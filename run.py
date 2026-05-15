@@ -1,25 +1,35 @@
 """
-run.py — PK Optimizer CLI entry point
+run.py — Optimus9 CLI entry point
 
 Subcommands:
   start              Drive a full grind for a test_config.
   analyze            Aggregate a completed run into a structured report + CSV.
   smoke              Tiny 5-combo grind against 1 day of data — integration test.
+  compare            Side-by-side comparison of 2-4 optimizer runs.
+  supervisor         Always-on data pipeline (TickCollector + BarBuilder).
   backfill_synthetic Build 5s OHLCV from Bybit 1m REST historicals.
-  backfill_binance   (kept from existing — Binance backfill loop)
-  tick_collect       (kept from existing — live Bybit WS → ticks)
-  bar_build          (kept from existing — ticks → kline_collection)
-  indicator_monitor  (kept from existing — config drift sniffer)
+  backfill_binance   Binance backfill loop.
+  tick_collect       Live Bybit WS → ticks (single-process; supervisor preferred).
+  bar_build          ticks → kline_collection (5s; supervisor preferred).
+  indicator_monitor  Config drift sniffer.
 
-Round 260514 — 5s PK gate + p-rev:
+Round 260514 (r02) — 5s PK gate + p-rev:
   • start gains --p_rev / --pk5s_gate flags (both default 'on')
   • start invokes analyze automatically unless --skip_analyze
   • smoke command added — small fixed grid for fast integration check
   • optimizer_runs columns or_p_rev_enabled / or_pk5s_gate_enabled
     recorded per run for queryable cross-run comparison
 
+Round 260515 (r02 cont.) — compare:
+  • compare command added — portrait console output + pivot-friendly CSV
+  • int-aware centroid rounding (len/pool_c/pool_w/pool_range/multiplier)
+
+Round 260516 (r03) — supervisor:
+  • supervisor command added — TickCollector + BarBuilder under ProcessManager
+  • intended deployment via systemd user service (see r03 spec)
+
 ═════════════════════════════════════════════════════════════════════════════
-TODO — parked items from 260514 round, surface when relevant
+TODO — parked items, surface when relevant
 ═════════════════════════════════════════════════════════════════════════════
   • Per-config p_rev override on test_configs (currently CLI-only)
       → add tc_p_rev_default TINYINT(1), CLI flag becomes override
@@ -31,6 +41,9 @@ TODO — parked items from 260514 round, surface when relevant
   • Trend machine rebuild (xls 260511 spec, separate workstream)
   • Patch PKDetector's 1-bar window discrepancy once next clean centroid
     is locked in (see PKDetector docstring for current rationale)
+  • Auto-backfill on supervisor startup (gap between last_kline and now)
+  • IndicatorMonitor + BinanceBackfiller as supervised workers
+  • Exponential restart backoff in ProcessManager
 ═════════════════════════════════════════════════════════════════════════════
 """
 
@@ -52,10 +65,16 @@ from optimus9 import (
     Pk5sGateComputer,        # noqa: F401 — re-exported for import sanity-checks
     PKDetector,
     ParameterGridBuilder,
+    ProcessManager,
     ReportManager,
     SwingAnalyzer,
     SyntheticBackfiller,
     TickCollector,
+    WorkerSpec,
+)
+from optimus9.orchestration.workers import (
+    tick_collector_worker,
+    bar_builder_worker,
 )
 
 
@@ -63,7 +82,6 @@ _log = get_logger('run')
 
 
 # ─── DB connection ─────────────────────────────────────────────────────────
-# Pull credentials from env. Same pattern as before.
 def _db() -> DatabaseManager:
     db = DatabaseManager(
         host     = os.environ.get('PK_DB_HOST',     'localhost'),
@@ -78,7 +96,7 @@ def _db() -> DatabaseManager:
 
 # ─── argument parsing ──────────────────────────────────────────────────────
 def _build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog='run', description='PK Optimizer CLI')
+    p = argparse.ArgumentParser(prog='run', description='Optimus9 CLI')
     sub = p.add_subparsers(dest='cmd', required=True)
 
     # start ----------------------------------------------------------------
@@ -110,28 +128,41 @@ def _build_parser() -> argparse.ArgumentParser:
     k.add_argument('--tc_pk',         type=int, required=True)
     k.add_argument('--lookback_days', type=int, default=1)
 
+    # compare --------------------------------------------------------------
+    c = sub.add_parser('compare',
+                       help='Side-by-side comparison of 2-4 optimizer runs')
+    c.add_argument('--or_pks',     type=int, nargs='+', required=True,
+                   help='Two to four or_pks. First = baseline, last = target.')
+    c.add_argument('--output_dir', default='.')
+
+    # supervisor -----------------------------------------------------------
+    sv = sub.add_parser('supervisor',
+                        help='Always-on data pipeline (TickCollector + BarBuilder)')
+    sv.add_argument('--tp_pk',  type=int, default=1)
+    sv.add_argument('--symbol', default='FARTCOINUSDT')
+
     # backfill_synthetic ---------------------------------------------------
     bs = sub.add_parser('backfill_synthetic',
                         help='Build 5s OHLCV from Bybit 1m historicals')
     bs.add_argument('--tp_pk',  type=int, default=1)
     bs.add_argument('--symbol', default='FARTCOINUSDT')
 
-    # backfill_binance (kept from existing) -------------------------------
+    # backfill_binance -----------------------------------------------------
     bb = sub.add_parser('backfill_binance', help='Binance backfill loop')
     bb.add_argument('--tp_pk',  type=int, default=1)
     bb.add_argument('--symbol', default='FARTCOINUSDT')
     bb.add_argument('--once',   action='store_true')
 
-    # tick_collect (kept from existing) -----------------------------------
+    # tick_collect ---------------------------------------------------------
     tc = sub.add_parser('tick_collect', help='Live Bybit WS → ticks table')
     tc.add_argument('--tp_pk',  type=int, default=1)
     tc.add_argument('--symbol', default='FARTCOINUSDT')
 
-    # bar_build (kept from existing) --------------------------------------
+    # bar_build ------------------------------------------------------------
     bbd = sub.add_parser('bar_build', help='ticks → kline_collection (5s)')
     bbd.add_argument('--tp_pk', type=int, default=1)
 
-    # indicator_monitor (kept from existing) ------------------------------
+    # indicator_monitor ----------------------------------------------------
     im = sub.add_parser('indicator_monitor', help='Config drift sniffer')
     im.add_argument('--tp_pk', type=int, default=1)
     im.add_argument('--tc_pk', type=int, default=1)
@@ -162,8 +193,6 @@ def cmd_start(args, db: DatabaseManager) -> int:
     if csv_path:
         _log.info(f'Optimizer CSV → {csv_path}')
 
-    # ReportManager.run returns the CSV path; we need or_pk to chain analyze.
-    # Pull the latest run row for this tc as the most-recent or_pk.
     if not args.skip_analyze:
         rows = db.execute(
             '''SELECT or_pk FROM optimizer_runs
@@ -190,9 +219,8 @@ def cmd_analyze(args, db: DatabaseManager) -> int:
     return 0
 
 
-# ── smoke: hardcoded 5-combo grid covering all 5 srcs, both pool_ranges,
-#    and len/mult/pool_c/pool_w spread to both ends. See spec 260514 for
-#    rationale.
+# Hardcoded 5-combo grid for smoke runs. Covers all 5 srcs, both pool_ranges,
+# and spreads len/mult/pool_c/pool_w to both ends. See r02 spec for rationale.
 _SMOKE_GRID = [
     # len mult  pc  pw  pr  src      slope multiplier
     (19, 0.69,  8, 55,  2, 'close',  2.5, 3),  # known-good centroid baseline
@@ -206,20 +234,13 @@ _SMOKE_GRID = [
 def cmd_smoke(args, db: DatabaseManager) -> int:
     """
     Fast integration test: full pipeline (compute + gate + detect + analyse)
-    against 1 day of data with 5 combos. Catches schema-load / gate-fold /
-    p-rev integration bugs without burning a full grind's compute budget.
-
-    Both --p_rev and --pk5s_gate default 'on'. To exercise the off paths,
-    use `start --lookback_days 1` with explicit flags — smoke is intentionally
-    minimal-args.
+    against 1 day of data with 5 combos. Both --p_rev and --pk5s_gate
+    default 'on'. To exercise off paths, use `start --lookback_days 1` with
+    explicit flags.
     """
     _log.info(f'Smoke test tc_pk={args.tc_pk}  lookback_days={args.lookback_days}  '
               f'5-combo grid, both flags on')
 
-    # Override the parameter grid by inserting a temporary one. The cleanest
-    # path is to bypass ParameterGridBuilder by patching the build step —
-    # but that requires touching ReportManager internals. Easier: monkey-patch
-    # the grid for this single call.
     grid = [
         {
             'len':         L,
@@ -234,7 +255,7 @@ def cmd_smoke(args, db: DatabaseManager) -> int:
         for (L, M, PC, PW, PR, SRC, SF, MUL) in _SMOKE_GRID
     ]
 
-    # Swap the grid builder transiently. Sole call site is inside
+    # Monkey-patch the grid builder transiently. Sole call site is inside
     # ReportManager.run via ParameterGridBuilder(db).build(tc_pk).
     original_build = ParameterGridBuilder.build
     def _smoke_build(self, tc_pk: int) -> list:
@@ -258,11 +279,72 @@ def cmd_smoke(args, db: DatabaseManager) -> int:
         if rows:
             or_pk = int(rows[0]['or_pk'])
             _log.info(f'Smoke analyzing or_pk={or_pk}')
-            # Lower min_signals — smoke runs are small by design
             AnalyzeManager(db).run(or_pk, min_signals=1, top_n=5)
     finally:
         ParameterGridBuilder.build = original_build
 
+    return 0
+
+
+def cmd_compare(args, db: DatabaseManager) -> int:
+    """Side-by-side comparison of 2-4 optimizer runs. Output: console + CSV."""
+    if not 2 <= len(args.or_pks) <= 4:
+        _log.error(f'compare requires 2-4 or_pks (got {len(args.or_pks)})')
+        return 1
+    _log.info(f'Comparing or_pks={args.or_pks}')
+    AnalyzeManager(db).compare(args.or_pks, output_dir=args.output_dir)
+    return 0
+
+
+def cmd_supervisor(args, db: DatabaseManager) -> int:
+    """
+    Drive the always-on data pipeline. Registers TickCollector and BarBuilder
+    as continuous supervised workers, then blocks until SIGTERM / SIGINT.
+
+    Workers receive db_kwargs (not the parent's DB connection) and construct
+    their own connection inside the child process — multiprocessing.Process
+    can't pickle live MySQL connections.
+
+    The parent `db` connection is released before supervise() starts so we're
+    not holding a connection while just supervising children.
+    """
+    db_kwargs = {
+        'host':     os.environ.get('PK_DB_HOST',     'localhost'),
+        'user':     os.environ.get('PK_DB_USER',     'root'),
+        'password': os.environ.get('PK_DB_PASS',     'yourpassword'),
+        'database': os.environ.get('PK_DB_NAME',     'pk_optimizer'),
+        'port':     int(os.environ.get('PK_DB_PORT', 3306)),
+    }
+
+    # Backfill any gap between last stored 5s bar and now before
+    # launching workers. Cold start fills the full 5-week lookback;
+    # warm start fills whatever gap exists. SyntheticBackfiller
+    # short-circuits on gaps under 30s, so this is cheap when the
+    # supervisor has been running recently.
+    _log.info('Checking kline_collection for backfill needs before launching workers')
+    SyntheticBackfiller(db, BybitKlineClient()).backfill(args.tp_pk, args.symbol)
+
+    # Parent doesn't need its DB while supervising — release it
+    db.disconnect()
+
+    pm = ProcessManager()
+    pm.register(WorkerSpec(
+        name              = 'tick_collector',
+        target_fn         = tick_collector_worker,
+        args              = (args.tp_pk, args.symbol, db_kwargs),
+        restart_on_failure= True,
+        interval_s        = None,        # continuous
+        restart_delay_s   = 5.0,
+    ))
+    pm.register(WorkerSpec(
+        name              = 'bar_builder',
+        target_fn         = bar_builder_worker,
+        args              = (args.tp_pk, db_kwargs),
+        restart_on_failure= True,
+        interval_s        = None,
+        restart_delay_s   = 5.0,
+    ))
+    pm.start()  # blocks until SIGTERM/SIGINT
     return 0
 
 
@@ -300,6 +382,8 @@ _DISPATCH = {
     'start':              cmd_start,
     'analyze':            cmd_analyze,
     'smoke':              cmd_smoke,
+    'compare':            cmd_compare,
+    'supervisor':         cmd_supervisor,
     'backfill_synthetic': cmd_backfill_synthetic,
     'backfill_binance':   cmd_backfill_binance,
     'tick_collect':       cmd_tick_collect,

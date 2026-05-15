@@ -1,0 +1,35 @@
+From: r03_260516_supervisor (backfill on start)
+Subject: cmd_supervisor backfills kline_collection before spawning workers
+
+SyntheticBackfiller already handles gap detection — cold start fills
+the full 5-week lookback (_LOOKBACK_WEEKS = 5 → 35 days), warm start
+fills whatever gap exists since the last stored bar, gaps under 30s
+short-circuit. So this is one call, blocking the parent until done,
+before pm.start() spawns the live workers into already-current data.
+
+No new imports needed — both SyntheticBackfiller and BybitKlineClient
+are already in run.py's optimus9 import block.
+
+Apply with:
+    git apply --check r03_260516_backfill_on_start.diff   # validate
+    git apply r03_260516_backfill_on_start.diff           # apply
+---
+diff --git a/run.py b/run.py
+--- a/run.py
++++ b/run.py
+@@ -304,6 +304,14 @@ def cmd_supervisor(args, db: DatabaseManager) -> int:
+         'database': os.environ.get('PK_DB_NAME',     'pk_optimizer'),
+         'port':     int(os.environ.get('PK_DB_PORT', 3306)),
+     }
+ 
++    # Backfill any gap between last stored 5s bar and now before
++    # launching workers. Cold start fills the full 5-week lookback;
++    # warm start fills whatever gap exists. SyntheticBackfiller
++    # short-circuits on gaps under 30s, so this is cheap when the
++    # supervisor has been running recently.
++    _log.info('Checking kline_collection for backfill needs before launching workers')
++    SyntheticBackfiller(db, BybitKlineClient()).backfill(args.tp_pk, args.symbol)
++
+     # Parent doesn't need its DB while supervising — release it
+     db.disconnect()
+ 

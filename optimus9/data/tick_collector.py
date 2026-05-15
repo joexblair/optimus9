@@ -36,6 +36,7 @@ from logger import get_logger
 # ── cross-package imports ─────────────────────────────────────────────────
 from ..db.database_manager import DatabaseManager
 from ..data.bybit_websocket_client import BybitWebSocketClient
+from .._helpers import _ms_to_iso
 
 
 class TickCollector:
