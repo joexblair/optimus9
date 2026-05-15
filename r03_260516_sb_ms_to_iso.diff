@@ -1,0 +1,27 @@
+From: r03_260516_supervisor (sb _ms_to_iso import fix)
+Subject: add _ms_to_iso import to synthetic_backfiller.py
+
+Same latent migration bug we fixed in tick_collector.py — the helper
+was module-scope in the original managers.py and resolved lexically.
+Post-migrate.py it lives in optimus9/_helpers.py but the import wasn't
+auto-added to every file that calls it. Surfaces whenever the backfill
+log lines fire (any gap > 30s).
+
+Worth a follow-up scan once we're clear: grep -rn "_ms_to_iso" optimus9/
+will show which other files reference the helper without importing it.
+
+Apply with:
+    git apply --check r03_260516_sb_ms_to_iso.diff
+    git apply r03_260516_sb_ms_to_iso.diff
+---
+diff --git a/optimus9/data/synthetic_backfiller.py b/optimus9/data/synthetic_backfiller.py
+--- a/optimus9/data/synthetic_backfiller.py
++++ b/optimus9/data/synthetic_backfiller.py
+@@ -36,6 +36,7 @@ from logger import get_logger
+ from ..db.database_manager import DatabaseManager
+ from ..data.bybit_kline_client import BybitKlineClient
+ from ..data.synthetic_bar_builder import SyntheticBarBuilder
++from .._helpers import _ms_to_iso
+ 
+ 
+ class SyntheticBackfiller:

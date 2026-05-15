@@ -37,6 +37,7 @@ from logger import get_logger
 from ..db.database_manager import DatabaseManager
 from ..data.bybit_kline_client import BybitKlineClient
 from ..data.synthetic_bar_builder import SyntheticBarBuilder
+from .._helpers import _ms_to_iso
 
 
 class SyntheticBackfiller:
