@@ -33,6 +33,9 @@ import websockets
 
 from logger import get_logger
 
+# ── cross-package imports ─────────────────────────────────────────────────
+from .._helpers import _ms_to_iso
+
 
 class BybitKlineClient:
     """Fetches OHLCV klines from Bybit Futures REST API (v5) for synthetic backfill."""

@@ -1,0 +1,56 @@
+From: r03_260516_supervisor (batch _ms_to_iso fix, v2)
+Subject: add _ms_to_iso import to remaining files (binance_backfiller, bybit_kline_client, indicator_monitor)
+
+v1 of this diff had wrong line counts in the bybit_kline_client hunk's @@ header
+(claimed 6/9 lines, body actually had 5/8). git apply correctly rejected it as
+corrupt. Counts corrected; hunk now applies cleanly.
+
+Final sweep of the migrate.py defect — _ms_to_iso was module-scope in the
+original managers.py and resolved by lexical lookup; post-split, every
+consuming file needs an explicit import. With these three landed, the
+decomposition is complete.
+
+Apply with:
+    git apply --check r03_260516_batch_ms_to_iso.diff
+    git apply r03_260516_batch_ms_to_iso.diff
+
+Suggested commit message:
+    fix: import _ms_to_iso in three remaining migration-affected files
+
+    Completes the cleanup started in tick_collector and synthetic_backfiller.
+    All optimus9 modules now use explicit imports for the helper.
+---
+diff --git a/optimus9/data/binance_backfiller.py b/optimus9/data/binance_backfiller.py
+--- a/optimus9/data/binance_backfiller.py
++++ b/optimus9/data/binance_backfiller.py
+@@ -35,6 +35,7 @@ from logger import get_logger
+ # ── cross-package imports ─────────────────────────────────────────────────
+ from ..db.database_manager import DatabaseManager
+ from ..data.binance_client import BinanceClient
++from .._helpers import _ms_to_iso
+ 
+ 
+ class BinanceBackfiller:
+diff --git a/optimus9/data/indicator_monitor.py b/optimus9/data/indicator_monitor.py
+--- a/optimus9/data/indicator_monitor.py
++++ b/optimus9/data/indicator_monitor.py
+@@ -34,6 +34,7 @@ from logger import get_logger
+ 
+ # ── cross-package imports ─────────────────────────────────────────────────
+ from ..db.database_manager import DatabaseManager
++from .._helpers import _ms_to_iso
+ 
+ 
+ class IndicatorMonitor:
+diff --git a/optimus9/data/bybit_kline_client.py b/optimus9/data/bybit_kline_client.py
+--- a/optimus9/data/bybit_kline_client.py
++++ b/optimus9/data/bybit_kline_client.py
+@@ -32,5 +32,8 @@ import websockets
+ 
+ from logger import get_logger
+ 
++# ── cross-package imports ─────────────────────────────────────────────────
++from .._helpers import _ms_to_iso
++
+ 
+ class BybitKlineClient:
