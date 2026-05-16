@@ -12,6 +12,7 @@ Subcommands:
   tick_collect       Live Bybit WS → ticks (single-process; supervisor preferred).
   bar_build          ticks → kline_collection (5s; supervisor preferred).
   indicator_monitor  Config drift sniffer.
+  reconcile          5s pk signal reconciliation against Pine TradingView output.
 
 Round 260514 (r02) — 5s PK gate + p-rev:
   • start gains --p_rev / --pk5s_gate flags (both default 'on')
@@ -76,6 +77,7 @@ from optimus9.orchestration.workers import (
     tick_collector_worker,
     bar_builder_worker,
 )
+from optimus9.analysis.reconciler import Reconciler
 
 
 _log = get_logger('run')
@@ -169,6 +171,16 @@ def _build_parser() -> argparse.ArgumentParser:
     im = sub.add_parser('indicator_monitor', help='Config drift sniffer')
     im.add_argument('--tp_pk', type=int, default=1)
     im.add_argument('--tc_pk', type=int, default=1)
+
+    # reconcile ------------------------------------------------------------
+    rc = sub.add_parser('reconcile',
+                        help='5s pk signal reconciliation vs Pine TradingView output')
+    rc.add_argument('--tp_pk',      type=int, default=1)
+    rc.add_argument('--hours',      type=float, default=12.0,
+                    help='Window size in hours (default 12)')
+    rc.add_argument('--end_date',   type=str, default=None,
+                    help='YYYY-MM-DD (end of day UTC). Default: now.')
+    rc.add_argument('--output_dir', default='.')
 
     return p
 
@@ -382,6 +394,16 @@ def cmd_indicator_monitor(args, db: DatabaseManager) -> int:
     return 0
 
 
+def cmd_reconcile(args, db: DatabaseManager) -> int:
+    Reconciler(db).reconcile(
+        tp_pk      = args.tp_pk,
+        end_date   = args.end_date,
+        hours      = args.hours,
+        output_dir = args.output_dir,
+    )
+    return 0
+
+
 _DISPATCH = {
     'start':              cmd_start,
     'analyze':            cmd_analyze,
@@ -393,6 +415,7 @@ _DISPATCH = {
     'tick_collect':       cmd_tick_collect,
     'bar_build':          cmd_bar_build,
     'indicator_monitor':  cmd_indicator_monitor,
+    'reconcile':          cmd_reconcile,
 }
 
 
