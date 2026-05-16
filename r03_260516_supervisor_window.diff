@@ -1,0 +1,104 @@
+From: r03_260516_supervisor (window-mode backfill)
+Subject: SyntheticBackfiller window mode + supervisor --lookback_days flag
+
+Two changes, one feature:
+
+1. SyntheticBackfiller.backfill() gains an optional lookback_days parameter.
+   When provided, switches from gap-fill mode (fetch from MAX(kc_timestamp)
+   to now) to window mode (always fetch the last N days, INSERT IGNORE
+   dedupes against existing rows). Existing callers (cmd_backfill_synthetic)
+   work unchanged — default None preserves gap-fill behavior.
+
+2. cmd_supervisor gains --lookback_days flag (default 35) and passes it
+   through to backfill(), guaranteeing the kline_collection table always
+   holds the requested minimum coverage window before workers spawn.
+
+The supervisor will now ALWAYS backfill on start — including when data is
+already current — because window mode ignores the 30s short-circuit. For
+typical operation this means re-fetching the last 35 days every supervisor
+restart, with INSERT IGNORE accepting nearly all rows as duplicates. Cost:
+one big Bybit fetch (~50k 1m bars across ~50 paginated requests) and a
+batch INSERT that mostly no-ops. A few minutes per restart, predictable.
+
+Apply with:
+    git apply --check r03_260516_supervisor_window.diff
+    git apply r03_260516_supervisor_window.diff
+
+Suggested commit message:
+    feat: supervisor ensures N days of kline coverage on every start
+
+    SyntheticBackfiller.backfill() gains window mode (lookback_days param);
+    supervisor passes args.lookback_days (default 35) so kline_collection
+    is guaranteed to hold the minimum coverage window before workers spawn.
+    INSERT IGNORE handles dedup with existing rows.
+---
+diff --git a/optimus9/data/synthetic_backfiller.py b/optimus9/data/synthetic_backfiller.py
+--- a/optimus9/data/synthetic_backfiller.py
++++ b/optimus9/data/synthetic_backfiller.py
+@@ -52,14 +52,25 @@ class SyntheticBackfiller:
+     def __init__(self, db: DatabaseManager, client: BybitKlineClient) -> None:
+         self._db     = db
+         self._client = client
+         self._log    = get_logger(self.__class__.__name__)
+ 
+-    def backfill(self, tp_pk: int, symbol: str) -> int:
+-        start_ms  = self._gap_start(tp_pk)
+-        end_ms    = int(datetime.now(timezone.utc).timestamp() * 1000)
+-        if end_ms - start_ms < 30_000:
+-            self._log.info('kline_collection is current — no backfill needed')
+-            return 0
++    def backfill(self, tp_pk: int, symbol: str, lookback_days: int = None) -> int:
++        """
++        Two modes:
++          • lookback_days=None — gap-fill from MAX(kc_timestamp) to now.
++            Short-circuits if gap < 30s. Default for manual backfill_synthetic.
++          • lookback_days=N    — window mode. Always fetch the last N days.
++            INSERT IGNORE dedupes against existing rows. Use when caller
++            needs a guaranteed minimum coverage window (e.g. supervisor).
++        """
++        end_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
++        if lookback_days is not None:
++            start_ms = end_ms - lookback_days * 86_400_000
++        else:
++            start_ms = self._gap_start(tp_pk)
++            if end_ms - start_ms < 30_000:
++                self._log.info('kline_collection is current — no backfill needed')
++                return 0
+ 
+         span_days = (end_ms - start_ms) / 86_400_000
+         self._log.info(
+diff --git a/run.py b/run.py
+--- a/run.py
++++ b/run.py
+@@ -148,6 +148,9 @@ def _build_parser() -> argparse.ArgumentParser:
+                         help='Always-on data pipeline (TickCollector + BarBuilder)')
+     sv.add_argument('--tp_pk',  type=int, default=1)
+     sv.add_argument('--symbol', default='FARTCOINUSDT')
++    sv.add_argument('--lookback_days', type=int, default=35,
++                    help='Ensure kline_collection has at least N days of 5s bars '
++                         'before launching workers (default 35)')
+ 
+     # backfill_synthetic ---------------------------------------------------
+     bs = sub.add_parser('backfill_synthetic',
+@@ -316,13 +319,14 @@ def cmd_supervisor(args, db: DatabaseManager) -> int:
+         'port':     int(os.environ.get('PK_DB_PORT', 3306)),
+     }
+ 
+-    # Backfill any gap between last stored 5s bar and now before
+-    # launching workers. Cold start fills the full 5-week lookback;
+-    # warm start fills whatever gap exists. SyntheticBackfiller
+-    # short-circuits on gaps under 30s, so this is cheap when the
+-    # supervisor has been running recently.
+-    _log.info('Checking kline_collection for backfill needs before launching workers')
+-    SyntheticBackfiller(db, BybitKlineClient()).backfill(args.tp_pk, args.symbol)
++    # Backfill the last N days into kline_collection before launching
++    # workers — ensures the table holds a guaranteed minimum coverage
++    # window. SyntheticBackfiller's window mode always fetches the full
++    # span; INSERT IGNORE dedupes against existing rows downstream.
++    _log.info(f'Ensuring kline_collection holds last {args.lookback_days} days before launching workers')
++    SyntheticBackfiller(db, BybitKlineClient()).backfill(
++        args.tp_pk, args.symbol, lookback_days=args.lookback_days,
++    )
+ 
+     # Parent doesn't need its DB while supervising — release it
+     db.disconnect()

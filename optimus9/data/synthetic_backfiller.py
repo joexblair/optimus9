@@ -54,12 +54,23 @@ class SyntheticBackfiller:
         self._client = client
         self._log    = get_logger(self.__class__.__name__)
 
-    def backfill(self, tp_pk: int, symbol: str) -> int:
-        start_ms  = self._gap_start(tp_pk)
-        end_ms    = int(datetime.now(timezone.utc).timestamp() * 1000)
-        if end_ms - start_ms < 30_000:
-            self._log.info('kline_collection is current — no backfill needed')
-            return 0
+    def backfill(self, tp_pk: int, symbol: str, lookback_days: int = None) -> int:
+        """
+        Two modes:
+          • lookback_days=None — gap-fill from MAX(kc_timestamp) to now.
+            Short-circuits if gap < 30s. Default for manual backfill_synthetic.
+          • lookback_days=N    — window mode. Always fetch the last N days.
+            INSERT IGNORE dedupes against existing rows. Use when caller
+            needs a guaranteed minimum coverage window (e.g. supervisor).
+        """
+        end_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        if lookback_days is not None:
+            start_ms = end_ms - lookback_days * 86_400_000
+        else:
+            start_ms = self._gap_start(tp_pk)
+            if end_ms - start_ms < 30_000:
+                self._log.info('kline_collection is current — no backfill needed')
+                return 0
 
         span_days = (end_ms - start_ms) / 86_400_000
         self._log.info(
