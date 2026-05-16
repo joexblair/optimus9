@@ -118,7 +118,8 @@ class Pk5sGateComputer:
                 base_df:  pd.DataFrame,
                 dema:     np.ndarray,
                 params:   dict,
-                midpoint: float = 50.0) -> np.ndarray:
+                midpoint: float = 50.0,
+                vote_overrides: list = None) -> np.ndarray:
         """
         Build the OOB-equivalent gate array for one pk_5s tce row.
 
@@ -131,6 +132,11 @@ class Pk5sGateComputer:
                  threshold_long, threshold_short, pm_suppression,
                  decision_delay)
         midpoint : f_pk_state midpoint, default 50
+        vote_overrides : optional list of vote dicts matching the shape
+                 returned by _load_votes. When provided, bypasses the DB
+                 lookup entirely — tce_pk becomes a log-only identifier.
+                 Used by Reconciler with xlsx-sourced config to avoid
+                 mutating test_config_ext_votes for one-off comparisons.
 
         Returns
         -------
@@ -139,7 +145,7 @@ class Pk5sGateComputer:
           +1 = short PK fired (oob_side equivalent: HI OOB → expected = -1 short)
            0 = idle / suppressed by decision delay / no verdict
         """
-        votes = self._load_votes(tce_pk)
+        votes = vote_overrides if vote_overrides is not None else self._load_votes(tce_pk)
         n     = len(base_df)
         if not votes:
             self._log.warning(f'pk_5s tce_pk={tce_pk}: no active vote lines')
