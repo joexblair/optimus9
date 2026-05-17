@@ -2,7 +2,7 @@
 StopCalibrator — see class docstring for purpose, design notes.
 """
 
-import time
+import json
 from datetime import datetime, timezone
 
 import numpy as np
@@ -11,44 +11,47 @@ import pandas as pd
 from logger import get_logger
 
 from ..db.database_manager import DatabaseManager
-from ..compute.pk_detector import PKDetector
+from ..compute.pk5s_gate_computer import Pk5sGateComputer
 from ..compute.swing_analyzer import SwingAnalyzer
-from ..compute.indicator_computer import IndicatorComputer
 
 
 class StopCalibrator:
     """
-    Per-line stop_pct calibration. Generates PK signals via PKDetector on
-    the target line alone (using indicator_configs baseline values), sweeps
-    stop_pct across a 12-value range, picks the value that maximizes net
-    banked profit, adds tc_stop_buffer, writes back to tc.tc_stop_pct.
+    Per-line stop_pct calibration for 5s singular grinds.
 
-    The "what counts as a win" threshold is tc.tc_profit_zone. A signal is
-    qualifying when its max_profit_pct >= tc_profit_zone, regardless of
-    whether the stop was hit.
+    Generates baseline signals via Pk5sGateComputer with single-line
+    vote_overrides — the target line carries its xlsx weights, no other
+    lines participate. This mirrors the reconciler's mechanism exactly:
+    same f_pk_state, same threshold + decision_delay aggregation Pine uses.
 
-    Per-stop diagnostics are persisted to stop_calibration so calibration
-    drift over time can be queried (e.g., "is gcs5m's optimal stop stable
-    or wandering?").
+    Then sweeps stop_pct across a 12-value range, picks the value that
+    maximizes net banked profit, adds tc_stop_buffer, writes back to
+    tc.tc_stop_pct. Per-stop diagnostics persisted to stop_calibration.
 
-    Round: r04_260517 5s singular grind
+    Round: r04_260517 (revised mid-round after Joe's "how does Pine
+    handle 5s?" question — answer: vote machine via Pk5sGateComputer,
+    not PKDetector. r05 captures the bigger "which machine for what
+    timeframe" architectural question.)
     """
 
     # 12 stop values: [0.11, 0.15, 0.19, ..., 0.55]
     _STOP_RANGE_DEFAULT = (0.11, 0.55, 0.04)
 
+    # Midpoint for f_pk_state's peak-selector switch. Same value Pine
+    # uses for s5_pk computation. Hardcoded here — r05 will read from
+    # indicator_configs once ob/os are promoted to per-line config.
+    _MIDPOINT = 50.0
+
     def __init__(self, db: DatabaseManager,
-                 detector: PKDetector,
                  stop_range: tuple = _STOP_RANGE_DEFAULT) -> None:
-        self._db       = db
-        self._detector = detector
-        self._stops    = self._build_stop_values(stop_range)
-        self._log      = get_logger(self.__class__.__name__)
+        self._db    = db
+        self._pk5s  = Pk5sGateComputer(db)
+        self._stops = self._build_stop_values(stop_range)
+        self._log   = get_logger(self.__class__.__name__)
 
     def calibrate(self, tc_pk: int,
                   base_df: pd.DataFrame,
                   dema: np.ndarray,
-                  oob_side: np.ndarray,
                   lookback_days: float) -> float:
         """
         Sweep stop_pct, find best by net_banked, write to tc.tc_stop_pct.
@@ -61,11 +64,11 @@ class StopCalibrator:
         self._log.info('═' * 72)
         self._log.info(
             f'Calibrating tc_pk={tc_pk} ({tc["tc_indicator_label"]}) — '
-            f'lookback={lookback_days}d, profit_zone={profit_zone:.2f}%, '
+            f'lookback={lookback_days:.1f}d, profit_zone={profit_zone:.2f}%, '
             f'buffer={buffer_pct:.2f}%'
         )
 
-        signals = self._generate_signals(tc, base_df, dema, oob_side)
+        signals = self._generate_signals(tc, base_df, dema)
         if not signals:
             self._log.warning(
                 'No signals generated at baseline — cannot calibrate. '
@@ -82,7 +85,6 @@ class StopCalibrator:
         run_ts  = int(datetime.now(timezone.utc).timestamp() * 1000)
         results = []
 
-        # Header row for console table
         self._log.info(
             f'  {"stop":>5}  {"signals":>7}  {"qual":>5}  {"lost":>5}  '
             f'{"inc%":>5}  {"gross_p":>8}  {"gross_l":>8}  {"net":>8}'
@@ -109,13 +111,11 @@ class StopCalibrator:
             f'Chosen stop_pct = {chosen:.2f}% (peak + buffer {buffer_pct:.2f}%)'
         )
 
-        # Persist all rows; mark peak as chosen
         self._persist_calibration(
             tc_pk, run_ts, int(round(lookback_days)),
             results, peak['stop_pct'],
         )
 
-        # Write chosen back to tc
         self._db.execute(
             'UPDATE test_configs SET tc_stop_pct = %s WHERE tc_pk = %s',
             (chosen, tc_pk),
@@ -137,8 +137,7 @@ class StopCalibrator:
         rows = self._db.execute(
             '''SELECT tc.*, ic.ic_line_type, ic.ic_src,
                       ic.ic_bb_len, ic.ic_bb_mult,
-                      ic.ic_k_len, ic.ic_rsi_len, ic.ic_stc_len,
-                      ic.ic_high_boundary, ic.ic_low_boundary
+                      ic.ic_k_len, ic.ic_rsi_len, ic.ic_stc_len
                FROM test_configs tc
                JOIN indicator_configs ic ON ic.ic_pk = tc.tc_ic_pk
                WHERE tc.tc_pk = %s''',
@@ -148,63 +147,128 @@ class StopCalibrator:
             raise ValueError(f'No test_config for tc_pk={tc_pk}')
         return rows[0]
 
+    def _load_baseline_pool_params(self) -> dict:
+        """
+        Read pool/threshold/decision params from the production pk_5s tce.
+        Same source the reconciler uses (xlsx-truth in DB form).
+        """
+        rows = self._db.execute(
+            '''SELECT tce_params FROM test_config_extensions
+               WHERE tce_type = 'pk_5s' AND tce_is_active = 1
+               ORDER BY tce_pk DESC LIMIT 1''',
+            (), fetch=True,
+        )
+        if not rows:
+            raise RuntimeError(
+                'No active pk_5s tce found — cannot determine baseline pool params'
+            )
+        p = rows[0]['tce_params']
+        if isinstance(p, (str, bytes)):
+            p = json.loads(p)
+        return p
+
+    def _load_baseline_weights(self, ic_pk: int) -> tuple:
+        """
+        Read this line's xlsx weights from the production pk_5s tcev.
+        Used as fixed weights for single-line vote during calibration.
+        Returns (weight_close, weight_wide). Falls back to (5, 2) if no
+        active row found — better to calibrate against something than
+        fail outright.
+        """
+        rows = self._db.execute(
+            '''SELECT tcev.tcev_weight_close, tcev.tcev_weight_wide
+               FROM test_config_ext_votes tcev
+               JOIN test_config_extensions tce ON tce.tce_pk = tcev.tcev_tce_pk
+               WHERE tce.tce_type = 'pk_5s'
+                 AND tce.tce_is_active = 1
+                 AND tcev.tcev_ic_pk = %s
+                 AND tcev.tcev_is_active = 1
+               ORDER BY tce.tce_pk DESC LIMIT 1''',
+            (ic_pk,), fetch=True,
+        )
+        if not rows:
+            self._log.warning(
+                f'No tcev row for ic_pk={ic_pk} — using default weights (5, 2)'
+            )
+            return (5, 2)
+        return (
+            int(rows[0]['tcev_weight_close']),
+            int(rows[0]['tcev_weight_wide']),
+        )
+
     def _generate_signals(self, tc: dict,
                           base_df: pd.DataFrame,
-                          dema: np.ndarray,
-                          oob_side: np.ndarray) -> list:
+                          dema: np.ndarray) -> list:
         """
-        Build the line at indicator_configs baseline values, run PKDetector,
-        return raw signals. No grid sweep — just THIS line at ITS baseline.
+        Build single-line vote_overrides at this line's indicator_configs
+        baseline values + xlsx weights. Call Pk5sGateComputer. Extract
+        transition signals (bars where Pine s5_pk_final changes to ±1)
+        as the baseline signal set.
         """
-        line = self._build_line(tc, base_df)
+        pool_params  = self._load_baseline_pool_params()
+        w_close, w_wide = self._load_baseline_weights(int(tc['tc_ic_pk']))
 
-        # Use Pine's documented default pool params for the calibration pass.
-        # The grind that follows will sweep these — calibration here is just
-        # "what stop fits this line's baseline signal characteristic."
-        baseline_params = {
-            'len':         int(tc.get('ic_bb_len') or tc.get('ic_k_len') or 0),
-            'mult':        float(tc.get('ic_bb_mult') or 0),
-            'src':         tc['ic_src'],
-            'pool_c':      30,
-            'pool_w':      70,
-            'pool_range':  4,
-            'slope_floor': 5.0,
-            'multiplier':  1,
-        }
-        signals = self._detector.detect(
-            line, dema,
-            baseline_params['pool_c'], baseline_params['pool_w'],
-            baseline_params['pool_range'], baseline_params['multiplier'],
-            baseline_params['slope_floor'], oob_side, baseline_params,
+        target_vote = self._build_vote(tc, w_close, w_wide)
+        self._log.info(
+            f'Baseline vote: line_type={target_vote["ic_line_type"]}, '
+            f'weights=({w_close}, {w_wide}), '
+            f'pool=(c={pool_params.get("pool_c")}, w={pool_params.get("pool_w")}, '
+            f'range={pool_params.get("pool_range")}, slope={pool_params.get("pool_slope")})'
         )
-        return signals
+
+        oob_arr = self._pk5s.compute(
+            tce_pk=f'calibrate-tc{tc["tc_pk"]}',
+            base_df=base_df,
+            dema=dema,
+            params=pool_params,
+            midpoint=self._MIDPOINT,
+            vote_overrides=[target_vote],
+        )
+        # Pk5sGateComputer returns OOB-equivalent (sign-inverted from Pine).
+        # Flip to Pine s5_pk_final convention for transition extraction.
+        s5_pk_final = -oob_arr
+
+        # Transitions: bars where signal changes from 0 (or opposite) to ±1
+        prev = np.concatenate([[0], s5_pk_final[:-1]])
+        transitions_idx = np.where((s5_pk_final != prev) & (s5_pk_final != 0))[0]
+        return [
+            {'bar_index': int(i), 'direction': int(s5_pk_final[i])}
+            for i in transitions_idx
+        ]
 
     @staticmethod
-    def _build_line(tc: dict, base_df: pd.DataFrame) -> np.ndarray:
-        """
-        Compute the indicator line at indicator_configs baseline values.
-        BB or K based on ic_line_type.
-        """
-        src = IndicatorComputer.build_source(base_df, tc['ic_src'])
+    def _build_vote(tc: dict, weight_close: int, weight_wide: int) -> dict:
+        v = {
+            'tcev_weight_close':  weight_close,
+            'tcev_weight_wide':   weight_wide,
+            'tcev_trigger_mode':  'standard_pk',
+            'tcev_roc_threshold': None,
+            'ic_itf_seconds':     5,
+        }
         if tc['ic_line_type'] == 'bb':
-            line = IndicatorComputer.f_bb(
-                src, int(tc['ic_bb_len']), float(tc['ic_bb_mult']),
-            )
+            v.update({
+                'ic_line_type': 'bb',
+                'ic_src':       tc['ic_src'],
+                'ic_bb_len':    int(tc['ic_bb_len']),
+                'ic_bb_mult':   float(tc['ic_bb_mult']),
+                'ic_k_len':     None,
+                'ic_rsi_len':   None,
+                'ic_stc_len':   None,
+            })
         else:  # 'k'
-            line = IndicatorComputer.f_k(
-                src,
-                int(tc['ic_rsi_len']),
-                int(tc['ic_stc_len']),
-                int(tc['ic_k_len']),
-            )
-        return line
+            v.update({
+                'ic_line_type': 'k',
+                'ic_src':       tc['ic_src'],
+                'ic_bb_len':    None,
+                'ic_bb_mult':   None,
+                'ic_k_len':     int(tc['ic_k_len']),
+                'ic_rsi_len':   int(tc['ic_rsi_len']),
+                'ic_stc_len':   int(tc['ic_stc_len']),
+            })
+        return v
 
     def _evaluate_stop(self, signals: list, close: np.ndarray,
                        stop_pct: float, profit_zone: float) -> dict:
-        """
-        Run SwingAnalyzer at this stop_pct; compute per-stop aggregates
-        against the profit_zone threshold.
-        """
         analyzer = SwingAnalyzer(stop_pct=stop_pct)
         outcomes = analyzer.analyze(signals, close)
 

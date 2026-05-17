@@ -11,7 +11,7 @@ Every class calls get_logger(self.__class__.__name__).
 Terminology:
   OOB  = out of boundary (indicator has crossed high/low threshold)
   IB   = in boundary (indicator is within thresholds)
-  OS/OB remain only in RSI/K oscillator context where they are technically correct.
+  OS/OB reserved for RSI/K oscillator context only.
 """
 
 import asyncio
@@ -71,8 +71,14 @@ class ReportManager:
             rows produce gate arrays via Pk5sGateComputer that fold with
             bny30M/p as a third OOB-equivalent gate. Recorded on the run.
 
-        Both flags default True for production. Toggle for the comparison
-        matrix in 260514_pk5s_spec.md.
+        Round 04 changes (260517):
+          • Pre-grind stop_pct calibration when tc.tc_dynamic_stoploss is TRUE
+            and the target line is 5s-native. Uses Pk5sGateComputer with
+            single-line vote_overrides (Pine vote-machine mimic). Calibrator
+            writes back to tc.tc_stop_pct before the grid grind starts.
+          • SwingAnalyzer dropped drag_pct — won/stopped/inconclusive
+            classification moved to AnalyzeManager (tc.tc_profit_zone as
+            the threshold).
         """
         
         config = self._load_config(tc_pk)
@@ -100,8 +106,8 @@ class ReportManager:
         dema_src = IndicatorComputer.build_source(base_df, config['tc_dema_src'])
         dema     = IndicatorComputer.dema(dema_src, int(config['tc_dema_len']))
 
-        # Gate: load active extensions, compute oob_side per gate, fold
-        # Gates: bny30M/p (existing OOB gates) + optional pk_5s vote machines.
+        # Gate: load active extensions, compute oob_side per gate, fold.
+        # Gates: bny30M/p (OOB gates) + optional pk_5s vote machines.
         # All gates fold via OR semantics in IndicatorComputer.fold_gates.
         gate_cfgs = self._load_gate_configs(tc_pk)
         gate_sides = []
@@ -147,20 +153,16 @@ class ReportManager:
         grid = ParameterGridBuilder(self._db).build(tc_pk)
 
         # r04: Per-line stop_pct calibration before the grind.
-        # 5s-native targets only — b6m calibration requires resample/align
-        # the calibrator doesn't currently do (future round).
-        # Skipped silently if tc_dynamic_stoploss is FALSE or absent.
+        # 5s-native targets only — calibration uses Pk5sGateComputer with
+        # single-line vote_overrides (true Pine mimic via vote machine).
+        # Skipped silently if tc_dynamic_stoploss is FALSE.
         if config.get('tc_dynamic_stoploss') and int(config['ic_itf_seconds']) == 5:
             self._log.info('Stop calibration enabled (5s target) — running before grid grind')
             cal_lookback = (
                 float(lookback_days) if lookback_days is not None
                 else (base_df['timestamp'].iloc[-1] - base_df['timestamp'].iloc[0]) / 86_400_000.0
             )
-            StopCalibrator(
-                self._db,
-                PKDetector(float(config['ic_high_boundary']),
-                           float(config['ic_low_boundary'])),
-            ).calibrate(tc_pk, base_df, dema, oob_side, cal_lookback)
+            StopCalibrator(self._db).calibrate(tc_pk, base_df, dema, cal_lookback)
             # Reload — calibrator just updated tc.tc_stop_pct
             config = self._load_config(tc_pk)
 

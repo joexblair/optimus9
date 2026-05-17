@@ -9,20 +9,24 @@ diff --git a/optimus9/orchestration/report_manager.py b/optimus9/orchestration/r
  from ..orchestration.optimizer_runner import OptimizerRunner
  from ..compute.parameter_grid_builder import ParameterGridBuilder
  from ..orchestration.report_exporter import ReportExporter
-@@ -111,9 +112,23 @@ class ReportManager:
+@@ -111,9 +112,27 @@ class ReportManager:
          grid = ParameterGridBuilder(self._db).build(tc_pk)
  
 +        # r04: Per-line stop_pct calibration before the grind.
-+        # 5s-native targets only — calibration uses Pk5sGateComputer with
-+        # single-line vote_overrides (true Pine mimic via vote machine).
-+        # Skipped silently if tc_dynamic_stoploss is FALSE.
++        # 5s-native targets only — b6m calibration requires resample/align
++        # the calibrator doesn't currently do (future round).
++        # Skipped silently if tc_dynamic_stoploss is FALSE or absent.
 +        if config.get('tc_dynamic_stoploss') and int(config['ic_itf_seconds']) == 5:
 +            self._log.info('Stop calibration enabled (5s target) — running before grid grind')
 +            cal_lookback = (
 +                float(lookback_days) if lookback_days is not None
 +                else (base_df['timestamp'].iloc[-1] - base_df['timestamp'].iloc[0]) / 86_400_000.0
 +            )
-+            StopCalibrator(self._db).calibrate(tc_pk, base_df, dema, cal_lookback)
++            StopCalibrator(
++                self._db,
++                PKDetector(float(config['ic_high_boundary']),
++                           float(config['ic_low_boundary'])),
++            ).calibrate(tc_pk, base_df, dema, oob_side, cal_lookback)
 +            # Reload — calibrator just updated tc.tc_stop_pct
 +            config = self._load_config(tc_pk)
 +
