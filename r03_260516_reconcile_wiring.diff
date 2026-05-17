@@ -1,0 +1,67 @@
+diff --git a/run.py b/run.py
+--- a/run.py
++++ b/run.py
+@@ -11,7 +11,8 @@ Subcommands:
+   backfill_binance   Binance backfill loop.
+   tick_collect       Live Bybit WS → ticks (single-process; supervisor preferred).
+   bar_build          ticks → kline_collection (5s; supervisor preferred).
+   indicator_monitor  Config drift sniffer.
++  reconcile          5s pk signal reconciliation against Pine TradingView output.
+ 
+ Round 260514 (r02) — 5s PK gate + p-rev:
+   • start gains --p_rev / --pk5s_gate flags (both default 'on')
+@@ -75,7 +76,8 @@ from optimus9 import (
+ from optimus9.orchestration.workers import (
+     tick_collector_worker,
+     bar_builder_worker,
+ )
++from optimus9.analysis.reconciler import Reconciler
+ 
+ 
+ _log = get_logger('run')
+@@ -168,6 +170,16 @@ def _build_parser() -> argparse.ArgumentParser:
+     # indicator_monitor ----------------------------------------------------
+     im = sub.add_parser('indicator_monitor', help='Config drift sniffer')
+     im.add_argument('--tp_pk', type=int, default=1)
+     im.add_argument('--tc_pk', type=int, default=1)
+ 
++    # reconcile ------------------------------------------------------------
++    rc = sub.add_parser('reconcile',
++                        help='5s pk signal reconciliation vs Pine TradingView output')
++    rc.add_argument('--tp_pk',      type=int, default=1)
++    rc.add_argument('--hours',      type=float, default=12.0,
++                    help='Window size in hours (default 12)')
++    rc.add_argument('--end_date',   type=str, default=None,
++                    help='YYYY-MM-DD (end of day UTC). Default: now.')
++    rc.add_argument('--output_dir', default='.')
++
+     return p
+@@ -371,17 +383,28 @@ def cmd_indicator_monitor(args, db: DatabaseManager) -> int:
+ def cmd_indicator_monitor(args, db: DatabaseManager) -> int:
+     IndicatorMonitor(db).run(args.tp_pk, args.tc_pk)
+     return 0
+ 
+ 
++def cmd_reconcile(args, db: DatabaseManager) -> int:
++    Reconciler(db).reconcile(
++        tp_pk      = args.tp_pk,
++        end_date   = args.end_date,
++        hours      = args.hours,
++        output_dir = args.output_dir,
++    )
++    return 0
++
++
+ _DISPATCH = {
+     'start':              cmd_start,
+     'analyze':            cmd_analyze,
+     'smoke':              cmd_smoke,
+     'compare':            cmd_compare,
+     'supervisor':         cmd_supervisor,
+     'backfill_synthetic': cmd_backfill_synthetic,
+     'backfill_binance':   cmd_backfill_binance,
+     'tick_collect':       cmd_tick_collect,
+     'bar_build':          cmd_bar_build,
+     'indicator_monitor':  cmd_indicator_monitor,
++    'reconcile':          cmd_reconcile,
+ }

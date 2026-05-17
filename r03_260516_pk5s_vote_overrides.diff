@@ -1,0 +1,59 @@
+From: r03_260516_reconciler (sub-round)
+Subject: Pk5sGateComputer.compute() — add vote_overrides parameter
+
+Lets callers bypass the DB lookup for vote definitions by passing them
+directly. Reconciler uses this to drive Pk5sGateComputer with xlsx-sourced
+config without mutating test_config_ext_votes state.
+
+Backward-compatible: vote_overrides defaults to None, preserving the
+DB-lookup path for production callers (ReportManager etc).
+
+Apply with:
+    git apply --check r03_260516_pk5s_vote_overrides.diff
+    git apply r03_260516_pk5s_vote_overrides.diff
+
+Suggested commit message:
+    feat: Pk5sGateComputer.compute() accepts vote_overrides
+
+    Lets external callers (Reconciler, future trend machine tests) inject
+    votes directly instead of pulling from test_config_ext_votes. DB path
+    unchanged when vote_overrides is None.
+---
+diff --git a/optimus9/compute/pk5s_gate_computer.py b/optimus9/compute/pk5s_gate_computer.py
+--- a/optimus9/compute/pk5s_gate_computer.py
++++ b/optimus9/compute/pk5s_gate_computer.py
+@@ -97,10 +97,11 @@ class Pk5sGateComputer:
+     # ── public ──────────────────────────────────────────────────────────────
+     def compute(self, tce_pk: int,
+                 base_df:  pd.DataFrame,
+                 dema:     np.ndarray,
+                 params:   dict,
+-                midpoint: float = 50.0) -> np.ndarray:
++                midpoint: float = 50.0,
++                vote_overrides: list = None) -> np.ndarray:
+         """
+         Build the OOB-equivalent gate array for one pk_5s tce row.
+ 
+         Parameters
+@@ -112,7 +113,12 @@ class Pk5sGateComputer:
+         params : tce_params dict (pool_c, pool_w, pool_slope, pool_range,
+                  threshold_long, threshold_short, pm_suppression,
+                  decision_delay)
+         midpoint : f_pk_state midpoint, default 50
++        vote_overrides : optional list of vote dicts matching the shape
++                 returned by _load_votes. When provided, bypasses the DB
++                 lookup entirely — tce_pk becomes a log-only identifier.
++                 Used by Reconciler with xlsx-sourced config to avoid
++                 mutating test_config_ext_votes for one-off comparisons.
+ 
+         Returns
+         -------
+@@ -120,7 +130,7 @@ class Pk5sGateComputer:
+           +1 = short PK fired (oob_side equivalent: HI OOB → expected = -1 short)
+            0 = idle / suppressed by decision delay / no verdict
+         """
+-        votes = self._load_votes(tce_pk)
++        votes = vote_overrides if vote_overrides is not None else self._load_votes(tce_pk)
+         n     = len(base_df)
+         if not votes:
+             self._log.warning(f'pk_5s tce_pk={tce_pk}: no active vote lines')

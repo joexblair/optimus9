@@ -72,8 +72,13 @@ class ParameterGridBuilder:
 
             if ptype == 'int':
                 values = sorted(set(int(round(v)) for v in values))
-                # pool_range=0 means disabled — exclude
                 if name == 'pool_range':
+                    # pool_range=0 means disabled — exclude
+                    values = [v for v in values if v > 0]
+                elif name in ('len', 'len_rsi', 'len_stoch'):
+                    # r04: length params must be positive (k_len=0, rsi_len=0
+                    # etc. would crash IndicatorComputer). Center-symmetric
+                    # sweeps around small baselines can land on zero or negative.
                     values = [v for v in values if v > 0]
 
             param_lists[name] = values

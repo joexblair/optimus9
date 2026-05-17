@@ -40,18 +40,47 @@ from ..db.database_manager import DatabaseManager
 class AnalyzeManager:
     """
     Aggregates grind results from MySQL and produces a structured analysis report.
-    All heavy lifting stays in the DB — Python only sees ~3,150 combo summary rows.
+    All heavy lifting stays in the DB — Python only sees the per-combo summary rows.
 
     Outputs:
       - Console / info.log: full analysis report
       - CSV: combo summary with all metrics (for further exploration)
+
+    Round 04 changes:
+      - 'won' / 'stopped' / 'inconclusive' classification re-derived from
+        max_profit_pct + bars_to_stop using tc.tc_profit_zone, not the
+        deleted pko_result column.
+      - Sweep params discovered dynamically from pk_signals columns (which
+        are populated) and test_param_ranges.tpr_param_type (for int/float/enum).
+      - K-line target support: pks_len_rsi, pks_len_stoch surface as sweep
+        params in K grinds, are NULL/absent in BB grinds.
     """
 
-    _NUMERIC_PARAMS = ['len', 'mult', 'pool_c', 'pool_w', 'pool_range', 'slope_floor', 'multiplier']
-    _CAT_PARAMS     = ['src']
-    # Params that must be ints — no fractional grid points exist. Used by
-    # _compute_centroid to round these to int rather than 4dp.
-    _INT_PARAMS     = {'len', 'pool_c', 'pool_w', 'pool_range', 'multiplier'}
+    # Columns in the combo summary query that are NOT sweep params — these
+    # are the aggregate metrics. Everything else returned by the query is
+    # treated as a sweep dimension.
+    _META_COLS = {
+        'total', 'decided', 'won', 'stopped_ct', 'inconclusive_ct',
+        'avg_win_pct', 'avg_bars', 'avg_bars_peak',
+    }
+
+    # Sweep dimensions that can appear in pk_signals. Order matters only
+    # for report presentation; missing/NULL columns are filtered downstream.
+    _CANDIDATE_PARAMS = [
+        'len', 'mult', 'len_rsi', 'len_stoch', 'src',
+        'pool_c', 'pool_w', 'pool_range', 'slope_floor', 'multiplier',
+    ]
+
+    # Auto-labels keyed on (p_rev, pk5s_gate) flag tuple (compare reports)
+    _COMPARE_LABELS = {
+        ('off', 'off'): 'baseline',
+        ('on',  'off'): 'p_rev only',
+        ('off', 'on'):  'gate only',
+        ('on',  'on'):  'production',
+    }
+
+    _DIV_LINE = '═' * 72
+    _SEC_LINE = '─' * 72
 
     def __init__(self, db: DatabaseManager) -> None:
         self._db  = db
@@ -60,9 +89,10 @@ class AnalyzeManager:
     def run(self, or_pk: int, min_signals: int = 30, top_n: int = 20,
             output_dir: str = '.') -> str:
 
-        run_meta  = self._load_run_meta(or_pk)
-        stop_pct  = float(run_meta['tc_stop_pct'])
-        raw       = self._load_combo_summaries(or_pk)
+        run_meta    = self._load_run_meta(or_pk)
+        stop_pct    = float(run_meta['tc_stop_pct'])
+        profit_zone = float(run_meta['tc_profit_zone'])
+        raw         = self._load_combo_summaries(or_pk, profit_zone)
 
         if not raw:
             self._log.error(f'No results found for or_pk={or_pk}')
@@ -71,13 +101,20 @@ class AnalyzeManager:
         df = pd.DataFrame(raw)
         df = self._enrich(df, stop_pct)
 
+        # Discover which sweep params are populated for this run.
+        # Any candidate column that's all-NULL gets pruned.
+        params_present = self._discover_params(df)
+
+        # Load int/float/enum classification from test_param_ranges for centroid math
+        param_types = self._load_param_types(int(run_meta['or_tc_pk']))
+
         # Filter to combos with enough decided trades
         filtered = df[df['decided'] >= min_signals].copy()
 
         self._report_overview(df, filtered, run_meta)
-        self._report_sensitivity(filtered)
-        self._report_top_n(filtered, top_n)
-        self._report_centroid(filtered, top_n)
+        self._report_sensitivity(filtered, params_present)
+        self._report_top_n(filtered, top_n, params_present)
+        self._report_centroid(filtered, top_n, params_present, param_types)
 
         path = f'{output_dir}/analysis_or{or_pk}.csv'
         df.to_csv(path, index=False)
@@ -88,7 +125,9 @@ class AnalyzeManager:
 
     def _load_run_meta(self, or_pk: int) -> dict:
         rows = self._db.execute(
-            '''SELECT r.*, tc.tc_stop_pct, tc.tc_indicator_label,
+            '''SELECT r.*, tc.tc_pk AS or_tc_pk,
+                      tc.tc_stop_pct, tc.tc_profit_zone, tc.tc_stop_buffer,
+                      tc.tc_dynamic_stoploss, tc.tc_indicator_label,
                       tc.tc_dema_len, tc.tc_dema_src
                FROM optimizer_runs r
                JOIN test_configs tc ON tc.tc_pk = r.or_tc_pk
@@ -99,35 +138,55 @@ class AnalyzeManager:
             raise ValueError(f'No optimizer_run for or_pk={or_pk}')
         return rows[0]
 
-    def _load_combo_summaries(self, or_pk: int) -> list:
+    def _load_combo_summaries(self, or_pk: int, profit_zone: float) -> list:
+        # r04: won/stopped/inconclusive derived from max_profit_pct + bars_to_stop.
+        # GROUP BY includes both BB and K param columns; NULL columns collapse
+        # to a single bucket per combo so BB grinds aren't fragmented.
         return self._db.execute(
             '''SELECT
                    s.pks_len        AS len,
                    s.pks_mult       AS mult,
+                   s.pks_len_rsi    AS len_rsi,
+                   s.pks_len_stoch  AS len_stoch,
                    s.pks_src        AS src,
                    s.pks_pool_c     AS pool_c,
                    s.pks_pool_w     AS pool_w,
                    s.pks_pool_range AS pool_range,
                    s.pks_slope_floor AS slope_floor,
                    s.pks_multiplier  AS multiplier,
-                   COUNT(*)                                                           AS total,
-                   SUM(o.pko_result IN ('won','stopped'))                             AS decided,
-                   SUM(o.pko_result = 'won')                                         AS won,
-                   SUM(o.pko_result = 'stopped')                                     AS stopped_ct,
-                   SUM(o.pko_result = 'inconclusive')                                AS inconclusive_ct,
-                   AVG(CASE WHEN o.pko_result = 'won' THEN o.pko_max_profit_pct END) AS avg_win_pct,
-                   AVG(o.pko_bars_to_stop)                                            AS avg_bars,
-                   AVG(o.pko_bars_to_max_profit)                                      AS avg_bars_peak
+                   COUNT(*)                                                AS total,
+                   SUM(o.pko_bars_to_stop IS NOT NULL)                     AS decided,
+                   SUM(o.pko_max_profit_pct >= %s)                         AS won,
+                   SUM(o.pko_bars_to_stop IS NOT NULL
+                       AND o.pko_max_profit_pct < %s)                      AS stopped_ct,
+                   SUM(o.pko_bars_to_stop IS NULL)                         AS inconclusive_ct,
+                   AVG(CASE WHEN o.pko_max_profit_pct >= %s
+                            THEN o.pko_max_profit_pct END)                 AS avg_win_pct,
+                   AVG(o.pko_bars_to_stop)                                 AS avg_bars,
+                   AVG(o.pko_bars_to_max_profit)                           AS avg_bars_peak
                FROM pk_signals s
                JOIN pk_outcomes o ON o.pko_pks_pk = s.pks_pk
                WHERE s.pks_or_pk = %s
-               GROUP BY s.pks_len, s.pks_mult, s.pks_src,
-                        s.pks_pool_c, s.pks_pool_w, s.pks_pool_range,
+               GROUP BY s.pks_len, s.pks_mult, s.pks_len_rsi, s.pks_len_stoch,
+                        s.pks_src, s.pks_pool_c, s.pks_pool_w, s.pks_pool_range,
                         s.pks_slope_floor, s.pks_multiplier''',
-            (or_pk,), fetch=True,
+            (profit_zone, profit_zone, profit_zone, or_pk), fetch=True,
         )
 
-    # ── enrichment ────────────────────────────────────────────────────────────
+    def _load_param_types(self, tc_pk: int) -> dict:
+        """
+        Returns {param_name: 'int'|'float'|'enum'} from test_param_ranges.
+        Used by centroid math to round int params to int (no fractional
+        grid points exist for them).
+        """
+        rows = self._db.execute(
+            '''SELECT tpr_param_name AS name, tpr_param_type AS ptype
+               FROM test_param_ranges WHERE tpr_tc_pk = %s''',
+            (tc_pk,), fetch=True,
+        )
+        return {r['name']: r['ptype'] for r in rows}
+
+    # ── enrichment + param discovery ──────────────────────────────────────────
 
     def _enrich(self, df: pd.DataFrame, stop_pct: float) -> pd.DataFrame:
         df = df.copy()
@@ -135,26 +194,33 @@ class AnalyzeManager:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
         for col in ['avg_win_pct', 'avg_bars', 'avg_bars_peak']:
             df[col] = pd.to_numeric(df[col], errors='coerce')
-        # When a combo has zero wins, avg_win_pct is NaN (mean over empty subset).
-        # Coerce to 0 so expectancy collapses to -stop_pct rather than NaN —
-        # the correct value when every signal stops out. Without this, idxmax
-        # downstream raises "Encountered all NA values" on a degenerate day.
+        # All-stops combo → avg_win_pct is NaN. Coerce to 0 so expectancy
+        # collapses to −stop_pct rather than NaN (preserves r02 idxmax fix).
         df['avg_win_pct'] = df['avg_win_pct'].fillna(0.0)
-        
+
         df['win_rate']         = df['won'] / df['decided'].replace(0, float('nan'))
         df['inconclusive_rate'] = df['inconclusive_ct'] / df['total'].replace(0, float('nan'))
-        # expectancy in % per trade: E = win_rate × avg_win - loss_rate × stop
         df['expectancy']       = (
             df['win_rate'] * df['avg_win_pct']
             - (1.0 - df['win_rate']) * stop_pct
         )
         return df
 
+    def _discover_params(self, df: pd.DataFrame) -> list:
+        """
+        Return the candidate params that have at least one non-NULL value
+        in this combo set. BB grinds drop len_rsi/len_stoch; K grinds drop
+        mult. Order preserved from _CANDIDATE_PARAMS for presentation.
+        """
+        return [
+            p for p in self._CANDIDATE_PARAMS
+            if p in df.columns and df[p].notna().any()
+        ]
+
     # ── report sections ───────────────────────────────────────────────────────
 
     def _report_overview(self, df: pd.DataFrame, filtered: pd.DataFrame, meta: dict) -> None:
         total_signals = int(df['total'].sum())
-        days_approx   = total_signals / (17_280 * len(df))  # rough: signals per 5s bar
         baseline_wr   = float(df['won'].sum() / max(df['decided'].sum(), 1) * 100)
 
         self._log.info(self._DIV_LINE)
@@ -162,8 +228,6 @@ class AnalyzeManager:
             f'  PK GRINDER — ANALYSIS   or_pk={meta["or_pk"]}'
             f'   {meta["tc_indicator_label"]}'
         )
-        # Round 260514: surface the two new run flags so output is self-
-        # describing. Defaults to "?" if columns are absent (pre-260514 runs).
         p_rev = meta.get('or_p_rev_enabled')
         pk5s  = meta.get('or_pk5s_gate_enabled')
         if p_rev is not None or pk5s is not None:
@@ -171,8 +235,13 @@ class AnalyzeManager:
                 f'  Run config: p_rev={"on" if p_rev else "off"}'
                 f'   pk5s_gate={"on" if pk5s else "off"}'
             )
+        self._log.info(
+            f'  Calibration: stop_pct={float(meta["tc_stop_pct"]):.4f}%   '
+            f'profit_zone={float(meta["tc_profit_zone"]):.4f}%   '
+            f'dynamic_stoploss={"on" if meta["tc_dynamic_stoploss"] else "off"}'
+        )
         self._log.info(self._DIV_LINE)
-        
+
         if df['decided'].sum() < 5000:
             self._log.info('  ⚠  Low data volume — results are preliminary')
         self._log.info('')
@@ -197,16 +266,14 @@ class AnalyzeManager:
             )
         self._log.info('')
 
-    def _report_sensitivity(self, df: pd.DataFrame) -> None:
+    def _report_sensitivity(self, df: pd.DataFrame, params: list) -> None:
         if df.empty:
             return
         self._log.info('PER-PARAM SENSITIVITY  (avg expectancy across combos per value)')
         self._log.info(self._SEC_LINE)
 
-        for param in self._NUMERIC_PARAMS + self._CAT_PARAMS:
-            if param not in df.columns:
-                continue
-            grp = (df.groupby(param)['expectancy']
+        for param in params:
+            grp = (df.groupby(param, dropna=True)['expectancy']
                      .agg(['mean', 'count'])
                      .reset_index()
                      .sort_values(param))
@@ -218,40 +285,47 @@ class AnalyzeManager:
 
         self._log.info('')
 
-    def _report_top_n(self, df: pd.DataFrame, n: int) -> None:
+    def _report_top_n(self, df: pd.DataFrame, n: int, params: list) -> None:
         if df.empty:
             return
         top = df.nlargest(n, 'expectancy')
         self._log.info(f'TOP {n} COMBOS BY EXPECTANCY')
         self._log.info(self._SEC_LINE)
+        # Dynamic header — show first 4 params + metrics for column budget
+        head_params = params[:4]
+        head_cols = '  '.join(f'{p:>8}' for p in head_params)
         self._log.info(
-            f'  {"#":>3}  {"len":>3}  {"mult":>5}  {"src":<6}'
-            f'  {"pc":>3}  {"pw":>3}  {"pr":>3}'
-            f'  {"exp%":>7}  {"win%":>6}  {"avg_win":>8}  {"sigs":>6}'
+            f'  {"#":>3}  {head_cols}  '
+            f'{"exp%":>7}  {"win%":>6}  {"avg_win":>8}  {"sigs":>6}'
         )
         for rank, (_, row) in enumerate(top.iterrows(), 1):
+            param_vals = '  '.join(
+                f'{self._fmt_param_val(row[p]):>8}' for p in head_params
+            )
             self._log.info(
-                f'  {rank:>3}  {int(row["len"]):>3}  {float(row["mult"]):>5.2f}'
-                f'  {str(row["src"]):<6}'
-                f'  {int(row["pool_c"]):>3}  {int(row["pool_w"]):>3}  {int(row["pool_range"]):>3}'
-                f'  {float(row["expectancy"]):>+7.4f}'
+                f'  {rank:>3}  {param_vals}  '
+                f'{float(row["expectancy"]):>+7.4f}'
                 f'  {float(row["win_rate"])*100:>5.1f}%'
                 f'  {float(row["avg_win_pct"]) if pd.notna(row["avg_win_pct"]) else 0.0:>7.4f}%'
                 f'  {int(row["total"]):>6}'
             )
         self._log.info('')
 
-    def _compute_centroid(self, df: pd.DataFrame, n: int = 20) -> dict:
+    @staticmethod
+    def _fmt_param_val(v) -> str:
+        if pd.isna(v):
+            return '-'
+        if isinstance(v, float):
+            return f'{v:.2f}'
+        return str(v)
+
+    def _compute_centroid(self, df: pd.DataFrame, n: int, params: list,
+                          param_types: dict) -> dict:
         """
         Top-N expectancy-weighted centroid of a combo dataframe.
 
-        Numeric params in _INT_PARAMS round to int (a centroid value of
-        18.25 for `len` is meaningless — no grid point exists there).
-        Other numeric params round to 4dp. Categorical params resolve to
-        the weighted mode.
-
-        Returns {} for empty input. Falls back to uniform weights when all
-        expectancies are non-positive (preserves the original guard).
+        Numeric int params round to int; float params round to 4dp.
+        Categorical params resolve to the weighted mode.
         """
         if df.empty:
             return {}
@@ -261,30 +335,31 @@ class AnalyzeManager:
             weights = pd.Series(1.0, index=top.index)
 
         centroid = {}
-        for param in self._NUMERIC_PARAMS:
-            if param not in top.columns:
-                continue
-            vals = pd.to_numeric(top[param], errors='coerce')
-            val  = float((vals * weights).sum() / weights.sum())
-            centroid[param] = int(round(val)) if param in self._INT_PARAMS \
-                              else round(val, 4)
+        for param in params:
+            ptype = param_types.get(param, 'float')
 
-        for param in self._CAT_PARAMS:
-            if param not in top.columns:
-                continue
-            centroid[param] = (
-                top.assign(w=weights)
-                   .groupby(param)['w']
-                   .sum()
-                   .idxmax()
-            )
+            if ptype == 'enum':
+                centroid[param] = (
+                    top.assign(w=weights)
+                       .groupby(param)['w']
+                       .sum()
+                       .idxmax()
+                )
+            else:
+                vals = pd.to_numeric(top[param], errors='coerce')
+                # Skip params with all-NaN (shouldn't happen post-discover,
+                # but defensive)
+                if not vals.notna().any():
+                    continue
+                val = float((vals * weights).sum() / weights.sum())
+                centroid[param] = int(round(val)) if ptype == 'int' else round(val, 4)
         return centroid
 
-    def _report_centroid(self, df: pd.DataFrame, n: int) -> None:
-        """Single-run centroid log path. Math lives in _compute_centroid."""
+    def _report_centroid(self, df: pd.DataFrame, n: int,
+                         params: list, param_types: dict) -> None:
         if df.empty:
             return
-        centroid = self._compute_centroid(df, n)
+        centroid = self._compute_centroid(df, n, params, param_types)
         self._log.info(f'RECOMMENDED CENTROID  (top {n} combos, weighted by expectancy)')
         self._log.info(self._SEC_LINE)
         parts = '   '.join(f'{k}={v}' for k, v in centroid.items())
@@ -293,47 +368,19 @@ class AnalyzeManager:
 
     # ──────────────────────────────────────────────────────────────────────
     # Compare — side-by-side reporting of 2-4 optimizer runs
-    #
-    # Added 260515. Portrait layout (vertical block per run), pivot-friendly
-    # long-format CSV output. Reuses _load_run_meta / _load_combo_summaries /
-    # _enrich / _compute_centroid so the per-run math is identical to a
-    # single-run report. First or_pk is the baseline; last is the target.
-    # Delta block computes target − baseline.
     # ──────────────────────────────────────────────────────────────────────
 
-    # Auto-labels keyed on (p_rev, pk5s_gate) flag tuple
-    _COMPARE_LABELS = {
-        ('off', 'off'): 'baseline',
-        ('on',  'off'): 'p_rev only',
-        ('off', 'on'):  'gate only',
-        ('on',  'on'):  'production',
-    }
-
     def compare(self, or_pks: list, output_dir: str = '.') -> str:
-        """
-        Side-by-side comparison of 2-4 optimizer runs.
-
-        Output: portrait console report + long-format CSV at
-        {output_dir}/compare_<or_pks_joined>.csv.
-
-        First or_pk in the list is the baseline; the last is the target.
-        Centroid drift is reported target − baseline; intermediate runs
-        appear in the per-run blocks but not in the delta calculation.
-        """
         if not 2 <= len(or_pks) <= 4:
             raise ValueError(f'compare requires 2-4 or_pks, got {len(or_pks)}')
 
         runs = [self._build_run_summary(op) for op in or_pks]
         baseline, target = runs[0], runs[-1]
 
-        # ── header ────────────────────────────────────────────────────────
         self._log.info(self._DIV_LINE)
-        self._log.info(
-            '  COMPARE — or_pk ' + ' / '.join(str(r['or_pk']) for r in runs)
-        )
+        self._log.info('  COMPARE — or_pk ' + ' / '.join(str(r['or_pk']) for r in runs))
         self._log.info(self._DIV_LINE)
 
-        # ── configs block ─────────────────────────────────────────────────
         self._log.info('')
         self._log.info('CONFIGS')
         for i, r in enumerate(runs):
@@ -347,7 +394,15 @@ class AnalyzeManager:
         self._log.info('')
         self._log.info(self._SEC_LINE)
 
-        # ── per-run blocks ────────────────────────────────────────────────
+        # Union of params present across all runs (so the report aligns)
+        all_params = []
+        seen = set()
+        for r in runs:
+            for p in r['params']:
+                if p not in seen:
+                    all_params.append(p)
+                    seen.add(p)
+
         for r in runs:
             self._log.info('')
             self._log.info(
@@ -361,20 +416,14 @@ class AnalyzeManager:
             self._log.info(f'  win_rate      {r["win_rate"]*100:>11.1f}%')
             self._log.info(f'  expectancy    {r["expectancy"]:>+11.3f}%')
             cent = r['centroid']
-            num_parts = '  '.join(
-                f'{p}={cent[p]}' for p in self._NUMERIC_PARAMS if p in cent
+            cent_parts = '  '.join(
+                f'{p}={cent[p]}' for p in all_params if p in cent
             )
-            self._log.info(f'  centroid      {num_parts}')
-            cat_parts = '  '.join(
-                f'{p}={cent[p]}' for p in self._CAT_PARAMS if p in cent
-            )
-            if cat_parts:
-                self._log.info(f'                {cat_parts}')
+            self._log.info(f'  centroid      {cent_parts}')
 
         self._log.info('')
         self._log.info(self._SEC_LINE)
 
-        # ── delta block ───────────────────────────────────────────────────
         self._log.info('')
         self._log.info(f'DELTA — or_pk={target["or_pk"]} vs or_pk={baseline["or_pk"]}')
         self._log.info('')
@@ -390,31 +439,27 @@ class AnalyzeManager:
 
         self._log.info('')
         self._log.info('  centroid drift')
-        for p in self._NUMERIC_PARAMS:
+        for p in all_params:
             bv = baseline['centroid'].get(p)
             tv = target['centroid'].get(p)
             if bv is None or tv is None:
                 continue
-            delta = tv - bv
-            if p in self._INT_PARAMS:
+            btype = baseline['param_types'].get(p, 'float')
+            if btype == 'int':
+                delta = int(tv) - int(bv)
                 tail = '(—)' if delta == 0 else f'({delta:+d})'
                 self._log.info(f'    {p:<12} {int(bv):>5} → {int(tv):<5}  {tail}')
+            elif btype == 'enum':
+                marker = '(—)' if bv == tv else '(changed)'
+                self._log.info(f'    {p:<12} {str(bv):>5} → {str(tv):<5}  {marker}')
             else:
+                delta = float(tv) - float(bv)
                 tail = '(—)' if abs(delta) < 1e-9 else f'({delta:+.3f})'
-                self._log.info(f'    {p:<12} {bv:>5.3f} → {tv:<5.3f}  {tail}')
-
-        for p in self._CAT_PARAMS:
-            bv = baseline['centroid'].get(p)
-            tv = target['centroid'].get(p)
-            if bv is None or tv is None:
-                continue
-            marker = '(—)' if bv == tv else '(changed)'
-            self._log.info(f'    {p:<12} {str(bv):>5} → {str(tv):<5}  {marker}')
+                self._log.info(f'    {p:<12} {float(bv):>5.3f} → {float(tv):<5.3f}  {tail}')
 
         self._log.info('')
         self._log.info(self._SEC_LINE)
 
-        # ── warnings ──────────────────────────────────────────────────────
         warnings = self._comparison_warnings(runs)
         if warnings:
             self._log.info('')
@@ -425,24 +470,21 @@ class AnalyzeManager:
         self._log.info('')
         self._log.info(self._DIV_LINE)
 
-        # ── CSV ───────────────────────────────────────────────────────────
         csv_path = self._write_compare_csv(runs, output_dir)
         self._log.info(f'Compare CSV (long format) → {csv_path}')
         return csv_path
 
     def _build_run_summary(self, or_pk: int) -> dict:
-        """
-        Load + enrich a single run's combo data into the summary dict that
-        compare() consumes. Lookback inferred from the pk_signals time span
-        since we don't store lookback explicitly on optimizer_runs.
-        """
-        meta     = self._load_run_meta(or_pk)
-        stop_pct = float(meta['tc_stop_pct'])
-        raw      = self._load_combo_summaries(or_pk)
+        meta        = self._load_run_meta(or_pk)
+        stop_pct    = float(meta['tc_stop_pct'])
+        profit_zone = float(meta['tc_profit_zone'])
+        raw         = self._load_combo_summaries(or_pk, profit_zone)
         if not raw:
             raise ValueError(f'No combos for or_pk={or_pk}')
-        df       = self._enrich(pd.DataFrame(raw), stop_pct)
-        filtered = df[df['decided'] >= 30].copy()
+        df          = self._enrich(pd.DataFrame(raw), stop_pct)
+        params      = self._discover_params(df)
+        param_types = self._load_param_types(int(meta['or_tc_pk']))
+        filtered    = df[df['decided'] >= 30].copy()
 
         span_rows = self._db.execute(
             '''SELECT MIN(pks_timestamp) AS mn, MAX(pks_timestamp) AS mx
@@ -473,17 +515,20 @@ class AnalyzeManager:
             'win_rate':        0.0,
             'expectancy':      0.0,
             'centroid':        {},
+            'params':          params,
+            'param_types':     param_types,
         }
         if not filtered.empty:
             summary['win_rate']   = float(
                 filtered['won'].sum() / max(filtered['decided'].sum(), 1)
             )
             summary['expectancy'] = float(filtered['expectancy'].max())
-            summary['centroid']   = self._compute_centroid(filtered, n=20)
+            summary['centroid']   = self._compute_centroid(
+                filtered, 20, params, param_types,
+            )
         return summary
 
     def _comparison_warnings(self, runs: list) -> list:
-        """Sanity checks: mismatched tc_pk, lookback drift, incomplete runs."""
         out = []
         tc_pks = {r['tc_pk'] for r in runs}
         if len(tc_pks) > 1:
@@ -511,29 +556,6 @@ class AnalyzeManager:
         return out
 
     def _write_compare_csv(self, runs: list, output_dir: str) -> str:
-        """
-        Long-format CSV for pivoting downstream (Excel pivot / pandas
-        pivot_table). Each row = one metric observation for one run.
-
-        Columns:
-            or_pk, label, p_rev, pk5s_gate, lookback_days,
-            metric_class, metric_name, value
-
-        metric_class:
-            'summary'  → signals, combos, combos_filtered, win_rate, expectancy
-            'centroid' → len, mult, pool_c, pool_w, pool_range,
-                         slope_floor, multiplier, src
-
-        value is mixed dtype (numeric for most, str for categorical `src`);
-        consumers cast as needed.
-
-        Pivot example in pandas:
-            df_long = pd.read_csv('compare_1_3_5.csv')
-            df_wide = df_long.pivot_table(
-                index='metric_name', columns='or_pk',
-                values='value', aggfunc='first',
-            )
-        """
         rows = []
         for r in runs:
             common = {

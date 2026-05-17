@@ -1,0 +1,21 @@
+diff --git a/optimus9/compute/parameter_grid_builder.py b/optimus9/compute/parameter_grid_builder.py
+--- a/optimus9/compute/parameter_grid_builder.py
++++ b/optimus9/compute/parameter_grid_builder.py
+@@ -41,11 +41,16 @@ class ParameterGridBuilder:
+             values  = [round(current - half * step + k * step, 8) for k in range(n + 1)]
+ 
+             if ptype == 'int':
+                 values = sorted(set(int(round(v)) for v in values))
+-                # pool_range=0 means disabled — exclude
+                 if name == 'pool_range':
++                    # pool_range=0 means disabled — exclude
+                     values = [v for v in values if v > 0]
++                elif name in ('len', 'len_rsi', 'len_stoch'):
++                    # r04: length params must be positive (k_len=0, rsi_len=0
++                    # etc. would crash IndicatorComputer). Center-symmetric
++                    # sweeps around small baselines can land on zero or negative.
++                    values = [v for v in values if v > 0]
+ 
+             param_lists[name] = values
+ 
+         keys   = list(param_lists.keys())
