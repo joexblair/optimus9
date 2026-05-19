@@ -4,3 +4,5 @@ logs/info.log
 *.csv
 *.xlsx
 
+logs/
+*.log
