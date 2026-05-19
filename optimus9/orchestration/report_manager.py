@@ -11,7 +11,7 @@ Every class calls get_logger(self.__class__.__name__).
 Terminology:
   OOB  = out of boundary (indicator has crossed high/low threshold)
   IB   = in boundary (indicator is within thresholds)
-  OS/OB reserved for RSI/K oscillator context only.
+  OS/OB remain only in RSI/K oscillator context where they are technically correct.
 """
 
 import asyncio
@@ -39,10 +39,10 @@ from ..compute.indicator_computer import IndicatorComputer
 from ..compute.pk_detector import PKDetector
 from ..compute.pk5s_gate_computer import Pk5sGateComputer
 from ..compute.swing_analyzer import SwingAnalyzer
-from ..compute.stop_calibrator import StopCalibrator
 from ..orchestration.optimizer_runner import OptimizerRunner
 from ..compute.parameter_grid_builder import ParameterGridBuilder
 from ..orchestration.report_exporter import ReportExporter
+from ..analysis.analyze_manager import AnalyzeManager
 
 
 class ReportManager:
@@ -71,14 +71,13 @@ class ReportManager:
             rows produce gate arrays via Pk5sGateComputer that fold with
             bny30M/p as a third OOB-equivalent gate. Recorded on the run.
 
-        Round 04 changes (260517):
-          • Pre-grind stop_pct calibration when tc.tc_dynamic_stoploss is TRUE
-            and the target line is 5s-native. Uses Pk5sGateComputer with
-            single-line vote_overrides (Pine vote-machine mimic). Calibrator
-            writes back to tc.tc_stop_pct before the grid grind starts.
-          • SwingAnalyzer dropped drag_pct — won/stopped/inconclusive
-            classification moved to AnalyzeManager (tc.tc_profit_zone as
-            the threshold).
+        Both flags default True for production. Toggle for the comparison
+        matrix in 260514_pk5s_spec.md.
+
+        r05: AnalyzeManager runs automatically at the end of every grind.
+        ReportExporter and AnalyzeManager are both wrapped in try/except so
+        a report failure can't mask a successful grind — the data is
+        persisted before either runs.
         """
         
         config = self._load_config(tc_pk)
@@ -106,8 +105,8 @@ class ReportManager:
         dema_src = IndicatorComputer.build_source(base_df, config['tc_dema_src'])
         dema     = IndicatorComputer.dema(dema_src, int(config['tc_dema_len']))
 
-        # Gate: load active extensions, compute oob_side per gate, fold.
-        # Gates: bny30M/p (OOB gates) + optional pk_5s vote machines.
+        # Gate: load active extensions, compute oob_side per gate, fold
+        # Gates: bny30M/p (existing OOB gates) + optional pk_5s vote machines.
         # All gates fold via OR semantics in IndicatorComputer.fold_gates.
         gate_cfgs = self._load_gate_configs(tc_pk)
         gate_sides = []
@@ -152,24 +151,9 @@ class ReportManager:
 
         grid = ParameterGridBuilder(self._db).build(tc_pk)
 
-        # r04: Per-line stop_pct calibration before the grind.
-        # 5s-native targets only — calibration uses Pk5sGateComputer with
-        # single-line vote_overrides (true Pine mimic via vote machine).
-        # Skipped silently if tc_dynamic_stoploss is FALSE.
-        if config.get('tc_dynamic_stoploss') and int(config['ic_itf_seconds']) == 5:
-            self._log.info('Stop calibration enabled (5s target) — running before grid grind')
-            cal_lookback = (
-                float(lookback_days) if lookback_days is not None
-                else (base_df['timestamp'].iloc[-1] - base_df['timestamp'].iloc[0]) / 86_400_000.0
-            )
-            StopCalibrator(self._db).calibrate(tc_pk, base_df, dema, cal_lookback)
-            # Reload — calibrator just updated tc.tc_stop_pct
-            config = self._load_config(tc_pk)
-
         OptimizerRunner(
             self._db,
             PKDetector(float(config['ic_high_boundary']), float(config['ic_low_boundary'])),
-            # r04: SwingAnalyzer dropped drag_pct — classification moved to AnalyzeManager
             SwingAnalyzer(float(config['tc_stop_pct']), int(config['tc_max_bars'])),
         ).run(or_pk, base_df, ind_df, dema, oob_side, grid, config,
               p_rev_enabled=p_rev_enabled)
@@ -182,7 +166,24 @@ class ReportManager:
             (or_pk,),
         )
 
-        return ReportExporter(self._db).export(or_pk, output_dir) if export_csv else None
+        # r05: auto-analyze. Best-effort — grind data is already persisted,
+        # so a report-side failure shouldn't mask a successful grind.
+        try:
+            self._log.info('Running auto-analysis…')
+            AnalyzeManager(self._db).run(or_pk)
+        except Exception as e:
+            self._log.warning(f'Auto-analyze failed (grind data is safe in DB): {e}')
+
+        # CSV export wrapped in try/except for the same reason — known
+        # ReportExporter drift against the r04 schema can crash the export
+        # without affecting the grind result.
+        if not export_csv:
+            return None
+        try:
+            return ReportExporter(self._db).export(or_pk, output_dir)
+        except Exception as e:
+            self._log.warning(f'CSV export failed (grind data is safe in DB): {e}')
+            return None
 
     def _load_config(self, tc_pk: int) -> dict:
         """Load test_config joined with its calibration indicator_config."""

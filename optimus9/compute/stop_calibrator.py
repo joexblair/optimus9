@@ -34,8 +34,11 @@ class StopCalibrator:
     timeframe" architectural question.)
     """
 
-    # 12 stop values: [0.11, 0.15, 0.19, ..., 0.55]
-    _STOP_RANGE_DEFAULT = (0.11, 0.55, 0.04)
+    # 21 stop values: [0.11, 0.15, 0.19, ..., 0.87, 0.91]. Extended in
+    # mid-round after gcs5m's 1-day calibration peaked at 0.55 with net
+    # banked still climbing — the true optimum lies past the original
+    # 0.55 ceiling. Boundary warning surfaces when peak lands at an edge.
+    _STOP_RANGE_DEFAULT = (0.11, 0.91, 0.04)
 
     # Midpoint for f_pk_state's peak-selector switch. Same value Pine
     # uses for s5_pk computation. Hardcoded here — r05 will read from
@@ -97,7 +100,7 @@ class StopCalibrator:
                 f'  {stop_pct:>5.2f}  {row["signals"]:>7}  '
                 f'{row["qualifying"]:>5}  {row["lost"]:>5}  '
                 f'{(row["inconclusive"]/max(row["signals"],1))*100:>5.1f}  '
-                f'{row["gross_profit"]:>+8.2f}  {row["gross_loss"]:>+8.2f}  '
+                f'{row["gross_profit"]:>+8.2f}  {-row["gross_loss"]:>+8.2f}  '
                 f'{row["net_banked"]:>+8.2f}'
             )
 
@@ -105,6 +108,21 @@ class StopCalibrator:
         results.sort(key=lambda r: (-r['net_banked'], r['stop_pct']))
         peak = results[0]
         chosen = round(peak['stop_pct'] + buffer_pct, 4)
+
+        # Boundary check — if peak is at sweep edge, true optimum may
+        # lie outside the tested range. Logged WARNING so it surfaces
+        # in info.log and gets noticed when scanning calibration logs.
+        if abs(peak['stop_pct'] - max(self._stops)) < 1e-9:
+            self._log.warning(
+                f'Peak at upper sweep boundary ({peak["stop_pct"]:.2f}%) — '
+                f'true optimum may lie beyond. Widen _STOP_RANGE_DEFAULT '
+                f'or accept that this line wants very wide stops.'
+            )
+        elif abs(peak['stop_pct'] - min(self._stops)) < 1e-9:
+            self._log.warning(
+                f'Peak at lower sweep boundary ({peak["stop_pct"]:.2f}%) — '
+                f'true optimum may lie below. Widen _STOP_RANGE_DEFAULT.'
+            )
 
         self._log.info(
             f'Peak net_banked = {peak["net_banked"]:+.2f}% at stop={peak["stop_pct"]:.2f}%. '

@@ -60,7 +60,7 @@ class AnalyzeManager:
     # are the aggregate metrics. Everything else returned by the query is
     # treated as a sweep dimension.
     _META_COLS = {
-        'total', 'decided', 'won', 'stopped_ct', 'inconclusive_ct',
+        'total', 'won', 'stopped_ct', 'inconclusive_ct',
         'avg_win_pct', 'avg_bars', 'avg_bars_peak',
     }
 
@@ -113,7 +113,8 @@ class AnalyzeManager:
 
         self._report_overview(df, filtered, run_meta)
         self._report_sensitivity(filtered, params_present)
-        self._report_top_n(filtered, top_n, params_present)
+        self._report_top_n(filtered, top_n, params_present, run_meta)
+        self._report_baseline(run_meta, params_present)
         self._report_centroid(filtered, top_n, params_present, param_types)
 
         path = f'{output_dir}/analysis_or{or_pk}.csv'
@@ -128,9 +129,17 @@ class AnalyzeManager:
             '''SELECT r.*, tc.tc_pk AS or_tc_pk,
                       tc.tc_stop_pct, tc.tc_profit_zone, tc.tc_stop_buffer,
                       tc.tc_dynamic_stoploss, tc.tc_indicator_label,
-                      tc.tc_dema_len, tc.tc_dema_src
+                      tc.tc_dema_len, tc.tc_dema_src,
+                      ic.ic_line_type AS og_line_type,
+                      ic.ic_src       AS og_src,
+                      ic.ic_bb_len    AS og_bb_len,
+                      ic.ic_bb_mult   AS og_bb_mult,
+                      ic.ic_k_len     AS og_k_len,
+                      ic.ic_rsi_len   AS og_rsi_len,
+                      ic.ic_stc_len   AS og_stc_len
                FROM optimizer_runs r
                JOIN test_configs tc ON tc.tc_pk = r.or_tc_pk
+               JOIN indicator_configs ic ON ic.ic_pk = tc.tc_ic_pk
                WHERE r.or_pk = %s''',
             (or_pk,), fetch=True,
         )
@@ -139,9 +148,13 @@ class AnalyzeManager:
         return rows[0]
 
     def _load_combo_summaries(self, or_pk: int, profit_zone: float) -> list:
-        # r04: won/stopped/inconclusive derived from max_profit_pct + bars_to_stop.
-        # GROUP BY includes both BB and K param columns; NULL columns collapse
-        # to a single bucket per combo so BB grinds aren't fragmented.
+        # r05: 'won' counts any trade that reached profit_zone regardless
+        # of whether stop later fired (in real trading the position closes
+        # at profit). 'stopped_ct' excludes those wins. 'inconclusive_ct'
+        # excludes them too. The three are mutually exclusive and sum to
+        # total. 'decided' = won + stopped_ct is computed in _enrich.
+        # Bug fix from r04 where SQL's `decided` undercounted won-but-not-
+        # stopped trades, producing win_rate > 100%.
         return self._db.execute(
             '''SELECT
                    s.pks_len        AS len,
@@ -155,11 +168,11 @@ class AnalyzeManager:
                    s.pks_slope_floor AS slope_floor,
                    s.pks_multiplier  AS multiplier,
                    COUNT(*)                                                AS total,
-                   SUM(o.pko_bars_to_stop IS NOT NULL)                     AS decided,
                    SUM(o.pko_max_profit_pct >= %s)                         AS won,
                    SUM(o.pko_bars_to_stop IS NOT NULL
                        AND o.pko_max_profit_pct < %s)                      AS stopped_ct,
-                   SUM(o.pko_bars_to_stop IS NULL)                         AS inconclusive_ct,
+                   SUM(o.pko_bars_to_stop IS NULL
+                       AND o.pko_max_profit_pct < %s)                      AS inconclusive_ct,
                    AVG(CASE WHEN o.pko_max_profit_pct >= %s
                             THEN o.pko_max_profit_pct END)                 AS avg_win_pct,
                    AVG(o.pko_bars_to_stop)                                 AS avg_bars,
@@ -170,7 +183,7 @@ class AnalyzeManager:
                GROUP BY s.pks_len, s.pks_mult, s.pks_len_rsi, s.pks_len_stoch,
                         s.pks_src, s.pks_pool_c, s.pks_pool_w, s.pks_pool_range,
                         s.pks_slope_floor, s.pks_multiplier''',
-            (profit_zone, profit_zone, profit_zone, or_pk), fetch=True,
+            (profit_zone, profit_zone, profit_zone, profit_zone, or_pk), fetch=True,
         )
 
     def _load_param_types(self, tc_pk: int) -> dict:
@@ -190,7 +203,7 @@ class AnalyzeManager:
 
     def _enrich(self, df: pd.DataFrame, stop_pct: float) -> pd.DataFrame:
         df = df.copy()
-        for col in ['total', 'decided', 'won', 'stopped_ct', 'inconclusive_ct']:
+        for col in ['total', 'won', 'stopped_ct', 'inconclusive_ct']:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
         for col in ['avg_win_pct', 'avg_bars', 'avg_bars_peak']:
             df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -198,6 +211,12 @@ class AnalyzeManager:
         # collapses to −stop_pct rather than NaN (preserves r02 idxmax fix).
         df['avg_win_pct'] = df['avg_win_pct'].fillna(0.0)
 
+        # r05: decided = won + stopped_ct (computed in Python, not SQL).
+        # The three SQL buckets (won/stopped_ct/inconclusive_ct) are
+        # mutually exclusive and sum to total. 'decided' excludes
+        # inconclusive trades from the win-rate denominator since they
+        # never resolved into a clear outcome. This bounds win_rate ≤ 1.
+        df['decided'] = df['won'] + df['stopped_ct']
         df['win_rate']         = df['won'] / df['decided'].replace(0, float('nan'))
         df['inconclusive_rate'] = df['inconclusive_ct'] / df['total'].replace(0, float('nan'))
         df['expectancy']       = (
@@ -285,7 +304,8 @@ class AnalyzeManager:
 
         self._log.info('')
 
-    def _report_top_n(self, df: pd.DataFrame, n: int, params: list) -> None:
+    def _report_top_n(self, df: pd.DataFrame, n: int, params: list,
+                      meta: dict = None) -> None:
         if df.empty:
             return
         top = df.nlargest(n, 'expectancy')
@@ -309,7 +329,68 @@ class AnalyzeManager:
                 f'  {float(row["avg_win_pct"]) if pd.notna(row["avg_win_pct"]) else 0.0:>7.4f}%'
                 f'  {int(row["total"]):>6}'
             )
+
+        # r05: append a row for the OG line settings, so the report shows
+        # how the original line stacks up against the top 20. Pool params
+        # drift to whatever optimum exists in the grid — this answers
+        # "the OG line at its best, regardless of pool".
+        if meta is not None:
+            self._render_og_row(df, meta, head_params)
+
         self._log.info('')
+
+    def _render_og_row(self, df: pd.DataFrame, meta: dict,
+                       head_params: list) -> None:
+        """
+        Find the best combo where line params match indicator_configs
+        OG values and render as a labeled row after the top N.
+        """
+        line_type = meta.get('og_line_type', 'bb')
+
+        if line_type == 'bb':
+            og_len  = meta.get('og_bb_len')
+            og_mult = meta.get('og_bb_mult')
+            og_src  = meta.get('og_src')
+            if og_len is None or og_mult is None or og_src is None:
+                return
+            og_len  = int(og_len)
+            og_mult = float(og_mult)
+            mask = (
+                (df['len'].astype(int) == og_len) &
+                ((df['mult'].astype(float) - og_mult).abs() < 0.01) &
+                (df['src'] == og_src)
+            )
+        else:
+            og_k   = meta.get('og_k_len')
+            og_rsi = meta.get('og_rsi_len')
+            og_stc = meta.get('og_stc_len')
+            og_src = meta.get('og_src')
+            if any(v is None for v in (og_k, og_rsi, og_stc, og_src)):
+                return
+            mask = (
+                (df['len'].astype(int) == int(og_k)) &
+                (df['len_rsi'].astype(int) == int(og_rsi)) &
+                (df['len_stoch'].astype(int) == int(og_stc)) &
+                (df['src'] == og_src)
+            )
+
+        og_rows = df[mask]
+        if og_rows.empty:
+            self._log.info('   og   (no rows match OG line params — '
+                           'verify indicator_configs values are in the grid)')
+            return
+
+        best = og_rows.loc[og_rows['expectancy'].idxmax()]
+        param_vals = '  '.join(
+            f'{self._fmt_param_val(best[p]):>8}' for p in head_params
+        )
+        self._log.info(
+            f'   og  {param_vals}  '
+            f'{float(best["expectancy"]):>+7.4f}'
+            f'  {float(best["win_rate"])*100:>5.1f}%'
+            f'  {float(best["avg_win_pct"]) if pd.notna(best["avg_win_pct"]) else 0.0:>7.4f}%'
+            f'  {int(best["total"]):>6}'
+        )
 
     @staticmethod
     def _fmt_param_val(v) -> str:
@@ -318,6 +399,40 @@ class AnalyzeManager:
         if isinstance(v, float):
             return f'{v:.2f}'
         return str(v)
+
+    def _report_baseline(self, meta: dict, params: list) -> None:
+        """
+        Surface the line's original indicator_configs values for visual
+        comparison against the recommended centroid that follows.
+        """
+        line_label = meta.get('tc_indicator_label', 'unknown')
+        self._log.info(f'ORIGINAL LINE ({line_label})')
+        self._log.info(self._SEC_LINE)
+        line_type = meta.get('og_line_type', 'bb')
+
+        # Build a dict of baseline values keyed the same way as centroid
+        baseline = {'src': meta.get('og_src')}
+        if line_type == 'bb':
+            baseline['len']  = meta.get('og_bb_len')
+            baseline['mult'] = float(meta['og_bb_mult']) if meta.get('og_bb_mult') is not None else None
+        else:  # 'k'
+            baseline['len']       = meta.get('og_k_len')
+            baseline['len_rsi']   = meta.get('og_rsi_len')
+            baseline['len_stoch'] = meta.get('og_stc_len')
+
+        # Render only the params that are also in this grind's discovered set
+        # (so the line aligns with the centroid line below)
+        parts = []
+        for p in params:
+            v = baseline.get(p)
+            if v is None:
+                parts.append(f'{p}=—')   # not in indicator_configs (e.g., pool_c)
+            elif isinstance(v, float):
+                parts.append(f'{p}={v:g}')
+            else:
+                parts.append(f'{p}={v}')
+        self._log.info(f'  {"   ".join(parts)}')
+        self._log.info('')
 
     def _compute_centroid(self, df: pd.DataFrame, n: int, params: list,
                           param_types: dict) -> dict:
