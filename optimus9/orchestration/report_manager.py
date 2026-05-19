@@ -42,7 +42,6 @@ from ..compute.swing_analyzer import SwingAnalyzer
 from ..orchestration.optimizer_runner import OptimizerRunner
 from ..compute.parameter_grid_builder import ParameterGridBuilder
 from ..orchestration.report_exporter import ReportExporter
-from ..analysis.analyze_manager import AnalyzeManager
 
 
 class ReportManager:
@@ -74,10 +73,9 @@ class ReportManager:
         Both flags default True for production. Toggle for the comparison
         matrix in 260514_pk5s_spec.md.
 
-        r05: AnalyzeManager runs automatically at the end of every grind.
-        ReportExporter and AnalyzeManager are both wrapped in try/except so
-        a report failure can't mask a successful grind — the data is
-        persisted before either runs.
+        r05: ReportExporter is wrapped in try/except so a known schema
+        drift against r04 can't mask a successful grind. Auto-analyze
+        is handled by the run.py caller, not here.
         """
         
         config = self._load_config(tc_pk)
@@ -166,17 +164,9 @@ class ReportManager:
             (or_pk,),
         )
 
-        # r05: auto-analyze. Best-effort — grind data is already persisted,
-        # so a report-side failure shouldn't mask a successful grind.
-        try:
-            self._log.info('Running auto-analysis…')
-            AnalyzeManager(self._db).run(or_pk)
-        except Exception as e:
-            self._log.warning(f'Auto-analyze failed (grind data is safe in DB): {e}')
-
-        # CSV export wrapped in try/except for the same reason — known
-        # ReportExporter drift against the r04 schema can crash the export
-        # without affecting the grind result.
+        # Note: auto-analyze is handled by run.py's cmd_start hook, not here.
+        # Keeping the export-error wrap below so a known ReportExporter drift
+        # against the r04 schema doesn't kill the grind result.
         if not export_csv:
             return None
         try:
