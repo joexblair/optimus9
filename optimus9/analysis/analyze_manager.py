@@ -104,6 +104,12 @@ class AnalyzeManager:
         CSV: full top 100 sorted by gross_banked with all metrics.
         """
         run_meta    = self._load_run_meta(or_pk)
+        self._log.info(
+            f'Loading combo summaries for or_pk={or_pk} '
+            f'({run_meta["tc_indicator_label"]}) — this is the expensive '
+            'step (GROUP BY across all signals), may take 10-20 min for '
+            'large grinds'
+        )
         stop_pct    = float(run_meta['tc_stop_pct'])
         profit_zone = float(run_meta['tc_profit_zone'])
         raw         = self._load_combo_summaries(or_pk, profit_zone)
@@ -150,11 +156,31 @@ class AnalyzeManager:
         self._log.info(self._DIV_LINE)
         return path
 
-    def analyze_many(self, or_pks: list, **kwargs) -> list:
+    def analyze_many(self, or_pks: list, parallel: int = 1, **kwargs) -> list:
         """
-        Batch process multiple or_pks. Same kwargs as run(). Returns list
-        of CSV paths (parallel to input or_pks).
+        Batch process multiple or_pks. Same kwargs as run().
+
+        parallel=1 (default): sequential, single DB connection.
+        parallel=N (N>1):     N worker processes, each opens its own DB.
+                              Use N ≤ min(len(or_pks), available_cores).
+                              Each or_pk takes 10-20 min for large grinds
+                              so parallelism pays off heavily.
+
+        Note: worker log lines may interleave across or_pks; CSVs are
+        per-or_pk so they don't conflict.
         """
+        if parallel > 1:
+            import multiprocessing as mp
+            self._log.info(
+                f'Batch analyze: {len(or_pks)} or_pks across '
+                f'{parallel} parallel workers'
+            )
+            with mp.Pool(parallel) as pool:
+                return pool.map(
+                    _analyze_one_worker,
+                    [(op, kwargs) for op in or_pks],
+                )
+
         out = []
         for or_pk in or_pks:
             self._log.info('')
@@ -1136,6 +1162,35 @@ class AnalyzeManager:
         pd.DataFrame(rows).to_csv(path, index=False)
         return path
 
+
+# ─── Multiprocessing worker (module-level for pickle compatibility) ─────────
+def _analyze_one_worker(args: tuple) -> str:
+    """
+    Worker process for analyze_many(parallel=N). Each process opens its
+    own DB connection, runs analyze for one or_pk, then disconnects.
+    Module-level (not method) because multiprocessing.Pool requires
+    picklable callables.
+    """
+    import os
+    or_pk, kwargs = args
+    db = DatabaseManager(
+        host     = os.environ.get('PK_DB_HOST', 'localhost'),
+        user     = os.environ.get('PK_DB_USER', 'root'),
+        password = os.environ.get('PK_DB_PASS', 'yourpassword'),
+        database = os.environ.get('PK_DB_NAME', 'pk_optimizer'),
+        port     = int(os.environ.get('PK_DB_PORT', 3306)),
+    )
+    db.connect()
+    try:
+        return AnalyzeManager(db).run(or_pk, **kwargs)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        raise
+    finally:
+        db.disconnect()
+
+
 # ─── CLI entry point ────────────────────────────────────────────────────────
 if __name__ == '__main__':
     import argparse
@@ -1156,6 +1211,10 @@ if __name__ == '__main__':
     parser.add_argument('--top_n',        type=int,   default=20)
     parser.add_argument('--top_stage1',   type=int,   default=100)
     parser.add_argument('--dd_threshold', type=float, default=0.15)
+    parser.add_argument('--parallel',     type=int,   default=1,
+                        help='Number of parallel worker processes '
+                             '(default 1). Use 6 for the standard 6-or_pk '
+                             'batch on a 16-core machine.')
     args = parser.parse_args()
 
     or_pks = ([args.or_pk] if args.or_pk is not None
@@ -1172,6 +1231,7 @@ if __name__ == '__main__':
     try:
         AnalyzeManager(db).analyze_many(
             or_pks,
+            parallel=args.parallel,
             min_signals=args.min_signals,
             top_n=args.top_n,
             top_stage1=args.top_stage1,
