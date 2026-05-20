@@ -298,6 +298,13 @@ def main():
                              'a ~1200 local-variable limit at script main scope; '
                              'each pushed signal costs ~6 locals, so ~150 signals '
                              'leaves headroom. Python sim always uses the full set.')
+    parser.add_argument('--use_bny30', action='store_true',
+                        help='Apply bny30M+bny30p AND-folded gating to the PK fires '
+                             'before stop sweep. Reports raw + retained counts. '
+                             'Stop sweep operates on the gated subset.')
+    parser.add_argument('--gate_ic_pks', type=str, default='2,3',
+                        help='Comma-separated ic_pks for gating when --use_bny30 is '
+                             'set. Defaults to 2,3 (bny30M + bny30p).')
     parser.add_argument('--output', type=str, default=None)
     args = parser.parse_args()
 
@@ -334,11 +341,36 @@ def main():
     transitions_idx = np.where((s5_pk_final != prev) & (s5_pk_final != 0))[0]
     timestamps = df['timestamp'].to_numpy()
 
+    raw_count = len(transitions_idx)
+
+    # ── bny30 gating (optional) ─────────────────────────────────────────
+    if args.use_bny30:
+        from optimus9.compute.indicator_computer import IndicatorComputer
+        gate_ic_pks = [int(p) for p in args.gate_ic_pks.split(',')]
+        log.info(f'Computing bny30 AND-folded gate from ic_pks={gate_ic_pks}')
+        gate_mask = IndicatorComputer.compute_gate_mask(
+            db=db, ic_pks=gate_ic_pks, base_df=df, fold='AND',
+        )
+
+        directions = s5_pk_final[transitions_idx]
+        keep = np.array([
+            int(gate_mask[i]) == int(d)
+            for i, d in zip(transitions_idx, directions)
+        ], dtype=bool)
+
+        gated_idx = transitions_idx[keep]
+        retained_pct = 100.0 * len(gated_idx) / raw_count if raw_count else 0
+        print()
+        print(f'Gate: bny30 AND ({",".join(str(p) for p in gate_ic_pks)}) — '
+              f'kept {len(gated_idx)}/{raw_count} ({retained_pct:.1f}%)')
+        transitions_idx = gated_idx
+
     n_long  = int((s5_pk_final[transitions_idx] == 1).sum())
     n_short = int((s5_pk_final[transitions_idx] == -1).sum())
 
     print()
-    print(f'Total: {len(transitions_idx)} signals  ({n_long} LONG, {n_short} SHORT)')
+    print(f'Total: {len(transitions_idx)} signals  ({n_long} LONG, {n_short} SHORT)'
+          + (f'  [gated from {raw_count}]' if args.use_bny30 else ''))
     print(f'Dataset: {len(df)} bars  ({len(df)*5/60:.1f} min)')
     print(f'Profit zone (win threshold): {_PROFIT_ZONE}%')
 

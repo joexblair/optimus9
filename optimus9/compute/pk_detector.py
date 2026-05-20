@@ -51,6 +51,11 @@ class PKDetector:
     line[i - upper + 1 : i - lower + 1]. The two classes coexist in this
     round; the discrepancy here will be patched once the next clean centroid
     is locked. See round spec 260514_pk5s_spec.md.
+
+    r05 (260519): line_type parameter added so K-line targets can use this
+    gated path. BB lines populate 'mult'; K lines populate 'len_rsi' and
+    'len_stoch'. Default 'bb' preserves the prior calling contract for any
+    code that didn't update with this change.
     """
 
     _PM_LONG  =  2.0
@@ -63,7 +68,8 @@ class PKDetector:
     def detect(self, line: np.ndarray, dema: np.ndarray,
                pool_c: int, pool_w: int, pool_range: int,
                multiplier: int, slope_floor: float,
-               oob_side: np.ndarray, params: dict) -> list:
+               oob_side: np.ndarray, params: dict,
+               line_type: str = 'bb') -> list:
 
         # pool_range=0 means disabled — skip
         if pool_range == 0:
@@ -106,7 +112,7 @@ class PKDetector:
                 if pk_state not in (float(expected), float(expected) * 2.0):
                     continue
 
-                signals.append({
+                sig = {
                     'bar_index':   i,
                     'direction':   expected,
                     'pk_state':    pk_state,
@@ -117,13 +123,23 @@ class PKDetector:
                     'dema_value':  float(dema[i]),
                     'pool':        label,
                     'len':         params['len'],
-                    'mult':        params['mult'],
                     'src':         params['src'],
                     'pool_c':      pool_c,
                     'pool_w':      pool_w,
                     'pool_range':  pool_range,
                     'slope_floor': slope_floor,
                     'multiplier':  multiplier,
-                })
+                }
+                # Line-type-specific params: BB carries mult; K carries the
+                # two extra length params. _persist_gated reads these by
+                # line_type, so they must be present on the side that needs
+                # them and absent (or None) on the other.
+                if line_type == 'bb':
+                    sig['mult'] = params['mult']
+                else:  # 'k'
+                    sig['len_rsi']   = params['len_rsi']
+                    sig['len_stoch'] = params['len_stoch']
+
+                signals.append(sig)
 
         return signals

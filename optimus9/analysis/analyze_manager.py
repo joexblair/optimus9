@@ -87,8 +87,22 @@ class AnalyzeManager:
         self._log = get_logger(self.__class__.__name__)
 
     def run(self, or_pk: int, min_signals: int = 30, top_n: int = 20,
+            top_stage1: int = 100, dd_threshold: float = 0.15,
             output_dir: str = '.') -> str:
+        """
+        Two-stage analysis pipeline:
+          Stage 1: top `top_stage1` combos by expectancy (statistical edge filter)
+          Stage 2: walk each Stage 1 combo's signal sequence to get real
+                   gross_banked, max_drawdown, profit_factor, sharpe, sortino
+          DD filter: combos with max_drawdown > dd_threshold are listed
+                     separately (not silently dropped).
+          PROVEN COMBO: Stage 2 rank #1 by gross_banked (excluding DD-killed).
+          Centroid: still computed for directional hint; no longer the
+                    deployment recommendation.
 
+        Console: top 20 by gross_banked + PROVEN COMBO + DD audit if any.
+        CSV: full top 100 sorted by gross_banked with all metrics.
+        """
         run_meta    = self._load_run_meta(or_pk)
         stop_pct    = float(run_meta['tc_stop_pct'])
         profit_zone = float(run_meta['tc_profit_zone'])
@@ -102,25 +116,55 @@ class AnalyzeManager:
         df = self._enrich(df, stop_pct)
 
         # Discover which sweep params are populated for this run.
-        # Any candidate column that's all-NULL gets pruned.
         params_present = self._discover_params(df)
-
-        # Load int/float/enum classification from test_param_ranges for centroid math
-        param_types = self._load_param_types(int(run_meta['or_tc_pk']))
+        param_types    = self._load_param_types(int(run_meta['or_tc_pk']))
 
         # Filter to combos with enough decided trades
         filtered = df[df['decided'] >= min_signals].copy()
 
+        # ── Stage 1: shortlist by expectancy ───────────────────────────────
+        stage1 = self._compute_stage1(filtered, top_stage1)
+
+        # ── Stage 2: walk equity per combo, compute real metrics ───────────
+        stage2 = self._compute_stage2(
+            or_pk, stage1, profit_zone, stop_pct, params_present,
+        )
+
+        # ── DD filter: kept (for ranking) vs killed (for audit) ────────────
+        stage2_kept, stage2_killed = self._apply_dd_filter(stage2, dd_threshold)
+
+        # Reports
         self._report_overview(df, filtered, run_meta)
         self._report_sensitivity(filtered, params_present)
-        self._report_top_n(filtered, top_n, params_present, run_meta)
+        self._report_top_n_v2(stage2_kept, top_n, params_present, run_meta, df)
         self._report_baseline(run_meta, params_present)
+        self._report_proven_combo(stage2_kept, params_present, profit_zone)
         self._report_centroid(filtered, top_n, params_present, param_types)
+        if not stage2_killed.empty:
+            self._report_dd_audit(stage2_killed, dd_threshold)
 
+        # CSV — full top 100 by gross_banked, with all Stage 2 metrics
         path = f'{output_dir}/analysis_or{or_pk}.csv'
-        df.to_csv(path, index=False)
-        self._log.info(f'Full combo summary → {path}')
+        self._write_stage2_csv(stage2, path)
+        self._log.info(f'Full top {top_stage1} with metrics → {path}')
+        self._log.info(self._DIV_LINE)
         return path
+
+    def analyze_many(self, or_pks: list, **kwargs) -> list:
+        """
+        Batch process multiple or_pks. Same kwargs as run(). Returns list
+        of CSV paths (parallel to input or_pks).
+        """
+        out = []
+        for or_pk in or_pks:
+            self._log.info('')
+            self._log.info('')
+            try:
+                out.append(self.run(or_pk, **kwargs))
+            except Exception as e:
+                self._log.error(f'or_pk={or_pk} failed: {e}')
+                out.append(None)
+        return out
 
     # ── data loading ──────────────────────────────────────────────────────────
 
@@ -268,7 +312,7 @@ class AnalyzeManager:
         self._log.info(f'  Total signals        : {total_signals:>10,}')
         self._log.info(f'  Combos (all)         : {len(df):>10,}')
         self._log.info(f'  Combos (≥{meta.get("min_signals",30)} decided) : {len(filtered):>10,}')
-        self._log.info(f'  Overall win rate     : {baseline_wr:>9.1f}%  ← baseline to beat')
+        self._log.info(f'  Avg gated win rate   : {baseline_wr:>9.1f}%')
 
         if not filtered.empty:
             best  = filtered.loc[filtered['expectancy'].idxmax()]
@@ -303,6 +347,401 @@ class AnalyzeManager:
             self._log.info(f'  {param:<12}  {parts}')
 
         self._log.info('')
+
+    # ── Stage 1: shortlist by expectancy ─────────────────────────────────
+
+    def _compute_stage1(self, df: pd.DataFrame, top_n: int) -> pd.DataFrame:
+        """
+        Stage 1: take top N combos by expectancy. Returns a slice of df
+        with `stage1_rank` column added.
+        """
+        if df.empty:
+            return df.iloc[0:0].copy()
+        out = df.nlargest(top_n, 'expectancy').copy()
+        out['stage1_rank'] = range(1, len(out) + 1)
+        return out
+
+    # ── Stage 2: walk equity per combo, compute real metrics ─────────────
+
+    _PARAM_COL_MAP = (
+        ('pks_len',         'len'),
+        ('pks_mult',        'mult'),
+        ('pks_src',         'src'),
+        ('pks_len_rsi',     'len_rsi'),
+        ('pks_len_stoch',   'len_stoch'),
+        ('pks_pool_c',      'pool_c'),
+        ('pks_pool_w',      'pool_w'),
+        ('pks_pool_range',  'pool_range'),
+        ('pks_slope_floor', 'slope_floor'),
+        ('pks_multiplier',  'multiplier'),
+    )
+
+    def _query_combo_signals(self, or_pk: int, combo_row) -> list:
+        """
+        Pull all signals + outcomes for a specific combo, ordered by time.
+        BB combos have NULL len_rsi/stoch; K combos have NULL mult.
+        WHERE clause uses IS NULL for NULL values to match correctly.
+        """
+        where_parts = ['s.pks_or_pk = %s']
+        vals = [or_pk]
+        for col, key in self._PARAM_COL_MAP:
+            v = combo_row.get(key)
+            if v is None or (isinstance(v, float) and pd.isna(v)):
+                where_parts.append(f's.{col} IS NULL')
+            else:
+                where_parts.append(f's.{col} = %s')
+                vals.append(v)
+
+        sql = f'''
+            SELECT s.pks_timestamp        AS ts,
+                   s.pks_dir              AS direction,
+                   o.pko_max_profit_pct   AS max_pct,
+                   o.pko_bars_to_stop     AS bts,
+                   o.pko_bars_to_max_profit AS btm
+            FROM pk_signals s
+            LEFT JOIN pk_outcomes o ON o.pko_pks_pk = s.pks_pk
+            WHERE {' AND '.join(where_parts)}
+            ORDER BY s.pks_pk
+        '''
+        return self._db.execute(sql, tuple(vals), fetch=True)
+
+    @staticmethod
+    def _walk_equity(signals: list, profit_zone: float, stop_pct: float,
+                     seed: float = 1000.0) -> dict:
+        """
+        Walk a signal sequence on a $seed-equity curve. Returns:
+          gross_banked, max_drawdown, profit_factor, sharpe, sortino,
+          mean_pnl, n_won, n_stopped, n_inconc, avg_won_pct,
+          min_won_pct, win95_flag
+
+        signal_pnl logic:
+          max_pct >= profit_zone           → +max_pct (win at profit_zone exit)
+          else if bars_to_stop NOT NULL    → -stop_pct (loss)
+          else                             → 0 (inconclusive, no trade close)
+
+        Inconclusive trades count toward 'total' but not 'decided'. They
+        contribute 0 to equity (assumes the strategy holds them flat).
+
+        Returns inf for sharpe/sortino/PF when stdev or denominator is 0;
+        the CSV writer converts inf → blank for cleanliness.
+        """
+        equity = seed
+        peak   = seed
+        max_dd = 0.0
+
+        won_pcts     = []
+        stopped      = 0
+        inconc       = 0
+        gross_wins   = 0.0
+        gross_losses = 0.0
+        pnls         = []
+
+        for s in signals:
+            mp  = float(s['max_pct']) if s['max_pct'] is not None else None
+            bts = s['bts']
+
+            if mp is not None and mp >= profit_zone:
+                pnl = mp
+                won_pcts.append(mp)
+                gross_wins += mp
+            elif bts is not None:
+                pnl = -stop_pct
+                stopped += 1
+                gross_losses += stop_pct
+            else:
+                pnl = 0.0
+                inconc += 1
+
+            pnls.append(pnl)
+            equity *= (1.0 + pnl / 100.0)
+            peak    = max(peak, equity)
+            if peak > 0:
+                dd = (peak - equity) / peak
+                if dd > max_dd:
+                    max_dd = dd
+
+        n     = len(pnls)
+        n_won = len(won_pcts)
+        arr   = np.array(pnls)
+        neg   = arr[arr < 0]
+
+        mean_pnl    = float(arr.mean())             if n   else 0.0
+        std_pnl     = float(arr.std(ddof=0))        if n > 1 else 0.0
+        std_neg     = float(neg.std(ddof=0))        if len(neg) > 1 else 0.0
+        avg_won_pct = float(np.mean(won_pcts))      if won_pcts else 0.0
+        min_won_pct = float(np.min(won_pcts))       if won_pcts else 0.0
+
+        decided = n_won + stopped
+        win_rate = (n_won / decided) if decided else 0.0
+
+        return {
+            'gross_banked':  equity,
+            'max_drawdown':  max_dd,
+            'profit_factor': (gross_wins / gross_losses) if gross_losses > 0 else float('inf'),
+            'sharpe':        (mean_pnl / std_pnl) if std_pnl > 0 else float('inf'),
+            'sortino':       (mean_pnl / std_neg) if std_neg > 0 else float('inf'),
+            'mean_pnl':      mean_pnl,
+            'n_won':         n_won,
+            'n_stopped':     stopped,
+            'n_inconc':      inconc,
+            'win_rate_walked': win_rate,
+            'avg_won_pct_walked': avg_won_pct,
+            'min_won_pct':   min_won_pct,
+            'win95_flag':    1 if win_rate > 0.95 else 0,
+        }
+
+    def _compute_stage2(self, or_pk: int, stage1: pd.DataFrame,
+                        profit_zone: float, stop_pct: float,
+                        params: list) -> pd.DataFrame:
+        """
+        For each Stage 1 combo: pull its signals, walk equity, attach
+        metrics. Returns df sorted by gross_banked DESC.
+        """
+        if stage1.empty:
+            return stage1.copy()
+
+        rows = []
+        for _, combo in stage1.iterrows():
+            signals = self._query_combo_signals(or_pk, combo)
+            metrics = self._walk_equity(signals, profit_zone, stop_pct)
+            row = {
+                'stage1_rank': int(combo['stage1_rank']),
+                'expectancy':  float(combo['expectancy']),
+                'total':       int(combo['total']),
+            }
+            for p in params:
+                row[p] = combo[p]
+            row.update(metrics)
+            rows.append(row)
+
+        out = pd.DataFrame(rows)
+        out = out.sort_values('gross_banked', ascending=False).reset_index(drop=True)
+        out['stage2_rank'] = range(1, len(out) + 1)
+        return out
+
+    @staticmethod
+    def _apply_dd_filter(stage2: pd.DataFrame, dd_threshold: float):
+        """Split stage2 into kept (DD ≤ threshold) and killed (DD > threshold)."""
+        if stage2.empty:
+            return stage2.copy(), stage2.copy()
+        kept   = stage2[stage2['max_drawdown'] <= dd_threshold].copy()
+        killed = stage2[stage2['max_drawdown']  > dd_threshold].copy()
+        kept   = kept.sort_values('gross_banked', ascending=False).reset_index(drop=True)
+        killed = killed.sort_values('gross_banked', ascending=False).reset_index(drop=True)
+        return kept, killed
+
+    # ── Stage 2 reports ──────────────────────────────────────────────────
+
+    def _report_top_n_v2(self, stage2_kept: pd.DataFrame, n: int,
+                         params: list, meta: dict,
+                         full_df: pd.DataFrame) -> None:
+        """
+        Top N by gross_banked from Stage 2 (DD-filtered). Console keeps
+        the simple 9-col layout — full picture lives in the CSV.
+        """
+        self._log.info(f'TOP {n} COMBOS BY gross_banked   (Stage 2, DD ≤ kill switch)')
+        self._log.info(self._SEC_LINE)
+
+        line_type = meta.get('og_line_type', 'bb')
+        if line_type == 'bb':
+            header = (f'  {"#":>3}  {"len":>4} {"mult":>5} {"src":>6}  '
+                      f'{"exp%":>7} {"win%":>5} {"avg_won":>7} {"sigs":>5}  '
+                      f'{"gross_bank":>11}')
+        else:
+            header = (f'  {"#":>3}  {"len":>4} {"rsi":>4} {"stc":>4} {"src":>6}  '
+                      f'{"exp%":>7} {"win%":>5} {"avg_won":>7} {"sigs":>5}  '
+                      f'{"gross_bank":>11}')
+        self._log.info(header)
+
+        if stage2_kept.empty:
+            self._log.info('  (no combos survived DD filter — see DD audit below)')
+            return
+
+        for _, row in stage2_kept.head(n).iterrows():
+            flag = ' ⚠' if int(row.get('win95_flag', 0)) == 1 else ''
+            if line_type == 'bb':
+                core = (
+                    f'  {int(row["stage2_rank"]):>3}  '
+                    f'{int(row["len"]):>4} '
+                    f'{float(row["mult"]):>5.2f} '
+                    f'{str(row["src"]):>6}  '
+                )
+            else:
+                core = (
+                    f'  {int(row["stage2_rank"]):>3}  '
+                    f'{int(row["len"]):>4} '
+                    f'{int(row["len_rsi"]):>4} '
+                    f'{int(row["len_stoch"]):>4} '
+                    f'{str(row["src"]):>6}  '
+                )
+            metrics = (
+                f'{float(row["expectancy"]):>+7.4f} '
+                f'{float(row["win_rate_walked"])*100:>5.1f} '
+                f'{float(row["avg_won_pct_walked"]):>7.4f} '
+                f'{int(row["total"]):>5}  '
+                f'${row["gross_banked"]:>9,.0f}{flag}'
+            )
+            self._log.info(core + metrics)
+
+        # OG line row (existing logic, but compute from full_df since OG
+        # might not be in Stage 1/2)
+        if meta is not None:
+            self._log.info('')
+            self._render_og_row_v2(full_df, meta, line_type)
+        self._log.info('')
+
+    def _render_og_row_v2(self, df: pd.DataFrame, meta: dict, line_type: str) -> None:
+        """Render OG row in the new column format."""
+        if line_type == 'bb':
+            og_len  = meta.get('og_bb_len')
+            og_mult = meta.get('og_bb_mult')
+            og_src  = meta.get('og_src')
+            if any(v is None for v in (og_len, og_mult, og_src)):
+                return
+            mask = (
+                (df['len'].astype(int) == int(og_len)) &
+                ((df['mult'].astype(float) - float(og_mult)).abs() < 0.01) &
+                (df['src'] == og_src)
+            )
+        else:
+            og_k   = meta.get('og_k_len')
+            og_rsi = meta.get('og_rsi_len')
+            og_stc = meta.get('og_stc_len')
+            og_src = meta.get('og_src')
+            if any(v is None for v in (og_k, og_rsi, og_stc, og_src)):
+                return
+            mask = (
+                (df['len'].astype(int) == int(og_k)) &
+                (df['len_rsi'].astype(int) == int(og_rsi)) &
+                (df['len_stoch'].astype(int) == int(og_stc)) &
+                (df['src'] == og_src)
+            )
+
+        og_rows = df[mask]
+        if og_rows.empty:
+            self._log.info('   og   (no rows match OG line params)')
+            return
+        best = og_rows.loc[og_rows['expectancy'].idxmax()]
+
+        if line_type == 'bb':
+            core = (
+                f'  {"og":>3}  '
+                f'{int(best["len"]):>4} '
+                f'{float(best["mult"]):>5.2f} '
+                f'{str(best["src"]):>6}  '
+            )
+        else:
+            core = (
+                f'  {"og":>3}  '
+                f'{int(best["len"]):>4} '
+                f'{int(best["len_rsi"]):>4} '
+                f'{int(best["len_stoch"]):>4} '
+                f'{str(best["src"]):>6}  '
+            )
+        # OG row uses expectancy-based metrics (it's from full_df, not Stage 2)
+        win = float(best['win_rate']) * 100 if pd.notna(best['win_rate']) else 0
+        avg = float(best['avg_win_pct']) if pd.notna(best['avg_win_pct']) else 0
+        self._log.info(
+            core +
+            f'{float(best["expectancy"]):>+7.4f} '
+            f'{win:>5.1f} '
+            f'{avg:>7.4f} '
+            f'{int(best["total"]):>5}  '
+            f'{"—":>11}'
+        )
+
+    def _report_proven_combo(self, stage2_kept: pd.DataFrame,
+                             params: list, profit_zone: float) -> None:
+        """PROVEN COMBO = Stage 2 rank #1 after DD filter. Goes before centroid."""
+        self._log.info('PROVEN COMBO  (Stage 2 rank #1, DD-qualified)')
+        self._log.info(self._SEC_LINE)
+        if stage2_kept.empty:
+            self._log.info('  No combo passed DD filter.')
+            self._log.info('')
+            return
+
+        best = stage2_kept.iloc[0]
+        # Render all params with their value
+        parts = []
+        for p in params:
+            v = best[p]
+            if pd.isna(v):
+                continue
+            if p == 'mult':
+                parts.append(f'{p}={float(v):.2f}')
+            elif p == 'slope_floor':
+                parts.append(f'{p}={float(v):.1f}')
+            elif isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer()):
+                parts.append(f'{p}={int(v)}')
+            else:
+                parts.append(f'{p}={v}')
+        self._log.info(f'  {"   ".join(parts)}')
+
+        flag = ' ⚠ win95'  if int(best.get('win95_flag', 0)) == 1 else ''
+        sharpe = best['sharpe']
+        sortino = best['sortino']
+        pf = best['profit_factor']
+        self._log.info(
+            f'  expectancy={float(best["expectancy"]):+.4f}%  '
+            f'win={float(best["win_rate_walked"])*100:.1f}%  '
+            f'signals={int(best["total"])}  '
+            f'gross_banked=${best["gross_banked"]:,.0f}'
+        )
+        self._log.info(
+            f'  max_dd={float(best["max_drawdown"])*100:.2f}%  '
+            f'PF={self._fmt_inf(pf, "{:.2f}")}  '
+            f'Sharpe={self._fmt_inf(sharpe, "{:.3f}")}  '
+            f'Sortino={self._fmt_inf(sortino, "{:.3f}")}  '
+            f'min_won={float(best["min_won_pct"]):.4f}%'
+            f'{flag}'
+        )
+        self._log.info('')
+
+    def _report_dd_audit(self, stage2_killed: pd.DataFrame,
+                         dd_threshold: float) -> None:
+        """DD audit: combos that exceeded DD threshold but had top-100 expectancy."""
+        self._log.info('DD KILLED  (top-100 expectancy but DD > '
+                       f'{dd_threshold*100:.0f}%)')
+        self._log.info(self._SEC_LINE)
+        self._log.info(
+            f'  {"s1_rank":>7}  {"exp%":>7}  {"gross_bank":>11}  '
+            f'{"max_dd":>6}  {"sigs":>5}'
+        )
+        for _, row in stage2_killed.head(20).iterrows():
+            self._log.info(
+                f'  {int(row["stage1_rank"]):>7}  '
+                f'{float(row["expectancy"]):>+7.4f}  '
+                f'${row["gross_banked"]:>9,.0f}  '
+                f'{float(row["max_drawdown"])*100:>5.2f}%  '
+                f'{int(row["total"]):>5}'
+            )
+        if len(stage2_killed) > 20:
+            self._log.info(f'  ... +{len(stage2_killed)-20} more in CSV')
+        self._log.info('')
+
+    def _write_stage2_csv(self, stage2: pd.DataFrame, path: str) -> None:
+        """Write top 100 Stage 2 results with full metrics to CSV."""
+        if stage2.empty:
+            stage2.to_csv(path, index=False)
+            return
+        # Convert inf to NaN for cleaner CSV
+        df = stage2.copy()
+        for col in ('sharpe', 'sortino', 'profit_factor'):
+            df[col] = df[col].replace([np.inf, -np.inf], np.nan)
+        df.to_csv(path, index=False)
+
+    @staticmethod
+    def _fmt_inf(v, fmt: str) -> str:
+        """Format with handling for inf (returns '∞')."""
+        try:
+            v = float(v)
+            if not np.isfinite(v):
+                return '∞'
+            return fmt.format(v)
+        except (TypeError, ValueError):
+            return '—'
+
+    # ── Existing reports below (unchanged from r05) ──────────────────────
 
     def _report_top_n(self, df: pd.DataFrame, n: int, params: list,
                       meta: dict = None) -> None:

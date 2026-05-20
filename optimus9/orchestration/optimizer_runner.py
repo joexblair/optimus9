@@ -40,10 +40,12 @@ class OptimizerRunner:
         reconciler uses, just with one voter (target line carries xlsx
         weights, others absent). True Pine mimic.
 
-      Gated (b6m grind):
+      Gated (b6m grind, r05 6-line grinds under bny30):
         External gate (bny30M/p) provides oob_side. Builds the calibration
         line per combo, calls PKDetector to find PK patterns within the
-        OOB region. Existing path, preserved.
+        OOB region. K-line support added r04 (line via f_k); detect()
+        now also accepts line_type so K-line params (len_rsi/len_stoch)
+        emit correctly without expecting 'mult'.
 
     r04: K-line support added on the gated path (line via f_k instead of
     f_bb when ic_line_type='k'). Self-gated path supports K too via
@@ -292,6 +294,7 @@ class OptimizerRunner:
                 int(params['pool_c']), int(params['pool_w']),
                 int(params['pool_range']), int(params['multiplier']),
                 float(params['slope_floor']), oob_side, params,
+                line_type=line_type,
             )
             outcomes = self._analyzer.analyze(signals, close)
             self._persist_gated(or_pk, base_df['timestamp'].to_numpy(), outcomes, line_type)

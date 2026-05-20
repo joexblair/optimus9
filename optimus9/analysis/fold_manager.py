@@ -62,7 +62,8 @@ class FoldManager:
     # ─────────────────────────────────────────────────────────────────────
 
     def run(self, tp_pk: int, lookback_days: int, centroids: dict,
-            stops: list, gating_on: bool = False,
+            stops: list, gating_on: bool = True,
+            gate_ic_pks: list = None,
             notes: str = None) -> int:
         """
         Fold all lines in centroids onto line_signals.
@@ -71,15 +72,25 @@ class FoldManager:
                              pool_range, slope_floor, multiplier,
                              weight_close, weight_wide}}
         stops     — list of stop_pct values; outcomes computed per stop
-        Returns the lsr_pk (line_signal_runs row id) for the run.
+        gating_on — if True, compute bny30 gate mask and tag each fire's
+                    ls_gated_in column (1 if gate agrees, 0 if filtered).
+                    All fires are persisted regardless — gating is a tag,
+                    not a filter. Analysis filters via WHERE ls_gated_in=1.
+        gate_ic_pks — list of gate ic_pks; defaults to [2, 3] (bny30M/p).
+
+        Returns the lsr_pk for the run.
         """
+        if gate_ic_pks is None:
+            gate_ic_pks = [2, 3]   # bny30M + bny30p
+
         end_ms   = int(datetime.now(timezone.utc).timestamp() * 1000)
         start_ms = int((datetime.now(timezone.utc)
                         - timedelta(days=lookback_days)).timestamp() * 1000)
 
         self._log.info(f'FoldManager: tp_pk={tp_pk}, lookback={lookback_days}d, '
                        f'lines={sorted(centroids.keys())}, stops={stops}, '
-                       f'gating={"on" if gating_on else "off"}')
+                       f'gating={"on" if gating_on else "off"}'
+                       + (f' ic_pks={gate_ic_pks}' if gating_on else ''))
 
         # Create the run row
         lsr_pk = self._db.execute(
@@ -101,26 +112,36 @@ class FoldManager:
         base_df = self._load_klines(tp_pk, start_ms, end_ms)
         self._log.info(f'  base: {len(base_df)} × 5s bars')
 
-        # Compute gate mask if requested. Otherwise zero array → all bars valid.
+        # Compute the bny30 gate mask once if gating is on (used by all lines)
         if gating_on:
-            oob_side = self._compute_bny30_gate(tp_pk, base_df)
-            self._log.info(f'  gate: {int((oob_side != 0).sum())} OOB bars '
-                           f'(L={int((oob_side == 1).sum())}, '
-                           f'S={int((oob_side == -1).sum())})')
+            gate_mask = IndicatorComputer.compute_gate_mask(
+                db=self._db, ic_pks=gate_ic_pks,
+                base_df=base_df, fold='AND',
+            )
+            kept = int((gate_mask != 0).sum())
+            self._log.info(f'  gate: bny30 AND — {kept} bars OOB '
+                           f'(L={int((gate_mask == 1).sum())}, '
+                           f'S={int((gate_mask == -1).sum())})')
         else:
-            oob_side = np.zeros(len(base_df), dtype=np.int8)
+            gate_mask = np.zeros(len(base_df), dtype=np.int8)
 
         # Process each line
         for ic_pk in sorted(centroids.keys()):
             try:
-                fires = self._process_line(
+                fires, gated = self._process_line(
                     lsr_pk, ic_pk, centroids[ic_pk],
-                    base_df, oob_side, stops,
+                    base_df, gate_mask, gating_on, stops,
                 )
-                self._log.info(f'  ic_pk={ic_pk}: {fires} fires persisted')
+                if gating_on:
+                    pct = (100.0 * gated / fires) if fires else 0
+                    self._log.info(f'  ic_pk={ic_pk}: {fires} fires, '
+                                   f'{gated} gated-in ({pct:.1f}%)')
+                else:
+                    self._log.info(f'  ic_pk={ic_pk}: {fires} fires '
+                                   '(gating off; all marked ls_gated_in=1)')
             except Exception as e:
                 self._log.error(f'  ic_pk={ic_pk} failed: {e}')
-                raise  # don't half-fold; either all or none
+                raise
 
         return lsr_pk
 
@@ -129,11 +150,14 @@ class FoldManager:
     # ─────────────────────────────────────────────────────────────────────
 
     def _process_line(self, lsr_pk: int, ic_pk: int, params: dict,
-                      base_df: pd.DataFrame, oob_side: np.ndarray,
-                      stops: list) -> int:
+                      base_df: pd.DataFrame, gate_mask: np.ndarray,
+                      gating_on: bool, stops: list) -> tuple:
         """
         Run pk machine for one line at its centroid, extract fires,
-        compute outcomes per stop, bulk-insert into line_signals.
+        compute outcomes per stop, tag with gate agreement, bulk-insert.
+
+        Returns (total_fires, gated_in_fires) — first is all fires
+        persisted; second is the subset where gate agrees with direction.
         """
         line_cfg = self._load_line_config(ic_pk)
 
@@ -144,7 +168,7 @@ class FoldManager:
         # Build single-line vote dict for Pk5sGateComputer
         vote = self._build_single_line_vote(ic_pk, params, line_cfg)
 
-        # Run the gate machine
+        # Run the gate machine to produce PK fires
         pk_arr = Pk5sGateComputer(self._db).compute(
             tce_pk=f'fold-{lsr_pk}-{ic_pk}',
             base_df=base_df, dema=dema,
@@ -158,22 +182,35 @@ class FoldManager:
         fire_idx = np.where((pk_arr != prev) & (pk_arr != 0))[0]
 
         timestamps = base_df['timestamp'].to_numpy()
+        gated_count = 0
         rows = []
         for i in fire_idx:
             i = int(i)
             direction = int(pk_arr[i])
+
+            # ls_gated_in: 1 if bny30 gate agrees with this fire's direction.
+            # When gating_on=False, mark all fires as 1 so consumer queries
+            # using `WHERE ls_gated_in=1` behave consistently across runs.
+            if gating_on:
+                gated_in = 1 if int(gate_mask[i]) == direction else 0
+            else:
+                gated_in = 1
+            gated_count += gated_in
 
             row = {
                 'lsr_pk':    lsr_pk,
                 'timestamp': int(timestamps[i]),
                 'ic_pk':     ic_pk,
                 'direction': direction,
+                'gated_in':  gated_in,
                 'line_value': None,           # Pk5sGateComputer doesn't expose per-bar
                 'slope':       None,           # internals; populate later via separate
                 'dema_value':  float(dema[i]),  # slope-instrumented compute pass.
             }
 
-            # Compute outcomes per stop
+            # Compute outcomes per stop. All fires get outcomes, not just
+            # gated-in ones — lets analysis compare "what gating filtered out
+            # had it played out" against "what it kept."
             for stop in stops:
                 outcome = self._evaluate_outcome(base_df, i, direction, stop)
                 suf = f'{int(round(stop * 100)):02d}'
@@ -183,7 +220,7 @@ class FoldManager:
             rows.append(row)
 
         self._bulk_insert_signals(rows)
-        return len(rows)
+        return len(rows), gated_count
 
     def _evaluate_outcome(self, base_df: pd.DataFrame, entry_idx: int,
                           direction: int, stop_pct: float) -> dict:
@@ -300,23 +337,12 @@ class FoldManager:
             raise RuntimeError(f'No klines for tp_pk={tp_pk} in window')
         return pd.DataFrame(rows)
 
-    def _compute_bny30_gate(self, tp_pk: int,
-                            base_df: pd.DataFrame) -> np.ndarray:
-        """
-        Stub. To be implemented when bny30 integration lands.
-        Returns the folded oob_side array (+1 HI, -1 LO, 0 IB) from
-        bny30M and bny30p gates aligned to base_df.
-        """
-        raise NotImplementedError(
-            'bny30 gating not yet integrated into FoldManager. '
-            'Set gating_on=False until that lands.'
-        )
-
     def _bulk_insert_signals(self, rows: list) -> None:
         if not rows:
             return
         cols = (
             'ls_lsr_pk', 'ls_timestamp', 'ls_ic_pk', 'ls_direction',
+            'ls_gated_in',
             'ls_line_value', 'ls_slope', 'ls_dema_value',
             'ls_max_profit_60', 'ls_bars_to_stop_60',
             'ls_max_profit_71', 'ls_bars_to_stop_71',
@@ -327,6 +353,7 @@ class FoldManager:
         for r in rows:
             values.append((
                 r['lsr_pk'], r['timestamp'], r['ic_pk'], r['direction'],
+                r['gated_in'],
                 r['line_value'], r['slope'], r['dema_value'],
                 r.get('max_profit_60'),   r.get('bars_to_stop_60'),
                 r.get('max_profit_71'),   r.get('bars_to_stop_71'),

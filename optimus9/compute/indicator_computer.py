@@ -187,6 +187,89 @@ class IndicatorComputer:
         out = np.where(rng.isna(), np.nan, out)
         return out.astype(float)
 
+    # ═══════════════════════════════════════════════════════════════════
+    # PIECE B — r05 gate composition helpers
+    #
+    # compute_gate_mask: generalize ReportManager._load_gate_configs flow
+    # into a reusable classmethod for inspector + FoldManager + future
+    # consumers. Existing fold_gates (OR semantics) is preserved for
+    # production grinds; new code uses fold='AND' for conservative
+    # bny30M+bny30p gating.
+    # ═══════════════════════════════════════════════════════════════════
+
+    @classmethod
+    def compute_gate_mask(cls, db, ic_pks: list,
+                          base_df: pd.DataFrame,
+                          fold: str = 'AND') -> np.ndarray:
+        """
+        Compute a folded per-bar gate mask from multiple gate indicators.
+
+        Each ic_pk loaded from indicator_configs, OOB-side computed at its
+        native TF, aligned to 5s base, then all gates folded.
+
+        Args:
+            db       — DatabaseManager instance
+            ic_pks   — list of ic_pks (e.g. [2, 3] for bny30M + bny30p)
+            base_df  — 5s base DataFrame (alignment target)
+            fold     — 'AND' (every gate must agree, conservative) or
+                       'OR' (any gate fires; legacy fold_gates semantics)
+
+        Returns:
+            np.ndarray shape (len(base_df),) values {-1, 0, +1}
+        """
+        if not ic_pks:
+            return np.zeros(len(base_df), dtype=np.int8)
+
+        placeholders = ','.join(['%s'] * len(ic_pks))
+        configs = db.execute(
+            f'''SELECT ic.*,
+                       itf.itf_seconds AS ic_itf_seconds,
+                       s.is_prefix,
+                       itf.itf_label,
+                       il.il_suffix
+                FROM indicator_configs ic
+                JOIN indicator_timeframes itf ON itf.itf_pk = ic.ic_itf_pk
+                JOIN indicator_series     s   ON s.is_pk    = ic.ic_is_pk
+                JOIN indicator_lines      il  ON il.il_pk   = ic.ic_il_pk
+                WHERE ic.ic_pk IN ({placeholders})''',
+            tuple(ic_pks), fetch=True,
+        )
+
+        if len(configs) != len(ic_pks):
+            present = {c['ic_pk'] for c in configs}
+            missing = set(ic_pks) - present
+            raise ValueError(f'Missing indicator_configs for ic_pks: {missing}')
+
+        gate_sides = []
+        for gcfg in configs:
+            gate_df   = cls.resample(base_df, int(gcfg['ic_itf_seconds']))
+            oob_raw   = cls.compute_oob_side(gcfg, gate_df)
+            oob_align = cls.align_to_base(oob_raw, gate_df, base_df)
+            gate_sides.append(oob_align)
+
+        if fold == 'AND':
+            return cls._fold_and(gate_sides)
+        elif fold == 'OR':
+            return cls.fold_gates(gate_sides)
+        else:
+            raise ValueError(f'Unknown fold={fold!r}; use "AND" or "OR"')
+
+    @staticmethod
+    def _fold_and(sides: list) -> np.ndarray:
+        """
+        AND fold: bar is HI iff EVERY gate says HI; LO iff every says LO;
+        IB otherwise. Counterpart to fold_gates (OR) for conservative
+        bny30M+bny30p gating per Joe's spec.
+        """
+        if not sides:
+            return np.zeros(0, dtype=np.int8)
+        stack = np.stack(sides)              # (n_gates, n_bars)
+        n_bars = stack.shape[1]
+        out = np.zeros(n_bars, dtype=np.int8)
+        out[np.all(stack ==  1, axis=0)] =  1
+        out[np.all(stack == -1, axis=0)] = -1
+        return out
+
 # ═══════════════════════════════════════════════════════════════════════════
 # PIECE A — IndicatorComputer additions
 #
@@ -224,7 +307,6 @@ class IndicatorComputer:
         DataFrame parallel to base_df (same length, same timestamps) with
         columns: timestamp, open, high, low, close.
         """
-        """[docstring unchanged]"""
         ts        = base_df['timestamp'].to_numpy()
         window_id = (ts // (target_seconds * 1000)).astype(np.int64)
 

@@ -39,9 +39,6 @@ CREATE TABLE line_signals (
     ls_timestamp    bigint UNSIGNED NOT NULL,        -- ms epoch
     ls_ic_pk        smallint UNSIGNED NOT NULL,      -- which line fired
     ls_direction    tinyint NOT NULL,                -- +1=LONG, -1=SHORT
-    ls_gated_in     tinyint UNSIGNED NOT NULL,       -- 1 if bny30 gate agrees with direction; 0 if filtered out
-                                                     -- Always populated. Lets analysis query raw vs gated subsets
-                                                     -- from same fold (`WHERE ls_gated_in = 1`).
 
     -- Per-bar diagnostics at signal time (for slope-weighted affinity)
     ls_line_value   decimal(14,6) DEFAULT NULL,      -- line value at fire bar
@@ -58,10 +55,9 @@ CREATE TABLE line_signals (
     ls_bars_to_stop_95 int DEFAULT NULL,
 
     PRIMARY KEY (ls_pk),
-    INDEX idx_ls_lsr_ts        (ls_lsr_pk, ls_timestamp),
-    INDEX idx_ls_lsr_ic        (ls_lsr_pk, ls_ic_pk),
-    INDEX idx_ls_lsr_gated_ic  (ls_lsr_pk, ls_gated_in, ls_ic_pk),
-    INDEX idx_ls_lsr_ic_dir    (ls_lsr_pk, ls_ic_pk, ls_direction, ls_timestamp),
+    INDEX idx_ls_lsr_ts     (ls_lsr_pk, ls_timestamp),
+    INDEX idx_ls_lsr_ic     (ls_lsr_pk, ls_ic_pk),
+    INDEX idx_ls_lsr_ic_dir (ls_lsr_pk, ls_ic_pk, ls_direction, ls_timestamp),
     CONSTRAINT fk_ls_lsr FOREIGN KEY (ls_lsr_pk)
         REFERENCES line_signal_runs(lsr_pk)
         ON DELETE CASCADE
