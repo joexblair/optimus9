@@ -498,6 +498,8 @@ def validate(db: DatabaseManager, or_pk: int,
 
 
 if __name__ == '__main__':
+    import os
+
     parser = argparse.ArgumentParser()
     grp = parser.add_mutually_exclusive_group(required=True)
     grp.add_argument('--or_pk',  type=int, help='single or_pk to validate')
@@ -514,9 +516,15 @@ if __name__ == '__main__':
     or_pks = ([args.or_pk] if args.or_pk is not None
               else [int(p) for p in args.or_pks.split(',')])
 
-    db = DatabaseManager()
+    db = DatabaseManager(
+        host     = os.environ.get('PK_DB_HOST', 'localhost'),
+        user     = os.environ.get('PK_DB_USER', 'root'),
+        password = os.environ.get('PK_DB_PASS', 'yourpassword'),
+        database = os.environ.get('PK_DB_NAME', 'pk_optimizer'),
+        port     = int(os.environ.get('PK_DB_PORT', 3306)),
+    )
+    db.connect()
     try:
-        db.connect()
         for op in or_pks:
             try:
                 validate(db, op, args.output_dir, args.emit_pine,

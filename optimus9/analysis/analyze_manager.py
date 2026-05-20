@@ -1135,3 +1135,48 @@ class AnalyzeManager:
         path = f'{output_dir}/compare_{or_pks_str}.csv'
         pd.DataFrame(rows).to_csv(path, index=False)
         return path
+
+# ─── CLI entry point ────────────────────────────────────────────────────────
+if __name__ == '__main__':
+    import argparse
+    import os
+
+    parser = argparse.ArgumentParser(
+        description='Re-analyze existing optimizer_runs through the AM v2 '
+                    'two-stage ranker. Reads pk_signals/pk_outcomes only — '
+                    'no re-grinding.'
+    )
+    grp = parser.add_mutually_exclusive_group(required=True)
+    grp.add_argument('--or_pk',  type=int, help='single or_pk to analyze')
+    grp.add_argument('--or_pks', type=str,
+                     help='comma-separated or_pks for batch, '
+                          'e.g. --or_pks=20,21,22,17,18,19')
+    parser.add_argument('--output_dir',   type=str,   default='.')
+    parser.add_argument('--min_signals',  type=int,   default=30)
+    parser.add_argument('--top_n',        type=int,   default=20)
+    parser.add_argument('--top_stage1',   type=int,   default=100)
+    parser.add_argument('--dd_threshold', type=float, default=0.15)
+    args = parser.parse_args()
+
+    or_pks = ([args.or_pk] if args.or_pk is not None
+              else [int(p) for p in args.or_pks.split(',')])
+
+    db = DatabaseManager(
+        host     = os.environ.get('PK_DB_HOST', 'localhost'),
+        user     = os.environ.get('PK_DB_USER', 'root'),
+        password = os.environ.get('PK_DB_PASS', 'yourpassword'),
+        database = os.environ.get('PK_DB_NAME', 'pk_optimizer'),
+        port     = int(os.environ.get('PK_DB_PORT', 3306)),
+    )
+    db.connect()
+    try:
+        AnalyzeManager(db).analyze_many(
+            or_pks,
+            min_signals=args.min_signals,
+            top_n=args.top_n,
+            top_stage1=args.top_stage1,
+            dd_threshold=args.dd_threshold,
+            output_dir=args.output_dir,
+        )
+    finally:
+        db.disconnect()
