@@ -126,7 +126,9 @@ class OptimizerRunner:
             s5_pk_final = -oob_arr  # invert to Pine convention
 
             signals = self._extract_transitions(s5_pk_final)
-            outcomes = self._analyzer.analyze(signals, close)
+            # timestamps threaded through for future debug instrumentation
+            # inside SwingAnalyzer / outcome_walker.
+            outcomes = self._analyzer.analyze(signals, close, timestamps)
             self._persist_self_gated(or_pk, timestamps, outcomes, params, line_type)
 
     @staticmethod

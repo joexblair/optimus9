@@ -451,40 +451,60 @@ class AnalyzeManager:
         Returns inf for sharpe/sortino/PF when stdev or denominator is 0;
         the CSV writer converts inf → blank for cleanliness.
         """
+        # RESOLVED equity walk
         equity = seed
         peak   = seed
         max_dd = 0.0
 
         won_pcts     = []
         stopped      = 0
-        inconc       = 0
+        unrealized   = 0     # was 'inconc'; renamed locally for clarity
         gross_wins   = 0.0
         gross_losses = 0.0
         pnls         = []
+
+        # UNREALIZED parallel equity walk (r05 260521)
+        u_equity     = seed
+        u_peak       = seed
+        u_max_dd     = 0.0
+        u_pnls       = []
+        u_max_pcts   = []
 
         for s in signals:
             mp  = float(s['max_pct']) if s['max_pct'] is not None else None
             bts = s['bts']
 
-            if mp is not None and mp >= profit_zone:
-                pnl = mp
-                won_pcts.append(mp)
-                gross_wins += mp
-            elif bts is not None:
-                pnl = -stop_pct
-                stopped += 1
-                gross_losses += stop_pct
-            else:
-                pnl = 0.0
-                inconc += 1
+            if bts is not None:
+                # RESOLVED — stop fired at some point during the trade
+                if mp is not None and mp >= profit_zone:
+                    pnl = mp
+                    won_pcts.append(mp)
+                    gross_wins += mp
+                else:
+                    pnl = -stop_pct
+                    stopped += 1
+                    gross_losses += stop_pct
 
-            pnls.append(pnl)
-            equity *= (1.0 + pnl / 100.0)
-            peak    = max(peak, equity)
-            if peak > 0:
-                dd = (peak - equity) / peak
-                if dd > max_dd:
-                    max_dd = dd
+                pnls.append(pnl)
+                equity *= (1.0 + pnl / 100.0)
+                peak    = max(peak, equity)
+                if peak > 0:
+                    dd = (peak - equity) / peak
+                    if dd > max_dd:
+                        max_dd = dd
+            else:
+                # UNREALIZED — trade ran off the end of available klines.
+                u_pnl = mp if mp is not None else 0.0
+                unrealized += 1
+                u_pnls.append(u_pnl)
+                if mp is not None and mp > 0:
+                    u_max_pcts.append(mp)
+                u_equity *= (1.0 + u_pnl / 100.0)
+                u_peak    = max(u_peak, u_equity)
+                if u_peak > 0:
+                    u_dd = (u_peak - u_equity) / u_peak
+                    if u_dd > u_max_dd:
+                        u_max_dd = u_dd
 
         n     = len(pnls)
         n_won = len(won_pcts)
@@ -509,11 +529,17 @@ class AnalyzeManager:
             'mean_pnl':      mean_pnl,
             'n_won':         n_won,
             'n_stopped':     stopped,
-            'n_inconc':      inconc,
+            'n_inconc':      unrealized,    # alias for n_unrealized (back-compat)
+            'n_unrealized':  unrealized,
             'win_rate_walked': win_rate,
             'avg_won_pct_walked': avg_won_pct,
             'min_won_pct':   min_won_pct,
             'win95_flag':    1 if win_rate > 0.95 else 0,
+            # UNREALIZED shadow metrics (trades still open at dataset end)
+            'unrealized_gross_banked': u_equity,
+            'unrealized_max_drawdown': u_max_dd,
+            'unrealized_mean_pnl':     float(np.mean(u_pnls)) if u_pnls else 0.0,
+            'unrealized_avg_max_pct':  float(np.mean(u_max_pcts)) if u_max_pcts else 0.0,
         }
 
     def _compute_stage2(self, or_pk: int, stage1: pd.DataFrame,

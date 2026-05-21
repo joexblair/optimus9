@@ -1,0 +1,8 @@
+{
+    "files.exclude": {
+        "**/.csv": true,
+        "**/.md": true,
+        "**/.sql": true,
+        "**/.txt": true
+    }
+}

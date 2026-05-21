@@ -25,9 +25,11 @@ from datetime import datetime, timedelta, timezone
 from logger import get_logger
 
 from ..db.database_manager import DatabaseManager
+from ..db.kline_loader     import KlineLoader
 from ..compute.indicator_computer import IndicatorComputer
 from ..compute.pk5s_gate_computer import Pk5sGateComputer
 from ..compute.swing_analyzer import SwingAnalyzer
+from ..compute.outcome_walker import walk_outcome
 
 
 class FoldManager:
@@ -51,10 +53,12 @@ class FoldManager:
       # Then query: SELECT * FROM line_signals WHERE ls_lsr_pk = lsr_pk
     """
 
-    _MAX_BARS = 1080  # match production tc.tc_max_bars default
+    # r05 (260521): _MAX_BARS dropped — outcome_walker now uses no cap.
+    # bars_to_stop=None ⇔ trade ran off the end of available klines.
 
     def __init__(self, db: DatabaseManager) -> None:
         self._db  = db
+        self._kl  = KlineLoader(db)
         self._log = get_logger(self.__class__.__name__)
 
     # ─────────────────────────────────────────────────────────────────────
@@ -225,43 +229,19 @@ class FoldManager:
     def _evaluate_outcome(self, base_df: pd.DataFrame, entry_idx: int,
                           direction: int, stop_pct: float) -> dict:
         """
-        Walk forward from entry_idx, capture max_profit_pct and bars_to_stop
-        against stop_pct. Returns dict with max_profit_pct and bars_to_stop
-        (bars_to_stop = None if trade never stopped within MAX_BARS).
+        Walk forward from entry_idx via shared outcome_walker.walk_outcome.
+
+        r05 (260521): per-bar walk moved to compute.outcome_walker, shared
+        with SwingAnalyzer. _MAX_BARS cap dropped — bars_to_stop=None now
+        strictly means the trade ran off the end of available klines.
         """
         close = base_df['close'].to_numpy()
-        entry = float(close[entry_idx])
-        cap   = min(entry_idx + self._MAX_BARS, len(close) - 1)
-
-        max_profit_pct = 0.0
-        bars_to_stop   = None
-
-        if direction == 1:
-            stop_level = entry * (1.0 - stop_pct / 100.0)
-            for j in range(entry_idx + 1, cap + 1):
-                c = float(close[j])
-                if c > entry:
-                    profit = (c / entry - 1.0) * 100.0
-                    if profit > max_profit_pct:
-                        max_profit_pct = profit
-                if c <= stop_level:
-                    bars_to_stop = j - entry_idx
-                    break
-        else:
-            stop_level = entry * (1.0 + stop_pct / 100.0)
-            for j in range(entry_idx + 1, cap + 1):
-                c = float(close[j])
-                if c < entry:
-                    profit = (1.0 - c / entry) * 100.0
-                    if profit > max_profit_pct:
-                        max_profit_pct = profit
-                if c >= stop_level:
-                    bars_to_stop = j - entry_idx
-                    break
-
+        outcome = walk_outcome(close, entry_idx, direction, stop_pct)
+        # FoldManager only consumes max_profit_pct and bars_to_stop;
+        # drop bars_to_max_profit to keep the call-site stable.
         return {
-            'max_profit_pct': round(max_profit_pct, 4),
-            'bars_to_stop':   bars_to_stop,
+            'max_profit_pct': outcome['max_profit_pct'],
+            'bars_to_stop':   outcome['bars_to_stop'],
         }
 
     # ─────────────────────────────────────────────────────────────────────
@@ -322,20 +302,8 @@ class FoldManager:
 
     def _load_klines(self, tp_pk: int, start_ms: int,
                      end_ms: int) -> pd.DataFrame:
-        rows = self._db.execute(
-            '''SELECT kc_timestamp AS timestamp, kc_open  AS open,
-                      kc_high      AS high,      kc_low   AS low,
-                      kc_close     AS close,     kc_volume AS volume
-               FROM kline_collection
-               WHERE kc_tp_pk    = %s
-                 AND kc_timestamp >= %s
-                 AND kc_timestamp <  %s
-               ORDER BY kc_timestamp ASC''',
-            (tp_pk, start_ms, end_ms), fetch=True,
-        )
-        if not rows:
-            raise RuntimeError(f'No klines for tp_pk={tp_pk} in window')
-        return pd.DataFrame(rows)
+        """Delegates to shared KlineLoader (r05 260521 refactor)."""
+        return self._kl.load_window(tp_pk, start_ms, end_ms)
 
     def _bulk_insert_signals(self, rows: list) -> None:
         if not rows:

@@ -53,7 +53,10 @@ class OutlierReporter:
         stats = self._db.execute(
             '''SELECT pks_len, pks_mult, pks_src,
                       COUNT(*) AS total,
-                      SUM(pko_result = 'won') AS won,
+                      -- pko_result column was dropped; derive 'won' from
+                      -- max_profit_pct vs profit_zone (hardcoded 0.60 here
+                      -- because OutlierReporter is currently orphaned).
+                      SUM(o.pko_max_profit_pct >= 0.60) AS won,
                       AVG(pko_max_profit_pct) AS avg_profit
                FROM pk_signals s JOIN pk_outcomes o ON o.pko_pks_pk = s.pks_pk
                GROUP BY pks_len, pks_mult, pks_src

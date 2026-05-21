@@ -165,30 +165,47 @@ def _walk_equity(signals: list, profit_zone: float, stop_pct: float,
     """Mirror of AnalyzeManager._walk_equity for the validator's standalone use."""
     import numpy as np
     equity, peak, max_dd = seed, seed, 0.0
-    won_pcts, stopped, inconc = [], 0, 0
+    won_pcts, stopped, unrealized = [], 0, 0
     gross_wins, gross_losses = 0.0, 0.0
     pnls = []
+    # UNREALIZED parallel set (r05 260521)
+    u_equity, u_peak, u_max_dd = seed, seed, 0.0
+    u_pnls, u_max_pcts = [], []
+
     for s in signals:
         mp  = float(s['max_pct']) if s['max_pct'] is not None else None
         bts = s['bts'] if 'bts' in s else s.get('bars_to_stop')
-        if mp is not None and mp >= profit_zone:
-            pnl = mp
-            won_pcts.append(mp)
-            gross_wins += mp
-        elif bts is not None:
-            pnl = -stop_pct
-            stopped += 1
-            gross_losses += stop_pct
+
+        if bts is not None:
+            # RESOLVED — stop fired
+            if mp is not None and mp >= profit_zone:
+                pnl = mp
+                won_pcts.append(mp)
+                gross_wins += mp
+            else:
+                pnl = -stop_pct
+                stopped += 1
+                gross_losses += stop_pct
+            pnls.append(pnl)
+            equity *= (1.0 + pnl / 100.0)
+            peak = max(peak, equity)
+            if peak > 0:
+                dd = (peak - equity) / peak
+                if dd > max_dd:
+                    max_dd = dd
         else:
-            pnl = 0.0
-            inconc += 1
-        pnls.append(pnl)
-        equity *= (1.0 + pnl / 100.0)
-        peak = max(peak, equity)
-        if peak > 0:
-            dd = (peak - equity) / peak
-            if dd > max_dd:
-                max_dd = dd
+            # UNREALIZED — ran off dataset end
+            u_pnl = mp if mp is not None else 0.0
+            unrealized += 1
+            u_pnls.append(u_pnl)
+            if mp is not None and mp > 0:
+                u_max_pcts.append(mp)
+            u_equity *= (1.0 + u_pnl / 100.0)
+            u_peak = max(u_peak, u_equity)
+            if u_peak > 0:
+                u_dd = (u_peak - u_equity) / u_peak
+                if u_dd > u_max_dd:
+                    u_max_dd = u_dd
     n = len(pnls)
     n_won = len(won_pcts)
     arr = np.array(pnls)
@@ -205,11 +222,17 @@ def _walk_equity(signals: list, profit_zone: float, stop_pct: float,
         'sortino':       (mean_pnl / std_neg) if std_neg > 0 else float('inf'),
         'n_won':         n_won,
         'n_stopped':     stopped,
-        'n_inconc':      inconc,
+        'n_inconc':      unrealized,
+        'n_unrealized':  unrealized,
         'win_rate':      (n_won / decided) if decided else 0.0,
         'avg_won_pct':   (sum(won_pcts) / n_won) if n_won else 0.0,
         'min_won_pct':   min(won_pcts) if won_pcts else 0.0,
         'win95_flag':    1 if decided and (n_won / decided) > 0.95 else 0,
+        # UNREALIZED shadow metrics
+        'unrealized_gross_banked': u_equity,
+        'unrealized_max_drawdown': u_max_dd,
+        'unrealized_mean_pnl':     float(np.mean(u_pnls)) if u_pnls else 0.0,
+        'unrealized_avg_max_pct':  float(np.mean(u_max_pcts)) if u_max_pcts else 0.0,
     }
 
 
@@ -416,7 +439,10 @@ def _emit_pine(path: str, ctx: dict, combo: dict, signals: list,
     for s in signals:
         ts = int(s['ts'])
         d  = int(s['direction'])
-        push_lines.append(f'    array.push(sig_ts, {ts})  ; array.push(sig_dir, {d:>2})')
+        # Pine v5 doesn't support `;` as statement separator — each
+        # array.push must be on its own line.
+        push_lines.append(f'    array.push(sig_ts,  {ts})')
+        push_lines.append(f'    array.push(sig_dir, {d:>2})')
 
     footer = [
         '',
@@ -442,6 +468,87 @@ def _emit_pine(path: str, ctx: dict, combo: dict, signals: list,
         f.write('\n'.join(header + push_lines + footer) + '\n')
 
 
+def _proven_from_analysis_csv(path: str, dd_threshold: float) -> dict:
+    """
+    Read AM v2's analysis_or<N>.csv (top 100 by gross_banked, with walked
+    metrics) and return the PROVEN combo as a dict shaped like the SQL
+    row from _query_proven_combo.
+
+    PROVEN = highest gross_banked among rows with max_drawdown <=
+    dd_threshold. Falls back to highest expectancy if no rows qualify.
+
+    Saves ~9 minutes per or_pk vs re-running Stage 1 from raw signals.
+
+    Handles BB vs K param schema differences: BB CSVs lack len_rsi/
+    len_stoch columns; K CSVs lack mult column. Missing values map to
+    None in the returned dict, which the SQL query builder converts to
+    'IS NULL' predicates.
+    """
+    import pandas as pd
+
+    df = pd.read_csv(path)
+    kept = df[df['max_drawdown'] <= dd_threshold].sort_values(
+        'gross_banked', ascending=False,
+    )
+    if kept.empty:
+        _log.warning(f'No DD-qualifying rows in {path} (all combos > '
+                     f'{dd_threshold*100:.0f}% DD) — falling back to top '
+                     'by expectancy')
+        kept = df.sort_values('expectancy', ascending=False)
+
+    top = kept.iloc[0]
+
+    def _get_int(col):
+        """Return int(top[col]) if column present + not NaN, else None."""
+        if col in top.index:
+            v = top[col]
+            if not pd.isna(v):
+                return int(v)
+        return None
+
+    def _get_float(col):
+        if col in top.index:
+            v = top[col]
+            if not pd.isna(v):
+                return float(v)
+        return None
+
+    def _inf_safe(col):
+        if col in top.index:
+            v = top[col]
+            if not pd.isna(v):
+                return float(v)
+        return float('inf')
+
+    return {
+        # Param keys (pks_* names) for _query_combo_signals.
+        # Missing → None → SQL clause becomes 'IS NULL'.
+        'pks_len':         _get_int('len'),
+        'pks_mult':        _get_float('mult'),
+        'pks_src':         top['src'],
+        'pks_len_rsi':     _get_int('len_rsi'),
+        'pks_len_stoch':   _get_int('len_stoch'),
+        'pks_pool_c':      _get_int('pool_c'),
+        'pks_pool_w':      _get_int('pool_w'),
+        'pks_pool_range':  _get_int('pool_range'),
+        'pks_slope_floor': _get_float('slope_floor'),
+        'pks_multiplier':  _get_int('multiplier'),
+        # Walked metrics for CSV footer + Pine emit
+        'gross_banked':    float(top['gross_banked']),
+        'max_drawdown':    float(top['max_drawdown']),
+        'profit_factor':   _inf_safe('profit_factor'),
+        'sharpe':          _inf_safe('sharpe'),
+        'sortino':         _inf_safe('sortino'),
+        'n_won':           int(top['n_won']),
+        'n_stopped':       int(top['n_stopped']),
+        'n_inconc':        int(top['n_inconc']),
+        'win_rate':        float(top['win_rate_walked']),
+        'avg_won_pct':     float(top['avg_won_pct_walked']),
+        'min_won_pct':     float(top['min_won_pct']),
+        'win95_flag':      int(top['win95_flag']),
+    }
+
+
 def validate(db: DatabaseManager, or_pk: int,
              output_dir: str = '.',
              emit_pine: bool = False,
@@ -449,21 +556,32 @@ def validate(db: DatabaseManager, or_pk: int,
              top_stage1: int = 100,
              dd_threshold: float = 0.15) -> dict:
     """
-    Run the full validation flow for or_pk using AM v2 ranker:
-      Stage 1: top top_stage1 combos by expectancy
-      Stage 2: walk equity, pick best gross_banked among DD-qualifying
+    Run validation for or_pk. If analysis_or<N>.csv exists in output_dir
+    (produced by AM v2), reuses its top-100 ranking to pick PROVEN
+    without re-running Stage 1's expensive GROUP BY. Otherwise falls back
+    to full Stage 1 + Stage 2.
 
-    Picks the PROVEN COMBO and writes CSV (always) + Pine (if requested).
-    Returns the combo dict (with walked metrics attached).
+    PROVEN = highest gross_banked among combos with max_drawdown <=
+    dd_threshold. validate_centroid writes per-signal CSV (always) and
+    Pine emit (if requested).
     """
-    ctx   = _load_run_context(db, or_pk)
-    combo = _query_proven_combo(
-        db, or_pk,
-        ctx['stop_pct'], ctx['profit_zone'],
-        min_decided=min_decided,
-        top_stage1=top_stage1,
-        dd_threshold=dd_threshold,
-    )
+    ctx = _load_run_context(db, or_pk)
+
+    # Fast path: reuse AM v2's already-ranked output
+    analysis_csv = os.path.join(output_dir, f'analysis_or{or_pk}.csv')
+    if os.path.exists(analysis_csv):
+        _log.info(f'  reusing {analysis_csv} (skipping Stage 1/2 — saves ~9 min)')
+        combo = _proven_from_analysis_csv(analysis_csv, dd_threshold)
+    else:
+        _log.info(f'  no {analysis_csv} found — running Stage 1/2 from scratch')
+        combo = _query_proven_combo(
+            db, or_pk,
+            ctx['stop_pct'], ctx['profit_zone'],
+            min_decided=min_decided,
+            top_stage1=top_stage1,
+            dd_threshold=dd_threshold,
+        )
+
     signals = _query_combo_signals(db, or_pk, combo)
 
     _log.info(f'validate or_pk={or_pk}  tc={ctx["tc_label"]}')

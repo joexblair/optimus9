@@ -6,3 +6,5 @@ logs/info.log
 
 logs/
 *.log
+*.pine
+*.diff

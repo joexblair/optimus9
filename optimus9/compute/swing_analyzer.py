@@ -33,6 +33,9 @@ import websockets
 
 from logger import get_logger
 
+# ── cross-package imports ─────────────────────────────────────────────────
+from .outcome_walker import walk_outcome
+
 
 class SwingAnalyzer:
     """
@@ -50,53 +53,29 @@ class SwingAnalyzer:
     classification single-sourced and tunable without re-running grinds.
     """
 
-    def __init__(self, stop_pct: float = 0.33, max_bars: int = 1080) -> None:
-        # r04: dropped drag_pct, profit_long, profit_short — classification
-        # moved to AnalyzeManager (max_profit_pct >= tc.tc_profit_zone).
-        self._stop_long  = 1.0 - stop_pct / 100.0
-        self._stop_short = 1.0 + stop_pct / 100.0
-        self._stop_pct   = stop_pct
-        self._max_bars   = max_bars
-        self._log        = get_logger(self.__class__.__name__)
+    def __init__(self, stop_pct: float = 0.33, max_bars: int = None) -> None:
+        """
+        max_bars is deprecated as of r05 260521. Accepted for back-compat
+        with callers that still pass tc_max_bars, but ignored. A trade
+        either stops or runs off the dataset — no time cap.
+        """
+        self._stop_pct = stop_pct
+        self._log      = get_logger(self.__class__.__name__)
+        if max_bars is not None:
+            self._log.debug(f'max_bars={max_bars} ignored (deprecated)')
 
-    def analyze(self, signals: list, close: np.ndarray) -> list:
-        return [self._evaluate(sig, close) for sig in signals]
+    def analyze(self, signals: list, close: np.ndarray,
+                timestamps: np.ndarray = None) -> list:
+        """
+        Walk each signal's outcome via outcome_walker.walk_outcome.
 
-    def _evaluate(self, sig: dict, close: np.ndarray) -> dict:
-        i, direction = sig['bar_index'], sig['direction']
-        entry        = close[i]
-        cap          = min(i + self._max_bars, len(close) - 1)
-
-        stop_level = entry * (self._stop_long if direction == 1 else self._stop_short)
-
-        best_price         = entry
-        max_profit_pct     = 0.0
-        bars_to_max_profit = None
-        bars_to_stop       = None
-
-        for j in range(i + 1, cap + 1):
-            c = close[j]
-
-            if direction == 1:
-                if c > best_price:
-                    best_price         = c
-                    max_profit_pct     = (best_price / entry - 1.0) * 100.0
-                    bars_to_max_profit = j - i
-                if c <= stop_level:
-                    bars_to_stop = j - i
-                    break
-            else:
-                if c < best_price:
-                    best_price         = c
-                    max_profit_pct     = (entry / best_price - 1.0) * 100.0
-                    bars_to_max_profit = j - i
-                if c >= stop_level:
-                    bars_to_stop = j - i
-                    break
-
-        return {
-            **sig,
-            'max_profit_pct':     round(max_profit_pct, 6),
-            'bars_to_stop':       bars_to_stop,
-            'bars_to_max_profit': bars_to_max_profit,
-        }
+        timestamps is optional — when provided, threaded through to
+        outcome_walker for future per-call debug instrumentation.
+        """
+        return [
+            {**sig, **walk_outcome(
+                close, sig['bar_index'], sig['direction'],
+                self._stop_pct, timestamps,
+            )}
+            for sig in signals
+        ]

@@ -53,7 +53,7 @@ class ReportExporter:
                       s.pks_pool_c, s.pks_pool_w, s.pks_pool_range,
                       s.pks_slope_floor, s.pks_multiplier,
                       o.pko_max_profit_pct, o.pko_bars_to_stop,
-                      o.pko_bars_to_max_profit, o.pko_result, o.pko_stop_pct
+                      o.pko_bars_to_max_profit
                FROM pk_signals s JOIN pk_outcomes o ON o.pko_pks_pk = s.pks_pk
                WHERE s.pks_or_pk = %s ORDER BY s.pks_timestamp ASC''',
             (or_pk,), fetch=True,

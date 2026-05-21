@@ -35,6 +35,7 @@ from logger import get_logger
 
 # ── cross-package imports ─────────────────────────────────────────────────
 from ..db.database_manager import DatabaseManager
+from ..db.kline_loader     import KlineLoader
 from ..compute.indicator_computer import IndicatorComputer
 from ..compute.pk_detector import PKDetector
 from ..compute.pk5s_gate_computer import Pk5sGateComputer
@@ -152,7 +153,10 @@ class ReportManager:
         OptimizerRunner(
             self._db,
             PKDetector(float(config['ic_high_boundary']), float(config['ic_low_boundary'])),
-            SwingAnalyzer(float(config['tc_stop_pct']), int(config['tc_max_bars'])),
+            # r05 (260521): tc_max_bars deprecated — column kept for back-compat
+            # but no longer plumbed in. "Always a stop" principle means
+            # bars_to_stop=NULL ⇔ trade ran off the end of available klines.
+            SwingAnalyzer(float(config['tc_stop_pct'])),
         ).run(or_pk, base_df, ind_df, dema, oob_side, grid, config,
               p_rev_enabled=p_rev_enabled)
         
@@ -243,17 +247,5 @@ class ReportManager:
         
         
     def _load_klines(self, tp_pk: int, lookback_days: int = None) -> pd.DataFrame:
-        if lookback_days:
-            cutoff = int((datetime.now(timezone.utc) - timedelta(days=lookback_days)).timestamp() * 1000)
-            where, params = 'kc_tp_pk = %s AND kc_timestamp >= %s', (tp_pk, cutoff)
-        else:
-            where, params = 'kc_tp_pk = %s', (tp_pk,)
-        rows = self._db.execute(
-            f'''SELECT kc_timestamp AS timestamp, kc_open AS open, kc_high AS high,
-                       kc_low AS low, kc_close AS close, kc_volume AS volume
-                FROM kline_collection WHERE {where} ORDER BY kc_timestamp ASC''',
-            params, fetch=True,
-        )
-        if not rows:
-            raise RuntimeError(f'No klines for tp_pk={tp_pk}')
-        return pd.DataFrame(rows)
+        """Delegates to shared KlineLoader (r05 260521 refactor)."""
+        return KlineLoader(self._db).load_recent(tp_pk, lookback_days)
