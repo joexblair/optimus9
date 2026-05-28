@@ -42,12 +42,14 @@
             <Table Name="indicator_configs" Left="-40" Top="-272" Width="221.9054" Height="206" Collapsed="False" />
             <Table Name="indicator_series" Left="-419" Top="-301" Width="203.0838" Height="90" Collapsed="False" />
             <Table Name="indicator_lines" Left="-576" Top="96" Width="203.0838" Height="98" Collapsed="False" />
-            <Table Name="indicator_timeframes" Left="-277" Top="89" Width="216.3767" Height="98" Collapsed="False" />
+            <Table Name="indicator_timeframes" Left="-277" Top="89" Width="211.3767" Height="98" Collapsed="False" />
           </Tables>
         </SubQuery>
       </Data>
     </View>
-    <View Name="Code" Visible="True" />
+    <View Name="Code" Visible="True">
+      <Data />
+    </View>
     <View Name="Data" Active="True" Visible="True" />
     <View Name="Profiler" Visible="False" />
     <View Name="PivotGrid" Visible="False" />

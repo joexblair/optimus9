@@ -8,3 +8,5 @@ logs/
 *.log
 *.pine
 *.diff
+*.sql
+files.zip

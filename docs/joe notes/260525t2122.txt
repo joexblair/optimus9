@@ -1,0 +1,18 @@
+
+"But we're NOT extracting because pk_5s itself needs to keep working. Pk5sGateComputer might genuinely be deletable after Step 5."  I agree.  But we're NOT extracting because pk_5s itself needs to keep working. Pk5sGateComputer might genuinely be deletable after Step 5.
+
+
+tce_type=='pk_5s' appears in the table only once, on a very early tc_pk that has since been trashed
+--can we run a pre-update grind now? 
+--tbh though, what was pk_5s's actual target and our expectations?
+
+
+
+
+
+
+	q1)  good call.  re intuition, it's likely relates to your point of snf.  leaving it for later is good
+
+	q3) agreed, unit test first.  there were no results from the query
+
+

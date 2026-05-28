@@ -37,7 +37,9 @@ from logger import get_logger
 from ..db.database_manager import DatabaseManager
 from ..db.kline_loader     import KlineLoader
 from ..compute.indicator_computer import IndicatorComputer
-from ..compute.pk_detector import PKDetector
+from ..compute.pk_state_computer  import PKStateComputer
+from ..compute.pk_gate_filter     import PKGateFilter
+from ..compute.pk_signal_detector import PKSignalDetector
 from ..compute.pk5s_gate_computer import Pk5sGateComputer
 from ..compute.swing_analyzer import SwingAnalyzer
 from ..orchestration.optimizer_runner import OptimizerRunner
@@ -152,7 +154,13 @@ class ReportManager:
 
         OptimizerRunner(
             self._db,
-            PKDetector(float(config['ic_high_boundary']), float(config['ic_low_boundary'])),
+            PKSignalDetector(
+                state_computer = PKStateComputer(
+                    high_b = float(config['ic_high_boundary']),
+                    low_b  = float(config['ic_low_boundary']),
+                ),
+                gate_filter = PKGateFilter(),
+            ),
             # r05 (260521): tc_max_bars deprecated — column kept for back-compat
             # but no longer plumbed in. "Always a stop" principle means
             # bars_to_stop=NULL ⇔ trade ran off the end of available klines.

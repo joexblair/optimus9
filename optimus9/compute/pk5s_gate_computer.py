@@ -129,8 +129,8 @@ class Pk5sGateComputer:
         base_df : 5s OHLCV
         dema : DEMA series on the base 5s (same dema as PKDetector consumes)
         params : tce_params dict (pool_c, pool_w, pool_slope, pool_range,
-                 threshold_long, threshold_short, pm_suppression,
-                 decision_delay)
+                 threshold_long, threshold_short, pm_suppression).
+                 Any `decision_delay` field is ignored (r07: removed).
         midpoint : f_pk_state midpoint, default 50
         vote_overrides : optional list of vote dicts matching the shape
                  returned by _load_votes. When provided, bypasses the DB
@@ -158,7 +158,6 @@ class Pk5sGateComputer:
         thr_long     = float(params['threshold_long'])
         thr_short    = float(params['threshold_short'])
         pm_supp      = float(params['pm_suppression'])
-        decision_dly = int(params['decision_delay'])
 
         long_pts    = np.zeros(n, dtype=np.float64)
         short_pts   = np.zeros(n, dtype=np.float64)
@@ -210,14 +209,14 @@ class Pk5sGateComputer:
         pk_raw = np.where(long_ratio  > thr_long,   1,
                  np.where(short_ratio > thr_short, -1, 0)).astype(np.int8)
 
-        s5_pk_final = self._apply_decision_delay(pk_raw, decision_dly)
+        # r07: decision delay removed — hostile to HTF anchor signals
+        s5_pk_final = pk_raw
 
         fires_long  = int((s5_pk_final ==  1).sum())
         fires_short = int((s5_pk_final == -1).sum())
         self._log.info(
-            f'pk_5s tce_pk={tce_pk}: raw fires {int((pk_raw != 0).sum())}, '
-            f'after {decision_dly}-bar delay {fires_long + fires_short} '
-            f'({fires_long}L / {fires_short}S)'
+            f'pk_5s tce_pk={tce_pk}: '
+            f'fires {fires_long + fires_short} ({fires_long}L / {fires_short}S)'
         )
 
         # Sign-invert for oob_side convention (Pine s5_pk_final +1 = long
@@ -385,45 +384,4 @@ class Pk5sGateComputer:
         out   = np.where(valid, states, np.nan)
         return out
 
-    # ── decision-delay state machine ───────────────────────────────────────
-    @staticmethod
-    def _apply_decision_delay(pk_raw: np.ndarray, delay: int) -> np.ndarray:
-        """
-        Pine: bbstr.pine line 1624-1648.
-
-        State machine (no upstream gate at the 5s level, so the Pine
-        `_gate_open` branch collapses):
-
-            if pk_raw != 0:
-                if pk_raw == pending:
-                    countdown -= 1
-                    if countdown == 0: fire = pk_raw
-                else:
-                    pending   = pk_raw
-                    countdown = delay
-                    fire      = 0
-            else:
-                pending = 0; countdown = 0; fire = 0
-
-        Sequential by necessity — the state machine doesn't vectorise cleanly.
-        Loop is in plain Python; n is typically a few hundred thousand 5s bars
-        for a 30-day grind, well within tolerable single-pass loop time.
-        """
-        n         = len(pk_raw)
-        out       = np.zeros(n, dtype=np.int8)
-        pending   = 0
-        countdown = 0
-        for i in range(n):
-            d = int(pk_raw[i])
-            if d != 0:
-                if d == pending:
-                    countdown = max(0, countdown - 1)
-                    if countdown == 0:
-                        out[i] = d
-                else:
-                    pending   = d
-                    countdown = delay
-            else:
-                pending   = 0
-                countdown = 0
-        return out
+    

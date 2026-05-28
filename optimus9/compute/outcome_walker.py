@@ -70,33 +70,58 @@ def walk_outcome(close:      np.ndarray,
     else:
         stop_level = entry * (1.0 + stop_pct / 100.0)
 
-    best_price         = entry
-    max_profit_pct     = 0.0
-    bars_to_max_profit = None
-    bars_to_stop       = None
+    # Favourable excursion tracking
+    best_price          = entry
+    max_profit_pct      = 0.0
+    bars_to_max_profit  = None
+
+    # Adverse excursion tracking (r06 260522) — magnitude of worst
+    # against-direction excursion during the trade window. Used for
+    # per-signal dd_pct in Pine strategy labels + general MAE analysis.
+    worst_price         = entry
+    max_adverse_pct     = 0.0
+    bars_to_max_adverse = None
+
+    bars_to_stop        = None
 
     for j in range(entry_idx + 1, end + 1):
         c = float(close[j])
 
         if direction == 1:
+            # Favourable
             if c > best_price:
                 best_price         = c
                 max_profit_pct     = (best_price / entry - 1.0) * 100.0
                 bars_to_max_profit = j - entry_idx
+            # Adverse (LONG: price falling against us)
+            if c < worst_price:
+                worst_price         = c
+                max_adverse_pct     = (entry / worst_price - 1.0) * 100.0
+                bars_to_max_adverse = j - entry_idx
+            # Stop
             if c <= stop_level:
                 bars_to_stop = j - entry_idx
                 break
         else:
+            # Favourable
             if c < best_price:
                 best_price         = c
                 max_profit_pct     = (entry / best_price - 1.0) * 100.0
                 bars_to_max_profit = j - entry_idx
+            # Adverse (SHORT: price rising against us)
+            if c > worst_price:
+                worst_price         = c
+                max_adverse_pct     = (worst_price / entry - 1.0) * 100.0
+                bars_to_max_adverse = j - entry_idx
+            # Stop
             if c >= stop_level:
                 bars_to_stop = j - entry_idx
                 break
 
     return {
-        'max_profit_pct':     round(max_profit_pct, 6),
-        'bars_to_max_profit': bars_to_max_profit,
-        'bars_to_stop':       bars_to_stop,
+        'max_profit_pct':      round(max_profit_pct, 6),
+        'bars_to_max_profit':  bars_to_max_profit,
+        'max_adverse_pct':     round(max_adverse_pct, 6),
+        'bars_to_max_adverse': bars_to_max_adverse,
+        'bars_to_stop':        bars_to_stop,
     }

@@ -1,5 +1,6 @@
 ﻿SELECT
   indicator_configs.ic_pk,
+  indicator_timeframes.itf_seconds,
   indicator_timeframes.itf_label,
   indicator_series.is_prefix,
   indicator_lines.il_suffix,

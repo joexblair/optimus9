@@ -1,0 +1,18 @@
+{
+  "_comment": "Copy to optimus9_config.json (gitignored), then fill in your real values. Env vars (PK_DB_*) override these.",
+
+  "db": {
+    "host":     "localhost",
+    "user":     "root",
+    "password": "yourpassword",
+    "database": "pk_optimizer",
+    "port":     3306
+  },
+
+  "archive": {
+    "_comment":    "r07 feature — not yet wired",
+    "enabled":     false,
+    "path":        "/mnt/archive/optimus9",
+    "keep_recent": 3
+  }
+}

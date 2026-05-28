@@ -23,7 +23,7 @@ import pandas as pd
 from logger import get_logger
 
 from ..db.database_manager import DatabaseManager
-from ..compute.pk_detector import PKDetector
+from ..compute.pk_signal_detector import PKSignalDetector
 from ..compute.pk5s_gate_computer import Pk5sGateComputer
 from ..compute.swing_analyzer import SwingAnalyzer
 from ..compute.indicator_computer import IndicatorComputer
@@ -42,7 +42,7 @@ class OptimizerRunner:
 
       Gated (b6m grind, r05 6-line grinds under bny30):
         External gate (bny30M/p) provides oob_side. Builds the calibration
-        line per combo, calls PKDetector to find PK patterns within the
+        line per combo, calls PKSignalDetector to find PK transitions within the
         OOB region. K-line support added r04 (line via f_k); detect()
         now also accepts line_type so K-line params (len_rsi/len_stoch)
         emit correctly without expecting 'mult'.
@@ -61,7 +61,7 @@ class OptimizerRunner:
 
     _MIDPOINT = 50.0  # Pine f_pk_state midpoint switch
 
-    def __init__(self, db: DatabaseManager, detector: PKDetector,
+    def __init__(self, db: DatabaseManager, detector: PKSignalDetector,
                  analyzer: SwingAnalyzer) -> None:
         self._db       = db
         self._detector = detector
@@ -126,9 +126,7 @@ class OptimizerRunner:
             s5_pk_final = -oob_arr  # invert to Pine convention
 
             signals = self._extract_transitions(s5_pk_final)
-            # timestamps threaded through for future debug instrumentation
-            # inside SwingAnalyzer / outcome_walker.
-            outcomes = self._analyzer.analyze(signals, close, timestamps)
+            outcomes = self._analyzer.analyze(signals, close)
             self._persist_self_gated(or_pk, timestamps, outcomes, params, line_type)
 
     @staticmethod
@@ -222,8 +220,9 @@ class OptimizerRunner:
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)'''
 
         out_sql = '''INSERT INTO pk_outcomes
-            (pko_pks_pk, pko_max_profit_pct, pko_bars_to_stop, pko_bars_to_max_profit)
-            VALUES (%s,%s,%s,%s)'''
+            (pko_pks_pk, pko_max_profit_pct, pko_bars_to_stop, pko_bars_to_max_profit,
+             pko_max_adverse_pct, pko_bars_to_max_adverse)
+            VALUES (%s,%s,%s,%s,%s,%s)'''
 
         # Column distribution: BB has mult populated, K-only cols NULL.
         # K has len_rsi/len_stoch populated, mult NULL.
@@ -257,7 +256,9 @@ class OptimizerRunner:
             (first_id + i,
              dv(o['max_profit_pct']),
              o['bars_to_stop'],
-             o['bars_to_max_profit'])
+             o['bars_to_max_profit'],
+             dv(o.get('max_adverse_pct')),
+             o.get('bars_to_max_adverse'))
             for i, o in enumerate(outcomes)
         ])
 
@@ -275,7 +276,8 @@ class OptimizerRunner:
         total       = len(param_grid)
         ind_seconds = int(config['ic_itf_seconds'])
         line_type   = config.get('ic_line_type', 'bb')
-
+        self._log.info(f'Gated mode — PKSignalDetector ({line_type} line) with externally-folded oob_side')
+        
         use_lookahead = bool(p_rev_enabled and ind_seconds > 5 and line_type == 'bb')
         if use_lookahead:
             self._log.info(
@@ -349,8 +351,9 @@ class OptimizerRunner:
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)'''
 
         out_sql = '''INSERT INTO pk_outcomes
-            (pko_pks_pk, pko_max_profit_pct, pko_bars_to_stop, pko_bars_to_max_profit)
-            VALUES (%s,%s,%s,%s)'''
+            (pko_pks_pk, pko_max_profit_pct, pko_bars_to_stop, pko_bars_to_max_profit,
+             pko_max_adverse_pct, pko_bars_to_max_adverse)
+            VALUES (%s,%s,%s,%s,%s,%s)'''
 
         sig_rows = []
         for o in outcomes:
@@ -380,7 +383,9 @@ class OptimizerRunner:
             (first_id + i,
              dv(o['max_profit_pct']),
              o['bars_to_stop'],
-             o['bars_to_max_profit'])
+             o['bars_to_max_profit'],
+             dv(o.get('max_adverse_pct')),
+             o.get('bars_to_max_adverse'))
             for i, o in enumerate(outcomes)
         ])
 

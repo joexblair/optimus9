@@ -1241,6 +1241,9 @@ if __name__ == '__main__':
                         help='Number of parallel worker processes '
                              '(default 1). Use 6 for the standard 6-or_pk '
                              'batch on a 16-core machine.')
+    parser.add_argument('--emit_pine',    action='store_true',
+                        help='After analysis completes, emit Pine v6 '
+                             'strategy for the PROVEN combo of each or_pk.')
     args = parser.parse_args()
 
     or_pks = ([args.or_pk] if args.or_pk is not None
@@ -1264,5 +1267,11 @@ if __name__ == '__main__':
             dd_threshold=args.dd_threshold,
             output_dir=args.output_dir,
         )
+
+        if args.emit_pine:
+            from ..emit.pine_strategy_emitter import PineStrategyEmitter
+            emitter = PineStrategyEmitter(db)
+            for or_pk in or_pks:
+                emitter.emit(or_pk, output_dir=args.output_dir)
     finally:
         db.disconnect()

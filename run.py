@@ -53,6 +53,7 @@ import os
 import sys
 
 from logger import get_logger
+from optimus9.config import get_db_config
 from optimus9 import (
     AnalyzeManager,
     BarBuilder,
@@ -64,7 +65,9 @@ from optimus9 import (
     IndicatorMonitor,
     OptimizerRunner,
     Pk5sGateComputer,        # noqa: F401 — re-exported for import sanity-checks
-    PKDetector,
+    PKStateComputer,        # noqa: F401
+    PKGateFilter,           # noqa: F401
+    PKSignalDetector,       # noqa: F401
     ParameterGridBuilder,
     ProcessManager,
     ReportManager,
@@ -85,13 +88,7 @@ _log = get_logger('run')
 
 # ─── DB connection ─────────────────────────────────────────────────────────
 def _db() -> DatabaseManager:
-    db = DatabaseManager(
-        host     = os.environ.get('PK_DB_HOST',     'localhost'),
-        user     = os.environ.get('PK_DB_USER',     'root'),
-        password = os.environ.get('PK_DB_PASS',     'yourpassword'),
-        database = os.environ.get('PK_DB_NAME',     'pk_optimizer'),
-        port     = int(os.environ.get('PK_DB_PORT', 3306)),
-    )
+    db = DatabaseManager(**get_db_config())
     db.connect()
     return db
 
