@@ -352,11 +352,12 @@ def test_pm_additive_single_dial_covers_close_and_wide():
     assert out['short_pts'][5] == 2.0
     # wide PM_SHORT (bar 7): wide adds 3×0.4=1.2 to short_pts
     assert abs(out['short_pts'][7] - 1.2) < 1e-9
-    # Neutral routing unchanged (PM still goes to neutral at full weight)
-    assert out['neutral_pts'][1] == 5.0   # close PM_LONG full
-    assert out['neutral_pts'][3] == 3.0   # wide  PM_LONG full
-    assert out['neutral_pts'][5] == 5.0
-    assert out['neutral_pts'][7] == 3.0
+    # Neutral routing unchanged: PM at full weight + state-0 at full weight,
+    # so both probes contribute their full weight to neutral_pts on every bar.
+    assert out['neutral_pts'][1] == 8.0   # close PM_LONG (5) + wide N (3)
+    assert out['neutral_pts'][3] == 8.0   # close N (5)        + wide PM_LONG (3)
+    assert out['neutral_pts'][5] == 8.0   # close PM_SHORT (5) + wide N (3)
+    assert out['neutral_pts'][7] == 8.0   # close N (5)        + wide PM_SHORT (3)
 
 
 def test_pm_additive_with_suppression_worked_example():
