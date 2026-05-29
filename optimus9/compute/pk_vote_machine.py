@@ -13,10 +13,13 @@ SRP boundaries:
   - No knowledge of decision delay. Deleted in r07 — pk_raw IS the
     final signal direction.
 
-r07 Step 2 signature: pm_additive args NOT YET PRESENT. They arrive
-in Step 4. Implement this class to the Step-2 shape only — do not
-pre-add pm_additive fields, the design doc has both signatures
-documented for clarity.
+r07 Step 4: pm_additive_str added. PM sentinels also contribute
+weight × pm_additive_str to the matching directional bucket
+(see PM mechanics below). Default 0.0 — no behavioural change vs Step 3.
+Single dial covers both close and wide probes (collapsed from the
+original per-probe-type split per design riff 2026-05-29: PM additive
+is the WEIGHT of commitment evidence relative to divergence evidence,
+which doesn't have a strong reason to differ by lookback distance).
 
 Architecture context:
   - "Pool" = full settings group for ONE line (one votes-table row).
@@ -31,6 +34,9 @@ PM mechanics:
   - State ±1 (divergence) contributes weight to long_pts / short_pts
   - State 0 (neutral) and PM sentinels (±2) contribute weight to
     neutral_pts at full weight
+  - PM additive (Step 4): PM sentinels ALSO add weight × pm_additive_str
+    to the matching directional bucket (PM_LONG → long_pts, PM_SHORT →
+    short_pts). Default 0.0 → no additive contribution.
   - PM sentinels ADDITIONALLY contribute to pm_long_wt / pm_short_wt
     tracking buckets, used for PM suppression below
   - PM suppression: adj_long = max(0, long_pts - pm_short_wt × pm_suppress_str)
@@ -60,6 +66,7 @@ class PKVoteMachine:
 
     def __init__(self,
                  pm_suppress_str: float = 0.5,
+                 pm_additive_str: float = 0.0,
                  control_voter_weight: int = 0,
                  pm_option_a: bool = False) -> None:
         """
@@ -69,6 +76,14 @@ class PKVoteMachine:
             Strength of PM-sentinel suppression on opposing direction.
             adj_long = max(0, long_pts - pm_short_wt * pm_suppress_str).
             Pine default 0.4; Python config-driven.
+        pm_additive_str : float
+            r07 Step 4. PM sentinels ALSO add (probe_weight * pm_additive_str)
+            to the matching directional bucket (PM_LONG → long_pts,
+            PM_SHORT → short_pts), on top of full-weight routing to
+            neutral_pts. Single dial covers both close and wide probes —
+            PM additive is the weight of commitment evidence relative to
+            divergence evidence, which doesn't justify a per-probe-type
+            split. Default 0.0 → no additive (output identical to Step 3).
         control_voter_weight : int
             Weight of a "control voter" — a phantom contributor that
             adds to active_w (the ratio denominator) without contributing
@@ -83,6 +98,7 @@ class PKVoteMachine:
             Resolve before Step 5 production wiring.
         """
         self._pm_suppress_str       = float(pm_suppress_str)
+        self._pm_additive_str       = float(pm_additive_str)
         self._control_voter_weight  = int(control_voter_weight)
         self._pm_option_a           = bool(pm_option_a)
         self._log                   = get_logger(self.__class__.__name__)
@@ -144,6 +160,11 @@ class PKVoteMachine:
                 (states == 0.0) | (states == self._PM_LONG) | (states == self._PM_SHORT),
                 weight, 0.0,
             )
+            # r07 Step 4: PM sentinels ALSO add weight × pm_additive_str
+            # to the matching directional bucket (on top of neutral routing).
+            # Default 0.0 → inert.
+            long_pts    += np.where(states == self._PM_LONG,  weight * self._pm_additive_str, 0.0)
+            short_pts   += np.where(states == self._PM_SHORT, weight * self._pm_additive_str, 0.0)
             pm_long_wt  += np.where(states == self._PM_LONG,  weight, 0.0)
             pm_short_wt += np.where(states == self._PM_SHORT, weight, 0.0)
 

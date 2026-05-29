@@ -311,3 +311,90 @@ def test_aggregation_matches_inline_pk5s_math():
     expected_long_ratio = (4.2 / 6.2) * 10.0
     assert abs(out['long_ratio'][1] - expected_long_ratio) < 1e-9
     assert out['pk_raw'][1] == 1
+
+
+# ── r07 Step 4: pm_additive_str ─────────────────────────────────────────
+
+def test_pm_additive_default_zero_is_inert():
+    """Default pm_additive_str=0.0 — PM probes route only to neutral (Step 3 behavior)."""
+    vm = PKVoteMachine(pm_suppress_str=0.0)  # pm_additive_str defaults 0.0
+    probe_states = {
+        (_POOL_ID, 'close'): _make_states([0, 2, 2, 0, 0, -2, -2, 0, 0, 0]),
+    }
+    probe_weights = {(_POOL_ID, 'close'): 5}
+    out = vm.aggregate(probe_states, probe_weights,
+                       threshold_long=5.0, threshold_short=5.0)
+    # PM_LONG → neutral only, long_pts stays 0
+    assert out['neutral_pts'][1] == 5.0
+    assert out['long_pts'][1]    == 0.0
+    assert out['short_pts'][1]   == 0.0
+    # PM_SHORT → neutral only, short_pts stays 0
+    assert out['neutral_pts'][5] == 5.0
+    assert out['short_pts'][5]   == 0.0
+    assert out['long_pts'][5]    == 0.0
+
+
+def test_pm_additive_single_dial_covers_close_and_wide():
+    """pm_additive_str > 0 — one dial scales PM contribution from both close and wide probes."""
+    vm = PKVoteMachine(pm_suppress_str=0.0, pm_additive_str=0.4)
+    probe_states = {
+        (_POOL_ID, 'close'): _make_states([0, 2, 2, 0, 0, -2, -2, 0, 0, 0]),
+        (_POOL_ID, 'wide'):  _make_states([0, 0, 0, 2, 2,  0,  0, -2, -2, 0]),
+    }
+    probe_weights = {(_POOL_ID, 'close'): 5, (_POOL_ID, 'wide'): 3}
+    out = vm.aggregate(probe_states, probe_weights,
+                       threshold_long=5.0, threshold_short=5.0)
+    # close PM_LONG (bar 1): close adds 5×0.4=2.0 to long_pts; wide=0 contributes nothing
+    assert out['long_pts'][1] == 2.0
+    # wide PM_LONG (bar 3): wide adds 3×0.4=1.2 to long_pts (SAME single dial as close)
+    assert abs(out['long_pts'][3] - 1.2) < 1e-9
+    # close PM_SHORT (bar 5): close adds 5×0.4=2.0 to short_pts
+    assert out['short_pts'][5] == 2.0
+    # wide PM_SHORT (bar 7): wide adds 3×0.4=1.2 to short_pts
+    assert abs(out['short_pts'][7] - 1.2) < 1e-9
+    # Neutral routing unchanged (PM still goes to neutral at full weight)
+    assert out['neutral_pts'][1] == 5.0   # close PM_LONG full
+    assert out['neutral_pts'][3] == 3.0   # wide  PM_LONG full
+    assert out['neutral_pts'][5] == 5.0
+    assert out['neutral_pts'][7] == 3.0
+
+
+def test_pm_additive_with_suppression_worked_example():
+    """
+    r07 Step 4 worked example — additive + suppression + divergence interaction.
+
+    Inputs (bar 1):
+      - close probe: divergence long (+1, weight 5)
+      - wide probe:  PM short        (-2, weight 5)
+      - pm_suppress_str = 0.4
+      - pm_additive_str = 0.5
+
+    Hand-calculated:
+      long_pts    = 5             (close +1)
+      short_pts   = 5 × 0.5 = 2.5  (wide PM_SHORT additive)
+      neutral_pts = 5             (wide PM_SHORT → neutral full weight)
+      pm_short_wt = 5             (suppression evidence)
+      adj_long    = max(0, 5 - 5×0.4) = 3.0
+      adj_short   = max(0, 2.5 - 0)   = 2.5
+      active_w    = 3.0 + 2.5 + 5 = 10.5
+      long_ratio  = 3.0 / 10.5 × 10 ≈ 2.857
+      short_ratio = 2.5 / 10.5 × 10 ≈ 2.381
+      pk_raw      = 0 (both ratios under 5.0)
+    """
+    vm = PKVoteMachine(pm_suppress_str=0.4, pm_additive_str=0.5)
+    probe_states = {
+        (1, 'close'): _make_states([0, 1, 0, 0, 0, 0, 0, 0, 0, 0]),
+        (1, 'wide'):  _make_states([0, -2, 0, 0, 0, 0, 0, 0, 0, 0]),
+    }
+    probe_weights = {(1, 'close'): 5, (1, 'wide'): 5}
+    out = vm.aggregate(probe_states, probe_weights, 5.0, 5.0)
+
+    assert out['long_pts'][1]    == 5.0
+    assert out['short_pts'][1]   == 2.5
+    assert out['neutral_pts'][1] == 5.0
+
+    expected_long_ratio  = (3.0 / 10.5) * 10.0
+    expected_short_ratio = (2.5 / 10.5) * 10.0
+    assert abs(out['long_ratio'][1]  - expected_long_ratio)  < 1e-9
+    assert abs(out['short_ratio'][1] - expected_short_ratio) < 1e-9
+    assert out['pk_raw'][1] == 0
