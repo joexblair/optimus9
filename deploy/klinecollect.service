@@ -1,0 +1,19 @@
+[Unit]
+Description=Optimus9 kline collector (TickCollector + BarBuilder supervisor)
+After=network-online.target
+Wants=network-online.target
+# If MySQL runs as a systemd unit on this host, also order after it, e.g.:
+# After=network-online.target mysql.service
+
+[Service]
+Type=simple
+User=joe
+WorkingDirectory=/home/joe/thecodes
+ExecStart=/usr/bin/python3 run.py supervisor
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

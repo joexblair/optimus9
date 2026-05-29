@@ -320,13 +320,11 @@ def cmd_supervisor(args, db: DatabaseManager) -> int:
     The parent `db` connection is released before supervise() starts so we're
     not holding a connection while just supervising children.
     """
-    db_kwargs = {
-        'host':     os.environ.get('PK_DB_HOST',     'localhost'),
-        'user':     os.environ.get('PK_DB_USER',     'root'),
-        'password': os.environ.get('PK_DB_PASS',     'yourpassword'),
-        'database': os.environ.get('PK_DB_NAME',     'pk_optimizer'),
-        'port':     int(os.environ.get('PK_DB_PORT', 3306)),
-    }
+    # r07: read creds from optimus9_config.json via get_db_config (was a
+    # hardcoded PK_DB_* env-fallback with a 'yourpassword' default that
+    # systemd wouldn't have — it doesn't inherit the interactive shell env).
+    # Children pickle this plain dict into their own processes.
+    db_kwargs = get_db_config()
 
     # Backfill the last N days into kline_collection before launching
     # workers — ensures the table holds a guaranteed minimum coverage
