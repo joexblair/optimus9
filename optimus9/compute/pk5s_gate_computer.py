@@ -178,6 +178,10 @@ class Pk5sGateComputer:
         thr_long     = float(params['threshold_long'])
         thr_short    = float(params['threshold_short'])
         pm_supp      = float(params['pm_suppression'])
+        # r07 Step 4 pass-through: optional pm_additive dial. Default 0.0 keeps
+        # behaviour identical to pre-Step-4 grinds when the sweep grid doesn't
+        # populate it.
+        pm_additive  = float(params.get('pm_additive', 0.0))
 
         # r07 Step 2: build per-probe state dict, delegate vote folding to
         # PKVoteMachine. The flattening loop replaces inline accumulation;
@@ -213,7 +217,10 @@ class Pk5sGateComputer:
             self._log.warning(f'pk_5s tce_pk={tce_pk}: all probes zero-weighted')
             return np.zeros(n, dtype=np.int8)
 
-        vm = self._vote_machine or PKVoteMachine(pm_suppress_str=pm_supp)
+        vm = self._vote_machine or PKVoteMachine(
+            pm_suppress_str=pm_supp,
+            pm_additive_str=pm_additive,
+        )
         result = vm.aggregate(probe_states, probe_weights, thr_long, thr_short)
         pk_raw = result['pk_raw']
 
