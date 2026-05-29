@@ -9,6 +9,7 @@ Log directory defaults to ./logs — override with PK_LOG_DIR env var.
 
 import logging
 import os
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 _LOG_DIR    = Path(os.environ.get('PK_LOG_DIR', 'logs'))
@@ -47,7 +48,12 @@ def _initialise(log_dir: Path) -> None:
         (logging.INFO,  'info.log'),
         (logging.ERROR, 'error.log'),
     ):
-        fh = logging.FileHandler(log_dir / filename, encoding='utf-8')
+        fh = RotatingFileHandler(
+            log_dir / filename,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
+            encoding='utf-8',
+        )
         fh.setLevel(level)
         fh.addFilter(_LevelFilter(level))
         fh.setFormatter(fmt)
