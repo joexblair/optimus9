@@ -169,6 +169,9 @@ class OptimizerRunner:
             'pool_range':      int(params['pool_range']),
             'pool_slope':      float(params['slope_floor']),
             'multiplier':      int(params['multiplier']),
+            # r07 Step 4: pm_additive — swept from the grid, fixed via tce, or 0.0.
+            'pm_additive':     float(params.get('pm_additive',
+                                                tce_params.get('pm_additive', 0.0))),
             # Fixed xlsx-truth values (not swept this round)
             'threshold_long':  tce_params.get('threshold_long',  7.5),
             'threshold_short': tce_params.get('threshold_short', 7.5),
