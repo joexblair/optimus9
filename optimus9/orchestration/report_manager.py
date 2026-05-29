@@ -59,6 +59,8 @@ class ReportManager:
     def run(self, tc_pk: int,
             export_csv: bool = True, output_dir: str = '.',
             lookback_days: int = None,
+            start_ms: int = None,
+            end_ms: int = None,
             p_rev_enabled: bool = True,
             pk5s_gate_enabled: bool = True) -> Optional[str]:
         """
@@ -99,7 +101,8 @@ class ReportManager:
                        f'pk5s_gate={"on" if pk5s_gate_enabled else "off"}')
         self._log.info(f'Run created: or_pk={or_pk}')
 
-        base_df = self._load_klines(int(config['tc_tp_pk']), lookback_days)
+        base_df = self._load_klines(int(config['tc_tp_pk']), lookback_days,
+                                    start_ms, end_ms)
         self._log.info(f'Base: {len(base_df)} × 5s bars')
 
         # DEMA on native 5s
@@ -254,6 +257,14 @@ class ReportManager:
         return rows
         
         
-    def _load_klines(self, tp_pk: int, lookback_days: int = None) -> pd.DataFrame:
-        """Delegates to shared KlineLoader (r05 260521 refactor)."""
-        return KlineLoader(self._db).load_recent(tp_pk, lookback_days)
+    def _load_klines(self, tp_pk: int, lookback_days: int = None,
+                     start_ms: int = None, end_ms: int = None) -> pd.DataFrame:
+        """Delegates to shared KlineLoader (r05 260521 refactor).
+
+        A fixed [start_ms, end_ms) window takes precedence over lookback_days
+        when both bounds are supplied — for reproducible validation grinds
+        (rolling lookback_days is regime-sensitive across days)."""
+        loader = KlineLoader(self._db)
+        if start_ms is not None and end_ms is not None:
+            return loader.load_window(tp_pk, start_ms, end_ms)
+        return loader.load_recent(tp_pk, lookback_days)

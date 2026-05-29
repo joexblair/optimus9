@@ -109,6 +109,11 @@ def _build_parser() -> argparse.ArgumentParser:
                         '(default on)')
     s.add_argument('--lookback_days', type=int, default=None,
                    help='Restrict kline window to last N days')
+    s.add_argument('--start_ms',      type=int, default=None,
+                   help='Fixed kline window start, ms epoch (inclusive). '
+                        'Use with --end_ms for reproducible validation grinds.')
+    s.add_argument('--end_ms',        type=int, default=None,
+                   help='Fixed kline window end, ms epoch (exclusive).')
     s.add_argument('--skip_analyze',  action='store_true',
                    help='Do not auto-run analyze after the grind')
     s.add_argument('--no_csv',        action='store_true',
@@ -188,6 +193,10 @@ def cmd_start(args, db: DatabaseManager) -> int:
     p_rev_enabled     = (args.p_rev     == 'on')
     pk5s_gate_enabled = (args.pk5s_gate == 'on')
 
+    if (args.start_ms is None) != (args.end_ms is None):
+        _log.error('--start_ms and --end_ms must be supplied together')
+        return 1
+
     _log.info(
         f'Starting grind tc_pk={args.tc_pk}  '
         f'p_rev={"on" if p_rev_enabled else "off"}  '
@@ -199,6 +208,8 @@ def cmd_start(args, db: DatabaseManager) -> int:
         export_csv        = (not args.no_csv),
         output_dir        = args.output_dir,
         lookback_days     = args.lookback_days,
+        start_ms          = args.start_ms,
+        end_ms            = args.end_ms,
         p_rev_enabled     = p_rev_enabled,
         pk5s_gate_enabled = pk5s_gate_enabled,
     )
