@@ -34,10 +34,14 @@ from .data.indicator_monitor import IndicatorMonitor
 
 # compute
 from .compute.indicator_computer import IndicatorComputer
+
 from .compute.pk_state_computer  import PKStateComputer
 from .compute.pk_gate_filter     import PKGateFilter
 from .compute.pk_signal_detector import PKSignalDetector
+from .compute.pk_vote_machine    import PKVoteMachine
 from .compute.pk5s_gate_computer import Pk5sGateComputer
+
+
 from .compute.swing_analyzer import SwingAnalyzer
 from .compute.parameter_grid_builder import ParameterGridBuilder
 
@@ -66,6 +70,7 @@ __all__ = [
     'PKStateComputer',
     'PKGateFilter',
     'PKSignalDetector',
+    'PKVoteMachine',
     'Pk5sGateComputer',
     'SwingAnalyzer',
     'ParameterGridBuilder',

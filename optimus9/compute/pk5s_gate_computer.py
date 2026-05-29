@@ -36,6 +36,7 @@ from logger import get_logger
 # ── cross-package imports ─────────────────────────────────────────────────
 from ..db.database_manager import DatabaseManager
 from ..compute.indicator_computer import IndicatorComputer
+from ..compute.pk_vote_machine    import PKVoteMachine
 
 
 class Pk5sGateComputer:
@@ -48,7 +49,15 @@ class Pk5sGateComputer:
     every 5s bar. Each contributing line votes 'long', 'short', or 'neutral'
     based on its slope vs DEMA slope; votes accumulate with per-line weights;
     PM (price-matched) votes suppress the opposing bucket; ratios are
-    thresholded; a decision-delay countdown gates final fires.
+    thresholded; pk_raw becomes s5_pk_final directly (r07: decision delay
+    removed).
+
+    r07 Step 2: vote-folding math extracted to PKVoteMachine. Pk5sGateComputer
+    is now a thin composer — it computes per-line states (via _states_standard
+    or _states_roc_curl), flattens them into the (pool_id, probe_label)-keyed
+    dict shape PKVoteMachine expects, and delegates the math. The class
+    docstring's "vote machine" phrasing refers to the conceptual pattern;
+    the actual aggregation now lives in PKVoteMachine.
 
     Output is sign-inverted from Pine s5_pk_final (Pine +1=long → Python -1)
     so it plugs into IndicatorComputer.fold_gates alongside bny30M/p as a
@@ -61,18 +70,15 @@ class Pk5sGateComputer:
       • f_pk_state      → per-line state (±1 divergence, ±2 PM, 0 neutral)
                           (Pine line 1368, replicated here in _states_standard)
       • f_vote          → state → long/short/neutral buckets at full weight
-                          (Pine line 1508)
+                          (Pine line 1508) — now in PKVoteMachine.aggregate
       • PM suppression  → adj_long  = max(0, long_pts  − pm_short_wt × pm_supp)
                           adj_short = max(0, short_pts − pm_long_wt  × pm_supp)
-                          (Pine line 1613-1614)
+                          (Pine line 1613-1614) — now in PKVoteMachine.aggregate
       • ratio scaling   → (adj_x / active_w) × 10
                           denominator includes neutrals (Pine pm_option_a=false)
-                          (Pine line 1616-1618)
-      • decision delay  → N-bar persistence before fire; gate-open check only
-                          at countdown start, in-progress countdowns run to
-                          completion. At the 5s level there is no upstream gate
-                          to check.
-                          (Pine line 1624-1648)
+                          (Pine line 1616-1618) — now in PKVoteMachine.aggregate
+      • decision delay  → REMOVED in r07. Pine retains it for validation
+                          comparisons. See r07_vote_machine_design.md.
 
     Pk5sGateComputer's f_pk_state window matches Pine exactly: covers
     line[i - upper + 1 : i - lower + 1] of length pool_range bars. The
@@ -109,9 +115,23 @@ class Pk5sGateComputer:
     _PM_LONG  =  2.0
     _PM_SHORT = -2.0
 
-    def __init__(self, db: 'DatabaseManager') -> None:
-        self._db  = db
-        self._log = get_logger(self.__class__.__name__)
+    def __init__(self, db: 'DatabaseManager',
+                 vote_machine: Optional[PKVoteMachine] = None) -> None:
+        """
+        Parameters
+        ----------
+        db : DatabaseManager
+            Used by _load_votes for the tce vote rows lookup.
+        vote_machine : PKVoteMachine, optional
+            Injected vote machine instance. When None (default), compute()
+            constructs a fresh PKVoteMachine using params['pm_suppression'].
+            Injection point exists for r08 multi-line / SnF work where a
+            single vote machine config may apply across multiple compute()
+            calls; production single-config path uses the default.
+        """
+        self._db           = db
+        self._log          = get_logger(self.__class__.__name__)
+        self._vote_machine = vote_machine
 
     # ── public ──────────────────────────────────────────────────────────────
     def compute(self, tce_pk: int,
@@ -143,7 +163,7 @@ class Pk5sGateComputer:
         int8 array length len(base_df), sign-inverted vs Pine s5_pk_final:
           -1 = long PK fired (oob_side equivalent: LO OOB → expected = +1 long)
           +1 = short PK fired (oob_side equivalent: HI OOB → expected = -1 short)
-           0 = idle / suppressed by decision delay / no verdict
+           0 = idle / no verdict
         """
         votes = vote_overrides if vote_overrides is not None else self._load_votes(tce_pk)
         n     = len(base_df)
@@ -159,12 +179,12 @@ class Pk5sGateComputer:
         thr_short    = float(params['threshold_short'])
         pm_supp      = float(params['pm_suppression'])
 
-        long_pts    = np.zeros(n, dtype=np.float64)
-        short_pts   = np.zeros(n, dtype=np.float64)
-        neutral_pts = np.zeros(n, dtype=np.float64)
-        pm_long_wt  = np.zeros(n, dtype=np.float64)
-        pm_short_wt = np.zeros(n, dtype=np.float64)
-
+        # r07 Step 2: build per-probe state dict, delegate vote folding to
+        # PKVoteMachine. The flattening loop replaces inline accumulation;
+        # the math itself is identical to pre-Step-2 (validated by
+        # test_pk_vote_machine.py).
+        probe_states  = {}
+        probe_weights = {}
         for v in votes:
             line = self._compute_line(v, base_df)
 
@@ -181,33 +201,21 @@ class Pk5sGateComputer:
                     'wide':  self._states_standard(line, dema, pool_w, pool_range, slope_floor, midpoint),
                 }
 
+            pool_id = int(v['tcev_pk'])
             for pool_label in ('close', 'wide'):
                 weight = int(v[f'tcev_weight_{pool_label}'])
                 if weight == 0:
                     continue
-                states = pool_states[pool_label]
+                probe_states[(pool_id, pool_label)]  = pool_states[pool_label]
+                probe_weights[(pool_id, pool_label)] = weight
 
-                # Pine: f_vote — PM sentinels route to neutral at full weight
-                long_pts    += np.where(states ==  1.0, weight, 0.0)
-                short_pts   += np.where(states == -1.0, weight, 0.0)
-                neutral_pts += np.where(
-                    (states == 0.0) | (states == self._PM_LONG) | (states == self._PM_SHORT),
-                    weight, 0.0
-                )
-                pm_long_wt  += np.where(states == self._PM_LONG,  weight, 0.0)
-                pm_short_wt += np.where(states == self._PM_SHORT, weight, 0.0)
+        if not probe_states:
+            self._log.warning(f'pk_5s tce_pk={tce_pk}: all probes zero-weighted')
+            return np.zeros(n, dtype=np.int8)
 
-        # Pine: PM suppression post-processing
-        adj_long  = np.maximum(0.0, long_pts  - pm_short_wt * pm_supp)
-        adj_short = np.maximum(0.0, short_pts - pm_long_wt  * pm_supp)
-        active_w  = adj_long + adj_short + neutral_pts        # pm_option_a=false
-
-        with np.errstate(invalid='ignore', divide='ignore'):
-            long_ratio  = np.where(active_w > 0, (adj_long  / active_w) * 10.0, 0.0)
-            short_ratio = np.where(active_w > 0, (adj_short / active_w) * 10.0, 0.0)
-
-        pk_raw = np.where(long_ratio  > thr_long,   1,
-                 np.where(short_ratio > thr_short, -1, 0)).astype(np.int8)
+        vm = self._vote_machine or PKVoteMachine(pm_suppress_str=pm_supp)
+        result = vm.aggregate(probe_states, probe_weights, thr_long, thr_short)
+        pk_raw = result['pk_raw']
 
         # r07: decision delay removed — hostile to HTF anchor signals
         s5_pk_final = pk_raw
@@ -383,5 +391,3 @@ class Pk5sGateComputer:
         valid = fires & ~np.isnan(line_slope) & ~np.isnan(price_slope)
         out   = np.where(valid, states, np.nan)
         return out
-
-    
