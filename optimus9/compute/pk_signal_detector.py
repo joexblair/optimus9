@@ -32,6 +32,7 @@ import numpy as np
 from logger import get_logger
 from .pk_state_computer import PKStateComputer
 from .pk_gate_filter   import PKGateFilter
+from .pk_vote_machine   import PKVoteMachine
 
 
 class PKSignalDetector:
@@ -39,9 +40,14 @@ class PKSignalDetector:
 
     def __init__(self,
                  state_computer: Optional[PKStateComputer] = None,
-                 gate_filter:    Optional[PKGateFilter]    = None) -> None:
+                 gate_filter:    Optional[PKGateFilter]    = None,
+                 vote_machine:   Optional[PKVoteMachine]   = None) -> None:
         self._state_computer = state_computer or PKStateComputer()
         self._gate_filter    = gate_filter    or PKGateFilter()
+        # r07 Step 3a: optional vote-machine injection point. When None
+        # (default; the gated grind path supplies nothing) behaviour is
+        # unchanged. The vote-engaged flow is Step 3b — see detect().
+        self._vote_machine   = vote_machine
         self._log            = get_logger(self.__class__.__name__)
 
     def detect(self, line: np.ndarray, dema: np.ndarray,
@@ -58,6 +64,14 @@ class PKSignalDetector:
         We truncate all three to the minimum length, matching the original
         PKDetector loop's implicit behavior.
         """
+        if self._vote_machine is not None:
+            # r07 Step 3b (vote-engaged flow) — pending design decisions on
+            # aggregate-signal persistence + gate-on-pk_raw sign convention.
+            raise NotImplementedError(
+                'PKSignalDetector vote-engaged flow is Step 3b (not yet '
+                'implemented). Use vote_machine=None for the per-probe path.'
+            )
+
         if pool_range == 0:
             return []
 
