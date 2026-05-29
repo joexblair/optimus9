@@ -49,6 +49,7 @@ class BarBuilder:
     def __init__(self, db: DatabaseManager) -> None:
         self._db  = db
         self._log = get_logger(self.__class__.__name__)
+        self._log.setLevel('INFO')  # r07: drop per-bar DEBUG flooding debug.log
 
     def run(self, tp_pk: int) -> None:
         self._log.info('BarBuilder started')

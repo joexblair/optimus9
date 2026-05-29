@@ -53,6 +53,7 @@ class TickCollector:
         self._db         = db
         self._ws         = BybitWebSocketClient()
         self._log        = get_logger(self.__class__.__name__)
+        self._log.setLevel('INFO')  # r07: drop per-tick DEBUG flooding debug.log
         self._last_prune = time.time()
 
     def run(self, tp_pk: int, symbol: str) -> None:
