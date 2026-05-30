@@ -78,6 +78,11 @@ class OptimizerRunner:
             config: dict,
             p_rev_enabled: bool = False) -> None:
 
+        # r07: cache profit_zone — _persist_combo_summary needs it to
+        # compute won/stopped/inconc counts at combo-aggregation time
+        # (replaces AM's GROUP BY of the same logic over signal rows).
+        self._profit_zone = float(config['tc_profit_zone'])
+
         # r07: dispatch on signal-source (vote vs line) rather than on
         # whether gates happen to be active. Replaces the older
         # `is_self_gated = not oob_side.any()` inference.
@@ -162,6 +167,7 @@ class OptimizerRunner:
             signals = self._extract_transitions(s5_pk_gated)
             outcomes = self._analyzer.analyze(signals, close)
             self._persist_self_gated(or_pk, timestamps, outcomes, params, line_type)
+            self._persist_combo_summary(or_pk, params, line_type, outcomes)
 
     @staticmethod
     def _build_target_vote(line_type: str, params: dict) -> dict:
@@ -262,8 +268,8 @@ class OptimizerRunner:
              pks_len, pks_mult, pks_src,
              pks_len_rsi, pks_len_stoch,
              pks_pool_c, pks_pool_w, pks_pool_range,
-             pks_slope_floor, pks_multiplier)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)'''
+             pks_slope_floor, pks_pm_additive, pks_pm_suppression, pks_multiplier)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)'''
 
         out_sql = '''INSERT INTO pk_outcomes
             (pko_pks_pk, pko_max_profit_pct, pko_bars_to_stop, pko_bars_to_max_profit,
@@ -293,6 +299,8 @@ class OptimizerRunner:
                 int(params['pool_c']), int(params['pool_w']),
                 int(params['pool_range']),
                 float(params['slope_floor']),
+                params.get('pm_additive'),
+                params.get('pm_suppression'),
                 int(params['multiplier']),
             ))
 
@@ -348,6 +356,7 @@ class OptimizerRunner:
             )
             outcomes = self._analyzer.analyze(signals, close)
             self._persist_gated(or_pk, base_df['timestamp'].to_numpy(), outcomes, line_type)
+            self._persist_combo_summary(or_pk, params, line_type, outcomes)
 
     @staticmethod
     def _build_line(base_df: pd.DataFrame, ind_df: pd.DataFrame,
@@ -393,8 +402,8 @@ class OptimizerRunner:
              pks_len, pks_mult, pks_src,
              pks_len_rsi, pks_len_stoch,
              pks_pool_c, pks_pool_w, pks_pool_range,
-             pks_slope_floor, pks_multiplier)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)'''
+             pks_slope_floor, pks_pm_additive, pks_pm_suppression, pks_multiplier)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)'''
 
         out_sql = '''INSERT INTO pk_outcomes
             (pko_pks_pk, pko_max_profit_pct, pko_bars_to_stop, pko_bars_to_max_profit,
@@ -420,7 +429,9 @@ class OptimizerRunner:
                 int(o['len']), pks_mult, o['src'],
                 pks_len_rsi, pks_len_stoch,
                 int(o['pool_c']), int(o['pool_w']), int(o['pool_range']),
-                float(o['slope_floor']), int(o['multiplier']),
+                float(o['slope_floor']),
+                None, None,  # line-sourced has no pm dials
+                int(o['multiplier']),
             ))
 
         first_id = self._db.executemany(sig_sql, sig_rows)
@@ -434,6 +445,78 @@ class OptimizerRunner:
              o.get('bars_to_max_adverse'))
             for i, o in enumerate(outcomes)
         ])
+
+    # ── Per-combo summary (used by both paths) ──────────────────────────────
+
+    def _persist_combo_summary(self, or_pk: int, params: dict,
+                                line_type: str, outcomes: list) -> None:
+        """Compute per-combo aggregates over outcomes; INSERT one row
+        into pk_combo_summary. Skipped when outcomes is empty — matches
+        AM's GROUP BY behaviour (no row for empty combos).
+
+        r07 (2026-05-30): replaces AM's per-signal GROUP BY (which did
+        40 min on 76.5M signal rows of or_pk=54 → 41 groups). AM reads
+        from this table directly. Aggregates are 1:1 with what
+        _load_combo_summaries used to compute via SQL.
+        """
+        if not outcomes:
+            return
+
+        pz = self._profit_zone
+        total = len(outcomes)
+        won = stopped_ct = inconc_ct = 0
+        win_pcts = []
+        bars_to_stop_vals = []
+        bars_to_peak_vals = []
+        for o in outcomes:
+            mp  = o.get('max_profit_pct')
+            bts = o.get('bars_to_stop')
+            btp = o.get('bars_to_max_profit')
+            if mp is not None:
+                if mp >= pz:
+                    won += 1
+                    win_pcts.append(mp)
+                elif bts is not None:
+                    stopped_ct += 1
+                else:
+                    inconc_ct += 1
+            if bts is not None:
+                bars_to_stop_vals.append(bts)
+            if btp is not None:
+                bars_to_peak_vals.append(btp)
+
+        avg_win_pct   = (sum(win_pcts)          / len(win_pcts))          if win_pcts          else None
+        avg_bars      = (sum(bars_to_stop_vals) / len(bars_to_stop_vals)) if bars_to_stop_vals else None
+        avg_bars_peak = (sum(bars_to_peak_vals) / len(bars_to_peak_vals)) if bars_to_peak_vals else None
+
+        # BB → mult set, K-only → NULL. Mirrors _persist_self_gated.
+        pcs_mult      = float(params['mult'])    if line_type == 'bb' else None
+        pcs_len_rsi   = int(params['len_rsi'])   if line_type == 'k'  else None
+        pcs_len_stoch = int(params['len_stoch']) if line_type == 'k'  else None
+
+        self._db.execute(
+            '''INSERT INTO pk_combo_summary
+                (pcs_or_pk,
+                 pcs_len, pcs_mult, pcs_src,
+                 pcs_pool_c, pcs_pool_w, pcs_pool_range,
+                 pcs_slope_floor, pcs_multiplier,
+                 pcs_len_rsi, pcs_len_stoch,
+                 pcs_pm_additive, pcs_pm_suppression,
+                 pcs_profit_zone,
+                 pcs_total, pcs_won, pcs_stopped_ct, pcs_inconclusive_ct,
+                 pcs_avg_win_pct, pcs_avg_bars, pcs_avg_bars_peak)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                       %s, %s, %s, %s, %s, %s, %s, %s)''',
+            (or_pk,
+             int(params['len']), pcs_mult, params['src'],
+             int(params['pool_c']), int(params['pool_w']), int(params['pool_range']),
+             float(params['slope_floor']), int(params['multiplier']),
+             pcs_len_rsi, pcs_len_stoch,
+             params.get('pm_additive'), params.get('pm_suppression'),
+             pz,
+             total, won, stopped_ct, inconc_ct,
+             avg_win_pct, avg_bars, avg_bars_peak),
+        )
 
     # ── shared helpers ───────────────────────────────────────────────────────
 
