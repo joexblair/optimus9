@@ -229,7 +229,7 @@ class Pk5sGateComputer:
 
         fires_long  = int((s5_pk_final ==  1).sum())
         fires_short = int((s5_pk_final == -1).sum())
-        self._log.info(
+        self._log.debug(
             f'pk_5s tce_pk={tce_pk}: '
             f'fires {fires_long + fires_short} ({fires_long}L / {fires_short}S)'
         )

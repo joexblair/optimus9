@@ -110,7 +110,7 @@ class OptimizerRunner:
         tce_params = self._load_tce_params()
 
         for idx, params in enumerate(param_grid, 1):
-            self._log.info(f'[{idx}/{total}]  {params}')
+            self._log.info(f'[{idx}/{total}]')
 
             target_vote = self._build_target_vote(line_type, params)
             pool_params = self._build_pool_params(params, tce_params)
@@ -176,7 +176,6 @@ class OptimizerRunner:
             'threshold_long':  tce_params.get('threshold_long',  7.5),
             'threshold_short': tce_params.get('threshold_short', 7.5),
             'pm_suppression':  tce_params.get('pm_suppression',  0.5),
-            'decision_delay':  tce_params.get('decision_delay',  1),
         }
 
     def _load_tce_params(self) -> dict:
@@ -290,7 +289,7 @@ class OptimizerRunner:
             self._log.info(f'K-line target — using f_k path (TF={ind_seconds}s)')
 
         for idx, params in enumerate(param_grid, 1):
-            self._log.info(f'[{idx}/{total}]  {params}')
+            self._log.info(f'[{idx}/{total}]')
 
             line = self._build_line(
                 base_df, ind_df, line_type, ind_seconds,
