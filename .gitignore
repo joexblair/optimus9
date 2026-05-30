@@ -9,4 +9,5 @@ logs/
 *.pine
 *.diff
 *.sql
+!optimus9/sql/**/*.sql
 files.zip
