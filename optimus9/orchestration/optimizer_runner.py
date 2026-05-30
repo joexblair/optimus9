@@ -33,14 +33,14 @@ class OptimizerRunner:
     """
     Drives the parameter grid. Two execution paths:
 
-      Self-gated (5s singular grind):
+      Vote-sourced (5s singular grind):
         No external gate. Builds single-line vote_overrides per combo and
         calls Pk5sGateComputer to produce a Pine-equivalent s5_pk_final
         signal. Transitions to ±1 become signals. Same machinery the
         reconciler uses, just with one voter (target line carries xlsx
         weights, others absent). True Pine mimic.
 
-      Gated (b6m grind, r05 6-line grinds under bny30):
+      Line-sourced (b6m grind, r05 6-line grinds under bny30):
         External gate (bny30M/p) provides oob_side. Builds the calibration
         line per combo, calls PKSignalDetector to find PK transitions within the
         OOB region. K-line support added r04 (line via f_k); detect()
@@ -48,7 +48,7 @@ class OptimizerRunner:
         emit correctly without expecting 'mult'.
 
     r04: K-line support added on the gated path (line via f_k instead of
-    f_bb when ic_line_type='k'). Self-gated path supports K too via
+    f_bb when ic_line_type='k'). Vote-sourced path supports K too via
     vote_overrides shape — Pk5sGateComputer already handles both line types.
 
     Mode selection is automatic: oob_side all-zeros → self-gated, otherwise
@@ -82,18 +82,18 @@ class OptimizerRunner:
 
         if is_self_gated:
             self._log.info(
-                'Self-gated mode — Pk5sGateComputer with single-line vote_overrides per combo'
+                'Vote-sourced mode — Pk5sGateComputer with single-line vote_overrides per combo'
             )
-            self._run_self_gated(or_pk, base_df, dema, param_grid, config)
+            self._run_vote_sourced(or_pk, base_df, dema, param_grid, config)
         else:
-            self._run_gated(
+            self._run_line_sourced(
                 or_pk, base_df, ind_df, dema, oob_side,
                 param_grid, config, p_rev_enabled,
             )
 
-    # ── Self-gated path (5s singular grind) ──────────────────────────────────
+    # ── Vote-sourced path (5s singular grind) ──────────────────────────────────
 
-    def _run_self_gated(self, or_pk: int,
+    def _run_vote_sourced(self, or_pk: int,
                         base_df: pd.DataFrame,
                         dema: np.ndarray,
                         param_grid: list,
@@ -264,9 +264,9 @@ class OptimizerRunner:
             for i, o in enumerate(outcomes)
         ])
 
-    # ── Gated path (b6m grind — existing PKDetector flow) ────────────────────
+    # ── Line-sourced path (b6m grind — existing PKDetector flow) ────────────
 
-    def _run_gated(self, or_pk: int,
+    def _run_line_sourced(self, or_pk: int,
                    base_df: pd.DataFrame,
                    ind_df: pd.DataFrame,
                    dema: np.ndarray,
@@ -278,7 +278,7 @@ class OptimizerRunner:
         total       = len(param_grid)
         ind_seconds = int(config['ic_itf_seconds'])
         line_type   = config.get('ic_line_type', 'bb')
-        self._log.info(f'Gated mode — PKSignalDetector ({line_type} line) with externally-folded oob_side')
+        self._log.info(f'Line-sourced mode — PKSignalDetector ({line_type} line) with externally-folded oob_side')
         
         use_lookahead = bool(p_rev_enabled and ind_seconds > 5 and line_type == 'bb')
         if use_lookahead:
