@@ -78,24 +78,48 @@ class OptimizerRunner:
             config: dict,
             p_rev_enabled: bool = False) -> None:
 
-        is_self_gated = not oob_side.any()
+        # r07: dispatch on signal-source (vote vs line) rather than on
+        # whether gates happen to be active. Replaces the older
+        # `is_self_gated = not oob_side.any()` inference.
+        signal_source = self._determine_signal_source(int(config['tc_pk']))
 
-        if is_self_gated:
+        if signal_source == 'vote':
             self._log.info(
-                'Vote-sourced mode — Pk5sGateComputer with single-line vote_overrides per combo'
+                'Vote-sourced mode — Pk5sGateComputer + AND-folded oob_side '
+                '(single-line vote_overrides per combo)'
             )
-            self._run_vote_sourced(or_pk, base_df, dema, param_grid, config)
+            self._run_vote_sourced(or_pk, base_df, dema, oob_side, param_grid, config)
         else:
             self._run_line_sourced(
                 or_pk, base_df, ind_df, dema, oob_side,
                 param_grid, config, p_rev_enabled,
             )
 
+    # ── Dispatch helper ───────────────────────────────────────────────────────
+
+    def _determine_signal_source(self, tc_pk: int) -> str:
+        """Return 'vote' if test_config has an active pk_5s extension, else 'line'.
+
+        r07 dispatch reshape: replaces the older `not oob_side.any()` inference,
+        which conflated "no gates active" with "vote-sourced path". The right
+        question is which signal-producing extension exists for this tc, not
+        whether any gates happen to be on.
+        """
+        rows = self._db.execute(
+            '''SELECT EXISTS(SELECT 1 FROM test_config_extensions
+                             WHERE tce_tc_pk = %s
+                               AND tce_type = 'pk_5s'
+                               AND tce_is_active = 1) AS h''',
+            (tc_pk,), fetch=True,
+        )
+        return 'vote' if rows[0]['h'] else 'line'
+
     # ── Vote-sourced path (5s singular grind) ──────────────────────────────────
 
     def _run_vote_sourced(self, or_pk: int,
                         base_df: pd.DataFrame,
                         dema: np.ndarray,
+                        oob_side: np.ndarray,
                         param_grid: list,
                         config: dict) -> None:
         close      = base_df['close'].to_numpy(dtype=float)
@@ -125,7 +149,17 @@ class OptimizerRunner:
             )
             s5_pk_final = -oob_arr  # invert to Pine convention
 
-            signals = self._extract_transitions(s5_pk_final)
+            # r07: AND composition with externally-folded oob_side. Vote signal
+            # must match the expected boundary direction (mean reversion):
+            # vote=+1 (long) needs oob_side=-1 (LO breach); vote=-1 (short)
+            # needs oob_side=+1 (HI breach). In-band (oob_side=0) → blocked
+            # (per the bny30 correction: OOB = unlatched/allowed, IB = blocked).
+            # Applied BEFORE _extract_transitions so a blocked transition can't
+            # leave a silent state-change that misses firing later.
+            expected_oob = -s5_pk_final
+            s5_pk_gated  = np.where(oob_side == expected_oob, s5_pk_final, 0).astype(np.int8)
+
+            signals = self._extract_transitions(s5_pk_gated)
             outcomes = self._analyzer.analyze(signals, close)
             self._persist_self_gated(or_pk, timestamps, outcomes, params, line_type)
 
