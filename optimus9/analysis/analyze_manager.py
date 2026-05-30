@@ -64,11 +64,15 @@ class AnalyzeManager:
         'avg_win_pct', 'avg_bars', 'avg_bars_peak',
     }
 
-    # Sweep dimensions that can appear in pk_signals. Order matters only
-    # for report presentation; missing/NULL columns are filtered downstream.
+    # Sweep dimensions that can appear in pk_signals / pk_combo_summary.
+    # Order matters only for report presentation; missing/NULL columns are
+    # filtered downstream.
     _CANDIDATE_PARAMS = [
         'len', 'mult', 'len_rsi', 'len_stoch', 'src',
         'pool_c', 'pool_w', 'pool_range', 'slope_floor', 'multiplier',
+        # r07 (2026-05-30): PM dials surface as sweep dims in vote-sourced
+        # grinds. Tagged on signals + pk_combo_summary; NULL for line-sourced.
+        'pm_additive', 'pm_suppression',
     ]
 
     # Auto-labels keyed on (p_rev, pk5s_gate) flag tuple (compare reports)
@@ -218,25 +222,69 @@ class AnalyzeManager:
         return rows[0]
 
     def _load_combo_summaries(self, or_pk: int, profit_zone: float) -> list:
-        # r05: 'won' counts any trade that reached profit_zone regardless
-        # of whether stop later fired (in real trading the position closes
-        # at profit). 'stopped_ct' excludes those wins. 'inconclusive_ct'
-        # excludes them too. The three are mutually exclusive and sum to
-        # total. 'decided' = won + stopped_ct is computed in _enrich.
-        # Bug fix from r04 where SQL's `decided` undercounted won-but-not-
-        # stopped trades, producing win_rate > 100%.
+        # r07 (2026-05-30): prefer pre-aggregated rows from pk_combo_summary
+        # (OptimizerRunner populates one row per combo as the grind runs).
+        # AM's prior GROUP BY did 40 min on or_pk=54's 76.5M signal rows;
+        # reading the summary table is O(combos) instead.
+        #
+        # Fallback to the original GROUP BY when no summary rows exist for
+        # this or_pk — preserves backward-compat for grinds that ran before
+        # the pk_combo_summary refactor. The fallback's GROUP BY now also
+        # includes pks_pm_additive / pks_pm_suppression so vote-sourced
+        # combos resolve correctly even via the slow path.
+        #
+        # r05 semantics preserved: 'won' counts any trade that reached
+        # profit_zone regardless of whether stop later fired (in real
+        # trading the position closes at profit). 'stopped_ct' excludes
+        # those wins. 'inconclusive_ct' excludes them too. The three are
+        # mutually exclusive and sum to total. 'decided' = won + stopped_ct
+        # is computed in _enrich.
+        rows = self._db.execute(
+            '''SELECT pcs_len             AS len,
+                      pcs_mult            AS mult,
+                      pcs_len_rsi         AS len_rsi,
+                      pcs_len_stoch       AS len_stoch,
+                      pcs_src             AS src,
+                      pcs_pool_c          AS pool_c,
+                      pcs_pool_w          AS pool_w,
+                      pcs_pool_range      AS pool_range,
+                      pcs_slope_floor     AS slope_floor,
+                      pcs_multiplier      AS multiplier,
+                      pcs_pm_additive     AS pm_additive,
+                      pcs_pm_suppression  AS pm_suppression,
+                      pcs_total           AS total,
+                      pcs_won             AS won,
+                      pcs_stopped_ct      AS stopped_ct,
+                      pcs_inconclusive_ct AS inconclusive_ct,
+                      pcs_avg_win_pct     AS avg_win_pct,
+                      pcs_avg_bars        AS avg_bars,
+                      pcs_avg_bars_peak   AS avg_bars_peak
+               FROM pk_combo_summary
+               WHERE pcs_or_pk = %s''',
+            (or_pk,), fetch=True,
+        )
+        if rows:
+            return rows
+
+        # Fallback: original GROUP BY over pk_signals + pk_outcomes.
+        self._log.info(
+            f'pk_combo_summary empty for or_pk={or_pk} — falling back to '
+            'GROUP BY (this is the slow path; pre-refactor grind)'
+        )
         return self._db.execute(
             '''SELECT
-                   s.pks_len        AS len,
-                   s.pks_mult       AS mult,
-                   s.pks_len_rsi    AS len_rsi,
-                   s.pks_len_stoch  AS len_stoch,
-                   s.pks_src        AS src,
-                   s.pks_pool_c     AS pool_c,
-                   s.pks_pool_w     AS pool_w,
-                   s.pks_pool_range AS pool_range,
-                   s.pks_slope_floor AS slope_floor,
-                   s.pks_multiplier  AS multiplier,
+                   s.pks_len             AS len,
+                   s.pks_mult            AS mult,
+                   s.pks_len_rsi         AS len_rsi,
+                   s.pks_len_stoch       AS len_stoch,
+                   s.pks_src             AS src,
+                   s.pks_pool_c          AS pool_c,
+                   s.pks_pool_w          AS pool_w,
+                   s.pks_pool_range      AS pool_range,
+                   s.pks_slope_floor     AS slope_floor,
+                   s.pks_multiplier      AS multiplier,
+                   s.pks_pm_additive     AS pm_additive,
+                   s.pks_pm_suppression  AS pm_suppression,
                    COUNT(*)                                                AS total,
                    SUM(o.pko_max_profit_pct >= %s)                         AS won,
                    SUM(o.pko_bars_to_stop IS NOT NULL
@@ -252,7 +300,8 @@ class AnalyzeManager:
                WHERE s.pks_or_pk = %s
                GROUP BY s.pks_len, s.pks_mult, s.pks_len_rsi, s.pks_len_stoch,
                         s.pks_src, s.pks_pool_c, s.pks_pool_w, s.pks_pool_range,
-                        s.pks_slope_floor, s.pks_multiplier''',
+                        s.pks_slope_floor, s.pks_multiplier,
+                        s.pks_pm_additive, s.pks_pm_suppression''',
             (profit_zone, profit_zone, profit_zone, profit_zone, or_pk), fetch=True,
         )
 
