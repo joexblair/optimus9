@@ -1,38 +1,108 @@
-# r07 Status — 2026-05-26
+# r07 Status — closed 2026-05-30
 
 ## TL;DR
 
-**Where we are**: SRP refactor + vectorization shipped and validated end-to-end.
-Decision delay deleted from Python. Pine deprecated as production path —
-Python is canonical. Vote machine extract is designed
-(`r07_vote_machine_design.md`) and ready to start at Step 2 (Step 1 is done).
+**r07 closed.** Vote machine extracted + extended, dispatch reshape +
+AND composition shipped, per-combo summary table replaces a 40-min
+GROUP BY, heartbeat + fixed-window grind args + 4 schema migrations
+landed. The SnF architecture for r08 was designed in the same session
+(filed as the r08 SnF spec stub in `r07_open_items.md`). gca5m line
+dialed at 5s — sf=7 candidate. PM dials confirmed inert in single-line:
+they belong at the SnF (collection) layer, not per-line.
 
-**What's done today**:
-- ✓ MAE persist restored both gated and self-gated paths
-- ✓ Disk reclaimed (TRUNCATE + OPTIMIZE, 156GB back)
-- ✓ Vectorized PKStateComputer + PKSignalDetector (40s → 21s per 80-combo grind)
-- ✓ Length-mismatch bug worked around in PKStateComputer (proper fix
-  remains open — see Open Items)
-- ✓ Pine `request.security` tuple consolidation (4s → 2s per TV input tweak)
-- ✓ Reference checkpoint (or44_reference.csv) — 99.4% match validation
-  (see "Vectorization validation" below for exact interpretation)
-- ✓ Architecture decision: Pine = validation only, Python = production
-- ✓ Decision delay deleted from Python (`apply_r07_remove_decision_delay.py`
-  ran successfully — 4 of 5 edits applied automatically; 5th was a
-  cosmetic method-deletion that was applied manually because the apply
-  script's skip-logic was inverted)
-- ✓ Design doc for vote machine extract
+### Shipped this round (commits in ~/thecodes)
+- **r07.5 SQL tooling**: clone / inspect / delete test_config procs (`optimus9/sql/procs/`).
+- **r07 Step 1**: decision delay deleted from Python.
+- **r07 Step 2**: PKVoteMachine extracted from Pk5sGateComputer.
+- **r07 Step 3a**: optional `vote_machine` injection point on PKSignalDetector
+  (None-path byte-identical; regression-tested via fixed-window or_pk=49 vs or_pk=50).
+- **r07 Step 4**: `pm_additive_str` in PKVoteMachine (single collapsed dial,
+  close + wide) + Pk5sGateComputer pass-through + orchestration plumbing.
+- **Dispatch reshape**: `signal_source` (vote / line) helper replaces
+  `is_self_gated = not oob_side.any()` inference. Renames:
+  `_run_vote_sourced`, `_run_line_sourced`.
+- **AND composition**: vote-sourced path AND-folds bny30 `oob_side` with
+  `s5_pk_final` before transition extraction. Strict polarity
+  (in-band → blocked, per the bny30 correction).
+- **Schema**: `pks_pm_additive` + `pks_pm_suppression` columns on `pk_signals`;
+  new `pk_combo_summary` table (per-combo aggregates populated by the grind,
+  AM reads directly — replaces the 40-min GROUP BY).
+- **AM refactor**: `_load_combo_summaries` reads `pk_combo_summary` first,
+  falls back to GROUP BY for pre-refactor grinds. `_CANDIDATE_PARAMS`
+  extended with pm dims.
+- **Logger**: rotation handlers (10 MB × 5); Tick + Bar collectors
+  downgraded to INFO+ERROR.
+- **Supervisor as systemd**: `klinecollect.service` runs continuously as
+  user joe from ~/thecodes; uses `get_db_config()` (not env fallbacks).
+- **Grind UX**: heartbeat every 77 rows (pct + elapsed + ETA) replaces
+  per-combo INFO; final completion line prints or_pk.
+- **Fixed-window grind args**: `--start_ms / --end_ms` for reproducible
+  reference grinds (used for Step 3a's byte-identical validation).
+- **pk_outcomes schema migration**: bar-counter columns widened to
+  `INT UNSIGNED` (smallint overflow on 7-day windows).
+- **`.gitignore`** unignored `optimus9/sql/**/*.sql` so migrations + procs
+  commit without `-f`.
+- **Bug catches** (caught + filed): synthetic vote_overrides missing
+  `tcev_pk` (first vote-sourced integration grind); pm dial resolution
+  chain (combo-grid → tce_params fallback) for persist consistency.
 
-**What's queued (in order)**:
-1. ~~Apply `apply_r07_remove_decision_delay.py`~~ DONE
-2. Extract PKVoteMachine from Pk5sGateComputer (Step 2 — meaty)
-3. Promote PKSignalDetector to flow manager (Step 3 — meaty)
-4. Add PM additive to PKVoteMachine (Step 4 — small, after Steps 2-3)
-5. Production engine wiring — own milestone (r08+)
+### Dialing findings — 2026-05-30 1D sweeps
 
-**Why I stopped overnight**: Steps 2-3 are substantive code work where
-Joe's real-time pressure-testing catches things I'd miss solo. The
-validation discipline needs Joe in the loop.
+- **gca5m at 5s, slope_floor sweep** (or_pk=55, 41 combos):
+  monotonic — lower sf → more signals, marginally better expectancy.
+  Peak gross at sf=7 (~$2,680, +1.10% exp, 906 wins). Peak expectancy
+  at sf=7.5 (+1.109%). Density wins with comparable win rate (~37.3%).
+- **gca5m at 5s, pm_additive sweep** (or_pk=56, 31 combos): inert
+  across [0, 0.5]; **one binary jump at 0.55** (1745 → 2035 signals);
+  plateaus to 1.5. The polarising threshold-crossing behaviour Joe saw
+  in Pine, in single-line it has only one tier.
+- **gca5m at 5s, pm_suppression sweep** (or_pk=57, 31 combos): **zero
+  effect** across [0, 1.5]. All 31 combos identical to baseline.
+- **Implication**: PM dials are designed for multi-line vote dynamics.
+  Single-line voting can't exercise them. They belong at the SnF
+  (collection) layer where multiple lines actually interact.
+- **Reference or_pks**: 53 (baseline single combo), 55/56/57 (1D sweeps).
+- **5s centroid candidate**: sf=7 picked by visual cluster preference
+  ("better clusters in places"). `cluster_quality_score` will make this
+  empirical when r08 ships.
+
+### r08 starting state — pointer
+
+The full SnF architecture is in `r07_open_items.md` under
+"r08 SnF spec stub — architecture landed 2026-05-30". TL;DR:
+- **Per-line library + temporal-coalition SnF + cluster overlay.** Per-line
+  grinds produce reusable signal libraries; SnF simulator forms coalitions
+  by signals firing within x bars of each other; cluster overlay scores
+  emitted streams against detected swings.
+- **SnFv2 enhancement**: each line offers its top-5 intrinsic centroids;
+  SnF sweeps the cross-product (5^N collection compositions).
+- **Cluster overlay** built as a separate post-grind layer (not baked into
+  grind), runs multi-algo swing detection (ZigZag + ATR + fractal) for
+  robustness.
+- **Friction formula A/B** filed (v1: opposing-signals-only; v2: + non-firing-line tax).
+- **Swing significance calibration**: at 5s, "optimal clustering" (TBD); at
+  HTF, 0.9% (scalper-exit threshold becomes natural at HTF noise levels).
+
+### Step 3b — deferred by design
+
+Original Step 3b (wire vote machine into PKSignalDetector for line-sourced
+path) is **deferred indefinitely**. The SnF architecture treats lines as
+independent signal sources composed at the SnF layer via temporal
+coalition — not via PKSignalDetector's per-line vote machine. 3b is moot
+in the new architecture.
+
+### Where we stopped this round / fork moment
+
+Architecture for r08 SnF locked. Per-line dial mechanics established via
+the 3-grind 1D sweeps. r07 ships the engine; r08 builds the SnF analyzer
+on top. **Natural fork point** — fresh r08 session reads
+`fork_init_prompt.md` (handover dir) + memory + the spec stub and is
+productive without this session's accumulated context bloat.
+
+Joe's next move: loose Pine visual validation of a new 5s line
+(gcs5M candidate). Once happy, hands the line spec + indicator config to
+fresh CC for a per-line library multi-D grind. Same shape as r07 grinds
+A/B/C, just for a different line.
 
 ---
 
