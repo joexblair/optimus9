@@ -175,8 +175,14 @@ class OptimizerRunner:
 
             signals = self._extract_transitions(s5_pk_gated)
             outcomes = self._analyzer.analyze(signals, close)
-            self._persist_self_gated(or_pk, timestamps, outcomes, params, line_type)
-            self._persist_combo_summary(or_pk, params, line_type, outcomes)
+            # r07 (2026-05-30): persist sees the *resolved* pm dials
+            # (combo grid OR tce_params fallback) — not the bare combo,
+            # which only carries the dims explicitly swept this grind.
+            persist_params = {**params,
+                              'pm_additive':    pool_params['pm_additive'],
+                              'pm_suppression': pool_params['pm_suppression']}
+            self._persist_self_gated(or_pk, timestamps, outcomes, persist_params, line_type)
+            self._persist_combo_summary(or_pk, persist_params, line_type, outcomes)
 
         elapsed = time.time() - start_t
         self._log.info(
