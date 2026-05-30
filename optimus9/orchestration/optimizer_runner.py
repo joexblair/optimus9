@@ -166,6 +166,13 @@ class OptimizerRunner:
     @staticmethod
     def _build_target_vote(line_type: str, params: dict) -> dict:
         v = {
+            # r07 (2026-05-30): Pk5sGateComputer.compute reads v['tcev_pk']
+            # as the pool_id key for probe_states/probe_weights dicts. For
+            # synthetic single-line vote_overrides we use 0 — the
+            # (pool_id, probe_label) tuple stays unique via the label.
+            # Caught when the first vote-sourced integration grind ran (the
+            # status doc had flagged the path as unvalidated end-to-end).
+            'tcev_pk':            0,
             'tcev_weight_close':  int(params['tcev_weight_close']),
             'tcev_weight_wide':   int(params['tcev_weight_wide']),
             'tcev_trigger_mode':  'standard_pk',
