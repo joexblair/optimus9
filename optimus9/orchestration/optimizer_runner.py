@@ -203,13 +203,16 @@ class OptimizerRunner:
             'pool_range':      int(params['pool_range']),
             'pool_slope':      float(params['slope_floor']),
             'multiplier':      int(params['multiplier']),
-            # r07 Step 4: pm_additive — swept from the grid, fixed via tce, or 0.0.
+            # PM dials — swept from the grid, fixed via tce, or default.
+            # r07 Step 4 introduced pm_additive on this pattern; pm_suppression
+            # follows it so the grind can sweep it too.
             'pm_additive':     float(params.get('pm_additive',
                                                 tce_params.get('pm_additive', 0.0))),
-            # Fixed xlsx-truth values (not swept this round)
+            'pm_suppression':  float(params.get('pm_suppression',
+                                                tce_params.get('pm_suppression', 0.5))),
+            # Fixed xlsx-truth values
             'threshold_long':  tce_params.get('threshold_long',  7.5),
             'threshold_short': tce_params.get('threshold_short', 7.5),
-            'pm_suppression':  tce_params.get('pm_suppression',  0.5),
         }
 
     def _load_tce_params(self) -> dict:
