@@ -16,6 +16,7 @@ Terminology:
 
 import json
 import math
+import time
 
 import numpy as np
 import pandas as pd
@@ -137,9 +138,17 @@ class OptimizerRunner:
         # decision_delay, pm_suppression). Pool dimensions (c/w/range/slope)
         # come from the combo dict.
         tce_params = self._load_tce_params()
+        start_t    = time.time()
 
         for idx, params in enumerate(param_grid, 1):
-            self._log.info(f'[{idx}/{total}]')
+            if idx % 77 == 0 or idx == total:
+                elapsed = time.time() - start_t
+                pct     = idx / total * 100
+                eta_s   = elapsed * (total - idx) / idx
+                self._log.info(
+                    f'[{idx}/{total}]  {pct:.1f}%  elapsed {elapsed/60:.1f}min  '
+                    f'ETA {eta_s/60:.1f}min'
+                )
 
             target_vote = self._build_target_vote(line_type, params)
             pool_params = self._build_pool_params(params, tce_params)
@@ -168,6 +177,12 @@ class OptimizerRunner:
             outcomes = self._analyzer.analyze(signals, close)
             self._persist_self_gated(or_pk, timestamps, outcomes, params, line_type)
             self._persist_combo_summary(or_pk, params, line_type, outcomes)
+
+        elapsed = time.time() - start_t
+        self._log.info(
+            f'Grind complete: or_pk={or_pk}  {total} combos in '
+            f'{elapsed/60:.1f}min'
+        )
 
     @staticmethod
     def _build_target_vote(line_type: str, params: dict) -> dict:
@@ -340,8 +355,17 @@ class OptimizerRunner:
         elif line_type == 'k':
             self._log.info(f'K-line target — using f_k path (TF={ind_seconds}s)')
 
+        start_t = time.time()
+
         for idx, params in enumerate(param_grid, 1):
-            self._log.info(f'[{idx}/{total}]')
+            if idx % 77 == 0 or idx == total:
+                elapsed = time.time() - start_t
+                pct     = idx / total * 100
+                eta_s   = elapsed * (total - idx) / idx
+                self._log.info(
+                    f'[{idx}/{total}]  {pct:.1f}%  elapsed {elapsed/60:.1f}min  '
+                    f'ETA {eta_s/60:.1f}min'
+                )
 
             line = self._build_line(
                 base_df, ind_df, line_type, ind_seconds,
@@ -357,6 +381,12 @@ class OptimizerRunner:
             outcomes = self._analyzer.analyze(signals, close)
             self._persist_gated(or_pk, base_df['timestamp'].to_numpy(), outcomes, line_type)
             self._persist_combo_summary(or_pk, params, line_type, outcomes)
+
+        elapsed = time.time() - start_t
+        self._log.info(
+            f'Grind complete: or_pk={or_pk}  {total} combos in '
+            f'{elapsed/60:.1f}min'
+        )
 
     @staticmethod
     def _build_line(base_df: pd.DataFrame, ind_df: pd.DataFrame,
