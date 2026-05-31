@@ -18,7 +18,7 @@ from optimus9.db.database_manager import DatabaseManager
 from optimus9.db.kline_loader import KlineLoader
 from optimus9.config import get_db_config
 from optimus9.orchestration.gate_signal_sweep import (
-    generate_line_signals, label_winners, run_signal_sweep, score_signals,
+    generate_gca5m_signals, label_winners, run_signal_sweep, score_signals,
 )
 from optimus9.orchestration.gate_sweep_runner import (
     build_gate_configs, _build_resample_cache, _line_side, _fold, SCOUT_A_TEMPLATE,
@@ -50,7 +50,7 @@ def main():
     db    = DatabaseManager(**get_db_config()); db.connect()
     base  = KlineLoader(db).load_recent(a.tp_pk, a.lookback_days)
     close = base['close'].to_numpy(float)
-    bars, dirs = generate_line_signals(base)
+    bars, dirs = generate_gca5m_signals(base, db)
     win = label_winners(bars, dirs, close, a.threshold, a.horizon)
     raw_wr = win.mean()
     print(f'\ngca5m signals: {len(bars):,} | raw winners (ungated): {int(win.sum()):,} '

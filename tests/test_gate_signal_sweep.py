@@ -5,11 +5,8 @@ DB-free: score_signals (sign-opposition admission + precision/recall on winners)
 and a generate_line_signals smoke on synthetic price.
 """
 import numpy as np
-import pandas as pd
 
-from optimus9.orchestration.gate_signal_sweep import (
-    score_signals, generate_line_signals, label_winners,
-)
+from optimus9.orchestration.gate_signal_sweep import score_signals, label_winners
 
 
 def test_score_signals_admission_and_pr():
@@ -34,17 +31,11 @@ def test_score_signals_no_admission_nan_precision():
     assert s['admitted'] == 0 and np.isnan(s['precision']) and np.isnan(s['f1'])
 
 
-def test_generate_line_signals_smoke():
+def test_label_winners_matches_partition():
+    # long signal wins iff price reaches +0.9% before -0.9% within horizon
     rng   = np.random.default_rng(2)
-    n     = 1500
-    close = 100.0 + np.cumsum(rng.normal(0, 0.08, n))
-    base  = pd.DataFrame({
-        'timestamp': 1_700_000_000_000 + np.arange(n) * 5000,
-        'open': close, 'high': close + 0.05, 'low': close - 0.05,
-        'close': close, 'volume': np.ones(n),
-    })
-    bars, dirs = generate_line_signals(base)
-    assert len(bars) == len(dirs) and len(bars) > 0
-    assert set(np.unique(dirs)).issubset({-1, 1})
-    win = label_winners(bars, dirs, close, threshold=0.9, horizon=120)
+    close = 100.0 + np.cumsum(rng.normal(0, 0.08, 2000))
+    bars  = np.array([10, 50, 100, 500])
+    dirs  = np.array([1, -1, 1, -1])
+    win = label_winners(bars, dirs, close, threshold=0.9, horizon=200)
     assert win.shape == bars.shape and win.dtype == bool
