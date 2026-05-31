@@ -96,23 +96,27 @@ class GoalAlignment:
     def emit_pine(self, rows: list, path: str = 'gca5m_gate_validation.pine') -> str:
         """Pine overlay: green=long / red=short bgcolor per PK bar; white bgcolor
         overlaid on gated PKs (two bgcolors on one bar)."""
-        # floor PK times to the 5s grid so our tick-derived bar times match TV's bars
-        t = ','.join(str(r['pk_ms'] // 5000 * 5000) for r in rows) or '0'
+        t = ','.join(str(r['pk_ms']) for r in rows) or '0'   # raw ms — matched by range
         d = ','.join(str(r['dir'])   for r in rows) or '0'
         g = ','.join('true' if r['gated'] else 'false' for r in rows) or 'false'
         names = ' + '.join(n for n, _ in self._filters)
-        # bgcolor must be called in GLOBAL scope — compute colours as ternaries
-        # (na off-PK) and call bgcolor twice; the 2nd (white) overlays the 1st.
+        # Our tick-derived bar times don't sit cleanly on TV's 5s grid, so match a
+        # PK to a bar by RANGE: pk_ms ∈ [bar_time, bar_time+5000). bgcolor must be
+        # called in global scope, so compute the colours and call bgcolor at top level.
         pine = f'''//@version=6
 indicator("gca5m gate validation ({names})", overlay=true)
 // {len(rows)} PKs, last {self._lookback}h, stop {self._stop}% / profit {self._profit}%
 var int[]  pk_t = array.from({t})
 var int[]  pk_d = array.from({d})
 var bool[] pk_g = array.from({g})
-t5 = time - time % 5000
-i  = array.indexof(pk_t, t5)
-is_pk = i >= 0
-si = math.max(i, 0)
+hit = -1
+for j = 0 to array.size(pk_t) - 1
+    pt = array.get(pk_t, j)
+    if pt >= time and pt < time + 5000
+        hit := j
+        break
+is_pk = hit >= 0
+si = math.max(hit, 0)
 base_col = is_pk ? (array.get(pk_d, si) > 0 ? color.new(color.green, 65) : color.new(color.red, 65)) : na
 gate_col = (is_pk and array.get(pk_g, si)) ? color.new(color.white, 55) : na
 bgcolor(base_col)         // direction: green=long / red=short
