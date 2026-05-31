@@ -26,7 +26,11 @@ from typing import Optional
 import numpy as np
 
 
-# Class labels (match the gate's oob_side polarity: +1 long, -1 short, 0 none)
+# Class labels — natural trade polarity (+1 long, -1 short, 0 none), matching
+# pks_dir. NOTE: this is INVERTED vs the gate's oob_side (LO breach=-1 enables
+# longs). The gate match scorer owns that bridge (hit = gate == -P); see
+# gate_match_score.py. Do NOT "align" these to oob_side — it would bury the
+# inversion inside this general price primitive.
 LONG, SHORT, NEITHER = 1, -1, 0
 
 
