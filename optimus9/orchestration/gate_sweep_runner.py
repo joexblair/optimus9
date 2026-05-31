@@ -21,7 +21,7 @@ from ..compute.indicator_computer import IndicatorComputer as IC
 from ..compute.gate_match_score import overlap_score
 
 
-# Scout A: bnyM (BB) + bnyp (K), OR-folded, 30s, boundaries 15/85.
+# Scout A: sweep bnyM {len, mult, src} + bnyp {k_len, src}; bnyp osc fixed. OR, 30s, 15/85.
 SCOUT_A_TEMPLATE = [
     {'line_type': 'bb', 'itf_seconds': 30, 'low_b': 15, 'high_b': 85,
      'fixed': {},
@@ -29,6 +29,17 @@ SCOUT_A_TEMPLATE = [
     {'line_type': 'k',  'itf_seconds': 30, 'low_b': 15, 'high_b': 85,
      'fixed': {'ic_rsi_len': 114, 'ic_stc_len': 105},
      'params': {'ic_src': 'p_src', 'ic_k_len': 'p_k_len'}},
+]
+
+# Scout B: bnyM anchored at the battery winner (58/1.50/hl2); sweep bnyp's
+# oscillator internals {k_len (bridge), rsi_len, stc_len}; p_src anchored.
+SCOUT_B_TEMPLATE = [
+    {'line_type': 'bb', 'itf_seconds': 30, 'low_b': 15, 'high_b': 85,
+     'fixed': {'ic_src': 'hl2', 'ic_bb_len': 58, 'ic_bb_mult': 1.50},
+     'params': {}},
+    {'line_type': 'k',  'itf_seconds': 30, 'low_b': 15, 'high_b': 85,
+     'fixed': {'ic_src': 'ohlc4'},
+     'params': {'ic_k_len': 'p_k_len', 'ic_rsi_len': 'p_rsi_len', 'ic_stc_len': 'p_stc_len'}},
 ]
 
 
