@@ -107,9 +107,10 @@ class PKSignalDetector:
           A signal fires at bar i where state_series[i] is non-zero AND
           differs from state_series[i-1] (treating NaN-prev as zero).
 
-        Gate rule:
-          oob_side[i] != 0 AND state_series[i] matches -oob_side[i]
-          (mean reversion semantic).
+        Gate rule (sign-opposition):
+          oob_side[i] != 0 AND state_series[i] matches -oob_side[i] — a signal
+          is admitted only where its sign is the negation of the filter's
+          breach sign.
         """
         n = len(state_series)
         if n == 0:
@@ -130,9 +131,9 @@ class PKSignalDetector:
         is_transition  = is_directional & is_change
 
         # ── Gate mask ───────────────────────────────────────────────────────
-        # Mean reversion: signal fires when its direction opposes oob_side.
-        # oob_side ∈ {-1, 0, +1}. Expected signal direction = -oob_side.
-        # Match on state ∈ {±1, ±2}.
+        # Sign-opposition: a signal is admitted only where its sign is the
+        # negation of the filter's breach sign. oob_side ∈ {-1, 0, +1};
+        # expected signal sign = -oob_side. Match on state ∈ {±1, ±2}.
         oob = oob_side.astype(np.int8)
         expected = -oob.astype(np.float64)  # what the state should oppose to
         gate_passes = (oob != 0) & (
