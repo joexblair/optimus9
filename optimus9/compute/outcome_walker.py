@@ -125,3 +125,47 @@ def walk_outcome(close:      np.ndarray,
         'bars_to_max_adverse': bars_to_max_adverse,
         'bars_to_stop':        bars_to_stop,
     }
+
+
+def walk_to_first_cross(close:      np.ndarray,
+                        entry_idx:  int,
+                        direction:  int,
+                        profit_pct: float,
+                        stop_pct:   float,
+                        horizon:    Optional[int] = None):
+    """
+    Walk forward from `entry_idx` and return (win_offset, stop_offset) — the bar
+    offsets of the FIRST profit-target cross vs the FIRST stop cross, whichever
+    resolves the trade first. Directional + asymmetric (close-based, matching
+    walk_outcome):
+
+      LONG  (+1): win  close >= entry*(1 + profit_pct/100)
+                  stop close <= entry*(1 - stop_pct/100)
+      SHORT (-1): win  close <= entry*(1 - profit_pct/100)
+                  stop close >= entry*(1 + stop_pct/100)
+
+    Returns:
+      profit first → (offset, None)
+      stop   first → (None, offset)
+      neither by horizon / data-end → (None, None)   [undecided]
+
+    A single close can't cross both bounds (win_lvl > entry > stop_lvl), so
+    there is no same-bar ambiguity. `horizon` caps the walk in bars; None walks
+    to the end of `close` (the loaded data end == the report's end_ms).
+    """
+    entry = float(close[entry_idx])
+    if direction >= 0:
+        win_lvl, stop_lvl = entry * (1 + profit_pct / 100.0), entry * (1 - stop_pct / 100.0)
+    else:
+        win_lvl, stop_lvl = entry * (1 - profit_pct / 100.0), entry * (1 + stop_pct / 100.0)
+
+    end = len(close) - 1 if horizon is None else min(entry_idx + horizon, len(close) - 1)
+    for j in range(entry_idx + 1, end + 1):
+        c = float(close[j])
+        if direction >= 0:
+            if c >= win_lvl:  return (j - entry_idx, None)
+            if c <= stop_lvl: return (None, j - entry_idx)
+        else:
+            if c <= win_lvl:  return (j - entry_idx, None)
+            if c >= stop_lvl: return (None, j - entry_idx)
+    return (None, None)

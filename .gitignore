@@ -11,3 +11,5 @@ logs/
 *.sql
 !optimus9/sql/**/*.sql
 files.zip
+
+gca5m_gate_validation.pine
