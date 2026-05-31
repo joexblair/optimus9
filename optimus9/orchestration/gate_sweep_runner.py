@@ -56,11 +56,19 @@ def _line_side(cfg: dict, base_df) -> np.ndarray:
     return IC._fold_and([side])
 
 
-def score_combo(combo: dict, template: list, base_df, p_cls: np.ndarray) -> dict:
-    """Score one combo: combined (AND) gate match score + per-line solo scores."""
+def _fold(sides: list, fold: str):
+    """OR (fold_gates) is the production rule for bny30M/p (either line OOB);
+    AND (_fold_and) is retained for the conservative both-OOB variant."""
+    return IC.fold_gates(sides) if fold == 'OR' else IC._fold_and(sides)
+
+
+def score_combo(combo: dict, template: list, base_df, p_cls: np.ndarray,
+                fold: str = 'OR') -> dict:
+    """Score one combo: combined gate match score + per-line solo scores.
+    fold defaults to OR (the bny30 rule: gate open when EITHER line is OOB)."""
     cfgs     = build_gate_configs(combo, template)
     sides    = [_line_side(cfg, base_df) for cfg in cfgs]
-    combined = IC._fold_and(sides)
+    combined = _fold(sides, fold)
     res = gate_match_score(combined, p_cls)
     res['solo_scores'] = [gate_match_score(s, p_cls)['score'] for s in sides]
     res['combo'] = combo
@@ -68,11 +76,11 @@ def score_combo(combo: dict, template: list, base_df, p_cls: np.ndarray) -> dict
 
 
 def run_sweep(combos: list, template: list, base_df, p_cls: np.ndarray,
-              progress: int = 0) -> list:
+              progress: int = 0, fold: str = 'OR') -> list:
     """Score every combo; return results sorted by match score (desc, NaN last)."""
     results = []
     for i, combo in enumerate(combos):
-        results.append(score_combo(combo, template, base_df, p_cls))
+        results.append(score_combo(combo, template, base_df, p_cls, fold=fold))
         if progress and (i + 1) % progress == 0:
             print(f'  scored {i + 1}/{len(combos)}')
     results.sort(key=lambda r: (np.isnan(r['score']),
