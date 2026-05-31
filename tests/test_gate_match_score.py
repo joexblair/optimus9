@@ -7,7 +7,35 @@ guard below fails loudly if anyone ever writes `gate == P`.
 """
 import numpy as np
 
-from optimus9.compute.gate_match_score import gate_match_score
+from optimus9.compute.gate_match_score import gate_match_score, overlap_score
+
+
+def test_overlap_perfect():
+    g = np.array([-1, 0, 1, 0])       # open at 0,2
+    t = np.array([1, 0, 1, 0], bool)  # target at 0,2
+    s = overlap_score(g, t)
+    assert s['score'] == 1.0 and s['recall'] == 1.0 and s['precision'] == 1.0
+
+
+def test_overlap_direction_agnostic():
+    # gate side (LO vs HI) is irrelevant — only open-vs-closed matters
+    a = overlap_score(np.array([-1, 1]), np.array([1, 1], bool))
+    b = overlap_score(np.array([1, -1]), np.array([1, 1], bool))
+    assert a['score'] == b['score'] == 1.0
+
+
+def test_overlap_recall_precision():
+    g = np.array([1, 1, 0, 0])        # open 2 bars
+    t = np.array([1, 0, 1, 0], bool)  # target 2 bars; overlap 1
+    s = overlap_score(g, t)
+    assert s['inter'] == 1 and s['open'] == 2 and s['target'] == 2
+    assert abs(s['score'] - 1/3) < 1e-9        # IoU = 1 / (2+2-1)
+    assert s['recall'] == 0.5 and s['precision'] == 0.5
+
+
+def test_overlap_nothing_painted_nan():
+    s = overlap_score(np.zeros(4, int), np.zeros(4, bool))
+    assert np.isnan(s['score'])
 
 
 def test_lo_breach_aligns_with_long():

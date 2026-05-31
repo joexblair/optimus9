@@ -63,3 +63,31 @@ def gate_match_score(gate_mask: np.ndarray, p_cls: np.ndarray) -> dict:
         'missed':     int((p_trade & ~hit).sum()),
         'wrong_side': int(wrong_side.sum()),
     }
+
+
+def overlap_score(gate_mask: np.ndarray, target_mask: np.ndarray) -> dict:
+    """
+    Direction-agnostic gate objective (the LIVE scorer — `gate_match_score`
+    above is the legacy trading-framed version). Measures how well the gate's
+    OPEN windows (|gate| > 0, either side) overlap a target mask (e.g. the
+    forward-walk "≥0.9% reachable from here" bars). See gate_sweep_design.md.
+
+      score     : IoU = |open ∩ target| / |open ∪ target|  (NaN if nothing painted)
+      recall    : fraction of target bars the gate is open during
+      precision : fraction of open bars that are target bars
+    """
+    go = np.asarray(gate_mask) != 0
+    tg = np.asarray(target_mask).astype(bool)
+    if go.shape != tg.shape:
+        raise ValueError(f'shape mismatch: gate {go.shape} vs target {tg.shape}')
+    inter = int((go & tg).sum())
+    uni   = int((go | tg).sum())
+    n_go, n_tg = int(go.sum()), int(tg.sum())
+    return {
+        'score':     inter / uni  if uni  else float('nan'),
+        'recall':    inter / n_tg if n_tg else 0.0,
+        'precision': inter / n_go if n_go else 0.0,
+        'open':      n_go,
+        'target':    n_tg,
+        'inter':     inter,
+    }

@@ -18,10 +18,10 @@ The `template` is a list of per-line specs — swap it to sweep other line pairs
 import numpy as np
 
 from ..compute.indicator_computer import IndicatorComputer as IC
-from ..compute.gate_match_score import gate_match_score
+from ..compute.gate_match_score import overlap_score
 
 
-# Scout A: bnyM (BB) + bnyp (K), AND-folded, 30s, boundaries 15/85.
+# Scout A: bnyM (BB) + bnyp (K), OR-folded, 30s, boundaries 15/85.
 SCOUT_A_TEMPLATE = [
     {'line_type': 'bb', 'itf_seconds': 30, 'low_b': 15, 'high_b': 85,
      'fixed': {},
@@ -48,9 +48,16 @@ def build_gate_configs(combo: dict, template: list) -> list:
     return cfgs
 
 
-def _line_side(cfg: dict, base_df) -> np.ndarray:
+def _build_resample_cache(template: list, base_df) -> dict:
+    """Resample base_df to each line's TF once — the resample depends only on the
+    window, not the combo, so it's shared across all combos (big speedup)."""
+    return {spec['itf_seconds']: IC.resample(base_df, int(spec['itf_seconds']))
+            for spec in template}
+
+
+def _line_side(cfg: dict, base_df, cache: dict) -> np.ndarray:
     """One line's aligned oob_side, cleaned to int8 {-1,0,+1} (NaN→0 via fold)."""
-    gate_df = IC.resample(base_df, int(cfg['ic_itf_seconds']))
+    gate_df = cache[int(cfg['ic_itf_seconds'])]
     oob     = IC.compute_oob_side(cfg, gate_df)
     side    = IC.align_to_base(oob, gate_df, base_df)
     return IC._fold_and([side])
@@ -62,25 +69,31 @@ def _fold(sides: list, fold: str):
     return IC.fold_gates(sides) if fold == 'OR' else IC._fold_and(sides)
 
 
-def score_combo(combo: dict, template: list, base_df, p_cls: np.ndarray,
-                fold: str = 'OR') -> dict:
-    """Score one combo: combined gate match score + per-line solo scores.
-    fold defaults to OR (the bny30 rule: gate open when EITHER line is OOB)."""
+def score_combo(combo: dict, template: list, base_df, target_mask: np.ndarray,
+                fold: str = 'OR', cache: dict = None) -> dict:
+    """Score one combo: OR-folded gate vs target_mask (direction-agnostic
+    overlap, IoU/recall/precision) + per-line solo IoUs. target_mask is the
+    per-bar "≥0.9% reachable from here" mask (profit_partition). fold defaults
+    to OR (the bny30 rule: gate open when EITHER line is OOB)."""
+    if cache is None:
+        cache = _build_resample_cache(template, base_df)
     cfgs     = build_gate_configs(combo, template)
-    sides    = [_line_side(cfg, base_df) for cfg in cfgs]
+    sides    = [_line_side(cfg, base_df, cache) for cfg in cfgs]
     combined = _fold(sides, fold)
-    res = gate_match_score(combined, p_cls)
-    res['solo_scores'] = [gate_match_score(s, p_cls)['score'] for s in sides]
+    res = overlap_score(combined, target_mask)
+    res['solo_scores'] = [overlap_score(s, target_mask)['score'] for s in sides]
     res['combo'] = combo
     return res
 
 
-def run_sweep(combos: list, template: list, base_df, p_cls: np.ndarray,
+def run_sweep(combos: list, template: list, base_df, target_mask: np.ndarray,
               progress: int = 0, fold: str = 'OR') -> list:
-    """Score every combo; return results sorted by match score (desc, NaN last)."""
+    """Score every combo against target_mask; sorted by IoU (desc, NaN last)."""
+    cache = _build_resample_cache(template, base_df)
     results = []
     for i, combo in enumerate(combos):
-        results.append(score_combo(combo, template, base_df, p_cls, fold=fold))
+        results.append(score_combo(combo, template, base_df, target_mask,
+                                   fold=fold, cache=cache))
         if progress and (i + 1) % progress == 0:
             print(f'  scored {i + 1}/{len(combos)}')
     results.sort(key=lambda r: (np.isnan(r['score']),
