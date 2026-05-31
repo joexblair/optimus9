@@ -12,6 +12,8 @@ Columns grow with filters: each entry in `filters` adds a `g8_<name>` boolean.
 """
 from datetime import datetime, timezone
 
+import numpy as np
+
 from logger import get_logger
 from ..db.kline_loader import KlineLoader
 from ..compute.indicator_computer import IndicatorComputer as IC
@@ -65,22 +67,25 @@ class GoalAlignment:
         bars, dirs = generate_gca5m_signals(base, self._db, self._gca)
 
         cache = {}
-        sides = {name: self._filter_side(cfg, base, cache) for name, cfg in self._filters}
+        evals = {name: self._filter_eval(cfg, base, cache) for name, cfg in self._filters}
 
         rows = []
         for bar, d in zip(bars.tolist(), dirs.tolist()):
             if ts[bar] < win_start:               # only the lookback window
                 continue
             wo, so = walk_to_first_cross(close, bar, d, self._profit, self._stop)
-            g8 = {name: bool(sides[name][bar] != -d) for name, _ in self._filters}
+            g8  = {name: bool(evals[name][1][bar] != -d) for name, _ in self._filters}
+            val = {name: float(evals[name][0][bar])      for name, _ in self._filters}
             rows.append({
                 'run_ms':  end_ms,
                 'pk_ms':   int(ts[bar]),
                 'dir':     int(d),
                 'win_ms':  int(ts[bar + wo]) if wo is not None else None,
                 'stop_ms': int(ts[bar + so]) if so is not None else None,
-                'gated':   any(g8.values()),
+                # OR-admit gate: blocked only when EVERY filter blocks (none admits)
+                'gated':   all(g8.values()),
                 'g8':      g8,
+                'val':     val,
             })
         self._persist(rows)
         self._log.info(f'gate_validation: {len(rows)} PKs in last {self._lookback}h '
@@ -119,13 +124,26 @@ bgcolor(gate_col)         // overlay: white on gated PKs
         return path
 
     # ── internals ──────────────────────────────────────────────────────────
-    def _filter_side(self, cfg, base, cache):
+    def _filter_eval(self, cfg, base, cache):
+        """Return (value, side) for one filter, aligned to the 5s base.
+        value = the f_bb/f_k indicator value (TV-comparable); side = its OOB
+        classification vs the 15/85 boundaries (+1 HI, -1 LO, 0 IB)."""
         secs = int(cfg['ic_itf_seconds'])
         if secs not in cache:
             cache[secs] = IC.resample(base, secs)
         gate_df = cache[secs]
-        oob     = IC.compute_oob_side(cfg, gate_df)
-        return IC._fold_and([IC.align_to_base(oob, gate_df, base)])   # clean int8
+        src     = IC.build_source(gate_df, cfg['ic_src'])
+        if cfg['ic_line_type'] == 'bb':
+            vals = IC.f_bb(src, int(cfg['ic_bb_len']), float(cfg['ic_bb_mult']))
+        else:
+            vals = IC.f_k(src, int(cfg['ic_rsi_len']), int(cfg['ic_stc_len']), int(cfg['ic_k_len']))
+        val = IC.align_to_base(vals, gate_df, base)
+        hi, lo = float(cfg['ic_high_boundary']), float(cfg['ic_low_boundary'])
+        side = np.zeros(len(base), dtype=np.int8)
+        with np.errstate(invalid='ignore'):
+            side[val >= hi] =  1
+            side[val <= lo] = -1
+        return val, side
 
     def _data_max(self):
         return int(self._db.execute(
@@ -133,25 +151,33 @@ bgcolor(gate_col)         // overlay: white on gated PKs
             (self._tp_pk,), fetch=True)[0]['m'])
 
     def _persist(self, rows):
-        g8_cols = [f'g8_{n}' for n, _ in self._filters]
+        names   = [n for n, _ in self._filters]
+        g8_cols = [f'g8_{n}'  for n in names]
+        val_cols = [f'val_{n}' for n in names]
         ddl = ',\n  '.join(
             ['gv_pk BIGINT AUTO_INCREMENT PRIMARY KEY', 'gv_run_utc DATETIME',
              'pk_time DATETIME', 'pk_dir TINYINT',
              'win_time DATETIME NULL', 'stop_time DATETIME NULL', 'gated TINYINT'] +
-            [f'{c} TINYINT' for c in g8_cols])
+            [f'{c} TINYINT' for c in g8_cols] + [f'{c} FLOAT' for c in val_cols])
         self._db.execute(f'DROP TABLE IF EXISTS {self._TABLE}')
         self._db.execute(f'CREATE TABLE {self._TABLE} (\n  {ddl}\n)')
         if not rows:
             return
-        cols = ['gv_run_utc', 'pk_time', 'pk_dir', 'win_time', 'stop_time', 'gated'] + g8_cols
+        cols = (['gv_run_utc', 'pk_time', 'pk_dir', 'win_time', 'stop_time', 'gated']
+                + g8_cols + val_cols)
         ph   = ','.join(['%s'] * len(cols))
 
         def dt(ms):
             return (datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
                     .strftime('%Y-%m-%d %H:%M:%S')) if ms is not None else None
 
+        def vv(x):
+            return round(float(x), 2) if x == x else None     # NaN → NULL
+
         data = [[dt(r['run_ms']), dt(r['pk_ms']), r['dir'], dt(r['win_ms']), dt(r['stop_ms']),
-                 1 if r['gated'] else 0] + [1 if r['g8'][n] else 0 for n, _ in self._filters]
+                 1 if r['gated'] else 0]
+                + [1 if r['g8'][n] else 0 for n in names]
+                + [vv(r['val'][n]) for n in names]
                 for r in rows]
         self._db.executemany(
             f'INSERT INTO {self._TABLE} ({",".join(cols)}) VALUES ({ph})', data)
