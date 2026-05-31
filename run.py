@@ -191,6 +191,8 @@ def _build_parser() -> argparse.ArgumentParser:
     vg.add_argument('--lookback_hours', type=float, default=6.0)
     vg.add_argument('--stop_loss',      type=float, default=0.4)
     vg.add_argument('--profit_point',   type=float, default=0.9)
+    vg.add_argument('--boundary_slip',  type=float, default=3.0,
+                    help='loosen OOB boundaries inward by N (slip 3 → 18/82)')
     vg.add_argument('--end_ms',         type=int,   default=None,
                     help='time-machine end (ms); default = now (data max)')
     vg.add_argument('--pine',           default='gca5m_gate_validation.pine',
@@ -425,7 +427,8 @@ def cmd_reconcile(args, db: DatabaseManager) -> int:
 def cmd_validate_gate(args, db: DatabaseManager) -> int:
     from optimus9.analysis.goal_alignment import GoalAlignment
     ga = GoalAlignment(db, lookback_hours=args.lookback_hours, stop_loss=args.stop_loss,
-                       profit_point=args.profit_point, tp_pk=args.tp_pk)
+                       profit_point=args.profit_point, tp_pk=args.tp_pk,
+                       boundary_slip=args.boundary_slip)
     rows  = ga.report(end_ms=args.end_ms)
     won   = sum(r['win_ms'] is not None for r in rows)
     gated = sum(r['gated'] for r in rows)

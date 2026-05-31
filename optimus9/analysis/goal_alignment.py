@@ -21,23 +21,10 @@ from ..compute.outcome_walker import walk_to_first_cross
 from ..orchestration.gate_signal_sweep import generate_gca5m_signals, GCA5M
 
 
-def _bb(src, length, mult):
-    return dict(ic_itf_seconds=30, ic_line_type='bb', ic_src=src,
-                ic_high_boundary=85, ic_low_boundary=15, ic_bb_len=length, ic_bb_mult=mult)
-
-
-def _k(src, k, rsi, stc):
-    return dict(ic_itf_seconds=30, ic_line_type='k', ic_src=src,
-                ic_high_boundary=85, ic_low_boundary=15, ic_k_len=k, ic_rsi_len=rsi, ic_stc_len=stc)
-
-
-# The locked bny30 gate (candidate, 2026-05-31 — beats the old 58/1.24 + 21/114/105
-# across 7/14/28d). Pass a different list to validate another build; add an entry →
-# its g8_<name> column appears automatically.
-DEFAULT_FILTERS = [
-    ('bny30M', _bb('hl2', 58, 1.50)),
-    ('bny30p', _k('ohlc4', 80, 50, 200)),
-]
+# The bny30 gate filters: (report column name, DB ind_name). Configs are loaded
+# LIVE from the indicator_configs_live view (no hardcoding — can't drift off TV).
+# Add a pair → its g8_<name>/val_<name> columns appear automatically.
+DEFAULT_GATE = [('bny30M', 'bnyM'), ('bny30p', 'bnyp')]
 
 
 class GoalAlignment:
@@ -45,14 +32,16 @@ class GoalAlignment:
     _WARMUP_HOURS = 6
 
     def __init__(self, db, lookback_hours=6.0, stop_loss=0.4, profit_point=0.9,
-                 tp_pk=1, gca5m_cfg=None, filters=None):
+                 tp_pk=1, gca5m_cfg=None, gate=None, boundary_slip=3.0):
         self._db      = db
         self._lookback = float(lookback_hours)
         self._stop    = float(stop_loss)
         self._profit  = float(profit_point)
         self._tp_pk   = int(tp_pk)
         self._gca     = gca5m_cfg or GCA5M
-        self._filters = filters or DEFAULT_FILTERS
+        self._gate    = gate or DEFAULT_GATE
+        self._slip    = float(boundary_slip)
+        self._filters = []          # resolved from the live view at report() time
         self._log     = get_logger(self.__class__.__name__)
 
     # ── public ───────────────────────────────────────────────────────────────
@@ -67,6 +56,8 @@ class GoalAlignment:
         ts    = base['timestamp'].to_numpy()
         bars, dirs = generate_gca5m_signals(base, self._db, self._gca)
 
+        # resolve gate filter configs LIVE from the DB view (no hardcoding)
+        self._filters = [(disp, self._load_gate_config(name)) for disp, name in self._gate]
         cache = {}
         evals = {name: self._filter_eval(cfg, base, cache) for name, cfg in self._filters}
 
@@ -143,12 +134,33 @@ bgcolor(gate_col)         // overlay: white on gated PKs
         else:
             vals = IC.f_k(src, int(cfg['ic_rsi_len']), int(cfg['ic_stc_len']), int(cfg['ic_k_len']))
         val = IC.align_to_base(vals, gate_df, base)
-        hi, lo = float(cfg['ic_high_boundary']), float(cfg['ic_low_boundary'])
+        # boundary_slip loosens the OOB zone inward: 15+slip / 85-slip (slip=3 → 18/82)
+        hi = float(cfg['ic_high_boundary']) - self._slip
+        lo = float(cfg['ic_low_boundary'])  + self._slip
         side = np.zeros(len(base), dtype=np.int8)
         with np.errstate(invalid='ignore'):
             side[val >= hi] =  1
             side[val <= lo] = -1
         return val, side
+
+    def _load_gate_config(self, ind_name):
+        """Resolve a gate line's LIVE config from indicator_configs_live (the
+        ic_live_after_dt view) — no hardcoding, always matches production/TV."""
+        r = self._db.execute(
+            '''SELECT ic_line_type, ic_src, ic_bb_len, ic_bb_mult, ic_k_len, ic_rsi_len,
+                      ic_stc_len, ic_low_boundary, ic_high_boundary, itf_seconds
+               FROM indicator_configs_live WHERE ind_name = %s''', (ind_name,), fetch=True)
+        if not r:
+            raise ValueError(f'no live indicator_configs for {ind_name!r}')
+        c = r[0]
+        return {'ic_itf_seconds':   int(c['itf_seconds']),
+                'ic_line_type':     c['ic_line_type'],
+                'ic_src':           c['ic_src'],
+                'ic_high_boundary': float(c['ic_high_boundary']),
+                'ic_low_boundary':  float(c['ic_low_boundary']),
+                'ic_bb_len':        c['ic_bb_len'],  'ic_bb_mult': c['ic_bb_mult'],
+                'ic_k_len':         c['ic_k_len'],   'ic_rsi_len': c['ic_rsi_len'],
+                'ic_stc_len':       c['ic_stc_len']}
 
     def _data_max(self):
         return int(self._db.execute(
