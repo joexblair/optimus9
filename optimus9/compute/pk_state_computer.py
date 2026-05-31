@@ -5,9 +5,12 @@ VECTORIZED numpy implementation. Computes pk_state values per bar based
 on line vs DEMA slope analysis. Matches Pine's f_pk_state exactly.
 
 Window semantics (Pine-aligned):
-  For bar i, the peak search window covers line[i - upper + 1 : i - lower + 1],
-  i.e. pool_range bars ending at i - lower. This matches Pine's
-  ta.highest(line[lower], pool_range).
+  For bar i, the peak search window covers line[i - upper + 1 : i - lower + 1]
+  — width `upper - lower` = `pool_range * multiplier`, ending at i - lower.
+  This matches Pine's ta.highest(line[_lower], _window) where
+  _window = _upper - _lower. The window WIDTH scales with multiplier (the
+  half terms cancel); only the OFFSET differs for odd pool_range (Pine's
+  float half vs Python's floor). See compute() for the odd-pool_range caveat.
 
 Implementation:
   - Compute rolling max + rolling min of size pool_range over line
@@ -79,13 +82,27 @@ class PKStateComputer:
         center = bars * multiplier
 
         # ── Rolling peak / trough on `line` ────────────────────────────────
-        # rolling_max[j] = max(line[j - pool_range + 1 : j + 1])
-        # We want bar i's peak from window ending at i - lower, so we shift
-        # the rolling array forward by `lower` positions:
-        #   peak_max[i] = rolling_max[i - lower]   for i >= lower
+        # Pine: peak = highest/lowest(line[_lower], _window) where the search
+        # width is `_upper - _lower`. The half terms cancel, so the width is
+        # exactly `pool_range * multiplier` — it scales with the TF multiplier
+        # (at multiplier=M the peak is the extreme over M× as many bars, M×
+        # further back). The earlier implementation hard-fixed the window at
+        # `pool_range`, matching Pine ONLY at multiplier=1; corrected
+        # 2026-05-31 after the Pine-vs-Python multiplier validation.
+        #
+        # NOTE (odd pool_range): Pine's `_half = pool_range / 2` is float, so
+        # for odd pool_range the window OFFSET (`lower`) sits 0.5*multiplier
+        # bars closer than Python's floored `half`. Width is identical either
+        # way (halves cancel). Even pool_range (e.g. p_r=4) is byte-identical
+        # to Pine; odd pool_range needs a Pine-export diff to nail the
+        # fractional-index rounding before it's trusted.
+        #
+        # rolling_max[j] = max(line[j - window + 1 : j + 1]); shift forward by
+        # `lower` so peak_max[i] = rolling_max[i - lower] for i >= lower.
+        window = pool_range * multiplier
         s_line = pd.Series(line)
-        rolling_max = s_line.rolling(pool_range, min_periods=pool_range).max().to_numpy()
-        rolling_min = s_line.rolling(pool_range, min_periods=pool_range).min().to_numpy()
+        rolling_max = s_line.rolling(window, min_periods=window).max().to_numpy()
+        rolling_min = s_line.rolling(window, min_periods=window).min().to_numpy()
 
         if lower > 0:
             pad      = np.full(lower, np.nan)
