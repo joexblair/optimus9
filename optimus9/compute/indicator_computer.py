@@ -219,7 +219,13 @@ class IndicatorComputer:
         """
         if not ic_pks:
             return np.zeros(len(base_df), dtype=np.int8)
+        configs = cls._load_gate_configs(db, ic_pks)
+        return cls._mask_from_configs(configs, base_df, fold)
 
+    @staticmethod
+    def _load_gate_configs(db, ic_pks: list) -> list:
+        """Load indicator_configs (+ itf_seconds) for `ic_pks`, joined to their
+        timeframe/series/line metadata. Raises if any ic_pk is missing."""
         placeholders = ','.join(['%s'] * len(ic_pks))
         configs = db.execute(
             f'''SELECT ic.*,
@@ -234,11 +240,31 @@ class IndicatorComputer:
                 WHERE ic.ic_pk IN ({placeholders})''',
             tuple(ic_pks), fetch=True,
         )
-
         if len(configs) != len(ic_pks):
             present = {c['ic_pk'] for c in configs}
             missing = set(ic_pks) - present
             raise ValueError(f'Missing indicator_configs for ic_pks: {missing}')
+        return configs
+
+    @classmethod
+    def _mask_from_configs(cls, configs: list,
+                           base_df: pd.DataFrame,
+                           fold: str = 'AND') -> np.ndarray:
+        """
+        Build a folded per-bar gate mask from already-resolved config dicts.
+
+        Each config dict needs `ic_itf_seconds` plus the fields
+        `compute_oob_side` reads (`ic_line_type`, `ic_src`, `ic_high_boundary`,
+        `ic_low_boundary`, and the line-type params: ic_bb_len/ic_bb_mult for
+        'bb', ic_k_len/ic_rsi_len/ic_stc_len for 'k').
+
+        Shared by `compute_gate_mask` (configs loaded from DB by ic_pk) and the
+        gate sweep (configs built from grid params per combo; see
+        gate_sweep_design.md). Factors the per-gate loop so it can be driven by
+        params, not only ic_pks — the DB-loaded path stays byte-identical.
+        """
+        if not configs:
+            return np.zeros(len(base_df), dtype=np.int8)
 
         gate_sides = []
         for gcfg in configs:
