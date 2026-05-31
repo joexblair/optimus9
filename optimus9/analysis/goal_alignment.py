@@ -31,11 +31,12 @@ def _k(src, k, rsi, stc):
                 ic_high_boundary=85, ic_low_boundary=15, ic_k_len=k, ic_rsi_len=rsi, ic_stc_len=stc)
 
 
-# The gate under test (current bny30 config). Pass a different list to validate
-# another build; add an entry → its g8_<name> column appears automatically.
+# The locked bny30 gate (candidate, 2026-05-31 — beats the old 58/1.24 + 21/114/105
+# across 7/14/28d). Pass a different list to validate another build; add an entry →
+# its g8_<name> column appears automatically.
 DEFAULT_FILTERS = [
-    ('bny30M', _bb('hl2', 58, 1.24)),
-    ('bny30p', _k('ohlc4', 21, 114, 105)),
+    ('bny30M', _bb('hl2', 58, 1.50)),
+    ('bny30p', _k('ohlc4', 80, 50, 200)),
 ]
 
 
