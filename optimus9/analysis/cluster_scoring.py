@@ -35,7 +35,7 @@ class ClusterScoring:
     _TABLE = 'cluster_scores'
 
     def __init__(self, db, win_grid=WIN_GRID, stop_grid=None, tp_pk=1,
-                 horizon=HORIZON, top_n=20, min_signals=30):
+                 horizon=HORIZON, top_n=20, min_signals=30, manual_stop=0.33):
         self._db       = db
         self._wins     = tuple(float(w) for w in win_grid)
         self._stops    = tuple(float(s) for s in stop_grid) if stop_grid else None
@@ -43,6 +43,7 @@ class ClusterScoring:
         self._horizon  = int(horizon) if horizon else None
         self._top_n    = int(top_n)
         self._min_sig  = int(min_signals)
+        self._manual   = float(manual_stop)     # Joe's trusted hand-traded stop floor
         self._log      = get_logger(self.__class__.__name__)
 
     # ── public ───────────────────────────────────────────────────────────────
@@ -84,17 +85,21 @@ class ClusterScoring:
 
     # ── internals ──────────────────────────────────────────────────────────
     def _stop_grid(self, t0_ms, t1_ms):
-        """Use an explicit stop grid if given, else auto-centre on the winners-MAE
-        (mean+σ) over the SAME window being scored, and bracket it ±0.2."""
+        """Use an explicit stop grid if given, else span from Joe's trusted manual
+        stop (0.33, the hand-traded floor) up to the winners-MAE centre over the
+        SAME window being scored. The winners-MAE is a thermometer for entry
+        quality, not a target — spanning both regimes lets us watch the gap close
+        as entries tighten (the BL machine)."""
         if self._stops:
             return self._stops
         lookback = max(1.0, (int(t1_ms) - int(t0_ms)) / 3600_000)
         info = GoalAlignment(self._db, tp_pk=self._tp_pk, lookback_hours=lookback
                              ).winner_mae_stop(end_ms=int(t1_ms), horizon=self._horizon)
-        c = info.get('stop_centre') or 0.4
-        grid = tuple(round(max(0.1, c + d), 2) for d in (-0.2, 0.0, 0.2))
-        self._log.info(f'auto stop grid from winners-MAE centre {c} '
-                       f'({lookback:.0f}h window): {grid}')
+        c  = info.get('stop_centre') or 0.4
+        hi = max(c, self._manual + 0.15)                  # always at least a small span
+        grid = tuple(sorted({round(float(x), 2) for x in np.linspace(self._manual, hi, 4)}))
+        self._log.info(f'stop grid {self._manual}(manual)..{round(hi,2)}'
+                       f'(winners-MAE {c}, {lookback:.0f}h): {grid}')
         return grid
 
     def _outcomes(self, entries, close, win, stop) -> dict:
