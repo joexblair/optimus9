@@ -198,6 +198,18 @@ def _build_parser() -> argparse.ArgumentParser:
     vg.add_argument('--pine',           default='gca5m_gate_validation.pine',
                     help='Pine overlay output path')
 
+    cs = sub.add_parser('cluster_score',
+                        help="Rank a grind's AM centroids by swing-catch profit "
+                             '(near_swing/total_net) → cluster_scores table')
+    cs.add_argument('--or_pk',       type=int,   required=True)
+    cs.add_argument('--tp_pk',       type=int,   default=1)
+    cs.add_argument('--top_n',       type=int,   default=20,
+                    help='AM top-N centroids to score')
+    cs.add_argument('--horizon',     type=int,   default=2160,
+                    help='outcome-walk cap in 5s bars (default 3h)')
+    cs.add_argument('--manual_stop', type=float, default=0.33,
+                    help='trusted hand-traded stop; stop-sweep low anchor')
+
     return p
 
 
@@ -438,6 +450,18 @@ def cmd_validate_gate(args, db: DatabaseManager) -> int:
     return 0
 
 
+def cmd_cluster_score(args, db: DatabaseManager) -> int:
+    from optimus9.analysis.cluster_scoring import ClusterScoring
+    cs   = ClusterScoring(db, tp_pk=args.tp_pk, top_n=args.top_n,
+                          horizon=args.horizon, manual_stop=args.manual_stop)
+    rows = cs.score(args.or_pk)
+    top  = rows[0]
+    _log.info(f'cluster_scores: {len(rows)} centroids → table cluster_scores | '
+              f'#1 {top["combo"]} near_swing={top["near_swing"]:.2f} '
+              f'total_net={top["total_net"]:.2f}')
+    return 0
+
+
 _DISPATCH = {
     'start':              cmd_start,
     'analyze':            cmd_analyze,
@@ -451,6 +475,7 @@ _DISPATCH = {
     'indicator_monitor':  cmd_indicator_monitor,
     'reconcile':          cmd_reconcile,
     'validate_gate':      cmd_validate_gate,
+    'cluster_score':      cmd_cluster_score,
 }
 
 
