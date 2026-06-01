@@ -169,3 +169,42 @@ def walk_to_first_cross(close:      np.ndarray,
             if c <= win_lvl:  return (j - entry_idx, None)
             if c >= stop_lvl: return (None, j - entry_idx)
     return (None, None)
+
+
+def winner_mae(close:      np.ndarray,
+               entry_idx:  int,
+               direction:  int,
+               profit_pct: float,
+               horizon:    Optional[int] = None) -> Optional[float]:
+    """
+    For an entry that reaches +profit_pct within `horizon` (a "winner"), return
+    its max adverse excursion (% against direction) up to the profit cross.
+    Returns None if +profit is never reached within `horizon` — not a winner.
+
+    Stop is deliberately IGNORED: this measures how far *eventual winners* dip
+    underwater, which is the basis for a data-derived stop (a stop tighter than
+    these excursions would have killed the winners). Close-based, matching
+    walk_outcome's MAE convention.
+    """
+    entry   = float(close[entry_idx])
+    win_lvl = entry * (1 + profit_pct / 100.0) if direction >= 0 \
+        else entry * (1 - profit_pct / 100.0)
+    end = len(close) - 1 if horizon is None else min(entry_idx + horizon, len(close) - 1)
+
+    worst = entry
+    mae   = 0.0
+    for j in range(entry_idx + 1, end + 1):
+        c = float(close[j])
+        if direction >= 0:
+            if c < worst:
+                worst = c
+                mae   = (entry / worst - 1.0) * 100.0
+            if c >= win_lvl:
+                return round(mae, 6)
+        else:
+            if c > worst:
+                worst = c
+                mae   = (worst / entry - 1.0) * 100.0
+            if c <= win_lvl:
+                return round(mae, 6)
+    return None

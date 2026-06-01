@@ -17,7 +17,7 @@ import numpy as np
 from logger import get_logger
 from ..db.kline_loader import KlineLoader
 from ..compute.indicator_computer import IndicatorComputer as IC
-from ..compute.outcome_walker import walk_to_first_cross
+from ..compute.outcome_walker import walk_to_first_cross, winner_mae
 from ..orchestration.gate_signal_sweep import generate_gca5m_signals, GCA5M
 
 
@@ -84,6 +84,47 @@ class GoalAlignment:
                        f'(gated {sum(r["gated"] for r in rows)}, '
                        f'won {sum(r["win_ms"] is not None for r in rows)})')
         return rows
+
+    def winner_mae_stop(self, end_ms=None, profit=None, k=1.0, trim=0.05,
+                        horizon=None) -> dict:
+        """Data-derived stop centre for downstream SL/TP sweeps (e.g.
+        cluster_scoring). Over the lookback window, collects the MAE of every
+        gca5m PK that eventually wins (+profit%, stop ignored) and returns a
+        robust centre = trimmed mean + k·σ — the stop just wide enough to keep
+        most eventual winners, with outliers trimmed so one freak dip can't blow
+        it out. Returns {stop_centre, n_winners, mean, std, p50, p90}.
+        """
+        profit     = float(profit if profit is not None else self._profit)
+        end_ms     = int(end_ms or self._data_max())
+        win_start  = int(end_ms - self._lookback * 3600_000)
+        load_start = int(win_start - self._WARMUP_HOURS * 3600_000)
+
+        base  = KlineLoader(self._db).load_window(self._tp_pk, load_start, end_ms)
+        close = base['close'].to_numpy(dtype=float)
+        ts    = base['timestamp'].to_numpy()
+        bars, dirs = generate_gca5m_signals(base, self._db, self._gca)
+
+        maes = [m for bar, d in zip(bars.tolist(), dirs.tolist())
+                if ts[bar] >= win_start
+                and (m := winner_mae(close, bar, d, profit, horizon)) is not None]
+        if not maes:
+            self._log.warning('winner_mae_stop: no winners in window')
+            return {'stop_centre': None, 'n_winners': 0}
+
+        arr = np.asarray(maes, dtype=float)
+        if trim and len(arr) >= 20:                          # drop tails, robust
+            lo, hi = np.quantile(arr, [trim, 1.0 - trim])
+            arr = arr[(arr >= lo) & (arr <= hi)]
+        out = {'stop_centre': round(float(arr.mean() + k * arr.std()), 4),
+               'n_winners':   len(maes),
+               'mean':        round(float(arr.mean()), 4),
+               'std':         round(float(arr.std()), 4),
+               'p50':         round(float(np.median(maes)), 4),
+               'p90':         round(float(np.quantile(maes, 0.9)), 4)}
+        self._log.info(f'winner_mae_stop: n={out["n_winners"]} mean={out["mean"]} '
+                       f'std={out["std"]} p90={out["p90"]} → '
+                       f'centre(mean+{k}σ)={out["stop_centre"]}')
+        return out
 
     def emit_pine(self, rows: list, path: str = 'gca5m_gate_validation.pine') -> str:
         """Pine overlay: green=long / red=short bgcolor per PK bar; white bgcolor

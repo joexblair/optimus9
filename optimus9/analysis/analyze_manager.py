@@ -198,6 +198,116 @@ class AnalyzeManager:
 
     # ── data loading ──────────────────────────────────────────────────────────
 
+    def top_combo_signals(self, or_pk: int, top_n: int = 20, min_signals: int = 30,
+                          top_stage1: int = 100, dd_threshold: float = None) -> list:
+        """The two-stage top-N combos (the 'centroids'), each with its signal
+        timestamps. Reuses the run() ranking pipeline but returns data instead of
+        writing reports — for downstream scorers like ClusterScoring.
+
+        Ranked by gross_banked. `dd_threshold` is OFF by default: max-drawdown is a
+        portfolio-level concern, not a signal-grind gate (r07), and at 5s it would
+        cull every combo. Pass a value to re-enable the kept/killed split.
+
+        Returns [{'rank': int, 'params': {name: value, ...},
+                  'signals': [(ts_ms, dir), ...]}, ...].
+        """
+        meta        = self._load_run_meta(or_pk)
+        stop_pct    = float(meta['tc_stop_pct'])
+        profit_zone = float(meta['tc_profit_zone'])
+        raw = self._load_combo_summaries(or_pk, profit_zone)
+        if not raw:
+            self._log.error(f'No results for or_pk={or_pk}')
+            return []
+
+        df       = self._enrich(pd.DataFrame(raw), stop_pct)
+        params   = self._discover_params(df)
+        filtered = df[df['decided'] >= min_signals].copy()
+        stage1   = self._compute_stage1(filtered, top_stage1)
+        stage2   = self._compute_stage2(or_pk, stage1, profit_zone, stop_pct, params)
+        ranked   = (self._apply_dd_filter(stage2, dd_threshold)[0]
+                    if dd_threshold is not None else stage2)
+
+        out = []
+        for _, combo in ranked.head(top_n).iterrows():
+            sigs = self._query_combo_signals(or_pk, combo)
+            out.append({
+                'rank':    int(combo['stage2_rank']),
+                'params':  {p: combo[p] for p in params},
+                'signals': [(int(s['ts']), int(s['direction'])) for s in sigs],
+            })
+        self._log.info(f'top_combo_signals: or_pk={or_pk} → {len(out)} combos '
+                       f'({sum(len(c["signals"]) for c in out)} signals)')
+        return out
+
+    def materialize_centroids(self, or_pk: int, top_n: int = 20, **kw) -> list:
+        """top_combo_signals + persist to the reusable am_centroids /
+        am_centroid_signals tables. Returns the list."""
+        top = self.top_combo_signals(or_pk, top_n=top_n, **kw)
+        if top:
+            self._persist_centroids(or_pk, top)
+        return top
+
+    def centroids(self, or_pk: int) -> list:
+        """Read materialised centroids for an or_pk (same shape as
+        top_combo_signals, plus a 'combo' fingerprint). [] if none materialised."""
+        try:
+            heads = self._db.execute(
+                '''SELECT amc_pk, amc_rank, amc_combo, amc_params
+                   FROM am_centroids WHERE amc_or_pk=%s ORDER BY amc_rank''',
+                (or_pk,), fetch=True)
+        except mysql.connector.Error:
+            return []
+        out = []
+        for h in heads or []:
+            sigs = self._db.execute(
+                '''SELECT acs_ts, acs_dir FROM am_centroid_signals
+                   WHERE acs_amc_pk=%s ORDER BY acs_ts''', (h['amc_pk'],), fetch=True)
+            out.append({
+                'rank':    int(h['amc_rank']),
+                'combo':   h['amc_combo'],
+                'params':  json.loads(h['amc_params']) if h['amc_params'] else {},
+                'signals': [(int(s['acs_ts']), int(s['acs_dir'])) for s in sigs],
+            })
+        return out
+
+    def _persist_centroids(self, or_pk: int, top: list) -> None:
+        """Materialise top-N centroids + their (ts,dir) into am_centroids /
+        am_centroid_signals (replacing any prior rows for this or_pk), so
+        cluster_scoring / SnF read centroids without re-touching the firehose."""
+        self._db.execute('''CREATE TABLE IF NOT EXISTS am_centroids (
+            amc_pk BIGINT AUTO_INCREMENT PRIMARY KEY,
+            amc_or_pk INT, amc_rank INT, amc_n_signals INT,
+            amc_combo VARCHAR(160), amc_params TEXT, INDEX(amc_or_pk))''')
+        self._db.execute('''CREATE TABLE IF NOT EXISTS am_centroid_signals (
+            acs_pk BIGINT AUTO_INCREMENT PRIMARY KEY,
+            acs_amc_pk BIGINT, acs_ts BIGINT, acs_dir TINYINT, INDEX(acs_amc_pk))''')
+
+        prior = self._db.execute(
+            'SELECT amc_pk FROM am_centroids WHERE amc_or_pk=%s', (or_pk,), fetch=True)
+        if prior:
+            ph = ','.join(['%s'] * len(prior))
+            ids = tuple(r['amc_pk'] for r in prior)
+            self._db.execute(
+                f'DELETE FROM am_centroid_signals WHERE acs_amc_pk IN ({ph})', ids)
+            self._db.execute('DELETE FROM am_centroids WHERE amc_or_pk=%s', (or_pk,))
+
+        for c in top:
+            combo = '|'.join(str(c['params'][p]) for p in c['params'])
+            self._db.execute(
+                '''INSERT INTO am_centroids
+                   (amc_or_pk, amc_rank, amc_n_signals, amc_combo, amc_params)
+                   VALUES (%s,%s,%s,%s,%s)''',
+                (or_pk, c['rank'], len(c['signals']), combo,
+                 json.dumps({k: str(v) for k, v in c['params'].items()})))
+            amc_pk = self._db.execute(
+                'SELECT LAST_INSERT_ID() AS id', fetch=True)[0]['id']
+            if c['signals']:
+                self._db.executemany(
+                    '''INSERT INTO am_centroid_signals (acs_amc_pk, acs_ts, acs_dir)
+                       VALUES (%s,%s,%s)''',
+                    [(amc_pk, ts, d) for ts, d in c['signals']])
+        self._log.info(f'materialised {len(top)} centroids → am_centroids (or_pk={or_pk})')
+
     def _load_run_meta(self, or_pk: int) -> dict:
         rows = self._db.execute(
             '''SELECT r.*, tc.tc_pk AS or_tc_pk,
