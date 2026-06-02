@@ -58,7 +58,14 @@ class BreachingLine:
     # ── public ───────────────────────────────────────────────────────────────
     def run(self, k, bb_m, bb_M) -> dict:
         """Walk the bars; return per-bar arrays: state, breach_dir, predicted,
-        exit1/exit2/exit3 (the bools the persistence table needs)."""
+        exit1/exit2/exit3 (the bools the persistence table needs).
+
+        Dormancy model (Target-1 review): a line inside the 30:70 fence is dormant
+        (state 0). Re-arming to 1 needs a FRESH breach (an IB→OOB crossing or a
+        fresh prediction) — so a *pegged* OOB line stays at 3 instead of bobbing,
+        while a line genuinely moving in and out re-arms on each re-entry. Curl is
+        evaluated only while OOB. Curl + an exit on the same bar cascades 1→2→3.
+        """
         k    = np.asarray(k, float)
         bb_m = np.asarray(bb_m, float)
         bb_M = np.asarray(bb_M, float)
@@ -66,11 +73,11 @@ class BreachingLine:
         m    = self.mult
 
         pred = predict_breach(k, bb_m, bb_M, self.hi, self.lo, self.fence_hi, self.fence_lo)
+        oob  = (k >= self.hi) | (k <= self.lo)
+        in_fence = (k > self.fence_lo) & (k < self.fence_hi)
         sig  = np.zeros(n, np.int8)
-        sig[(k >= self.hi) | (pred == 1)] =  1
+        sig[(k >= self.hi) | (pred == 1)]  =  1
         sig[(k <= self.lo) | (pred == -1)] = -1
-        breach_any = sig != 0
-        fresh      = breach_any & ~np.concatenate([[False], breach_any[:-1]])
 
         slope_k = np.full(n, np.nan); slope_k[m:] = k[m:]    - k[:-m]
         slope_M = np.full(n, np.nan); slope_M[m:] = bb_M[m:] - bb_M[:-m]
@@ -82,33 +89,41 @@ class BreachingLine:
         o_e1 = np.zeros(n, bool); o_e2 = np.zeros(n, bool); o_e3 = np.zeros(n, bool)
 
         for i in range(n):
-            cur_dir = int(sig[i]) if breach_any[i] else bdir
-            curl_valid = ((cur_dir == 1  and slope_k[i] < -self.curl_floor) or
-                          (cur_dir == -1 and slope_k[i] >  self.curl_floor))
+            cur_dir   = int(sig[i]) if sig[i] != 0 else bdir
+            fresh_oob = bool(oob[i]      and (i == 0 or not oob[i - 1]))
+            fresh_prd = bool(pred[i] != 0 and (i == 0 or pred[i - 1] == 0))
+            fresh_eng = fresh_oob or fresh_prd                 # a genuinely new breach
+            curl = bool(oob[i] and (                           # curl only while OOB
+                (cur_dir == 1  and slope_k[i] < -self.curl_floor) or
+                (cur_dir == -1 and slope_k[i] >  self.curl_floor)))
             e1 = self._exit_ob_to_ib(bbM_ib, bbM_oob, i)
             e2 = self._exit_nonsubtle_roc(slope_M, i)
             e3 = self._exit_cross_toward_ib(cur_dir, bb_M, k, i)
             any_exit = e1 or e2 or e3
 
-            ns, nb = state, bdir
-            if state == 0:
-                if breach_any[i]:
-                    ns, nb = 1, cur_dir
-            elif state == 1:
-                nb = cur_dir
-                if curl_valid:
-                    ns = 2
-            elif state == 2:
-                nb = cur_dir
-                if fresh[i]:
-                    ns, nb = 1, cur_dir          # re-breach (bobbing)
-                elif any_exit:
-                    ns = 3
-            elif state == 3:
-                if breach_any[i]:
-                    ns, nb = 1, cur_dir          # re-pulled
-                else:
-                    ns, nb = 0, 0                # reset (single-line)
+            if in_fence[i]:
+                ns, nb = 0, 0                                  # dead zone → dormant
+            else:
+                ns, nb = state, bdir
+                if state == 0:
+                    if fresh_eng:
+                        ns, nb = 1, cur_dir
+                elif state == 1:
+                    nb = cur_dir
+                    if curl:
+                        ns = 2
+                        if any_exit:
+                            ns = 3                             # 1→2→3 in one bar
+                elif state == 2:
+                    nb = cur_dir
+                    if fresh_oob:
+                        ns = 1                                 # re-breach (bobbing)
+                    elif any_exit:
+                        ns = 3
+                elif state == 3:
+                    if fresh_eng:
+                        ns, nb = 1, cur_dir                    # re-armed by a fresh breach
+                    # else stay 3 (pegged → dormant)
             state, bdir = ns, nb
             o_state[i], o_dir[i] = state, bdir
             o_e1[i], o_e2[i], o_e3[i] = e1, e2, e3

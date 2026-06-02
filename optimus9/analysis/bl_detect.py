@@ -37,7 +37,7 @@ class BLDetect:
         self._tp       = int(tp_pk)
         self._lookback = float(lookback_hours)
         self._warmup   = float(warmup_hours)
-        self._bl = BreachingLine(mult=1, curl_floor=curl_floor,
+        self._bl = BreachingLine(mult=family['tf_seconds'] // 5, curl_floor=curl_floor,
                                  flatten=flatten, pseudo_cross=pseudo_cross)
         self._log = get_logger(self.__class__.__name__)
 
@@ -51,33 +51,29 @@ class BLDetect:
         ts    = base['timestamp'].to_numpy()
         close = base['close'].to_numpy(dtype=float)
 
-        # Lines computed + the machine RUN on native HTF bars (per-9min cadence =
-        # how TV evaluates), then forward-filled to the 5s table. Running per-5s on
-        # forward-filled lines re-fires held conditions every bar (spurious cycling).
-        tf    = IC.resample(base, self._fam['tf_seconds'])
-        tf_ts = tf['timestamp'].to_numpy()
-        k  = self._line(tf, self._fam['k'])     # hb9b (breaching K)
-        bM = self._line(tf, self._fam['bM'])    # hb9M
-        bm = self._line(tf, self._fam['bm'])    # hb9m
-        r  = self._bl.run(k, bm, bM)            # run(k, bb_m, bb_M) on HTF bars
-        px = IC.dema(close, 2)                   # display only ('px_smooth')
+        # Lines are the DEVELOPING (lookahead) HTF view, 5s-aligned — matches TV's
+        # lookahead_on (last bar + ticks). The machine ticks per 5s with a curl/slope
+        # lookback of tf_seconds/5 bars (hb9 = 108) to span one HTF period.
+        k  = self._line(base, self._fam['k'])     # hb9b (breaching K)
+        bM = self._line(base, self._fam['bM'])    # hb9M
+        bm = self._line(base, self._fam['bm'])    # hb9m
+        r  = self._bl.run(k, bm, bM)              # run(k, bb_m, bb_M)
+        px = IC.dema(close, 2)                      # display only ('px_smooth')
 
-        idx = np.searchsorted(tf_ts, ts, side='right') - 1   # each 5s bar → its HTF bar
         rows = []
         for i in range(len(ts)):
-            if ts[i] < win_start or idx[i] < 0:
+            if ts[i] < win_start:
                 continue
-            j = idx[i]
             rows.append({
                 'bar_ms':    int(ts[i]),
                 'px_smooth': _f(px[i]),
-                'hb9b':      _f(k[j]),  'hb9M': _f(bM[j]),  'hb9m': _f(bm[j]),
-                'predicted': int(bool(r['predicted'][j])),
-                'exit1':     int(bool(r['exit1'][j])),
-                'exit2':     int(bool(r['exit2'][j])),
-                'exit3':     int(bool(r['exit3'][j])),
-                'breach_dir': int(r['breach_dir'][j]),
-                'state':     int(r['state'][j]),
+                'hb9b':      _f(k[i]),  'hb9M': _f(bM[i]),  'hb9m': _f(bm[i]),
+                'predicted': int(bool(r['predicted'][i])),
+                'exit1':     int(bool(r['exit1'][i])),
+                'exit2':     int(bool(r['exit2'][i])),
+                'exit3':     int(bool(r['exit3'][i])),
+                'breach_dir': int(r['breach_dir'][i]),
+                'state':     int(r['state'][i]),
             })
         self._persist(rows)
         states = [row['state'] for row in rows]
@@ -117,11 +113,12 @@ if hit >= 0
         return path
 
     # ── internals ──────────────────────────────────────────────────────────
-    def _line(self, tf, cfg):
-        src = IC.build_source(tf, cfg['src'])
+    def _line(self, base, cfg):
+        """Developing (lookahead) HTF line, 5s-aligned — matches TV lookahead_on."""
+        secs = self._fam['tf_seconds']
         if cfg['kind'] == 'bb':
-            return IC.f_bb(src, cfg['bb_len'], cfg['bb_mult'])
-        return IC.f_k(src, cfg['rsi_len'], cfg['stc_len'], cfg['k_len'])
+            return IC.f_bb_lookahead(base, secs, cfg['bb_len'], cfg['bb_mult'], cfg['src'])
+        return IC.f_k_lookahead(base, secs, cfg['k_len'], cfg['rsi_len'], cfg['stc_len'], cfg['src'])
 
     def _data_max(self):
         return int(self._db.execute(
