@@ -58,7 +58,14 @@ class BLDetect:
         bM = self._line(base, self._fam['bM'])    # hb9M
         bm = self._line(base, self._fam['bm'])    # hb9m
         r  = self._bl.run(k, bm, bM)              # run(k, bb_m, bb_M)
-        px = IC.dema(close, 2)                      # display only ('px_smooth')
+        # display refs on the lines' TF (9-min) — px_smooth = DEMA(9m close,2) (matches
+        # TV); + the closed TF9 OHLC, both forward-filled to the 5s rows.
+        tf    = IC.resample(base, self._fam['tf_seconds'])
+        tf_ts = tf['timestamp'].to_numpy()
+        idx   = np.clip(np.searchsorted(tf_ts, ts, side='right') - 1, 0, None)
+        px  = IC.dema(tf['close'].to_numpy(dtype=float), 2)[idx]
+        d_o = tf['open'].to_numpy()[idx];  d_h = tf['high'].to_numpy()[idx]
+        d_l = tf['low'].to_numpy()[idx];   d_c = tf['close'].to_numpy()[idx]
 
         rows = []
         for i in range(len(ts)):
@@ -67,6 +74,8 @@ class BLDetect:
             rows.append({
                 'bar_ms':    int(ts[i]),
                 'px_smooth': _f(px[i]),
+                'tf_open':   _f(d_o[i]), 'tf_high': _f(d_h[i]),
+                'tf_low':    _f(d_l[i]), 'tf_close': _f(d_c[i]),
                 'hb9b':      _f(k[i]),  'hb9M': _f(bM[i]),  'hb9m': _f(bm[i]),
                 'predicted': int(bool(r['predicted'][i])),
                 'exit1':     int(bool(r['exit1'][i])),
@@ -129,15 +138,18 @@ if hit >= 0
         self._db.execute(f'DROP TABLE IF EXISTS {self._TABLE}')
         self._db.execute(f'''CREATE TABLE {self._TABLE} (
             bls_pk BIGINT AUTO_INCREMENT PRIMARY KEY, bar_time DATETIME,
-            px_smooth FLOAT, k_line FLOAT, bb_main FLOAT, bb_mid FLOAT,
+            px_smooth FLOAT, tf_open FLOAT, tf_high FLOAT, tf_low FLOAT, tf_close FLOAT,
+            k_line FLOAT, bb_main FLOAT, bb_mid FLOAT,
             predicted TINYINT, exit1 TINYINT, exit2 TINYINT, exit3 TINYINT,
             breach_dir TINYINT, state TINYINT)''')
         if not rows:
             return
-        cols = ['bar_time', 'px_smooth', 'k_line', 'bb_main', 'bb_mid', 'predicted',
+        cols = ['bar_time', 'px_smooth', 'tf_open', 'tf_high', 'tf_low', 'tf_close',
+                'k_line', 'bb_main', 'bb_mid', 'predicted',
                 'exit1', 'exit2', 'exit3', 'breach_dir', 'state']
         ph = ','.join(['%s'] * len(cols))
-        data = [[_dt(r['bar_ms']), r['px_smooth'], r['hb9b'], r['hb9M'], r['hb9m'],
+        data = [[_dt(r['bar_ms']), r['px_smooth'], r['tf_open'], r['tf_high'],
+                 r['tf_low'], r['tf_close'], r['hb9b'], r['hb9M'], r['hb9m'],
                  r['predicted'], r['exit1'], r['exit2'], r['exit3'],
                  r['breach_dir'], r['state']] for r in rows]
         self._db.executemany(
