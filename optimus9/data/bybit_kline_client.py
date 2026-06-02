@@ -37,13 +37,18 @@ from logger import get_logger
 from .._helpers import _ms_to_iso
 
 
+class _RateLimited(Exception):
+    """Bybit retCode 10006 — back off and retry rather than truncate the backfill."""
+
+
 class BybitKlineClient:
     """Fetches OHLCV klines from Bybit Futures REST API (v5) for synthetic backfill."""
 
     _BASE        = 'https://api.bybit.com'
     _PATH        = '/v5/market/kline'
     _BATCH_LIMIT = 200
-    _RATE_DELAY  = 0.12
+    _RATE_DELAY  = 0.15
+    _MAX_TRIES   = 8
 
     def __init__(self) -> None:
         self._session = requests.Session()
@@ -53,7 +58,7 @@ class BybitKlineClient:
         all_candles: list = []
         cursor_end = end_ms
         while cursor_end > start_ms:
-            batch = self._fetch_batch(symbol, interval, start_ms, cursor_end)
+            batch = self._fetch_batch_retry(symbol, interval, start_ms, cursor_end)
             if not batch:
                 break
             all_candles.extend(batch)
@@ -72,17 +77,33 @@ class BybitKlineClient:
         self._log.info(f'Fetched {len(all_candles)} candles ({symbol} {interval}m)')
         return all_candles
 
+    def _fetch_batch_retry(self, symbol: str, interval: str, start_ms: int, end_ms: int) -> list:
+        """_fetch_batch with exponential backoff on rate limits / transient network
+        errors — so a 10006 mid-pagination recovers instead of silently truncating
+        the backfill. Raises (loud) only after exhausting retries."""
+        delay = 1.0
+        for attempt in range(1, self._MAX_TRIES + 1):
+            try:
+                return self._fetch_batch(symbol, interval, start_ms, end_ms)
+            except (_RateLimited, requests.RequestException) as e:
+                if attempt == self._MAX_TRIES:
+                    raise RuntimeError(f'kline fetch failed after {attempt} tries: {e}') from e
+                self._log.warning(f'{type(e).__name__}: {str(e)[:60]} — backing off '
+                                  f'{delay:.0f}s (try {attempt}/{self._MAX_TRIES})')
+                time.sleep(delay)
+                delay = min(delay * 2, 30.0)
+
     def _fetch_batch(self, symbol: str, interval: str, start_ms: int, end_ms: int) -> list:
         params = {'category': 'linear', 'symbol': symbol, 'interval': interval,
                   'start': start_ms, 'end': end_ms, 'limit': self._BATCH_LIMIT}
         resp = self._session.get(self._BASE + self._PATH, params=params, timeout=10)
-        if not resp.ok:
-            self._log.error(f'Bybit {resp.status_code}: {resp.text}')
-            resp.raise_for_status()
+        resp.raise_for_status()                                   # HTTP/network → retry
         data = resp.json()
-        if data.get('retCode') != 0:
-            self._log.error(f'Bybit API error: {data}')
-            return []
+        code = data.get('retCode')
+        if code == 10006:                                        # rate limit → retry
+            raise _RateLimited(data.get('retMsg', 'rate limit'))
+        if code != 0:                                            # other API error → loud
+            raise RuntimeError(f'Bybit API error: {data}')
         return [{'timestamp': int(r[0]), 'open': float(r[1]), 'high': float(r[2]),
                  'low': float(r[3]), 'close': float(r[4]), 'volume': float(r[5])}
                 for r in data['result']['list']]
