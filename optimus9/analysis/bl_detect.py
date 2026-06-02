@@ -157,7 +157,9 @@ if hit >= 0
 
 
 def _f(x):
-    return round(float(x), 4) if x == x else None        # NaN → NULL
+    # 6dp, not 4 — FARTCOIN prints at 0.14xxx (5 decimals); rounding to 4 lopped the
+    # 5th digit and showed as a phantom ~3.5 bps "drift" vs TV. The tape is faithful.
+    return round(float(x), 6) if x == x else None        # NaN → NULL
 
 
 def _dt(ms):
