@@ -169,10 +169,24 @@ class IndicatorComputer:
         return out
 
     @staticmethod
+    def _rma(src: np.ndarray, n: int) -> np.ndarray:
+        """Wilder's RMA (Pine ta.rma): SMA-seeded, recursive with alpha = 1/n.
+        ta.rsi uses THIS, not the 2/(n+1) EMA."""
+        out   = np.full_like(src, np.nan, dtype=float)
+        valid = np.where(~np.isnan(src))[0]
+        if len(valid) < n:
+            return out
+        seed      = valid[n - 1]
+        out[seed] = float(np.nanmean(src[valid[0]: seed + 1]))
+        for i in range(seed + 1, len(src)):
+            out[i] = (out[i - 1] * (n - 1) + src[i]) / n if not np.isnan(src[i]) else out[i - 1]
+        return out
+
+    @staticmethod
     def _rsi(src: np.ndarray, n: int) -> np.ndarray:
         delta = np.diff(src, prepend=np.nan)
-        avg_g = IndicatorComputer._ema(np.where(delta > 0,  delta, 0.0), n)
-        avg_l = IndicatorComputer._ema(np.where(delta < 0, -delta, 0.0), n)
+        avg_g = IndicatorComputer._rma(np.where(delta > 0,  delta, 0.0), n)
+        avg_l = IndicatorComputer._rma(np.where(delta < 0, -delta, 0.0), n)
         with np.errstate(invalid='ignore', divide='ignore'):
             rs = np.where(avg_l != 0, avg_g / avg_l, np.inf)
         return 100.0 - (100.0 / (1.0 + rs))
@@ -458,8 +472,8 @@ class IndicatorComputer:
         delta_c = np.diff(closed_src, prepend=np.nan)
         g_c     = np.where(delta_c > 0,  delta_c, 0.0)
         l_c     = np.where(delta_c < 0, -delta_c, 0.0)
-        avg_g_c = IndicatorComputer._ema(g_c, rsi_len)
-        avg_l_c = IndicatorComputer._ema(l_c, rsi_len)
+        avg_g_c = IndicatorComputer._rma(g_c, rsi_len)
+        avg_l_c = IndicatorComputer._rma(l_c, rsi_len)
 
         # Stoch needs rolling min/max of RSI — but we'll compute developing RSI
         # at each 5s, then do windowed min/max combining closed and developing.
@@ -488,8 +502,8 @@ class IndicatorComputer:
         lb_idx   = np.where(valid, idx - 1, 0)
 
         # ── developing RSI: single-step update from last-closed RSI state ──
-        # alpha = 2/(n+1) update: avg_new = alpha*x + (1-alpha)*avg_prev
-        alpha   = 2.0 / (rsi_len + 1.0)
+        # Wilder RMA update (alpha = 1/n): avg_new = avg_prev + (x - avg_prev)/n
+        alpha   = 1.0 / rsi_len
         prev_src = np.where(valid, closed_src[lb_idx], np.nan)
         delta_d  = dev_src - prev_src
         g_d      = np.where(delta_d > 0,  delta_d, 0.0)
