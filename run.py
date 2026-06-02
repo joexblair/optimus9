@@ -210,6 +210,17 @@ def _build_parser() -> argparse.ArgumentParser:
     cs.add_argument('--manual_stop', type=float, default=0.33,
                     help='trusted hand-traded stop; stop-sweep low anchor')
 
+    bd = sub.add_parser('bl_detect',
+                        help='BL 4-state detection for a line family (hb9) → '
+                             'bl_states table + labelled Pine overlay')
+    bd.add_argument('--lookback_hours', type=float, default=12.0)
+    bd.add_argument('--curl_floor',     type=float, default=1.0)
+    bd.add_argument('--flatten',        type=float, default=0.5)
+    bd.add_argument('--pseudo_cross',   type=float, default=15.0)
+    bd.add_argument('--end_ms',         type=int,   default=None,
+                    help='time-machine end (ms); default = now (data max)')
+    bd.add_argument('--pine',           default='bl_hb9_states.pine')
+
     return p
 
 
@@ -462,6 +473,20 @@ def cmd_cluster_score(args, db: DatabaseManager) -> int:
     return 0
 
 
+def cmd_bl_detect(args, db: DatabaseManager) -> int:
+    import collections
+    from optimus9.analysis.bl_detect import BLDetect
+    d    = BLDetect(db, lookback_hours=args.lookback_hours, curl_floor=args.curl_floor,
+                    flatten=args.flatten, pseudo_cross=args.pseudo_cross)
+    rows = d.report(end_ms=args.end_ms)
+    d.emit_pine(rows, args.pine)
+    dist = dict(sorted(collections.Counter(
+        r['state'] for r in rows if r['hb9b'] is not None).items()))
+    _log.info(f'bl_states: {len(rows)} bars → table bl_states | states {dist} | '
+              f'Pine → {args.pine}')
+    return 0
+
+
 _DISPATCH = {
     'start':              cmd_start,
     'analyze':            cmd_analyze,
@@ -476,6 +501,7 @@ _DISPATCH = {
     'reconcile':          cmd_reconcile,
     'validate_gate':      cmd_validate_gate,
     'cluster_score':      cmd_cluster_score,
+    'bl_detect':          cmd_bl_detect,
 }
 
 
