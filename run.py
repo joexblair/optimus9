@@ -221,6 +221,12 @@ def _build_parser() -> argparse.ArgumentParser:
                     help='time-machine end (ms); default = now (data max)')
     bd.add_argument('--pine',           default='bl_hb9_states.pine')
 
+    tk = sub.add_parser('tape_check',
+                        help='Scan kline_collection over a window for gaps, '
+                             'continuity breaks (open != prev close) and OHLC sanity')
+    tk.add_argument('--tp_pk', type=int,   default=1)
+    tk.add_argument('--hours', type=float, default=12.0)
+
     dr = sub.add_parser('delete_run',
                         help='Cascade-delete an optimizer run (or_pk) + all related '
                              'rows; pk_signals/outcomes batched to dodge the lock table')
@@ -480,6 +486,50 @@ def cmd_cluster_score(args, db: DatabaseManager) -> int:
     return 0
 
 
+def cmd_tape_check(args, db: DatabaseManager) -> int:
+    """Loud data-quality gate over kline_collection: missing bars, non-gapless
+    seams (open != prior close), and OHLC sanity. PASS/FAIL verdict."""
+    import datetime as _dt
+    tp, hours, bar = args.tp_pk, args.hours, 5000
+    mx = db.execute('SELECT MAX(kc_timestamp) m FROM kline_collection WHERE kc_tp_pk=%s',
+                    (tp,), fetch=True)[0]['m']
+    if mx is None:
+        _log.error(f'tape_check tp={tp}: no klines'); return 1
+    end   = int(mx)
+    start = end - int(hours * 3600 * 1000)
+    rows  = db.execute(
+        '''SELECT kc_timestamp ts, kc_open o, kc_high h, kc_low l, kc_close c
+           FROM kline_collection WHERE kc_tp_pk=%s AND kc_timestamp BETWEEN %s AND %s
+           ORDER BY kc_timestamp''', (tp, start, end), fetch=True)
+
+    def _u(ms): return _dt.datetime.fromtimestamp(ms / 1000, tz=_dt.timezone.utc).strftime('%m-%d %H:%M:%S')
+    gaps, seams = [], []
+    for i in range(1, len(rows)):
+        dt = int(rows[i]['ts']) - int(rows[i - 1]['ts'])
+        if dt != bar:
+            gaps.append((rows[i - 1]['ts'], rows[i]['ts'], (dt - bar) // bar))
+        elif abs(float(rows[i]['o']) - float(rows[i - 1]['c'])) > 1e-9:
+            seams.append((rows[i]['ts'], float(rows[i - 1]['c']), float(rows[i]['o'])))
+    bad = [r['ts'] for r in rows
+           if not (float(r['h']) >= max(float(r['o']), float(r['c']))
+                   and float(r['l']) <= min(float(r['o']), float(r['c']))
+                   and float(r['h']) >= float(r['l']))]
+
+    expected = (end - start) // bar + 1
+    _log.info(f'tape_check tp={tp} last {hours}h: {len(rows):,} bars (expect ~{expected:,}) '
+              f'| missing-bar gaps={len(gaps)}  non-gapless seams={len(seams)}  bad-OHLC={len(bad)}')
+    for ts0, ts1, miss in gaps[:5]:
+        _log.info(f'  GAP {miss} bar(s): {_u(int(ts0))} -> {_u(int(ts1))}')
+    for ts, pc, o in seams[:5]:
+        _log.info(f'  SEAM @ {_u(int(ts))}: open {o} != prev close {pc} '
+                  f'({(o - pc) / pc * 1e4:+.2f} bps)')
+    for ts in bad[:5]:
+        _log.info(f'  BAD-OHLC @ {_u(int(ts))}')
+    verdict = 'PASS' if not (gaps or seams or bad) else 'FAIL'
+    _log.info(f'tape_check: {verdict}')
+    return 0 if verdict == 'PASS' else 1
+
+
 def cmd_delete_run(args, db: DatabaseManager) -> int:
     """Cascade-delete one optimizer run. The big children (pk_signals + their
     pk_outcomes) are deleted in pks_pk ranges so each statement stays under the
@@ -555,6 +605,7 @@ _DISPATCH = {
     'cluster_score':      cmd_cluster_score,
     'bl_detect':          cmd_bl_detect,
     'delete_run':         cmd_delete_run,
+    'tape_check':         cmd_tape_check,
 }
 
 
