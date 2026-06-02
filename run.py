@@ -221,6 +221,13 @@ def _build_parser() -> argparse.ArgumentParser:
                     help='time-machine end (ms); default = now (data max)')
     bd.add_argument('--pine',           default='bl_hb9_states.pine')
 
+    dr = sub.add_parser('delete_run',
+                        help='Cascade-delete an optimizer run (or_pk) + all related '
+                             'rows; pk_signals/outcomes batched to dodge the lock table')
+    dr.add_argument('--or_pk', type=int, required=True)
+    dr.add_argument('--batch', type=int, default=100000,
+                    help='pk_signals/outcomes rows per batch (lock-safe; default 100k)')
+
     return p
 
 
@@ -473,6 +480,51 @@ def cmd_cluster_score(args, db: DatabaseManager) -> int:
     return 0
 
 
+def cmd_delete_run(args, db: DatabaseManager) -> int:
+    """Cascade-delete one optimizer run. The big children (pk_signals + their
+    pk_outcomes) are deleted in pks_pk ranges so each statement stays under the
+    InnoDB lock table (the 1206 error on full-table deletes)."""
+    orp, batch = args.or_pk, args.batch
+    r = db.execute(
+        'SELECT MIN(pks_pk) lo, MAX(pks_pk) hi, COUNT(*) n FROM pk_signals WHERE pks_or_pk=%s',
+        (orp,), fetch=True)[0]
+    if r['lo'] is not None:
+        lo, hi, n = int(r['lo']), int(r['hi']), int(r['n'])
+        _log.info(f'delete_run or_pk={orp}: {n:,} pk_signals (+outcomes) in '
+                  f'pks_pk [{lo:,}..{hi:,}], batch={batch:,}')
+        cur, i = lo, 0
+        while cur <= hi:
+            top = cur + batch
+            db.execute('''DELETE o FROM pk_outcomes o JOIN pk_signals s
+                          ON o.pko_pks_pk = s.pks_pk
+                          WHERE s.pks_or_pk=%s AND s.pks_pk>=%s AND s.pks_pk<%s''',
+                       (orp, cur, top))
+            db.execute('DELETE FROM pk_signals WHERE pks_or_pk=%s AND pks_pk>=%s AND pks_pk<%s',
+                       (orp, cur, top))
+            i += 1
+            if i % 10 == 0 or top > hi:
+                _log.info(f'  cleared to pks_pk {min(top,hi):,}  '
+                          f'(~{min(100,(cur-lo)*100//max(hi-lo,1))}%)')
+            cur = top
+    else:
+        _log.info(f'delete_run or_pk={orp}: no pk_signals')
+
+    for sql, label in (
+        ('DELETE FROM pk_combo_summary WHERE pcs_or_pk=%s', 'pk_combo_summary'),
+        ('''DELETE acs FROM am_centroid_signals acs JOIN am_centroids amc
+            ON acs.acs_amc_pk = amc.amc_pk WHERE amc.amc_or_pk=%s''', 'am_centroid_signals'),
+        ('DELETE FROM am_centroids WHERE amc_or_pk=%s', 'am_centroids'),
+        ('DELETE FROM cluster_scores WHERE cs_or_pk=%s', 'cluster_scores'),
+        ('DELETE FROM optimizer_runs WHERE or_pk=%s', 'optimizer_runs'),
+    ):
+        try:
+            db.execute(sql, (orp,)); _log.info(f'  deleted {label}')
+        except Exception as e:                       # table may not exist for every run
+            _log.warning(f'  skip {label}: {str(e)[:70]}')
+    _log.info(f'delete_run or_pk={orp}: done')
+    return 0
+
+
 def cmd_bl_detect(args, db: DatabaseManager) -> int:
     import collections
     from optimus9.analysis.bl_detect import BLDetect
@@ -502,6 +554,7 @@ _DISPATCH = {
     'validate_gate':      cmd_validate_gate,
     'cluster_score':      cmd_cluster_score,
     'bl_detect':          cmd_bl_detect,
+    'delete_run':         cmd_delete_run,
 }
 
 
