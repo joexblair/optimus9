@@ -66,7 +66,7 @@ class BarBuilder:
 
     def _build(self, tp_pk: int, start_ms: int, end_ms: int) -> None:
         rows = self._db.execute(
-            '''SELECT tk_price, tk_volume FROM ticks
+            '''SELECT tk_timestamp, tk_price, tk_volume FROM ticks
                WHERE tk_tp_pk = %s AND tk_timestamp >= %s AND tk_timestamp < %s
                ORDER BY tk_timestamp ASC''',
             (tp_pk, start_ms, end_ms), fetch=True,
@@ -75,8 +75,12 @@ class BarBuilder:
             self._log.debug(f'No ticks for bar {start_ms}')
             return
 
-        prices  = [float(r['tk_price'])  for r in rows]
-        volumes = [float(r['tk_volume']) for r in rows]
+        tss     = [int(r['tk_timestamp']) for r in rows]
+        prices  = [float(r['tk_price'])   for r in rows]
+        volumes = [float(r['tk_volume'])  for r in rows]
+        o, h, l, c = prices[0], max(prices), min(prices), prices[-1]
+
+        self._check_continuity(tp_pk, start_ms, o, c, tss, prices)
 
         self._db.execute(
             '''INSERT INTO kline_collection
@@ -86,9 +90,42 @@ class BarBuilder:
                    kc_open=VALUES(kc_open), kc_high=VALUES(kc_high),
                    kc_low=VALUES(kc_low),   kc_close=VALUES(kc_close),
                    kc_volume=VALUES(kc_volume)''',
-            (tp_pk, start_ms, prices[0], max(prices), min(prices), prices[-1], sum(volumes)),
+            (tp_pk, start_ms, o, h, l, c, sum(volumes)),
         )
-        self._log.debug(
-            f'Bar ts={start_ms}  o={prices[0]}  h={max(prices)}'
-            f'  l={min(prices)}  c={prices[-1]}  v={sum(volumes):.4f}'
+        self._log.debug(f'Bar ts={start_ms}  o={o} h={h} l={l} c={c} v={sum(volumes):.4f}')
+
+    def _check_continuity(self, tp_pk, start_ms, open_, close_, tss, prices) -> None:
+        """Quick-and-dirty live tape gate: on a gapless tape a new bar's open == the
+        prior bar's close. Fire a rich ERROR on a non-gapless seam OR a missing-bar
+        gap, so the fault is visible the instant it happens (incl. how late the first
+        tick lands — the prime suspect for the open drift)."""
+        prev = self._db.execute(
+            '''SELECT kc_timestamp, kc_close FROM kline_collection
+               WHERE kc_tp_pk = %s AND kc_timestamp < %s
+               ORDER BY kc_timestamp DESC LIMIT 1''',
+            (tp_pk, start_ms), fetch=True,
         )
+        if not prev:
+            return
+        p_ts    = int(prev[0]['kc_timestamp'])
+        p_close = float(prev[0]['kc_close'])
+        bar     = self._BAR_S * 1000
+        f_off   = tss[0]  - start_ms          # ms the first tick lands after bar open
+        l_off   = tss[-1] - start_ms
+        def _u(ms): return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).strftime('%H:%M:%S')
+
+        if p_ts < start_ms - bar:
+            missing = (start_ms - bar - p_ts) // bar
+            self._log.error(
+                f'KLINE GAP: {missing} missing bar(s) before {_u(start_ms)} '
+                f'(ts={start_ms}). prev {_u(p_ts)} close={p_close}; this open={open_}; '
+                f'{len(prices)} ticks, first +{f_off}ms / last +{l_off}ms')
+        elif abs(open_ - p_close) > 1e-12:
+            d   = open_ - p_close
+            bps = (d / p_close * 1e4) if p_close else 0.0
+            self._log.error(
+                f'KLINE NON-GAPLESS @ {_u(start_ms)} (ts={start_ms}): '
+                f'open {open_} != prev close {p_close}  jump={d:+.8f} ({bps:+.2f} bps) | '
+                f'h={max(prices)} l={min(prices)} c={close_} | '
+                f'{len(prices)} ticks, first +{f_off}ms (p={prices[0]}) '
+                f'last +{l_off}ms (p={prices[-1]})')
