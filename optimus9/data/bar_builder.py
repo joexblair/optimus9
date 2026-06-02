@@ -45,6 +45,7 @@ class BarBuilder:
     """
 
     _BAR_S = 5
+    _MAX_FILL_BARS = 720          # cap live forward-fill at ~1h; bigger gaps → backfiller
 
     def __init__(self, db: DatabaseManager) -> None:
         self._db  = db
@@ -55,33 +56,64 @@ class BarBuilder:
         self._log.info('BarBuilder started')
         while True:
             self._sleep_to_boundary()
-            boundary_ms = int(time.time() * 1000)
-            bar_end     = boundary_ms - self._BAR_S * 1000
-            bar_start   = bar_end     - self._BAR_S * 1000
-            self._build(tp_pk, bar_start, bar_end)
+            boundary_ms  = int(time.time() * 1000)
+            latest_start = boundary_ms - 2 * self._BAR_S * 1000   # last fully-closed bar
+            self._catch_up(tp_pk, latest_start)
 
     def _sleep_to_boundary(self) -> None:
         now = time.time()
         time.sleep(max(0.0, math.ceil(now / self._BAR_S) * self._BAR_S - now))
 
-    def _build(self, tp_pk: int, start_ms: int, end_ms: int) -> None:
+    def _catch_up(self, tp_pk: int, latest_start: int) -> None:
+        """Build every 5s bar from the last stored bar up to latest_start, GAPLESS:
+        a window with ticks opens at the prior close (not its own first tick); a
+        window with no ticks becomes a doji at the prior close (forward-fill). Bounded
+        — a gap larger than the cap is left to the backfiller."""
+        bar  = self._BAR_S * 1000
+        prev = self._db.execute(
+            '''SELECT kc_timestamp, kc_close FROM kline_collection
+               WHERE kc_tp_pk = %s ORDER BY kc_timestamp DESC LIMIT 1''',
+            (tp_pk,), fetch=True,
+        )
+        if not prev:
+            self._build_one(tp_pk, latest_start, None)            # cold start
+            return
+        first = int(prev[0]['kc_timestamp']) + bar
+        if first > latest_start:
+            return                                                # nothing new
+        if (latest_start - first) // bar + 1 > self._MAX_FILL_BARS:
+            self._log.warning(
+                f'gap > {self._MAX_FILL_BARS} bars to {latest_start}; building latest '
+                'only — backfiller owns the rest')
+            first = latest_start
+        cur = float(prev[0]['kc_close'])
+        for ws in range(first, latest_start + bar, bar):
+            cur = self._build_one(tp_pk, ws, cur)
+
+    def _build_one(self, tp_pk: int, start_ms: int, prior_close):
+        """Build+upsert one 5s bar. open = prior_close (gapless) when known; empty
+        window → doji at prior_close. Returns the bar's close (the next open)."""
+        bar  = self._BAR_S * 1000
         rows = self._db.execute(
             '''SELECT tk_timestamp, tk_price, tk_volume FROM ticks
                WHERE tk_tp_pk = %s AND tk_timestamp >= %s AND tk_timestamp < %s
                ORDER BY tk_timestamp ASC''',
-            (tp_pk, start_ms, end_ms), fetch=True,
+            (tp_pk, start_ms, start_ms + bar), fetch=True,
         )
-        if not rows:
-            self._log.debug(f'No ticks for bar {start_ms}')
-            return
-
-        tss     = [int(r['tk_timestamp']) for r in rows]
-        prices  = [float(r['tk_price'])   for r in rows]
-        volumes = [float(r['tk_volume'])  for r in rows]
-        o, h, l, c = prices[0], max(prices), min(prices), prices[-1]
-
-        self._check_continuity(tp_pk, start_ms, o, c, tss, prices)
-
+        if rows:
+            tss    = [int(r['tk_timestamp']) for r in rows]
+            prices = [float(r['tk_price'])   for r in rows]
+            vol    = sum(float(r['tk_volume']) for r in rows)
+            o = float(prior_close) if prior_close is not None else prices[0]
+            c = prices[-1]
+            h = max([o] + prices)
+            l = min([o] + prices)
+            if prior_close is not None:
+                self._check_continuity(tp_pk, start_ms, o, c, tss, prices)   # regression guard
+        elif prior_close is not None:
+            o = h = l = c = float(prior_close); vol = 0.0        # gapless doji (no trades)
+        else:
+            return None                                          # cold start, no ticks
         self._db.execute(
             '''INSERT INTO kline_collection
                    (kc_tp_pk, kc_timestamp, kc_open, kc_high, kc_low, kc_close, kc_volume)
@@ -90,9 +122,9 @@ class BarBuilder:
                    kc_open=VALUES(kc_open), kc_high=VALUES(kc_high),
                    kc_low=VALUES(kc_low),   kc_close=VALUES(kc_close),
                    kc_volume=VALUES(kc_volume)''',
-            (tp_pk, start_ms, o, h, l, c, sum(volumes)),
+            (tp_pk, start_ms, o, h, l, c, vol),
         )
-        self._log.debug(f'Bar ts={start_ms}  o={o} h={h} l={l} c={c} v={sum(volumes):.4f}')
+        return c
 
     def _check_continuity(self, tp_pk, start_ms, open_, close_, tss, prices) -> None:
         """Quick-and-dirty live tape gate: on a gapless tape a new bar's open == the
