@@ -27,9 +27,9 @@ def test_already_breached_is_not_predicted():
 
 
 # ── exit methods in isolation ───────────────────────────────────────────────
-def _bl():
+def _bl(**kw):
     # curl_lookback=1 so the short synthetic series exercise the curl on a 1-bar slope
-    return BreachingLine(curl_floor=1.0, curl_lookback=1, pseudo_cross=15.0, flatten=0.5)
+    return BreachingLine(curl_floor=1.0, curl_lookback=1, pseudo_cross=15.0, **kw)
 
 
 def test_exit3_cross_toward_ib():

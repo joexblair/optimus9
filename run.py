@@ -212,21 +212,27 @@ def _build_parser() -> argparse.ArgumentParser:
 
     bd = sub.add_parser('bl_detect',
                         help='BL 4-state detection for a line family (hb9) → '
-                             'bl_states table + labelled Pine overlay')
+                             'bl_states table + labelled Pine overlay. Tuning knobs '
+                             'come from the active bl_config row (see bl_config).')
     bd.add_argument('--lookback_hours', type=float, default=12.0)
-    bd.add_argument('--curl_floor',     type=float, default=1.0)
-    bd.add_argument('--curl_lookback',  type=int,   default=7,
-                    help='curl slope window in bars (~bars before K reverses; default 7)')
-    bd.add_argument('--flatten',        type=float, default=0.5)
-    bd.add_argument('--pseudo_cross',   type=float, default=15.0)
-    bd.add_argument('--grace',          type=int,   default=2,
-                    help='bars to wait for a curl after an early exit3 (default 2)')
-    bd.add_argument('--fence_pad',      type=float, default=5.0,
-                    help='widen the no-prediction fence: hi += pad, lo -= pad '
-                         '(default 5 → 25:75 engage band)')
     bd.add_argument('--end_ms',         type=int,   default=None,
                     help='time-machine end (ms); default = now (data max)')
     bd.add_argument('--pine',           default='bl_hb9_states.pine')
+
+    bc = sub.add_parser('bl_config',
+                        help='List / activate / clone the BL tuning configs '
+                             '(bl_config table; bl_detect reads the active row)')
+    bc.add_argument('--activate', type=int, default=None, metavar='PK',
+                    help='make config PK the active one')
+    bc.add_argument('--new', action='store_true',
+                    help='clone the active config to a new active row (others → inactive)')
+    bc.add_argument('--label',         default=None)
+    bc.add_argument('--curl_floor',    type=float, default=None)
+    bc.add_argument('--curl_lookback', type=int,   default=None)
+    bc.add_argument('--grace',         type=int,   default=None)
+    bc.add_argument('--pseudo_cross',  type=float, default=None)
+    bc.add_argument('--fence_pad',     type=float, default=None)
+    bc.add_argument('--exit2_anchor',  choices=['now', 'prior', 'avg'], default=None)
 
     tk = sub.add_parser('tape_check',
                         help='Scan kline_collection over a window for gaps, '
@@ -585,16 +591,43 @@ def cmd_delete_run(args, db: DatabaseManager) -> int:
 def cmd_bl_detect(args, db: DatabaseManager) -> int:
     import collections
     from optimus9.analysis.bl_detect import BLDetect
-    d    = BLDetect(db, lookback_hours=args.lookback_hours, curl_floor=args.curl_floor,
-                    curl_lookback=args.curl_lookback, flatten=args.flatten,
-                    pseudo_cross=args.pseudo_cross, grace=args.grace,
-                    fence_pad=args.fence_pad)
+    d    = BLDetect(db, lookback_hours=args.lookback_hours)   # tuning from active bl_config
     rows = d.report(end_ms=args.end_ms)
     d.emit_pine(rows, args.pine)
     dist = dict(sorted(collections.Counter(
         r['state'] for r in rows if r['hb9b'] is not None).items()))
     _log.info(f'bl_states: {len(rows)} bars → table bl_states | states {dist} | '
               f'Pine → {args.pine}')
+    return 0
+
+
+def cmd_bl_config(args, db: DatabaseManager) -> int:
+    from optimus9.analysis.bl_detect import BLDetect
+    BLDetect(db)                                  # ensure bl_config exists + seeded
+    T    = 'bl_config'
+    cols = ['curl_floor', 'curl_lookback', 'grace', 'pseudo_cross', 'fence_pad', 'exit2_anchor']
+    if args.activate is not None:
+        db.execute(f'UPDATE {T} SET blc_is_active=0')
+        db.execute(f'UPDATE {T} SET blc_is_active=1 WHERE blc_pk=%s', (args.activate,))
+        _log.info(f'activated bl_config #{args.activate}')
+    elif args.new:
+        cur = db.execute(f'SELECT * FROM {T} WHERE blc_is_active=1 ORDER BY blc_pk DESC LIMIT 1',
+                         fetch=True)[0]
+        vals  = [getattr(args, c) if getattr(args, c) is not None else cur[c] for c in cols]
+        label = args.label or f"clone of #{cur['blc_pk']}"
+        db.execute(f'UPDATE {T} SET blc_is_active=0')
+        ph = ','.join(['%s'] * (len(cols) + 2))
+        db.execute(f"INSERT INTO {T} (blc_label, blc_is_active, {','.join(cols)}) VALUES ({ph})",
+                   (label, 1, *vals))
+        _log.info(f"created + activated new bl_config '{label}'")
+    rows = db.execute(f'SELECT * FROM {T} ORDER BY blc_pk', fetch=True)
+    print(f"\n{'pk':>4} {'':1} {'label':22} {'curl_fl':7} {'curl_lb':7} {'grace':5} "
+          f"{'pseudo':6} {'fence':5} {'exit2_anchor'}")
+    for r in rows:
+        act = '*' if r['blc_is_active'] else ' '
+        print(f"{r['blc_pk']:>4} {act:1} {(r['blc_label'] or '')[:22]:22} "
+              f"{r['curl_floor']:<7} {r['curl_lookback']:<7} {r['grace']:<5} "
+              f"{r['pseudo_cross']:<6} {r['fence_pad']:<5} {r['exit2_anchor']}")
     return 0
 
 
@@ -613,6 +646,7 @@ _DISPATCH = {
     'validate_gate':      cmd_validate_gate,
     'cluster_score':      cmd_cluster_score,
     'bl_detect':          cmd_bl_detect,
+    'bl_config':          cmd_bl_config,
     'delete_run':         cmd_delete_run,
     'tape_check':         cmd_tape_check,
 }

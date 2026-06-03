@@ -29,23 +29,56 @@ HB9 = {
 
 
 class BLDetect:
-    _TABLE = 'bl_states'
+    _TABLE  = 'bl_states'
+    _CONFIG = 'bl_config'
 
-    def __init__(self, db, family=HB9, tp_pk=1, lookback_hours=12.0,
-                 warmup_hours=24.0, curl_floor=1.0, curl_lookback=7, flatten=0.5,
-                 pseudo_cross=15.0, grace=2, fence_pad=5.0):
+    def __init__(self, db, family=HB9, tp_pk=1, lookback_hours=12.0, warmup_hours=24.0):
         self._db       = db
         self._fam      = family
         self._tp       = int(tp_pk)
         self._lookback = float(lookback_hours)
         self._warmup   = float(warmup_hours)
-        # fence widened symmetrically: upper += pad, lower -= pad (default 5 → 25:75)
-        self._bl = BreachingLine(mult=family['tf_seconds'] // 5, curl_floor=curl_floor,
-                                 curl_lookback=curl_lookback, flatten=flatten,
-                                 pseudo_cross=pseudo_cross, grace=grace,
-                                 fence_hi=FENCE_HI + float(fence_pad),
-                                 fence_lo=FENCE_LO - float(fence_pad))
-        self._log = get_logger(self.__class__.__name__)
+        self._log      = get_logger(self.__class__.__name__)
+        # tuning knobs come from the active bl_config row (not args) so Joe can tweak
+        # between runs and keep history; fence widened ±fence_pad (5 → 25:75).
+        cfg = self._load_config()
+        fp  = float(cfg['fence_pad'])
+        self._bl = BreachingLine(mult=family['tf_seconds'] // 5,
+                                 curl_floor=float(cfg['curl_floor']),
+                                 curl_lookback=int(cfg['curl_lookback']),
+                                 pseudo_cross=float(cfg['pseudo_cross']),
+                                 grace=int(cfg['grace']),
+                                 exit2_anchor=str(cfg['exit2_anchor']),
+                                 fence_hi=FENCE_HI + fp, fence_lo=FENCE_LO - fp)
+        self._log.info(
+            f"bl_config #{cfg['blc_pk']} '{cfg['blc_label']}' | curl_floor={cfg['curl_floor']} "
+            f"curl_lookback={cfg['curl_lookback']} grace={cfg['grace']} "
+            f"pseudo_cross={cfg['pseudo_cross']} fence_pad={cfg['fence_pad']} "
+            f"exit2_anchor={cfg['exit2_anchor']}")
+
+    def _load_config(self) -> dict:
+        """Ensure bl_config exists, seed a default active row if empty, return the
+        active row. Knobs live here (not CLI args) so they're tweakable between runs
+        with history (is_active flags the live one; old rows stay)."""
+        self._db.execute(f'''CREATE TABLE IF NOT EXISTS {self._CONFIG} (
+            blc_pk BIGINT AUTO_INCREMENT PRIMARY KEY,
+            blc_label VARCHAR(80) DEFAULT '',
+            blc_is_active TINYINT DEFAULT 0,
+            blc_created DATETIME DEFAULT CURRENT_TIMESTAMP,
+            curl_floor FLOAT DEFAULT 1.0,
+            curl_lookback INT DEFAULT 7,
+            grace INT DEFAULT 2,
+            pseudo_cross FLOAT DEFAULT 15.0,
+            fence_pad FLOAT DEFAULT 5.0,
+            exit2_anchor VARCHAR(16) DEFAULT 'now')''')
+        sel = (f'SELECT * FROM {self._CONFIG} WHERE blc_is_active=1 '
+               'ORDER BY blc_pk DESC LIMIT 1')
+        rows = self._db.execute(sel, fetch=True)
+        if not rows:
+            self._db.execute(
+                f"INSERT INTO {self._CONFIG} (blc_label, blc_is_active) VALUES ('default', 1)")
+            rows = self._db.execute(sel, fetch=True)
+        return rows[0]
 
     # ── public ───────────────────────────────────────────────────────────────
     def report(self, end_ms=None) -> list:
