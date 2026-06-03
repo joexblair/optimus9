@@ -217,6 +217,9 @@ def _build_parser() -> argparse.ArgumentParser:
     bd.add_argument('--curl_floor',     type=float, default=1.0)
     bd.add_argument('--flatten',        type=float, default=0.5)
     bd.add_argument('--pseudo_cross',   type=float, default=15.0)
+    bd.add_argument('--fence_pad',      type=float, default=5.0,
+                    help='widen the no-prediction fence: hi += pad, lo -= pad '
+                         '(default 5 → 25:75 engage band)')
     bd.add_argument('--end_ms',         type=int,   default=None,
                     help='time-machine end (ms); default = now (data max)')
     bd.add_argument('--pine',           default='bl_hb9_states.pine')
@@ -579,7 +582,8 @@ def cmd_bl_detect(args, db: DatabaseManager) -> int:
     import collections
     from optimus9.analysis.bl_detect import BLDetect
     d    = BLDetect(db, lookback_hours=args.lookback_hours, curl_floor=args.curl_floor,
-                    flatten=args.flatten, pseudo_cross=args.pseudo_cross)
+                    flatten=args.flatten, pseudo_cross=args.pseudo_cross,
+                    fence_pad=args.fence_pad)
     rows = d.report(end_ms=args.end_ms)
     d.emit_pine(rows, args.pine)
     dist = dict(sorted(collections.Counter(

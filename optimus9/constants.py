@@ -27,3 +27,10 @@ RSI_OVERSOLD   = 30.0
 # OOB detection — line is "out of boundary" / breached
 BOUNDARY_HI = 85.0
 BOUNDARY_LO = 15.0
+
+# ── BL no-engagement fence ────────────────────────────────────────────
+# Base K band inside which a breach is NOT predicted/engaged. Independent of the
+# RSI rescale above (equal by default, but a separate tuning concern). bl_detect
+# widens it symmetrically via --fence_pad (upper += pad, lower -= pad).
+FENCE_HI = 70.0
+FENCE_LO = 30.0

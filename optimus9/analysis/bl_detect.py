@@ -15,6 +15,7 @@ from logger import get_logger
 from ..db.kline_loader import KlineLoader
 from ..compute.indicator_computer import IndicatorComputer as IC
 from ..compute.breaching_line import BreachingLine
+from ..constants import FENCE_HI, FENCE_LO
 
 
 # hb9 family — TF9 = 9 minutes (540s). BB lines hand-curated; not AM-swept.
@@ -31,14 +32,18 @@ class BLDetect:
     _TABLE = 'bl_states'
 
     def __init__(self, db, family=HB9, tp_pk=1, lookback_hours=12.0,
-                 warmup_hours=24.0, curl_floor=1.0, flatten=0.5, pseudo_cross=15.0):
+                 warmup_hours=24.0, curl_floor=1.0, flatten=0.5, pseudo_cross=15.0,
+                 fence_pad=5.0):
         self._db       = db
         self._fam      = family
         self._tp       = int(tp_pk)
         self._lookback = float(lookback_hours)
         self._warmup   = float(warmup_hours)
+        # fence widened symmetrically: upper += pad, lower -= pad (default 5 → 25:75)
         self._bl = BreachingLine(mult=family['tf_seconds'] // 5, curl_floor=curl_floor,
-                                 flatten=flatten, pseudo_cross=pseudo_cross)
+                                 flatten=flatten, pseudo_cross=pseudo_cross,
+                                 fence_hi=FENCE_HI + float(fence_pad),
+                                 fence_lo=FENCE_LO - float(fence_pad))
         self._log = get_logger(self.__class__.__name__)
 
     # ── public ───────────────────────────────────────────────────────────────
@@ -58,14 +63,20 @@ class BLDetect:
         bM = self._line(base, self._fam['bM'])    # hb9M
         bm = self._line(base, self._fam['bm'])    # hb9m
         r  = self._bl.run(k, bm, bM)              # run(k, bb_m, bb_M)
-        # display refs on the lines' TF (9-min) — px_smooth = DEMA(9m close,2) (matches
-        # TV); + the closed TF9 OHLC, both forward-filled to the 5s rows.
+        # ── two HTF (9-min) views per 5s bar, lookahead-free (see _htf_views) ──
+        # c9 = last CLOSED 9-min bar (held across the cycle); e9 = the EMERGING bar
+        # accumulated from cycle-open to THIS 5s bar (O anchored at the cycle's first
+        # 5s open; H/L running extremes so far; C = this 5s close). Realtime reads e9;
+        # c9 is the confirmed reference. Replaces the old forward-filled full-bar tf_*
+        # which leaked the whole closed bar onto its first 5s row (the 21:45 mismatch).
+        c9, e9 = self._htf_views(base, ts)
+
+        # px_smooth = DEMA(9m close, 2) on the developing bin — display only.
+        # REVIEW: still developing-bin/lookahead basis; candidate to ride e9['close'].
         tf    = IC.resample(base, self._fam['tf_seconds'])
         tf_ts = tf['timestamp'].to_numpy()
         idx   = np.clip(np.searchsorted(tf_ts, ts, side='right') - 1, 0, None)
         px  = IC.dema(tf['close'].to_numpy(dtype=float), 2)[idx]
-        d_o = tf['open'].to_numpy()[idx];  d_h = tf['high'].to_numpy()[idx]
-        d_l = tf['low'].to_numpy()[idx];   d_c = tf['close'].to_numpy()[idx]
 
         rows = []
         for i in range(len(ts)):
@@ -74,8 +85,10 @@ class BLDetect:
             rows.append({
                 'bar_ms':    int(ts[i]),
                 'px_smooth': _f(px[i]),
-                'tf_open':   _f(d_o[i]), 'tf_high': _f(d_h[i]),
-                'tf_low':    _f(d_l[i]), 'tf_close': _f(d_c[i]),
+                'c9_open':   _f(c9['o'][i]), 'c9_high': _f(c9['h'][i]),
+                'c9_low':    _f(c9['l'][i]), 'c9_close': _f(c9['c'][i]),
+                'e9_open':   _f(e9['o'][i]), 'e9_high': _f(e9['h'][i]),
+                'e9_low':    _f(e9['l'][i]), 'e9_close': _f(e9['c'][i]),
                 'hb9b':      _f(k[i]),  'hb9M': _f(bM[i]),  'hb9m': _f(bm[i]),
                 'predicted': int(bool(r['predicted'][i])),
                 'exit1':     int(bool(r['exit1'][i])),
@@ -129,6 +142,37 @@ if hit >= 0
             return IC.f_bb_lookahead(base, secs, cfg['bb_len'], cfg['bb_mult'], cfg['src'])
         return IC.f_k_lookahead(base, secs, cfg['k_len'], cfg['rsi_len'], cfg['stc_len'], cfg['src'])
 
+    def _htf_views(self, base, ts):
+        """Per-5s, lookahead-free 9-min OHLC, two views:
+          c9 = last CLOSED 9-min bar (prev cycle's full OHLC, held across this cycle).
+          e9 = EMERGING 9-min bar — O anchored at the cycle's first 5s open; H/L the
+               running extremes from cycle-open to THIS 5s bar; C = this 5s close.
+        Cycles are epoch-anchored 540s bins (== midnight UTC grid == TV's), so e9 at a
+        cycle's last 5s bar equals that cycle's true closed OHLC. Returns (c9, e9) dicts
+        of float arrays keyed 'o'/'h'/'l'/'c'."""
+        period = self._fam['tf_seconds'] * 1000
+        o5 = base['open'].to_numpy(dtype=float); h5 = base['high'].to_numpy(dtype=float)
+        l5 = base['low'].to_numpy(dtype=float);  c5 = base['close'].to_numpy(dtype=float)
+        cyc = ts // period
+        n   = len(ts)
+        e_o = np.empty(n); e_h = np.empty(n); e_l = np.empty(n)
+        c_o = np.full(n, np.nan); c_h = np.full(n, np.nan)
+        c_l = np.full(n, np.nan); c_c = np.full(n, np.nan)
+        prev = None; cur = None; r_o = r_h = r_l = 0.0
+        for i in range(n):
+            if cyc[i] != cur:
+                if cur is not None:
+                    prev = (r_o, r_h, r_l, c5[i - 1])    # closed bar: C = cycle's last 5s
+                cur = cyc[i]; r_o = o5[i]; r_h = h5[i]; r_l = l5[i]
+            else:
+                if h5[i] > r_h: r_h = h5[i]
+                if l5[i] < r_l: r_l = l5[i]
+            e_o[i] = r_o; e_h[i] = r_h; e_l[i] = r_l
+            if prev is not None:
+                c_o[i], c_h[i], c_l[i], c_c[i] = prev
+        return ({'o': c_o, 'h': c_h, 'l': c_l, 'c': c_c},
+                {'o': e_o, 'h': e_h, 'l': e_l, 'c': c5})
+
     def _data_max(self):
         return int(self._db.execute(
             'SELECT MAX(kc_timestamp) AS m FROM kline_collection WHERE kc_tp_pk=%s',
@@ -138,18 +182,24 @@ if hit >= 0
         self._db.execute(f'DROP TABLE IF EXISTS {self._TABLE}')
         self._db.execute(f'''CREATE TABLE {self._TABLE} (
             bls_pk BIGINT AUTO_INCREMENT PRIMARY KEY, bar_time DATETIME,
-            px_smooth FLOAT, tf_open FLOAT, tf_high FLOAT, tf_low FLOAT, tf_close FLOAT,
+            px_smooth FLOAT,
+            c9_open FLOAT, c9_high FLOAT, c9_low FLOAT, c9_close FLOAT,
+            e9_open FLOAT, e9_high FLOAT, e9_low FLOAT, e9_close FLOAT,
             k_line FLOAT, bb_main FLOAT, bb_mid FLOAT,
             predicted TINYINT, exit1 TINYINT, exit2 TINYINT, exit3 TINYINT,
             breach_dir TINYINT, state TINYINT)''')
         if not rows:
             return
-        cols = ['bar_time', 'px_smooth', 'tf_open', 'tf_high', 'tf_low', 'tf_close',
+        cols = ['bar_time', 'px_smooth',
+                'c9_open', 'c9_high', 'c9_low', 'c9_close',
+                'e9_open', 'e9_high', 'e9_low', 'e9_close',
                 'k_line', 'bb_main', 'bb_mid', 'predicted',
                 'exit1', 'exit2', 'exit3', 'breach_dir', 'state']
         ph = ','.join(['%s'] * len(cols))
-        data = [[_dt(r['bar_ms']), r['px_smooth'], r['tf_open'], r['tf_high'],
-                 r['tf_low'], r['tf_close'], r['hb9b'], r['hb9M'], r['hb9m'],
+        data = [[_dt(r['bar_ms']), r['px_smooth'],
+                 r['c9_open'], r['c9_high'], r['c9_low'], r['c9_close'],
+                 r['e9_open'], r['e9_high'], r['e9_low'], r['e9_close'],
+                 r['hb9b'], r['hb9M'], r['hb9m'],
                  r['predicted'], r['exit1'], r['exit2'], r['exit3'],
                  r['breach_dir'], r['state']] for r in rows]
         self._db.executemany(
