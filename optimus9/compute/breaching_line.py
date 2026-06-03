@@ -62,7 +62,7 @@ class BreachingLine:
         self.fence_hi, self.fence_lo = float(fence_hi), float(fence_lo)
 
     # ── public ───────────────────────────────────────────────────────────────
-    def run(self, k, bb_m, bb_M) -> dict:
+    def run(self, k, bb_m, bb_M, seam=None) -> dict:
         """Walk the bars; return per-bar arrays: state, breach_dir, predicted,
         exit1/exit2/exit3 (the bools the persistence table needs).
 
@@ -76,6 +76,9 @@ class BreachingLine:
         bb_m = np.asarray(bb_m, float)
         bb_M = np.asarray(bb_M, float)
         n    = len(k)
+        # seam[i] = bar i is the first 5s of a new TF9 cycle. Default (all True) makes
+        # the exit2 anchor a 5s lookback; bl_detect passes real seams → TF9 anchor.
+        seam = np.ones(n, bool) if seam is None else np.asarray(seam, bool)
 
         pred = predict_breach(k, bb_m, bb_M, self.hi, self.lo, self.fence_hi, self.fence_lo)
         oob  = (k >= self.hi) | (k <= self.lo)
@@ -92,11 +95,14 @@ class BreachingLine:
         state, bdir = 0, 0
         pend3 = 0                                             # exit3-before-curl grace countdown
         k_ext = np.nan; k_anch = np.nan                      # exit2: breach extreme + reversal anchor
+        pre_seam_k = np.nan                                  # K just before the latest TF9 seam
         o_state = np.zeros(n, np.int8); o_dir = np.zeros(n, np.int8)
         o_e1 = np.zeros(n, bool); o_e2 = np.zeros(n, bool); o_e3 = np.zeros(n, bool)
         o_anch = np.full(n, np.nan)
 
         for i in range(n):
+            if seam[i] and i > 0:
+                pre_seam_k = k[i - 1]                          # K just before this TF9 seam
             cur_dir   = int(sig[i]) if sig[i] != 0 else bdir
             fresh_oob = bool(oob[i]      and (i == 0 or not oob[i - 1]))
             fresh_prd = bool(pred[i] != 0 and (i == 0 or pred[i - 1] == 0))
@@ -104,14 +110,14 @@ class BreachingLine:
             curl = bool(oob[i] and (                           # curl only while OOB
                 (cur_dir == 1  and slope_k[i] < -self.curl_floor) or
                 (cur_dir == -1 and slope_k[i] >  self.curl_floor)))
-            # exit2 anchor: track K's breach extreme; the anchor is K one bar BEFORE
-            # it, and exit2 fires when K reverses back past the anchor — a clear K
-            # turn, not a BB flatten (Joe, 2026-06-03).
+            # exit2 anchor: track K's breach extreme; the anchor is K just before the
+            # TF9 seam preceding that extreme (1 TF9 bar before max K), and exit2 fires
+            # when K reverses back past it — a clear K turn, not a BB flatten (Joe).
             if state in (0, 3) and fresh_eng:
-                k_ext, k_anch = k[i], (k[i - 1] if i > 0 else np.nan)
+                k_ext, k_anch = k[i], pre_seam_k
             elif state in (1, 2) and (
                     (cur_dir == 1 and k[i] > k_ext) or (cur_dir == -1 and k[i] < k_ext)):
-                k_anch, k_ext = k[i - 1], k[i]
+                k_anch, k_ext = pre_seam_k, k[i]
             o_anch[i] = k_anch
             e1 = self._exit_ob_to_ib(bbM_ib, bbM_oob, i)
             e2 = bool(k_anch == k_anch and (                  # k_anch==k_anch ⇒ not NaN

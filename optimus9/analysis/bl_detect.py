@@ -63,7 +63,11 @@ class BLDetect:
         k  = self._line(base, self._fam['k'])     # hb9b (breaching K)
         bM = self._line(base, self._fam['bM'])    # hb9M
         bm = self._line(base, self._fam['bm'])    # hb9m
-        r  = self._bl.run(k, bm, bM)              # run(k, bb_m, bb_M)
+        # TF9 seams (cycle boundaries) — exit2's anchor is the K just before the seam
+        # preceding max K, so the machine needs to know where the 9-min seams fall.
+        cyc  = ts // (self._fam['tf_seconds'] * 1000)
+        seam = np.empty(len(ts), bool); seam[0] = True; seam[1:] = cyc[1:] != cyc[:-1]
+        r  = self._bl.run(k, bm, bM, seam=seam)   # run(k, bb_m, bb_M, seam)
         # ── two HTF (9-min) views per 5s bar, lookahead-free (see _htf_views) ──
         # c9 = last CLOSED 9-min bar (held across the cycle); e9 = the EMERGING bar
         # accumulated from cycle-open to THIS 5s bar (O anchored at the cycle's first
