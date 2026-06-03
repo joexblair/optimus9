@@ -36,7 +36,7 @@ def main() -> int:
 
     # 2. Instantiation check
     try:
-        state_comp = PKStateComputer(high_b=85.0, low_b=15.0)
+        state_comp = PKStateComputer()
         gate       = PKGateFilter()
         detector   = PKSignalDetector(state_computer=state_comp, gate_filter=gate)
         print('+  Instantiation successful')

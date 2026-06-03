@@ -42,9 +42,11 @@ class PKStateComputer:
     _PM_LONG  =  2.0
     _PM_SHORT = -2.0
 
-    def __init__(self, high_b: float = RSI_OVERBOUGHT, low_b: float = RSI_OVERSOLD) -> None:
+    def __init__(self) -> None:
         # midpoint of the RSI rescale domain = 50 (matches Pine f_pk_state).
-        self._midpoint = (high_b + low_b) / 2.0
+        # Was parameterised as high_b/low_b — a misnomer that invited the OOB
+        # boundary (85/15); the midpoint is 50 regardless, so it's a constant now.
+        self._midpoint = (RSI_OVERBOUGHT + RSI_OVERSOLD) / 2.0
         self._log      = get_logger(self.__class__.__name__)
 
     def compute(self, line: np.ndarray, dema: np.ndarray,

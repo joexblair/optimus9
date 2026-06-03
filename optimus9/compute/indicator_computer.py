@@ -96,9 +96,9 @@ class IndicatorComputer:
         Returns +1 (HI OOB), -1 (LO OOB), 0 (IB) for each bar.
         Dispatches to f_bb or f_k based on ic_line_type.
         """
-        src    = IndicatorComputer.build_source(df, cfg['ic_src'])
-        high_b = float(cfg['ic_high_boundary'])
-        low_b  = float(cfg['ic_low_boundary'])
+        src         = IndicatorComputer.build_source(df, cfg['ic_src'])
+        boundary_hi = float(cfg['ic_high_boundary'])    # OOB detection (85/15)
+        boundary_lo = float(cfg['ic_low_boundary'])
 
         if cfg['ic_line_type'] == 'bb':
             vals = IndicatorComputer.f_bb(src, int(cfg['ic_bb_len']), float(cfg['ic_bb_mult']))
@@ -109,8 +109,8 @@ class IndicatorComputer:
 
         result = np.zeros(len(vals), dtype=np.int8)
         with np.errstate(invalid='ignore'):
-            result[vals >= high_b] =  1
-            result[vals <= low_b]  = -1
+            result[vals >= boundary_hi] =  1
+            result[vals <= boundary_lo] = -1
         return result
 
     @staticmethod
@@ -129,13 +129,15 @@ class IndicatorComputer:
 
     @staticmethod
     def f_bb(src: np.ndarray, length: int, mult: float,
-             high_b: float = RSI_OVERBOUGHT, low_b: float = RSI_OVERSOLD) -> np.ndarray:
+             rsi_ob: float = RSI_OVERBOUGHT, rsi_os: float = RSI_OVERSOLD) -> np.ndarray:
+        # rsi_ob/rsi_os are the RSI-domain RESCALE endpoints (70/30), NOT OOB
+        # boundaries — feeding 85/15 here was the historical conflation.
         basis = IndicatorComputer._sma(src, length)
         dev   = mult * IndicatorComputer._stdev(src, length)
         span  = (basis + dev) - (basis - dev)
         with np.errstate(invalid='ignore', divide='ignore'):
             pct = np.where(span != 0.0, (src - (basis - dev)) / span, np.nan)
-        return (high_b - low_b) * pct + low_b
+        return (rsi_ob - rsi_os) * pct + rsi_os
 
     @staticmethod
     def f_k(src: np.ndarray, rsi_len: int, stc_len: int, k_len: int) -> np.ndarray:
@@ -374,7 +376,7 @@ class IndicatorComputer:
     @staticmethod
     def f_bb_lookahead(base_df: pd.DataFrame, target_seconds: int,
                        length: int, mult: float, src: str,
-                       high_b: float = RSI_OVERBOUGHT, low_b: float = RSI_OVERSOLD) -> np.ndarray:
+                       rsi_ob: float = RSI_OVERBOUGHT, rsi_os: float = RSI_OVERSOLD) -> np.ndarray:
         """
         BB(length, mult) at each 5s bar against the developing higher-TF bar.
 
@@ -433,12 +435,12 @@ class IndicatorComputer:
         std = np.sqrt(var)
 
         # Same final scaling as f_bb: position of src within [basis-dev, basis+dev]
-        # mapped to [low_b, high_b].
+        # mapped to [rsi_os, rsi_ob] (the RSI rescale domain, not OOB boundaries).
         dev_band = mult * std
         span     = 2.0 * dev_band
         with np.errstate(invalid='ignore', divide='ignore'):
             pct = np.where(span != 0.0, (dev_src - (mean - dev_band)) / span, np.nan)
-        return (high_b - low_b) * pct + low_b
+        return (rsi_ob - rsi_os) * pct + rsi_os
 
     @staticmethod
     def f_k_lookahead(base_df: pd.DataFrame, target_seconds: int,

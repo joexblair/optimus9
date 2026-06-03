@@ -411,6 +411,10 @@ class OptimizerRunner:
             return IndicatorComputer.align_to_base(line_raw, ind_df, base_df)
 
         if use_lookahead:
+            # DEFERRED LEVER: these feed the OOB boundary (ic_*_boundary, 85/15) into
+            # the rsi_ob/rsi_os RESCALE slot — so the optimizer rescales BB to [15,85],
+            # not [30,70] like TV. Intentional for now: flipping it moves the tuned
+            # bny30 gate triggers and needs a re-validation grind. See constants.py.
             return IndicatorComputer.f_bb_lookahead(
                 base_df, ind_seconds,
                 int(params['len']), float(params['mult']), params['src'],

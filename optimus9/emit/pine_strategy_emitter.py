@@ -456,7 +456,7 @@ state_gca5m_w = f_pk_state(gca5m_line, dema_price, pool_w, pool_range, multiplie
 // ═══════════════════════════════════════════════════════════════════════════
 // GATE LINES — bny30M (BB) + bny30p (K), 30S TF, lookahead_on
 //
-// Match Python IndicatorComputer: f_bb uses high_b=70/low_b=30 internally
+// Match Python IndicatorComputer: f_bb uses rsi_ob=70/rsi_os=30 internally
 // for the BB rescale (the 'ob'/'os' aliases above). The 85/15 boundaries
 // here are the gate's own OOB fence applied to the rescaled line values.
 // ═══════════════════════════════════════════════════════════════════════════

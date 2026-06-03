@@ -11,7 +11,7 @@ profit_partition (ground truth, precomputed once). See gate_sweep_design.md.
 
 The `template` is a list of per-line specs — swap it to sweep other line pairs
 (the gate is a configurable line-pair, not hardcoded bnyM/bnyp):
-  line_type / itf_seconds / low_b / high_b — the line's frame (15/85 gospel)
+  line_type / itf_seconds / boundary_lo / boundary_hi — the line's frame (15/85 gospel)
   fixed   — held-constant config fields
   params  — config field -> grid combo key that fills it
 """
@@ -24,10 +24,10 @@ from ..constants import BOUNDARY_HI, BOUNDARY_LO
 
 # Scout A: sweep bnyM {len, mult, src} + bnyp {k_len, src}; bnyp osc fixed. OR, 30s, 15/85.
 SCOUT_A_TEMPLATE = [
-    {'line_type': 'bb', 'itf_seconds': 30, 'low_b': BOUNDARY_LO, 'high_b': BOUNDARY_HI,
+    {'line_type': 'bb', 'itf_seconds': 30, 'boundary_lo': BOUNDARY_LO, 'boundary_hi': BOUNDARY_HI,
      'fixed': {},
      'params': {'ic_src': 'M_src', 'ic_bb_len': 'M_bb_len', 'ic_bb_mult': 'M_bb_mult'}},
-    {'line_type': 'k',  'itf_seconds': 30, 'low_b': BOUNDARY_LO, 'high_b': BOUNDARY_HI,
+    {'line_type': 'k',  'itf_seconds': 30, 'boundary_lo': BOUNDARY_LO, 'boundary_hi': BOUNDARY_HI,
      'fixed': {'ic_rsi_len': 114, 'ic_stc_len': 105},
      'params': {'ic_src': 'p_src', 'ic_k_len': 'p_k_len'}},
 ]
@@ -35,10 +35,10 @@ SCOUT_A_TEMPLATE = [
 # Scout B: bnyM anchored at the battery winner (58/1.50/hl2); sweep bnyp's
 # oscillator internals {k_len (bridge), rsi_len, stc_len}; p_src anchored.
 SCOUT_B_TEMPLATE = [
-    {'line_type': 'bb', 'itf_seconds': 30, 'low_b': BOUNDARY_LO, 'high_b': BOUNDARY_HI,
+    {'line_type': 'bb', 'itf_seconds': 30, 'boundary_lo': BOUNDARY_LO, 'boundary_hi': BOUNDARY_HI,
      'fixed': {'ic_src': 'hl2', 'ic_bb_len': 58, 'ic_bb_mult': 1.50},
      'params': {}},
-    {'line_type': 'k',  'itf_seconds': 30, 'low_b': BOUNDARY_LO, 'high_b': BOUNDARY_HI,
+    {'line_type': 'k',  'itf_seconds': 30, 'boundary_lo': BOUNDARY_LO, 'boundary_hi': BOUNDARY_HI,
      'fixed': {'ic_src': 'ohlc4'},
      'params': {'ic_k_len': 'p_k_len', 'ic_rsi_len': 'p_rsi_len', 'ic_stc_len': 'p_stc_len'}},
 ]
@@ -51,8 +51,8 @@ def build_gate_configs(combo: dict, template: list) -> list:
     for spec in template:
         cfg = {'ic_itf_seconds':  spec['itf_seconds'],
                'ic_line_type':    spec['line_type'],
-               'ic_high_boundary': spec['high_b'],
-               'ic_low_boundary':  spec['low_b']}
+               'ic_high_boundary': spec['boundary_hi'],
+               'ic_low_boundary':  spec['boundary_lo']}
         cfg.update(spec['fixed'])
         for field, grid_key in spec['params'].items():
             cfg[field] = combo[grid_key]

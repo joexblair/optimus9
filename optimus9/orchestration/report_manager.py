@@ -158,10 +158,7 @@ class ReportManager:
         OptimizerRunner(
             self._db,
             PKSignalDetector(
-                state_computer = PKStateComputer(
-                    high_b = float(config['ic_high_boundary']),
-                    low_b  = float(config['ic_low_boundary']),
-                ),
+                state_computer = PKStateComputer(),   # midpoint 50 (RSI-domain centre)
                 gate_filter = PKGateFilter(),
             ),
             # r05 (260521): tc_max_bars deprecated — column kept for back-compat

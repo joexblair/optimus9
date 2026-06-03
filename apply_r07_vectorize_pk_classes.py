@@ -31,7 +31,7 @@ def main() -> int:
     print('Step 1: verify imports')
     try:
         from optimus9 import PKStateComputer, PKGateFilter, PKSignalDetector
-        sc = PKStateComputer(high_b=85.0, low_b=15.0)
+        sc = PKStateComputer()
         gf = PKGateFilter()
         d  = PKSignalDetector(state_computer=sc, gate_filter=gf)
         print(f'+  Imports successful')
