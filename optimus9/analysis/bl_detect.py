@@ -18,7 +18,9 @@ from ..compute.breaching_line import BreachingLine
 from ..constants import FENCE_HI, FENCE_LO
 
 
-# hb9 family — TF9 = 9 minutes (540s). BB lines hand-curated; not AM-swept.
+# hb9 family — the canonical values now live in the DB (indicator_configs +
+# bl_lines, seeded Stage 1). Kept here only as a documentation reference / fallback:
+#   hb9b K  5|74|29|hlc3 · hb9M BB 19|0.78|hl2 · hb9m BB 13|0.78|ohlc4 · TF9=540s
 HB9 = {
     'name':       'hb9',
     'tf_seconds': 540,
@@ -32,18 +34,18 @@ class BLDetect:
     _TABLE  = 'bl_states'
     _CONFIG = 'bl_config'
 
-    def __init__(self, db, family=HB9, tp_pk=1, lookback_hours=12.0, warmup_hours=24.0):
+    def __init__(self, db, family=None, tp_pk=1, lookback_hours=12.0, warmup_hours=24.0):
         self._db       = db
-        self._fam      = family
         self._tp       = int(tp_pk)
         self._lookback = float(lookback_hours)
         self._warmup   = float(warmup_hours)
         self._log      = get_logger(self.__class__.__name__)
-        # tuning knobs come from the active bl_config row (not args) so Joe can tweak
-        # between runs and keep history; fence widened ±fence_pad (5 → 25:75).
+        # lines come from bl_lines + indicator_configs (de-hardcoded); tuning from the
+        # active bl_config row. fence widened ±fence_pad (5 → 25:75).
+        self._fam = family if family is not None else self._load_family()
         cfg = self._load_config()
         fp  = float(cfg['fence_pad'])
-        self._bl = BreachingLine(mult=family['tf_seconds'] // 5,
+        self._bl = BreachingLine(mult=self._fam['tf_seconds'] // 5,
                                  curl_floor=float(cfg['curl_floor']),
                                  curl_lookback=int(cfg['curl_lookback']),
                                  pseudo_cross=float(cfg['pseudo_cross']),
@@ -79,6 +81,48 @@ class BLDetect:
                 f"INSERT INTO {self._CONFIG} (blc_label, blc_is_active) VALUES ('default', 1)")
             rows = self._db.execute(sel, fetch=True)
         return rows[0]
+
+    def _load_family(self) -> dict:
+        """Build the family dict (name, tf_seconds, k/bM/bm cfgs, exit_mask, pk_ic_pk)
+        from the active bl_lines + indicator_configs — replaces the hardcoded HB9 dict.
+        Stage 1: one active 'breach' line + its same-series 'anchor' BBs (il M→bM, m→bm)."""
+        breach = self._db.execute(
+            '''SELECT bl.bl_ic_pk, bl.bl_pk_ic_pk, bl.bl_exit_mask, ic.ic_is_pk,
+                      s.is_prefix, itf.itf_seconds, itf.itf_label
+               FROM bl_lines bl
+               JOIN indicator_configs ic   ON ic.ic_pk   = bl.bl_ic_pk
+               JOIN indicator_series s     ON s.is_pk     = ic.ic_is_pk
+               JOIN indicator_timeframes itf ON itf.itf_pk = ic.ic_itf_pk
+               WHERE bl.bl_is_active = 1 AND bl.bl_role = 'breach'
+               ORDER BY bl.bl_pk LIMIT 1''', fetch=True)
+        if not breach:
+            raise RuntimeError('bl_lines has no active breach line — seed it (Stage 1)')
+        b = breach[0]
+        anchors = self._db.execute(
+            '''SELECT bl.bl_ic_pk, il.il_suffix FROM bl_lines bl
+               JOIN indicator_configs ic ON ic.ic_pk = bl.bl_ic_pk
+               JOIN indicator_lines il   ON il.il_pk = ic.ic_il_pk
+               WHERE bl.bl_is_active = 1 AND bl.bl_role = 'anchor' AND ic.ic_is_pk = %s''',
+            (b['ic_is_pk'],), fetch=True)
+        by_suf = {a['il_suffix']: self._cfg_dict(a['bl_ic_pk']) for a in anchors}
+        fam = {'name':       f"{b['is_prefix']}{b['itf_label']}",
+               'tf_seconds': int(b['itf_seconds']),
+               'k':  self._cfg_dict(b['bl_ic_pk']),
+               'bM': by_suf.get('M'), 'bm': by_suf.get('m'),
+               'exit_mask': b['bl_exit_mask'], 'pk_ic_pk': b['bl_pk_ic_pk']}
+        self._log.info(f"bl_lines: breach {fam['name']} (TF{fam['tf_seconds']}s) ic={b['bl_ic_pk']} "
+                       f"exit_mask={b['bl_exit_mask']} pk_ic={b['bl_pk_ic_pk']}")
+        return fam
+
+    def _cfg_dict(self, ic_pk) -> dict:
+        """One indicator_configs row → the kind/params dict _line() consumes."""
+        r = self._db.execute('SELECT * FROM indicator_configs WHERE ic_pk = %s',
+                             (ic_pk,), fetch=True)[0]
+        if r['ic_line_type'] == 'k':
+            return dict(kind='k', rsi_len=int(r['ic_rsi_len']), stc_len=int(r['ic_stc_len']),
+                        k_len=int(r['ic_k_len']), src=r['ic_src'])
+        return dict(kind='bb', bb_len=int(r['ic_bb_len']), bb_mult=float(r['ic_bb_mult']),
+                    src=r['ic_src'])
 
     # ── public ───────────────────────────────────────────────────────────────
     def report(self, end_ms=None) -> list:
