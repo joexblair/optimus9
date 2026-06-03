@@ -40,11 +40,20 @@ def test_exit3_cross_toward_ib():
     assert not bl._exit_cross_toward_ib(1, np.array([90., 92.]), np.array([84., 84.]), 1)
 
 
-def test_exit2_nonsubtle_roc():
-    bl = _bl()
-    assert bl._exit_nonsubtle_roc(np.array([5., -3.]), 1)      # reversal
-    assert bl._exit_nonsubtle_roc(np.array([5., 0.2]), 1)      # flatten
-    assert not bl._exit_nonsubtle_roc(np.array([5., 4.]), 1)   # subtle → no
+def test_exit2_fires_when_k_reverses_past_anchor():
+    # hi breach: K peaks 90 at b2 (anchor = k[1] = 86); K falls below 86 at b4 →
+    # exit2 (a clear K reversal) completes the journey.
+    r = _bl().run(k=[50, 86, 90, 88, 80], bb_m=[50]*5, bb_M=[50]*5)
+    assert list(r['state']) == [0, 1, 1, 2, 3]
+    assert r['exit2'][4]
+
+
+def test_exit2_silent_on_shallow_pullback():
+    # K peaks 90 then only dips to 89 — never back past the anchor (86), so exit2
+    # stays quiet and the journey never completes (the 16267 false-complete).
+    r = _bl().run(k=[50, 86, 90, 89, 89], bb_m=[50]*5, bb_M=[50]*5)
+    assert not any(r['exit2'])
+    assert 3 not in list(r['state'])
 
 
 # ── dormancy model ──────────────────────────────────────────────────────────

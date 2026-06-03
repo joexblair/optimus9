@@ -76,7 +76,6 @@ class BreachingLine:
         bb_m = np.asarray(bb_m, float)
         bb_M = np.asarray(bb_M, float)
         n    = len(k)
-        m    = self.mult
 
         pred = predict_breach(k, bb_m, bb_M, self.hi, self.lo, self.fence_hi, self.fence_lo)
         oob  = (k >= self.hi) | (k <= self.lo)
@@ -87,14 +86,15 @@ class BreachingLine:
 
         cl = self.curl_lookback                              # curl: short local slope (7)
         slope_k = np.full(n, np.nan); slope_k[cl:] = k[cl:]  - k[:-cl]
-        slope_M = np.full(n, np.nan); slope_M[m:] = bb_M[m:] - bb_M[:-m]
         bbM_oob = (bb_M >= self.hi) | (bb_M <= self.lo)
         bbM_ib  = ~bbM_oob
 
         state, bdir = 0, 0
         pend3 = 0                                             # exit3-before-curl grace countdown
+        k_ext = np.nan; k_anch = np.nan                      # exit2: breach extreme + reversal anchor
         o_state = np.zeros(n, np.int8); o_dir = np.zeros(n, np.int8)
         o_e1 = np.zeros(n, bool); o_e2 = np.zeros(n, bool); o_e3 = np.zeros(n, bool)
+        o_anch = np.full(n, np.nan)
 
         for i in range(n):
             cur_dir   = int(sig[i]) if sig[i] != 0 else bdir
@@ -104,8 +104,18 @@ class BreachingLine:
             curl = bool(oob[i] and (                           # curl only while OOB
                 (cur_dir == 1  and slope_k[i] < -self.curl_floor) or
                 (cur_dir == -1 and slope_k[i] >  self.curl_floor)))
+            # exit2 anchor: track K's breach extreme; the anchor is K one bar BEFORE
+            # it, and exit2 fires when K reverses back past the anchor — a clear K
+            # turn, not a BB flatten (Joe, 2026-06-03).
+            if state in (0, 3) and fresh_eng:
+                k_ext, k_anch = k[i], (k[i - 1] if i > 0 else np.nan)
+            elif state in (1, 2) and (
+                    (cur_dir == 1 and k[i] > k_ext) or (cur_dir == -1 and k[i] < k_ext)):
+                k_anch, k_ext = k[i - 1], k[i]
+            o_anch[i] = k_anch
             e1 = self._exit_ob_to_ib(bbM_ib, bbM_oob, i)
-            e2 = self._exit_nonsubtle_roc(slope_M, i)
+            e2 = bool(k_anch == k_anch and (                  # k_anch==k_anch ⇒ not NaN
+                (cur_dir == 1 and k[i] < k_anch) or (cur_dir == -1 and k[i] > k_anch)))
             e3 = self._exit_cross_toward_ib(cur_dir, bb_M, k, i)
             any_exit = e1 or e2 or e3
 
@@ -138,26 +148,22 @@ class BreachingLine:
                     # else stay 3 (pegged → dormant)
             if ns != 1:
                 pend3 = 0                                      # grace only lives inside state 1
+            if ns == 0 or ns == 3:
+                k_ext = k_anch = np.nan                        # breach over → drop the anchor
             state, bdir = ns, nb
             o_state[i], o_dir[i] = state, bdir
             o_e1[i], o_e2[i], o_e3[i] = e1, e2, e3
 
         return {'state': o_state, 'breach_dir': o_dir, 'predicted': pred != 0,
-                'exit1': o_e1, 'exit2': o_e2, 'exit3': o_e3, 'slope_k': slope_k}
+                'exit1': o_e1, 'exit2': o_e2, 'exit3': o_e3,
+                'slope_k': slope_k, 'k_anch': o_anch}
 
     # ── exit methods (parameterised; calibrated against Pine) ─────────────────
+    # exit2 (K reversed past its pre-peak anchor) is computed inline in run() — it
+    # needs the per-breach extreme, so it can't be a stateless helper like 1 and 3.
     def _exit_ob_to_ib(self, bbM_ib, bbM_oob, i) -> bool:
         """(1) BB was OB within the lookback and is now IB."""
         return bool(bbM_ib[i] and bbM_oob[max(0, i - self.exit_lookback):i].any())
-
-    def _exit_nonsubtle_roc(self, slope_M, i) -> bool:
-        """(2) BB has a non-subtle ROC — a sharp change: slope reverses (up→down)
-        or flattens (|slope| collapses below the floor)."""
-        if i == 0 or np.isnan(slope_M[i]) or np.isnan(slope_M[i - 1]):
-            return False
-        reversed_ = np.sign(slope_M[i]) != np.sign(slope_M[i - 1]) and slope_M[i - 1] != 0
-        flattened = abs(slope_M[i]) <= self.flatten and abs(slope_M[i - 1]) > self.flatten
-        return bool(reversed_ or flattened)
 
     def _exit_cross_toward_ib(self, cur_dir, bb_M, k, i) -> bool:
         """(3) BB × K toward IB — the BB cuts through the K heading in-boundary.
