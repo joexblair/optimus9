@@ -73,6 +73,14 @@ def main():
         X("""INSERT INTO bl_lines (bl_ic_pk,bl_role,bl_exit_mask,bl_pk_ic_pk,bl_is_active,bl_live_after_date)
              VALUES (%s,%s,%s,%s,1,NOW())""", (ic, role, mask, pkic))
 
+    # ── bl_config: prefix the tuning columns blc_ (idempotent rename) ────────
+    cur = [c['Field'] for c in X("SHOW COLUMNS FROM bl_config", fetch=True)]
+    for old, new in (('curl_floor', 'blc_curl_floor'), ('curl_lookback', 'blc_curl_lookback'),
+                     ('grace', 'blc_grace'), ('pseudo_cross', 'blc_pseudo_cross'),
+                     ('fence_pad', 'blc_fence_pad'), ('exit2_anchor', 'blc_exit2_anchor')):
+        if old in cur and new not in cur:
+            X(f"ALTER TABLE bl_config RENAME COLUMN {old} TO {new}")
+
     # ── bl_config live-date column + triggers (bl_config, bl_lines) ───────────
     if 'blc_live_after_date' not in [c['Field'] for c in X("SHOW COLUMNS FROM bl_config", fetch=True)]:
         X("ALTER TABLE bl_config ADD COLUMN blc_live_after_date DATETIME DEFAULT '2000-01-01'")

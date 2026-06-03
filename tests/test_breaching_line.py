@@ -56,6 +56,15 @@ def test_exit2_silent_on_shallow_pullback():
     assert 3 not in list(r['state'])
 
 
+def test_exit_mask_disables_exit2():
+    # mask 5 = exit1(1) + exit3(4), exit2(2) OFF. The K-reversal series that completes
+    # via exit2 under the default mask now stalls at state 2 — the raw condition is
+    # still recorded, just not actioned.
+    r = _bl(exit_mask=5).run(k=[50, 86, 90, 88, 80], bb_m=[50]*5, bb_M=[50]*5)
+    assert list(r['state']) == [0, 1, 1, 2, 2]
+    assert r['exit2'][4]
+
+
 def test_exit2_anchor_taken_at_tf9_seam():
     # Seams every 3 bars; K peaks 92 in TF9 bar B (b3-5). The anchor is the K just
     # before B's seam — k[2]=88 ("1 TF9 bar before max"), NOT k[3]=90 (1 5s bar).

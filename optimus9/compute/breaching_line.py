@@ -49,7 +49,7 @@ def predict_breach(k, bb_m, bb_M, hi=HI, lo=LO, fence_hi=FENCE_HI, fence_lo=FENC
 
 class BreachingLine:
     def __init__(self, mult=1, curl_floor=1.0, curl_lookback=7, exit_lookback=2,
-                 pseudo_cross=15.0, grace=2, exit2_anchor='now',
+                 pseudo_cross=15.0, grace=2, exit2_anchor='now', exit_mask=7,
                  hi=HI, lo=LO, fence_hi=FENCE_HI, fence_lo=FENCE_LO):
         self.mult          = int(mult)
         self.curl_floor    = float(curl_floor)
@@ -58,6 +58,7 @@ class BreachingLine:
         self.pseudo_cross  = float(pseudo_cross)
         self.grace         = int(grace)           # bars to wait for a curl after an early exit3
         self.exit2_anchor  = str(exit2_anchor)    # 'now' | 'prior' | 'avg' seam for the exit2 anchor
+        self.exit_mask     = int(exit_mask)       # bitmask: exit1=1 exit2=2 exit3=4 exit4=8
         self.hi, self.lo   = float(hi), float(lo)
         self.fence_hi, self.fence_lo = float(fence_hi), float(fence_lo)
 
@@ -133,7 +134,11 @@ class BreachingLine:
             e2 = bool(k_anch == k_anch and (                  # k_anch==k_anch ⇒ not NaN
                 (cur_dir == 1 and k[i] < k_anch) or (cur_dir == -1 and k[i] > k_anch)))
             e3 = self._exit_cross_toward_ib(cur_dir, bb_M, k, i)
-            any_exit = e1 or e2 or e3
+            # raw conditions recorded for eyeballing; the exit_mask gates which ones
+            # actually COMPLETE the journey (exit1=1 exit2=2 exit3=4; exit4=8 Stage 3).
+            e3_on    = e3 and bool(self.exit_mask & 4)
+            any_exit = bool((e1 and self.exit_mask & 1) or
+                            (e2 and self.exit_mask & 2) or e3_on)
 
             if in_fence[i]:
                 ns, nb = 0, 0                                  # dead zone → dormant
@@ -148,7 +153,7 @@ class BreachingLine:
                         ns = 2
                         if any_exit or pend3 > 0:              # curl + an exit now, OR an exit3
                             ns = 3                             # within the grace window → complete
-                    elif e3:
+                    elif e3_on:
                         pend3 = self.grace                     # exit3 before curl → wait for it
                     elif pend3 > 0:
                         pend3 -= 1                             # tick the grace window down

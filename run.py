@@ -604,8 +604,9 @@ def cmd_bl_detect(args, db: DatabaseManager) -> int:
 def cmd_bl_config(args, db: DatabaseManager) -> int:
     from optimus9.analysis.bl_detect import BLDetect
     BLDetect(db)                                  # ensure bl_config exists + seeded
-    T    = 'bl_config'
-    cols = ['curl_floor', 'curl_lookback', 'grace', 'pseudo_cross', 'fence_pad', 'exit2_anchor']
+    T     = 'bl_config'
+    KNOBS = ['curl_floor', 'curl_lookback', 'grace', 'pseudo_cross', 'fence_pad', 'exit2_anchor']
+    cols  = ['blc_' + k for k in KNOBS]           # columns are blc_-prefixed; CLI args aren't
     if args.activate is not None:
         db.execute(f'UPDATE {T} SET blc_is_active=0')
         db.execute(f'UPDATE {T} SET blc_is_active=1 WHERE blc_pk=%s', (args.activate,))
@@ -613,7 +614,7 @@ def cmd_bl_config(args, db: DatabaseManager) -> int:
     elif args.new:
         cur = db.execute(f'SELECT * FROM {T} WHERE blc_is_active=1 ORDER BY blc_pk DESC LIMIT 1',
                          fetch=True)[0]
-        vals  = [getattr(args, c) if getattr(args, c) is not None else cur[c] for c in cols]
+        vals  = [getattr(args, k) if getattr(args, k) is not None else cur['blc_' + k] for k in KNOBS]
         label = args.label or f"clone of #{cur['blc_pk']}"
         db.execute(f'UPDATE {T} SET blc_is_active=0')
         ph = ','.join(['%s'] * (len(cols) + 2))
@@ -626,8 +627,8 @@ def cmd_bl_config(args, db: DatabaseManager) -> int:
     for r in rows:
         act = '*' if r['blc_is_active'] else ' '
         print(f"{r['blc_pk']:>4} {act:1} {(r['blc_label'] or '')[:22]:22} "
-              f"{r['curl_floor']:<7} {r['curl_lookback']:<7} {r['grace']:<5} "
-              f"{r['pseudo_cross']:<6} {r['fence_pad']:<5} {r['exit2_anchor']}")
+              f"{r['blc_curl_floor']:<7} {r['blc_curl_lookback']:<7} {r['blc_grace']:<5} "
+              f"{r['blc_pseudo_cross']:<6} {r['blc_fence_pad']:<5} {r['blc_exit2_anchor']}")
     return 0
 
 

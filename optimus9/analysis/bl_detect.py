@@ -44,19 +44,20 @@ class BLDetect:
         # active bl_config row. fence widened ±fence_pad (5 → 25:75).
         self._fam = family if family is not None else self._load_family()
         cfg = self._load_config()
-        fp  = float(cfg['fence_pad'])
+        fp  = float(cfg['blc_fence_pad'])
         self._bl = BreachingLine(mult=self._fam['tf_seconds'] // 5,
-                                 curl_floor=float(cfg['curl_floor']),
-                                 curl_lookback=int(cfg['curl_lookback']),
-                                 pseudo_cross=float(cfg['pseudo_cross']),
-                                 grace=int(cfg['grace']),
-                                 exit2_anchor=str(cfg['exit2_anchor']),
+                                 curl_floor=float(cfg['blc_curl_floor']),
+                                 curl_lookback=int(cfg['blc_curl_lookback']),
+                                 pseudo_cross=float(cfg['blc_pseudo_cross']),
+                                 grace=int(cfg['blc_grace']),
+                                 exit2_anchor=str(cfg['blc_exit2_anchor']),
+                                 exit_mask=int(self._fam.get('exit_mask') or 7),
                                  fence_hi=FENCE_HI + fp, fence_lo=FENCE_LO - fp)
         self._log.info(
-            f"bl_config #{cfg['blc_pk']} '{cfg['blc_label']}' | curl_floor={cfg['curl_floor']} "
-            f"curl_lookback={cfg['curl_lookback']} grace={cfg['grace']} "
-            f"pseudo_cross={cfg['pseudo_cross']} fence_pad={cfg['fence_pad']} "
-            f"exit2_anchor={cfg['exit2_anchor']}")
+            f"bl_config #{cfg['blc_pk']} '{cfg['blc_label']}' | curl_floor={cfg['blc_curl_floor']} "
+            f"curl_lookback={cfg['blc_curl_lookback']} grace={cfg['blc_grace']} "
+            f"pseudo_cross={cfg['blc_pseudo_cross']} fence_pad={cfg['blc_fence_pad']} "
+            f"exit2_anchor={cfg['blc_exit2_anchor']}")
 
     def _load_config(self) -> dict:
         """Ensure bl_config exists, seed a default active row if empty, return the
@@ -67,12 +68,13 @@ class BLDetect:
             blc_label VARCHAR(80) DEFAULT '',
             blc_is_active TINYINT DEFAULT 0,
             blc_created DATETIME DEFAULT CURRENT_TIMESTAMP,
-            curl_floor FLOAT DEFAULT 1.0,
-            curl_lookback INT DEFAULT 7,
-            grace INT DEFAULT 2,
-            pseudo_cross FLOAT DEFAULT 15.0,
-            fence_pad FLOAT DEFAULT 5.0,
-            exit2_anchor VARCHAR(16) DEFAULT 'now')''')
+            blc_live_after_date DATETIME DEFAULT '2000-01-01',
+            blc_curl_floor FLOAT DEFAULT 1.0,
+            blc_curl_lookback INT DEFAULT 7,
+            blc_grace INT DEFAULT 2,
+            blc_pseudo_cross FLOAT DEFAULT 15.0,
+            blc_fence_pad FLOAT DEFAULT 5.0,
+            blc_exit2_anchor VARCHAR(16) DEFAULT 'now')''')
         sel = (f'SELECT * FROM {self._CONFIG} WHERE blc_is_active=1 '
                'ORDER BY blc_pk DESC LIMIT 1')
         rows = self._db.execute(sel, fetch=True)
