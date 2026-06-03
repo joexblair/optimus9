@@ -215,8 +215,12 @@ def _build_parser() -> argparse.ArgumentParser:
                              'bl_states table + labelled Pine overlay')
     bd.add_argument('--lookback_hours', type=float, default=12.0)
     bd.add_argument('--curl_floor',     type=float, default=1.0)
+    bd.add_argument('--curl_lookback',  type=int,   default=7,
+                    help='curl slope window in bars (~bars before K reverses; default 7)')
     bd.add_argument('--flatten',        type=float, default=0.5)
     bd.add_argument('--pseudo_cross',   type=float, default=15.0)
+    bd.add_argument('--grace',          type=int,   default=2,
+                    help='bars to wait for a curl after an early exit3 (default 2)')
     bd.add_argument('--fence_pad',      type=float, default=5.0,
                     help='widen the no-prediction fence: hi += pad, lo -= pad '
                          '(default 5 → 25:75 engage band)')
@@ -582,7 +586,8 @@ def cmd_bl_detect(args, db: DatabaseManager) -> int:
     import collections
     from optimus9.analysis.bl_detect import BLDetect
     d    = BLDetect(db, lookback_hours=args.lookback_hours, curl_floor=args.curl_floor,
-                    flatten=args.flatten, pseudo_cross=args.pseudo_cross,
+                    curl_lookback=args.curl_lookback, flatten=args.flatten,
+                    pseudo_cross=args.pseudo_cross, grace=args.grace,
                     fence_pad=args.fence_pad)
     rows = d.report(end_ms=args.end_ms)
     d.emit_pine(rows, args.pine)

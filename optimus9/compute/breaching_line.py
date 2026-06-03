@@ -48,14 +48,17 @@ def predict_breach(k, bb_m, bb_M, hi=HI, lo=LO, fence_hi=FENCE_HI, fence_lo=FENC
 
 
 class BreachingLine:
-    def __init__(self, mult=1, curl_floor=1.0, exit_lookback=2, flatten=0.5,
-                 pseudo_cross=15.0, hi=HI, lo=LO, fence_hi=FENCE_HI, fence_lo=FENCE_LO):
-        self.mult         = int(mult)
-        self.curl_floor   = float(curl_floor)
+    def __init__(self, mult=1, curl_floor=1.0, curl_lookback=7, exit_lookback=2,
+                 flatten=0.5, pseudo_cross=15.0, grace=2,
+                 hi=HI, lo=LO, fence_hi=FENCE_HI, fence_lo=FENCE_LO):
+        self.mult          = int(mult)
+        self.curl_floor    = float(curl_floor)
+        self.curl_lookback = int(curl_lookback)   # curl slope window (~bars before K reverses)
         self.exit_lookback = int(exit_lookback)
-        self.flatten      = float(flatten)
-        self.pseudo_cross = float(pseudo_cross)
-        self.hi, self.lo  = float(hi), float(lo)
+        self.flatten       = float(flatten)
+        self.pseudo_cross  = float(pseudo_cross)
+        self.grace         = int(grace)           # bars to wait for a curl after an early exit3
+        self.hi, self.lo   = float(hi), float(lo)
         self.fence_hi, self.fence_lo = float(fence_hi), float(fence_lo)
 
     # ── public ───────────────────────────────────────────────────────────────
@@ -82,12 +85,14 @@ class BreachingLine:
         sig[(k >= self.hi) | (pred == 1)]  =  1
         sig[(k <= self.lo) | (pred == -1)] = -1
 
-        slope_k = np.full(n, np.nan); slope_k[m:] = k[m:]    - k[:-m]
+        cl = self.curl_lookback                              # curl: short local slope (7)
+        slope_k = np.full(n, np.nan); slope_k[cl:] = k[cl:]  - k[:-cl]
         slope_M = np.full(n, np.nan); slope_M[m:] = bb_M[m:] - bb_M[:-m]
         bbM_oob = (bb_M >= self.hi) | (bb_M <= self.lo)
         bbM_ib  = ~bbM_oob
 
         state, bdir = 0, 0
+        pend3 = 0                                             # exit3-before-curl grace countdown
         o_state = np.zeros(n, np.int8); o_dir = np.zeros(n, np.int8)
         o_e1 = np.zeros(n, bool); o_e2 = np.zeros(n, bool); o_e3 = np.zeros(n, bool)
 
@@ -115,8 +120,12 @@ class BreachingLine:
                     nb = cur_dir
                     if curl:
                         ns = 2
-                        if any_exit:
-                            ns = 3                             # 1→2→3 in one bar
+                        if any_exit or pend3 > 0:              # curl + an exit now, OR an exit3
+                            ns = 3                             # within the grace window → complete
+                    elif e3:
+                        pend3 = self.grace                     # exit3 before curl → wait for it
+                    elif pend3 > 0:
+                        pend3 -= 1                             # tick the grace window down
                 elif state == 2:
                     nb = cur_dir
                     if fresh_oob:
@@ -127,12 +136,14 @@ class BreachingLine:
                     if fresh_eng:
                         ns, nb = 1, cur_dir                    # re-armed by a fresh breach
                     # else stay 3 (pegged → dormant)
+            if ns != 1:
+                pend3 = 0                                      # grace only lives inside state 1
             state, bdir = ns, nb
             o_state[i], o_dir[i] = state, bdir
             o_e1[i], o_e2[i], o_e3[i] = e1, e2, e3
 
         return {'state': o_state, 'breach_dir': o_dir, 'predicted': pred != 0,
-                'exit1': o_e1, 'exit2': o_e2, 'exit3': o_e3}
+                'exit1': o_e1, 'exit2': o_e2, 'exit3': o_e3, 'slope_k': slope_k}
 
     # ── exit methods (parameterised; calibrated against Pine) ─────────────────
     def _exit_ob_to_ib(self, bbM_ib, bbM_oob, i) -> bool:

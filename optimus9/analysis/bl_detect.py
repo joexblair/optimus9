@@ -32,8 +32,8 @@ class BLDetect:
     _TABLE = 'bl_states'
 
     def __init__(self, db, family=HB9, tp_pk=1, lookback_hours=12.0,
-                 warmup_hours=24.0, curl_floor=1.0, flatten=0.5, pseudo_cross=15.0,
-                 fence_pad=5.0):
+                 warmup_hours=24.0, curl_floor=1.0, curl_lookback=7, flatten=0.5,
+                 pseudo_cross=15.0, grace=2, fence_pad=5.0):
         self._db       = db
         self._fam      = family
         self._tp       = int(tp_pk)
@@ -41,7 +41,8 @@ class BLDetect:
         self._warmup   = float(warmup_hours)
         # fence widened symmetrically: upper += pad, lower -= pad (default 5 → 25:75)
         self._bl = BreachingLine(mult=family['tf_seconds'] // 5, curl_floor=curl_floor,
-                                 flatten=flatten, pseudo_cross=pseudo_cross,
+                                 curl_lookback=curl_lookback, flatten=flatten,
+                                 pseudo_cross=pseudo_cross, grace=grace,
                                  fence_hi=FENCE_HI + float(fence_pad),
                                  fence_lo=FENCE_LO - float(fence_pad))
         self._log = get_logger(self.__class__.__name__)
@@ -91,6 +92,7 @@ class BLDetect:
                 'e9_low':    _f(e9['l'][i]), 'e9_close': _f(e9['c'][i]),
                 'hb9b':      _f(k[i]),  'hb9M': _f(bM[i]),  'hb9m': _f(bm[i]),
                 'k_gt_bb_main': int(bool(k[i] > bM[i])),   # raw K>bb_main — the IB-cross marker
+                'slope_k':   _f(r['slope_k'][i]),          # curl input: k[i]-k[i-curl_lookback]
                 'predicted': int(bool(r['predicted'][i])),
                 'exit1':     int(bool(r['exit1'][i])),
                 'exit2':     int(bool(r['exit2'][i])),
@@ -189,6 +191,7 @@ if {nm}_hit >= 0
             c9_open FLOAT, c9_high FLOAT, c9_low FLOAT, c9_close FLOAT,
             e9_open FLOAT, e9_high FLOAT, e9_low FLOAT, e9_close FLOAT,
             k_line FLOAT, bb_main FLOAT, bb_mid FLOAT, k_gt_bb_main TINYINT,
+            slope_k FLOAT,
             predicted TINYINT, exit1 TINYINT, exit2 TINYINT, exit3 TINYINT,
             breach_dir TINYINT, state TINYINT)''')
         if not rows:
@@ -196,13 +199,13 @@ if {nm}_hit >= 0
         cols = ['bar_time', 'px_smooth',
                 'c9_open', 'c9_high', 'c9_low', 'c9_close',
                 'e9_open', 'e9_high', 'e9_low', 'e9_close',
-                'k_line', 'bb_main', 'bb_mid', 'k_gt_bb_main', 'predicted',
+                'k_line', 'bb_main', 'bb_mid', 'k_gt_bb_main', 'slope_k', 'predicted',
                 'exit1', 'exit2', 'exit3', 'breach_dir', 'state']
         ph = ','.join(['%s'] * len(cols))
         data = [[_dt(r['bar_ms']), r['px_smooth'],
                  r['c9_open'], r['c9_high'], r['c9_low'], r['c9_close'],
                  r['e9_open'], r['e9_high'], r['e9_low'], r['e9_close'],
-                 r['hb9b'], r['hb9M'], r['hb9m'], r['k_gt_bb_main'],
+                 r['hb9b'], r['hb9M'], r['hb9m'], r['k_gt_bb_main'], r['slope_k'],
                  r['predicted'], r['exit1'], r['exit2'], r['exit3'],
                  r['breach_dir'], r['state']] for r in rows]
         self._db.executemany(

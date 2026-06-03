@@ -28,7 +28,8 @@ def test_already_breached_is_not_predicted():
 
 # ── exit methods in isolation ───────────────────────────────────────────────
 def _bl():
-    return BreachingLine(curl_floor=1.0, pseudo_cross=15.0, flatten=0.5)
+    # curl_lookback=1 so the short synthetic series exercise the curl on a 1-bar slope
+    return BreachingLine(curl_floor=1.0, curl_lookback=1, pseudo_cross=15.0, flatten=0.5)
 
 
 def test_exit3_cross_toward_ib():
@@ -80,3 +81,22 @@ def test_pegged_stays_dormant_until_fresh_breach():
     assert r['state'][3] == 3            # completed
     assert r['state'][4] == 3            # still OOB but pegged → no bobbing, stays 3
     assert r['state'][7] == 1            # IB then OOB again = fresh breach → re-armed
+
+
+# ── exit3-before-curl grace (Joe, 2026-06-03): wait `grace` bars for the curl ──
+def test_grace_exit3_then_curl_within_window_completes():
+    # lo breach; e3 fires at b3 (bb_M crosses up through k), curl lands b4 (1 bar
+    # later, within grace=2) → straight to 3.  bb_M only the e3 driver.
+    k    = [50, 10, 10, 10, 12]
+    bb_M = [50,  8,  8, 11, 11]
+    r = _bl().run(k=k, bb_m=[50]*5, bb_M=bb_M)
+    assert list(r['state']) == [0, 1, 1, 1, 3]
+
+
+def test_grace_expires_curl_too_late_only_curls():
+    # same e3 at b3, but curl not until b6 (3 bars later, > grace) → grace lapsed,
+    # so the late curl alone only reaches state 2, not 3.
+    k    = [50, 10, 10, 10, 10, 10, 12]
+    bb_M = [50,  8,  8, 11, 11, 11, 11]
+    r = _bl().run(k=k, bb_m=[50]*7, bb_M=bb_M)
+    assert list(r['state']) == [0, 1, 1, 1, 1, 1, 2]
