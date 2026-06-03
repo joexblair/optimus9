@@ -111,22 +111,24 @@ class BLDetect:
                  if j == 0 or r['state'] != rows[j - 1]['state']]
         t = ','.join(str(r['bar_ms']) for r in trans) or '0'
         s = ','.join(str(r['state'])  for r in trans) or '0'
+        nm = self._fam['name']   # prefix every identifier so multiple BL overlays
+                                 # (hb9, s18b, …) coexist on one chart without clashing
         pine = f'''//@version=6
-indicator("BL states ({self._fam['name']})", overlay=true)
+indicator("BL states ({nm})", overlay=true)
 // {len(rows)} bars, last {self._lookback}h — {len(trans)} transitions
 // state 0 idle · 1 breached · 2 curled · 3 complete
-var int[] tt = array.from({t})
-var int[] ss = array.from({s})
-hit = -1
-for j = 0 to array.size(tt) - 1
-    pt = array.get(tt, j)
-    if pt >= time and pt < time + 5000
-        hit := j
+var int[] {nm}_tt = array.from({t})
+var int[] {nm}_ss = array.from({s})
+{nm}_hit = -1
+for {nm}_j = 0 to array.size({nm}_tt) - 1
+    {nm}_pt = array.get({nm}_tt, {nm}_j)
+    if {nm}_pt >= time and {nm}_pt < time + 5000
+        {nm}_hit := {nm}_j
         break
-if hit >= 0
-    st = array.get(ss, hit)
-    col = st == 1 ? color.yellow : st == 2 ? color.orange : st == 3 ? color.lime : color.gray
-    label.new(bar_index, high, str.tostring(st), color=col,
+if {nm}_hit >= 0
+    {nm}_st = array.get({nm}_ss, {nm}_hit)
+    {nm}_col = {nm}_st == 1 ? color.yellow : {nm}_st == 2 ? color.orange : {nm}_st == 3 ? color.lime : color.gray
+    label.new(bar_index, high, str.tostring({nm}_st), color={nm}_col,
               style=label.style_label_down, size=size.small)
 '''
         with open(path, 'w') as f:
