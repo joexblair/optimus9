@@ -23,15 +23,17 @@ Implementation:
     see r07_open_items.md "dema[i - center] wraparound" note)
   - State classification vectorized via np.where cascades
 
-r08 NOTE: high_b / low_b currently sit per-row in indicator_configs but
-every row is 85/15. These are global system constants and should move
-to a system_settings table.
+r08 NOTE: the midpoint is the centre of the RSI rescale domain
+(RSI_OVERBOUGHT + RSI_OVERSOLD)/2 = 50 — matching the Pine f_pk_state. (The old
+85/15 OOB-boundary pair gave the same 50 by coincidence; constants now name it.)
 """
 
 import numpy as np
 import pandas as pd
 
 from logger import get_logger
+
+from ..constants import RSI_OVERBOUGHT, RSI_OVERSOLD
 
 
 class PKStateComputer:
@@ -40,8 +42,8 @@ class PKStateComputer:
     _PM_LONG  =  2.0
     _PM_SHORT = -2.0
 
-    def __init__(self, high_b: float = 85.0, low_b: float = 15.0) -> None:
-        # r08: high_b/low_b should be global system settings.
+    def __init__(self, high_b: float = RSI_OVERBOUGHT, low_b: float = RSI_OVERSOLD) -> None:
+        # midpoint of the RSI rescale domain = 50 (matches Pine f_pk_state).
         self._midpoint = (high_b + low_b) / 2.0
         self._log      = get_logger(self.__class__.__name__)
 

@@ -26,6 +26,7 @@ from logger import get_logger
 from ..db.database_manager import DatabaseManager
 from ..compute.pk5s_gate_computer import Pk5sGateComputer
 from ..compute.indicator_computer import IndicatorComputer
+from ..constants import RSI_OVERBOUGHT, RSI_OVERSOLD
 from .._helpers import _ms_to_iso
 
 
@@ -34,8 +35,8 @@ from .._helpers import _ms_to_iso
 # Edit when Joe changes TV inputs; this is the only source of truth for
 # the reconciler.
 
-_OB = 70.0
-_OS = 30.0
+_OB = RSI_OVERBOUGHT
+_OS = RSI_OVERSOLD
 
 _DEMA_SRC = 'close'      # TV override; Pine default was hlcc4
 _DEMA_LEN = 2

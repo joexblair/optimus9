@@ -33,6 +33,8 @@ import websockets
 
 from logger import get_logger
 
+from ..constants import RSI_OVERBOUGHT, RSI_OVERSOLD
+
 
 class IndicatorComputer:
     """Pure computation. Replicates Pine Script f_bb, f_k, DEMA. No I/O."""
@@ -127,7 +129,7 @@ class IndicatorComputer:
 
     @staticmethod
     def f_bb(src: np.ndarray, length: int, mult: float,
-             high_b: float = 70.0, low_b: float = 30.0) -> np.ndarray:
+             high_b: float = RSI_OVERBOUGHT, low_b: float = RSI_OVERSOLD) -> np.ndarray:
         basis = IndicatorComputer._sma(src, length)
         dev   = mult * IndicatorComputer._stdev(src, length)
         span  = (basis + dev) - (basis - dev)
@@ -372,7 +374,7 @@ class IndicatorComputer:
     @staticmethod
     def f_bb_lookahead(base_df: pd.DataFrame, target_seconds: int,
                        length: int, mult: float, src: str,
-                       high_b: float = 85.0, low_b: float = 15.0) -> np.ndarray:
+                       high_b: float = RSI_OVERBOUGHT, low_b: float = RSI_OVERSOLD) -> np.ndarray:
         """
         BB(length, mult) at each 5s bar against the developing higher-TF bar.
 

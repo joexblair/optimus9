@@ -15,8 +15,10 @@ Thresholds are tunable — calibrated against the manual Pine application (Targe
 """
 import numpy as np
 
-HI, LO            = 85.0, 15.0
-FENCE_HI, FENCE_LO = 70.0, 30.0          # 30:70 no-engagement fence
+from ..constants import RSI_OVERBOUGHT, RSI_OVERSOLD, BOUNDARY_HI, BOUNDARY_LO
+
+HI, LO             = BOUNDARY_HI, BOUNDARY_LO       # OOB breach detection (85/15)
+FENCE_HI, FENCE_LO = RSI_OVERBOUGHT, RSI_OVERSOLD   # 30:70 no-engagement fence (RSI OB/OS)
 
 
 def predict_breach(k, bb_m, bb_M, hi=HI, lo=LO, fence_hi=FENCE_HI, fence_lo=FENCE_LO):
