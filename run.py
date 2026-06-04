@@ -234,6 +234,10 @@ def _build_parser() -> argparse.ArgumentParser:
     bc.add_argument('--fence_pad',     type=float, default=None)
     bc.add_argument('--exit2_anchor',  choices=['now', 'prior', 'avg'], default=None)
 
+    sub.add_parser('bl_review',
+                   help='Materialise bl_review: state-change/exit rows + per gate-open '
+                        'the stop size (req2) & profit potential (req3) vs px_smooth swings')
+
     tk = sub.add_parser('tape_check',
                         help='Scan kline_collection over a window for gaps, '
                              'continuity breaks (open != prev close) and OHLC sanity')
@@ -601,6 +605,21 @@ def cmd_bl_detect(args, db: DatabaseManager) -> int:
     return 0
 
 
+def cmd_bl_review(args, db: DatabaseManager) -> int:
+    from optimus9.analysis.bl_review import build_review
+    out   = build_review(db)
+    gates = [o for o in out if o['stop_pct'] is not None]
+    print(f"\n{'gate-open':19} {'dir':4} {'px_smooth':10} "
+          f"{'stop%':7} {'→ peak/trough':19} {'profit%':8} {'→ next':19}")
+    for o in gates[:20]:
+        print(f"{o['bar_time'].strftime('%m-%d %H:%M:%S'):19} {o['breach_dir']:+d}   "
+              f"{o['px_smooth']:<10} {o['stop_pct']!s:7} "
+              f"{o['stop_at'].strftime('%m-%d %H:%M:%S') if o['stop_at'] else '—':19} "
+              f"{o['profit_pct']!s:8} "
+              f"{o['profit_at'].strftime('%m-%d %H:%M:%S') if o['profit_at'] else '—':19}")
+    return 0
+
+
 def cmd_bl_config(args, db: DatabaseManager) -> int:
     from optimus9.analysis.bl_detect import BLDetect
     BLDetect(db)                                  # ensure bl_config exists + seeded
@@ -648,6 +667,7 @@ _DISPATCH = {
     'cluster_score':      cmd_cluster_score,
     'bl_detect':          cmd_bl_detect,
     'bl_config':          cmd_bl_config,
+    'bl_review':          cmd_bl_review,
     'delete_run':         cmd_delete_run,
     'tape_check':         cmd_tape_check,
 }
