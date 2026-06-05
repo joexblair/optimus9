@@ -73,7 +73,7 @@ def test_exit2_anchor_taken_at_tf9_seam():
     seam = [True, False, False, True, False, False, True, False, False]
     k    = [50,   86,    88,    90,   92,    91,    89,   89,    89]
     r = _bl().run(k=k, bb_m=[50]*9, bb_M=[50]*9, seam=seam)
-    assert r['pk_anch'][4] == 88
+    assert r['exit2_anch'][4] == 88
     assert not any(r['exit2'])
 
 
