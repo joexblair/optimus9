@@ -149,24 +149,30 @@ class BreachingLine:
                 (cur_dir == 1 and k[i] < k_anch) or (cur_dir == -1 and k[i] > k_anch)))
             e3 = self._exit_cross_toward_ib(cur_dir, bb_M, k, i)
             # raw conditions recorded for eyeballing; the exit_mask gates which ones
-            # actually COMPLETE the journey (exit1=1 exit2=2 exit3=4; exit4=8 Stage 3).
-            e3_on    = e3 and bool(self.exit_mask & 4)
-            any_exit = bool((e1 and self.exit_mask & 1) or
-                            (e2 and self.exit_mask & 2) or e3_on)
+            # COMPLETE. exit1 bypasses the curl (immediate, even same-bar as the breach);
+            # exit2/exit3 need the curl (state 2); exit4 (mask 8, p-rev) will need it too.
+            e1_on = e1 and bool(self.exit_mask & 1)
+            e2_on = e2 and bool(self.exit_mask & 2)
+            e3_on = e3 and bool(self.exit_mask & 4)
+            ib_cross = bool((not oob[i]) and i > 0 and oob[i - 1])  # K back inside the boundary
 
-            if in_fence[i]:
-                ns, nb = 0, 0                                  # dead zone → dormant
+            if in_fence[i] or ib_cross:
+                ns, nb = 0, 0                                  # dead zone, or OOB→IB → reset to idle
             else:
                 ns, nb = state, bdir
                 if state == 0:
                     if fresh_eng:
                         ns, nb = 1, cur_dir
+                        if e1_on:                              # BB already IB → breach + exit1 same bar
+                            ns = 3
                 elif state == 1:
                     nb = cur_dir
-                    if curl:
+                    if e1_on:
+                        ns = 3                                 # exit1 bypasses the mandatory curl
+                    elif curl:
                         ns = 2
-                        if any_exit or pend3 > 0:              # curl + an exit now, OR an exit3
-                            ns = 3                             # within the grace window → complete
+                        if e2_on or e3_on or pend3 > 0:        # curl + a curl-gated exit (2/3)
+                            ns = 3
                     elif e3_on:
                         pend3 = self.grace                     # exit3 before curl → wait for it
                     elif pend3 > 0:
@@ -175,12 +181,13 @@ class BreachingLine:
                     nb = cur_dir
                     if fresh_oob:
                         ns = 1                                 # re-breach (bobbing)
-                    elif any_exit:
+                    elif e1_on or e2_on or e3_on:
                         ns = 3
                 elif state == 3:
                     if fresh_eng:
                         ns, nb = 1, cur_dir                    # re-armed by a fresh breach
-                    # else stay 3 (pegged → dormant)
+                        if e1_on:
+                            ns = 3
             if ns != 1:
                 pend3 = 0                                      # grace only lives inside state 1
             if ns == 0 or ns == 3:

@@ -41,9 +41,9 @@ def test_exit3_cross_toward_ib():
 
 
 def test_exit2_fires_when_k_reverses_past_anchor():
-    # hi breach: K peaks 90 at b2 (anchor = k[1] = 86); K falls below 86 at b4 →
-    # exit2 (a clear K reversal) completes the journey.
-    r = _bl().run(k=[50, 86, 90, 88, 80], bb_m=[50]*5, bb_M=[50]*5)
+    # hi breach: K peaks 95 (ref settles at k[1]=88); K curls (b3) then falls to 86 —
+    # past the 88 ref but still OOB (>85) — so exit2 completes before K returns IB.
+    r = _bl().run(k=[50, 88, 95, 92, 86], bb_m=[50]*5, bb_M=[50]*5)
     assert list(r['state']) == [0, 1, 1, 2, 3]
     assert r['exit2'][4]
 
@@ -60,7 +60,7 @@ def test_exit_mask_disables_exit2():
     # mask 5 = exit1(1) + exit3(4), exit2(2) OFF. The K-reversal series that completes
     # via exit2 under the default mask now stalls at state 2 — the raw condition is
     # still recorded, just not actioned.
-    r = _bl(exit_mask=5).run(k=[50, 86, 90, 88, 80], bb_m=[50]*5, bb_M=[50]*5)
+    r = _bl(exit_mask=5).run(k=[50, 88, 95, 92, 86], bb_m=[50]*5, bb_M=[50]*5)
     assert list(r['state']) == [0, 1, 1, 2, 2]
     assert r['exit2'][4]
 
@@ -98,11 +98,29 @@ def test_fence_forces_state_0():
     assert list(r['state']) == [1, 0]
 
 
-def test_curl_gated_to_oob():
-    # K breaches then pulls to the engage band (IB, not fence); the slope would
-    # "curl" but curl is gated to OOB → stays state 1
+def test_ib_cross_resets_to_0():
+    # OOB→IB rule: a breached line (90) that crosses back inside the boundary (84 IB,
+    # still outside the 30:70 fence) flips to bls0 — the breach is over, machine re-arms
+    # from idle. (Supersedes the old "curl gated to OOB keeps it at 1": IB → 0 now.)
     r = _bl().run(k=[50, 90, 84], bb_m=[50]*3, bb_M=[50]*3)
-    assert list(r['state']) == [0, 1, 1]
+    assert list(r['state']) == [0, 1, 0]
+
+
+def test_exit1_bypasses_curl():
+    # hi breach pegged high (90,90,90 — never curls); the BB (hb9M) was OOB then crosses
+    # IB at b3 → exit1 completes straight from state 1, no mandatory curl.
+    r = _bl().run(k=[50, 90, 90, 90], bb_m=[50]*4, bb_M=[50, 90, 90, 50])
+    assert list(r['state']) == [0, 1, 1, 3]
+    assert r['exit1'][3]
+
+
+def test_exit1_completes_same_bar_as_breach():
+    # the exit_lookback window lets a line breach and flip to bls3 in ONE bar when the
+    # BB has already crossed IB: at b1 K breaches (90) and hb9M is already IB (50) after
+    # being OOB (90) within lookback → bls0→bls1→bls3 same bar.
+    r = _bl().run(k=[50, 90], bb_m=[50, 50], bb_M=[90, 50])
+    assert list(r['state']) == [0, 3]
+    assert r['exit1'][1]
 
 
 def test_lifecycle_dwell_at_2_then_complete():
