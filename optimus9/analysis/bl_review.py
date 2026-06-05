@@ -26,8 +26,8 @@ _TABLE = 'bl_review'
 def build_review(db, pct: float = 0.9) -> list:
     log = get_logger('BLReview')
     rows = db.execute(
-        '''SELECT bls_pk, bar_time, px_smooth, k_line, bb_main, breach_dir, state,
-                  exit1, exit2, exit3
+        '''SELECT bls_pk, bar_time, line_name, px_smooth, k_line, bb_main, breach_dir,
+                  predicted, state, exit1, exit2, exit3
            FROM bl_states WHERE px_smooth IS NOT NULL ORDER BY bar_time''', fetch=True)
     if not rows:
         log.warning('bl_states has no px_smooth rows — run bl_detect first')
@@ -63,21 +63,26 @@ def build_review(db, pct: float = 0.9) -> list:
         r     = rows[j]
         ev    = events.get(j, 'context')
         exits = (1 if r['exit1'] else 0) | (2 if r['exit2'] else 0) | (4 if r['exit3'] else 0)
-        rec = {'bls_pk': r['bls_pk'], 'bar_time': r['bar_time'], 'event': ev,
-               'state': int(r['state']), 'breach_dir': int(r['breach_dir']),
+        rec = {'bls_pk': r['bls_pk'], 'bar_time': r['bar_time'], 'bl_line': r['line_name'],
+               'event': ev, 'state': int(r['state']), 'breach_dir': int(r['breach_dir']),
+               'predicted': int(bool(r['predicted'])),
                'px_smooth': r['px_smooth'], 'k_line': r['k_line'], 'bb_main': r['bb_main'],
                'exit_bits': exits, 'stop_pct': None, 'stop_at': None,
                'profit_pct': None, 'profit_at': None}
-        if ev == 'gate_open' and int(r['state']) == 3 and int(r['breach_dir']) in (1, -1):
-            kind = 'H' if int(r['breach_dir']) == 1 else 'L'   # hi→short→next peak; lo→long→next trough
-            pk = next_kind(j, kind)
-            if pk is not None:
-                rec['stop_pct'] = round(abs(px[pk] - px[j]) / px[j] * 100, 3)
-                rec['stop_at']  = rows[pk]['bar_time']
-                tk = first_after(pk)
-                if tk is not None:
-                    rec['profit_pct'] = round(abs(px[tk] - px[pk]) / px[pk] * 100, 3)
-                    rec['profit_at']  = rows[tk]['bar_time']
+        if ev == 'gate_open':
+            # direction is the IN-BREACH dir (the gate-open row may be a state→0 reset
+            # with breach_dir=0), so read it from the bar before the gate opened.
+            bdir = int(rows[j - 1]['breach_dir']) if j > 0 else 0
+            if bdir in (1, -1):
+                kind = 'H' if bdir == 1 else 'L'              # hi→short→next peak; lo→long→next trough
+                pk = next_kind(j, kind)
+                if pk is not None:
+                    rec['stop_pct'] = round(abs(px[pk] - px[j]) / px[j] * 100, 3)
+                    rec['stop_at']  = rows[pk]['bar_time']
+                    tk = first_after(pk)
+                    if tk is not None:
+                        rec['profit_pct'] = round(abs(px[tk] - px[pk]) / px[pk] * 100, 3)
+                        rec['profit_at']  = rows[tk]['bar_time']
         out.append(rec)
 
     _persist(db, out)
@@ -90,13 +95,14 @@ def _persist(db, rows):
     db.execute(f'DROP TABLE IF EXISTS {_TABLE}')
     db.execute(f'''CREATE TABLE {_TABLE} (
         blr_pk BIGINT AUTO_INCREMENT PRIMARY KEY, bls_pk BIGINT, bar_time DATETIME,
-        event VARCHAR(12), state TINYINT, breach_dir TINYINT, px_smooth FLOAT,
-        k_line FLOAT, bb_main FLOAT, exit_bits TINYINT,
+        bl_line VARCHAR(16), event VARCHAR(12), state TINYINT, breach_dir TINYINT,
+        predicted TINYINT, px_smooth FLOAT, k_line FLOAT, bb_main FLOAT, exit_bits TINYINT,
         stop_pct FLOAT, stop_at DATETIME, profit_pct FLOAT, profit_at DATETIME)''')
     if not rows:
         return
-    cols = ['bls_pk', 'bar_time', 'event', 'state', 'breach_dir', 'px_smooth', 'k_line',
-            'bb_main', 'exit_bits', 'stop_pct', 'stop_at', 'profit_pct', 'profit_at']
+    cols = ['bls_pk', 'bar_time', 'bl_line', 'event', 'state', 'breach_dir', 'predicted',
+            'px_smooth', 'k_line', 'bb_main', 'exit_bits', 'stop_pct', 'stop_at',
+            'profit_pct', 'profit_at']
     ph = ','.join(['%s'] * len(cols))
     db.executemany(f"INSERT INTO {_TABLE} ({','.join(cols)}) VALUES ({ph})",
                    [[r[c] for c in cols] for r in rows])
