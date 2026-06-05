@@ -84,9 +84,9 @@ def test_exit2_ref_does_not_reach_pre_breach():
     # 'now' pins to the breach-edge bl_line (k[8]=58), with idx 8 for exit2_ref_dt.
     seam = [True, False, False, True, False, False, True, False, False, True, False, False]
     k    = [50,   51,    52,    53,   54,    55,    56,   57,    58,    10,   9,     9]
-    rp = _bl(exit2_anchor='prior').run(k=k, bb_m=[50]*12, bb_M=[50]*12, seam=seam)
+    rp = _bl(exit2_ref='prior').run(k=k, bb_m=[50]*12, bb_M=[50]*12, seam=seam)
     assert np.isnan(rp['exit2_ref'][9])               # did not reach pre-breach structure
-    rn = _bl(exit2_anchor='now').run(k=k, bb_m=[50]*12, bb_M=[50]*12, seam=seam)
+    rn = _bl(exit2_ref='now').run(k=k, bb_m=[50]*12, bb_M=[50]*12, seam=seam)
     assert rn['exit2_ref'][9] == 58                   # breach-edge bl_line
     assert rn['exit2_ref_idx'][9] == 8                # provenance for exit2_ref_dt
 

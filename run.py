@@ -232,7 +232,8 @@ def _build_parser() -> argparse.ArgumentParser:
     bc.add_argument('--grace',         type=int,   default=None)
     bc.add_argument('--pseudo_cross',  type=float, default=None)
     bc.add_argument('--fence_pad',     type=float, default=None)
-    bc.add_argument('--exit2_anchor',  choices=['now', 'prior', 'avg'], default=None)
+    bc.add_argument('--bb_pad',        type=float, default=None)
+    bc.add_argument('--exit2_ref',     choices=['now', 'prior', 'avg'], default=None)
 
     sub.add_parser('bl_review',
                    help='Materialise bl_review: state-change/exit rows + per gate-open '
@@ -624,7 +625,7 @@ def cmd_bl_config(args, db: DatabaseManager) -> int:
     from optimus9.analysis.bl_detect import BLDetect
     BLDetect(db)                                  # ensure bl_config exists + seeded
     T     = 'bl_config'
-    KNOBS = ['curl_floor', 'curl_lookback', 'grace', 'pseudo_cross', 'fence_pad', 'exit2_anchor']
+    KNOBS = ['curl_floor', 'curl_lookback', 'grace', 'pseudo_cross', 'fence_pad', 'bb_pad', 'exit2_ref']
     cols  = ['blc_' + k for k in KNOBS]           # columns are blc_-prefixed; CLI args aren't
     if args.activate is not None:
         db.execute(f'UPDATE {T} SET blc_is_active=0')
@@ -642,12 +643,12 @@ def cmd_bl_config(args, db: DatabaseManager) -> int:
         _log.info(f"created + activated new bl_config '{label}'")
     rows = db.execute(f'SELECT * FROM {T} ORDER BY blc_pk', fetch=True)
     print(f"\n{'pk':>4} {'':1} {'label':22} {'curl_fl':7} {'curl_lb':7} {'grace':5} "
-          f"{'pseudo':6} {'fence':5} {'exit2_anchor'}")
+          f"{'pseudo':6} {'fence':5} {'bb_pad':6} {'exit2_ref'}")
     for r in rows:
         act = '*' if r['blc_is_active'] else ' '
         print(f"{r['blc_pk']:>4} {act:1} {(r['blc_label'] or '')[:22]:22} "
               f"{r['blc_curl_floor']:<7} {r['blc_curl_lookback']:<7} {r['blc_grace']:<5} "
-              f"{r['blc_pseudo_cross']:<6} {r['blc_fence_pad']:<5} {r['blc_exit2_anchor']}")
+              f"{r['blc_pseudo_cross']:<6} {r['blc_fence_pad']:<5} {r['blc_bb_pad']:<6} {r['blc_exit2_ref']}")
     return 0
 
 

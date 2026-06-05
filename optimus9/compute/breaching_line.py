@@ -49,7 +49,7 @@ def predict_breach(k, bb_m, bb_M, hi=HI, lo=LO, fence_hi=FENCE_HI, fence_lo=FENC
 
 class BreachingLine:
     def __init__(self, mult=1, curl_floor=1.0, curl_lookback=7, exit_lookback=2,
-                 pseudo_cross=15.0, grace=2, exit2_anchor='now', exit_mask=7,
+                 pseudo_cross=15.0, grace=2, exit2_ref='now', exit_mask=7, bb_pad=0.0,
                  hi=HI, lo=LO, fence_hi=FENCE_HI, fence_lo=FENCE_LO):
         self.mult          = int(mult)
         self.curl_floor    = float(curl_floor)
@@ -57,8 +57,9 @@ class BreachingLine:
         self.exit_lookback = int(exit_lookback)
         self.pseudo_cross  = float(pseudo_cross)
         self.grace         = int(grace)           # bars to wait for a curl after an early exit3
-        self.exit2_anchor  = str(exit2_anchor)    # 'now' | 'prior' | 'avg' seam for the exit2 anchor
+        self.exit2_ref     = str(exit2_ref)       # 'now' | 'prior' | 'avg' seam for the exit2 reference
         self.exit_mask     = int(exit_mask)       # bitmask: exit1=1 exit2=2 exit3=4 exit4=8
+        self.bb_pad        = float(bb_pad)        # pad BB OOB detection toward IB (exit1), like fence_pad
         self.hi, self.lo   = float(hi), float(lo)
         self.fence_hi, self.fence_lo = float(fence_hi), float(fence_lo)
 
@@ -90,8 +91,8 @@ class BreachingLine:
 
         cl = self.curl_lookback                              # curl: short local slope (7)
         slope_k = np.full(n, np.nan); slope_k[cl:] = k[cl:]  - k[:-cl]
-        bbM_oob = (bb_M >= self.hi) | (bb_M <= self.lo)
-        bbM_ib  = ~bbM_oob
+        bbM_oob = (bb_M >= self.hi - self.bb_pad) | (bb_M <= self.lo + self.bb_pad)
+        bbM_ib  = ~bbM_oob                                   # bb_pad: count a near-OOB BB as OOB for exit1
 
         state, bdir = 0, 0
         pend3 = 0                                             # exit3-before-curl grace countdown
@@ -126,9 +127,9 @@ class BreachingLine:
             # (Joe). exit2_anchor picks which seam: 'now' (the seam before the extreme),
             # 'prior' (one back); 'avg' is the mean of the two — a DERIVED value, not a
             # single seam bar, so it is not seam-based and carries no ref bar/dt.
-            if self.exit2_anchor == 'prior':
+            if self.exit2_ref == 'prior':
                 ref, ref_idx = pre_seam_k_prev, pre_seam_prev_idx
-            elif self.exit2_anchor == 'avg':
+            elif self.exit2_ref == 'avg':
                 ref = (pre_seam_k_prev if pre_seam_k != pre_seam_k else
                        pre_seam_k if pre_seam_k_prev != pre_seam_k_prev else
                        (pre_seam_k + pre_seam_k_prev) / 2.0)

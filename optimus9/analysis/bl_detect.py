@@ -50,14 +50,15 @@ class BLDetect:
                                  curl_lookback=int(cfg['blc_curl_lookback']),
                                  pseudo_cross=float(cfg['blc_pseudo_cross']),
                                  grace=int(cfg['blc_grace']),
-                                 exit2_anchor=str(cfg['blc_exit2_anchor']),
+                                 exit2_ref=str(cfg['blc_exit2_ref']),
                                  exit_mask=int(self._fam.get('exit_mask') or 7),
+                                 bb_pad=float(cfg['blc_bb_pad']),
                                  fence_hi=FENCE_HI + fp, fence_lo=FENCE_LO - fp)
         self._log.info(
             f"bl_config #{cfg['blc_pk']} '{cfg['blc_label']}' | curl_floor={cfg['blc_curl_floor']} "
             f"curl_lookback={cfg['blc_curl_lookback']} grace={cfg['blc_grace']} "
             f"pseudo_cross={cfg['blc_pseudo_cross']} fence_pad={cfg['blc_fence_pad']} "
-            f"exit2_anchor={cfg['blc_exit2_anchor']}")
+            f"bb_pad={cfg['blc_bb_pad']} exit2_ref={cfg['blc_exit2_ref']}")
 
     def _load_config(self) -> dict:
         """Ensure bl_config exists, seed a default active row if empty, return the
@@ -74,7 +75,8 @@ class BLDetect:
             blc_grace INT DEFAULT 2,
             blc_pseudo_cross FLOAT DEFAULT 15.0,
             blc_fence_pad FLOAT DEFAULT 5.0,
-            blc_exit2_anchor VARCHAR(16) DEFAULT 'now')''')
+            blc_bb_pad FLOAT DEFAULT 0.0,
+            blc_exit2_ref VARCHAR(16) DEFAULT 'now')''')
         sel = (f'SELECT * FROM {self._CONFIG} WHERE blc_is_active=1 '
                'ORDER BY blc_pk DESC LIMIT 1')
         rows = self._db.execute(sel, fetch=True)
@@ -87,27 +89,28 @@ class BLDetect:
     def _load_family(self) -> dict:
         """Build the family dict (name, tf_seconds, k/bM/bm cfgs, exit_mask, pk_ic_pk)
         from the active bl_lines + indicator_configs — replaces the hardcoded HB9 dict.
-        Stage 1: one active 'breach' line + its same-series 'anchor' BBs (il M→bM, m→bm)."""
+        Stage 1: one active 'breach' line + its same-series 'support' BBs (il M→bM, m→bm)."""
         breach = self._db.execute(
             '''SELECT bl.bl_ic_pk, bl.bl_pk_ic_pk, bl.bl_exit_mask, ic.ic_is_pk,
-                      s.is_prefix, itf.itf_seconds, itf.itf_label
+                      s.is_prefix, itf.itf_seconds, itf.itf_label, il.il_suffix
                FROM bl_lines bl
                JOIN indicator_configs ic   ON ic.ic_pk   = bl.bl_ic_pk
                JOIN indicator_series s     ON s.is_pk     = ic.ic_is_pk
+               JOIN indicator_lines il     ON il.il_pk    = ic.ic_il_pk
                JOIN indicator_timeframes itf ON itf.itf_pk = ic.ic_itf_pk
                WHERE bl.bl_is_active = 1 AND bl.bl_role = 'breach'
                ORDER BY bl.bl_pk LIMIT 1''', fetch=True)
         if not breach:
             raise RuntimeError('bl_lines has no active breach line — seed it (Stage 1)')
         b = breach[0]
-        anchors = self._db.execute(
+        supports = self._db.execute(
             '''SELECT bl.bl_ic_pk, il.il_suffix FROM bl_lines bl
                JOIN indicator_configs ic ON ic.ic_pk = bl.bl_ic_pk
                JOIN indicator_lines il   ON il.il_pk = ic.ic_il_pk
-               WHERE bl.bl_is_active = 1 AND bl.bl_role = 'anchor' AND ic.ic_is_pk = %s''',
+               WHERE bl.bl_is_active = 1 AND bl.bl_role = 'support' AND ic.ic_is_pk = %s''',
             (b['ic_is_pk'],), fetch=True)
-        by_suf = {a['il_suffix']: self._cfg_dict(a['bl_ic_pk']) for a in anchors}
-        fam = {'name':       f"{b['is_prefix']}{b['itf_label']}",
+        by_suf = {a['il_suffix']: self._cfg_dict(a['bl_ic_pk']) for a in supports}
+        fam = {'name':       f"{b['is_prefix']}{b['itf_label']}{b['il_suffix']}",
                'tf_seconds': int(b['itf_seconds']),
                'k':  self._cfg_dict(b['bl_ic_pk']),
                'bM': by_suf.get('M'), 'bm': by_suf.get('m'),
@@ -205,7 +208,7 @@ class BLDetect:
         nm = self._fam['name']   # prefix every identifier so multiple BL overlays
                                  # (hb9, s18b, …) coexist on one chart without clashing
         pine = f'''//@version=6
-indicator("BL states ({nm})", overlay=true)
+indicator("BL states ({nm})", overlay=true, max_labels_count=500)
 // {len(rows)} bars, last {self._lookback}h — {len(trans)} transitions
 // state 0 idle · 1 breached · 2 curled · 3 complete
 var int[] {nm}_tt = array.from({t})
