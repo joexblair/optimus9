@@ -17,6 +17,13 @@ from ..compute.indicator_computer import IndicatorComputer as IC
 from ..compute.breaching_line import BreachingLine
 from ..constants import FENCE_HI, FENCE_LO
 
+# gca5m raw 5s-PK config (Joe 2026-06-05): BB(hlcc4, len6, ×0.74) · pool 5/33/6/17 ·
+# mult 1 (5s-native). The SnF source for the raw-pk overlay (and exit4/p-rev next).
+GCA5M_RAW = dict(src='hlcc4', length=6, mult=0.74, dema_len=2, dema_src='close',
+                 pool_c=5, pool_w=33, pool_range=6, pool_slope=17,
+                 weight_close=5, weight_wide=2, pm_suppression=0.4, pm_additive=0.0,
+                 threshold_long=7.5, threshold_short=7.5)
+
 
 # hb9 family — the canonical values now live in the DB (indicator_configs +
 # bl_lines, seeded Stage 1). Kept here only as a documentation reference / fallback:
@@ -140,6 +147,12 @@ class BLDetect:
         ts    = base['timestamp'].to_numpy()
         close = base['close'].to_numpy(dtype=float)
 
+        # raw 5s-PK (gca5m, the SnF source): fire events per bar (+1 long / -1 short / 0)
+        from ..orchestration.gate_signal_sweep import generate_gca5m_signals
+        pk_idx, pk_dirs = generate_gca5m_signals(base, self._db, GCA5M_RAW)
+        raw_pk = np.zeros(len(ts), np.int8)
+        raw_pk[pk_idx] = pk_dirs
+
         # Lines are the DEVELOPING (lookahead) HTF view, 5s-aligned — matches TV's
         # lookahead_on (last bar + ticks). The machine ticks per 5s with a curl/slope
         # lookback of tf_seconds/5 bars (hb9 = 108) to span one HTF period.
@@ -191,6 +204,7 @@ class BLDetect:
                 'exit3':     int(bool(r['exit3'][i])),
                 'breach_dir': int(r['breach_dir'][i]),
                 'state':     int(r['state'][i]),
+                'raw_pk':    int(raw_pk[i]),               # gca5m 5s-PK fire (+1 long / -1 short / 0)
             })
         self._persist(rows)
         states = [row['state'] for row in rows]
@@ -206,6 +220,9 @@ class BLDetect:
                  if j == 0 or r['state'] != rows[j - 1]['state']]
         t = ','.join(str(r['bar_ms']) for r in trans) or '0'
         s = ','.join(str(r['state'])  for r in trans) or '0'
+        pk = [r for r in rows if r.get('raw_pk')]                   # gca5m raw-pk fires
+        pt = ','.join(str(r['bar_ms']) for r in pk) or '0'
+        pd = ','.join(str(r['raw_pk']) for r in pk) or '0'
         nm = self._fam['name']   # prefix every identifier so multiple BL overlays
                                  # (hb9, s18b, …) coexist on one chart without clashing
         c  = self._cfg
@@ -234,10 +251,20 @@ if {nm}_hit >= 0
     {nm}_col = {nm}_st == 1 ? color.yellow : {nm}_st == 2 ? color.orange : {nm}_st == 3 ? color.lime : color.gray
     label.new(bar_index, high, str.tostring({nm}_st), color={nm}_col,
               style=label.style_label_down, size=size.small)
+// raw gca5m 5s-PK fires — up/green = long, down/red = short
+var int[] {nm}_qt = array.from({pt})
+var int[] {nm}_qd = array.from({pd})
+{nm}_pk = 0
+for {nm}_q = 0 to array.size({nm}_qt) - 1
+    if array.get({nm}_qt, {nm}_q) >= time and array.get({nm}_qt, {nm}_q) < time + {nm}_bar_ms
+        {nm}_pk := array.get({nm}_qd, {nm}_q)
+        break
+plotshape({nm}_pk ==  1, title="raw pk long",  style=shape.triangleup,   location=location.belowbar, color=color.new(color.green, 0), size=size.tiny)
+plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0),   size=size.tiny)
 '''
         with open(path, 'w') as f:
             f.write(pine)
-        self._log.info(f'wrote Pine overlay ({len(trans)} transitions) -> {path}')
+        self._log.info(f'wrote Pine overlay ({len(trans)} transitions, {len(pk)} raw pks) -> {path}')
         return path
 
     # ── internals ──────────────────────────────────────────────────────────
@@ -294,7 +321,7 @@ if {nm}_hit >= 0
             k_line FLOAT, bb_main FLOAT, bb_mid FLOAT, k_gt_bb_main TINYINT,
             slope_k FLOAT, exit2_ref FLOAT, exit2_ref_dt DATETIME, bl_ext FLOAT,
             predicted TINYINT, exit1 TINYINT, exit2 TINYINT, exit3 TINYINT,
-            breach_dir TINYINT, state TINYINT)''')
+            breach_dir TINYINT, state TINYINT, raw_pk TINYINT)''')
         if not rows:
             return
         cols = ['bar_time', 'line_name', 'px_smooth',
@@ -302,7 +329,7 @@ if {nm}_hit >= 0
                 'e9_open', 'e9_high', 'e9_low', 'e9_close',
                 'k_line', 'bb_main', 'bb_mid', 'k_gt_bb_main', 'slope_k',
                 'exit2_ref', 'exit2_ref_dt', 'bl_ext',
-                'predicted', 'exit1', 'exit2', 'exit3', 'breach_dir', 'state']
+                'predicted', 'exit1', 'exit2', 'exit3', 'breach_dir', 'state', 'raw_pk']
         ph = ','.join(['%s'] * len(cols))
         data = [[_dt(r['bar_ms']), r['line_name'], r['px_smooth'],
                  r['c9_open'], r['c9_high'], r['c9_low'], r['c9_close'],
@@ -310,7 +337,7 @@ if {nm}_hit >= 0
                  r['hb9b'], r['hb9M'], r['hb9m'], r['k_gt_bb_main'], r['slope_k'],
                  r['exit2_ref'], r['exit2_ref_dt'], r['bl_ext'],
                  r['predicted'], r['exit1'], r['exit2'], r['exit3'],
-                 r['breach_dir'], r['state']] for r in rows]
+                 r['breach_dir'], r['state'], r['raw_pk']] for r in rows]
         self._db.executemany(
             f'INSERT INTO {self._TABLE} ({",".join(cols)}) VALUES ({ph})', data)
 
