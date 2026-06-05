@@ -41,22 +41,34 @@ def build_review(db, pct: float = 0.9) -> list:
     def first_after(idx0):                                # next pivot of any kind after idx0
         return next((idx for idx, k in pivots if idx > idx0), None)
 
-    out = []
+    # ── identify event rows (state change / exit) ────────────────────────────
+    events = {}
     for j, r in enumerate(rows):
         prev    = int(rows[j - 1]['state']) if j > 0 else 0
         st      = int(r['state'])
         exits   = (1 if r['exit1'] else 0) | (2 if r['exit2'] else 0) | (4 if r['exit3'] else 0)
         changed = st != prev
-        if not (changed or exits):
-            continue
-        gate_open = changed and prev in (1, 2) and st in (0, 3)
-        rec = {'bls_pk': r['bls_pk'], 'bar_time': r['bar_time'],
-               'event': 'gate_open' if gate_open else ('state' if changed else 'exit'),
-               'state': st, 'breach_dir': int(r['breach_dir']),
+        if changed or exits:
+            events[j] = ('gate_open' if (changed and prev in (1, 2) and st in (0, 3))
+                         else ('state' if changed else 'exit'))
+
+    # context: include the 11 rows preceding each STATE CHANGE (incl gate_open) — the run-up
+    emit = set(events)
+    for j, ev in events.items():
+        if ev in ('state', 'gate_open'):
+            emit.update(range(max(0, j - 11), j))
+
+    out = []
+    for j in sorted(emit):
+        r     = rows[j]
+        ev    = events.get(j, 'context')
+        exits = (1 if r['exit1'] else 0) | (2 if r['exit2'] else 0) | (4 if r['exit3'] else 0)
+        rec = {'bls_pk': r['bls_pk'], 'bar_time': r['bar_time'], 'event': ev,
+               'state': int(r['state']), 'breach_dir': int(r['breach_dir']),
                'px_smooth': r['px_smooth'], 'k_line': r['k_line'], 'bb_main': r['bb_main'],
                'exit_bits': exits, 'stop_pct': None, 'stop_at': None,
                'profit_pct': None, 'profit_at': None}
-        if gate_open and st == 3 and int(r['breach_dir']) in (1, -1):
+        if ev == 'gate_open' and int(r['state']) == 3 and int(r['breach_dir']) in (1, -1):
             kind = 'H' if int(r['breach_dir']) == 1 else 'L'   # hi→short→next peak; lo→long→next trough
             pk = next_kind(j, kind)
             if pk is not None:
