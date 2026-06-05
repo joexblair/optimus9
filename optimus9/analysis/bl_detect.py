@@ -44,6 +44,7 @@ class BLDetect:
         # active bl_config row. fence widened ±fence_pad (5 → 25:75).
         self._fam = family if family is not None else self._load_family()
         cfg = self._load_config()
+        self._cfg = cfg                              # kept for the Pine remark
         fp  = float(cfg['blc_fence_pad'])
         self._bl = BreachingLine(mult=self._fam['tf_seconds'] // 5,
                                  curl_floor=float(cfg['blc_curl_floor']),
@@ -207,16 +208,25 @@ class BLDetect:
         s = ','.join(str(r['state'])  for r in trans) or '0'
         nm = self._fam['name']   # prefix every identifier so multiple BL overlays
                                  # (hb9, s18b, …) coexist on one chart without clashing
+        c  = self._cfg
+        built = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        cfg_line = (f"bl_config #{c['blc_pk']} '{c['blc_label']}': curl_floor={c['blc_curl_floor']} "
+                    f"curl_lookback={c['blc_curl_lookback']} grace={c['blc_grace']} "
+                    f"pseudo_cross={c['blc_pseudo_cross']} fence_pad={c['blc_fence_pad']} "
+                    f"bb_pad={c['blc_bb_pad']} exit2_ref={c['blc_exit2_ref']}")
         pine = f'''//@version=6
 indicator("BL states ({nm})", overlay=true, max_labels_count=500)
-// {len(rows)} bars, last {self._lookback}h — {len(trans)} transitions
+// built {built} UTC  |  {len(rows)} bars, last {self._lookback}h — {len(trans)} transitions
+// {cfg_line}
 // state 0 idle · 1 breached · 2 curled · 3 complete
+// window is timeframe-aware: a transition prints on whatever bar contains it (5s, TF9, …)
 var int[] {nm}_tt = array.from({t})
 var int[] {nm}_ss = array.from({s})
+{nm}_bar_ms = timeframe.in_seconds() * 1000
 {nm}_hit = -1
 for {nm}_j = 0 to array.size({nm}_tt) - 1
     {nm}_pt = array.get({nm}_tt, {nm}_j)
-    if {nm}_pt >= time and {nm}_pt < time + 5000
+    if {nm}_pt >= time and {nm}_pt < time + {nm}_bar_ms
         {nm}_hit := {nm}_j
         break
 if {nm}_hit >= 0
