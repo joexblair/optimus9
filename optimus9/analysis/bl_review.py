@@ -50,7 +50,19 @@ def build_review(db, pct: float = 0.9) -> list:
         changed = st != prev
         if changed or exits:
             events[j] = ('gate_open' if (changed and prev in (1, 2) and st in (0, 3))
-                         else ('state' if changed else 'exit'))
+                         else ('state' if changed else 'exit_raw'))
+
+    # 'exit_raw' = a raw exit *condition* fired but did NOT complete the journey (e.g.
+    # exit3 pseudo-cross while still bls1 — never curls). Collapse a consecutive run of
+    # them to its first bar (one slow approach should be one row, not 15).
+    drop, prev_kept = [], None
+    for j in sorted(events):
+        if events[j] == 'exit_raw' and prev_kept == 'exit_raw':
+            drop.append(j)
+        else:
+            prev_kept = events[j]
+    for j in drop:
+        del events[j]
 
     # context: include the 11 rows preceding each STATE CHANGE (incl gate_open) — the run-up
     emit = set(events)
