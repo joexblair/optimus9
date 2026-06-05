@@ -168,6 +168,7 @@ class BLDetect:
                 continue
             rows.append({
                 'bar_ms':    int(ts[i]),
+                'line_name': self._fam['name'],            # which BL line (preempts multi-line)
                 'px_smooth': _f(px[i]),
                 'c9_open':   _f(c9['o'][i]), 'c9_high': _f(c9['h'][i]),
                 'c9_low':    _f(c9['l'][i]), 'c9_close': _f(c9['c'][i]),
@@ -179,6 +180,7 @@ class BLDetect:
                 'exit2_ref':    _f(r['exit2_ref'][i]),     # exit2 reversal REFERENCE (pre-seam bl_line, not a PK anchor)
                 'exit2_ref_dt': (_dt(int(ts[r['exit2_ref_idx'][i]]))
                                  if r['exit2_ref_idx'][i] >= 0 else None),   # source bar of the ref (NULL for 'avg')
+                'bl_ext':       _f(r['bl_ext'][i]),        # breach extreme (debug: extreme · ref · line triangle)
                 'predicted': int(bool(r['predicted'][i])),
                 'exit1':     int(bool(r['exit1'][i])),
                 'exit2':     int(bool(r['exit2'][i])),
@@ -273,25 +275,27 @@ if {nm}_hit >= 0
         self._db.execute(f'DROP TABLE IF EXISTS {self._TABLE}')
         self._db.execute(f'''CREATE TABLE {self._TABLE} (
             bls_pk BIGINT AUTO_INCREMENT PRIMARY KEY, bar_time DATETIME,
-            px_smooth FLOAT,
+            line_name VARCHAR(16), px_smooth FLOAT,
             c9_open FLOAT, c9_high FLOAT, c9_low FLOAT, c9_close FLOAT,
             e9_open FLOAT, e9_high FLOAT, e9_low FLOAT, e9_close FLOAT,
             k_line FLOAT, bb_main FLOAT, bb_mid FLOAT, k_gt_bb_main TINYINT,
-            slope_k FLOAT, exit2_ref FLOAT, exit2_ref_dt DATETIME,
+            slope_k FLOAT, exit2_ref FLOAT, exit2_ref_dt DATETIME, bl_ext FLOAT,
             predicted TINYINT, exit1 TINYINT, exit2 TINYINT, exit3 TINYINT,
             breach_dir TINYINT, state TINYINT)''')
         if not rows:
             return
-        cols = ['bar_time', 'px_smooth',
+        cols = ['bar_time', 'line_name', 'px_smooth',
                 'c9_open', 'c9_high', 'c9_low', 'c9_close',
                 'e9_open', 'e9_high', 'e9_low', 'e9_close',
-                'k_line', 'bb_main', 'bb_mid', 'k_gt_bb_main', 'slope_k', 'exit2_ref', 'exit2_ref_dt',
+                'k_line', 'bb_main', 'bb_mid', 'k_gt_bb_main', 'slope_k',
+                'exit2_ref', 'exit2_ref_dt', 'bl_ext',
                 'predicted', 'exit1', 'exit2', 'exit3', 'breach_dir', 'state']
         ph = ','.join(['%s'] * len(cols))
-        data = [[_dt(r['bar_ms']), r['px_smooth'],
+        data = [[_dt(r['bar_ms']), r['line_name'], r['px_smooth'],
                  r['c9_open'], r['c9_high'], r['c9_low'], r['c9_close'],
                  r['e9_open'], r['e9_high'], r['e9_low'], r['e9_close'],
-                 r['hb9b'], r['hb9M'], r['hb9m'], r['k_gt_bb_main'], r['slope_k'], r['exit2_ref'], r['exit2_ref_dt'],
+                 r['hb9b'], r['hb9M'], r['hb9m'], r['k_gt_bb_main'], r['slope_k'],
+                 r['exit2_ref'], r['exit2_ref_dt'], r['bl_ext'],
                  r['predicted'], r['exit1'], r['exit2'], r['exit3'],
                  r['breach_dir'], r['state']] for r in rows]
         self._db.executemany(

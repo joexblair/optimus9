@@ -101,6 +101,7 @@ class BreachingLine:
         o_state = np.zeros(n, np.int8); o_dir = np.zeros(n, np.int8)
         o_e1 = np.zeros(n, bool); o_e2 = np.zeros(n, bool); o_e3 = np.zeros(n, bool)
         o_ref = np.full(n, np.nan); o_ref_idx = np.full(n, -1, dtype=int)
+        o_ext = np.full(n, np.nan)                            # breach extreme (debug: the exit2 triangle)
 
         for i in range(n):
             if seam[i] and i > 0:
@@ -141,6 +142,7 @@ class BreachingLine:
                 k_anch, k_ext, k_anch_idx = ref, k[i], ref_idx
             o_ref[i] = k_anch
             o_ref_idx[i] = k_anch_idx
+            o_ext[i] = k_ext
             e1 = self._exit_ob_to_ib(bbM_ib, bbM_oob, i)
             e2 = bool(k_anch == k_anch and (                  # k_anch==k_anch ⇒ not NaN
                 (cur_dir == 1 and k[i] < k_anch) or (cur_dir == -1 and k[i] > k_anch)))
@@ -188,7 +190,8 @@ class BreachingLine:
 
         return {'state': o_state, 'breach_dir': o_dir, 'predicted': pred != 0,
                 'exit1': o_e1, 'exit2': o_e2, 'exit3': o_e3,
-                'slope_k': slope_k, 'exit2_ref': o_ref, 'exit2_ref_idx': o_ref_idx}
+                'slope_k': slope_k, 'exit2_ref': o_ref, 'exit2_ref_idx': o_ref_idx,
+                'bl_ext': o_ext}
 
     # ── exit methods (parameterised; calibrated against Pine) ─────────────────
     # exit2 (K reversed past its pre-peak anchor) is computed inline in run() — it
