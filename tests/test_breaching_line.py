@@ -65,16 +65,30 @@ def test_exit_mask_disables_exit2():
     assert r['exit2'][4]
 
 
-def test_exit2_anchor_taken_at_tf9_seam():
-    # Seams every 3 bars; K peaks 92 in TF9 bar B (b3-5). The anchor is the K just
-    # before B's seam — k[2]=88 ("1 TF9 bar before max"), NOT k[3]=90 (1 5s bar).
-    # K then dips to 89: above the TF9 anchor (88) so exit2 stays silent; a 5s
-    # anchor (90) would have wrongly fired.
+def test_exit2_ref_taken_at_tf9_seam():
+    # Seams every 3 bars; bl_line peaks 92 in TF9 bar B (b3-5). The ref is the bl_line
+    # just before B's seam — k[2]=88 ("1 TF9 bar before max"), NOT k[3]=90 (1 5s bar).
+    # bl_line then dips to 89: above the TF9 ref (88) so exit2 stays silent; a 5s
+    # ref (90) would have wrongly fired.
     seam = [True, False, False, True, False, False, True, False, False]
     k    = [50,   86,    88,    90,   92,    91,    89,   89,    89]
     r = _bl().run(k=k, bb_m=[50]*9, bb_M=[50]*9, seam=seam)
-    assert r['exit2_anch'][4] == 88
+    assert r['exit2_ref'][4] == 88
     assert not any(r['exit2'])
+
+
+def test_exit2_ref_does_not_reach_pre_breach():
+    # The re-breach flaw: on a FRESH breach the seam-walk must not borrow structure
+    # from before the breach. Two TF9 cycles of pre-breach history, then a fresh lo
+    # breach at the bar-9 seam. 'prior' must NOT reach a 2-seams-back value (→ NaN);
+    # 'now' pins to the breach-edge bl_line (k[8]=58), with idx 8 for exit2_ref_dt.
+    seam = [True, False, False, True, False, False, True, False, False, True, False, False]
+    k    = [50,   51,    52,    53,   54,    55,    56,   57,    58,    10,   9,     9]
+    rp = _bl(exit2_anchor='prior').run(k=k, bb_m=[50]*12, bb_M=[50]*12, seam=seam)
+    assert np.isnan(rp['exit2_ref'][9])               # did not reach pre-breach structure
+    rn = _bl(exit2_anchor='now').run(k=k, bb_m=[50]*12, bb_M=[50]*12, seam=seam)
+    assert rn['exit2_ref'][9] == 58                   # breach-edge bl_line
+    assert rn['exit2_ref_idx'][9] == 8                # provenance for exit2_ref_dt
 
 
 # ── dormancy model ──────────────────────────────────────────────────────────

@@ -176,7 +176,9 @@ class BLDetect:
                 'hb9b':      _f(k[i]),  'hb9M': _f(bM[i]),  'hb9m': _f(bm[i]),
                 'k_gt_bb_main': int(bool(k[i] > bM[i])),   # raw K>bb_main — the IB-cross marker
                 'slope_k':   _f(r['slope_k'][i]),          # curl input: k[i]-k[i-curl_lookback]
-                'exit2_anchor': _f(r['exit2_anch'][i]),    # exit2 reversal anchor (pre-seam K, NOT a PK term)
+                'exit2_ref':    _f(r['exit2_ref'][i]),     # exit2 reversal REFERENCE (pre-seam bl_line, not a PK anchor)
+                'exit2_ref_dt': (_dt(int(ts[r['exit2_ref_idx'][i]]))
+                                 if r['exit2_ref_idx'][i] >= 0 else None),   # source bar of the ref (NULL for 'avg')
                 'predicted': int(bool(r['predicted'][i])),
                 'exit1':     int(bool(r['exit1'][i])),
                 'exit2':     int(bool(r['exit2'][i])),
@@ -275,7 +277,7 @@ if {nm}_hit >= 0
             c9_open FLOAT, c9_high FLOAT, c9_low FLOAT, c9_close FLOAT,
             e9_open FLOAT, e9_high FLOAT, e9_low FLOAT, e9_close FLOAT,
             k_line FLOAT, bb_main FLOAT, bb_mid FLOAT, k_gt_bb_main TINYINT,
-            slope_k FLOAT, exit2_anchor FLOAT,
+            slope_k FLOAT, exit2_ref FLOAT, exit2_ref_dt DATETIME,
             predicted TINYINT, exit1 TINYINT, exit2 TINYINT, exit3 TINYINT,
             breach_dir TINYINT, state TINYINT)''')
         if not rows:
@@ -283,13 +285,13 @@ if {nm}_hit >= 0
         cols = ['bar_time', 'px_smooth',
                 'c9_open', 'c9_high', 'c9_low', 'c9_close',
                 'e9_open', 'e9_high', 'e9_low', 'e9_close',
-                'k_line', 'bb_main', 'bb_mid', 'k_gt_bb_main', 'slope_k', 'exit2_anchor',
+                'k_line', 'bb_main', 'bb_mid', 'k_gt_bb_main', 'slope_k', 'exit2_ref', 'exit2_ref_dt',
                 'predicted', 'exit1', 'exit2', 'exit3', 'breach_dir', 'state']
         ph = ','.join(['%s'] * len(cols))
         data = [[_dt(r['bar_ms']), r['px_smooth'],
                  r['c9_open'], r['c9_high'], r['c9_low'], r['c9_close'],
                  r['e9_open'], r['e9_high'], r['e9_low'], r['e9_close'],
-                 r['hb9b'], r['hb9M'], r['hb9m'], r['k_gt_bb_main'], r['slope_k'], r['exit2_anchor'],
+                 r['hb9b'], r['hb9M'], r['hb9m'], r['k_gt_bb_main'], r['slope_k'], r['exit2_ref'], r['exit2_ref_dt'],
                  r['predicted'], r['exit1'], r['exit2'], r['exit3'],
                  r['breach_dir'], r['state']] for r in rows]
         self._db.executemany(

@@ -95,41 +95,52 @@ class BreachingLine:
 
         state, bdir = 0, 0
         pend3 = 0                                             # exit3-before-curl grace countdown
-        k_ext = np.nan; k_anch = np.nan                      # exit2: breach extreme + reversal anchor
-        pre_seam_k = np.nan; pre_seam_k_prev = np.nan        # K before the latest / prior TF9 seam
+        k_ext = np.nan; k_anch = np.nan; k_anch_idx = -1     # exit2: breach extreme + reversal ref + ref's bar
+        pre_seam_k = np.nan; pre_seam_k_prev = np.nan        # bl_line before the latest / prior TF9 seam
+        pre_seam_idx = -1; pre_seam_prev_idx = -1            # ...and which bar each came from (for exit2_ref_dt)
         o_state = np.zeros(n, np.int8); o_dir = np.zeros(n, np.int8)
         o_e1 = np.zeros(n, bool); o_e2 = np.zeros(n, bool); o_e3 = np.zeros(n, bool)
-        o_anch = np.full(n, np.nan)
+        o_ref = np.full(n, np.nan); o_ref_idx = np.full(n, -1, dtype=int)
 
         for i in range(n):
             if seam[i] and i > 0:
-                pre_seam_k_prev = pre_seam_k                   # roll the prior seam back
-                pre_seam_k      = k[i - 1]                     # K just before this TF9 seam
+                pre_seam_k_prev, pre_seam_prev_idx = pre_seam_k, pre_seam_idx  # roll the prior seam back
+                pre_seam_k,      pre_seam_idx      = k[i - 1], i - 1           # bl_line just before this TF9 seam
             cur_dir   = int(sig[i]) if sig[i] != 0 else bdir
             fresh_oob = bool(oob[i]      and (i == 0 or not oob[i - 1]))
             fresh_prd = bool(pred[i] != 0 and (i == 0 or pred[i - 1] == 0))
-            fresh_eng = fresh_oob or fresh_prd                 # a genuinely new breach
+            fresh_eng = fresh_oob or fresh_prd                 # a genuinely new breach (incl re-breach)
+            if fresh_eng:
+                # exit2 ref must see only the breach's OWN bars: on a fresh breach a
+                # seam-walk can reach pre-breach structure (the re-breach flaw, Joe). Pin
+                # the ref to the breach-edge bl_line and forget the prior seam; within-
+                # breach seams then roll back in normally.
+                pre_seam_k,      pre_seam_idx      = (k[i - 1], i - 1) if i > 0 else (k[i], i)
+                pre_seam_k_prev, pre_seam_prev_idx = np.nan, -1
             curl = bool(oob[i] and (                           # curl only while OOB
                 (cur_dir == 1  and slope_k[i] < -self.curl_floor) or
                 (cur_dir == -1 and slope_k[i] >  self.curl_floor)))
-            # exit2 anchor: track K's breach extreme; the anchor is a pre-seam K (1 TF9
-            # bar before max K), and exit2 fires when K reverses back past it — a clear
-            # K turn, not a BB flatten (Joe). exit2_anchor picks which seam: 'now' (the
-            # seam before the extreme), 'prior' (one further back), 'avg' (mean).
+            # exit2 ref: the bl_line value 1 TF9 bar before the breach extreme; exit2 fires
+            # when the bl_line reverses back past it — a clear line turn, not a BB flatten
+            # (Joe). exit2_anchor picks which seam: 'now' (the seam before the extreme),
+            # 'prior' (one back); 'avg' is the mean of the two — a DERIVED value, not a
+            # single seam bar, so it is not seam-based and carries no ref bar/dt.
             if self.exit2_anchor == 'prior':
-                anch = pre_seam_k_prev
+                ref, ref_idx = pre_seam_k_prev, pre_seam_prev_idx
             elif self.exit2_anchor == 'avg':
-                anch = (pre_seam_k_prev if pre_seam_k != pre_seam_k else
-                        pre_seam_k if pre_seam_k_prev != pre_seam_k_prev else
-                        (pre_seam_k + pre_seam_k_prev) / 2.0)
+                ref = (pre_seam_k_prev if pre_seam_k != pre_seam_k else
+                       pre_seam_k if pre_seam_k_prev != pre_seam_k_prev else
+                       (pre_seam_k + pre_seam_k_prev) / 2.0)
+                ref_idx = -1
             else:
-                anch = pre_seam_k
+                ref, ref_idx = pre_seam_k, pre_seam_idx
             if state in (0, 3) and fresh_eng:
-                k_ext, k_anch = k[i], anch
+                k_ext, k_anch, k_anch_idx = k[i], ref, ref_idx
             elif state in (1, 2) and (
                     (cur_dir == 1 and k[i] > k_ext) or (cur_dir == -1 and k[i] < k_ext)):
-                k_anch, k_ext = anch, k[i]
-            o_anch[i] = k_anch
+                k_anch, k_ext, k_anch_idx = ref, k[i], ref_idx
+            o_ref[i] = k_anch
+            o_ref_idx[i] = k_anch_idx
             e1 = self._exit_ob_to_ib(bbM_ib, bbM_oob, i)
             e2 = bool(k_anch == k_anch and (                  # k_anch==k_anch ⇒ not NaN
                 (cur_dir == 1 and k[i] < k_anch) or (cur_dir == -1 and k[i] > k_anch)))
@@ -170,14 +181,14 @@ class BreachingLine:
             if ns != 1:
                 pend3 = 0                                      # grace only lives inside state 1
             if ns == 0 or ns == 3:
-                k_ext = k_anch = np.nan                        # breach over → drop the anchor
+                k_ext = k_anch = np.nan; k_anch_idx = -1       # breach over → drop the ref
             state, bdir = ns, nb
             o_state[i], o_dir[i] = state, bdir
             o_e1[i], o_e2[i], o_e3[i] = e1, e2, e3
 
         return {'state': o_state, 'breach_dir': o_dir, 'predicted': pred != 0,
                 'exit1': o_e1, 'exit2': o_e2, 'exit3': o_e3,
-                'slope_k': slope_k, 'exit2_anch': o_anch}
+                'slope_k': slope_k, 'exit2_ref': o_ref, 'exit2_ref_idx': o_ref_idx}
 
     # ── exit methods (parameterised; calibrated against Pine) ─────────────────
     # exit2 (K reversed past its pre-peak anchor) is computed inline in run() — it
