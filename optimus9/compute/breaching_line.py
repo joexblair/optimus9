@@ -177,7 +177,7 @@ class BreachingLine:
 
         return {'state': o_state, 'breach_dir': o_dir, 'predicted': pred != 0,
                 'exit1': o_e1, 'exit2': o_e2, 'exit3': o_e3,
-                'slope_k': slope_k, 'k_anch': o_anch}
+                'slope_k': slope_k, 'pk_anch': o_anch}
 
     # ── exit methods (parameterised; calibrated against Pine) ─────────────────
     # exit2 (K reversed past its pre-peak anchor) is computed inline in run() — it
