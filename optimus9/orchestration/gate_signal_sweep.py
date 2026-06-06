@@ -76,15 +76,49 @@ def apply_decision_delay(pk_raw, delay: int = 1) -> np.ndarray:
     return out
 
 
+# the bny30 production gate (Pine PROVEN): bny30M (BB) OR bny30p (K), 30s, 85/15.
+BNY30 = [
+    dict(ic_itf_seconds=30, ic_line_type='bb', ic_src='hl2', ic_bb_len=58, ic_bb_mult=1.24,
+         ic_high_boundary=85, ic_low_boundary=15),
+    dict(ic_itf_seconds=30, ic_line_type='k', ic_src='ohlc4', ic_k_len=21, ic_rsi_len=114,
+         ic_stc_len=105, ic_high_boundary=85, ic_low_boundary=15),
+]
+
+
+def bny30_oob_side(base_df) -> np.ndarray:
+    """The bny30 gate's per-5s oob_side (+1 HI / -1 LO / 0 in-band), OR-folded over
+    bny30M (BB) + bny30p (K) — the Pine PROVEN production gate (either line OOB)."""
+    gate_df = IC.resample(base_df, 30)
+    sides   = [IC.align_to_base(IC.compute_oob_side(cfg, gate_df), gate_df, base_df)
+               for cfg in BNY30]
+    return IC.fold_gates(sides)
+
+
 def generate_gca5m_signals(base_df, db, cfg: dict = GCA5M):
     """gca5m's UNGATED, UN-delayed pk_raw fire transitions (+1 long / -1 short).
-    Returns (bars, dirs). For the Pine-aligned signal (decision-delay + gate) use
-    pine_aligned_signals(). The gate admits a signal where gate[bar] == -dir."""
+    Returns (bars, dirs). For the Pine-aligned realtime signal use pine_aligned_signals()."""
     s5    = gca5m_pk_raw(base_df, db, cfg)
     clean = s5.astype(float)
     prev  = np.concatenate([[0.0], clean[:-1]])
     idx   = np.where((clean != 0.0) & (clean != prev))[0]  # fire transitions
     return idx.astype(int), s5[idx].astype(int)
+
+
+def pine_aligned_signals(base_df, db, cfg: dict = GCA5M, delay: int = 1, gate: bool = True):
+    """The full Pine PROVEN realtime entry signal — what the strategy actually trades:
+      pk_raw → decision-delay(delay) state machine → fire edges → bny30 gate
+    The gate is mean-reversion: a fire survives only where dir == -oob_side (fire_long
+    needs the gate OOB-low, fire_short OOB-high). Returns (bars, dirs)."""
+    fin   = apply_decision_delay(gca5m_pk_raw(base_df, db, cfg), delay)
+    clean = fin.astype(float)
+    prev  = np.concatenate([[0.0], clean[:-1]])
+    idx   = np.where((clean != 0.0) & (clean != prev))[0]  # confirmed fire edges
+    dirs  = fin[idx].astype(int)
+    if gate:
+        oob  = bny30_oob_side(base_df)
+        keep = dirs == -oob[idx].astype(int)               # mean-reversion gate
+        idx, dirs = idx[keep], dirs[keep]
+    return idx.astype(int), dirs
 
 
 def label_winners(bars, dirs, close, threshold: float = 0.9, horizon: int = 720):

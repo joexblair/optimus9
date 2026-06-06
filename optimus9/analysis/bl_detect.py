@@ -162,9 +162,10 @@ class BLDetect:
         base  = KlineLoader(self._db).load_window(self._tp, load_start, end_ms)
         ts    = base['timestamp'].to_numpy()
 
-        # raw 5s-PK (gca5m, the SnF source) + shared HTF views / price smooth (PRIMARY TF).
-        from ..orchestration.gate_signal_sweep import generate_gca5m_signals
-        pk_idx, pk_dirs = generate_gca5m_signals(base, self._db, GCA5M_RAW)
+        # raw 5s-PK = the Pine-aligned REALTIME signal (pk_raw → decision-delay(1) →
+        # bny30 gate), so blr's "first SnF signal in the gate" is the real entry.
+        from ..orchestration.gate_signal_sweep import pine_aligned_signals
+        pk_idx, pk_dirs = pine_aligned_signals(base, self._db, GCA5M_RAW)
         raw_pk = np.zeros(len(ts), np.int8); raw_pk[pk_idx] = pk_dirs
         c9, e9 = self._htf_views(base, ts)                # c9/e9 + px on the primary line's TF
         tf    = IC.resample(base, self._fam['tf_seconds'])
