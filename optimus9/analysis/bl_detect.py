@@ -49,24 +49,16 @@ class BLDetect:
         self._log      = get_logger(self.__class__.__name__)
         # lines come from bl_lines + indicator_configs (de-hardcoded); tuning from the
         # active bl_config row. fence widened ±fence_pad (5 → 25:75).
-        self._fam = family if family is not None else self._load_family()
-        cfg = self._load_config()
-        self._cfg = cfg                              # kept for the Pine remark
-        fp  = float(cfg['blc_fence_pad'])
-        self._bl = BreachingLine(mult=self._fam['tf_seconds'] // 5,
-                                 curl_floor=float(cfg['blc_curl_floor']),
-                                 curl_lookback=int(cfg['blc_curl_lookback']),
-                                 pseudo_cross=float(cfg['blc_pseudo_cross']),
-                                 grace=int(cfg['blc_grace']),
-                                 exit2_ref=str(cfg['blc_exit2_ref']),
-                                 exit_mask=int(self._fam.get('exit_mask') or 7),
-                                 bb_pad=float(cfg['blc_bb_pad']),
-                                 fence_hi=FENCE_HI + fp, fence_lo=FENCE_LO - fp)
+        self._families = [family] if family is not None else self._load_families()
+        self._fam = self._families[0]   # primary line — the shared TF basis (c9/e9, px, seams)
+        self._cfg = self._load_config()
+        c = self._cfg
         self._log.info(
-            f"bl_config #{cfg['blc_pk']} '{cfg['blc_label']}' | curl_floor={cfg['blc_curl_floor']} "
-            f"curl_lookback={cfg['blc_curl_lookback']} grace={cfg['blc_grace']} "
-            f"pseudo_cross={cfg['blc_pseudo_cross']} fence_pad={cfg['blc_fence_pad']} "
-            f"bb_pad={cfg['blc_bb_pad']} exit2_ref={cfg['blc_exit2_ref']}")
+            f"bl_config #{c['blc_pk']} '{c['blc_label']}' | curl_floor={c['blc_curl_floor']} "
+            f"curl_lookback={c['blc_curl_lookback']} grace={c['blc_grace']} "
+            f"pseudo_cross={c['blc_pseudo_cross']} fence_pad={c['blc_fence_pad']} "
+            f"bb_pad={c['blc_bb_pad']} exit2_ref={c['blc_exit2_ref']} | "
+            f"{len(self._families)} breach line(s): {', '.join(f['name'] for f in self._families)}")
 
     def _load_config(self) -> dict:
         """Ensure bl_config exists, seed a default active row if empty, return the
@@ -94,12 +86,13 @@ class BLDetect:
             rows = self._db.execute(sel, fetch=True)
         return rows[0]
 
-    def _load_family(self) -> dict:
-        """Build the family dict (name, tf_seconds, k/bM/bm cfgs, exit_mask, pk_ic_pk)
-        from the active bl_lines + indicator_configs — replaces the hardcoded HB9 dict.
-        Stage 1: one active 'breach' line + its same-series 'support' BBs (il M→bM, m→bm)."""
-        breach = self._db.execute(
-            '''SELECT bl.bl_ic_pk, bl.bl_pk_ic_pk, bl.bl_exit_mask, ic.ic_is_pk,
+    def _load_families(self) -> list:
+        """Build a family dict per ACTIVE breach line (name, tf_seconds, line_type, the
+        breach-line cfg, support BBs M/m, exit_mask, pk_ic_pk) from bl_lines +
+        indicator_configs. A K-breach family carries its M/m supports; a BB-breach family
+        is standalone (run_bb). Replaces the single-family loader."""
+        breaches = self._db.execute(
+            '''SELECT bl.bl_ic_pk, bl.bl_pk_ic_pk, bl.bl_exit_mask, ic.ic_is_pk, ic.ic_line_type,
                       s.is_prefix, itf.itf_seconds, itf.itf_label, il.il_suffix
                FROM bl_lines bl
                JOIN indicator_configs ic   ON ic.ic_pk   = bl.bl_ic_pk
@@ -107,25 +100,48 @@ class BLDetect:
                JOIN indicator_lines il     ON il.il_pk    = ic.ic_il_pk
                JOIN indicator_timeframes itf ON itf.itf_pk = ic.ic_itf_pk
                WHERE bl.bl_is_active = 1 AND bl.bl_role = 'breach'
-               ORDER BY bl.bl_pk LIMIT 1''', fetch=True)
-        if not breach:
-            raise RuntimeError('bl_lines has no active breach line — seed it (Stage 1)')
-        b = breach[0]
-        supports = self._db.execute(
-            '''SELECT bl.bl_ic_pk, il.il_suffix FROM bl_lines bl
-               JOIN indicator_configs ic ON ic.ic_pk = bl.bl_ic_pk
-               JOIN indicator_lines il   ON il.il_pk = ic.ic_il_pk
-               WHERE bl.bl_is_active = 1 AND bl.bl_role = 'support' AND ic.ic_is_pk = %s''',
-            (b['ic_is_pk'],), fetch=True)
-        by_suf = {a['il_suffix']: self._cfg_dict(a['bl_ic_pk']) for a in supports}
-        fam = {'name':       f"{b['is_prefix']}{b['itf_label']}{b['il_suffix']}",
-               'tf_seconds': int(b['itf_seconds']),
-               'k':  self._cfg_dict(b['bl_ic_pk']),
-               'bM': by_suf.get('M'), 'bm': by_suf.get('m'),
-               'exit_mask': b['bl_exit_mask'], 'pk_ic_pk': b['bl_pk_ic_pk']}
-        self._log.info(f"bl_lines: breach {fam['name']} (TF{fam['tf_seconds']}s) ic={b['bl_ic_pk']} "
-                       f"exit_mask={b['bl_exit_mask']} pk_ic={b['bl_pk_ic_pk']}")
-        return fam
+               ORDER BY bl.bl_pk''', fetch=True)
+        if not breaches:
+            raise RuntimeError('bl_lines has no active breach line — seed it')
+        fams = []
+        for b in breaches:
+            supports = self._db.execute(
+                '''SELECT bl.bl_ic_pk, il.il_suffix FROM bl_lines bl
+                   JOIN indicator_configs ic ON ic.ic_pk = bl.bl_ic_pk
+                   JOIN indicator_lines il   ON il.il_pk = ic.ic_il_pk
+                   WHERE bl.bl_is_active = 1 AND bl.bl_role = 'support' AND ic.ic_is_pk = %s''',
+                (b['ic_is_pk'],), fetch=True)
+            by_suf = {a['il_suffix']: self._cfg_dict(a['bl_ic_pk']) for a in supports}
+            fams.append({'name':       f"{b['is_prefix']}{b['itf_label']}{b['il_suffix']}",
+                         'tf_seconds': int(b['itf_seconds']), 'line_type': b['ic_line_type'],
+                         'k':  self._cfg_dict(b['bl_ic_pk']),
+                         'bM': by_suf.get('M'), 'bm': by_suf.get('m'),
+                         'exit_mask': b['bl_exit_mask'], 'pk_ic_pk': b['bl_pk_ic_pk']})
+            self._log.info(f"  breach {fams[-1]['name']} (TF{fams[-1]['tf_seconds']}s, "
+                           f"{b['ic_line_type']}) mask={b['bl_exit_mask']}")
+        return fams
+
+    def _run_family(self, fam, base, ts):
+        """Compute one family's breach line + run its machine (K via run, BB via run_bb).
+        Returns (line, bM, bm, result_dict) — bM/bm are NaN for a BB-type family."""
+        c, fp = self._cfg, float(self._cfg['blc_fence_pad'])
+        bl = BreachingLine(mult=fam['tf_seconds'] // 5,
+                           curl_floor=float(c['blc_curl_floor']),
+                           curl_lookback=int(c['blc_curl_lookback']),
+                           pseudo_cross=float(c['blc_pseudo_cross']),
+                           grace=int(c['blc_grace']), exit2_ref=str(c['blc_exit2_ref']),
+                           exit_mask=int(fam.get('exit_mask') or 7), bb_pad=float(c['blc_bb_pad']),
+                           fence_hi=FENCE_HI + fp, fence_lo=FENCE_LO - fp)
+        line = self._line(base, fam['k'])                 # the breach line (K or BB)
+        cyc  = ts // (fam['tf_seconds'] * 1000)
+        seam = np.empty(len(ts), bool); seam[0] = True; seam[1:] = cyc[1:] != cyc[:-1]
+        if fam['line_type'] == 'bb':
+            r  = bl.run_bb(line, seam=seam)
+            bM = bm = np.full(len(ts), np.nan)
+        else:
+            bM = self._line(base, fam['bM']); bm = self._line(base, fam['bm'])
+            r  = bl.run(line, bm, bM, seam=seam)
+        return line, bM, bm, r
 
     def _cfg_dict(self, ic_pk) -> dict:
         """One indicator_configs row → the kind/params dict _line() consumes."""
@@ -145,86 +161,72 @@ class BLDetect:
 
         base  = KlineLoader(self._db).load_window(self._tp, load_start, end_ms)
         ts    = base['timestamp'].to_numpy()
-        close = base['close'].to_numpy(dtype=float)
 
-        # raw 5s-PK (gca5m, the SnF source): fire events per bar (+1 long / -1 short / 0)
+        # raw 5s-PK (gca5m, the SnF source) + shared HTF views / price smooth (PRIMARY TF).
         from ..orchestration.gate_signal_sweep import generate_gca5m_signals
         pk_idx, pk_dirs = generate_gca5m_signals(base, self._db, GCA5M_RAW)
-        raw_pk = np.zeros(len(ts), np.int8)
-        raw_pk[pk_idx] = pk_dirs
-
-        # Lines are the DEVELOPING (lookahead) HTF view, 5s-aligned — matches TV's
-        # lookahead_on (last bar + ticks). The machine ticks per 5s with a curl/slope
-        # lookback of tf_seconds/5 bars (hb9 = 108) to span one HTF period.
-        k  = self._line(base, self._fam['k'])     # hb9b (breaching K)
-        bM = self._line(base, self._fam['bM'])    # hb9M
-        bm = self._line(base, self._fam['bm'])    # hb9m
-        # TF9 seams (cycle boundaries) — exit2's anchor is the K just before the seam
-        # preceding max K, so the machine needs to know where the 9-min seams fall.
-        cyc  = ts // (self._fam['tf_seconds'] * 1000)
-        seam = np.empty(len(ts), bool); seam[0] = True; seam[1:] = cyc[1:] != cyc[:-1]
-        r  = self._bl.run(k, bm, bM, seam=seam)   # run(k, bb_m, bb_M, seam)
-        # ── two HTF (9-min) views per 5s bar, lookahead-free (see _htf_views) ──
-        # c9 = last CLOSED 9-min bar (held across the cycle); e9 = the EMERGING bar
-        # accumulated from cycle-open to THIS 5s bar (O anchored at the cycle's first
-        # 5s open; H/L running extremes so far; C = this 5s close). Realtime reads e9;
-        # c9 is the confirmed reference. Replaces the old forward-filled full-bar tf_*
-        # which leaked the whole closed bar onto its first 5s row (the 21:45 mismatch).
-        c9, e9 = self._htf_views(base, ts)
-
-        # px_smooth = DEMA(9m close, 2) on the developing bin — display only.
-        # REVIEW: still developing-bin/lookahead basis; candidate to ride e9['close'].
+        raw_pk = np.zeros(len(ts), np.int8); raw_pk[pk_idx] = pk_dirs
+        c9, e9 = self._htf_views(base, ts)                # c9/e9 + px on the primary line's TF
         tf    = IC.resample(base, self._fam['tf_seconds'])
-        tf_ts = tf['timestamp'].to_numpy()
-        idx   = np.clip(np.searchsorted(tf_ts, ts, side='right') - 1, 0, None)
-        px  = IC.dema(tf['close'].to_numpy(dtype=float), 2)[idx]
+        idx   = np.clip(np.searchsorted(tf['timestamp'].to_numpy(), ts, side='right') - 1, 0, None)
+        px    = IC.dema(tf['close'].to_numpy(dtype=float), 2)[idx]
+
+        # run EVERY active breach line (K via run, BB via run_bb), then fold the combined
+        # state the gate reacts to = min(states) across lines, per bar.
+        runs = [(fam, *self._run_family(fam, base, ts)) for fam in self._families]
+        combined = np.vstack([r['state'] for *_, r in runs]).min(axis=0).astype(np.int8)
 
         rows = []
-        for i in range(len(ts)):
-            if ts[i] < win_start:
-                continue
-            rows.append({
-                'bar_ms':    int(ts[i]),
-                'line_name': self._fam['name'],            # which BL line (preempts multi-line)
-                'px_smooth': _f(px[i]),
-                'c9_open':   _f(c9['o'][i]), 'c9_high': _f(c9['h'][i]),
-                'c9_low':    _f(c9['l'][i]), 'c9_close': _f(c9['c'][i]),
-                'e9_open':   _f(e9['o'][i]), 'e9_high': _f(e9['h'][i]),
-                'e9_low':    _f(e9['l'][i]), 'e9_close': _f(e9['c'][i]),
-                'hb9b':      _f(k[i]),  'hb9M': _f(bM[i]),  'hb9m': _f(bm[i]),
-                'k_gt_bb_main': int(bool(k[i] > bM[i])),   # raw K>bb_main — the IB-cross marker
-                'slope_k':   _f(r['slope_k'][i]),          # curl input: k[i]-k[i-curl_lookback]
-                'exit2_ref':    _f(r['exit2_ref'][i]),     # exit2 reversal REFERENCE (pre-seam bl_line, not a PK anchor)
-                'exit2_ref_dt': (_dt(int(ts[r['exit2_ref_idx'][i]]))
-                                 if r['exit2_ref_idx'][i] >= 0 else None),   # source bar of the ref (NULL for 'avg')
-                'bl_ext':       _f(r['bl_ext'][i]),        # breach extreme (debug: extreme · ref · line triangle)
-                'predicted': int(bool(r['predicted'][i])),
-                'exit1':     int(bool(r['exit1'][i])),
-                'exit2':     int(bool(r['exit2'][i])),
-                'exit3':     int(bool(r['exit3'][i])),
-                'breach_dir': int(r['breach_dir'][i]),
-                'state':     int(r['state'][i]),
-                'raw_pk':    int(raw_pk[i]),               # gca5m 5s-PK fire (+1 long / -1 short / 0)
-            })
+        for fam, line, bM, bm, r in runs:
+            for i in range(len(ts)):
+                if ts[i] < win_start:
+                    continue
+                rows.append({
+                    'bar_ms':    int(ts[i]),
+                    'line_name': fam['name'],
+                    'px_smooth': _f(px[i]),
+                    'c9_open':   _f(c9['o'][i]), 'c9_high': _f(c9['h'][i]),
+                    'c9_low':    _f(c9['l'][i]), 'c9_close': _f(c9['c'][i]),
+                    'e9_open':   _f(e9['o'][i]), 'e9_high': _f(e9['h'][i]),
+                    'e9_low':    _f(e9['l'][i]), 'e9_close': _f(e9['c'][i]),
+                    'hb9b':      _f(line[i]), 'hb9M': _f(bM[i]), 'hb9m': _f(bm[i]),
+                    'k_gt_bb_main': int(bool(line[i] > bM[i])) if bM[i] == bM[i] else 0,
+                    'slope_k':   _f(r['slope_k'][i]),
+                    'exit2_ref':    _f(r['exit2_ref'][i]),
+                    'exit2_ref_dt': (_dt(int(ts[r['exit2_ref_idx'][i]]))
+                                     if r['exit2_ref_idx'][i] >= 0 else None),
+                    'bl_ext':       _f(r['bl_ext'][i]),
+                    'predicted': int(bool(r['predicted'][i])),
+                    'exit1':     int(bool(r['exit1'][i])),
+                    'exit2':     int(bool(r['exit2'][i])),
+                    'exit3':     int(bool(r['exit3'][i])),
+                    'breach_dir': int(r['breach_dir'][i]),
+                    'state':     int(r['state'][i]),
+                    'combined_state': int(combined[i]),    # min(states) — what the gate reads
+                    'raw_pk':    int(raw_pk[i]),
+                })
         self._persist(rows)
-        states = [row['state'] for row in rows]
-        trans  = sum(1 for j in range(1, len(states)) if states[j] != states[j - 1])
-        self._log.info(f'bl_states: {len(rows)} bars ({self._fam["name"]}, last '
-                       f'{self._lookback}h) — {trans} state transitions')
+        nbars = len(set(row['bar_ms'] for row in rows))
+        self._log.info(f"bl_states: {len(rows)} rows ({len(self._families)} lines × {nbars} bars, "
+                       f"last {self._lookback}h) — lines {[f['name'] for f in self._families]}")
         return rows
 
     def emit_pine(self, rows: list, path: str = 'bl_hb9_states.pine') -> str:
         """Label each state TRANSITION with the new state, coloured by state —
         eyeball against the manual application on TV."""
-        trans = [r for j, r in enumerate(rows)
-                 if j == 0 or r['state'] != rows[j - 1]['state']]
-        t = ','.join(str(r['bar_ms']) for r in trans) or '0'
-        s = ','.join(str(r['state'])  for r in trans) or '0'
-        pk = [r for r in rows if r.get('raw_pk')]                   # gca5m raw-pk fires
-        pt = ','.join(str(r['bar_ms']) for r in pk) or '0'
-        pd = ','.join(str(r['raw_pk']) for r in pk) or '0'
-        nm = self._fam['name']   # prefix every identifier so multiple BL overlays
-                                 # (hb9, s18b, …) coexist on one chart without clashing
+        # rows are multi-line (N per bar) — collapse to the per-bar COMBINED state + raw pk
+        per_bar = {}
+        for r in rows:
+            per_bar.setdefault(r['bar_ms'], (r['combined_state'], r['raw_pk']))
+        bars  = sorted(per_bar)
+        cs    = [per_bar[b][0] for b in bars]
+        trans = [(bars[j], cs[j]) for j in range(len(bars)) if j == 0 or cs[j] != cs[j - 1]]
+        t = ','.join(str(b)  for b, _ in trans) or '0'
+        s = ','.join(str(st) for _, st in trans) or '0'
+        fires = [(b, per_bar[b][1]) for b in bars if per_bar[b][1]]
+        pt = ','.join(str(b) for b, _ in fires) or '0'
+        pd = ','.join(str(d) for _, d in fires) or '0'
+        nm = 'blc'   # the combined-state overlay (per-line detail lives in bl_review)
         c  = self._cfg
         built = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
         cfg_line = (f"bl_config #{c['blc_pk']} '{c['blc_label']}': curl_floor={c['blc_curl_floor']} "
@@ -232,10 +234,10 @@ class BLDetect:
                     f"pseudo_cross={c['blc_pseudo_cross']} fence_pad={c['blc_fence_pad']} "
                     f"bb_pad={c['blc_bb_pad']} exit2_ref={c['blc_exit2_ref']}")
         pine = f'''//@version=6
-indicator("BL states ({nm})", overlay=true, max_labels_count=500)
-// built {built} UTC  |  {len(rows)} bars, last {self._lookback}h — {len(trans)} transitions
+indicator("BL combined: {','.join(f['name'] for f in self._families)}", overlay=true, max_labels_count=500)
+// built {built} UTC  |  {len(bars)} bars, {len(self._families)} lines — {len(trans)} combined transitions
 // {cfg_line}
-// state 0 idle · 1 breached · 2 curled · 3 complete
+// combined state = MIN(line states) · 0 idle · 1 breached · 2 curled · 3 complete
 // window is timeframe-aware: a transition prints on whatever bar contains it (5s, TF9, …)
 var int[] {nm}_tt = array.from({t})
 var int[] {nm}_ss = array.from({s})
@@ -264,7 +266,7 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
 '''
         with open(path, 'w') as f:
             f.write(pine)
-        self._log.info(f'wrote Pine overlay ({len(trans)} transitions, {len(pk)} raw pks) -> {path}')
+        self._log.info(f'wrote Pine overlay ({len(trans)} combined transitions, {len(fires)} raw pks) -> {path}')
         return path
 
     # ── internals ──────────────────────────────────────────────────────────
@@ -321,7 +323,7 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
             k_line FLOAT, bb_main FLOAT, bb_mid FLOAT, k_gt_bb_main TINYINT,
             slope_k FLOAT, exit2_ref FLOAT, exit2_ref_dt DATETIME, bl_ext FLOAT,
             predicted TINYINT, exit1 TINYINT, exit2 TINYINT, exit3 TINYINT,
-            breach_dir TINYINT, state TINYINT, raw_pk TINYINT)''')
+            breach_dir TINYINT, state TINYINT, combined_state TINYINT, raw_pk TINYINT)''')
         if not rows:
             return
         cols = ['bar_time', 'line_name', 'px_smooth',
@@ -329,7 +331,8 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
                 'e9_open', 'e9_high', 'e9_low', 'e9_close',
                 'k_line', 'bb_main', 'bb_mid', 'k_gt_bb_main', 'slope_k',
                 'exit2_ref', 'exit2_ref_dt', 'bl_ext',
-                'predicted', 'exit1', 'exit2', 'exit3', 'breach_dir', 'state', 'raw_pk']
+                'predicted', 'exit1', 'exit2', 'exit3', 'breach_dir', 'state',
+                'combined_state', 'raw_pk']
         ph = ','.join(['%s'] * len(cols))
         data = [[_dt(r['bar_ms']), r['line_name'], r['px_smooth'],
                  r['c9_open'], r['c9_high'], r['c9_low'], r['c9_close'],
@@ -337,7 +340,7 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
                  r['hb9b'], r['hb9M'], r['hb9m'], r['k_gt_bb_main'], r['slope_k'],
                  r['exit2_ref'], r['exit2_ref_dt'], r['bl_ext'],
                  r['predicted'], r['exit1'], r['exit2'], r['exit3'],
-                 r['breach_dir'], r['state'], r['raw_pk']] for r in rows]
+                 r['breach_dir'], r['state'], r['combined_state'], r['raw_pk']] for r in rows]
         self._db.executemany(
             f'INSERT INTO {self._TABLE} ({",".join(cols)}) VALUES ({ph})', data)
 
