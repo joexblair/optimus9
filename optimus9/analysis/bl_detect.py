@@ -132,27 +132,32 @@ class BLDetect:
                            grace=int(c['blc_grace']), exit2_ref=str(c['blc_exit2_ref']),
                            exit_mask=int(fam.get('exit_mask') or 7), bb_pad=float(c['blc_bb_pad']),
                            fence_hi=FENCE_HI + fp, fence_lo=FENCE_LO - fp)
-        tf   = int(fam['tf_seconds'])
-        line = self._line(base, fam['k'], tf)             # the breach line (K or BB), on its own TF
+        tf   = int(fam['tf_seconds'])                     # breach line's TF = the machine's cadence
+        line = self._line(base, fam['k'])                 # each line computes on its own config TF
         cyc  = ts // (tf * 1000)
         seam = np.empty(len(ts), bool); seam[0] = True; seam[1:] = cyc[1:] != cyc[:-1]
         if fam['line_type'] == 'bb':
             r  = bl.run_bb(line, seam=seam)
             bM = bm = np.full(len(ts), np.nan)
         else:
-            bM = self._line(base, fam['bM'], tf); bm = self._line(base, fam['bm'], tf)
+            bM = self._line(base, fam['bM']); bm = self._line(base, fam['bm'])
             r  = bl.run(line, bm, bM, seam=seam)
         return line, bM, bm, r
 
     def _cfg_dict(self, ic_pk) -> dict:
-        """One indicator_configs row → the kind/params dict _line() consumes."""
-        r = self._db.execute('SELECT * FROM indicator_configs WHERE ic_pk = %s',
-                             (ic_pk,), fetch=True)[0]
+        """One indicator_configs row → the kind/params dict _line() consumes, INCLUDING
+        the line's own tf_seconds. The TF is a property of the config (ic_itf_pk), so the
+        calculator computes from a complete config — no caller re-sources the timeframe."""
+        r = self._db.execute(
+            '''SELECT ic.*, itf.itf_seconds FROM indicator_configs ic
+               JOIN indicator_timeframes itf ON itf.itf_pk = ic.ic_itf_pk
+               WHERE ic.ic_pk = %s''', (ic_pk,), fetch=True)[0]
+        tf = int(r['itf_seconds'])
         if r['ic_line_type'] == 'k':
-            return dict(kind='k', rsi_len=int(r['ic_rsi_len']), stc_len=int(r['ic_stc_len']),
-                        k_len=int(r['ic_k_len']), src=r['ic_src'])
-        return dict(kind='bb', bb_len=int(r['ic_bb_len']), bb_mult=float(r['ic_bb_mult']),
-                    src=r['ic_src'])
+            return dict(kind='k', tf_seconds=tf, rsi_len=int(r['ic_rsi_len']),
+                        stc_len=int(r['ic_stc_len']), k_len=int(r['ic_k_len']), src=r['ic_src'])
+        return dict(kind='bb', tf_seconds=tf, bb_len=int(r['ic_bb_len']),
+                    bb_mult=float(r['ic_bb_mult']), src=r['ic_src'])
 
     # ── public ───────────────────────────────────────────────────────────────
     def report(self, end_ms=None) -> list:
@@ -272,13 +277,15 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
         return path
 
     # ── internals ──────────────────────────────────────────────────────────
-    def _line(self, base, cfg, tf_seconds):
-        """Developing (lookahead) HTF line on the LINE'S OWN TF, 5s-aligned — matches
-        TV lookahead_on. tf_seconds is per-family (mnm9=240, hb9=540): a multi-line
-        engine must compute each line on its own timeframe, not the primary's."""
+    def _line(self, base, cfg):
+        """Developing (lookahead) HTF line on the line's OWN TF (cfg['tf_seconds']),
+        5s-aligned — matches TV lookahead_on. The TF rides in the config, so a multi-line
+        engine computes each line on its declared timeframe by construction (no primary
+        leakage: mnm9=240, hb9=540, a support on a third TF would Just Work)."""
+        secs = cfg['tf_seconds']
         if cfg['kind'] == 'bb':
-            return IC.f_bb_lookahead(base, tf_seconds, cfg['bb_len'], cfg['bb_mult'], cfg['src'])
-        return IC.f_k_lookahead(base, tf_seconds, cfg['k_len'], cfg['rsi_len'], cfg['stc_len'], cfg['src'])
+            return IC.f_bb_lookahead(base, secs, cfg['bb_len'], cfg['bb_mult'], cfg['src'])
+        return IC.f_k_lookahead(base, secs, cfg['k_len'], cfg['rsi_len'], cfg['stc_len'], cfg['src'])
 
     def _htf_views(self, base, ts):
         """Per-5s, lookahead-free 9-min OHLC, two views:
