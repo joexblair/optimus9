@@ -27,79 +27,85 @@ def build_review(db, pct: float = 0.9) -> list:
     log = get_logger('BLReview')
     rows = db.execute(
         '''SELECT bls_pk, bar_time, line_name, px_smooth, k_line, bb_main, breach_dir,
-                  predicted, state, exit1, exit2, exit3, raw_pk
-           FROM bl_states WHERE px_smooth IS NOT NULL ORDER BY bar_time''', fetch=True)
+                  predicted, state, exit1, exit2, exit3, raw_pk, combined_state
+           FROM bl_states WHERE px_smooth IS NOT NULL ORDER BY line_name, bar_time''', fetch=True)
     if not rows:
         log.warning('bl_states has no px_smooth rows — run bl_detect first')
         return []
-    px     = np.array([float(r['px_smooth']) for r in rows])
-    pivots = sorted(find_pivots(px, pct))                 # [(idx, 'H'|'L')] by idx
 
-    def next_kind(i, kind):                               # next pivot of `kind` after i
-        return next((idx for idx, k in pivots if idx > i and k == kind), None)
+    # per-bar shared series (px / combined / raw_pk are identical across lines) + the
+    # in-breach direction seen at each bar (the combined gate-open's trade side) + a
+    # representative row per bar (for the gate rec's shared columns).
+    bar_i, bars, px, comb, rawpk, bdir, rep, by_line = {}, [], [], [], [], [], {}, {}
+    for r in rows:
+        bt = r['bar_time']
+        if bt not in bar_i:
+            bar_i[bt] = len(bars); bars.append(bt); rep[bt] = r
+            px.append(float(r['px_smooth'])); comb.append(int(r['combined_state']))
+            rawpk.append(int(r['raw_pk'] or 0)); bdir.append(0)
+        if int(r['state']) in (1, 2) and int(r['breach_dir']) in (1, -1):
+            bdir[bar_i[bt]] = int(r['breach_dir'])
+        by_line.setdefault(r['line_name'], []).append(r)
+    px     = np.array(px)
+    pivots = sorted(find_pivots(px, pct))
 
-    def first_after(idx0):                                # next pivot of any kind after idx0
-        return next((idx for idx, k in pivots if idx > idx0), None)
+    def next_kind(i, kind): return next((x for x, k in pivots if x > i and k == kind), None)
+    def first_after(i0):    return next((x for x, k in pivots if x > i0), None)
 
-    # ── identify event rows (state change / exit) ────────────────────────────
-    events = {}
-    for j, r in enumerate(rows):
-        prev    = int(rows[j - 1]['state']) if j > 0 else 0
-        st      = int(r['state'])
-        exits   = (1 if r['exit1'] else 0) | (2 if r['exit2'] else 0) | (4 if r['exit3'] else 0)
-        changed = st != prev
-        if changed or exits:
-            events[j] = ('gate_open' if (changed and prev in (1, 2) and st in (0, 3))
-                         else ('state' if changed else 'exit_raw'))
-
-    # 'exit_raw' = a raw exit *condition* fired but did NOT complete the journey (e.g.
-    # exit3 pseudo-cross while still bls1 — never curls). Collapse a consecutive run of
-    # them to its first bar (one slow approach should be one row, not 15).
-    drop, prev_kept = [], None
-    for j in sorted(events):
-        if events[j] == 'exit_raw' and prev_kept == 'exit_raw':
-            drop.append(j)
-        else:
-            prev_kept = events[j]
-    for j in drop:
-        del events[j]
-
-    # context: include the 11 rows preceding each STATE CHANGE (incl gate_open) — the run-up
-    emit = set(events)
-    for j, ev in events.items():
-        if ev in ('state', 'gate_open'):
-            emit.update(range(max(0, j - 11), j))
+    def rec(line, bt, ev, st, bd, raw, src):
+        e = (1 if src['exit1'] else 0) | (2 if src['exit2'] else 0) | (4 if src['exit3'] else 0)
+        return {'bls_pk': src['bls_pk'], 'bar_time': bt, 'bl_line': line, 'event': ev,
+                'state': st, 'breach_dir': bd, 'predicted': int(bool(src['predicted'])),
+                'raw_pk': raw, 'px_smooth': src['px_smooth'], 'k_line': src['k_line'],
+                'bb_main': src['bb_main'], 'exit_bits': e, 'stop_pct': None, 'stop_at': None,
+                'profit_pct': None, 'profit_at': None}
 
     out = []
-    for j in sorted(emit):
-        r     = rows[j]
-        ev    = events.get(j, 'context')
-        exits = (1 if r['exit1'] else 0) | (2 if r['exit2'] else 0) | (4 if r['exit3'] else 0)
-        rec = {'bls_pk': r['bls_pk'], 'bar_time': r['bar_time'], 'bl_line': r['line_name'],
-               'event': ev, 'state': int(r['state']), 'breach_dir': int(r['breach_dir']),
-               'predicted': int(bool(r['predicted'])), 'raw_pk': int(r['raw_pk'] or 0),
-               'px_smooth': r['px_smooth'], 'k_line': r['k_line'], 'bb_main': r['bb_main'],
-               'exit_bits': exits, 'stop_pct': None, 'stop_at': None,
-               'profit_pct': None, 'profit_at': None}
-        if ev == 'gate_open':
-            # direction is the IN-BREACH dir (the gate-open row may be a state→0 reset
-            # with breach_dir=0), so read it from the bar before the gate opened.
-            bdir = int(rows[j - 1]['breach_dir']) if j > 0 else 0
-            if bdir in (1, -1):
-                kind = 'H' if bdir == 1 else 'L'              # hi→short→next peak; lo→long→next trough
-                pk = next_kind(j, kind)
-                if pk is not None:
-                    rec['stop_pct'] = round(abs(px[pk] - px[j]) / px[j] * 100, 3)
-                    rec['stop_at']  = rows[pk]['bar_time']
-                    tk = first_after(pk)
-                    if tk is not None:
-                        rec['profit_pct'] = round(abs(px[tk] - px[pk]) / px[pk] * 100, 3)
-                        rec['profit_at']  = rows[tk]['bar_time']
-        out.append(rec)
+    # ── COMBINED gate-opens (req2/3): combined 1/2 → 0/3 — the gate the trade uses ──
+    gate = {i: 'gate_open' for i in range(len(bars))
+            if comb[i] in (0, 3) and (comb[i - 1] if i > 0 else 0) in (1, 2)}
+    g_emit = set(gate)
+    for i in gate:
+        g_emit.update(range(max(0, i - 11), i))           # 11-bar run-up into the gate
+    for i in sorted(g_emit):
+        ev = gate.get(i, 'context')
+        d  = bdir[i - 1] if i > 0 else 0                   # trade side = the in-breach dir before the open
+        r  = rec('gate', bars[i], ev, comb[i], d, rawpk[i], rep[bars[i]])
+        if ev == 'gate_open' and d in (1, -1):
+            pk = next_kind(i, 'H' if d == 1 else 'L')       # hi→short→next peak; lo→long→next trough
+            if pk is not None:
+                r['stop_pct'] = round(abs(px[pk] - px[i]) / px[i] * 100, 3); r['stop_at'] = bars[pk]
+                tk = first_after(pk)
+                if tk is not None:
+                    r['profit_pct'] = round(abs(px[tk] - px[pk]) / px[pk] * 100, 3); r['profit_at'] = bars[tk]
+        out.append(r)
 
+    # ── per-line state changes / exits (req1) + the 11-bar run-up per change ──
+    for line, lrows in by_line.items():
+        ev = {}
+        for k, r in enumerate(lrows):
+            prev = int(lrows[k - 1]['state']) if k > 0 else 0
+            st   = int(r['state'])
+            if st != prev or r['exit1'] or r['exit2'] or r['exit3']:
+                ev[k] = 'state' if st != prev else 'exit_raw'
+        drop, kept = [], None                              # collapse consecutive exit_raw runs
+        for k in sorted(ev):
+            if ev[k] == 'exit_raw' and kept == 'exit_raw': drop.append(k)
+            else: kept = ev[k]
+        for k in drop: del ev[k]
+        em = set(ev)
+        for k, e in ev.items():
+            if e == 'state': em.update(range(max(0, k - 11), k))
+        for k in sorted(em):
+            r = lrows[k]
+            out.append(rec(line, r['bar_time'], ev.get(k, 'context'), int(r['state']),
+                           int(r['breach_dir']), int(r['raw_pk'] or 0), r))
+
+    out.sort(key=lambda o: (o['bar_time'], o['bl_line']))
     _persist(db, out)
-    ngate = sum(1 for o in out if o['stop_pct'] is not None)
-    log.info(f'{_TABLE}: {len(out)} rows ({ngate} gate-opens with stop/profit) → table {_TABLE}')
+    ng = sum(1 for o in out if o['stop_pct'] is not None)
+    log.info(f'{_TABLE}: {len(out)} rows ({ng} combined gate-opens w/ stop/profit, '
+             f'{len(by_line)} lines) → table {_TABLE}')
     return out
 
 
