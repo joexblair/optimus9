@@ -18,15 +18,15 @@ that updates per trade — so "poll every second" reads the running price)
   Poll the developing 1m bar every 1s → the close is the price sample. Build 5s bars
   the EXACT same way BarBuilder does (gapless), just fed from REST 1s samples.
 
-OBSERVE MODE (Joe 2026-06-06)
-  We don't yet know the right tolerance, so we OBSERVE: each bar records the per-field
-  O/H/L/C variance IN TICKS (no volume) — `ka_var_o/h/l/c`. The distribution of those
-  counts drives the next move (zero-tolerance / freeze-check / close-only / …).
-    5s tier: kc vs the REST-built bar, every 5s boundary.
-    1m tier: a few seconds after the minute, the official CLOSED 1m bar vs kc's 1m
-             aggregate (gold standard) AND the auditor's 1m aggregate (REST sanity).
-  Only STRUCTURAL faults (missing kc bar / incomplete minute) ERROR-log; tick variance
-  is recorded, not alarmed.
+TWO TIERS (the observe pass settled their roles, Joe 2026-06-06)
+  5s LIVENESS — kc is built from every WS tick, so REST (1s samples) can't tick-validate
+    a 5s bar; the residual variance is sampling noise. So 5s catches the FREEZE modes:
+    kc bar MISSING (collector down) or FROZEN (kc close static while the REST price moved).
+    The per-field tick variance is still recorded as context (ka_var_*), not alarmed.
+  1m TICK-EXACT GATE — a minute's OHLC is invariant to 5s sub-bucketing, so the official
+    CLOSED 1m bar vs kc's 1m aggregate IS exact (proven: matched 0,0,0,0). A non-zero
+    variance here = our tape diverged from the exchange → ERROR.
+  Bucketing is synced to Bybit server time so the 5s windows align to the exchange grid.
 
 The PURE CORE (bar construction + 1m aggregate + tick-variance) is below and is the
 testable heart (tests/test_kline_auditor.py); the KlineAuditor service wraps it.
@@ -81,6 +81,18 @@ def tick_variance(a, b, tick_size):
     return {f: int(round((float(a[i]) - float(b[i])) / tick_size)) for i, f in enumerate(_OHLC)}
 
 
+def is_frozen(recent, move_threshold):
+    """recent = [(kc_close, rest_close), …] over the freeze window. Frozen = the kc close
+    is perfectly STATIC while the independent REST price MOVED more than move_threshold —
+    a real freeze (kc writing stale closes while the market moved). Both static = a quiet
+    market, NOT a freeze."""
+    if len(recent) < 2:
+        return False
+    kc_static = len({round(r[0], 12) for r in recent}) == 1
+    rest_move = max(r[1] for r in recent) - min(r[1] for r in recent)
+    return kc_static and rest_move > move_threshold
+
+
 def _iso(ms: int) -> str:
     return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).strftime('%H:%M:%S')
 
@@ -108,6 +120,8 @@ class KlineAuditor:
     _CONFIG       = 'kline_audit_config'
     _PRUNE_DAYS   = 7
     _GC_KEEP_MIN  = 5
+    _FREEZE_BARS  = 6          # kc close static this many 5s bars + REST moved = freeze
+    _FREEZE_TICKS = 3          # REST must have moved > this many ticks to call it a freeze
 
     def __init__(self, db: DatabaseManager) -> None:
         self._db     = db
@@ -121,6 +135,7 @@ class KlineAuditor:
         self._clock_off  = 0          # ms: Bybit server − local; aligns 5s bucketing to exchange time
         self._last_sync  = 0.0
         self._last_prune = time.time()
+        self._recent     = []         # rolling (kc_close, rest_close) for freeze detection
 
     # ── lifecycle ───────────────────────────────────────────────────────────
     def run(self, tp_pk: int, symbol: str) -> None:
@@ -235,14 +250,24 @@ class KlineAuditor:
 
     # ── tiers (observe: record variance, alarm only on structural faults) ────
     def _flush_5s(self, tp_pk: int, win_start: int, audit_bar) -> None:
-        kc  = self._kc_5s(tp_pk, win_start)
-        var = tick_variance(kc, audit_bar, self._tick)
-        if var is None:
-            self._record(tp_pk, win_start, '5s', 'missing', kc, audit_bar, None, None, 'no kc bar')
-            self._log.error(f'5s missing @ {_iso(win_start)}: kline_collection has no bar')
+        """5s LIVENESS tier (path A): is kc present and tracking the live price? REST can't
+        tick-validate a 5s bar (kc has every WS tick; the auditor samples at 1s), so this
+        catches the freeze modes — not tick variance. The 1m tier is the tick-exact gate."""
+        kc = self._kc_5s(tp_pk, win_start)
+        if kc is None:
+            self._record(tp_pk, win_start, '5s', 'missing', None, audit_bar, None, None, 'no kc bar')
+            self._log.error(f'5s MISSING @ {_iso(win_start)}: kline_collection has no bar (collector down?)')
             return
-        verdict = 'match' if not any(var.values()) else 'variance'
+        self._recent.append((kc[3], audit_bar[3]))                  # (kc_close, rest_close)
+        self._recent = self._recent[-self._FREEZE_BARS:]
+        frozen  = (len(self._recent) >= self._FREEZE_BARS
+                   and is_frozen(self._recent, self._FREEZE_TICKS * self._tick))
+        verdict = 'frozen' if frozen else 'live'
+        var = tick_variance(kc, audit_bar, self._tick)              # context, not a fault
         self._record(tp_pk, win_start, '5s', verdict, kc, audit_bar, None, var, _fmt_var(var))
+        if frozen:
+            self._log.error(f'5s FROZEN @ {_iso(win_start)}: kc close static {self._FREEZE_BARS} bars '
+                            f'({kc[3]}) while REST moved — collector writing stale closes?')
 
     def _reconcile_1m(self, tp_pk: int, symbol: str, minute_start: int, audit_5s: dict, audit_v) -> None:
         n      = self._MIN_MS // (self._BAR_S * 1000)                    # 12 bars/minute
@@ -265,6 +290,8 @@ class KlineAuditor:
         detail   = (f'off_vs_kc:{_fmt_var(var)} off_vs_audit:{_fmt_var(var_a)} '
                     f'vol off={official[4]} kc={kc_1m[4]}')
         self._record(tp_pk, minute_start, '1m', verdict, kc_1m, audit_1m, official, var, detail)
+        if verdict != 'match':                                      # the tick-exact gate — a real fault
+            self._log.error(f'1m VARIANCE @ {_iso(minute_start)}: our tape != the exchange | {detail}')
 
     # ── persistence ─────────────────────────────────────────────────────────
     def _record(self, tp_pk, ts, tier, verdict, kc, audit, official, var, detail) -> None:

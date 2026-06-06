@@ -5,7 +5,7 @@ the per-field O/H/L/C variance IN TICKS vs kline_collection (5s) + the official 
 1m bar. These cases pin: the bar construction (mirrors BarBuilder._build_one), the 1m
 aggregate, and the tick-variance measure (observe mode).
 """
-from optimus9.data.kline_auditor import build_5s_bar, aggregate_1m, tick_variance
+from optimus9.data.kline_auditor import build_5s_bar, aggregate_1m, tick_variance, is_frozen
 
 
 # ── 5s construction: mirror BarBuilder._build_one, from REST samples ─────────
@@ -68,3 +68,24 @@ def test_tick_variance_missing_bar_is_none():
     bar = (0.1, 0.1, 0.1, 0.1)
     assert tick_variance(None, bar, TICK) is None
     assert tick_variance(bar, None, TICK) is None
+
+
+# ── freeze detection (5s liveness): kc static while the REST price moved ──────
+MOVE = 3 * TICK
+
+
+def test_is_frozen_static_kc_while_rest_moved():
+    recent = [(0.10000, 0.10000), (0.10000, 0.10002), (0.10000, 0.10004)]   # rest +4 ticks
+    assert is_frozen(recent, MOVE)
+
+
+def test_is_frozen_quiet_market_not_frozen():
+    assert not is_frozen([(0.10000, 0.10000)] * 4, MOVE)                     # both static = quiet
+
+
+def test_is_frozen_kc_moving_not_frozen():
+    assert not is_frozen([(0.10000, 0.10000), (0.10001, 0.10002)], MOVE)    # kc moving
+
+
+def test_is_frozen_rest_move_below_threshold():
+    assert not is_frozen([(0.10000, 0.10000), (0.10000, 0.10001)], MOVE)    # rest +1 tick ≤ 3
