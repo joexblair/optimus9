@@ -46,6 +46,8 @@ class BarBuilder:
 
     _BAR_S = 5
     _MAX_FILL_BARS = 720          # cap live forward-fill at ~1h; bigger gaps → backfiller
+    _COMMIT_DELAY_MS = 500        # print just past the seam (ticks commit <1s) — Joe 2026-06-06
+    _REBUILD_BARS    = 3          # re-process the last N bars each cycle to absorb late ticks
 
     def __init__(self, db: DatabaseManager) -> None:
         self._db  = db
@@ -55,20 +57,24 @@ class BarBuilder:
     def run(self, tp_pk: int) -> None:
         self._log.info('BarBuilder started')
         while True:
-            self._sleep_to_boundary()
-            boundary_ms  = int(time.time() * 1000)
-            latest_start = boundary_ms - 2 * self._BAR_S * 1000   # last fully-closed bar
+            self._sleep_to_boundary()                              # wake at the seam + commit delay
+            bar          = self._BAR_S * 1000
+            boundary_ms  = (int(time.time() * 1000) // bar) * bar   # the seam we just crossed
+            latest_start = boundary_ms - bar                        # print the JUST-closed window now
             self._catch_up(tp_pk, latest_start)
 
     def _sleep_to_boundary(self) -> None:
-        now = time.time()
-        time.sleep(max(0.0, math.ceil(now / self._BAR_S) * self._BAR_S - now))
+        """Wake just past each 5s seam — the commit delay lets ticks land, so the bar
+        that just closed is printed at seam+delay (≈:50.5 for the :45 bar)."""
+        now    = time.time()
+        target = math.ceil(now / self._BAR_S) * self._BAR_S + self._COMMIT_DELAY_MS / 1000.0
+        time.sleep(max(0.0, target - now))
 
     def _catch_up(self, tp_pk: int, latest_start: int) -> None:
-        """Build every 5s bar from the last stored bar up to latest_start, GAPLESS:
-        a window with ticks opens at the prior close (not its own first tick); a
-        window with no ticks becomes a doji at the prior close (forward-fill). Bounded
-        — a gap larger than the cap is left to the backfiller."""
+        """Build the just-closed bar AND re-process the last _REBUILD_BARS bars so late
+        ticks update already-printed rows (_build_one upserts). GAPLESS: a window with
+        ticks opens at the prior close; an empty window is a doji at the prior close. A
+        gap larger than the cap is left to the backfiller."""
         bar  = self._BAR_S * 1000
         prev = self._db.execute(
             '''SELECT kc_timestamp, kc_close FROM kline_collection
@@ -78,16 +84,30 @@ class BarBuilder:
         if not prev:
             self._build_one(tp_pk, latest_start, None)            # cold start
             return
-        first = int(prev[0]['kc_timestamp']) + bar
-        if first > latest_start:
-            return                                                # nothing new
-        if (latest_start - first) // bar + 1 > self._MAX_FILL_BARS:
+        last_stored = int(prev[0]['kc_timestamp'])
+        last_close  = float(prev[0]['kc_close'])
+        new_first   = last_stored + bar
+
+        # big forward gap → print latest only, backfiller owns the rest (no re-build)
+        if new_first <= latest_start and (latest_start - new_first) // bar + 1 > self._MAX_FILL_BARS:
             self._log.warning(
                 f'gap > {self._MAX_FILL_BARS} bars to {latest_start}; building latest '
                 'only — backfiller owns the rest')
-            first = latest_start
-        cur = float(prev[0]['kc_close'])
-        for ws in range(first, latest_start + bar, bar):
+            self._build_one(tp_pk, latest_start, last_close)
+            return
+
+        # re-process the last _REBUILD_BARS bars (late-tick absorption) + any new bars
+        walk_from = min(new_first, latest_start - self._REBUILD_BARS * bar)
+        anchor = self._db.execute(
+            '''SELECT kc_close FROM kline_collection
+               WHERE kc_tp_pk = %s AND kc_timestamp = %s''', (tp_pk, walk_from - bar), fetch=True)
+        if anchor:
+            cur = float(anchor[0]['kc_close'])
+        else:                                                     # re-build window predates stored data
+            walk_from, cur = new_first, last_close                # forward-only, gapless from last close
+        if walk_from > latest_start:
+            return                                                # nothing to do (already current)
+        for ws in range(walk_from, latest_start + bar, bar):
             cur = self._build_one(tp_pk, ws, cur)
 
     def _build_one(self, tp_pk: int, start_ms: int, prior_close):
