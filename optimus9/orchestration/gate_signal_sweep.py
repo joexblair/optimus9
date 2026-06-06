@@ -29,14 +29,10 @@ GCA5M = dict(src='close', length=8, mult=0.74, dema_len=2, dema_src='close',
              threshold_long=7.5, threshold_short=7.5)
 
 
-def generate_gca5m_signals(base_df, db, cfg: dict = GCA5M):
-    """gca5m's VOTE-AGGREGATED 5s PK fires (ungated) via Pk5sGateComputer — the
-    proper signal stream (close+wide probes vote-folded + thresholded), not the
-    per-pool firehose. dir = sign(s5_pk_final): +1 long, -1 short.
-
-    Returns (bars, dirs) int arrays. The gate then admits a signal where
-    gate[bar] == -dir (sign-opposition), exactly as the live grind gates.
-    """
+def gca5m_pk_raw(base_df, db, cfg: dict = GCA5M) -> np.ndarray:
+    """The per-bar pk_raw = the gca5m vote-aggregated, thresholded 5s signal
+    (+1 long / -1 short / 0). This is the Pine's `pk_raw` BEFORE the decision-delay
+    state machine and the bny30 gate. (close+wide probes vote-folded + thresholded.)"""
     dema = IC.dema(IC.build_source(base_df, cfg['dema_src']), int(cfg['dema_len']))
     vote = dict(tcev_pk=0, tcev_weight_close=int(cfg['weight_close']),
                 tcev_weight_wide=int(cfg['weight_wide']), tcev_trigger_mode='standard_pk',
@@ -47,9 +43,44 @@ def generate_gca5m_signals(base_df, db, cfg: dict = GCA5M):
               pool_range=int(cfg['pool_range']), pool_slope=float(cfg['pool_slope']),
               pm_additive=float(cfg['pm_additive']), pm_suppression=float(cfg['pm_suppression']),
               threshold_long=float(cfg['threshold_long']), threshold_short=float(cfg['threshold_short']))
-    oob   = Pk5sGateComputer(db).compute('gca5m-signals', base_df, dema, pp,
-                                         midpoint=50.0, vote_overrides=[vote])
-    s5    = (-np.asarray(oob)).astype(np.int8)            # +1 long, -1 short
+    oob = Pk5sGateComputer(db).compute('gca5m-signals', base_df, dema, pp,
+                                       midpoint=50.0, vote_overrides=[vote])
+    return (-np.asarray(oob)).astype(np.int8)            # +1 long, -1 short
+
+
+def apply_decision_delay(pk_raw, delay: int = 1) -> np.ndarray:
+    """Port of the Pine PROVEN production decision-delay state machine (passthrough
+    OFF). A new direction must HOLD `delay` bars (confirmation) before s5_pk_final
+    takes it; an opposing pk restarts the countdown; a neutral bar resets. Returns
+    the SUSTAINED s5_pk_final per bar (+1/-1/0) — the Pine's actual fire driver."""
+    pk_raw = np.asarray(pk_raw, dtype=np.int8)
+    n = len(pk_raw)
+    out = np.zeros(n, np.int8)
+    countdown = pending = final = 0
+    for i in range(n):
+        r = int(pk_raw[i])
+        if r != 0:
+            if r == pending:
+                countdown = max(0, countdown - 1)
+                if countdown == 0:
+                    final = r
+            else:
+                pending = r
+                if delay == 0:
+                    countdown, final = 0, r
+                else:
+                    countdown, final = delay, 0
+        else:
+            pending = countdown = final = 0
+        out[i] = final
+    return out
+
+
+def generate_gca5m_signals(base_df, db, cfg: dict = GCA5M):
+    """gca5m's UNGATED, UN-delayed pk_raw fire transitions (+1 long / -1 short).
+    Returns (bars, dirs). For the Pine-aligned signal (decision-delay + gate) use
+    pine_aligned_signals(). The gate admits a signal where gate[bar] == -dir."""
+    s5    = gca5m_pk_raw(base_df, db, cfg)
     clean = s5.astype(float)
     prev  = np.concatenate([[0.0], clean[:-1]])
     idx   = np.where((clean != 0.0) & (clean != prev))[0]  # fire transitions
