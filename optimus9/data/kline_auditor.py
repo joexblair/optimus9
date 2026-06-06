@@ -130,19 +130,19 @@ class KlineAuditor:
         self._log.setLevel('INFO')
         logging.getLogger('BybitKlineClient').setLevel('WARNING')   # quiet the 1/s poll chatter
         self._vol_tol     = 0.0
-        self._grace_s     = 3
+        self._kc_lag      = 20          # s to wait for kc to land (BarBuilder writes ~2 bars behind)
         self._last_prune  = time.time()
 
     # ── lifecycle ───────────────────────────────────────────────────────────
     def run(self, tp_pk: int, symbol: str) -> None:
         self._ensure_schema()
-        self._vol_tol, self._grace_s = self._load_config()
+        self._vol_tol, self._kc_lag = self._load_config()
         self._log.info(f'kline auditor started: {symbol} (vol_tol={self._vol_tol}, '
-                       f'm1_grace={self._grace_s}s)')
+                       f'kc_lag={self._kc_lag}s)')
         bar_ms = self._BAR_S * 1000
         prior_close = None
         cur_win, samples = None, []
-        audit_5s, min_v, done_min = {}, {}, set()
+        audit_5s, min_v, done_5s, done_min = {}, {}, set(), set()
 
         while True:
             try:
@@ -156,22 +156,28 @@ class KlineAuditor:
                 w = (now // bar_ms) * bar_ms
                 if cur_win is None:
                     cur_win = w
-                if w != cur_win:                               # a 5s window closed
+                if w != cur_win:                               # a 5s window closed → build + store
                     bar = build_5s_bar(prior_close, samples)
                     if bar is not None:
-                        self._flush_5s(tp_pk, cur_win, bar)
                         prior_close = bar[3]
                         audit_5s[cur_win] = bar
                     samples, cur_win = [], w
                 samples.append(price)
 
-                # reconcile a fully-closed minute (>= grace into the next one)
+                # kc is written ~2 bars behind realtime (BarBuilder waits for ticks to
+                # commit), so DEFER both tiers' kc reads by kc_lag — else every fresh
+                # bar reads as a false 'missing'.
+                lag = self._kc_lag * 1000
+                for ws in sorted(audit_5s):                              # deferred 5s compare
+                    if ws not in done_5s and (now - (ws + bar_ms)) >= lag:
+                        self._flush_5s(tp_pk, ws, audit_5s[ws])
+                        done_5s.add(ws)
                 cur_min = (now // self._MIN_MS) * self._MIN_MS
-                ready   = cur_min - self._MIN_MS
-                if (now - cur_min) >= self._grace_s * 1000 and ready in min_v and ready not in done_min:
-                    self._reconcile_1m(tp_pk, symbol, ready, audit_5s, min_v.get(ready))
-                    done_min.add(ready)
-                    self._gc(ready, audit_5s, min_v, done_min)
+                for m in (cur_min - self._MIN_MS, cur_min - 2 * self._MIN_MS):   # 1m reconcile
+                    if m in min_v and m not in done_min and (now - (m + self._MIN_MS)) >= lag:
+                        self._reconcile_1m(tp_pk, symbol, m, audit_5s, min_v.get(m))
+                        done_min.add(m)
+                self._gc(cur_min, audit_5s, min_v, done_5s, done_min)
 
                 self._maybe_prune(tp_pk)
             except Exception as e:                              # never let the permanent loop die
@@ -300,23 +306,24 @@ class KlineAuditor:
             kac_label VARCHAR(80) DEFAULT '', kac_is_active TINYINT DEFAULT 0,
             kac_created DATETIME DEFAULT CURRENT_TIMESTAMP,
             kac_volume_tolerance FLOAT DEFAULT 0.0,
-            kac_m1_grace_s INT DEFAULT 3)''')
+            kac_kc_lag_s INT DEFAULT 20)''')
         sel = f'SELECT * FROM {self._CONFIG} WHERE kac_is_active=1 ORDER BY kac_pk DESC LIMIT 1'
         rows = self._db.execute(sel, fetch=True)
         if not rows:
             self._db.execute(f"INSERT INTO {self._CONFIG} (kac_label, kac_is_active) VALUES ('default', 1)")
             rows = self._db.execute(sel, fetch=True)
         r = rows[0]
-        return float(r['kac_volume_tolerance']), int(r['kac_m1_grace_s'])
+        return float(r['kac_volume_tolerance']), int(r['kac_kc_lag_s'])
 
     # ── housekeeping ────────────────────────────────────────────────────────
-    def _gc(self, ready_min: int, audit_5s: dict, min_v: dict, done_min: set) -> None:
-        keep = ready_min - self._GC_KEEP_MIN * self._MIN_MS
+    def _gc(self, cur_min: int, audit_5s: dict, min_v: dict, done_5s: set, done_min: set) -> None:
+        keep = cur_min - self._GC_KEEP_MIN * self._MIN_MS
         for d in (audit_5s, min_v):
             for k in [k for k in d if k < keep]:
                 del d[k]
-        for m in [m for m in done_min if m < keep]:
-            done_min.discard(m)
+        for s in (done_5s, done_min):
+            for k in [k for k in s if k < keep]:
+                s.discard(k)
 
     def _maybe_prune(self, tp_pk: int) -> None:
         now = time.time()
