@@ -26,7 +26,7 @@ _TABLE = 'bl_review'
 def build_review(db, pct: float = 0.9) -> list:
     log = get_logger('BLReview')
     rows = db.execute(
-        '''SELECT bls_pk, bar_time, line_name, px_smooth, k_line, bb_main, breach_dir,
+        '''SELECT bls_pk, bar_time, line_name, px_smooth, breach_line, bb_main, breach_dir,
                   predicted, state, exit1, exit2, exit3, raw_pk, combined_state
            FROM bl_states WHERE px_smooth IS NOT NULL ORDER BY line_name, bar_time''', fetch=True)
     if not rows:
@@ -56,7 +56,7 @@ def build_review(db, pct: float = 0.9) -> list:
         e = (1 if src['exit1'] else 0) | (2 if src['exit2'] else 0) | (4 if src['exit3'] else 0)
         return {'bls_pk': src['bls_pk'], 'bar_time': bt, 'bl_line': line, 'event': ev,
                 'state': st, 'breach_dir': bd, 'predicted': int(bool(src['predicted'])),
-                'raw_pk': raw, 'px_smooth': src['px_smooth'], 'k_line': src['k_line'],
+                'raw_pk': raw, 'px_smooth': src['px_smooth'], 'breach_line': src['breach_line'],
                 'bb_main': src['bb_main'], 'exit_bits': e, 'stop_pct': None, 'stop_at': None,
                 'profit_pct': None, 'profit_at': None}
 
@@ -118,12 +118,12 @@ def _persist(db, rows):
     db.execute(f'''CREATE TABLE {_TABLE} (
         blr_pk BIGINT AUTO_INCREMENT PRIMARY KEY, bls_pk BIGINT, bar_time DATETIME,
         bl_line VARCHAR(16), event VARCHAR(12), state TINYINT, breach_dir TINYINT,
-        predicted TINYINT, raw_pk TINYINT, px_smooth FLOAT, k_line FLOAT, bb_main FLOAT,
+        predicted TINYINT, raw_pk TINYINT, px_smooth FLOAT, breach_line FLOAT, bb_main FLOAT,
         exit_bits TINYINT, stop_pct FLOAT, stop_at DATETIME, profit_pct FLOAT, profit_at DATETIME)''')
     if not rows:
         return
     cols = ['bls_pk', 'bar_time', 'bl_line', 'event', 'state', 'breach_dir', 'predicted',
-            'raw_pk', 'px_smooth', 'k_line', 'bb_main', 'exit_bits', 'stop_pct', 'stop_at',
+            'raw_pk', 'px_smooth', 'breach_line', 'bb_main', 'exit_bits', 'stop_pct', 'stop_at',
             'profit_pct', 'profit_at']
     ph = ','.join(['%s'] * len(cols))
     db.executemany(f"INSERT INTO {_TABLE} ({','.join(cols)}) VALUES ({ph})",

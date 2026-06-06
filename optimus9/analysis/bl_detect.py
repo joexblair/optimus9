@@ -196,9 +196,9 @@ class BLDetect:
                     'c9_low':    _f(c9['l'][i]), 'c9_close': _f(c9['c'][i]),
                     'e9_open':   _f(e9['o'][i]), 'e9_high': _f(e9['h'][i]),
                     'e9_low':    _f(e9['l'][i]), 'e9_close': _f(e9['c'][i]),
-                    'hb9b':      _f(line[i]), 'hb9M': _f(bM[i]), 'hb9m': _f(bm[i]),
-                    'k_gt_bb_main': int(bool(line[i] > bM[i])) if bM[i] == bM[i] else 0,
-                    'slope_k':   _f(r['slope_k'][i]),
+                    'breach_line': _f(line[i]), 'bb_main': _f(bM[i]), 'bb_mid': _f(bm[i]),
+                    'breach_gt_bb_main': int(bool(line[i] > bM[i])) if bM[i] == bM[i] else 0,
+                    'breach_slope': _f(r['slope_k'][i]),    # r['slope_k'] = machine-internal key
                     'exit2_ref':    _f(r['exit2_ref'][i]),
                     'exit2_ref_dt': (_dt(int(ts[r['exit2_ref_idx'][i]]))
                                      if r['exit2_ref_idx'][i] >= 0 else None),
@@ -330,8 +330,8 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
             line_name VARCHAR(16), px_smooth FLOAT,
             c9_open FLOAT, c9_high FLOAT, c9_low FLOAT, c9_close FLOAT,
             e9_open FLOAT, e9_high FLOAT, e9_low FLOAT, e9_close FLOAT,
-            k_line FLOAT, bb_main FLOAT, bb_mid FLOAT, k_gt_bb_main TINYINT,
-            slope_k FLOAT, exit2_ref FLOAT, exit2_ref_dt DATETIME, bl_ext FLOAT,
+            breach_line FLOAT, bb_main FLOAT, bb_mid FLOAT, breach_gt_bb_main TINYINT,
+            breach_slope FLOAT, exit2_ref FLOAT, exit2_ref_dt DATETIME, bl_ext FLOAT,
             predicted TINYINT, exit1 TINYINT, exit2 TINYINT, exit3 TINYINT,
             breach_dir TINYINT, state TINYINT, combined_state TINYINT, raw_pk TINYINT)''')
         if not rows:
@@ -339,7 +339,7 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
         cols = ['bar_time', 'line_name', 'px_smooth',
                 'c9_open', 'c9_high', 'c9_low', 'c9_close',
                 'e9_open', 'e9_high', 'e9_low', 'e9_close',
-                'k_line', 'bb_main', 'bb_mid', 'k_gt_bb_main', 'slope_k',
+                'breach_line', 'bb_main', 'bb_mid', 'breach_gt_bb_main', 'breach_slope',
                 'exit2_ref', 'exit2_ref_dt', 'bl_ext',
                 'predicted', 'exit1', 'exit2', 'exit3', 'breach_dir', 'state',
                 'combined_state', 'raw_pk']
@@ -347,7 +347,7 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
         data = [[_dt(r['bar_ms']), r['line_name'], r['px_smooth'],
                  r['c9_open'], r['c9_high'], r['c9_low'], r['c9_close'],
                  r['e9_open'], r['e9_high'], r['e9_low'], r['e9_close'],
-                 r['hb9b'], r['hb9M'], r['hb9m'], r['k_gt_bb_main'], r['slope_k'],
+                 r['breach_line'], r['bb_main'], r['bb_mid'], r['breach_gt_bb_main'], r['breach_slope'],
                  r['exit2_ref'], r['exit2_ref_dt'], r['bl_ext'],
                  r['predicted'], r['exit1'], r['exit2'], r['exit3'],
                  r['breach_dir'], r['state'], r['combined_state'], r['raw_pk']] for r in rows]
