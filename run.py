@@ -169,6 +169,12 @@ def _build_parser() -> argparse.ArgumentParser:
     bbd = sub.add_parser('bar_build', help='ticks → kline_collection (5s)')
     bbd.add_argument('--tp_pk', type=int, default=1)
 
+    # kline_audit ----------------------------------------------------------
+    ka = sub.add_parser('kline_audit',
+                        help='Independent REST audit of kline_collection (5s + 1m tiers)')
+    ka.add_argument('--tp_pk',  type=int, default=1)
+    ka.add_argument('--symbol', default='FARTCOINUSDT')
+
     # indicator_monitor ----------------------------------------------------
     im = sub.add_parser('indicator_monitor', help='Config drift sniffer')
     im.add_argument('--tp_pk', type=int, default=1)
@@ -458,6 +464,12 @@ def cmd_tick_collect(args, db: DatabaseManager) -> int:
     return 0
 
 
+def cmd_kline_audit(args, db: DatabaseManager) -> int:
+    from optimus9.data.kline_auditor import KlineAuditor
+    KlineAuditor(db).run(args.tp_pk, args.symbol)
+    return 0
+
+
 def cmd_bar_build(args, db: DatabaseManager) -> int:
     BarBuilder(db).run(args.tp_pk)
     return 0
@@ -662,6 +674,7 @@ _DISPATCH = {
     'backfill_binance':   cmd_backfill_binance,
     'tick_collect':       cmd_tick_collect,
     'bar_build':          cmd_bar_build,
+    'kline_audit':        cmd_kline_audit,
     'indicator_monitor':  cmd_indicator_monitor,
     'reconcile':          cmd_reconcile,
     'validate_gate':      cmd_validate_gate,
