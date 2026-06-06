@@ -479,10 +479,13 @@ A milestone-spec skeleton lives at `milestone_spec_template.md`.
 
 ## Anchor
 
-Most recent stopping point (r07 morning of 2026-05-26, post-CC-validation):
+Most recent stopping point (2026-06-06):
 
-> 🤙 Step 1 done (decision delay deleted). CC ran a parallel handover
-> validation, found real gaps, we fixed them. Step 2 (extract
-> PKVoteMachine) is queued, needs Joe in the loop. Coffee → work.
+> 🤙 A run of measurement-problems-wearing-bug-clothes — mnm9m on the wrong TF,
+> the synthetic-kline recovery window, TV's own OHLC drift. Each one peeled back;
+> the engine held clean every time. Pine demoted to a loose guide, the grind on
+> our clean tape made the arbiter. kline auditor greenlit — an independent REST
+> path to put "100% sure of our data" to bed. Buoyant. Coffee → work.
 
-That's the register. Carry it forward.
+That's the register — peel the measurement problem off the real signal, no ledgers.
+Carry it forward.

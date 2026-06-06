@@ -199,5 +199,5 @@ direction (§4b); state map (§3); hb9m role (prediction anchor); intrabar spine
   (the adverse excursion if the gate opened early); `profit_pct` = the following leg
   (the move the trade is opening for). Direction is read from the *in-breach* bar (a
   reset gate-open carries `breach_dir=0`). At the data edge (no future swing) both NULL.
-- columns: `bl_line` (e.g. hb9b), `predicted`, `state`, `breach_dir`, `k_line`,
+- columns: `bl_line` (e.g. hb9b), `predicted`, `state`, `breach_dir`, `breach_line`,
   `bb_main`, `exit_bits`, `px_smooth`, `stop_pct/at`, `profit_pct/at`.

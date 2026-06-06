@@ -34,6 +34,12 @@ ledger entries).
   for outputs (korero standard #9).
 - **Config tables over args** — dialable settings in DB tables with `is_active` +
   `live_after_date` history (e.g. `bl_config`), not CLI args; clone-tweak-activate.
+  - **No hardcoded data — the table is the only source.** Never duplicate a tunable
+    into a code constant/dict "for convenience": a hardcode is a second source that
+    silently drifts from the table (`GCA5M_RAW` 33/6/17 vs `pk_pools` 22/4/13 — the
+    dual-source bug). Typing a value into code? Name the table that owns it and read
+    from there. (Same single-source root as the complete-argument test above.)
+    [bl, 2026-06-06]
 - **Prefix consistency** — columns carry their table's prefix (`blc_`/`pkp_`/`bl_`).
 - **Lean reference docs** — keep the cheap-to-reference RoI high; detail goes to its
   own doc, not the quick-reference (quirks stays lean; cheat sheets are separate).
@@ -45,3 +51,4 @@ ledger entries).
 ## Cycle ritual
 Define → Explore → Scope → Decompose → Recycle. Plan mode = the scope gate; the
 design doc = DoD; memory = the CI ledger. Open *this* doc at init.
+Full treatment (the canonical home): `korero_working_relationship.md` §Cycle process.
