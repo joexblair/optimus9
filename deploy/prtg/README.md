@@ -2,15 +2,22 @@
 
 Minimum set: **2 service sensors** + **1 multi-channel SQL sensor**. PRTG 26.1.116+.
 
-## Service sensors (SSH Script) — is the daemon up?
-`check_service.sh` returns `1:<svc> active` / `0:<svc> DOWN`.
+## Service sensors — is the daemon up?
+Both return `1:<svc> active` / `0:<svc> DOWN`; PRTG channel **Error if value < 1**.
 
-1. It's already on the Linux box at `deploy/prtg/check_service.sh` — `chmod +x` it.
-2. PRTG → add an **SSH Script** sensor on the Linux device, one per service:
-   - script `check_service.sh`, parameter `klinecollect.service`
-   - script `check_service.sh`, parameter `kline_auditor.service`
-3. Channel: **Error if value < 1**.
-4. The SSH user needs no sudo (`systemctl is-active` is read-only).
+### A. Same machine as WSL (recommended — no SSH)
+WSL2 has no sshd by default and is NAT'd, so SSH-into-WSL is a project. If PRTG runs on
+the same Windows box, skip it: `check_wsl_service.bat` runs `wsl.exe systemctl is-active`.
+1. Copy `check_wsl_service.bat` into PRTG's `Custom Sensors\EXEXML\` (or `\EXE\`) dir.
+2. PRTG → **EXE/Script** sensor, one per service, parameter = the service name
+   (`klinecollect.service`, `kline_auditor.service`).
+3. **Gotcha:** PRTG's Probe Service must run as the Windows user that owns the WSL distro,
+   or `wsl.exe` can't see it. (`systemctl is-active` itself needs no Linux sudo.)
+
+### B. PRTG on a separate box (SSH)
+Needs sshd installed + running in WSL, WSL2 port-forwarding, and a Linux login. A
+dedicated monitoring user is the clean way (`sudo adduser prtgmon`, then SSH-key auth).
+Then a PRTG **SSH Script** sensor running `check_service.sh <svc>`.
 
 ## SQL sensor (MySQL v2) — is the data healthy?
 One sensor, 5 channels, from `health.sql`.
