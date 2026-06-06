@@ -132,14 +132,15 @@ class BLDetect:
                            grace=int(c['blc_grace']), exit2_ref=str(c['blc_exit2_ref']),
                            exit_mask=int(fam.get('exit_mask') or 7), bb_pad=float(c['blc_bb_pad']),
                            fence_hi=FENCE_HI + fp, fence_lo=FENCE_LO - fp)
-        line = self._line(base, fam['k'])                 # the breach line (K or BB)
-        cyc  = ts // (fam['tf_seconds'] * 1000)
+        tf   = int(fam['tf_seconds'])
+        line = self._line(base, fam['k'], tf)             # the breach line (K or BB), on its own TF
+        cyc  = ts // (tf * 1000)
         seam = np.empty(len(ts), bool); seam[0] = True; seam[1:] = cyc[1:] != cyc[:-1]
         if fam['line_type'] == 'bb':
             r  = bl.run_bb(line, seam=seam)
             bM = bm = np.full(len(ts), np.nan)
         else:
-            bM = self._line(base, fam['bM']); bm = self._line(base, fam['bm'])
+            bM = self._line(base, fam['bM'], tf); bm = self._line(base, fam['bm'], tf)
             r  = bl.run(line, bm, bM, seam=seam)
         return line, bM, bm, r
 
@@ -271,12 +272,13 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
         return path
 
     # ── internals ──────────────────────────────────────────────────────────
-    def _line(self, base, cfg):
-        """Developing (lookahead) HTF line, 5s-aligned — matches TV lookahead_on."""
-        secs = self._fam['tf_seconds']
+    def _line(self, base, cfg, tf_seconds):
+        """Developing (lookahead) HTF line on the LINE'S OWN TF, 5s-aligned — matches
+        TV lookahead_on. tf_seconds is per-family (mnm9=240, hb9=540): a multi-line
+        engine must compute each line on its own timeframe, not the primary's."""
         if cfg['kind'] == 'bb':
-            return IC.f_bb_lookahead(base, secs, cfg['bb_len'], cfg['bb_mult'], cfg['src'])
-        return IC.f_k_lookahead(base, secs, cfg['k_len'], cfg['rsi_len'], cfg['stc_len'], cfg['src'])
+            return IC.f_bb_lookahead(base, tf_seconds, cfg['bb_len'], cfg['bb_mult'], cfg['src'])
+        return IC.f_k_lookahead(base, tf_seconds, cfg['k_len'], cfg['rsi_len'], cfg['stc_len'], cfg['src'])
 
     def _htf_views(self, base, ts):
         """Per-5s, lookahead-free 9-min OHLC, two views:

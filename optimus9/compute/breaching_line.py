@@ -212,14 +212,15 @@ class BreachingLine:
         OOB→IB return, the o_state/o_dir scaffold); none of the K machinery applies."""
         line = np.asarray(line, float)
         n    = len(line)
-        oob  = (line >= self.hi) | (line <= self.lo)
+        hi_p, lo_p = self.hi - self.bb_pad, self.lo + self.bb_pad  # bb_pad: a bobbing BB
+        oob  = (line >= hi_p) | (line <= lo_p)                     # rarely hits 85/15, so pad in
         e1_enabled = bool(self.exit_mask & 1)
         state, bdir, ext = 0, 0, np.nan
         o_state = np.zeros(n, np.int8); o_dir = np.zeros(n, np.int8)
         o_e1 = np.zeros(n, bool); o_ext = np.full(n, np.nan)
         for i in range(n):
             fresh_oob = bool(oob[i] and (i == 0 or not oob[i - 1]))
-            cur_d = 1 if line[i] >= self.hi else (-1 if line[i] <= self.lo else 0)
+            cur_d = 1 if line[i] >= hi_p else (-1 if line[i] <= lo_p else 0)
             e1 = False
             if state == 0:
                 if fresh_oob:
