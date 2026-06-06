@@ -34,6 +34,7 @@ testable heart (tests/test_kline_auditor.py); the KlineAuditor service wraps it.
 
 import math
 import time
+import requests
 from datetime import datetime, timedelta, timezone
 
 from logger import get_logger
@@ -117,14 +118,17 @@ class KlineAuditor:
         logging.getLogger('BybitKlineClient').setLevel('WARNING')   # quiet the 1/s poll chatter
         self._kc_lag     = 20         # s to wait for kc to land (BarBuilder build + late-tick rebuild)
         self._tick       = 0.00001    # instrument tick size (FARTCOIN); from config
+        self._clock_off  = 0          # ms: Bybit server − local; aligns 5s bucketing to exchange time
+        self._last_sync  = 0.0
         self._last_prune = time.time()
 
     # ── lifecycle ───────────────────────────────────────────────────────────
     def run(self, tp_pk: int, symbol: str) -> None:
         self._ensure_schema()
         self._kc_lag, self._tick = self._load_config()
+        self._sync_clock()
         self._log.info(f'kline auditor started: {symbol} (observe mode; kc_lag={self._kc_lag}s, '
-                       f'tick={self._tick})')
+                       f'tick={self._tick}, clock_off={self._clock_off:+d}ms)')
         bar_ms = self._BAR_S * 1000
         prior_close = None
         cur_win, samples = None, []
@@ -133,11 +137,13 @@ class KlineAuditor:
         while True:
             try:
                 self._sleep_to_next_second()
+                if time.time() - self._last_sync > 300:
+                    self._sync_clock()
                 dev = self._poll_developing(symbol)
                 if dev is None:
                     continue
                 bar_start, _o, _h, _l, price, cum_v = dev
-                now = int(time.time() * 1000)
+                now = int(time.time() * 1000) + self._clock_off   # exchange-corrected (kc is exchange-keyed)
                 min_v[bar_start] = cum_v
                 w = (now // bar_ms) * bar_ms
                 if cur_win is None:
@@ -169,6 +175,21 @@ class KlineAuditor:
     def _sleep_to_next_second(self) -> None:
         now = time.time()
         time.sleep(max(0.0, math.ceil(now) - now))
+
+    def _sync_clock(self) -> None:
+        """RTT-corrected local→Bybit offset so 5s bucketing aligns to the exchange's bar
+        boundaries (kc is keyed by exchange tick-time). Joe's misbucketing fix 2026-06-06."""
+        try:
+            t0  = time.time()
+            srv = int(requests.get('https://api.bybit.com/v5/market/time', timeout=5).json()
+                      ['result']['timeNano']) / 1e6                 # ms
+            t1  = time.time()
+            self._clock_off = int(srv - (t0 + t1) / 2 * 1000)
+            self._last_sync = t1
+            self._log.info(f'clock synced: Bybit offset {self._clock_off:+d} ms')
+        except Exception as e:
+            self._log.error(f'clock sync failed (keeping offset {self._clock_off:+d}ms): {e}')
+            self._last_sync = time.time()                          # don't hammer on failure
 
     # ── polling ─────────────────────────────────────────────────────────────
     def _poll_developing(self, symbol: str):
