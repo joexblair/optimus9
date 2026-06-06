@@ -600,7 +600,7 @@ def cmd_bl_detect(args, db: DatabaseManager) -> int:
     rows = d.report(end_ms=args.end_ms)
     d.emit_pine(rows, args.pine)
     dist = dict(sorted(collections.Counter(
-        r['state'] for r in rows if r['hb9b'] is not None).items()))
+        r['state'] for r in rows if r['breach_line'] is not None).items()))
     _log.info(f'bl_states: {len(rows)} bars → table bl_states | states {dist} | '
               f'Pine → {args.pine}')
     return 0
