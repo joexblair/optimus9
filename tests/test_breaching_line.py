@@ -123,6 +123,19 @@ def test_exit1_completes_same_bar_as_breach():
     assert r['exit1'][1]
 
 
+def test_run_bb_oob_to_ib():
+    # BB-type breach (run_bb): OOB → bls1, return IB → bls3 (the only exit), reset → 0.
+    # No curl, no support — just the line crossing the boundary and back.
+    r = _bl(exit_mask=1).run_bb(line=[50, 90, 92, 80, 80])
+    assert list(r['state']) == [0, 1, 1, 3, 0]
+    assert r['exit1'][3] and not r['exit1'][4]
+    assert r['breach_dir'][1] == 1                     # hi breach
+    # mask without exit1 → IB just resets (no bls3 completion)
+    r0 = _bl(exit_mask=0).run_bb(line=[50, 90, 80])
+    assert list(r0['state']) == [0, 1, 0]
+    assert not any(r0['exit1'])
+
+
 def test_lifecycle_dwell_at_2_then_complete():
     #        b0    b1    b2    b3(curl→2)  b4(BB OB→IB exit→3)
     r = _bl().run(k=[50, 90, 90, 86, 86], bb_m=[50]*5, bb_M=[50, 50, 50, 90, 50])

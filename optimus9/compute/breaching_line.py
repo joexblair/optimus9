@@ -201,6 +201,49 @@ class BreachingLine:
                 'slope_k': slope_k, 'exit2_ref': o_ref, 'exit2_ref_idx': o_ref_idx,
                 'bl_ext': o_ext}
 
+    def run_bb(self, line, seam=None) -> dict:
+        """BB-type breaching line — a BB that breaches in its own right (no curl, no
+        support, no prediction). The simple 3-state path (Joe 2026-06-05):
+          0→1  the line goes OOB
+          1→3  the line returns IB  (the only exit: 'OOB→IB', gated by exit_mask&1)
+          3→0  reset next bar   ·   3→1 on a fresh re-breach
+        Returns the same dict shape as run() (K-only fields zeroed) so bl_detect treats
+        every breach line uniformly. Folds the shared primitives (oob, fresh_oob, the
+        OOB→IB return, the o_state/o_dir scaffold); none of the K machinery applies."""
+        line = np.asarray(line, float)
+        n    = len(line)
+        oob  = (line >= self.hi) | (line <= self.lo)
+        e1_enabled = bool(self.exit_mask & 1)
+        state, bdir, ext = 0, 0, np.nan
+        o_state = np.zeros(n, np.int8); o_dir = np.zeros(n, np.int8)
+        o_e1 = np.zeros(n, bool); o_ext = np.full(n, np.nan)
+        for i in range(n):
+            fresh_oob = bool(oob[i] and (i == 0 or not oob[i - 1]))
+            cur_d = 1 if line[i] >= self.hi else (-1 if line[i] <= self.lo else 0)
+            e1 = False
+            if state == 0:
+                if fresh_oob:
+                    state, bdir, ext = 1, cur_d, line[i]
+            elif state == 1:
+                bdir = cur_d or bdir
+                if (bdir == 1 and line[i] > ext) or (bdir == -1 and line[i] < ext):
+                    ext = line[i]                              # track the OOB extreme
+                if not oob[i]:                                 # returned IB → breach over
+                    state = 3 if e1_enabled else 0             # complete (exit1) or just reset
+                    e1 = e1_enabled
+            elif state == 3:
+                if fresh_oob:
+                    state, bdir, ext = 1, cur_d, line[i]       # re-breach
+                else:
+                    state, bdir, ext = 0, 0, np.nan            # reset
+            o_state[i], o_dir[i], o_e1[i], o_ext[i] = state, bdir, e1, ext
+        z   = np.zeros(n, bool)
+        nan = np.full(n, np.nan)
+        return {'state': o_state, 'breach_dir': o_dir, 'predicted': z,
+                'exit1': o_e1, 'exit2': z, 'exit3': z,
+                'slope_k': nan, 'exit2_ref': nan, 'exit2_ref_idx': np.full(n, -1, dtype=int),
+                'bl_ext': o_ext}
+
     # ── exit methods (parameterised; calibrated against Pine) ─────────────────
     # exit2 (K reversed past its pre-peak anchor) is computed inline in run() — it
     # needs the per-breach extreme, so it can't be a stateless helper like 1 and 3.
