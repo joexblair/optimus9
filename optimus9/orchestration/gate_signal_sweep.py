@@ -76,9 +76,10 @@ def apply_decision_delay(pk_raw, delay: int = 1) -> np.ndarray:
     return out
 
 
-# the bny30 production gate (Pine PROVEN): bny30M (BB) OR bny30p (K), 30s, 85/15.
+# the bny30 production gate (Joe 2026-06-06): bny30M (BB hl2 68/1.24) OR
+# bny30m (K ohlc4 21/114/105), 30s, 85/15.
 BNY30 = [
-    dict(ic_itf_seconds=30, ic_line_type='bb', ic_src='hl2', ic_bb_len=58, ic_bb_mult=1.24,
+    dict(ic_itf_seconds=30, ic_line_type='bb', ic_src='hl2', ic_bb_len=68, ic_bb_mult=1.24,
          ic_high_boundary=85, ic_low_boundary=15),
     dict(ic_itf_seconds=30, ic_line_type='k', ic_src='ohlc4', ic_k_len=21, ic_rsi_len=114,
          ic_stc_len=105, ic_high_boundary=85, ic_low_boundary=15),
@@ -87,7 +88,7 @@ BNY30 = [
 
 def bny30_oob_side(base_df) -> np.ndarray:
     """The bny30 gate's per-5s oob_side (+1 HI / -1 LO / 0 in-band), OR-folded over
-    bny30M (BB) + bny30p (K) — the Pine PROVEN production gate (either line OOB)."""
+    bny30M (BB hl2 68/1.24) + bny30m (K ohlc4 21/114/105) — the production gate."""
     gate_df = IC.resample(base_df, 30)
     sides   = [IC.align_to_base(IC.compute_oob_side(cfg, gate_df), gate_df, base_df)
                for cfg in BNY30]
