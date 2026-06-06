@@ -105,11 +105,13 @@ def generate_gca5m_signals(base_df, db, cfg: dict = GCA5M):
     return idx.astype(int), s5[idx].astype(int)
 
 
-def pine_aligned_signals(base_df, db, cfg: dict = GCA5M, delay: int = 1, gate: bool = True):
-    """The full Pine PROVEN realtime entry signal — what the strategy actually trades:
+def pine_aligned_signals(base_df, db, cfg: dict = GCA5M, delay: int = 0, gate: bool = True):
+    """The full Pine realtime entry signal — what the strategy actually trades:
       pk_raw → decision-delay(delay) state machine → fire edges → bny30 gate
-    The gate is mean-reversion: a fire survives only where dir == -oob_side (fire_long
-    needs the gate OOB-low, fire_short OOB-high). Returns (bars, dirs)."""
+    delay=0 matches the TV strategy (its decision-delay UI was 0): a confirmed pk fires
+    immediately. delay=1 holds one bar for confirmation and drops e.g. the 07:48 trade —
+    that mismatch is what flagged the UI was at 0. The gate is mean-reversion: a fire
+    survives only where dir == -oob_side (fire_long needs gate OOB-low, short OOB-high)."""
     fin   = apply_decision_delay(gca5m_pk_raw(base_df, db, cfg), delay)
     clean = fin.astype(float)
     prev  = np.concatenate([[0.0], clean[:-1]])
