@@ -60,14 +60,14 @@ def build_review(db, pct: float = 0.9) -> list:
                 'bb_main': src['bb_main'], 'exit_bits': e, 'stop_pct': None, 'stop_at': None,
                 'profit_pct': None, 'profit_at': None}
 
-    # ── gate-opens (req2/3): the gate is OPEN when ALL lines are in {0,3}; a gate-open
-    # is the transition INTO that. NOT merely combined∈{0,3} — min=0 can mask a line
-    # still breaching, so the all-lines-done test is the real gate. ──
-    line_st  = {ln: [int(r['state']) for r in lr] for ln, lr in by_line.items()}
-    all_done = [all(line_st[ln][i] in (0, 3) for ln in line_st) for i in range(len(bars))]
+    # ── gate-opens (req2/3): the gate is OPEN when combined∈{0,3} (all lines idle/done);
+    # a gate-open is the transition INTO that. The corrected combined fold (min of non-zero
+    # states, 0 iff all idle) makes this exact — a still-breaching line forces combined to
+    # 1/2, so {0,3} can't be masked by a plain min. Single-sources off combined_state. ──
+    done = [comb[i] in (0, 3) for i in range(len(bars))]
     out  = []
     gate = {i: 'gate_open' for i in range(len(bars))
-            if all_done[i] and not (all_done[i - 1] if i > 0 else True)}
+            if done[i] and not (done[i - 1] if i > 0 else True)}
     g_emit = set(gate)
     for i in gate:
         g_emit.update(range(max(0, i - 11), i))           # 11-bar run-up into the gate

@@ -179,9 +179,15 @@ class BLDetect:
         px    = IC.dema(tf['close'].to_numpy(dtype=float), 2)[idx]
 
         # run EVERY active breach line (K via run, BB via run_bb), then fold the combined
-        # state the gate reacts to = min(states) across lines, per bar.
-        runs = [(fam, *self._run_family(fam, base, ts)) for fam in self._families]
-        combined = np.vstack([r['state'] for *_, r in runs]).min(axis=0).astype(np.int8)
+        # state the gate reacts to. combined = the LEAST-progressed ACTIVE breach: min over
+        # the NON-ZERO states, and 0 ONLY when every line is idle. Plain min(states) is wrong
+        # (Joe 2026-06-06): it lets a {0,1} pair read 0/idle while a line is still breaching —
+        # counterproductive. This fold makes the gate test exactly combined∈{0,3}
+        # (0 = all idle, 3 = all done, 1/2 = a breach in flight on some line).
+        runs     = [(fam, *self._run_family(fam, base, ts)) for fam in self._families]
+        st_mat   = np.vstack([r['state'] for *_, r in runs])
+        nz       = np.where(st_mat == 0, 99, st_mat)          # mask idle so min ignores it
+        combined = np.where((st_mat == 0).all(axis=0), 0, nz.min(axis=0)).astype(np.int8)
 
         rows = []
         for fam, line, bM, bm, r in runs:
