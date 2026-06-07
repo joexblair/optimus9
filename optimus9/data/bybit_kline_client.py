@@ -46,6 +46,7 @@ class BybitKlineClient:
 
     _BASE        = 'https://api.bybit.com'
     _PATH        = '/v5/market/kline'
+    _TRADE_PATH  = '/v5/market/recent-trade'
     _BATCH_LIMIT = 200
     _RATE_DELAY  = 0.15
     _MAX_TRIES   = 8
@@ -76,6 +77,21 @@ class BybitKlineClient:
         all_candles.sort(key=lambda x: x['timestamp'])
         self._log.info(f'Fetched {len(all_candles)} candles ({symbol} {interval}m)')
         return all_candles
+
+    def fetch_recent_trades(self, symbol: str, limit: int = 1000) -> list:
+        """Recent public trades (newest-first) for the (re)start gap-fill. Dedupe-safe:
+        each trade's `execId` == the WS publicTrade `i` (verified — same exec UUID), so
+        INSERT IGNORE on the trade_id ignores overlap with the live stream. Returns
+        [{trade_id, ts, price, size, side}]."""
+        params = {'category': 'linear', 'symbol': symbol, 'limit': min(int(limit), 1000)}
+        resp = self._session.get(self._BASE + self._TRADE_PATH, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get('retCode') != 0:
+            raise RuntimeError(f'Bybit recent-trade error: {data}')
+        return [{'trade_id': t['execId'], 'ts': int(t['time']), 'price': float(t['price']),
+                 'size': float(t['size']), 'side': t['side'].lower()}
+                for t in data['result']['list']]
 
     def _fetch_batch_retry(self, symbol: str, interval: str, start_ms: int, end_ms: int) -> list:
         """_fetch_batch with exponential backoff on rate limits / transient network

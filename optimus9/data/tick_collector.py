@@ -20,6 +20,7 @@ import json
 import math
 import multiprocessing
 import signal
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -58,10 +59,32 @@ class TickCollector:
 
     def run(self, tp_pk: int, symbol: str) -> None:
         self._log.info(f'Collecting ticks: {symbol}')
+        # WS first (no missed live ticks); backfill the (re)start gap in a parallel thread —
+        # overlap with the live stream is deduped by trade_id.
+        threading.Thread(target=self._backfill_recent, args=(tp_pk, symbol), daemon=True).start()
         self._ws.stream(
             f'{self._TOPIC_PREFIX}.{symbol}',
             lambda msg: self._on_message(tp_pk, msg),
         )
+
+    def _backfill_recent(self, tp_pk: int, symbol: str) -> None:
+        """Fill the (re)start gap: pull recent public trades via REST and INSERT IGNORE.
+        Own DB connection (MySQL conns aren't thread-safe); overlap with the live WS is
+        deduped by trade_id. Best-effort — a failure just leans on the WS."""
+        try:
+            from ..config import get_db_config
+            from .bybit_kline_client import BybitKlineClient
+            db = DatabaseManager(**get_db_config())
+            db.connect()
+            trades = BybitKlineClient().fetch_recent_trades(symbol)
+            db.executemany(
+                '''INSERT IGNORE INTO ticks (tk_tp_pk, tk_trade_id, tk_timestamp, tk_price, tk_volume, tk_side)
+                   VALUES (%s,%s,%s,%s,%s,%s)''',
+                [(tp_pk, t['trade_id'], t['ts'], t['price'], t['size'], t['side']) for t in trades])
+            db.disconnect()
+            self._log.info(f'startup backfill: merged {len(trades)} recent trades (gap-fill)')
+        except Exception as e:
+            self._log.error(f'startup backfill failed (leaning on WS): {e}')
 
     def _on_message(self, tp_pk: int, msg: dict) -> None:
         trades = msg.get('data', [])
