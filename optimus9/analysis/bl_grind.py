@@ -1,19 +1,20 @@
 """
 bl_grind — the BL grind's walk engine (pure) + the gated-vs-ungated metric.
 
-The walk IS the realtime trade logic, replayed over historical bars (the same
-function the live engine will call bar-by-bar — "the grind is a literal replay"):
+The walk IS the realtime trade logic, replayed over historical bars (the same function
+the live engine calls bar-by-bar — "the grind is a literal replay"):
 
-  bls3      a BL line completes  → combined transitions INTO 3 → the setup ARMS
-  trigger   the first pk within `arm_timeout` bars, while bny30 is OPEN, fires a trade
-  direction bny30's OPEN side sets it (gate, not a verdict): oob-hi → short, oob-lo → long
-  score     req2 (stop) = adverse excursion to the next swing peak/trough in the trade
-            direction; req3 (profit) = the following leg — the same risk/reward bl_review
-            scores, anchored at the pk bar instead of the gate-open.
+  bls3      a BL line completes  → combined transitions INTO 3 → the trigger moment
+  pk        a curated 5s pk within the last `pk_lookback` bars confirms the entry
+  direction in line with that pk. The curated pk (= bl_states.raw_pk) is already
+            bny30-gated upstream (PKGateFilter: it only exists when bny30 was open AND the
+            signal opposed it — mean reversion), so its sign IS the trade direction:
+            +1 long / -1 short (OOB-hi→short, #3). No separate bny30 input.
+  entry     at the bls3 bar
+  score     req2 (stop) = adverse excursion to the next swing in the trade direction;
+            req3 (profit) = the following leg — recycled from bl_review
 
-Pure functions: arrays in, trades out — no DB, no I/O. So the grind calls it per combo
-in a worker, and the live engine calls it on the rolling window. Semantics that are
-Joe's calls are isolated as args (`arm_timeout`) or one-liners flagged below.
+Pure: arrays in, trades out. The grind calls it per combo; the live engine on the window.
 """
 from __future__ import annotations
 
@@ -37,33 +38,25 @@ def _score(j, d, px, next_kind, first_after):
     return {'open_i': j, 'dir': d, 'stop_pct': stop, 'profit_pct': profit}
 
 
-def _dir_from_bny30(oob):
-    """bny30 OPEN side → trade direction. oob-hi (+1) → short (-1); oob-lo (-1) → long (+1).
-    [confirm polarity — matches bl_review's hi-breach→short reversal.]"""
-    return -1 if oob > 0 else 1
-
-
-def walk(combined, pk_dir, px, bny30_oob, pivots, pk_lookback: int = 11) -> list:
+def walk(combined, pk_dir, px, pivots, pk_lookback: int = 11) -> list:
     """One pass over the bars → the gated trades.
-      combined[i]   BL combined state (min-nonzero fold); 3 = a line completed (bls3)
-      pk_dir[i]     curated 5s pk this bar: 0 = none, +1 = long, -1 = short
+      combined[i]   BL combined state (min-nonzero fold); 3 = a completion (bls3)
+      pk_dir[i]     curated 5s pk (bl_states.raw_pk, already bny30-gated): 0 none, +1 long, -1 short
       px[i]         px_smooth
-      bny30_oob[i]  bny30 gate: 0 = closed (IB), +1 = open OOB-hi, -1 = open OOB-lo
       pivots        [(idx, 'H'|'L')] swing pivots on px
-      pk_lookback   bars before bls3 to search for a confirming in-line pk
+      pk_lookback   bars before bls3 (inclusive) to search for a confirming curated pk
 
-    At a bls3 (combined→3) with bny30 open, the bny30 side sets the direction (#3); if a
-    curated pk IN THAT DIRECTION fired within the last `pk_lookback` bars (the confirmation —
-    'in line with the 5s pk'), the trade opens at the bls3 bar."""
+    At a bls3, the most recent curated pk within the last pk_lookback bars sets the
+    direction ('in line with the 5s pk'); the trade opens at the bls3 bar."""
     n = len(px)
     next_kind, first_after = _swing_fns(pivots)
     trades = []
     for i in range(1, n):
-        if combined[i] == 3 and combined[i - 1] != 3 and bny30_oob[i] != 0:   # bls3 + gate open
-            d  = _dir_from_bny30(bny30_oob[i])
-            lo = max(0, i - pk_lookback + 1)                                  # last pk_lookback bars incl. i
-            if any(pk_dir[k] == d for k in range(lo, i + 1)):                 # an in-line pk
-                t = _score(i, d, px, next_kind, first_after)
+        if combined[i] == 3 and combined[i - 1] != 3:                 # bls3: a completion
+            lo = max(0, i - pk_lookback + 1)                          # last pk_lookback bars incl. i
+            j  = next((k for k in range(i, lo - 1, -1) if pk_dir[k] != 0), None)  # most recent pk
+            if j is not None:
+                t = _score(i, pk_dir[j], px, next_kind, first_after)
                 if t is not None:
                     trades.append(t)
     return trades
@@ -84,15 +77,15 @@ def _summary(trades: list) -> dict:
             'avg_profit':  round(sum(prof) / len(prof), 3) if prof else None}
 
 
-def gated_vs_ungated(combined, pk_dir, px, bny30_oob, pivots, pk_lookback: int = 11) -> dict:
+def gated_vs_ungated(combined, pk_dir, px, pivots, pk_lookback: int = 11) -> dict:
     """The headline: the BL gate's value-add on the required stop. 'gated' = walk() trades
-    (a bls3 confirmed by an in-line pk). 'ungated' = every in-line pk while bny30 is open,
-    the BL gate removed. If gated's stop is tighter, the gate is buying entry quality."""
+    (a bls3 confirmed by a curated pk in the lookback). 'ungated' = every curated pk, the
+    BL gate removed, scored from its own bar. If gated's stop is tighter, the gate buys
+    entry quality (the 0.68→0.33 stop thread)."""
     next_kind, first_after = _swing_fns(pivots)
-    ungated = [t for t in (_score(i, _dir_from_bny30(bny30_oob[i]), px, next_kind, first_after)
-                           for i in range(len(px))
-                           if bny30_oob[i] != 0 and pk_dir[i] == _dir_from_bny30(bny30_oob[i]))
+    ungated = [t for t in (_score(i, pk_dir[i], px, next_kind, first_after)
+                           for i in range(len(px)) if pk_dir[i] != 0)
                if t is not None]
     return {'pk_lookback': pk_lookback,
-            'gated':   _summary(walk(combined, pk_dir, px, bny30_oob, pivots, pk_lookback)),
+            'gated':   _summary(walk(combined, pk_dir, px, pivots, pk_lookback)),
             'ungated': _summary(ungated)}
