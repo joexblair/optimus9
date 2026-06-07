@@ -68,9 +68,9 @@ class TickCollector:
         if not trades:
             return
         self._db.executemany(
-            '''INSERT IGNORE INTO ticks (tk_tp_pk, tk_timestamp, tk_price, tk_volume, tk_side)
-               VALUES (%s,%s,%s,%s,%s)''',
-            [(tp_pk, int(t['T']), float(t['p']), float(t['v']),
+            '''INSERT IGNORE INTO ticks (tk_tp_pk, tk_trade_id, tk_timestamp, tk_price, tk_volume, tk_side)
+               VALUES (%s,%s,%s,%s,%s,%s)''',
+            [(tp_pk, t.get('i'), int(t['T']), float(t['p']), float(t['v']),
               'buy' if t['S'] == 'Buy' else 'sell')
              for t in trades],
         )
