@@ -140,7 +140,8 @@ class BLDetect:
             r  = bl.run_bb(line, seam=seam)
             bM = bm = np.full(len(ts), np.nan)
         else:
-            bM = self._line(base, fam['bM']); bm = self._line(base, fam['bm'])
+            bM = self._line(base, fam['bM'])
+            bm = self._line(base, fam['bm']) if fam['bm'] else np.full(len(ts), np.nan)  # m parked → NaN
             r  = bl.run(line, bm, bM, seam=seam)
         return line, bM, bm, r
 
