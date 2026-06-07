@@ -72,7 +72,7 @@ def _rank(out):
     return sorted(out, key=lambda r: (r.get('n', 0) <= 0, r.get('avg_stop') or 9e9))  # most/tightest first
 
 
-def run_sweep(combos, workers=None, maxtasks=200, chunksize=4, progress=1000, checkpoint=2500):
+def run_sweep(combos, workers=None, maxtasks=200, chunksize=4, progress=1000, checkpoint=1000):
     workers = workers or max(1, mp.cpu_count() - 2)
     _log.info(f'sweep: {len(combos)} combos · {workers} workers · maxtasksperchild={maxtasks}')
     out = []
@@ -92,18 +92,15 @@ def main():
     ap.add_argument('--window_hours', type=float, default=26)
     ap.add_argument('--warmup_hours', type=float, default=12)
     ap.add_argument('--workers',      type=int,   default=12)       # leave cores for klinecollect/auditor
+    ap.add_argument('--every',        type=int,   default=1)        # 1=full grid; N>1 samples every Nth (test subset)
     args = ap.parse_args()
     nb, nw = prepare(args.window_hours, warmup_hours=args.warmup_hours)
-    combos = make_grid()
+    combos = make_grid()[::args.every]                              # sampled subset spans the whole space
     _log.info(f'BL grind start: {len(combos)} combos · window {args.window_hours}h ({nw} bars) · '
               f'warmup {args.warmup_hours}h · {args.workers} workers')
     res = run_sweep(combos, workers=args.workers)
     persist(res)
     _log.info(f'BL grind COMPLETE — best: {res[0] if res else None}')
-
-
-if __name__ == '__main__':
-    main()
 
 
 def persist(results, table='bl_grind_results'):
@@ -118,3 +115,7 @@ def persist(results, table='bl_grind_results'):
         [[r.get(c) for c in cols] for r in results])
     db.disconnect()
     _log.info(f'persisted {len(results)} rows → {table}')
+
+
+if __name__ == '__main__':
+    main()
