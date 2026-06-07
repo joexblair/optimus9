@@ -106,11 +106,15 @@ class SyntheticBackfiller:
             return int(latest) + 1
         return int((datetime.now(timezone.utc) - timedelta(weeks=self._LOOKBACK_WEEKS)).timestamp() * 1000)
 
+    _PERSIST_CHUNK = 5000   # one executemany of all 35d (604k rows) blows InnoDB's lock table (1206)
+
     def _persist(self, tp_pk: int, bars: list) -> None:
-        self._db.executemany(
-            '''INSERT IGNORE INTO kline_collection
-                   (kc_tp_pk, kc_timestamp, kc_open, kc_high, kc_low, kc_close, kc_volume)
-               VALUES (%s,%s,%s,%s,%s,%s,%s)''',
-            [(tp_pk, b['timestamp'], b['open'], b['high'], b['low'], b['close'], b['volume'])
-             for b in bars],
-        )
+        rows = [(tp_pk, b['timestamp'], b['open'], b['high'], b['low'], b['close'], b['volume'])
+                for b in bars]
+        for i in range(0, len(rows), self._PERSIST_CHUNK):   # autocommit=True releases locks per batch
+            self._db.executemany(
+                '''INSERT IGNORE INTO kline_collection
+                       (kc_tp_pk, kc_timestamp, kc_open, kc_high, kc_low, kc_close, kc_volume)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s)''',
+                rows[i:i + self._PERSIST_CHUNK],
+            )

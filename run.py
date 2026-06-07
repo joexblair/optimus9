@@ -51,6 +51,7 @@ TODO — parked items, surface when relevant
 import argparse
 import os
 import sys
+import threading
 
 from logger import get_logger
 from optimus9.config import get_db_config
@@ -411,17 +412,24 @@ def cmd_supervisor(args, db: DatabaseManager) -> int:
     # Children pickle this plain dict into their own processes.
     db_kwargs = get_db_config()
 
-    # Backfill the last N days into kline_collection before launching
-    # workers — ensures the table holds a guaranteed minimum coverage
-    # window. SyntheticBackfiller's window mode always fetches the full
-    # span; INSERT IGNORE dedupes against existing rows downstream.
-    _log.info(f'Ensuring kline_collection holds last {args.lookback_days} days before launching workers')
-    SyntheticBackfiller(db, BybitKlineClient()).backfill(
-        args.tp_pk, args.symbol, lookback_days=args.lookback_days,
-    )
-
     # Parent doesn't need its DB while supervising — release it
     db.disconnect()
+
+    # Backfill runs in its OWN thread (own DB conn, best-effort) so it NEVER blocks or
+    # crashes live collection: the tick collector connects immediately, history fills in
+    # the background. (Joe 2026-06-07: was a 2-min blocking backfill that crashed on a 1206
+    # lock-table overflow → systemd restart loop, the collector never started.)
+    def _backfill() -> None:
+        try:
+            bdb = DatabaseManager(**db_kwargs)
+            bdb.connect()
+            _log.info(f'Background backfill: ensuring kline_collection holds last {args.lookback_days} days')
+            SyntheticBackfiller(bdb, BybitKlineClient()).backfill(
+                args.tp_pk, args.symbol, lookback_days=args.lookback_days)
+            bdb.disconnect()
+        except Exception as e:
+            _log.error(f'background backfill failed (live collection unaffected): {e}')
+    threading.Thread(target=_backfill, daemon=True).start()
 
     pm = ProcessManager()
     pm.register(WorkerSpec(
