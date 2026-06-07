@@ -134,14 +134,19 @@ class BarBuilder:
             o = h = l = c = float(prior_close); vol = 0.0        # gapless doji (no trades)
         else:
             return None                                          # cold start, no ticks
+        # volume precedence: a doji (new vol=0) must NOT overwrite a bar that already has
+        # volume (synthetic-1m or real) — else a gap-window doji clobbers good data. A real
+        # bar (vol>0) still overwrites anything.
         self._db.execute(
             '''INSERT INTO kline_collection
                    (kc_tp_pk, kc_timestamp, kc_open, kc_high, kc_low, kc_close, kc_volume)
                VALUES (%s,%s,%s,%s,%s,%s,%s)
                ON DUPLICATE KEY UPDATE
-                   kc_open=VALUES(kc_open), kc_high=VALUES(kc_high),
-                   kc_low=VALUES(kc_low),   kc_close=VALUES(kc_close),
-                   kc_volume=VALUES(kc_volume)''',
+                   kc_open   = IF(VALUES(kc_volume)=0 AND kc_volume>0, kc_open,   VALUES(kc_open)),
+                   kc_high   = IF(VALUES(kc_volume)=0 AND kc_volume>0, kc_high,   VALUES(kc_high)),
+                   kc_low    = IF(VALUES(kc_volume)=0 AND kc_volume>0, kc_low,    VALUES(kc_low)),
+                   kc_close  = IF(VALUES(kc_volume)=0 AND kc_volume>0, kc_close,  VALUES(kc_close)),
+                   kc_volume = IF(VALUES(kc_volume)=0 AND kc_volume>0, kc_volume, VALUES(kc_volume))''',
             (tp_pk, start_ms, o, h, l, c, vol),
         )
         return c

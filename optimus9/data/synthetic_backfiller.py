@@ -111,10 +111,19 @@ class SyntheticBackfiller:
     def _persist(self, tp_pk: int, bars: list) -> None:
         rows = [(tp_pk, b['timestamp'], b['open'], b['high'], b['low'], b['close'], b['volume'])
                 for b in bars]
-        for i in range(0, len(rows), self._PERSIST_CHUNK):   # autocommit=True releases locks per batch
+        # overwrite only existing dojis (kc_volume=0) so the official-1m fills gap windows;
+        # never clobber a real-tick bar (kc_volume>0). chunked: one executemany of all 35d
+        # (604k rows) blows InnoDB's lock table (1206); autocommit releases locks per batch.
+        for i in range(0, len(rows), self._PERSIST_CHUNK):
             self._db.executemany(
-                '''INSERT IGNORE INTO kline_collection
+                '''INSERT INTO kline_collection
                        (kc_tp_pk, kc_timestamp, kc_open, kc_high, kc_low, kc_close, kc_volume)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s)''',
+                   VALUES (%s,%s,%s,%s,%s,%s,%s)
+                   ON DUPLICATE KEY UPDATE
+                       kc_open   = IF(kc_volume=0, VALUES(kc_open),   kc_open),
+                       kc_high   = IF(kc_volume=0, VALUES(kc_high),   kc_high),
+                       kc_low    = IF(kc_volume=0, VALUES(kc_low),    kc_low),
+                       kc_close  = IF(kc_volume=0, VALUES(kc_close),  kc_close),
+                       kc_volume = IF(kc_volume=0, VALUES(kc_volume), kc_volume)''',
                 rows[i:i + self._PERSIST_CHUNK],
             )
