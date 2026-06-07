@@ -161,23 +161,26 @@ class BLDetect:
                     bb_mult=float(r['ic_bb_mult']), src=r['ic_src'])
 
     # ── public ───────────────────────────────────────────────────────────────
-    def report(self, end_ms=None) -> list:
+    def _setup(self, end_ms=None):
+        """Shared compute for report() AND the grind sweep — the tape, the raw 5s-pk
+        (Pine-aligned → decision-delay → bny30 gate, so it's the gated entry signal), and
+        px_smooth. Returns (base, ts, win_start, raw_pk, px)."""
         end_ms     = int(end_ms or self._data_max())
         win_start  = int(end_ms - self._lookback * 3600_000)
         load_start = int(win_start - self._warmup * 3600_000)
-
         base  = KlineLoader(self._db).load_window(self._tp, load_start, end_ms)
         ts    = base['timestamp'].to_numpy()
-
-        # raw 5s-PK = the Pine-aligned REALTIME signal (pk_raw → decision-delay(1) →
-        # bny30 gate), so blr's "first SnF signal in the gate" is the real entry.
         from ..orchestration.gate_signal_sweep import pine_aligned_signals
         pk_idx, pk_dirs = pine_aligned_signals(base, self._db, GCA5M_RAW)
         raw_pk = np.zeros(len(ts), np.int8); raw_pk[pk_idx] = pk_dirs
-        c9, e9 = self._htf_views(base, ts)                # c9/e9 + px on the primary line's TF
         tf    = IC.resample(base, self._fam['tf_seconds'])
         idx   = np.clip(np.searchsorted(tf['timestamp'].to_numpy(), ts, side='right') - 1, 0, None)
         px    = IC.dema(tf['close'].to_numpy(dtype=float), 2)[idx]
+        return base, ts, win_start, raw_pk, px
+
+    def report(self, end_ms=None) -> list:
+        base, ts, win_start, raw_pk, px = self._setup(end_ms)
+        c9, e9 = self._htf_views(base, ts)                # c9/e9 + px on the primary line's TF
 
         # run EVERY active breach line (K via run, BB via run_bb), then fold the combined
         # state the gate reacts to. combined = the LEAST-progressed ACTIVE breach: min over
