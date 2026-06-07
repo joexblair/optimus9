@@ -67,7 +67,7 @@ def _rank(out):
     return sorted(out, key=lambda r: (r.get('n', 0) < 10, r.get('avg_stop') or 9e9))  # meaningful n, then tightest
 
 
-def run_sweep(combos, workers=None, maxtasks=200, chunksize=4, progress=2000, checkpoint=2000):
+def run_sweep(combos, workers=None, maxtasks=200, chunksize=4, progress=500, checkpoint=500):
     workers = workers or max(1, mp.cpu_count() - 2)
     _log.info(f'sweep: {len(combos)} combos · {workers} workers · maxtasksperchild={maxtasks}')
     out = []
