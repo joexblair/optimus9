@@ -82,18 +82,34 @@ def run_sweep(combos, workers=None, maxtasks=200, chunksize=4, progress=500, che
 
 
 def persist(results, table='bl_grind_results'):
+    """Upsert keyed on the combo (CREATE IF NOT EXISTS, never drops) so results accumulate
+    across restarts — the basis for resume-from-checkpoint."""
     db = DatabaseManager(**get_db_config()); db.connect()
-    db.execute(f'DROP TABLE IF EXISTS {table}')
-    db.execute(f'''CREATE TABLE {table} (
+    db.execute(f'''CREATE TABLE IF NOT EXISTS {table} (
         bgr_pk BIGINT AUTO_INCREMENT PRIMARY KEY, k_len INT, rsi_len INT, stc_len INT,
-        mn_len INT, mn_mult FLOAT, mn_src VARCHAR(8),
-        n INT, avg_stop FLOAT, median_stop FLOAT, max_stop FLOAT, avg_profit FLOAT)''')
+        mn_len INT, mn_mult DECIMAL(4,2), mn_src VARCHAR(8),
+        n INT, avg_stop FLOAT, median_stop FLOAT, max_stop FLOAT, avg_profit FLOAT,
+        UNIQUE KEY uq_combo (k_len, rsi_len, stc_len, mn_len, mn_mult, mn_src))''')
     cols = ['k_len', 'rsi_len', 'stc_len', 'mn_len', 'mn_mult', 'mn_src',
             'n', 'avg_stop', 'median_stop', 'max_stop', 'avg_profit']
-    db.executemany(f"INSERT INTO {table} ({','.join(cols)}) VALUES ({','.join(['%s'] * len(cols))})",
-                   [[r.get(c) for c in cols] for r in results])
+    upd  = ', '.join(f'{c}=VALUES({c})' for c in cols[6:])         # refresh metrics on re-score
+    db.executemany(
+        f"INSERT INTO {table} ({','.join(cols)}) VALUES ({','.join(['%s'] * len(cols))}) "
+        f"ON DUPLICATE KEY UPDATE {upd}",
+        [[r.get(c) for c in cols] for r in results])
     db.disconnect()
-    _log.info(f'persisted {len(results)} rows → {table}')
+    _log.info(f'persisted {len(results)} rows → {table} (upsert)')
+
+
+def done_combos(table='bl_grind_results'):
+    """The set of combos already scored in `table` (empty if it doesn't exist) — for resume."""
+    db = DatabaseManager(**get_db_config()); db.connect()
+    if not db.execute(f"SHOW TABLES LIKE '{table}'", fetch=True):
+        db.disconnect(); return set()
+    rows = db.execute(f'SELECT k_len, rsi_len, stc_len, mn_len, mn_mult, mn_src FROM {table}', fetch=True)
+    db.disconnect()
+    return {(r['k_len'], r['rsi_len'], r['stc_len'], r['mn_len'], round(float(r['mn_mult']), 2), r['mn_src'])
+            for r in rows}
 
 
 # gcb5p grid (coarser than the 3K — its shape is mapped; budget goes to mnm9m × window)
@@ -108,15 +124,25 @@ MS = ['close', 'hl2', 'hl3', 'ohlc4', 'hlcc4']   # mnm9m src             (5)
 def main():
     import argparse
     ap = argparse.ArgumentParser(description='BL grind — gcb5p × mnm9m sweep')
-    ap.add_argument('--window_hours', type=float, default=72)
+    ap.add_argument('--window_hours', type=float, default=90)
     ap.add_argument('--warmup_hours', type=float, default=12)
     ap.add_argument('--workers',      type=int,   default=12)
+    ap.add_argument('--fresh', action='store_true', help='drop the table + score all (default: resume — skip done)')
     args = ap.parse_args()
     nb, nw = prepare(args.window_hours, warmup_hours=args.warmup_hours)
-    combos = make_grid(GK, GR, GS, ML, MM, MS)
-    _log.info(f'BL grind start: {len(combos)} combos · window {args.window_hours}h ({nw} bars) · '
-              f'warmup {args.warmup_hours}h · {args.workers} workers')
-    persist(run_sweep(combos, workers=args.workers))
+    all_combos = make_grid(GK, GR, GS, ML, MM, MS)
+    if args.fresh:
+        db = DatabaseManager(**get_db_config()); db.connect()
+        db.execute('DROP TABLE IF EXISTS bl_grind_results'); db.disconnect()
+        done = set()
+    else:
+        done = done_combos()
+    combos = [c for c in all_combos
+              if (c[0], c[1], c[2], c[3], round(c[4], 2), c[5]) not in done]   # skip already-scored
+    _log.info(f'BL grind: {len(combos)}/{len(all_combos)} to score ({len(done)} done) · '
+              f'window {args.window_hours}h ({nw} bars) · {args.workers} workers')
+    if combos:
+        persist(run_sweep(combos, workers=args.workers))
     _log.info('BL grind COMPLETE')
 
 
