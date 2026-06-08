@@ -63,6 +63,24 @@ def make_grid(gk, gr, gs, ml, mm, ms):
     return [(k, r, s, l, m, src) for k in gk for r in gr for s in gs for l in ml for m in mm for src in ms]
 
 
+def _eval_mask(item):
+    """item = (combo6, gcb5p_exit_mask) — re-score a fixed gcb5p×mnm9m config with the
+    gcb5p breach EXIT MASK overridden (which exits complete the breach → the bls3 timing)."""
+    (gk, gr, gs, ml, mm, msrc), mask = item
+    gfam = dict(_CTX['gcb5p']); gfam['k'] = {**gfam['k'], 'k_len': int(gk), 'rsi_len': int(gr), 'stc_len': int(gs)}
+    gfam['exit_mask'] = int(mask)
+    mfam = dict(_CTX['mnm9m']); mfam['k'] = {**mfam['k'], 'bb_len': int(ml), 'bb_mult': float(mm), 'src': msrc}
+    try:
+        gst = _CTX['det']._run_family(gfam, _CTX['base'], _CTX['ts'])[3]['state']
+        mst = _CTX['det']._run_family(mfam, _CTX['base'], _CTX['ts'])[3]['state']
+        combined = _refold(_CTX['fixed'] + [gst, mst])[_CTX['mask']]
+        s = _summary(walk(combined, _CTX['raw_pk'], _CTX['px'], _CTX['pivots'], _CTX['pk_lookback']))
+    except Exception as e:
+        s = {'n': -1, 'err': str(e)[:60]}
+    return {'k_len': int(gk), 'rsi_len': int(gr), 'stc_len': int(gs), 'mn_len': int(ml),
+            'mn_mult': float(mm), 'mn_src': msrc, 'gcb5p_mask': int(mask), **s}
+
+
 def _rank(out):
     return sorted(out, key=lambda r: (r.get('n', 0) < 10, r.get('avg_stop') or 9e9))  # meaningful n, then tightest
 
