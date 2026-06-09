@@ -30,7 +30,8 @@ LINES        = ['s18b', 'hb9b']          # the BL lines to label (name:bls). swa
 COMBO        = {'b6b': 4, 'hb15b': 3, 'hb9b': 5, 'hs15r': 2,   # gate-M best pick (k_len/line)
                 'hs9r': 2, 's18b': 12, 's30r': 4, 's90b': 17}
 LOOKBACK_H   = 36
-GATE_BB, GATE_K = True, False            # gate-M. (True,True)=both · (False,True)=p
+GATE_BB, GATE_K = True, True             # the REAL bny30 gate = bny30M OR bny30p.
+# (set one False only for an M-only / p-only diagnostic — NOT the production gate)
 SWING_PCT, PK_LOOKBACK = 0.9, 11
 OUT = '/home/joe/thecodes/bl_viz_2line.pine'
 log = get_logger('BLViz')
