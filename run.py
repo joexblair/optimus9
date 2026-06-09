@@ -519,8 +519,8 @@ def cmd_cluster_score(args, db: DatabaseManager) -> int:
     rows = cs.score(args.or_pk)
     top  = rows[0]
     _log.info(f'cluster_scores: {len(rows)} centroids → table cluster_scores | '
-              f'#1 {top["combo"]} near_swing={top["near_swing"]:.2f} '
-              f'total_net={top["total_net"]:.2f}')
+              f'#1 {top["combo"]} swing_capture={top["swing_capture"]:.2f} '
+              f'capture_per_1k={top["capture_per_1k"]:.2f} total_net={top["total_net"]:.2f}')
     return 0
 
 

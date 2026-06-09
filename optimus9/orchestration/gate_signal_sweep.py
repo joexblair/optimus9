@@ -86,12 +86,16 @@ BNY30 = [
 ]
 
 
-def bny30_oob_side(base_df) -> np.ndarray:
-    """The bny30 gate's per-5s oob_side (+1 HI / -1 LO / 0 in-band), OR-folded over
-    bny30M (BB hl2 68/1.24) + bny30m (K ohlc4 21/114/105) — the production gate."""
+def bny30_oob_side(base_df, use_bb=True, use_k=True) -> np.ndarray:
+    """The bny30 gate's per-5s oob_side (+1 HI / -1 LO / 0 in-band), OR-folded over the
+    SELECTED bny30 components — bny30M (BB hl2 68/1.24) and/or bny30p (K ohlc4
+    21/114/105). Default (both) = the production gate; use_bb/use_k isolate M vs p."""
+    cfgs = [c for c, on in zip(BNY30, (use_bb, use_k)) if on]
+    if not cfgs:
+        return np.zeros(len(base_df), dtype=int)
     gate_df = IC.resample(base_df, 30)
     sides   = [IC.align_to_base(IC.compute_oob_side(cfg, gate_df), gate_df, base_df)
-               for cfg in BNY30]
+               for cfg in cfgs]
     return IC.fold_gates(sides)
 
 
@@ -105,7 +109,8 @@ def generate_gca5m_signals(base_df, db, cfg: dict = GCA5M):
     return idx.astype(int), s5[idx].astype(int)
 
 
-def pine_aligned_signals(base_df, db, cfg: dict = GCA5M, delay: int = 0, gate: bool = True):
+def pine_aligned_signals(base_df, db, cfg: dict = GCA5M, delay: int = 0, gate: bool = True,
+                         gate_bb: bool = True, gate_k: bool = True):
     """The full Pine realtime entry signal — what the strategy actually trades:
       pk_raw → decision-delay(delay) state machine → fire edges → bny30 gate
     delay=0 matches the TV strategy (its decision-delay UI was 0): a confirmed pk fires
@@ -118,7 +123,7 @@ def pine_aligned_signals(base_df, db, cfg: dict = GCA5M, delay: int = 0, gate: b
     idx   = np.where((clean != 0.0) & (clean != prev))[0]  # confirmed fire edges
     dirs  = fin[idx].astype(int)
     if gate:
-        oob  = bny30_oob_side(base_df)
+        oob  = bny30_oob_side(base_df, use_bb=gate_bb, use_k=gate_k)
         keep = dirs == -oob[idx].astype(int)               # mean-reversion gate
         idx, dirs = idx[keep], dirs[keep]
     return idx.astype(int), dirs
