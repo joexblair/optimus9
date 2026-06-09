@@ -87,12 +87,21 @@ class BLDetect:
         return rows[0]
 
     def _load_families(self) -> list:
-        """Build a family dict per ACTIVE breach line (name, tf_seconds, line_type, the
-        breach-line cfg, support BBs M/m, exit_mask, pk_ic_pk) from bl_lines +
-        indicator_configs. A K-breach family carries its M/m supports; a BB-breach family
-        is standalone (run_bb). Replaces the single-family loader."""
+        """Build a family dict per ACTIVE breach line from bl_lines + indicator_configs.
+
+        Two distinct support concerns, sourced separately (BRD bl_line_brd.md):
+          • PREDICTION — the breach's own set mini+Major BB (same series + label,
+            suffix m/M). Resolved from the SET, NOT bl_lines: every set has both, and
+            sourcing here avoids the old series-only collision when >1 breach shares a
+            series. → predictor_min / predictor_maj.
+          • EXITS — the hand-picked support bound to THIS breach via the breach row's
+            bl_support_ic_pk (and bl_exit3_support_ic_pk, the optional cross-family
+            exit3 override, e.g. hb15b's hb9M). → exit_support / exit3_support.
+        A BB-breach family is standalone (run_bb); its support fields stay None."""
         breaches = self._db.execute(
-            '''SELECT bl.bl_ic_pk, bl.bl_pk_ic_pk, bl.bl_exit_mask, ic.ic_is_pk, ic.ic_line_type,
+            '''SELECT bl.bl_ic_pk, bl.bl_pk_ic_pk, bl.bl_exit_mask,
+                      bl.bl_support_ic_pk, bl.bl_exit3_support_ic_pk,
+                      ic.ic_is_pk, ic.ic_line_type,
                       s.is_prefix, itf.itf_seconds, itf.itf_label, il.il_suffix
                FROM bl_lines bl
                JOIN indicator_configs ic   ON ic.ic_pk   = bl.bl_ic_pk
@@ -105,25 +114,34 @@ class BLDetect:
             raise RuntimeError('bl_lines has no active breach line — seed it')
         fams = []
         for b in breaches:
-            supports = self._db.execute(
-                '''SELECT bl.bl_ic_pk, il.il_suffix FROM bl_lines bl
-                   JOIN indicator_configs ic ON ic.ic_pk = bl.bl_ic_pk
-                   JOIN indicator_lines il   ON il.il_pk = ic.ic_il_pk
-                   WHERE bl.bl_is_active = 1 AND bl.bl_role = 'support' AND ic.ic_is_pk = %s''',
-                (b['ic_is_pk'],), fetch=True)
-            by_suf = {a['il_suffix']: self._cfg_dict(a['bl_ic_pk']) for a in supports}
-            fams.append({'name':       f"{b['is_prefix']}{b['itf_label']}{b['il_suffix']}",
-                         'tf_seconds': int(b['itf_seconds']), 'line_type': b['ic_line_type'],
-                         'k':  self._cfg_dict(b['bl_ic_pk']),
-                         'bM': by_suf.get('M'), 'bm': by_suf.get('m'),
+            # predictor BBs from the SET: same series + label, the two BB suffixes m/M
+            preds = self._db.execute(
+                '''SELECT il.il_suffix, ic.ic_pk FROM indicator_configs ic
+                   JOIN indicator_lines il      ON il.il_pk  = ic.ic_il_pk
+                   JOIN indicator_timeframes itf ON itf.itf_pk = ic.ic_itf_pk
+                   WHERE ic.ic_is_pk = %s AND itf.itf_label = %s
+                     AND ic.ic_line_type = 'bb' AND il.il_suffix IN ('m', 'M')''',
+                (b['ic_is_pk'], b['itf_label']), fetch=True)
+            by_suf = {p['il_suffix']: self._cfg_dict(p['ic_pk']) for p in preds}
+            cfg = lambda pk: self._cfg_dict(pk) if pk else None
+            fams.append({'name':          f"{b['is_prefix']}{b['itf_label']}{b['il_suffix']}",
+                         'tf_seconds':    int(b['itf_seconds']), 'line_type': b['ic_line_type'],
+                         'k':             self._cfg_dict(b['bl_ic_pk']),
+                         'predictor_min': by_suf.get('m'), 'predictor_maj': by_suf.get('M'),
+                         'exit_support':  cfg(b['bl_support_ic_pk']),
+                         'exit3_support': cfg(b['bl_exit3_support_ic_pk']),
                          'exit_mask': b['bl_exit_mask'], 'pk_ic_pk': b['bl_pk_ic_pk']})
             self._log.info(f"  breach {fams[-1]['name']} (TF{fams[-1]['tf_seconds']}s, "
-                           f"{b['ic_line_type']}) mask={b['bl_exit_mask']}")
+                           f"{b['ic_line_type']}) mask={b['bl_exit_mask']} "
+                           f"exit_sup={'y' if b['bl_support_ic_pk'] else '-'} "
+                           f"exit3={'y' if b['bl_exit3_support_ic_pk'] else '-'}")
         return fams
 
     def _run_family(self, fam, base, ts):
         """Compute one family's breach line + run its machine (K via run, BB via run_bb).
-        Returns (line, bM, bm, result_dict) — bM/bm are NaN for a BB-type family."""
+        Returns (line, exit_support_line, predictor_maj_line, result_dict) — the two
+        support arrays are NaN for a BB-type family. They land in bl_states as bb_main
+        (the exit support the exits read) / bb_mid (the predictor Major) for eyeballing."""
         c, fp = self._cfg, float(self._cfg['blc_fence_pad'])
         bl = BreachingLine(mult=fam['tf_seconds'] // 5,
                            curl_floor=float(c['blc_curl_floor']),
@@ -136,14 +154,17 @@ class BLDetect:
         line = self._line(base, fam['k'])                 # each line computes on its own config TF
         cyc  = ts // (tf * 1000)
         seam = np.empty(len(ts), bool); seam[0] = True; seam[1:] = cyc[1:] != cyc[:-1]
+        nan  = lambda: np.full(len(ts), np.nan)
         if fam['line_type'] == 'bb':
-            r  = bl.run_bb(line, seam=seam)
-            bM = bm = np.full(len(ts), np.nan)
+            r = bl.run_bb(line, seam=seam)
+            esup = pmaj = nan()
         else:
-            bM = self._line(base, fam['bM'])
-            bm = self._line(base, fam['bm']) if fam['bm'] else np.full(len(ts), np.nan)  # m parked → NaN
-            r  = bl.run(line, bm, bM, seam=seam)
-        return line, bM, bm, r
+            pmin = self._line(base, fam['predictor_min']) if fam['predictor_min'] else nan()
+            pmaj = self._line(base, fam['predictor_maj']) if fam['predictor_maj'] else nan()
+            esup = self._line(base, fam['exit_support'])  if fam['exit_support']  else pmaj
+            e3s  = self._line(base, fam['exit3_support']) if fam['exit3_support'] else None
+            r = bl.run(line, pmin, pmaj, esup, e3s, seam=seam)
+        return line, esup, pmaj, r
 
     def _cfg_dict(self, ic_pk) -> dict:
         """One indicator_configs row → the kind/params dict _line() consumes, INCLUDING

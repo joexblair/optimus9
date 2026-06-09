@@ -22,21 +22,24 @@ HI, LO = BOUNDARY_HI, BOUNDARY_LO    # OOB breach detection (85/15)
 # its own tuning concern, NOT the RSI rescale. bl_detect pads it via --fence_pad.
 
 
-def predict_breach(k, bb_m, bb_M, hi=HI, lo=LO, fence_hi=FENCE_HI, fence_lo=FENCE_LO):
+def predict_breach(k, predictor_min_bb, predictor_maj_bb, hi=HI, lo=LO,
+                   fence_hi=FENCE_HI, fence_lo=FENCE_LO):
     """Per-bar predicted-breach direction {+1 hi, -1 lo, 0 none}.
 
-    A K breach is predicted when the BB anchor overshoots the boundary by MORE than
-    K undershoots it (the BB's pull carries K through), while K sits in the engage
-    band (outside the 30:70 fence) and is not yet breached. The anchor uses BOTH BB
-    lines: max(m,M) for a hi breach, min(m,M) for a lo breach (hand-curated lines).
+    A K breach is predicted when the prediction_anchor overshoots the boundary by
+    MORE than K undershoots it (the BB's pull carries K through), while K sits in the
+    engage band (outside the 30:70 fence) and is not yet breached. The anchor uses
+    BOTH set BBs (mini + Major): max for a hi breach, min for a lo breach.
 
     Direction confirmed by Joe's examples (HI=85, K=75):
-      m=56/M=120 → anchor 120, (120-85)=35 > (85-75)=10 → True
-      m=56/M=90  → anchor 90,  (90-85)=5  > 10           → False
+      min=56/maj=120 → anchor 120, (120-85)=35 > (85-75)=10 → True
+      min=56/maj=90  → anchor 90,  (90-85)=5  > 10           → False
     """
-    k, bb_m, bb_M = np.asarray(k, float), np.asarray(bb_m, float), np.asarray(bb_M, float)
-    anchor_hi = np.maximum(bb_m, bb_M)
-    anchor_lo = np.minimum(bb_m, bb_M)
+    k    = np.asarray(k, float)
+    pmin = np.asarray(predictor_min_bb, float)
+    pmaj = np.asarray(predictor_maj_bb, float)
+    anchor_hi = np.maximum(pmin, pmaj)    # prediction_anchor (hi side)
+    anchor_lo = np.minimum(pmin, pmaj)    # prediction_anchor (lo side)
     pred_hi = ((k >= fence_hi) & (k < hi) & (anchor_hi >= hi) &
                ((anchor_hi - hi) > (hi - k)))
     pred_lo = ((k <= fence_lo) & (k > lo) & (anchor_lo <= lo) &
@@ -64,9 +67,19 @@ class BreachingLine:
         self.fence_hi, self.fence_lo = float(fence_hi), float(fence_lo)
 
     # ── public ───────────────────────────────────────────────────────────────
-    def run(self, k, bb_m, bb_M, seam=None) -> dict:
+    def run(self, k, predictor_min_bb, predictor_maj_bb, exit_support=None,
+            exit3_support=None, seam=None) -> dict:
         """Walk the bars; return per-bar arrays: state, breach_dir, predicted,
         exit1/exit2/exit3 (the bools the persistence table needs).
+
+        Inputs are type-agnostic — BL reads line VALUES; whether a line is K or BB is
+        an upstream (computer) concern, never branched on here:
+          predictor_min_bb / predictor_maj_bb — the set's mini+Major BBs; their
+            min/max is the prediction_anchor (predict_breach).
+          exit_support — the hand-picked support the exits read (exit1 OOB→IB,
+            exit3 ✕-toward-IB). Defaults to predictor_maj_bb when omitted.
+          exit3_support — optional: lets exit3 read a DIFFERENT support than exit1
+            (hb15b: exit1/2 ← hb15M, exit3 ← hb9M). Defaults to exit_support.
 
         Dormancy model (Target-1 review): a line inside the 30:70 fence is dormant
         (state 0). Re-arming to 1 needs a FRESH breach (an IB→OOB crossing or a
@@ -75,14 +88,16 @@ class BreachingLine:
         evaluated only while OOB. Curl + an exit on the same bar cascades 1→2→3.
         """
         k    = np.asarray(k, float)
-        bb_m = np.asarray(bb_m, float)
-        bb_M = np.asarray(bb_M, float)
+        pmin = np.asarray(predictor_min_bb, float)
+        pmaj = np.asarray(predictor_maj_bb, float)
+        esup = pmaj if exit_support  is None else np.asarray(exit_support, float)
+        e3s  = esup if exit3_support is None else np.asarray(exit3_support, float)
         n    = len(k)
         # seam[i] = bar i is the first 5s of a new TF9 cycle. Default (all True) makes
         # the exit2 anchor a 5s lookback; bl_detect passes real seams → TF9 anchor.
         seam = np.ones(n, bool) if seam is None else np.asarray(seam, bool)
 
-        pred = predict_breach(k, bb_m, bb_M, self.hi, self.lo, self.fence_hi, self.fence_lo)
+        pred = predict_breach(k, pmin, pmaj, self.hi, self.lo, self.fence_hi, self.fence_lo)
         oob  = (k >= self.hi) | (k <= self.lo)
         in_fence = (k > self.fence_lo) & (k < self.fence_hi)
         sig  = np.zeros(n, np.int8)
@@ -91,8 +106,8 @@ class BreachingLine:
 
         cl = self.curl_lookback                              # curl: short local slope (7)
         slope_k = np.full(n, np.nan); slope_k[cl:] = k[cl:]  - k[:-cl]
-        bbM_oob = (bb_M >= self.hi - self.bb_pad) | (bb_M <= self.lo + self.bb_pad)
-        bbM_ib  = ~bbM_oob                                   # bb_pad: count a near-OOB BB as OOB for exit1
+        esup_oob = (esup >= self.hi - self.bb_pad) | (esup <= self.lo + self.bb_pad)
+        esup_ib  = ~esup_oob                                 # bb_pad: count a near-OOB support as OOB for exit1
 
         state, bdir = 0, 0
         pend3 = 0                                             # exit3-before-curl grace countdown
@@ -144,10 +159,10 @@ class BreachingLine:
             o_ref[i] = k_anch
             o_ref_idx[i] = k_anch_idx
             o_ext[i] = k_ext
-            e1 = self._exit_ob_to_ib(bbM_ib, bbM_oob, i)
+            e1 = self._exit_ob_to_ib(esup_ib, esup_oob, i)
             e2 = bool(k_anch == k_anch and (                  # k_anch==k_anch ⇒ not NaN
                 (cur_dir == 1 and k[i] < k_anch) or (cur_dir == -1 and k[i] > k_anch)))
-            e3 = self._exit_cross_toward_ib(cur_dir, bb_M, k, i)
+            e3 = self._exit_cross_toward_ib(cur_dir, e3s, k, i)
             # raw conditions recorded for eyeballing; the exit_mask gates which ones
             # COMPLETE. exit1 bypasses the curl (immediate, even same-bar as the breach);
             # exit2/exit3 need the curl (state 2); exit4 (mask 8, p-rev) will need it too.

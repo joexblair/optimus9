@@ -11,19 +11,19 @@ from optimus9.compute.breaching_line import BreachingLine, predict_breach
 # ── prediction (Joe's examples, HI=85, K=75) ────────────────────────────────
 def test_predict_hi_joes_examples():
     # m=56/M=120 → anchor 120, 35>10 → True ;  m=56/M=90 → anchor 90, 5>10 → False
-    assert list(predict_breach(k=[75, 75], bb_m=[56, 56], bb_M=[120, 90])) == [1, 0]
+    assert list(predict_breach(k=[75, 75], predictor_min_bb=[56, 56], predictor_maj_bb=[120, 90])) == [1, 0]
 
 
 def test_predict_lo_mirror():
-    assert predict_breach(k=[20], bb_m=[5], bb_M=[44])[0] == -1
+    assert predict_breach(k=[20], predictor_min_bb=[5], predictor_maj_bb=[44])[0] == -1
 
 
 def test_fence_suppresses_prediction():
-    assert predict_breach(k=[50], bb_m=[56], bb_M=[120])[0] == 0
+    assert predict_breach(k=[50], predictor_min_bb=[56], predictor_maj_bb=[120])[0] == 0
 
 
 def test_already_breached_is_not_predicted():
-    assert predict_breach(k=[90], bb_m=[56], bb_M=[120])[0] == 0
+    assert predict_breach(k=[90], predictor_min_bb=[56], predictor_maj_bb=[120])[0] == 0
 
 
 # ── exit methods in isolation ───────────────────────────────────────────────
@@ -43,7 +43,7 @@ def test_exit3_cross_toward_ib():
 def test_exit2_fires_when_k_reverses_past_anchor():
     # hi breach: K peaks 95 (ref settles at k[1]=88); K curls (b3) then falls to 86 —
     # past the 88 ref but still OOB (>85) — so exit2 completes before K returns IB.
-    r = _bl().run(k=[50, 88, 95, 92, 86], bb_m=[50]*5, bb_M=[50]*5)
+    r = _bl().run(k=[50, 88, 95, 92, 86], predictor_min_bb=[50]*5, predictor_maj_bb=[50]*5)
     assert list(r['state']) == [0, 1, 1, 2, 3]
     assert r['exit2'][4]
 
@@ -51,7 +51,7 @@ def test_exit2_fires_when_k_reverses_past_anchor():
 def test_exit2_silent_on_shallow_pullback():
     # K peaks 90 then only dips to 89 — never back past the anchor (86), so exit2
     # stays quiet and the journey never completes (the 16267 false-complete).
-    r = _bl().run(k=[50, 86, 90, 89, 89], bb_m=[50]*5, bb_M=[50]*5)
+    r = _bl().run(k=[50, 86, 90, 89, 89], predictor_min_bb=[50]*5, predictor_maj_bb=[50]*5)
     assert not any(r['exit2'])
     assert 3 not in list(r['state'])
 
@@ -60,7 +60,7 @@ def test_exit_mask_disables_exit2():
     # mask 5 = exit1(1) + exit3(4), exit2(2) OFF. The K-reversal series that completes
     # via exit2 under the default mask now stalls at state 2 — the raw condition is
     # still recorded, just not actioned.
-    r = _bl(exit_mask=5).run(k=[50, 88, 95, 92, 86], bb_m=[50]*5, bb_M=[50]*5)
+    r = _bl(exit_mask=5).run(k=[50, 88, 95, 92, 86], predictor_min_bb=[50]*5, predictor_maj_bb=[50]*5)
     assert list(r['state']) == [0, 1, 1, 2, 2]
     assert r['exit2'][4]
 
@@ -72,7 +72,7 @@ def test_exit2_ref_taken_at_tf9_seam():
     # ref (90) would have wrongly fired.
     seam = [True, False, False, True, False, False, True, False, False]
     k    = [50,   86,    88,    90,   92,    91,    89,   89,    89]
-    r = _bl().run(k=k, bb_m=[50]*9, bb_M=[50]*9, seam=seam)
+    r = _bl().run(k=k, predictor_min_bb=[50]*9, predictor_maj_bb=[50]*9, seam=seam)
     assert r['exit2_ref'][4] == 88
     assert not any(r['exit2'])
 
@@ -84,9 +84,9 @@ def test_exit2_ref_does_not_reach_pre_breach():
     # 'now' pins to the breach-edge bl_line (k[8]=58), with idx 8 for exit2_ref_dt.
     seam = [True, False, False, True, False, False, True, False, False, True, False, False]
     k    = [50,   51,    52,    53,   54,    55,    56,   57,    58,    10,   9,     9]
-    rp = _bl(exit2_ref='prior').run(k=k, bb_m=[50]*12, bb_M=[50]*12, seam=seam)
+    rp = _bl(exit2_ref='prior').run(k=k, predictor_min_bb=[50]*12, predictor_maj_bb=[50]*12, seam=seam)
     assert np.isnan(rp['exit2_ref'][9])               # did not reach pre-breach structure
-    rn = _bl(exit2_ref='now').run(k=k, bb_m=[50]*12, bb_M=[50]*12, seam=seam)
+    rn = _bl(exit2_ref='now').run(k=k, predictor_min_bb=[50]*12, predictor_maj_bb=[50]*12, seam=seam)
     assert rn['exit2_ref'][9] == 58                   # breach-edge bl_line
     assert rn['exit2_ref_idx'][9] == 8                # provenance for exit2_ref_dt
 
@@ -94,7 +94,7 @@ def test_exit2_ref_does_not_reach_pre_breach():
 # ── dormancy model ──────────────────────────────────────────────────────────
 def test_fence_forces_state_0():
     # breached, then K returns to the 30:70 dead zone → dormant (state 0)
-    r = _bl().run(k=[90, 50], bb_m=[50, 50], bb_M=[50, 50])
+    r = _bl().run(k=[90, 50], predictor_min_bb=[50, 50], predictor_maj_bb=[50, 50])
     assert list(r['state']) == [1, 0]
 
 
@@ -102,14 +102,14 @@ def test_ib_cross_resets_to_0():
     # OOB→IB rule: a breached line (90) that crosses back inside the boundary (84 IB,
     # still outside the 30:70 fence) flips to bls0 — the breach is over, machine re-arms
     # from idle. (Supersedes the old "curl gated to OOB keeps it at 1": IB → 0 now.)
-    r = _bl().run(k=[50, 90, 84], bb_m=[50]*3, bb_M=[50]*3)
+    r = _bl().run(k=[50, 90, 84], predictor_min_bb=[50]*3, predictor_maj_bb=[50]*3)
     assert list(r['state']) == [0, 1, 0]
 
 
 def test_exit1_bypasses_curl():
     # hi breach pegged high (90,90,90 — never curls); the BB (hb9M) was OOB then crosses
     # IB at b3 → exit1 completes straight from state 1, no mandatory curl.
-    r = _bl().run(k=[50, 90, 90, 90], bb_m=[50]*4, bb_M=[50, 90, 90, 50])
+    r = _bl().run(k=[50, 90, 90, 90], predictor_min_bb=[50]*4, predictor_maj_bb=[50, 90, 90, 50])
     assert list(r['state']) == [0, 1, 1, 3]
     assert r['exit1'][3]
 
@@ -118,7 +118,7 @@ def test_exit1_completes_same_bar_as_breach():
     # the exit_lookback window lets a line breach and flip to bls3 in ONE bar when the
     # BB has already crossed IB: at b1 K breaches (90) and hb9M is already IB (50) after
     # being OOB (90) within lookback → bls0→bls1→bls3 same bar.
-    r = _bl().run(k=[50, 90], bb_m=[50, 50], bb_M=[90, 50])
+    r = _bl().run(k=[50, 90], predictor_min_bb=[50, 50], predictor_maj_bb=[90, 50])
     assert list(r['state']) == [0, 3]
     assert r['exit1'][1]
 
@@ -138,13 +138,13 @@ def test_run_bb_oob_to_ib():
 
 def test_lifecycle_dwell_at_2_then_complete():
     #        b0    b1    b2    b3(curl→2)  b4(BB OB→IB exit→3)
-    r = _bl().run(k=[50, 90, 90, 86, 86], bb_m=[50]*5, bb_M=[50, 50, 50, 90, 50])
+    r = _bl().run(k=[50, 90, 90, 86, 86], predictor_min_bb=[50]*5, predictor_maj_bb=[50, 50, 50, 90, 50])
     assert list(r['state']) == [0, 1, 1, 2, 3]
 
 
 def test_cascade_1_2_3_one_bar():
     # curl AND a BB OB→IB exit on the same bar → straight to 3 (through 2)
-    r = _bl().run(k=[50, 90, 90, 86], bb_m=[50]*4, bb_M=[50, 90, 90, 50])
+    r = _bl().run(k=[50, 90, 90, 86], predictor_min_bb=[50]*4, predictor_maj_bb=[50, 90, 90, 50])
     assert list(r['state']) == [0, 1, 1, 3]
 
 
@@ -152,7 +152,7 @@ def test_pegged_stays_dormant_until_fresh_breach():
     #          b0  b1  b2  b3(→3) b4  b5  b6(IB)  b7(re-breach)
     k    = [50, 90, 90, 86,   90, 90, 84,    90]
     bb_M = [50, 90, 90, 50,   50, 50, 50,    50]
-    r = _bl().run(k=k, bb_m=[50]*8, bb_M=bb_M)
+    r = _bl().run(k=k, predictor_min_bb=[50]*8, predictor_maj_bb=bb_M)
     assert r['state'][3] == 3            # completed
     assert r['state'][4] == 3            # still OOB but pegged → no bobbing, stays 3
     assert r['state'][7] == 1            # IB then OOB again = fresh breach → re-armed
@@ -164,7 +164,7 @@ def test_grace_exit3_then_curl_within_window_completes():
     # later, within grace=2) → straight to 3.  bb_M only the e3 driver.
     k    = [50, 10, 10, 10, 12]
     bb_M = [50,  8,  8, 11, 11]
-    r = _bl().run(k=k, bb_m=[50]*5, bb_M=bb_M)
+    r = _bl().run(k=k, predictor_min_bb=[50]*5, predictor_maj_bb=bb_M)
     assert list(r['state']) == [0, 1, 1, 1, 3]
 
 
@@ -173,5 +173,5 @@ def test_grace_expires_curl_too_late_only_curls():
     # so the late curl alone only reaches state 2, not 3.
     k    = [50, 10, 10, 10, 10, 10, 12]
     bb_M = [50,  8,  8, 11, 11, 11, 11]
-    r = _bl().run(k=k, bb_m=[50]*7, bb_M=bb_M)
+    r = _bl().run(k=k, predictor_min_bb=[50]*7, predictor_maj_bb=bb_M)
     assert list(r['state']) == [0, 1, 1, 1, 1, 1, 2]
