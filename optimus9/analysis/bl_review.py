@@ -26,7 +26,8 @@ _TABLE = 'bl_review'
 def build_review(db, pct: float = 0.9) -> list:
     log = get_logger('BLReview')
     rows = db.execute(
-        '''SELECT bls_pk, bar_time, line_name, px_smooth, breach_line, bb_main, breach_dir,
+        '''SELECT bls_pk, bar_time, line_name, px_smooth, breach_line,
+                  exit_support AS bb_main, breach_dir,
                   predicted, state, exit1, exit2, exit3, raw_pk, combined_state
            FROM bl_states WHERE px_smooth IS NOT NULL ORDER BY line_name, bar_time''', fetch=True)
     if not rows:

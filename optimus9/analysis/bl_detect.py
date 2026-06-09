@@ -7,6 +7,7 @@ the states on the Pine chart (Joe's eye). Lines are computed on their HTF, then
 forward-filled to the 5s base (mimics the TV lines); the machine ticks on 5s with
 a slope/curl lookback of tf_seconds/5 bars (hb9 = 540/5 = 108).
 """
+from collections import namedtuple
 from datetime import datetime, timezone
 
 import numpy as np
@@ -16,6 +17,12 @@ from ..db.kline_loader import KlineLoader
 from ..compute.indicator_computer import IndicatorComputer as IC
 from ..compute.breaching_line import BreachingLine
 from ..constants import FENCE_HI, FENCE_LO
+
+# _run_family's return. result stays at INDEX 3 so positional callers (grinds, sweep,
+# viz: ._run_family(...)[3]['state']) keep working; report() reads the support lines by
+# NAME → honest bl_states columns (predictor_min/maj, exit_support, exit3_support).
+FamilyRun = namedtuple('FamilyRun',
+                       'line predictor_min predictor_maj result exit_support exit3_support')
 
 # gca5m raw 5s-PK config (Joe 2026-06-05): BB(hlcc4, len6, ×0.74) · pool 5/33/6/17 ·
 # mult 1 (5s-native). The SnF source for the raw-pk overlay (and exit4/p-rev next).
@@ -139,9 +146,9 @@ class BLDetect:
 
     def _run_family(self, fam, base, ts):
         """Compute one family's breach line + run its machine (K via run, BB via run_bb).
-        Returns (line, exit_support_line, predictor_maj_line, result_dict) — the two
-        support arrays are NaN for a BB-type family. They land in bl_states as bb_main
-        (the exit support the exits read) / bb_mid (the predictor Major) for eyeballing."""
+        Returns a FamilyRun(line, predictor_min, predictor_maj, result, exit_support,
+        exit3_support). The four support arrays are NaN/None for a BB-type family; each
+        persists to bl_states under its own honest column name."""
         c, fp = self._cfg, float(self._cfg['blc_fence_pad'])
         bl = BreachingLine(mult=fam['tf_seconds'] // 5,
                            curl_floor=float(c['blc_curl_floor']),
@@ -157,14 +164,14 @@ class BLDetect:
         nan  = lambda: np.full(len(ts), np.nan)
         if fam['line_type'] == 'bb':
             r = bl.run_bb(line, seam=seam)
-            esup = pmaj = nan()
+            pmin = pmaj = esup = nan(); e3s = None
         else:
             pmin = self._line(base, fam['predictor_min']) if fam['predictor_min'] else nan()
             pmaj = self._line(base, fam['predictor_maj']) if fam['predictor_maj'] else nan()
             esup = self._line(base, fam['exit_support'])  if fam['exit_support']  else pmaj
             e3s  = self._line(base, fam['exit3_support']) if fam['exit3_support'] else None
             r = bl.run(line, pmin, pmaj, esup, e3s, seam=seam)
-        return line, esup, pmaj, r
+        return FamilyRun(line, pmin, pmaj, r, esup, e3s)
 
     def _cfg_dict(self, ic_pk) -> dict:
         """One indicator_configs row → the kind/params dict _line() consumes, INCLUDING
@@ -209,13 +216,14 @@ class BLDetect:
         # (Joe 2026-06-06): it lets a {0,1} pair read 0/idle while a line is still breaching —
         # counterproductive. This fold makes the gate test exactly combined∈{0,3}
         # (0 = all idle, 3 = all done, 1/2 = a breach in flight on some line).
-        runs     = [(fam, *self._run_family(fam, base, ts)) for fam in self._families]
-        st_mat   = np.vstack([r['state'] for *_, r in runs])
+        runs     = [(fam, self._run_family(fam, base, ts)) for fam in self._families]
+        st_mat   = np.vstack([fr.result['state'] for _, fr in runs])
         nz       = np.where(st_mat == 0, 99, st_mat)          # mask idle so min ignores it
         combined = np.where((st_mat == 0).all(axis=0), 0, nz.min(axis=0)).astype(np.int8)
 
         rows = []
-        for fam, line, bM, bm, r in runs:
+        for fam, fr in runs:
+            line, r = fr.line, fr.result
             for i in range(len(ts)):
                 if ts[i] < win_start:
                     continue
@@ -227,8 +235,11 @@ class BLDetect:
                     'c9_low':    _f(c9['l'][i]), 'c9_close': _f(c9['c'][i]),
                     'e9_open':   _f(e9['o'][i]), 'e9_high': _f(e9['h'][i]),
                     'e9_low':    _f(e9['l'][i]), 'e9_close': _f(e9['c'][i]),
-                    'breach_line': _f(line[i]), 'bb_main': _f(bM[i]), 'bb_mid': _f(bm[i]),
-                    'breach_gt_bb_main': int(bool(line[i] > bM[i])) if bM[i] == bM[i] else 0,
+                    'breach_line':   _f(line[i]),
+                    'predictor_min': _f(fr.predictor_min[i]),
+                    'predictor_maj': _f(fr.predictor_maj[i]),
+                    'exit_support':  _f(fr.exit_support[i]),
+                    'exit3_support': (_f(fr.exit3_support[i]) if fr.exit3_support is not None else None),
                     'breach_slope': _f(r['slope_k'][i]),    # r['slope_k'] = machine-internal key
                     'exit2_ref':    _f(r['exit2_ref'][i]),
                     'exit2_ref_dt': (_dt(int(ts[r['exit2_ref_idx'][i]]))
@@ -361,7 +372,8 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
             line_name VARCHAR(16), px_smooth FLOAT,
             c9_open FLOAT, c9_high FLOAT, c9_low FLOAT, c9_close FLOAT,
             e9_open FLOAT, e9_high FLOAT, e9_low FLOAT, e9_close FLOAT,
-            breach_line FLOAT, bb_main FLOAT, bb_mid FLOAT, breach_gt_bb_main TINYINT,
+            breach_line FLOAT, predictor_min FLOAT, predictor_maj FLOAT,
+            exit_support FLOAT, exit3_support FLOAT,
             breach_slope FLOAT, exit2_ref FLOAT, exit2_ref_dt DATETIME, bl_ext FLOAT,
             predicted TINYINT, exit1 TINYINT, exit2 TINYINT, exit3 TINYINT,
             breach_dir TINYINT, state TINYINT, combined_state TINYINT, raw_pk TINYINT)''')
@@ -370,7 +382,8 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
         cols = ['bar_time', 'line_name', 'px_smooth',
                 'c9_open', 'c9_high', 'c9_low', 'c9_close',
                 'e9_open', 'e9_high', 'e9_low', 'e9_close',
-                'breach_line', 'bb_main', 'bb_mid', 'breach_gt_bb_main', 'breach_slope',
+                'breach_line', 'predictor_min', 'predictor_maj', 'exit_support', 'exit3_support',
+                'breach_slope',
                 'exit2_ref', 'exit2_ref_dt', 'bl_ext',
                 'predicted', 'exit1', 'exit2', 'exit3', 'breach_dir', 'state',
                 'combined_state', 'raw_pk']
@@ -378,7 +391,8 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
         data = [[_dt(r['bar_ms']), r['line_name'], r['px_smooth'],
                  r['c9_open'], r['c9_high'], r['c9_low'], r['c9_close'],
                  r['e9_open'], r['e9_high'], r['e9_low'], r['e9_close'],
-                 r['breach_line'], r['bb_main'], r['bb_mid'], r['breach_gt_bb_main'], r['breach_slope'],
+                 r['breach_line'], r['predictor_min'], r['predictor_maj'],
+                 r['exit_support'], r['exit3_support'], r['breach_slope'],
                  r['exit2_ref'], r['exit2_ref_dt'], r['bl_ext'],
                  r['predicted'], r['exit1'], r['exit2'], r['exit3'],
                  r['breach_dir'], r['state'], r['combined_state'], r['raw_pk']] for r in rows]
