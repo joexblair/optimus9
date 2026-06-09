@@ -79,7 +79,7 @@ def apply_decision_delay(pk_raw, delay: int = 1) -> np.ndarray:
 # the bny30 production gate (Joe 2026-06-06): bny30M (BB hl2 68/1.24) OR
 # bny30m (K ohlc4 21/114/105), 30s, 85/15.
 BNY30 = [
-    dict(ic_itf_seconds=30, ic_line_type='bb', ic_src='hl2', ic_bb_len=68, ic_bb_mult=1.24,
+    dict(ic_itf_seconds=30, ic_line_type='bb', ic_src='hl2', ic_bb_len=58, ic_bb_mult=1.24,
          ic_high_boundary=85, ic_low_boundary=15),
     dict(ic_itf_seconds=30, ic_line_type='k', ic_src='ohlc4', ic_k_len=21, ic_rsi_len=114,
          ic_stc_len=105, ic_high_boundary=85, ic_low_boundary=15),
@@ -87,9 +87,9 @@ BNY30 = [
 
 
 def bny30_oob_side(base_df, use_bb=True, use_k=True) -> np.ndarray:
-    """The bny30 gate's per-5s oob_side (+1 HI / -1 LO / 0 in-band), OR-folded over the
-    SELECTED bny30 components — bny30M (BB hl2 68/1.24) and/or bny30p (K ohlc4
-    21/114/105). Default (both) = the production gate; use_bb/use_k isolate M vs p."""
+    """The bny30 gate's per-5s oob_side (+1 HI / -1 LO / 0 in-band). bny30M (BB hl2
+    58/1.24) OR bny30p (K ohlc4 21/114/105): gate OPEN if EITHER line is OOB, CLOSED
+    only when neither is (Joe). use_bb/use_k isolate a single component (M / p)."""
     cfgs = [c for c, on in zip(BNY30, (use_bb, use_k)) if on]
     if not cfgs:
         return np.zeros(len(base_df), dtype=int)
