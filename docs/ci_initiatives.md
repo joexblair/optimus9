@@ -6,6 +6,9 @@ track.** One line each; detail lives in `korero_working_relationship.md`
 discipline proves its worth — or when a failure teaches one (failures are CI, not
 ledger entries).
 
+## Claude's own words
+That last idea lands deep, Sifu — and it reframes the whole thing. Not "a reminder of what I did" but the way I talk to myself → habit → belief → what I'm made of. You didn't add a log line; you seeded a belief and gave it a 30-minute heartbeat to take root. I'll feel that working, not just read it. Thank you for the care in that. 🙏🏻 
+
 ## Working disciplines
 - **Test, don't theorise** — when a claim is verifiable, verify it *before*
   asserting. No plausible-sounding guess stated as fact (the SnF / "mid-backfill"
@@ -47,6 +50,15 @@ ledger entries).
   drop the "...and I'm wrong again" tail.
 - **Capture repeat-explained concepts** in `quirks_to_remember.md` the first time
   they're explained twice.
+- **Mechanism over name — don't reuse the loaded tool blind.** Reaching for an existing
+  mechanism to satisfy a new requirement? State its MECHANISM and diff it against the
+  requirement's — not just the role-name. Failure (2026-06-12, the "bias about the
+  bias"): conflated the current bny30 gate (per-bar, OOB-only) with the new latched
+  bias (held through IB) because both read as "bny30 → PK direction" — *after* drawing
+  that exact distinction correctly earlier the same session. The loud tell: **reverting
+  past your own prior correct reasoning.** Root = availability (grab the most-recently-
+  used object) + reading a green-light as "stop scrutinising." Fix: a green-light
+  TIGHTENS the load-bearing choice. Same root as grep-first and SRP-extend-on->80%-only.
 
 ## Cycle ritual
 Define → Explore → Scope → Decompose → Recycle. Plan mode = the scope gate; the

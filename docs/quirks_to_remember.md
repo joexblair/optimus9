@@ -43,3 +43,21 @@ For the BL HTF PK (exit4), the 5s-native trigger is run "through a SnF class stu
 - **SnF pk** = the result of **bonded** raw pks (the coalition output). PK *strength*
   (e.g. vote-bucket lopsidedness — 7L/1S is stronger than 7L/3S) is measured at the
   **SnF-pk** level, not the raw-pk level.
+
+---
+
+## BL line layering — a line owns only the swing it sees
+
+The BL lines stack across timeframes (LTF → HTF). A **30s line cannot know what the
+HTF lines do above it** — by design. Its only job is to reliably **own the swing it
+sees**: clock a modicum of profit on the local swing it can resolve. That mid-level
+reliability is what the heavy-lifting HTF BL lines lean on; the LTF line is not asked
+to predict the macro, only to be a dependable component.
+
+Consequence for grinding/scoring LTF lines: **rank by reliability, not peak PnL.** A
+combo that is net-positive in *every* window with steady placement win% beats one that
+spikes in a single window and bleeds the rest. (s30r/s30M dial-in, 2026-06-12.)
+
+The cascade reads LTF→HTF: shorter TF-relative indicator lengths react sooner, so LTF
+lines breach *first* and bob in/out of OOB while the slower lines catch up; the gate
+(combined state) only resolves when every line is at 3/0. (See `bl_machine_design.md`.)
