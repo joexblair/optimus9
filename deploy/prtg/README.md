@@ -30,7 +30,7 @@ One sensor, 5 channels, from `health.sql`.
    | channel | meaning | Error |
    |---|---|---|
    | `kc_age_s` | collector writing 5s bars | > 15 |
-   | `tick_age_s` | WS tick stream alive | > 10 |
+   | `tick_age_s` | WS tick stream alive | > 60 (warn > 30) |
    | `faults_5s` | auditor 5s freeze/missing (5 min) | > 0 |
    | `variance_1m` | tape ≠ exchange — the 1m gate (10 min) | > 0 |
    | `audit_age_s` | the auditor itself alive | > 60 |
@@ -40,7 +40,13 @@ One sensor, 5 channels, from `health.sql`.
 SQL sensor from a PRTG probe on the Linux box instead.)
 
 ## What each catches
-- `kc_age` / `tick_age` → the 06-04-style freeze (stopped writing) — the fastest signal.
+- `kc_age` → the 06-04-style freeze (collector stopped writing 5s bars) — the fastest signal.
+- `tick_age` → a **true WS death**. `kc_age` can't catch this alone: the bar builder writes
+  flat zero-volume bars from the carried-forward price even with no ticks, so `kc_age` stays
+  fresh through a dead stream. Threshold is **60s** (not 10s): FARTCOIN is low-volume, so
+  natural sparse-trade quiet reaches ~38s between ticks (p99 inter-tick gap ≈ 10.5s) — a real
+  death climbs into minutes, so 60s separates quiet from dead. (Tune up if a thinner market
+  false-alerts; `variance_1m` also catches the resulting flat-tape drift.)
 - `faults_5s` → kc writing stale closes (frozen) or missing bars, caught by the auditor.
 - `variance_1m` → our tape diverged from Bybit's official 1m bar (the real data fault).
 - `audit_age` → the watchdog itself died.
