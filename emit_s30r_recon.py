@@ -69,14 +69,34 @@ def main():
     cfg = S30R_OVERRIDE or {k: s30r['k'][k] for k in ('k_len', 'rsi_len', 'stc_len')}
     labs = f"array.from({','.join(Q + s + Q for s in lls)})" if lls else "array.new<string>(0)"
 
+    # lines IN USE by the s30r machine (the walk + exits) — so the chart says what to apply on TV
+    def _fmt(c):
+        return (f"K len{c['k_len']} rsi{c['rsi_len']} stc{c['stc_len']} src={c['src']} {c['tf_seconds']}s"
+                if c.get('kind') == 'k' else
+                f"BB len{c['bb_len']} mult{c['bb_mult']} src={c['src']} {c['tf_seconds']}s")
+    inuse = [('s30r breach', s30r['k'])]
+    for role, key in (('pred mini', 'predictor_min'), ('pred Major', 'predictor_maj'),
+                      ('exit support', 'exit_support'), ('exit3 support', 'exit3_support')):
+        if s30r.get(key):
+            inuse.append((role, s30r[key]))
+    tc = ['    table.cell(t,0,0,"line",text_color=color.white,bgcolor=color.new(color.gray,10),text_size=size.small)',
+          '    table.cell(t,1,0,"apply on TV  (OOB 85/15)",text_color=color.white,bgcolor=color.new(color.gray,10),text_size=size.small)']
+    for i, (role, c) in enumerate(inuse):
+        tc.append(f'    table.cell(t,0,{i+1},"{role}",text_color=color.silver,text_size=size.small)')
+        tc.append(f'    table.cell(t,1,{i+1},"{_fmt(c)}",text_color=color.aqua,text_size=size.small)')
+    tcells = '\n'.join(tc)
+
     pine = f'''//@version=5
 // s30r recon — bls walk · exit mask (1/2/3) · raw 5s PKs   |   {span}
 // s30r cfg: {cfg}   (12h · {N} bars)
 indicator("s30r recon — walk·exit·pk", overlay=true, max_labels_count=500)
 showWalk = input.bool(true, "bls walk band (1 ylw · 2 org · 3 lime)")
-showLbl  = input.bool(false, "state-transition labels (737 in 12h — noisy)")
 showExit = input.bool(true, "exit mask fires (x1/x2/x3)")
 showPk   = input.bool(true, "raw 5s PKs (green long / red short)")
+showCfg  = input.bool(true, "lines-in-use table (top-right)")
+var table t = table.new(position.top_right, 2, {len(inuse)+1}, border_width=1, frame_color=color.gray, frame_width=1)
+if showCfg and barstate.islast
+{tcells}
 ms = int(time)
 stt = {arr(stt)}
 var int[] stv = {arr(stv)}
@@ -97,9 +117,9 @@ while si < array.size(stt)
     si += 1
 bgcolor(showWalk and cur==1 ? color.new(color.yellow, 80) : showWalk and cur==2 ? color.new(color.orange, 78) : showWalk and cur==3 ? color.new(color.lime, 80) : na, title="bls walk")
 // state-transition labels
-if showLbl and array.includes(ltt, ms)
+if array.includes(ltt, ms)
     li = array.indexof(ltt, ms)
-    label.new(bar_index, high, array.get(lls, li), color=color.new(color.gray, 30), textcolor=color.white, style=label.style_label_down, size=size.tiny)
+    label.new(bar_index, high, array.get(lls, li), color=color.new(color.gray, 30), textcolor=color.white, style=label.style_label_down, size=size.small)
 // exit mask fires
 plotshape(showExit and array.includes(e1, ms), style=shape.xcross,  location=location.abovebar, color=color.aqua,   size=size.tiny, title="exit1")
 plotshape(showExit and array.includes(e2, ms), style=shape.xcross,  location=location.abovebar, color=color.fuchsia, size=size.tiny, title="exit2")
