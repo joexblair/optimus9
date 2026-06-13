@@ -18,7 +18,7 @@ cache yet — task #18). Gate is single-line (hb9b) until s18b activates.
 import numpy as np
 
 from logger import get_logger
-from ..compute.swing_detect import find_pivots
+from ..compute.swing_detect import find_pivots, nearest
 
 _TABLE = 'bl_review'
 
@@ -28,7 +28,8 @@ def build_review(db, pct: float = 0.9) -> list:
     rows = db.execute(
         '''SELECT bls_pk, bar_time, line_name, px_smooth, breach_line,
                   exit_support AS bb_main, breach_dir,
-                  predicted, state, exit1, exit2, exit3, raw_pk, combined_state
+                  predicted, state, exit1, exit2, exit3, raw_pk, combined_state,
+                  swing_closest_dt, entry_dt, swing_adverse_dt
            FROM bl_states WHERE px_smooth IS NOT NULL ORDER BY line_name, bar_time''', fetch=True)
     if not rows:
         log.warning('bl_states has no px_smooth rows — run bl_detect first')
@@ -56,10 +57,12 @@ def build_review(db, pct: float = 0.9) -> list:
     def rec(line, bt, ev, st, bd, raw, src):
         e = (1 if src['exit1'] else 0) | (2 if src['exit2'] else 0) | (4 if src['exit3'] else 0)
         return {'bls_pk': src['bls_pk'], 'bar_time': bt, 'bl_line': line, 'event': ev,
-                'state': st, 'breach_dir': bd, 'predicted': int(bool(src['predicted'])),
+                'state': st, 'c_bls': int(src['combined_state']), 'breach_dir': bd, 'predicted': int(bool(src['predicted'])),
                 'raw_pk': raw, 'px_smooth': src['px_smooth'], 'breach_line': src['breach_line'],
-                'bb_main': src['bb_main'], 'exit_bits': e, 'stop_pct': None, 'stop_at': None,
-                'profit_pct': None, 'profit_at': None}
+                'bb_main': src['bb_main'], 'exit_bits': e, 'stop_px': None, 'stop_at': None,
+                'profit_px': None, 'profit_at': None,                 # swing UTCs inherited from bl_states (close-based)
+                'swing_closest_dt': src['swing_closest_dt'], 'entry_dt': src['entry_dt'],
+                'swing_adverse_dt': src['swing_adverse_dt']}
 
     # ── gate-opens (req2/3): the gate is OPEN when combined∈{0,3} (all lines idle/done);
     # a gate-open is the transition INTO that. The corrected combined fold (min of non-zero
@@ -79,10 +82,10 @@ def build_review(db, pct: float = 0.9) -> list:
         if ev == 'gate_open' and d in (1, -1):
             pk = next_kind(i, 'H' if d == 1 else 'L')       # hi→short→next peak; lo→long→next trough
             if pk is not None:
-                r['stop_pct'] = round(abs(px[pk] - px[i]) / px[i] * 100, 3); r['stop_at'] = bars[pk]
+                r['stop_px'] = round(abs(px[pk] - px[i]) / px[i] * 100, 3); r['stop_at'] = bars[pk]
                 tk = first_after(pk)
                 if tk is not None:
-                    r['profit_pct'] = round(abs(px[tk] - px[pk]) / px[pk] * 100, 3); r['profit_at'] = bars[tk]
+                    r['profit_px'] = round(abs(px[tk] - px[pk]) / px[pk] * 100, 3); r['profit_at'] = bars[tk]
         out.append(r)
 
     # ── per-line state changes / exits (req1) + the 11-bar run-up per change ──
@@ -108,7 +111,7 @@ def build_review(db, pct: float = 0.9) -> list:
 
     out.sort(key=lambda o: (o['bar_time'], o['bl_line']))
     _persist(db, out)
-    ng = sum(1 for o in out if o['stop_pct'] is not None)
+    ng = sum(1 for o in out if o['stop_px'] is not None)
     log.info(f'{_TABLE}: {len(out)} rows ({ng} combined gate-opens w/ stop/profit, '
              f'{len(by_line)} lines) → table {_TABLE}')
     return out
@@ -118,14 +121,15 @@ def _persist(db, rows):
     db.execute(f'DROP TABLE IF EXISTS {_TABLE}')
     db.execute(f'''CREATE TABLE {_TABLE} (
         blr_pk BIGINT AUTO_INCREMENT PRIMARY KEY, bls_pk BIGINT, bar_time DATETIME,
-        bl_line VARCHAR(16), event VARCHAR(12), state TINYINT, breach_dir TINYINT,
+        bl_line VARCHAR(16), event VARCHAR(12), state TINYINT, c_bls TINYINT, breach_dir TINYINT,
         predicted TINYINT, raw_pk TINYINT, px_smooth FLOAT, breach_line FLOAT, bb_main FLOAT,
-        exit_bits TINYINT, stop_pct FLOAT, stop_at DATETIME, profit_pct FLOAT, profit_at DATETIME)''')
+        exit_bits TINYINT, stop_px FLOAT, stop_at DATETIME, profit_px FLOAT, profit_at DATETIME,
+        swing_closest_dt DATETIME, entry_dt DATETIME, swing_adverse_dt DATETIME)''')
     if not rows:
         return
-    cols = ['bls_pk', 'bar_time', 'bl_line', 'event', 'state', 'breach_dir', 'predicted',
-            'raw_pk', 'px_smooth', 'breach_line', 'bb_main', 'exit_bits', 'stop_pct', 'stop_at',
-            'profit_pct', 'profit_at']
+    cols = ['bls_pk', 'bar_time', 'bl_line', 'event', 'state', 'c_bls', 'breach_dir', 'predicted',
+            'raw_pk', 'px_smooth', 'breach_line', 'bb_main', 'exit_bits', 'stop_px', 'stop_at',
+            'profit_px', 'profit_at', 'swing_closest_dt', 'entry_dt', 'swing_adverse_dt']
     ph = ','.join(['%s'] * len(cols))
     db.executemany(f"INSERT INTO {_TABLE} ({','.join(cols)}) VALUES ({ph})",
                    [[r[c] for c in cols] for r in rows])

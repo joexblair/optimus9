@@ -16,6 +16,7 @@ from logger import get_logger
 from ..db.kline_loader import KlineLoader
 from ..compute.indicator_computer import IndicatorComputer as IC
 from ..compute.breaching_line import BreachingLine
+from ..compute.swing_detect import find_pivots, nearest
 from ..constants import FENCE_HI, FENCE_LO
 
 # _run_family's return. result stays at INDEX 3 so positional callers (grinds, sweep,
@@ -57,8 +58,11 @@ class BLDetect:
         # lines come from bl_lines + indicator_configs (de-hardcoded); tuning from the
         # active bl_config row. fence widened ±fence_pad (5 → 25:75).
         self._families = [family] if family is not None else self._load_families()
-        self._fam = self._families[0]   # primary line — the shared TF basis (c9/e9, px, seams)
+        # primary line = the HIGHEST-TF active breach (tie → lowest bl_pk; families are bl_pk-ordered,
+        # so max() keeps the first). Used only for the c9/e9 HTF views now — px_smooth is global 5s.
+        self._fam = max(self._families, key=lambda f: f['tf_seconds'])
         self._cfg = self._load_config()
+        self._sys = self._load_system()
         c = self._cfg
         self._log.info(
             f"bl_config #{c['blc_pk']} '{c['blc_label']}' | curl_floor={c['blc_curl_floor']} "
@@ -90,6 +94,22 @@ class BLDetect:
         if not rows:
             self._db.execute(
                 f"INSERT INTO {self._CONFIG} (blc_label, blc_is_active) VALUES ('default', 1)")
+            rows = self._db.execute(sel, fetch=True)
+        return rows[0]
+
+    def _load_system(self) -> dict:
+        """Global system config (px_smooth DEMA params). CREATE + seed-if-empty, return the row.
+        ONE global row — the px_smooth SERIES is per-coin by virtue of each coin's own base tape."""
+        self._db.execute('''CREATE TABLE IF NOT EXISTS optimus9_system (
+            sys_pk BIGINT AUTO_INCREMENT PRIMARY KEY,
+            pxsmooth_dema_src VARCHAR(10) DEFAULT 'close',
+            pxsmooth_dema_len INT DEFAULT 2,
+            pxsmooth_dema_tf  INT DEFAULT 5)''')
+        sel = 'SELECT * FROM optimus9_system ORDER BY sys_pk DESC LIMIT 1'
+        rows = self._db.execute(sel, fetch=True)
+        if not rows:
+            self._db.execute("INSERT INTO optimus9_system "
+                             "(pxsmooth_dema_src, pxsmooth_dema_len, pxsmooth_dema_tf) VALUES ('close', 2, 5)")
             rows = self._db.execute(sel, fetch=True)
         return rows[0]
 
@@ -201,9 +221,15 @@ class BLDetect:
         from ..orchestration.gate_signal_sweep import pine_aligned_signals
         pk_idx, pk_dirs = pine_aligned_signals(base, self._db, GCA5M_RAW)
         raw_pk = np.zeros(len(ts), np.int8); raw_pk[pk_idx] = pk_dirs
-        tf    = IC.resample(base, self._fam['tf_seconds'])
-        idx   = np.clip(np.searchsorted(tf['timestamp'].to_numpy(), ts, side='right') - 1, 0, None)
-        px    = IC.dema(tf['close'].to_numpy(dtype=float), 2)[idx]
+        # px_smooth: global 5s DEMA, params from optimus9_system (close/2/5) — same manner as the
+        # PK machine's dema (5s base, config-driven), NOT the old primary-TF resample.
+        s = self._sys
+        if int(s['pxsmooth_dema_tf']) <= 5:
+            px = IC.dema(IC.build_source(base, s['pxsmooth_dema_src']), int(s['pxsmooth_dema_len']))
+        else:
+            sdf = IC.resample(base, int(s['pxsmooth_dema_tf']))
+            idx = np.clip(np.searchsorted(sdf['timestamp'].to_numpy(), ts, side='right') - 1, 0, None)
+            px  = IC.dema(IC.build_source(sdf, s['pxsmooth_dema_src']), int(s['pxsmooth_dema_len']))[idx]
         return base, ts, win_start, raw_pk, px
 
     def report(self, end_ms=None) -> list:
@@ -221,12 +247,27 @@ class BLDetect:
         nz       = np.where(st_mat == 0, 99, st_mat)          # mask idle so min ignores it
         combined = np.where((st_mat == 0).all(axis=0), 0, nz.min(axis=0)).astype(np.int8)
 
+        # swing context: nearest pivot back/forth + adverse-side pivot, from the 0.9% ZigZag on
+        # px_smooth (the canonical basis — 5s DEMA agrees with raw close to ~0.005%). ffill the
+        # DEMA warmup NaN so find_pivots' running extreme doesn't stall.
+        pxf = np.asarray(px, float).copy(); m = np.isfinite(pxf)
+        if m.any() and not m.all():
+            ix = np.where(m, np.arange(len(pxf)), 0); np.maximum.accumulate(ix, out=ix)
+            pxf = pxf[ix]; pxf[:int(np.argmax(m))] = pxf[int(np.argmax(m))]
+        piv   = find_pivots(pxf, 0.9)
+        pv_all = np.array(sorted(x for x, _ in piv))
+        pv_hi  = np.array(sorted(x for x, k in piv if k == 'H'))
+        pv_lo  = np.array(sorted(x for x, k in piv if k == 'L'))
+
         rows = []
         for fam, fr in runs:
             line, r = fr.line, fr.result
             for i in range(len(ts)):
                 if ts[i] < win_start:
                     continue
+                bd = int(r['breach_dir'][i])
+                cl = nearest(pv_all, i)
+                ad = nearest(pv_hi if bd == 1 else pv_lo, i) if bd in (1, -1) else None
                 rows.append({
                     'bar_ms':    int(ts[i]),
                     'line_name': fam['name'],
@@ -253,6 +294,8 @@ class BLDetect:
                     'state':     int(r['state'][i]),
                     'combined_state': int(combined[i]),    # min(states) — what the gate reads
                     'raw_pk':    int(raw_pk[i]),
+                    'swing_closest_ms': (int(ts[cl]) if cl is not None else None),
+                    'swing_adverse_ms': (int(ts[ad]) if ad is not None else None),
                 })
         self._persist(rows)
         nbars = len(set(row['bar_ms'] for row in rows))
@@ -376,7 +419,8 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
             exit_support FLOAT, exit3_support FLOAT,
             breach_slope FLOAT, exit2_ref FLOAT, exit2_ref_dt DATETIME, bl_ext FLOAT,
             predicted TINYINT, exit1 TINYINT, exit2 TINYINT, exit3 TINYINT,
-            breach_dir TINYINT, state TINYINT, combined_state TINYINT, raw_pk TINYINT)''')
+            breach_dir TINYINT, state TINYINT, combined_state TINYINT, raw_pk TINYINT,
+            swing_closest_dt DATETIME, entry_dt DATETIME, swing_adverse_dt DATETIME)''')
         if not rows:
             return
         cols = ['bar_time', 'line_name', 'px_smooth',
@@ -386,7 +430,7 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
                 'breach_slope',
                 'exit2_ref', 'exit2_ref_dt', 'bl_ext',
                 'predicted', 'exit1', 'exit2', 'exit3', 'breach_dir', 'state',
-                'combined_state', 'raw_pk']
+                'combined_state', 'raw_pk', 'swing_closest_dt', 'entry_dt', 'swing_adverse_dt']
         ph = ','.join(['%s'] * len(cols))
         data = [[_dt(r['bar_ms']), r['line_name'], r['px_smooth'],
                  r['c9_open'], r['c9_high'], r['c9_low'], r['c9_close'],
@@ -395,7 +439,9 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
                  r['exit_support'], r['exit3_support'], r['breach_slope'],
                  r['exit2_ref'], r['exit2_ref_dt'], r['bl_ext'],
                  r['predicted'], r['exit1'], r['exit2'], r['exit3'],
-                 r['breach_dir'], r['state'], r['combined_state'], r['raw_pk']] for r in rows]
+                 r['breach_dir'], r['state'], r['combined_state'], r['raw_pk'],
+                 (_dt(r['swing_closest_ms']) if r['swing_closest_ms'] else None), _dt(r['bar_ms']),
+                 (_dt(r['swing_adverse_ms']) if r['swing_adverse_ms'] else None)] for r in rows]
         self._db.executemany(
             f'INSERT INTO {self._TABLE} ({",".join(cols)}) VALUES ({ph})', data)
 

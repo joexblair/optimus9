@@ -60,6 +60,51 @@ def find_pivots(price: np.ndarray, pct: float = 0.9) -> list:
     return pivots
 
 
+def compare_pivots(a, b, pct: float = 0.9, tol: int = 12) -> list:
+    """Run the 0.9% ZigZag on TWO aligned price series (a, b — same length/index) and align
+    their pivots. Returns rows sorted by bar:
+      {kind, a_bar, b_bar, a_px, b_px, lag, diff_pct, status}
+    status: 'both' (matched same-kind pivot within `tol` bars), 'a_only', 'b_only'.
+    lag = b_bar - a_bar (bars); diff_pct = (b_px - a_px)/a_px*100 at the matched pivots.
+    Leading NaN is ffilled (so DEMA warmup doesn't stall the running extreme); the synthetic
+    index-0 prepend pivot is dropped. Used to compare px_smooth vs close swing detection."""
+    def prep(x):
+        x = np.asarray(x, float).copy(); m = np.isfinite(x)
+        if m.any() and not m.all():
+            idx = np.where(m, np.arange(len(x)), 0); np.maximum.accumulate(idx, out=idx)
+            x = x[idx]; x[:int(np.argmax(m))] = x[int(np.argmax(m))]
+        return x
+    a, b = prep(a), prep(b)
+    pa = [p for p in find_pivots(a, pct) if p[0] != 0]
+    pb = [p for p in find_pivots(b, pct) if p[0] != 0]
+    used, rows = set(), []
+    for ba, ka in pa:
+        cand = [(j, bb) for j, (bb, kb) in enumerate(pb) if kb == ka and j not in used and abs(bb - ba) <= tol]
+        if cand:
+            j, bb = min(cand, key=lambda x: abs(x[1] - ba)); used.add(j)
+            rows.append(dict(kind=ka, a_bar=int(ba), b_bar=int(bb), a_px=float(a[ba]), b_px=float(b[bb]),
+                             lag=int(bb - ba), diff_pct=round((b[bb] - a[ba]) / a[ba] * 100, 4), status='both'))
+        else:
+            rows.append(dict(kind=ka, a_bar=int(ba), b_bar=None, a_px=float(a[ba]), b_px=None,
+                             lag=None, diff_pct=None, status='a_only'))
+    for j, (bb, kb) in enumerate(pb):
+        if j not in used:
+            rows.append(dict(kind=kb, a_bar=None, b_bar=int(bb), a_px=None, b_px=float(b[bb]),
+                             lag=None, diff_pct=None, status='b_only'))
+    rows.sort(key=lambda r: r['a_bar'] if r['a_bar'] is not None else r['b_bar'])
+    return rows
+
+
+def nearest(bars: np.ndarray, i: int):
+    """The VALUE in sorted `bars` closest to `i` (back OR forth); None if empty.
+    Returns the bar index itself (not its position in `bars`)."""
+    if len(bars) == 0:
+        return None
+    k = int(np.searchsorted(bars, i))
+    cands = [c for c in (k - 1, k) if 0 <= c < len(bars)]
+    return int(bars[min(cands, key=lambda c: abs(int(bars[c]) - i))]) if cands else None
+
+
 def legs(price: np.ndarray, pivots: list) -> list:
     """Consecutive pivots → legs. Each leg is a dict:
        {start, end, dir (+1 up / -1 down), amp_pct}."""
