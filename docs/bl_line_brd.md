@@ -10,6 +10,13 @@ This is a BRD (what + why), not an implementation plan. Where today's code and t
 intended vision diverge, that's called out in §6 for the review chat — not silently
 encoded.
 
+> **ACTIONED (2026-06-13).** The support model (BR-A…D) is implemented (commit `9b066ce`):
+> prediction sources from the set, exits bind to the breach via `bl_lines.bl_support_ic_pk`
+> (+ `bl_exit3_support_ic_pk`). §5/§6/§8 are now the historical rationale. The **machine
+> mechanism** is in `bl_machine_design.md`; the **live** support config is `bl_lines` (this
+> doc's §7 table is a dated snapshot — verify against the DB). ⚠ `prediction_anchor` rename
+> (BR-D) did NOT land — the code uses `predictor_min`/`predictor_maj`.
+
 ---
 
 ## 1. Purpose
@@ -127,11 +134,12 @@ BB bound in bl_lines (BR-A). b6p dropped; b6b/s30r per Joe's 2026-06-09 correcti
 | hs15r | hs15m / hs15M | hs15m | — |
 | s18b | s18m / s18M | s18m | — |
 | b6b | b6m / b6M | b6M | — |
-| s30r | s30m / s30M | s30M | — |
+| s30r | s30m / s30M | **s30m** (mini) | — |
 | hb15b | hb15m / hb15M | hb15M | **hb9M** |
 
-Note s90b: exit support is the *mini* (s90m), not the Major — proof the exit support
-is independent of the M/m letter and of prediction. It must be named explicitly.
+*Verified against live `bl_lines` 2026-06-13.* Note the exit support is **independent of the
+M/m letter** and of prediction — **most are minis** now (s30r, s90b, hs9r, hs15r, s18b);
+only hb9b/b6b/hb15b use the Major. It must be named explicitly per breach.
 
 ## 8. Open questions for review
 

@@ -1,5 +1,10 @@
 # BL Machine Grind — Design (line-set + knob optimisation)
 
+> **⚠ SUPERSEDED (2026-06-13).** The objective here is leg-capture **expectancy** (profit).
+> The dial-in has since moved to the **placement** metric — *smallest adversarial swing to
+> overcome* — see **`bl_dialin_process.md`** (the current, durable grind). The recycle-map and
+> the **solo-vs-combined intel** below still hold; the *objective* does not. Don't grind from this.
+
 **Status**: planned 2026-06-06, autonomous pass while Joe rests. Pre-code,
 recycling a known-good (the gate sweep). Interrogate before building.
 

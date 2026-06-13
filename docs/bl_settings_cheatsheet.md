@@ -18,6 +18,13 @@ One active row (`blc_is_active`); manage with `run.py bl_config --list / --activ
 | `blc_bb_pad` | 0 | pads **BB OOB detection toward IB for exit1** (same idea as `fence_pad`): a BB that only reaches `hi−pad` still counts as OOB, so exit1's "BB was OB" step arms on a near-miss (max 83.1 vs boundary 85 → OOB at pad≥2). Bigger = exit1 arms more readily. |
 | `blc_exit2_ref` | now | **which TF9 seam's pre-`bl_line` references exit2** (the "line clearly reversed" completion). exit2 fires when the bl_line reverses back past that reference. `now` = the seam just before the extreme (tight → can trip on a micro-dip); `prior` = one seam further back (needs a *deeper* reversal); `avg` = mean of the two (derived, not seam-based → no ref bar/dt). On a fresh breach the ref is bounded to the breach-edge (no pre-breach reach). **Further-back = stricter.** |
 
+## `optimus9_system` — global system config
+One global row (created + seeded by `bl_detect`). Holds the **px_smooth** params — the
+canonical swing / review basis: `pxsmooth_dema_src` (close) · `pxsmooth_dema_len` (2) ·
+`pxsmooth_dema_tf` (5). `px_smooth = DEMA(src, len)` on the `tf`-second base (5s) — same manner
+as the PK machine's dema; replaced the old 540s-resample (which yielded 0 pivots). The config
+row is global; the series is **per-coin** (each coin's own base tape).
+
 ## Running it against the DB configs
 ```bash
 # detect: walk N hours of 5s bars through the active bl_config + bl_lines → bl_states (+ Pine)

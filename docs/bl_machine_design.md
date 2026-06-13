@@ -4,6 +4,13 @@
 slice = hb9 4-state detection, intrabar. References: `260511 trend machine.xlsx`,
 `260604 BL machine.txt` (Pine — harvest, don't port), Joe's red-pen 2026-06-01/02.
 
+> **BL doc map (the source of truth).** This doc = the **machine mechanism** (states,
+> gate / `c_bls`, fence, prediction, exits). Companions: `bl_line_brd.md` (the line/support
+> *wiring* — which BB supports which breach; the **live** config is `bl_lines`) ·
+> `bl_dialin_process.md` (the dial-in / grind process) · `bl_settings_cheatsheet.md` (the
+> dialable knobs). Historical (kept, not authoritative): `bl_grind_design.md` (superseded —
+> old expectancy objective) · `bl_gate_experiments_findings.md` (a dated findings log).
+
 ## 0. Foundation — verified, and the intrabar pivot (2026-06-03)
 
 The data + line foundation BL stands on is now **proven true vs TradingView**, so
@@ -42,6 +49,21 @@ cluster_scoring conviction weight (task #10).
 - The gate **opens** only when ALL lines are state 3 or 0.
 - At gate-open, a trade can fire if a **5s PK printed within the last x bars**
   (lookback) — OR'd with the proxy-PK path (§9). *[downstream — parked.]*
+
+## 2b. c_bls — the combined breaching line state (the gate, formally)
+
+- **bls** = a single line's breaching-line state (0/1/2/3, §3).
+- **c_bls** = the **combined MINIMUM of the non-zero line states**; lines at `bls:0` are
+  **excluded** from the fold (c_bls:0 only when every line is idle).
+  - 2-line examples: `{1, 3}` → **1** · `{2, 1}` → **1** · `{2, 0}` → **2** (the 0 is dropped).
+- **`c_bls:3` ⟺ every non-zero line is at 3.** And `2→3` only fires when an **exit method
+  completes** (§5) — so `c_bls:3` means *every active line has had an exit trigger*. (State 3
+  can only happen on an exit — obvious but crucial.)
+- **`c_bls:3` is the gate opener**, and the **centre of the PK-signal tolerance range**: a
+  bias-aligned 5s PK admitted within **±lookback of a `c_bls:3`** capitalises on the open gate
+  (lookback lets a non-time-synced PK still take it). See `bl_dialin_process.md`.
+- Implementation: `bl_detect` folds it as `min` over non-zero states (0 masked), 0 iff all
+  idle — single-sourced into `combined_state` / `c_bls`.
 
 ## 3. The 4-state machine (per line)
 
