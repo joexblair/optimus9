@@ -78,8 +78,13 @@ def apply_decision_delay(pk_raw, delay: int = 1) -> np.ndarray:
 
 # the bny30 production gate (Joe 2026-06-06): bny30M (BB hl2 68/1.24) OR
 # bny30m (K ohlc4 21/114/105), 30s, 85/15.
+# ⚠ CONFIG MISMATCH RISK: bny30M/bny30p are HARDCODED here, but both lines also live in
+# indicator_configs (ic) WITH VERSIONING — so this copy can drift from ic / the live pine
+# (bny30M mult sat at 1.24 here vs the pine's 1.5 until 2026-06-14). Slated to source from ic
+# (versioned, with a change-comment per value). See task "Source BNY30 gate config from ic".
+# Keep in sync with ic + the pine until then.
 BNY30 = [
-    dict(ic_itf_seconds=30, ic_line_type='bb', ic_src='hl2', ic_bb_len=58, ic_bb_mult=1.24,
+    dict(ic_itf_seconds=30, ic_line_type='bb', ic_src='hl2', ic_bb_len=58, ic_bb_mult=1.5,
          ic_high_boundary=85, ic_low_boundary=15),
     dict(ic_itf_seconds=30, ic_line_type='k', ic_src='ohlc4', ic_k_len=21, ic_rsi_len=114,
          ic_stc_len=105, ic_high_boundary=85, ic_low_boundary=15),
@@ -88,7 +93,7 @@ BNY30 = [
 
 def bny30_oob_side(base_df, use_bb=True, use_k=True) -> np.ndarray:
     """The bny30 gate's per-5s oob_side (+1 HI / -1 LO / 0 in-band). bny30M (BB hl2
-    58/1.24) OR bny30p (K ohlc4 21/114/105): gate OPEN if EITHER line is OOB, CLOSED
+    58/1.5) OR bny30p (K ohlc4 21/114/105): gate OPEN if EITHER line is OOB, CLOSED
     only when neither is (Joe). use_bb/use_k isolate a single component (M / p)."""
     cfgs = [c for c, on in zip(BNY30, (use_bb, use_k)) if on]
     if not cfgs:
@@ -97,6 +102,47 @@ def bny30_oob_side(base_df, use_bb=True, use_k=True) -> np.ndarray:
     sides   = [IC.align_to_base(IC.compute_oob_side(cfg, gate_df), gate_df, base_df)
                for cfg in cfgs]
     return IC.fold_gates(sides)
+
+
+def bny30_latched_bias(base_df, threshold=2, use_bb=True, use_k=False, return_resets=False):
+    """bny30 inverted direction bias (per-5s), RE-LATCHED (a reset, not a flip) only after
+    `threshold` CONSECUTIVE OOB closes at bny30's native 30s cadence — a single touch-and-go
+    rarely marks a profitable swing edge, and BB lines often return to the prior boundary before
+    committing (Joe 2026-06-14). The latch runs on the 30s closes, then aligns to the 5s base.
+    cur = -side. threshold lives in bl_config (blc_bny30_bias_reset_threshold).
+
+    Driven by bny30M ONLY by default (use_k=False): bny30p is disabled — until a real switch
+    exists, the grind toggles use_k to A/B with-p vs without-p. With return_resets, also returns
+    the per-5s RESET events (the bar each confirming close lands) — same-side re-latches included,
+    because a reset is not a flip; a same-side re-confirm still resets the bias."""
+    cfgs = [c for c, on in zip(BNY30, (use_bb, use_k)) if on]
+    gate_df = IC.resample(base_df, 30)
+    if not cfgs:
+        z = np.zeros(len(base_df), np.int8)
+        return (z, np.zeros(len(base_df), bool)) if return_resets else z
+    oob = IC.fold_gates([IC.compute_oob_side(cfg, gate_df) for cfg in cfgs])   # per-30s-CLOSE oob
+    b = np.zeros(len(oob), np.int8); confirm = np.zeros(len(oob), bool)
+    cur = run_side = run_len = 0
+    for i in range(len(oob)):
+        s = int(oob[i])
+        if s != 0 and s == run_side:
+            run_len += 1
+        elif s != 0:
+            run_side, run_len = s, 1
+        else:
+            run_side = run_len = 0
+        if run_len == threshold:
+            confirm[i] = True                                # the confirming close = a RESET event
+        if run_len >= threshold:
+            cur = -run_side                                  # confirmed 30s OOB run → (re)latch the bias
+        b[i] = cur
+    bias5 = IC.align_to_base(b, gate_df, base_df).astype(np.int8)
+    if not return_resets:
+        return bias5
+    c5 = IC.align_to_base(confirm.astype(int), gate_df, base_df)               # confirm → 5s (ffilled)
+    reset5 = np.zeros(len(c5), bool)
+    reset5[1:] = (c5[1:] > 0) & (c5[:-1] == 0); reset5[0] = c5[0] > 0           # onset of each confirming close
+    return bias5, reset5
 
 
 def generate_gca5m_signals(base_df, db, cfg: dict = GCA5M):

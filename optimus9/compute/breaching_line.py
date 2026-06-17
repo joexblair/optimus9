@@ -164,8 +164,9 @@ class BreachingLine:
                 (cur_dir == 1 and k[i] < k_anch) or (cur_dir == -1 and k[i] > k_anch)))
             e3 = self._exit_cross_toward_ib(cur_dir, e3s, k, i)
             # raw conditions recorded for eyeballing; the exit_mask gates which ones
-            # COMPLETE. exit1 bypasses the curl (immediate, even same-bar as the breach);
-            # exit2/exit3 need the curl (state 2); exit4 (mask 8, p-rev) will need it too.
+            # COMPLETE. Any enabled exit (1/2/3) completes a breach directly — the cross IS the
+            # reversal; the curl no longer gates exit2/3 (Joe 2026-06-14). exit1 still completes
+            # same-bar as the breach (support already IB); exit4 (mask 8, p-rev) is parked.
             e1_on = e1 and bool(self.exit_mask & 1)
             e2_on = e2 and bool(self.exit_mask & 2)
             e3_on = e3 and bool(self.exit_mask & 4)
@@ -182,16 +183,10 @@ class BreachingLine:
                             ns = 3
                 elif state == 1:
                     nb = cur_dir
-                    if e1_on:
-                        ns = 3                                 # exit1 bypasses the mandatory curl
-                    elif curl:
+                    if e1_on or e2_on or e3_on:                # any enabled exit completes from state 1 — the
+                        ns = 3                                 # cross IS the reversal; curl no longer gates
+                    elif curl:                                 # exit2/3 (Joe 2026-06-14: curl is a bane)
                         ns = 2
-                        if e2_on or e3_on or pend3 > 0:        # curl + a curl-gated exit (2/3)
-                            ns = 3
-                    elif e3_on:
-                        pend3 = self.grace                     # exit3 before curl → wait for it
-                    elif pend3 > 0:
-                        pend3 -= 1                             # tick the grace window down
                 elif state == 2:
                     nb = cur_dir
                     if fresh_oob:

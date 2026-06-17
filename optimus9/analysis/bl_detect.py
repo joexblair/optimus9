@@ -68,7 +68,8 @@ class BLDetect:
             f"bl_config #{c['blc_pk']} '{c['blc_label']}' | curl_floor={c['blc_curl_floor']} "
             f"curl_lookback={c['blc_curl_lookback']} grace={c['blc_grace']} "
             f"pseudo_cross={c['blc_pseudo_cross']} fence_pad={c['blc_fence_pad']} "
-            f"bb_pad={c['blc_bb_pad']} exit2_ref={c['blc_exit2_ref']} | "
+            f"bb_pad={c['blc_bb_pad']} exit2_ref={c['blc_exit2_ref']} "
+            f"bny30_reset={c['blc_bny30_bias_reset_threshold']} | "
             f"{len(self._families)} breach line(s): {', '.join(f['name'] for f in self._families)}")
 
     def _load_config(self) -> dict:
@@ -87,7 +88,11 @@ class BLDetect:
             blc_pseudo_cross FLOAT DEFAULT 15.0,
             blc_fence_pad FLOAT DEFAULT 5.0,
             blc_bb_pad FLOAT DEFAULT 0.0,
-            blc_exit2_ref VARCHAR(16) DEFAULT 'now')''')
+            blc_exit2_ref VARCHAR(16) DEFAULT 'now',
+            blc_bny30_bias_reset_threshold INT DEFAULT 2)''')
+        have = {r['Field'] for r in self._db.execute(f'SHOW COLUMNS FROM {self._CONFIG}', fetch=True)}
+        if 'blc_bny30_bias_reset_threshold' not in have:       # migrate a pre-existing table
+            self._db.execute(f'ALTER TABLE {self._CONFIG} ADD COLUMN blc_bny30_bias_reset_threshold INT DEFAULT 2')
         sel = (f'SELECT * FROM {self._CONFIG} WHERE blc_is_active=1 '
                'ORDER BY blc_pk DESC LIMIT 1')
         rows = self._db.execute(sel, fetch=True)
@@ -219,7 +224,7 @@ class BLDetect:
         base  = KlineLoader(self._db).load_window(self._tp, load_start, end_ms)
         ts    = base['timestamp'].to_numpy()
         from ..orchestration.gate_signal_sweep import pine_aligned_signals
-        pk_idx, pk_dirs = pine_aligned_signals(base, self._db, GCA5M_RAW)
+        pk_idx, pk_dirs = pine_aligned_signals(base, self._db, GCA5M_RAW, gate=False)   # RAW pk = ungated (match grind/pine)
         raw_pk = np.zeros(len(ts), np.int8); raw_pk[pk_idx] = pk_dirs
         # px_smooth: global 5s DEMA, params from optimus9_system (close/2/5) — same manner as the
         # PK machine's dema (5s base, config-driven), NOT the old primary-TF resample.
@@ -235,6 +240,8 @@ class BLDetect:
     def report(self, end_ms=None) -> list:
         base, ts, win_start, raw_pk, px = self._setup(end_ms)
         c9, e9 = self._htf_views(base, ts)                # c9/e9 + px on the primary line's TF
+        from ..orchestration.gate_signal_sweep import bny30_latched_bias
+        bny30_bias = bny30_latched_bias(base, int(self._cfg['blc_bny30_bias_reset_threshold']), use_k=False)  # M-only
 
         # run EVERY active breach line (K via run, BB via run_bb), then fold the combined
         # state the gate reacts to. combined = the LEAST-progressed ACTIVE breach: min over
@@ -294,6 +301,7 @@ class BLDetect:
                     'state':     int(r['state'][i]),
                     'combined_state': int(combined[i]),    # min(states) — what the gate reads
                     'raw_pk':    int(raw_pk[i]),
+                    'bny30_bias': int(bny30_bias[i]),      # M-only inverted bny30 direction bias
                     'swing_closest_ms': (int(ts[cl]) if cl is not None else None),
                     'swing_adverse_ms': (int(ts[ad]) if ad is not None else None),
                 })
@@ -419,7 +427,7 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
             exit_support FLOAT, exit3_support FLOAT,
             breach_slope FLOAT, exit2_ref FLOAT, exit2_ref_dt DATETIME, bl_ext FLOAT,
             predicted TINYINT, exit1 TINYINT, exit2 TINYINT, exit3 TINYINT,
-            breach_dir TINYINT, state TINYINT, combined_state TINYINT, raw_pk TINYINT,
+            breach_dir TINYINT, state TINYINT, combined_state TINYINT, raw_pk TINYINT, bny30_bias TINYINT,
             swing_closest_dt DATETIME, entry_dt DATETIME, swing_adverse_dt DATETIME)''')
         if not rows:
             return
@@ -430,7 +438,7 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
                 'breach_slope',
                 'exit2_ref', 'exit2_ref_dt', 'bl_ext',
                 'predicted', 'exit1', 'exit2', 'exit3', 'breach_dir', 'state',
-                'combined_state', 'raw_pk', 'swing_closest_dt', 'entry_dt', 'swing_adverse_dt']
+                'combined_state', 'raw_pk', 'bny30_bias', 'swing_closest_dt', 'entry_dt', 'swing_adverse_dt']
         ph = ','.join(['%s'] * len(cols))
         data = [[_dt(r['bar_ms']), r['line_name'], r['px_smooth'],
                  r['c9_open'], r['c9_high'], r['c9_low'], r['c9_close'],
@@ -439,7 +447,7 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
                  r['exit_support'], r['exit3_support'], r['breach_slope'],
                  r['exit2_ref'], r['exit2_ref_dt'], r['bl_ext'],
                  r['predicted'], r['exit1'], r['exit2'], r['exit3'],
-                 r['breach_dir'], r['state'], r['combined_state'], r['raw_pk'],
+                 r['breach_dir'], r['state'], r['combined_state'], r['raw_pk'], r['bny30_bias'],
                  (_dt(r['swing_closest_ms']) if r['swing_closest_ms'] else None), _dt(r['bar_ms']),
                  (_dt(r['swing_adverse_ms']) if r['swing_adverse_ms'] else None)] for r in rows]
         self._db.executemany(

@@ -241,6 +241,8 @@ def _build_parser() -> argparse.ArgumentParser:
     bc.add_argument('--fence_pad',     type=float, default=None)
     bc.add_argument('--bb_pad',        type=float, default=None)
     bc.add_argument('--exit2_ref',     choices=['now', 'prior', 'avg'], default=None)
+    bc.add_argument('--bny30_bias_reset_threshold', type=int, default=None,
+                    help='consecutive OOB closes before bny30 resets the direction bias (default 2)')
 
     sub.add_parser('bl_review',
                    help='Materialise bl_review: state-change/exit rows + per gate-open '
@@ -645,7 +647,8 @@ def cmd_bl_config(args, db: DatabaseManager) -> int:
     from optimus9.analysis.bl_detect import BLDetect
     BLDetect(db)                                  # ensure bl_config exists + seeded
     T     = 'bl_config'
-    KNOBS = ['curl_floor', 'curl_lookback', 'grace', 'pseudo_cross', 'fence_pad', 'bb_pad', 'exit2_ref']
+    KNOBS = ['curl_floor', 'curl_lookback', 'grace', 'pseudo_cross', 'fence_pad', 'bb_pad', 'exit2_ref',
+             'bny30_bias_reset_threshold']
     cols  = ['blc_' + k for k in KNOBS]           # columns are blc_-prefixed; CLI args aren't
     if args.activate is not None:
         db.execute(f'UPDATE {T} SET blc_is_active=0')
