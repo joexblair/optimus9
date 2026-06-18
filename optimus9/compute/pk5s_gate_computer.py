@@ -282,6 +282,24 @@ class Pk5sGateComputer:
 
     # ── per-line state evaluators ──────────────────────────────────────────
     @staticmethod
+    def _pk_state_from_slopes(line_slope, price_slope, slope_floor):
+        """Core pk-state decision from the line & price slopes — the SEAM shared by the pooled
+        standard_pk path and any direct-fed peak (e.g. the bias machine's anchor/floater feed,
+        where line_slope = osc(anchor)-osc(floater), price_slope = px(anchor)-px(floater)).
+        Returns {NaN, 0.0, ±1.0 divergence, ±2.0 PM}. Vectorised; also valid on scalars.
+        Pine: f_pk_state inner branch, bbstr.pine line 1368."""
+        with np.errstate(invalid='ignore'):
+            diverge = np.sign(line_slope) != np.sign(price_slope)
+            noise   = np.abs(line_slope - price_slope) <= slope_floor
+            result  = np.where(
+                diverge,
+                np.where(line_slope > 0, 1.0, -1.0),
+                np.where(line_slope > 0, Pk5sGateComputer._PM_LONG, Pk5sGateComputer._PM_SHORT),
+            )
+            result = np.where(noise, 0.0, result)
+        return np.where(np.isnan(line_slope) | np.isnan(price_slope), np.nan, result)
+
+    @staticmethod
     def _states_standard(line: np.ndarray, dema: np.ndarray,
                          bars: int, pool_range: int, slope_floor: float,
                          midpoint: float) -> np.ndarray:
@@ -320,18 +338,7 @@ class Pk5sGateComputer:
         peak        = np.where(line > midpoint, roll_hi, roll_lo)
         line_slope  = line - peak
         price_slope = dema - dema_anchor
-        slope_diff  = np.abs(line_slope - price_slope)
-
-        with np.errstate(invalid='ignore'):
-            diverge = np.sign(line_slope) != np.sign(price_slope)
-            noise   = slope_diff <= slope_floor
-            result  = np.where(
-                diverge,
-                np.where(line_slope > 0,  1.0, -1.0),
-                np.where(line_slope > 0,  Pk5sGateComputer._PM_LONG,
-                                          Pk5sGateComputer._PM_SHORT),
-            )
-            result = np.where(noise, 0.0, result)
+        result      = Pk5sGateComputer._pk_state_from_slopes(line_slope, price_slope, slope_floor)
 
         invalid = (
             np.isnan(line) | np.isnan(dema) | np.isnan(dema_anchor)
