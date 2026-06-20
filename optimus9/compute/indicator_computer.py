@@ -40,8 +40,24 @@ class IndicatorComputer:
     """Pure computation. Replicates Pine Script f_bb, f_k, DEMA. No I/O."""
 
     @staticmethod
-    def resample(df: pd.DataFrame, target_seconds: int) -> pd.DataFrame:
-        """Aggregate a 5s OHLCV DataFrame into target_seconds bars."""
+    def resample(df: pd.DataFrame, target_seconds: int, anchor: str = 'epoch') -> pd.DataFrame:
+        """Aggregate a 5s OHLCV DataFrame into target_seconds bars.
+        anchor='epoch' (default — bars on the epoch grid; the live BL path);
+        'midnight' = bars re-anchored to UTC midnight each day, with a partial bar at day-end —
+        matches TV's non-day-divisor TF bars (7m/22m/…) which otherwise drift vs the epoch grid."""
+        if anchor == 'midnight':
+            ts  = df['timestamp'].to_numpy(dtype=np.int64)
+            bo  = IndicatorComputer._bar_open(ts, target_seconds, 'midnight')   # the flow
+            tmp = pd.DataFrame({'timestamp': ts,
+                                'open':  df['open'].to_numpy(dtype=float),
+                                'high':  df['high'].to_numpy(dtype=float),
+                                'low':   df['low'].to_numpy(dtype=float),
+                                'close': df['close'].to_numpy(dtype=float),
+                                'volume': df['volume'].to_numpy(dtype=float)})
+            return tmp.groupby(bo, sort=True).agg(
+                timestamp=('timestamp', 'first'), open=('open', 'first'),
+                high=('high', 'max'), low=('low', 'min'),
+                close=('close', 'last'), volume=('volume', 'sum')).reset_index(drop=True)
         tmp = df.copy()
         tmp['dt'] = pd.to_datetime(tmp['timestamp'], unit='ms', utc=True)
         tmp = tmp.set_index('dt').sort_index()
@@ -51,6 +67,16 @@ class IndicatorComputer:
             close=('close', 'last'), volume=('volume', 'sum'),
         ).dropna(subset=['open'])
         return agg.reset_index(drop=True)
+
+    @staticmethod
+    def _bar_open(ts: np.ndarray, target_seconds: int, anchor: str = 'epoch') -> np.ndarray:
+        """Bar-open ms per 5s timestamp (the resample 'flow'). 'epoch' = ts floored to the epoch
+        tf grid; 'midnight' = re-anchored to UTC midnight each day (TV's non-day-divisor TF bars)."""
+        tf_ms = target_seconds * 1000
+        if anchor == 'midnight':
+            day = (ts // 86_400_000) * 86_400_000
+            return day + ((ts - day) // tf_ms) * tf_ms
+        return (ts // tf_ms) * tf_ms
 
     @staticmethod
     def align_to_base(values: np.ndarray,
@@ -322,7 +348,7 @@ class IndicatorComputer:
 # ═══════════════════════════════════════════════════════════════════════════
 
     @staticmethod
-    def lookahead_resample(base_df: pd.DataFrame, target_seconds: int) -> pd.DataFrame:
+    def lookahead_resample(base_df: pd.DataFrame, target_seconds: int, anchor: str = 'epoch') -> pd.DataFrame:
         """
         Produce a 5s-aligned 'developing' OHLC view of a higher-TF.
 
@@ -352,7 +378,7 @@ class IndicatorComputer:
         columns: timestamp, open, high, low, close.
         """
         ts        = base_df['timestamp'].to_numpy()
-        window_id = (ts // (target_seconds * 1000)).astype(np.int64)
+        window_id = IndicatorComputer._bar_open(ts.astype(np.int64), target_seconds, anchor)
 
         # kline_collection columns are DECIMAL → object dtype via pymysql.
         # Cast to float64 up front so groupby cython ops (transform/cummax/cummin)
@@ -376,7 +402,8 @@ class IndicatorComputer:
     @staticmethod
     def f_bb_lookahead(base_df: pd.DataFrame, target_seconds: int,
                        length: int, mult: float, src: str,
-                       rsi_ob: float = RSI_OVERBOUGHT, rsi_os: float = RSI_OVERSOLD) -> np.ndarray:
+                       rsi_ob: float = RSI_OVERBOUGHT, rsi_os: float = RSI_OVERSOLD,
+                       anchor: str = 'epoch') -> np.ndarray:
         """
         BB(length, mult) at each 5s bar against the developing higher-TF bar.
 
@@ -397,7 +424,7 @@ class IndicatorComputer:
         history). Same return shape and scaling as f_bb.
         """
         # ── closed higher-TF source series ────────────────────────────────
-        closed     = IndicatorComputer.resample(base_df, target_seconds)
+        closed     = IndicatorComputer.resample(base_df, target_seconds, anchor)
         closed_src = IndicatorComputer.build_source(closed, src)
         closed_ts  = closed['timestamp'].to_numpy()
 
@@ -408,7 +435,7 @@ class IndicatorComputer:
         roll_sumsq = (s ** 2).rolling(length - 1, min_periods=length - 1).sum().to_numpy()
 
         # ── developing source values at every 5s ──────────────────────────
-        dev_df  = IndicatorComputer.lookahead_resample(base_df, target_seconds)
+        dev_df  = IndicatorComputer.lookahead_resample(base_df, target_seconds, anchor)
         dev_src = IndicatorComputer.build_source(dev_df, src)
 
         # ── map each 5s timestamp to its developing-window index in closed ─
@@ -444,7 +471,8 @@ class IndicatorComputer:
 
     @staticmethod
     def f_k_lookahead(base_df: pd.DataFrame, target_seconds: int,
-                      k_len: int, rsi_len: int, stc_len: int, src: str) -> np.ndarray:
+                      k_len: int, rsi_len: int, stc_len: int, src: str,
+                      anchor: str = 'epoch') -> np.ndarray:
         """
         K chain (RSI → Stoch → SMA) at each 5s bar against the developing
         higher-TF bar.
@@ -468,7 +496,7 @@ class IndicatorComputer:
         Returns a 1D float array parallel to base_df.
         """
         # ── closed higher-TF chain ────────────────────────────────────────
-        closed     = IndicatorComputer.resample(base_df, target_seconds)
+        closed     = IndicatorComputer.resample(base_df, target_seconds, anchor)
         closed_src = IndicatorComputer.build_source(closed, src)
         closed_ts  = closed['timestamp'].to_numpy()
 
@@ -495,7 +523,7 @@ class IndicatorComputer:
         roll_stoch_sum = stoch_c_s.rolling(k_len - 1, min_periods=k_len - 1).sum().to_numpy()
 
         # ── developing source at every 5s ─────────────────────────────────
-        dev_df  = IndicatorComputer.lookahead_resample(base_df, target_seconds)
+        dev_df  = IndicatorComputer.lookahead_resample(base_df, target_seconds, anchor)
         dev_src = IndicatorComputer.build_source(dev_df, src)
 
         base_ts = base_df['timestamp'].to_numpy()

@@ -46,7 +46,7 @@ def main():
                              (i, l, t), fetch=True)[0]['ic_pk']
     hb9b, hb9M, hb9m = icpk(8, 3, 7), icpk(8, 2, 7), icpk(8, 1, 7)
 
-    # ── pk_pools + live view (mirrors indicator_configs_live) ────────────────
+    # ── pk_pools + live view (mirrors vw_indicator_configs_live) ────────────────
     X("""CREATE TABLE IF NOT EXISTS pk_pools (
         pkp_pk BIGINT AUTO_INCREMENT PRIMARY KEY, pkp_is_pk BIGINT NOT NULL,
         pkp_live_after_date DATETIME NOT NULL DEFAULT '2000-01-01',

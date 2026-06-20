@@ -148,7 +148,7 @@ class BLDetect:
         for b in breaches:
             # predictor BBs from the SET: same series + label, the two BB suffixes m/M
             preds = self._db.execute(
-                '''SELECT il.il_suffix, ic.ic_pk FROM indicator_configs ic
+                '''SELECT il.il_suffix, ic.ic_pk FROM vw_indicator_configs_live ic
                    JOIN indicator_lines il      ON il.il_pk  = ic.ic_il_pk
                    JOIN indicator_timeframes itf ON itf.itf_pk = ic.ic_itf_pk
                    WHERE ic.ic_is_pk = %s AND itf.itf_label = %s

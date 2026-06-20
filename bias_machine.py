@@ -19,6 +19,7 @@ TF7 is the s14 slot → the generic TF axis excludes 7: TFS = (4,5,6,8,9,10,11,1
 import math
 import numpy as np
 import logging
+from dataclasses import dataclass
 for _n in ('BybitKlineClient', 'BLDetect', 'KlineLoader', 'DatabaseManager'):
     logging.getLogger(_n).setLevel('ERROR')
 from optimus9.compute.indicator_computer import IndicatorComputer as IC
@@ -44,6 +45,7 @@ S14m  = ('bb', 20, 0.77, 'hlc3')           # exit-A gate
 S14M  = ('bb', 74, 0.73, 'ohlc4')          # pk gate + exit maj (unified 0.73)
 S14r  = ('k', 12, 12, 10, 'hl2')
 S3M_E = ('bb', 10, 0.4, 'ohlc4')           # s3 entry m-line — ohlc4 (smoothed vs GEN_M hlc3) to damp double-spikes
+MO12m = ('bb', 7, 0.64, 'close')           # "momentum" series (Joe 0619): osc-only swap vs s12m; trigger stays s12m
 XM45m = ('bb', 111, 0.99, 'ohlc4')         # xm45 set (TF45=45s): premature-s30a filter (Joe 0618)
 XM45M = ('bb', 222, 0.92, 'hlcc4')
 XM45r = ('k', 40, 96, 12, 'close')         # display k12|rsi40|stc96|close
@@ -55,30 +57,92 @@ def _sign(v):
     return np.where(v >= OOB_HI, 1, np.where(v <= OOB_LO, -1, 0))
 
 
+class LineStore:
+    """SRP: resolve a bias line `ind_name` → (tf_seconds, cfg-tuple) from vw_indicator_configs_live
+    (the ic_live_after_dt view). Building (resample/align) stays with the window — this only owns the
+    DB lookup. cfg-tuple matches BiasWindow._raw: ('bb', len, mult, src) | ('k', rsi, stc, k, src)."""
+    def __init__(self, db):
+        self._db = db; self._cache = {}
+
+    def resolve(self, ind_name):
+        if ind_name not in self._cache:
+            r = self._db.execute(
+                '''SELECT ic_line_type lt, ic_src src, ic_bb_len, ic_bb_mult, ic_rsi_len,
+                          ic_stc_len, ic_k_len, itf_seconds
+                   FROM vw_indicator_configs_live WHERE ind_name = %s''', (ind_name,), fetch=True)
+            if not r:
+                raise ValueError(f'no live indicator_configs for {ind_name!r}')
+            c = r[0]
+            cfg = ('bb', c['ic_bb_len'], float(c['ic_bb_mult']), c['src']) if c['lt'] == 'bb' \
+                else ('k', c['ic_rsi_len'], c['ic_stc_len'], c['ic_k_len'], c['src'])
+            self._cache[ind_name] = (int(c['itf_seconds']), cfg)
+        return self._cache[ind_name]
+
+
+@dataclass
+class BiasConfig:
+    """Single source of truth for one bias-machine run: line refs (by ind_name, resolved live from
+    the DB) + mechanism knobs. Defaults reproduce the pre-config-drive engine behaviour exactly."""
+    # line refs (ind_name in vw_indicator_configs_live)
+    osc:    str = 's6r'                 # bias_pk_osc — anchor/floater value source (default ruler)
+    gate_M: str = 's14M'
+    gate_r: str = 's14r'
+    gate_m: str = 's14m'
+    s3_m:   str = 's3m'
+    s3_r:   str = 's3r'
+    s3_M:   str = 's3M'
+    s30_M:  str = 's30M'
+    s30_m:  str = 's30m'
+    s30_r:  str = 's30r'
+    xm45_m: str = 'xm45m'
+    xm45_M: str = 'xm45M'
+    xm45_r: str = 'xm45r'
+    # mechanism knobs
+    trigger_tf:     int   = 12         # trigger line = generic m @ this TF (s12m) — the flagged tf() seam
+    gate:           str   = 'oob'      # 'oob' (s14M|s14r OOB) | 'mid' (s14M vs 50)
+    floater_anchor: str   = 'same'     # 'same' = g[S] | 'last' = single g slot (any side)
+    flt_half:       int   = 2          # ±N osc-bar floater scan (0 = no scan, None = legacy rolling-avg)
+    g_gated:        bool  = False      # False = g updates ungated (0617) | True = only on gate-open reversals
+    verdict:        str   = 'magnitude'# 'magnitude' | 'pk'
+    slope_floor:    float = 0.0        # pk-verdict only (noise gate on |osc_slope − price_slope|)
+    delay:          int   = 0          # pk-verdict only (decision delay over the event sequence)
+    entry_order:    str   = 'co'       # 'co' | 'seq'
+    s3_variant:     str   = 'rM'       # 'm' | 'r' | 'M' | 'rM'
+    xm45:           bool  = False
+    mae:            float = 0.4
+    target:         float = 0.9
+    xm45r_lookback: int   = 720
+
+
 class BiasWindow:
     """One rolling window. Precomputes the shared lines + s30 wobs; lazily caches per-TF lines."""
 
-    def __init__(self, db, end, lookback=168, warmup=80):
+    def __init__(self, db, end, lookback=168, warmup=80, cfg=None):
+        self.cfg = cfg or BiasConfig()
+        self._ls = LineStore(db)
         det = BLDetect(db, lookback_hours=lookback, warmup_hours=warmup)
         base, ts, _ws, _x, px = det._setup(end)
         self.base, self.ts, self.px = base, ts, px
         self.W1 = min(int(ts[-1]), end)
         self.W0 = self.W1 - lookback * H
         self._tfcache = {}
-        # anchor ruler + gate (shared across every config)
-        self.s6r = self._aligned(360, GEN_R)
-        self._osc = self.s6r; self._bpt = 72                  # bias_pk_osc (swappable) + base 5s bars/osc-TF bar
-        self.s14M = self._aligned(420, S14M)
+        c = self.cfg
+        # every named line is resolved LIVE from vw_indicator_configs_live (no tuples)
+        self.s6r = self._line('s6r')                          # anchor ruler (ups_s6r_anchor)
+        otf, _ = self._ls.resolve(c.osc)
+        self._osc = self._line(c.osc); self._bpt = otf // 5   # bias_pk_osc (cfg-driven) + base 5s bars/osc-TF bar
+        self.s14M = self._line(c.gate_M)
         self.s14M_sign = _sign(self.s14M)
-        self.s14r_sign = _sign(self._aligned(420, S14r))      # gate now s14M OR s14r OOB
-        self.s14m_sign = _sign(self._aligned(420, S14m))
+        self.s14r_sign = _sign(self._line(c.gate_r))          # gate = s14M OR s14r OOB
+        self.s14m_sign = _sign(self._line(c.gate_m))
         self._build_s30_wobs()
-        self.s3m_sign = _sign(self._aligned(180, S3M_E)); self.s3r_sign = self.tf(3)['r_sign']  # s3 entry (m=ohlc4)
-        self.s3M_sign = _sign(self._aligned(180, S30M))       # s3 Major (alt to s3r in the entry)
-        self.xm45m_sign = _sign(self._aligned(45, XM45m))     # xm45 set (TF45) — premature-s30a filter
-        self.xm45M_sign = _sign(self._aligned(45, XM45M))
-        self.xm45r_recent = {s: self._recent_oob(_sign(self._aligned(45, XM45r)), s, XM45R_LOOKBACK) for s in (1, -1)}
-        self._entry_cfg = dict(ordering='co', variant='rM', xm45=False)   # default = current behaviour
+        self.s3m_sign = _sign(self._line(c.s3_m))             # s3 entry m
+        self.s3r_sign = _sign(self._line(c.s3_r))             # s3 entry r (= generic r @180)
+        self.s3M_sign = _sign(self._line(c.s3_M))             # s3 Major (alt to s3r in the entry)
+        self.xm45m_sign = _sign(self._line(c.xm45_m))         # xm45 set (TF45) — premature-s30a filter
+        self.xm45M_sign = _sign(self._line(c.xm45_M))
+        self.xm45r_recent = {s: self._recent_oob(_sign(self._line(c.xm45_r)), s, c.xm45r_lookback) for s in (1, -1)}
+        self._entry_cfg = dict(ordering=c.entry_order, variant=c.s3_variant, xm45=c.xm45)
 
     # ── line builders ──
     def _raw(self, tf_sec, cfg):
@@ -93,16 +157,92 @@ class BiasWindow:
         v, fr = self._raw(tf_sec, cfg)
         return IC.align_to_base(v, fr, self.base)
 
+    def _line(self, ind_name):
+        """Base-aligned line built from its LIVE DB config (vw_indicator_configs_live)."""
+        return self._aligned(*self._ls.resolve(ind_name))
+
+    def _line_emerging(self, ind_name, anchor='midnight'):
+        """Developing (emerging) line — one value per 5s bar against the forming higher-TF bar, via
+        f_*_lookahead. For the blp set (Joe 0620). anchor='midnight' (TV-aligned, the blp default;
+        non-day-divisor TFs drift on the epoch grid — TODO: source the anchor from a DB column)."""
+        tf_sec, cfg = self._ls.resolve(ind_name)
+        if cfg[0] == 'bb':
+            return IC.f_bb_lookahead(self.base, tf_sec, cfg[1], cfg[2], cfg[3], anchor=anchor)
+        return IC.f_k_lookahead(self.base, tf_sec, cfg[3], cfg[1], cfg[2], cfg[4], anchor=anchor)
+
+    # ── blp line-positioning mechanic (Joe 0620) ──────────────────────────────────────────────
+    def blp14(self):
+        """The 3 emerging blp14 lines sampled on the 1-min cycle. Returns (sample_bars, {k: vals}),
+        where vals[k] is the emerging blp14k at each minute-aligned base bar."""
+        if not hasattr(self, '_blp14'):
+            mins = np.where(self.ts % 60_000 == 0)[0]                  # minute-aligned 5s bars
+            self._blp14 = (mins, {k: self._line_emerging(f'blp14{k}')[mins] for k in ('m', 'M', 'r')})
+        return self._blp14
+
+    def blp_crosses(self):
+        """Any-pair crossover among the emerging blp14 m/M/r lines on the 1-min samples. A cross =
+        the (a−b) ordering flips between consecutive valid minute samples. Returns dicts:
+        (t, bar, pair, before=(a,b), after=(a,b)) — before = last sample pre-cross, after = at cross."""
+        mins, L = self.blp14()
+        pairs = (('m', 'M'), ('m', 'r'), ('M', 'r'))
+        out = []; prev = {p: None for p in pairs}
+        for i, j in enumerate(mins):
+            for a, b in pairs:
+                va, vb = L[a][i], L[b][i]
+                if np.isnan(va) or np.isnan(vb):
+                    continue
+                p = prev[(a, b)]
+                if p is not None and (p[0] - p[1]) * (va - vb) < 0:    # ordering flipped → cross
+                    out.append(dict(t=int(self.ts[j]), bar=int(j), pair=(a, b),
+                                    before=(round(float(p[0]), 1), round(float(p[1]), 1)),
+                                    after=(round(float(va), 1), round(float(vb), 1))))
+                prev[(a, b)] = (va, vb)
+        return out
+
+    def blp_signals(self, wob_tol_min=2):
+        """Line-positioning cascade → blp14 m×M cross signals (Joe 0620 v2). At each s30M wob (side S =
+        its OOB side), require on side S: ANY s22 line OOB · xm45a · a blp14 **m×M** cross with BOTH m,M
+        OOB on S, within ±wob_tol of the wob. s14M is NOT a gate here — annotated 'GATED' if its line is
+        IB. Label colour follows the s14M side-of-50. gravity = blp14M or s22M on the OTHER side of 50.
+        FLAGGED ASSUMPTIONS: side S = the s30M-wob side; both m,M OOB tested at the cross's after-values."""
+        mins, L = self.blp14()
+        s22M, s22m, s22r = self._line('s22M'), self._line('s22m'), self._line('s22r')
+        s22sign = {'m': _sign(s22m), 'M': _sign(s22M), 'r': _sign(s22r)}
+        mM = [c for c in self.blp_crosses() if c['pair'] == ('m', 'M')]     # the m×M crosses only
+        tol = wob_tol_min * 60_000
+        out = []
+        for T, J, S in ((self.HT, self.HJ, 1), (self.LT, self.LJ, -1)):
+            for wt, wj in zip(T, J):
+                wt, wj = int(wt), int(wj)
+                if not (self.W0 <= wt <= self.W1):                       continue
+                if not any(s22sign[k][wj] == S for k in ('m', 'M', 'r')): continue  # ANY s22 line OOB on S
+                if not bool(self._xm45_ok(wj, wj + 1, S)[0]):            continue   # xm45a
+                oob = (lambda x: x >= OOB_HI) if S == 1 else (lambda x: x <= OOB_LO)
+                cand = [c for c in mM if abs(c['t'] - wt) <= tol         # m×M cross, both OOB on S, ±tol
+                        and oob(c['after'][0]) and oob(c['after'][1])]
+                if not cand:                                             continue
+                cx = min(cand, key=lambda c: abs(c['t'] - wt))
+                mi = int(np.searchsorted(mins, wj, side='right')) - 1
+                other = (L['M'][mi] - 50) * S < 0 or (s22M[wj] - 50) * S < 0
+                grav = round(float(L['M'][mi] if (L['M'][mi] - 50) * S < 0 else s22M[wj]), 1) if other else None
+                out.append(dict(wob_t=wt, side=S, cross=cx, gravity=grav,
+                                gated=bool(self.s14M_sign[wj] == 0),       # s14M IB → 'GATED'
+                                s14_hi=bool(self.s14M[wj] > 50)))          # colour per s14M side-of-50
+        return out
+
     def _at(self, t):
         return int(np.searchsorted(self.ts, t, side='right')) - 1
 
     # ── s30 entry/exit wobs (1-bar off the OOB extreme, all-3 s30 OOB at the extreme) ──
     def _build_s30_wobs(self):
-        f30 = IC.resample(self.base, 30)
-        t30 = f30['timestamp'].to_numpy() + 30_000
-        M = IC.f_bb(IC.build_source(f30, S30M[3]), S30M[1], S30M[2])
-        m = IC.f_bb(IC.build_source(f30, S30m[3]), S30m[1], S30m[2])
-        r = IC.f_k(IC.build_source(f30, S30r[4]), S30r[1], S30r[2], S30r[3])
+        c = self.cfg
+        (s30, cM), (_, cm), (_, cr) = (self._ls.resolve(c.s30_M), self._ls.resolve(c.s30_m),
+                                       self._ls.resolve(c.s30_r))
+        f30 = IC.resample(self.base, s30)
+        t30 = f30['timestamp'].to_numpy() + s30 * 1000
+        M = IC.f_bb(IC.build_source(f30, cM[3]), cM[1], cM[2])
+        m = IC.f_bb(IC.build_source(f30, cm[3]), cm[1], cm[2])
+        r = IC.f_k(IC.build_source(f30, cr[4]), cr[1], cr[2], cr[3])
         hi, lo = [], []
         for i in range(1, len(M)):
             a, b = M[i - 1], M[i]
@@ -241,37 +381,66 @@ class BiasWindow:
         bj = lo + idx
         return float(self._osc[bj]), bj
 
-    # ── gated pk updates → list of dict(t, side, call) ; call ∈ BULL/BEAR/NEUT ──
-    def ups(self, trigs, gate, flt_half=2):
-        # rule (Joe 0617): a wrong-side print can't be consumed → dropped (no anchor, g untouched).
-        # anchor = raw osc at the reversal (fresh print); floater = the CONFIRMED osc extreme near the
-        # LAST anchor's bar (g[S]). g[S] updates on every right-side reversal (ungated); the gate
-        # (s14M|s14r OOB) only decides whether the pk fires. floater absent only at epoch.
-        # floater window = ±flt_half osc-TF bars around the last anchor — default 2 (range of 5: 2 back,
-        # 2 forward; Joe 0618 fixed it because the rolling-avg theory let intra-spikes balloon the window).
-        # flt_half=None → legacy rolling-avg-of-last-7-gaps (kept only so the A/B can compare).
+    # ── SRP split (Joe 0619): pk_events builds the anchor/floater stream (NO verdict); verdict_*
+    #    apply a decision over that stream. ups() = magnitude verdict — kept as the future SnF meld seam.
+    def pk_events(self, trigs, gate, flt_half=2, floater_src='same', g_gated=False):
+        # EVENT STREAM ONLY — no call. rule (Joe 0617): a wrong-side print can't be consumed → dropped
+        # (no anchor, g untouched). anchor = raw osc at the reversal; floater = the CONFIRMED osc extreme
+        # near the SOURCE anchor's bar. floater_src: 'same' = last SAME-side anchor g[S] (default, current
+        # behaviour); 'last' = last anchor of ANY side (single g slot, Joe 0619).
+        # g_gated (Joe 0620, A/B): False = g updates on every right-side reversal, s14M only decides firing
+        # (the 0617 rule); True = g updates ONLY on gate-OPEN reversals (a gate-shut pivot isn't a valid
+        # floater). floater absent only at epoch. window = ±flt_half osc-TF bars (default 2; flt_half=0 ⇒
+        # no scan = raw osc at the source bar; flt_half=None ⇒ legacy rolling-avg-of-last-7-gaps).
+        # The scan finds the extreme on the FLOATER ANCHOR's OWN side (stored in g), not the current
+        # event's side — so a 'last' floater off an other-side anchor scans the right extreme (Joe 0620).
         BPT = self._bpt
-        out = []; g = {1: None, -1: None}; dq = {1: [], -1: []}
+        out = []; g = {1: None, -1: None}; g_last = None; dq = {1: [], -1: []}
         for W in trigs:
             S = W['s']; v = W['oscv']
             if not ((S == 1 and v > 50) or (S == -1 and v < 50)):
                 continue                                       # wrong-side → cannot be consumed
-            flt_src = g[S]
-            if flt_half is None and flt_src is not None:
-                dq[S].append(round((W['j'] - flt_src) / BPT)); dq[S] = dq[S][-7:]
-            g[S] = W['j']                                      # floater source = prev anchor's bar (ungated)
+            flt_src = g_last if floater_src == 'last' else g[S]   # (bar, anchor_side) | None
             gate_ok = (self.s14M_sign[W['j']] == S or self.s14r_sign[W['j']] == S) if gate == 'oob' \
                 else ((self.s14M[W['j']] > 50) == (S == 1))
+            if (not g_gated) or gate_ok:                       # gate the g-update only when g_gated
+                if flt_half is None and flt_src is not None:
+                    dq[S].append(round((W['j'] - flt_src[0]) / BPT)); dq[S] = dq[S][-7:]
+                g[S] = (W['j'], S); g_last = (W['j'], S)       # floater source = prev valid anchor (bar, side)
             if not gate_ok or flt_src is None or not (self.W0 <= W['t'] <= self.W1):
                 continue
             half = flt_half if flt_half is not None else math.ceil((sum(dq[S]) / len(dq[S])) / 2)
-            fv, fv_bar = self._floater_extreme(flt_src, S, half * BPT)
+            fv, fv_bar = self._floater_extreme(flt_src[0], flt_src[1], half * BPT)
             if fv is None:
                 continue
-            call = 'NEUT' if abs(v - fv) <= NEUTRAL_BAND else ('BULL' if v > fv else 'BEAR')
-            out.append(dict(t=W['t'], side=S, call=call, anc=round(float(v), 1), flt=round(float(fv), 1),
+            out.append(dict(t=W['t'], side=S, anc=round(float(v), 1), flt=round(float(fv), 1),
                             anc_bar=W['j'], flt_bar=fv_bar))
         return out
+
+    def verdict_magnitude(self, events):
+        # verdict by |anchor − floater|: NEUT inside the band, else BULL/BEAR by which is higher.
+        return [dict(e, call=('NEUT' if abs(e['anc'] - e['flt']) <= NEUTRAL_BAND
+                              else ('BULL' if e['anc'] > e['flt'] else 'BEAR'))) for e in events]
+
+    def verdict(self, events):
+        # apply the CONFIGURED verdict to an event stream (single-sources cfg.verdict → method).
+        # consumers feed the stream here instead of binding to a baked-in call.
+        c = self.cfg
+        if c.verdict == 'pk':
+            return self.verdict_pk(events, c.slope_floor, c.delay)
+        return self.verdict_magnitude(events)
+
+    # ── cfg-driven bias signal stream: trigs → events → configured verdict (the consumer entry-point) ──
+    def signals(self):
+        c = self.cfg
+        events = self.pk_events(self.trigs(c.trigger_tf), c.gate, c.flt_half, c.floater_anchor, c.g_gated)
+        return self.verdict(events)
+
+    # ── gated pk updates → list of dict(t, side, call, …) ; call ∈ BULL/BEAR/NEUT ──
+    def ups(self, trigs, gate, flt_half=2):
+        # magnitude verdict over the event stream — back-compat wrapper + the seam SnF will meld
+        # multiple pk signals through. Behaviour-identical to the pre-split ups().
+        return self.verdict_magnitude(self.pk_events(trigs, gate, flt_half))
 
     # ── alt anchor (Joe 0617): s6m reversal ARMS, then wait for s6r to reverse; anchor = the s6r
     #    extreme (max hi / min lo) over [arm → s6r reversal]. pk fires at the s6r-reversal bar. ──
@@ -321,26 +490,34 @@ class BiasWindow:
     #    px_smooth(anchor)−px_smooth(floater) → _pk_state_from_slopes → close/wide probes →
     #    PKVoteMachine → pk_raw → apply_decision_delay over the EVENT sequence. Returns ups-like
     #    directional calls. NOTE: decision_delay counts pk EVENTS here, not bars — flagged for Joe.
-    def pk_feed(self, ups, slope_floor, delay, w_close=5, w_wide=2, thr=7.5, pm_suppress=0.4):
-        ev = [u for u in ups if u['call'] in ('BULL', 'BEAR')]
-        if not ev:
+    def verdict_pk(self, events, slope_floor, delay, w_close=5, w_wide=2, thr=7.5, pm_suppress=0.4):
+        # verdict by the pk machine over the FULL event stream (no pre-filter coupling). line_slope =
+        # osc(anc)−osc(flt), price_slope = px_smooth(anc)−px_smooth(flt) → _pk_state_from_slopes
+        # (divergence ±1 fires direction / PM ±2 votes 0 → single-line suppress) → PKVoteMachine →
+        # apply_decision_delay over the EVENT sequence. NOTE: decision_delay counts pk EVENTS, not bars.
+        if not events:
             return []
         states = np.array([
             float(Pk5sGateComputer._pk_state_from_slopes(
-                u['anc'] - u['flt'], self.px[u['anc_bar']] - self.px[u['flt_bar']], slope_floor))
-            for u in ev], dtype=float)
+                e['anc'] - e['flt'], self.px[e['anc_bar']] - self.px[e['flt_bar']], slope_floor))
+            for e in events], dtype=float)
         probe = {(0, 'close'): states, (0, 'wide'): states}
         wts   = {(0, 'close'): w_close, (0, 'wide'): w_wide}
         pk_raw = PKVoteMachine(pm_suppress_str=pm_suppress).aggregate(probe, wts, thr, thr)['pk_raw']
         delayed = apply_decision_delay(pk_raw, delay)
         out = []; prev = 0
-        for u, d in zip(ev, delayed):
+        for e, d in zip(events, delayed):
             d = int(d)
             if d != 0 and d != prev:
-                out.append(dict(t=u['t'], side=u['side'], call=('BULL' if d == 1 else 'BEAR'),
-                                anc=u['anc'], flt=u['flt'], anc_bar=u['anc_bar'], flt_bar=u['flt_bar']))
+                out.append(dict(e, call=('BULL' if d == 1 else 'BEAR')))
             prev = d
         return out
+
+    def pk_feed(self, ups, slope_floor, delay, w_close=5, w_wide=2, thr=7.5, pm_suppress=0.4):
+        # back-compat wrapper (the OLD coupled path): pre-filter to magnitude-directional events, then
+        # verdict_pk. SRP-clean path is verdict_pk(pk_events(...)) over the full, unfiltered stream.
+        return self.verdict_pk([u for u in ups if u['call'] in ('BULL', 'BEAR')],
+                               slope_floor, delay, w_close, w_wide, thr, pm_suppress)
 
     # ── trades: entry = next aligned s30 wob; exit = next opposite s30 wob with gate lines OOB ──
     # exit_signs = list of base-aligned OOB-sign arrays that must all == bias dir at the exit wob.

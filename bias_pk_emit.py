@@ -20,22 +20,20 @@ from optimus9 import DatabaseManager
 from optimus9.analysis.bl_detect import BLDetect
 import bias_machine as bm
 
-TRIG_TF, OSC, GATE = 12, 's12m', 'oob'                        # osc 's6r' (default) or 's12m'
-ENTRY = ('seq', 'm', False)                                  # cascade winner: sequential · s3=m · xm45 off
-MAE, TARGET = 0.4, 0.9
-R0 = int(dtm.datetime(2026, 5, 31, 0, 0, tzinfo=timezone.utc).timestamp() * 1000)
-R1 = int(dtm.datetime(2026, 6, 4, 0, 0, tzinfo=timezone.utc).timestamp() * 1000)
+# One BiasConfig drives the whole run — lines resolved live from the DB, no set_osc/set_entry.
+CFG = bm.BiasConfig(osc='s12m', trigger_tf=12, gate='oob',    # cascade winner: seq · s3=m · xm45 off
+                    entry_order='seq', s3_variant='m', xm45=False, mae=0.4, target=0.9,
+                    floater_anchor='last', verdict='pk')      # 0620 fix under validation (most-recent anchor + pk)
+R1 = int(dtm.datetime(2026, 6, 18, 3, 37, tzinfo=timezone.utc).timestamp() * 1000)   # weakest seq/m window (31%)
+R0 = R1 - 168 * bm.H                                                                 # full 168h scored window
 def dts(t): return dtm.datetime.fromtimestamp(t / 1000, timezone.utc).strftime('%Y-%m-%d %H:%M')
 
 db = DatabaseManager(**get_db_config()); db.connect()
-W = bm.BiasWindow(db, R1); db.disconnect()
-if OSC == 's12m':
-    W.set_osc(W._aligned(720, bm.GEN_M), 144)                # osc = s12m (TF12)
-W.set_entry(*ENTRY)
+W = bm.BiasWindow(db, R1, cfg=CFG); db.disconnect()
 bclose = W.base['close'].to_numpy()
 
-ups_all = W.ups(W.trigs(TRIG_TF), GATE)
-pls_all = W.placements(ups_all, MAE, TARGET)                 # full chain, then filter to range
+ups_all = W.signals()                                        # trigs → pk_events → cfg.verdict (the bias machine)
+pls_all = W.placements(ups_all, CFG.mae, CFG.target)         # full chain, then filter to range
 ups = [u for u in ups_all if R0 <= u['t'] < R1]
 pls = [p for p in pls_all if R0 <= p['et'] < R1]
 for u in ups:
@@ -45,12 +43,12 @@ for u in ups:
 
 nb = sum(u['call'] == 'BULL' for u in ups); nr = sum(u['call'] == 'BEAR' for u in ups); nn = sum(u['call'] == 'NEUT' for u in ups)
 hit = sum(p['hit'] for p in pls)
-print(f"range {dts(R0)} → {dts(R1)}  ·  osc={OSC} trig=s{TRIG_TF}m {GATE}  ·  MAE {MAE} target {TARGET}")
+print(f"range {dts(R0)} → {dts(R1)}  ·  osc={CFG.osc} trig=s{CFG.trigger_tf}m {CFG.gate}  ·  floater={CFG.floater_anchor} verdict={CFG.verdict}  ·  entry {CFG.entry_order}/{CFG.s3_variant}  ·  MAE {CFG.mae} target {CFG.target}")
 print(f"  pk updates: {len(ups)} ({nb} BULL / {nr} BEAR / {nn} NEUT)")
 print(f"  trades: {len(pls)} · correct {hit} ({hit/len(pls):.0%})" if pls else "  trades: 0")
 
 arr = lambda v: 'array.from(' + ', '.join(v) + ')'
-title = f'bias pk — osc {OSC} trig s{TRIG_TF}m ({dts(R0)[5:10]}→{dts(R1)[5:10]})'
+title = f'bias pk — osc {CFG.osc} trig s{CFG.trigger_tf}m ({dts(R0)[5:10]}→{dts(R1)[5:10]})'
 body = f'''//@version=5
 indicator("{title}", overlay = true, max_labels_count = 500, max_lines_count = 500)
 // ── pk UPDATES (label + anchor→floater dashed line) ──

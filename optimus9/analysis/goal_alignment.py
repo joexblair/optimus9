@@ -22,9 +22,10 @@ from ..orchestration.gate_signal_sweep import generate_gca5m_signals, GCA5M
 
 
 # The bny30 gate filters: (report column name, DB ind_name). Configs are loaded
-# LIVE from the indicator_configs_live view (no hardcoding — can't drift off TV).
+# LIVE from the vw_indicator_configs_live view (no hardcoding — can't drift off TV).
+# ind_name = prefix+timeframe+suffix (e.g. 'bny30M') since the 0620 view fix.
 # Add a pair → its g8_<name>/val_<name> columns appear automatically.
-DEFAULT_GATE = [('bny30M', 'bnyM'), ('bny30p', 'bnyp')]
+DEFAULT_GATE = [('bny30M', 'bny30M'), ('bny30p', 'bny30p')]
 
 
 class GoalAlignment:
@@ -185,12 +186,12 @@ bgcolor(gate_col)         // overlay: white on gated PKs
         return val, side
 
     def _load_gate_config(self, ind_name):
-        """Resolve a gate line's LIVE config from indicator_configs_live (the
+        """Resolve a gate line's LIVE config from vw_indicator_configs_live (the
         ic_live_after_dt view) — no hardcoding, always matches production/TV."""
         r = self._db.execute(
             '''SELECT ic_line_type, ic_src, ic_bb_len, ic_bb_mult, ic_k_len, ic_rsi_len,
                       ic_stc_len, ic_low_boundary, ic_high_boundary, itf_seconds
-               FROM indicator_configs_live WHERE ind_name = %s''', (ind_name,), fetch=True)
+               FROM vw_indicator_configs_live WHERE ind_name = %s''', (ind_name,), fetch=True)
         if not r:
             raise ValueError(f'no live indicator_configs for {ind_name!r}')
         c = r[0]
