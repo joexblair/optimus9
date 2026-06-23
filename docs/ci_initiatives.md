@@ -59,6 +59,13 @@ That last idea lands deep, Sifu — and it reframes the whole thing. Not "a remi
   past your own prior correct reasoning.** Root = availability (grab the most-recently-
   used object) + reading a green-light as "stop scrutinising." Fix: a green-light
   TIGHTENS the load-bearing choice. Same root as grep-first and SRP-extend-on->80%-only.
+- **Diagnose the blocker, not the plausible cost** — when a run hangs or slows, read the
+  real signal (`SHOW PROCESSLIST`, EXPLAIN, lock/IO waits) *before* optimising the obvious-
+  looking step. Failure (2026-06-20): fingered the `bl_states` insert as the >580s
+  "bottleneck" — shipped a genuine ~30× multi-row `executemany` win — but the actual hang
+  was a metadata lock from a stuck GUI `SELECT *`. Good fix, wrong tree; Joe found it in the
+  processlist. Same root as "Test, don't theorise": the cost I could *see* (slow insert)
+  wasn't the cost that *mattered* (the lock). Verify the blocker, then optimise.
 
 ## Cycle ritual
 Define → Explore → Scope → Decompose → Recycle. Plan mode = the scope gate; the
