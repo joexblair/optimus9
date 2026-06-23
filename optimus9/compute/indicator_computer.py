@@ -154,6 +154,44 @@ class IndicatorComputer:
         return mapping[src]
 
     @staticmethod
+    def wobble_slayer(line: np.ndarray, n: int, oob_hi: float, oob_lo: float,
+                      anchored: bool = True, strict: bool = True) -> np.ndarray:
+        """The 'wobble_slayer' reversal signal — an N-bar turn off a local extreme.
+
+        Per bar i: +1 (turn UP: n strictly-RISING bars off line[i-n]), -1 (turn DOWN: n
+        strictly-FALLING bars off line[i-n]), else 0. The first bar of the window is the
+        turning point; the next n peel monotonically off it.
+
+        `anchored` (default True) — the EXIT flavour: the turn must START at an OOB extreme
+        (up-turn needs line[i-n] <= oob_lo; down-turn needs >= oob_hi) — a line peeling off
+        the boundary toward IB. `anchored=False` — the RE-ENGAGE flavour (Joe 0621): ANY
+        reversal back toward the extreme, no boundary needed — a BB reflects price, so a
+        support that was heading IB but turns back out re-engages the breach wherever it sits.
+
+        CAUSAL (reads only i-n..i) and cadence-agnostic — the caller supplies `line` at the
+        wobble's TF (the BL machine: the emerging 5s line). `n` + the OOB band come from
+        config (bl_config / optimus9_system), never baked in. Pure SIGNAL: it only emits
+        'this line turned'; consumers apply their own verdict. NaN warmup yields 0.
+        """
+        line = np.asarray(line, float)
+        L = len(line)
+        out = np.zeros(L, np.int8)
+        if n < 1:
+            return out
+        d = np.diff(line)                              # d[k] = line[k+1] - line[k]
+        for i in range(n, L):
+            a, seg = line[i - n], d[i - n:i]           # turning bar + the n steps off it
+            # strict: every step monotone. non-strict: allow flats (the hl2 staircase) but
+            # demand a NET move past the turning bar — so a fully-flat line never fires.
+            up = np.all(seg > 0) if strict else (np.all(seg >= 0) and line[i] > a)
+            dn = np.all(seg < 0) if strict else (np.all(seg <= 0) and line[i] < a)
+            if up and (not anchored or a <= oob_lo):     # turn UP off a low
+                out[i] = 1
+            elif dn and (not anchored or a >= oob_hi):   # turn DOWN off a high
+                out[i] = -1
+        return out
+
+    @staticmethod
     def f_bb(src: np.ndarray, length: int, mult: float,
              rsi_ob: float = RSI_OVERBOUGHT, rsi_os: float = RSI_OVERSOLD) -> np.ndarray:
         # rsi_ob/rsi_os are the RSI-domain RESCALE endpoints (70/30), NOT OOB

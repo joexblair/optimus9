@@ -89,10 +89,17 @@ class BLDetect:
             blc_fence_pad FLOAT DEFAULT 5.0,
             blc_bb_pad FLOAT DEFAULT 0.0,
             blc_exit2_ref VARCHAR(16) DEFAULT 'now',
-            blc_bny30_bias_reset_threshold INT DEFAULT 2)''')
+            blc_bny30_bias_reset_threshold INT DEFAULT 2,
+            blc_wob_tf_seconds INT DEFAULT 5,
+            blc_wob_bars INT DEFAULT 2,
+            blc_wob_strict TINYINT DEFAULT 0)''')
         have = {r['Field'] for r in self._db.execute(f'SHOW COLUMNS FROM {self._CONFIG}', fetch=True)}
-        if 'blc_bny30_bias_reset_threshold' not in have:       # migrate a pre-existing table
-            self._db.execute(f'ALTER TABLE {self._CONFIG} ADD COLUMN blc_bny30_bias_reset_threshold INT DEFAULT 2')
+        for col, ddl in (('blc_bny30_bias_reset_threshold', 'INT DEFAULT 2'),   # migrate pre-existing tables
+                         ('blc_wob_tf_seconds', 'INT DEFAULT 5'),
+                         ('blc_wob_bars', 'INT DEFAULT 2'),
+                         ('blc_wob_strict', 'TINYINT DEFAULT 0')):
+            if col not in have:
+                self._db.execute(f'ALTER TABLE {self._CONFIG} ADD COLUMN {col} {ddl}')
         sel = (f'SELECT * FROM {self._CONFIG} WHERE blc_is_active=1 '
                'ORDER BY blc_pk DESC LIMIT 1')
         rows = self._db.execute(sel, fetch=True)
@@ -109,7 +116,13 @@ class BLDetect:
             sys_pk BIGINT AUTO_INCREMENT PRIMARY KEY,
             pxsmooth_dema_src VARCHAR(10) DEFAULT 'close',
             pxsmooth_dema_len INT DEFAULT 2,
-            pxsmooth_dema_tf  INT DEFAULT 5)''')
+            pxsmooth_dema_tf  INT DEFAULT 5,
+            hi_boundary FLOAT DEFAULT 85,
+            lo_boundary FLOAT DEFAULT 15)''')
+        have = {r['Field'] for r in self._db.execute('SHOW COLUMNS FROM optimus9_system', fetch=True)}
+        for col, ddl in (('hi_boundary', 'FLOAT DEFAULT 85'), ('lo_boundary', 'FLOAT DEFAULT 15')):
+            if col not in have:                                # slow-burn: global OOB out of constants.py → here
+                self._db.execute(f'ALTER TABLE optimus9_system ADD COLUMN {col} {ddl}')
         sel = 'SELECT * FROM optimus9_system ORDER BY sys_pk DESC LIMIT 1'
         rows = self._db.execute(sel, fetch=True)
         if not rows:
@@ -195,7 +208,15 @@ class BLDetect:
             pmaj = self._line(base, fam['predictor_maj']) if fam['predictor_maj'] else nan()
             esup = self._line(base, fam['exit_support'])  if fam['exit_support']  else pmaj
             e3s  = self._line(base, fam['exit3_support']) if fam['exit3_support'] else None
-            r = bl.run(line, pmin, pmaj, esup, e3s, seam=seam)
+            # wobble_slayer signals (Joe 0622) — n + strict from bl_config, OOB from optimus9_system.
+            # On 5s emerging lines (wob_tf_seconds=5 → no subsample). run() consumes; doesn't recompute.
+            wn  = int(self._cfg['blc_wob_bars']); ws = bool(int(self._cfg['blc_wob_strict']))
+            whi = float(self._sys['hi_boundary']); wlo = float(self._sys['lo_boundary'])
+            e3l = e3s if e3s is not None else esup
+            wob = {'xs': IC.wobble_slayer(e3l,  wn, whi, wlo, anchored=True,  strict=ws),   # exit3 reversal
+                   'rs': IC.wobble_slayer(esup, wn, whi, wlo, anchored=False, strict=ws),   # re-engage (support back)
+                   'kk': IC.wobble_slayer(line, wn, whi, wlo, anchored=True,  strict=ws)}   # bobble debounce (K peel-off)
+            r = bl.run(line, pmin, pmaj, esup, e3s, seam=seam, wob=wob)
         return FamilyRun(line, pmin, pmaj, r, esup, e3s)
 
     def _cfg_dict(self, ic_pk) -> dict:

@@ -55,6 +55,32 @@ encoded.
 - **FR-6 Prediction.** K is predicted to breach when the BB anchor overshoots the
   boundary by more than K falls short: `anchor=max(m,M)` (hi) / `min(m,M)` (lo),
   anchor OOB, `(anchor−HI) > (HI−k)`. Uses **both** support lines.
+- **FR-7 Wobble-slayer reversal (5s, config-driven).** The reversal signal across the
+  machine is the **`wobble_slayer`** (`IC.wobble_slayer`): N bars peeling off an OOB extreme
+  (`anchored`) or any reversal back toward it (`anchored=False`), on the **5s emerging** line.
+  `N` + `strict` from `bl_config` (`blc_wob_bars`/`blc_wob_strict`); OOB band from
+  `optimus9_system`. It only EMITS "this line turned" (+1 up / −1 down); three consumers each
+  apply their own verdict (SRP — `bl_detect` builds the signals, `run()` consumes them):
+  - **exit3** keeps its **own BB×K cross** logic (`_exit_cross_toward_ib`) and merely CONSUMES the
+    anchored support wobble as one of its rules: `exit3 = cross AND wobble(== −breach_dir)`. The
+    wobble emits 'reversed'; exit3 applies the cross. It does NOT replace the cross (Joe 0622 — a
+    prior cut wrongly baked the bare wobble in, firing exit3 on a deep-OOB top-drift with no cross).
+    `blc_pseudo_cross=0` (Joe 0623) → exit3 needs the REAL cross (support below the K), no near-cross pseudo.
+  - **re-engage (2→1 / 3→1)** — in bls:2 **or** bls:3 with K still OOB, when the **support crosses
+    back into OOB on the breach side** (re-supporting — a clean IB→OOB edge, NOT the wobble; Joe 0623,
+    supersedes the wobble re-engage which churned on the support's walk). Fires once per re-entry,
+    on 5s. FR-6 prediction is blind here (`k<HI`), so this fills the gap; extends the war against
+    early trades. (The re-engage is its own standalone rule — the wobble is now an exit3 tool only.)
+  - **bobble debounce** — the K's `1→0` reset waits for the K's **own anchored wobble** to
+    confirm a genuine peel-off, so a single graze of the boundary can't flip the state.
+  Causal — `tests/test_causality.py` covers the wobble paths. Off (today's behaviour: exit3 =
+  BB×K cross, no re-engage, immediate reset) unless `bl_detect` passes `wob`. (Joe 0622,
+  supersedes the 0621 support-seam interim.) **Support BBs use `close` src** — TV-matched to 0.0
+  at every bar close (`hl2` staircased on the emerging bar + diverged from TV; #29 resolved 0622).
+  The close line is responsive. **n/strict tuned via the wob rig** (`alchemy_wob_rig.py`, Joe 0622)
+  against swing-closeness: **n=3, non-strict** (`bl_config`) — 15s median lag off the true swing
+  (vs ~550s for the TF close), 100% coverage, ~7% s30a-harm. Detection-vs-churn is a real trade-off
+  (lower n = closer but churns more); n=3 is the knee. n/strict + support src stay grind dims (#26).
 
 ## 4. Functional requirements — exit methods
 
@@ -70,6 +96,21 @@ From state 2 (or same-bar via FR-5a), complete on any **enabled** exit:
   the curl (or the grace window after an early exit3).
 
 Per-line `exit_mask` selects which of 1/2/3 are live (exit4/p-rev parked).
+
+## 4b. Causality — the realtime guarantee
+
+The live machine is **causal: no repaint.** Proven by truncation test (truncate the tape
+at any T → every line + state at every bar ≤ T is byte-identical to the full-tape run;
+0 mismatches, 120k bars, 4 cuts — `tests/test_causality.py`). So:
+- `IC.f_bb_lookahead` / `f_k_lookahead` are **developing** lines (O fixed, H/L/C accumulate
+  to *now*) — NOT future-peeking; the "lookahead" name is a misnomer.
+- `breaching_line.run` is a forward loop; every transition (breach, curl, exit, re-engage,
+  prediction) reads only past/present. **What you backtest fires live, tick-for-tick.**
+
+The ONLY non-causal piece is in `bl_review`, NOT the machine: the swing ZigZag
+(`find_pivots`) confirms pivots retrospectively, so the **req2/req3 stop/profit analytics
+repaint**. That's the trade-outcome *report* — never a live signal; the gate and state
+never touch it.
 
 ## 5. The real root — prediction-BBs and exit-BBs are conflated
 

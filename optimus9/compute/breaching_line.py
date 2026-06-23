@@ -6,7 +6,8 @@ States: 0 idle · 1 breached · 2 curled · 3 complete.
   1→2  the K line curls (ROC reverses past floor) — MANDATORY
   2→3  any exit method completes (BB OB→IB / BB non-subtle ROC / BB×K toward IB)
   2→1  re-breach (the bobbing)
-  3→1  re-breach / re-predict while completing (re-pulled)
+  3→1  re-breach / re-predict while completing (re-pulled); or RE-ENGAGE — a BB-twitch-
+       faked exit (e1/e3) while K is still OOB, at the support's seam (Joe 0621)
   3→0  reset (single-line: next bar; multi-line gate-hold is parked)
 
 Harvested from the Pine (260604 BL machine.txt): states, ROC/curl, prediction.
@@ -68,7 +69,7 @@ class BreachingLine:
 
     # ── public ───────────────────────────────────────────────────────────────
     def run(self, k, predictor_min_bb, predictor_maj_bb, exit_support=None,
-            exit3_support=None, seam=None) -> dict:
+            exit3_support=None, seam=None, wob=None) -> dict:
         """Walk the bars; return per-bar arrays: state, breach_dir, predicted,
         exit1/exit2/exit3 (the bools the persistence table needs).
 
@@ -96,6 +97,20 @@ class BreachingLine:
         # seam[i] = bar i is the first 5s of a new TF9 cycle. Default (all True) makes
         # the exit2 anchor a 5s lookback; bl_detect passes real seams → TF9 anchor.
         seam = np.ones(n, bool) if seam is None else np.asarray(seam, bool)
+        # wob (Joe 0622) = precomputed wobble_slayer signals on the 5s emerging lines, or None.
+        # When present, the reversal logic is routed through the wobble (3 ways, each CONSUMING the
+        # signal — run() never recomputes it):
+        #   wob['xs'] — exit3's reversal: support peels off its OOB extreme toward IB (== -breach_dir).
+        #   wob['rs'] — re-engage (3→1): support turns back toward the breach extreme (== breach_dir),
+        #               K still OOB — predict_breach's blind spot (it needs k<hi). exit2-only exempt.
+        #   wob['kk'] — bobble debounce: the K's 1→0 reset waits for a genuine n-bar peel-off, so a
+        #               single graze of the boundary can't flip the state.
+        # bl_detect builds them from the lines + bl_config (n, strict) + optimus9_system OOB. None →
+        # today's behaviour (exit3 = BB×K cross, no re-engage, immediate reset; golden tests untouched).
+        reengage = wob is not None
+        wob_xs = wob['xs'] if reengage else None
+        wob_rs = wob['rs'] if reengage else None
+        wob_kk = wob['kk'] if reengage else None
 
         pred = predict_breach(k, pmin, pmaj, self.hi, self.lo, self.fence_hi, self.fence_lo)
         oob  = (k >= self.hi) | (k <= self.lo)
@@ -106,10 +121,13 @@ class BreachingLine:
 
         cl = self.curl_lookback                              # curl: short local slope (7)
         slope_k = np.full(n, np.nan); slope_k[cl:] = k[cl:]  - k[:-cl]
-        esup_oob = (esup >= self.hi - self.bb_pad) | (esup <= self.lo + self.bb_pad)
+        esup_oob_hi = esup >= self.hi - self.bb_pad
+        esup_oob_lo = esup <= self.lo + self.bb_pad
+        esup_oob = esup_oob_hi | esup_oob_lo
         esup_ib  = ~esup_oob                                 # bb_pad: count a near-OOB support as OOB for exit1
 
         state, bdir = 0, 0
+        compl_bb = False                                      # last →3 was BB-driven (e1/e3) → re-engage eligible
         pend3 = 0                                             # exit3-before-curl grace countdown
         k_ext = np.nan; k_anch = np.nan; k_anch_idx = -1     # exit2: breach extreme + reversal ref + ref's bar
         pre_seam_k = np.nan; pre_seam_k_prev = np.nan        # bl_line before the latest / prior TF9 seam
@@ -162,7 +180,12 @@ class BreachingLine:
             e1 = self._exit_ob_to_ib(esup_ib, esup_oob, i)
             e2 = bool(k_anch == k_anch and (                  # k_anch==k_anch ⇒ not NaN
                 (cur_dir == 1 and k[i] < k_anch) or (cur_dir == -1 and k[i] > k_anch)))
+            # exit3 owns its logic — the BB × K cross toward IB — and merely CONSUMES the wobble's
+            # reversal signal as one of its rules (Joe 0622). The wobble emits 'the support reversed';
+            # exit3 still requires its own cross. Without wob (golden tests) exit3 is the cross alone.
             e3 = self._exit_cross_toward_ib(cur_dir, e3s, k, i)
+            if reengage:                                          # gate the cross on a confirmed reversal
+                e3 = e3 and cur_dir != 0 and wob_xs[i] == -cur_dir
             # raw conditions recorded for eyeballing; the exit_mask gates which ones
             # COMPLETE. Any enabled exit (1/2/3) completes a breach directly — the cross IS the
             # reversal; the curl no longer gates exit2/3 (Joe 2026-06-14). exit1 still completes
@@ -171,6 +194,13 @@ class BreachingLine:
             e2_on = e2 and bool(self.exit_mask & 2)
             e3_on = e3 and bool(self.exit_mask & 4)
             ib_cross = bool((not oob[i]) and i > 0 and oob[i - 1])  # K back inside the boundary
+            if reengage and ib_cross:                              # bobble debounce (Joe 0622): the 1→0
+                ib_cross = bool(bdir != 0 and wob_kk[i] == -bdir)  # reset waits for a genuine K peel-off
+            # RE-ENGAGE trigger (Joe 0622): the support crosses BACK into OOB on the breach side
+            # (re-supporting) — a clean IB→OOB edge, NOT the wobble. Fires once per re-entry.
+            reeng = bool(reengage and i > 0 and oob[i] and (
+                (cur_dir == 1 and esup_oob_hi[i] and not esup_oob_hi[i - 1]) or
+                (cur_dir == -1 and esup_oob_lo[i] and not esup_oob_lo[i - 1])))
 
             if in_fence[i] or ib_cross:
                 ns, nb = 0, 0                                  # dead zone, or OOB→IB → reset to idle
@@ -193,11 +223,17 @@ class BreachingLine:
                         ns = 1                                 # re-breach (bobbing)
                     elif e1_on or e2_on or e3_on:
                         ns = 3
+                    elif reeng:
+                        ns = 1                                 # re-engage from a curl: support crossed back into OOB
                 elif state == 3:
                     if fresh_eng:
                         ns, nb = 1, cur_dir                    # re-armed by a fresh breach
                         if e1_on:
                             ns = 3
+                    elif reeng:
+                        ns, nb = 1, cur_dir                    # re-engage: support crossed back into OOB, K still OOB
+            if ns == 3 and state != 3:
+                compl_bb = bool(e1_on or e3_on)               # was this →3 BB-driven? (pure-exit2 → no re-engage)
             if ns != 1:
                 pend3 = 0                                      # grace only lives inside state 1
             if ns == 0 or ns == 3:
@@ -274,4 +310,19 @@ class BreachingLine:
         else:                                       # BB below K, cutting up through it
             crossed = bb_M[i] > k[i] and bb_M[i - 1] <= k[i - 1]
             pseudo  = bb_M[i] > bb_M[i - 1] and 0 < -gap_prev <= self.pseudo_cross
+        return bool(crossed or pseudo)
+
+    def _cross_toward_extreme(self, cur_dir, bb_M, k, i) -> bool:
+        """Re-engage cross: BB × K AWAY from 50 — the BB cuts back through the K heading
+        further OOB (the directional mirror of _exit_cross_toward_ib). Pseudo: within
+        pseudo_cross and diverging."""
+        if i == 0 or cur_dir == 0:
+            return False
+        gap_prev = bb_M[i - 1] - k[i - 1]
+        if cur_dir == 1:                            # hi breach: BB cutting UP through K, further OOB
+            crossed = bb_M[i] > k[i] and bb_M[i - 1] <= k[i - 1]
+            pseudo  = bb_M[i] > bb_M[i - 1] and 0 < -gap_prev <= self.pseudo_cross
+        else:                                       # lo breach: BB cutting DOWN through K
+            crossed = bb_M[i] < k[i] and bb_M[i - 1] >= k[i - 1]
+            pseudo  = bb_M[i] < bb_M[i - 1] and 0 < gap_prev <= self.pseudo_cross
         return bool(crossed or pseudo)
