@@ -44,8 +44,8 @@ for u in Wd.signals():
     d = 1 if u['call'] == 'BULL' else -1; j = int(np.searchsorted(ts, int(u['t']))) - 1
     clean = abs(p['mae']) < 0.5
     pres = [L for L in lines if L in last and last[L][d][j] >= 0 and (j - last[L][d][j]) <= W]
-    lv = ' '.join(f"{L}{val[L][j]:.0f}" for L in sorted(pres)) or "(none)"
-    labs.append((int(u['t']), float(px[j]), f"{lv}\\nmae{p['mae']:+.2f}", clean))
+    lv = '\\n'.join(f"{L}{val[L][j]:.0f}" for L in sorted(pres)) or "(none)"
+    labs.append((int(u['t']), float(px[j]), f"{lv}\\nmae{p['mae']:+.2f}\\na{u['anc']:.0f} f{u['flt']:.0f}", clean))
 db.disconnect()
 nc = sum(1 for *_ , c in labs if c)
 print(f"{STREAM}: {len(labs)} WIN flips · {nc} clean (green) / {len(labs) - nc} deep (red) · range {dts(R0)} -> {dts(R1)}")
@@ -63,7 +63,7 @@ if barstate.islast and not done
     done := true
     for i = 0 to array.size(w_t) - 1
         clean = array.get(w_cl, i) == 1
-        label.new(array.get(w_t, i), array.get(w_py, i), array.get(w_tx, i), xloc = xloc.bar_time, yloc = yloc.price, style = clean ? label.style_label_up : label.style_label_down, color = clean ? color.new(color.green, 0) : color.new(color.red, 0), textcolor = color.white, size = size.small)
+        label.new(array.get(w_t, i), array.get(w_py, i), array.get(w_tx, i), xloc = xloc.bar_time, yloc = yloc.price, style = clean ? label.style_label_up : label.style_label_down, color = clean ? color.new(color.green, 0) : color.new(color.red, 0), textcolor = color.white, size = size.normal)
 '''
 path = f'/home/joe/thecodes/pine_wins_{STREAM}.pine'
 open(path, 'w').write(body)
