@@ -100,6 +100,9 @@ class BiasConfig:
     # mechanism knobs
     trigger_tf:     int   = 12         # trigger line = generic m @ this TF (s12m) — the flagged tf() seam
     trigger_src:    str   = GEN_M[3]   # pk-trigger src (default hlc3 = GEN_M); grind seam: hlc3 vs close
+    trigger_len:    int   = GEN_M[1]   # pk-trigger BB len (default 10 = GEN_M); grind seam
+    trigger_mult:   float = GEN_M[2]   # pk-trigger BB mult (default 0.4 = GEN_M); grind seam
+    osc_from_trigger: bool = False     # osc value = the trigger line itself (self-triggered grindable line, e.g. blp6m)
     gate:           str   = 'oob'      # 'oob' (s14M|s14r OOB) | 'mid' (s14M vs 50)
     floater_anchor: str   = 'same'     # 'same' = g[S] | 'last' = single g slot (any side)
     flt_half:       int   = 2          # ±N osc-bar floater scan (0 = no scan, None = legacy rolling-avg)
@@ -130,8 +133,11 @@ class BiasWindow:
         c = self.cfg
         # every named line is resolved LIVE from vw_indicator_configs_live (no tuples)
         self.s6r = self._line('s6r')                          # anchor ruler (ups_s6r_anchor)
-        otf, _ = self._ls.resolve(c.osc)
-        self._osc = self._line(c.osc); self._bpt = otf // 5   # bias_pk_osc (cfg-driven) + base 5s bars/osc-TF bar
+        if c.osc_from_trigger:                                # osc value = the trigger line itself (grindable, e.g. blp6m)
+            otf = c.trigger_tf * 60; self._osc = self.tf(c.trigger_tf)['ma']
+        else:
+            otf, _ = self._ls.resolve(c.osc); self._osc = self._line(c.osc)
+        self._bpt = otf // 5                                  # base 5s bars per osc-TF bar
         self.s14M = self._line(c.gate_M)
         self.s14M_sign = _sign(self.s14M)
         self.s14r_sign = _sign(self._line(c.gate_r))          # gate = s14M OR s14r OOB
@@ -341,14 +347,14 @@ class BiasWindow:
 
     # ── per-TF generic lines (cached): m & r aligned + their OOB-sign arrays ──
     def tf(self, tf):
-        key = (tf, self.cfg.trigger_src)                       # trigger src is a grind seam (hlc3 vs close)
+        c = self.cfg; key = (tf, c.trigger_len, c.trigger_mult, c.trigger_src)   # the trigger BB config is a grind seam
         if key not in self._tfcache:
             sec = tf * 60
-            mb, fr = self._raw(sec, (GEN_M[0], GEN_M[1], GEN_M[2], self.cfg.trigger_src))
+            mb, fr = self._raw(sec, ('bb', c.trigger_len, c.trigger_mult, c.trigger_src))
             ma = IC.align_to_base(mb, fr, self.base)
             ra = self._aligned(sec, GEN_R)
             self._tfcache[key] = dict(mb=mb, tc=fr['timestamp'].to_numpy() + sec * 1000,
-                                      m_sign=_sign(ma), r_sign=_sign(ra))
+                                      ma=ma, m_sign=_sign(ma), r_sign=_sign(ra))
         return self._tfcache[key]
 
     # ── pk anchor triggers: s{tf}m local extrema (3-point), with side-of-50 s6r resolution ──
