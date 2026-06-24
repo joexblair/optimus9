@@ -1,8 +1,8 @@
 """
 snf_compare.py (Joe 0624) — SnF (Support and Friction) line-comparison table.
 
-Compares the bias-pk outcomes of 4 osc lines under a FIXED cascade footing (hlc3 trigger, s3 lookback
-N=2): s12m/s12M (trigger s12m, TF12) + s3m/s3M (trigger s6m, TF6). Per line: the directional pk stream
+Compares the bias-pk outcomes of 6 osc lines under a fixed s3-lookback footing (N=2): s12m/s12M (trig
+s12m, TF12) + s3m/s3M (trig s6m, TF6) + blp6m/blp6M (trig blp6m close/20/0.5, TF6). Per line: the pk stream
 (state ±1) + the first-trade placement (pnl/mae). Rows = union of directional pk-times; a line that
 didn't fire at a time = state 0, null pnl/mae (Joe's placeholder). The start of SnF dev.
 
@@ -17,9 +17,15 @@ from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 import bias_machine as bm
 
-STREAMS = {'s12m': ('s12m', 12), 's12maj': ('s12M', 12),      # col: (osc, trigger_tf) — maj dodges MySQL case-blind cols
-           's3m': ('s3m', 6),   's3maj': ('s3M', 6)}
-TRIGGER_SRC = 'hlc3'                                          # the grind footing (quality over volume)
+GM = bm.GEN_M                                                # trigger BB default (10/0.4/hlc3)
+STREAMS = {  # col: osc line · trigger TF · [trigger BB config tlen/tmult/tsrc, default GEN_M]; maj dodges MySQL case-blind cols
+    's12m':   dict(osc='s12m', tf=12),
+    's12maj': dict(osc='s12M', tf=12),
+    's3m':    dict(osc='s3m',  tf=6),
+    's3maj':  dict(osc='s3M',  tf=6),
+    'blp6m':   dict(osc='blp6m', tf=6, tlen=20, tmult=0.5, tsrc='close'),   # blp6m reversing = trigger (grind winner close/20/0.5)
+    'blp6maj': dict(osc='blp6M', tf=6, tlen=20, tmult=0.5, tsrc='close'),
+}
 S3_LOOKBACK = 2
 def ms(dt): return int(dt.replace(tzinfo=timezone.utc).timestamp() * 1000)
 def utc(t):  return dtm.datetime.utcfromtimestamp(t / 1000)
@@ -28,10 +34,12 @@ def utc(t):  return dtm.datetime.utcfromtimestamp(t / 1000)
 def snf_streams(db, R0, R1):
     """Per-line {pk-time → (state, pnl, mae)} + the union of directional pk-times + a per-line summary."""
     data = {c: {} for c in STREAMS}; alltimes = set(); summary = {}
-    for c, (osc, tf) in STREAMS.items():
-        cfg = bm.BiasConfig(osc=osc, trigger_tf=tf, gate='oob', entry_order='seq', s3_variant='m',
-                            xm45=False, mae=0.4, target=0.9, floater_anchor='last', verdict='pk',
-                            trigger_src=TRIGGER_SRC)
+    for c, s in STREAMS.items():
+        cfg = bm.BiasConfig(osc=s['osc'], trigger_tf=s['tf'],
+                            trigger_len=s.get('tlen', GM[1]), trigger_mult=s.get('tmult', GM[2]),
+                            trigger_src=s.get('tsrc', GM[3]),
+                            gate='oob', entry_order='seq', s3_variant='m',
+                            xm45=False, mae=0.4, target=0.9, floater_anchor='last', verdict='pk')
         W = bm.BiasWindow(db, R1, cfg=cfg); ups = W.signals()
         pls = W.placements(ups, cfg.mae, cfg.target, s3_lookback=S3_LOOKBACK)
         pnls = {int(p['pk_t']): (round(float(p['potential']), 3), round(float(p['mae']), 3), p['hit'])
