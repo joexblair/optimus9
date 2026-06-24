@@ -38,6 +38,10 @@ for u in ups:
     u['px'] = round(float(bclose[u['anc_bar']]), 5)
     u['fpx'] = round(float(bclose[u['flt_bar']]), 5)
     u['ft'] = int(W.ts[u['flt_bar']])
+dl_all = W._deadlines(ups_all); exp_set = set()    # TRADE EXPIRED = cascade window closed w/o an entry (ej None), not dedup
+for i, u in enumerate(ups_all):
+    if u['call'] in ('BULL', 'BEAR') and W._entry(u['t'], 1 if u['call'] == 'BULL' else -1, dl_all[i], 0)[0] is None:
+        exp_set.add(u['t'])
 nb = sum(u['call'] == 'BULL' for u in ups); nr = sum(u['call'] == 'BEAR' for u in ups); nn = sum(u['call'] == 'NEUT' for u in ups)
 print(f"range {dts(R0)} → {dts(R1)}  ·  osc={CFG.osc} trig=s{CFG.trigger_tf}m {CFG.gate}")
 print(f"  warmup: base {dts(int(W.ts[0]))} → R0 = {(R0 - int(W.ts[0])) / 86400000:.1f}d behind the scored start")
@@ -58,6 +62,7 @@ anc = {arr([f"{u['anc']:.1f}" for u in ups])}
 flt = {arr([f"{u['flt']:.1f}" for u in ups])}
 ft  = {arr([str(u['ft']) for u in ups])}
 fpx = {arr([f"{u['fpx']:.5f}" for u in ups])}
+ex  = {arr(['1' if u['t'] in exp_set else '0' for u in ups])}
 // ── first trades (entry arrow + result {{potential}} ✓/✗) ──
 et  = {arr([str(p['et']) for p in pls])}
 ed  = {arr(['1' if p['bd'] == 1 else '-1' for p in pls])}
@@ -71,7 +76,7 @@ if barstate.islast and not done
         c   = array.get(cl, i)
         col = c == "BULL" ? color.new(color.green, 0) : c == "BEAR" ? color.new(color.red, 0) : color.new(color.gray, 0)
         ar  = c == "BULL" ? "▲BULL" : c == "BEAR" ? "▼BEAR" : "■NEUT"
-        label.new(array.get(t, i), array.get(pxv, i), ar + " " + array.get(sd, i) + "\\na" + str.tostring(array.get(anc, i), "#.0") + " f" + str.tostring(array.get(flt, i), "#.0"), xloc = xloc.bar_time, yloc = yloc.price, style = label.style_label_down, color = col, textcolor = color.white, size = size.normal)
+        label.new(array.get(t, i), array.get(pxv, i), ar + " " + array.get(sd, i) + "\\na" + str.tostring(array.get(anc, i), "#.0") + " f" + str.tostring(array.get(flt, i), "#.0") + (array.get(ex, i) == 1 ? "\\nTRADE EXPIRED" : ""), xloc = xloc.bar_time, yloc = yloc.price, style = label.style_label_down, color = col, textcolor = color.white, size = size.normal)
         line.new(array.get(t, i), array.get(pxv, i), array.get(ft, i), array.get(fpx, i), xloc = xloc.bar_time, color = color.new(color.orange, 0), width = 2, style = line.style_dashed)
     for i = 0 to array.size(et) - 1
         isL = array.get(ed, i) == 1
