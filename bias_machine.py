@@ -99,6 +99,7 @@ class BiasConfig:
     xm45_r: str = 'xm45r'
     # mechanism knobs
     trigger_tf:     int   = 12         # trigger line = generic m @ this TF (s12m) — the flagged tf() seam
+    trigger_src:    str   = GEN_M[3]   # pk-trigger src (default hlc3 = GEN_M); grind seam: hlc3 vs close
     gate:           str   = 'oob'      # 'oob' (s14M|s14r OOB) | 'mid' (s14M vs 50)
     floater_anchor: str   = 'same'     # 'same' = g[S] | 'last' = single g slot (any side)
     flt_half:       int   = 2          # ±N osc-bar floater scan (0 = no scan, None = legacy rolling-avg)
@@ -285,7 +286,7 @@ class BiasWindow:
     def _xm45_ok(self, lo, hi, es):
         return (self.xm45m_sign[lo:hi] == es) & (self.xm45M_sign[lo:hi] == es) & self.xm45r_recent[es][lo:hi]
 
-    def _entry(self, t_up, bd, deadline=None):
+    def _entry(self, t_up, bd, deadline=None, s3_lookback=0):
         # cascade gate, A/B-configurable via set_entry. order: s3 gate → [xm45a] → s30 wob = entry.
         # deadline = next OPPOSITE pk (cancel). default cfg (co/rM/no-xm45) reproduces prior behaviour.
         cfg = self._entry_cfg; es = -bd; n = len(self.s3m_sign)
@@ -303,17 +304,18 @@ class BiasWindow:
             return None, None
         # sequential: s3 opens → xm45a opens → next s30 wob, all within SEQ_CAP of the pk
         j0 = self._at(t_up); cap = min(j0 + SEQ_CAP, n)
-        w1 = np.where(self._s3_ok(j0, cap, es))[0]
+        lo = max(0, j0 - s3_lookback * 36)                     # s3 lookback: N s3-bars back (s3 = TF180 = 36 base bars)
+        w1 = np.where(self._s3_ok(lo, cap, es))[0]
         if not len(w1):
             return None, None
-        s2 = j0 + int(w1[0])
+        s2 = lo + int(w1[0])                                   # s3 gate bar (may precede the pk when found via lookback)
         if cfg['xm45']:
             w2 = np.where(self._xm45_ok(s2, cap, es))[0]
             if not len(w2):
                 return None, None
             s2 = s2 + int(w2[0])
         ET, EJ = self._wob_side(-bd)
-        ei = int(np.searchsorted(ET, int(self.ts[s2]), side='right'))
+        ei = int(np.searchsorted(ET, int(self.ts[max(s2, j0)]), side='right'))   # entry follows the pk (lookback relaxes the gate, not the entry)
         if ei >= len(EJ):
             return None, None
         et = int(ET[ei]); ej = int(EJ[ei])
@@ -339,14 +341,15 @@ class BiasWindow:
 
     # ── per-TF generic lines (cached): m & r aligned + their OOB-sign arrays ──
     def tf(self, tf):
-        if tf not in self._tfcache:
+        key = (tf, self.cfg.trigger_src)                       # trigger src is a grind seam (hlc3 vs close)
+        if key not in self._tfcache:
             sec = tf * 60
-            mb, fr = self._raw(sec, GEN_M)
+            mb, fr = self._raw(sec, (GEN_M[0], GEN_M[1], GEN_M[2], self.cfg.trigger_src))
             ma = IC.align_to_base(mb, fr, self.base)
             ra = self._aligned(sec, GEN_R)
-            self._tfcache[tf] = dict(mb=mb, tc=fr['timestamp'].to_numpy() + sec * 1000,
-                                     m_sign=_sign(ma), r_sign=_sign(ra))
-        return self._tfcache[tf]
+            self._tfcache[key] = dict(mb=mb, tc=fr['timestamp'].to_numpy() + sec * 1000,
+                                      m_sign=_sign(ma), r_sign=_sign(ra))
+        return self._tfcache[key]
 
     # ── pk anchor triggers: s{tf}m local extrema (3-point), with side-of-50 s6r resolution ──
     def trigs(self, tf):
@@ -562,13 +565,13 @@ class BiasWindow:
     # placement metric: after each pk update, the following trade is allowed `mae_allow`% adverse;
     # potential profit = max favourable % reached BEFORE that adverse breach (walk to data-end).
     # correctly-placed iff potential ≥ target%. Exit is irrelevant here — this scores pk placement.
-    def placements(self, ups, mae_allow=0.3, target=0.9):
+    def placements(self, ups, mae_allow=0.3, target=0.9, s3_lookback=0):
         px = self.px; out = []; seen = set(); dl = self._deadlines(ups)
         for idx, u in enumerate(ups):
             if u['call'] in ('NEUT', 'VOID'):
                 continue
             bd = 1 if u['call'] == 'BULL' else -1
-            ej, et = self._entry(u['t'], bd, dl[idx])          # cancel if entry falls after opposite pk
+            ej, et = self._entry(u['t'], bd, dl[idx], s3_lookback)   # cancel if entry falls after opposite pk
             if ej is None or ej in seen:
                 continue
             seen.add(ej)
