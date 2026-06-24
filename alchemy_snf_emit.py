@@ -46,7 +46,7 @@ print(f"  snf pks / bias updates: {len(ups)} ({nb} BULL / {nr} BEAR / {nn} NEUT)
 print(f"  first trades: {len(pls)} · correct {hit} ({hit/len(pls):.0%})" if pls else "  first trades: 0")
 
 arr = lambda v: 'array.from(' + ', '.join(v) + ')'
-title = f'alchemy snf+bias — {STREAM} (trig s{CFG.trigger_tf}m) ({dts(R0)[5:10]}→{dts(R1)[5:10]})'
+title = f'{STREAM} (trig s{CFG.trigger_tf}m) ({dts(R0)[5:10]}→{dts(R1)[5:10]})'
 body = f'''//@version=5
 indicator("{title}", overlay = true, max_labels_count = 500, max_lines_count = 500)
 // ── SnF pks + bias update labels (label + anchor→floater dashed line) ──
