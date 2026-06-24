@@ -577,6 +577,7 @@ class BiasWindow:
             br = np.where(seg <= -mae_allow)[0]
             k = int(br[0]) if len(br) else len(seg)            # first −mae_allow breach (or end)
             potential = float(seg[:k].max())                   # MFE before the adverse breach
+            mae = float(seg[:k].min())                          # MAE: worst adverse excursion pre-breach (≤0)
             hit = potential >= target
             tt = None
             if hit:
@@ -584,8 +585,8 @@ class BiasWindow:
                 if len(tg):
                     tt = (int(self.ts[ej + int(tg[0])]) - et) // 1000
             stop_s = (int(self.ts[ej + k]) - et) // 1000 if len(br) else None
-            out.append(dict(pk_t=u['t'], et=et, bd=bd, potential=round(potential, 3), hit=hit,
-                            secs_to_target=tt, secs_to_stop=stop_s,
+            out.append(dict(pk_t=u['t'], et=et, bd=bd, potential=round(potential, 3),
+                            mae=round(mae, 3), hit=hit, secs_to_target=tt, secs_to_stop=stop_s,
                             anc=u.get('anc'), flt=u.get('flt')))
         return out
 
