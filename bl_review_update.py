@@ -12,7 +12,7 @@ from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.analysis.bl_detect import BLDetect
 from optimus9.analysis.bl_review import build_review
-from alchemy_report import add_s30a_events, paint_bny30_bias
+from alchemy_report import build_bias_state, add_s30a_events, paint_bny30_bias
 from logger import get_logger
 
 log = get_logger('bl_review_update'); t0 = time.perf_counter()
@@ -26,8 +26,9 @@ det.report(end_ms=END)
 log.info(f'[{el()}] bl_states repopulated (full set) — building review ...')
 rows = build_review(db)
 gates = sum(1 for o in rows if o['stop_px'] is not None)
-n_s30a = add_s30a_events(db, END)                                              # alchemy overlay: bias entry signals
-n_bias = paint_bny30_bias(db, END)                                            # bny30_bias := BiasState (s22r bls3)
+W, bs = build_bias_state(db, END)                                             # window + merged bias (bls3 + pk)
+n_s30a = add_s30a_events(db, W, bs, END)                                       # alchemy overlay: s30M-wob fires
+n_bias = paint_bny30_bias(db, bs, END)                                        # bny30_bias := merged BiasState
 log.info(f'[{el()}] DONE — bl_review {len(rows)} rows · {gates} gate-opens · {n_s30a} s30a+Mwobs · {n_bias} bias segments')
 print(f'bl_review updated: {len(rows)} rows, {gates} gate-opens, {n_s30a} s30a+Mwobs, {n_bias} bias segments')
 db.disconnect()

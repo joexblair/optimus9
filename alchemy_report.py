@@ -17,58 +17,52 @@ so it only serves to instantiate the window + resolve the s30 line refs from the
 """
 import datetime as dtm
 import numpy as np
-from optimus9.compute.indicator_computer import IndicatorComputer as IC
 import bias_machine as bm
-from bias_machine import OOB_HI, OOB_LO
-from optimus9.analysis.bias_state import BiasState
+from optimus9.analysis.bias_state import BiasState, bls3_bias_events, pk_bias_events
 
 _EVENT = 's30a+Mwobs'
 _CFG = bm.BiasConfig(osc='s12m', trigger_tf=12, gate='oob', entry_order='seq', s3_variant='m',
                      xm45=False, mae=0.4, target=0.9, floater_anchor='last', verdict='pk')
 
 
-def add_s30a_events(db, end_ms, lookback_hours=120):
-    """Insert s30a-state onsets + s30a+Mwob fires into bl_review as event rows, gated by the
-    breach-driven BIAS STATE (BiasState over s22r's bls3 flips): SHORT bias keeps HI s30a, LONG bias
-    keeps LO (side == -bias). breach_dir tags the s30a side (+1 hi / -1 lo). Other value columns
-    null. Replaces the prior s14M side-of-50 gate (Joe 0623, #32). Returns count."""
-    start = end_ms - lookback_hours * 3600 * 1000
+def build_bias_state(db, end_ms, lookback_hours=120):
+    """Build the bias window + the merged BiasState (bls3 + pk producers) once, for both consumers."""
     W = bm.BiasWindow(db, end_ms, cfg=_CFG)
-    c = W.cfg
-    (s30, cM), (_, cm), (_, cr) = (W._ls.resolve(c.s30_M), W._ls.resolve(c.s30_m), W._ls.resolve(c.s30_r))
-    f30 = IC.resample(W.base, s30); t30 = f30['timestamp'].to_numpy() + s30 * 1000
-    M = IC.f_bb(IC.build_source(f30, cM[3]), cM[1], cM[2])
-    m = IC.f_bb(IC.build_source(f30, cm[3]), cm[1], cm[2])
-    r = IC.f_k(IC.build_source(f30, cr[4]), cr[1], cr[2], cr[3])
-    hi = (M >= OOB_HI) & (m >= OOB_HI) & (r >= OOB_HI)
-    lo = (M <= OOB_LO) & (m <= OOB_LO) & (r <= OOB_LO)
-    events = []                                            # (time_ms, side): +1 hi / -1 lo
-    events += [(int(t30[i]),  1) for i in range(1, len(hi)) if hi[i] and not hi[i - 1]]   # s30a-hi onset
-    events += [(int(t30[i]), -1) for i in range(1, len(lo)) if lo[i] and not lo[i - 1]]   # s30a-lo onset
-    events += [(int(t),  1) for t in W.HT]                 # s30a+Mwob hi trigger
-    events += [(int(t), -1) for t in W.LT]                 # s30a+Mwob lo trigger
-    ts = W.ts
-    bias = BiasState(db, ('s22r',)).direction_array(ts, end_ms, lookback_hours)   # +1 long / -1 short (s22r bls3)
+    bs = BiasState().feed(bls3_bias_events(db, ('s22r',), end_ms, lookback_hours)).feed(pk_bias_events(W))
+    return W, bs
+
+
+def add_s30a_events(db, W, bs, end_ms, lookback_hours=120):
+    """Insert the trade-gate cascade overlay into bl_review (Joe 0624, #32 D):
+      • the s30M-wob ENTRIES that are valid cascade entries (event 's30a+Mwobs'), BiasState-STACKED —
+        the cascade entry side must agree with the merged bias (side == -bias);
+      • a row per pre-req gate satisfied (event '<gate> ok', e.g. 's3 ok' / 'xm45 ok').
+    The gates are table-driven (trade_gate / trade_gate_line). breach_dir tags the side. Returns count."""
+    from optimus9.analysis.trade_gate import TradeGateWalker
+    start = end_ms - lookback_hours * 3600 * 1000
+    ts = W.ts; bias = bs.direction_array(ts)
     rows = []
-    for t, side in sorted(events):
+    for t, kind, side in TradeGateWalker(W, db).events():
         if not (start <= t < end_ms):
             continue
-        j = int(np.searchsorted(ts, t, 'right')) - 1       # most recent base bar at/before the event
-        if j < 0 or bias[j] == 0:                          # no bias yet (before the first bls3 flip)
-            continue
-        if side == -bias[j]:                               # SHORT bias keeps HI s30a, LONG keeps LO (Joe 0623)
+        if kind == 'entry':
+            j = int(np.searchsorted(ts, t, 'right')) - 1
+            if j < 0 or side != -bias[j]:                  # stack: the cascade entry must sit on the bias side
+                continue
             rows.append((dtm.datetime.utcfromtimestamp(t / 1000), _EVENT, side))
+        else:                                              # 'gate:<name>' -> '<name> ok'
+            rows.append((dtm.datetime.utcfromtimestamp(t / 1000), kind.split(':', 1)[1] + ' ok', side))
     if rows:
         db.executemany('INSERT INTO bl_review (bar_time, event, breach_dir) VALUES (%s, %s, %s)', rows)
     return len(rows)
 
 
-def paint_bny30_bias(db, end_ms, lookback_hours=120):
-    """Override bl_review.bny30_bias with the breach-driven BiasState direction (Joe 0623, #32):
-    +1 long / -1 short, held between s22r bls3 flips. 0 before the first flip. Replaces the old
+def paint_bny30_bias(db, bs, end_ms):
+    """Override bl_review.bny30_bias with the merged BiasState direction (Joe 0623, #32): +1 long /
+    -1 short, held between events (bls3 flips + pk updates). 0 before the first. Replaces the old
     bny30-gate passthrough — bl_review now reads the bias machine state. Returns the segment count."""
-    tl = BiasState(db, ('s22r',)).timeline(end_ms, lookback_hours)     # [(t_ms, direction), ...]
-    db.execute('UPDATE bl_review SET bny30_bias = 0')                  # clear (incl. pre-first-flip)
+    tl = bs.timeline()                                                 # [(t_ms, direction), ...] merged
+    db.execute('UPDATE bl_review SET bny30_bias = 0')                  # clear (incl. pre-first-event)
     for i, (t, d) in enumerate(tl):
         nxt = tl[i + 1][0] if i + 1 < len(tl) else end_ms
         db.execute('UPDATE bl_review SET bny30_bias = %s WHERE bar_time >= %s AND bar_time < %s',
