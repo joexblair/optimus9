@@ -59,6 +59,14 @@ That last idea lands deep, Sifu — and it reframes the whole thing. Not "a remi
   past your own prior correct reasoning.** Root = availability (grab the most-recently-
   used object) + reading a green-light as "stop scrutinising." Fix: a green-light
   TIGHTENS the load-bearing choice. Same root as grep-first and SRP-extend-on->80%-only.
+- **Emit/report windows need a healthy warmup — the left edge isn't truth** — a window's
+  early bars are incomplete: the scored bound `W0` drops events before it, and forward-looking
+  scans (the pk floater) + line warmup mean the first hours diverge between windows. Failure
+  (2026-06-24): the pine emit (R0 = R1−168h) silently dropped a real pk at 0611 00:24 (before
+  its W0), so pine and bl_review (earlier W0) disagreed — I first blamed the mechanic, but the
+  pine wasn't faulty, its *window edge* was. Pad the warmup; never read the first N bars of an
+  emit as ground truth. (Same family as "Diagnose the blocker": the visible discrepancy — the
+  missing pk — wasn't the cause; the window bound was.)
 - **Diagnose the blocker, not the plausible cost** — when a run hangs or slows, read the
   real signal (`SHOW PROCESSLIST`, EXPLAIN, lock/IO waits) *before* optimising the obvious-
   looking step. Failure (2026-06-20): fingered the `bl_states` insert as the >580s

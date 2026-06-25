@@ -47,11 +47,49 @@ a false positive. The negative is **measured**, not assumed.
 - engine seams added for this: `BiasConfig.trigger_src/trigger_len/trigger_mult/osc_from_trigger`,
   `_entry.s3_lookback`, `placements` returns `mae`. blp6m/M/r = ic_pk 68/69/70.
 
+## Realized-metric addendum (0625) — the big reframe
+Re-ran on a **realized** metric (win = hit +0.9, else the trade's value is its *natural* stop, no
+forced −0.4) — Joe's "let the stop be the decider." It changes everything, and *down* to honest size:
+- **MFE overstated ~10×.** Realized EV is ~**+0.1 to +0.2 / trade**, not the +2.4 the MFE metric showed.
+- **Stop-sweep (9 windows, 269 trades):** realized EV is *positive at every stop* and **rises with a
+  WIDER stop** (−0.30→+0.09 … −2.0→+0.21, win 33%→76%). The extra wins a loose stop captures outweigh
+  the fatter losers — but it's a **high-win / fat-tail** profile (24% lose −2.0). Risk-adjusted may
+  favour tighter; that's the open question, not raw EV.
+- ⚠ **Process catch:** I first over-swung off a single-window outlier ("the stop is the edge,
+  s3m is break-even") + a miscalculated −0.4 EV. The proper 9-window sweep corrected me. Rail working.
+- **Win-MAE split:** ~**90% of s3m wins are DEEP** (dived past −0.5 before paying). NO LP group
+  produces consistently clean (<0.5 MAE) wins — clean wins (~10%) are too rare to be group-selectable.
+- **s6m ≈ s3m** (93% deep, EV +0.166): two different oscs, identical deep-drawdown fate ⇒ **the
+  drawdown lives in the s3-gate→s30-wob CASCADE (the entry), not the bias osc.** *The entry is the lever.*
+- Artifacts: `pine_wins_emit.py` (re-framed wins, green=clean/red=deep, param s3m|s6m), the realized
+  stop-sweep. The s3m signal is *modestly* profitable; improving it = entry/exit work, not signal-combos.
+
+## Methodology catch + the right metric (0624) — load-bearing
+- **`s18M+blp6m` is the lowest-avg-MAE confluence** among 0.9-MFE wins (IS |MAE| 1.08 vs 1.53 baseline;
+  OOS 1.42 vs 1.63 — attenuates but doesn't reverse). **Joe confirms it as a known-good confluence
+  from domain knowledge** → it's real, not fishing.
+- **Why it only surfaced on the Nth cut:** every prior ranking used the WRONG metric (MFE-lift,
+  realized-EV, clean-fraction≥70%) — none scores `s18M+blp6m`. **The right lens is avg-win-MAE
+  (drawdown-cleanliness), not MFE or EV.** A confluence's value is "supports the bias update = win with
+  a shallow MAE," i.e. tradeable on a tight stop.
+- **What MAE actually measures (Joe, 0624) — the mechanism:** a deep win-MAE = **bls flipped to
+  state 3 *before* price reached the swing** (premature entry); price runs adverse to the swing, then
+  pays. The stop depth is the market saying "get closer to the swing." So **avg-win-MAE = a
+  swing-proximity / bls→3-earliness measure**, and the low-MAE confluences (`s18M+blp6m`) mark
+  swing-proximity → they're candidate **entry-timing gates** that would hold bls→3 until near the swing.
+  This sharpens "drawdown is in the cascade" to "drawdown = premature bls→3." ⚠ Before proposing gate
+  mechanics: READ the bls state-3 trip condition, don't infer it.
+- ⚠ **Sampling-bias catch (Joe's probe):** we ran ~8 cuts over thousands of groups, all checking the
+  SAME windows 5–8 as "OOS" → metric-shopping + a contaminated hold-out. Selecting the group that looks
+  best on a reused OOS *is* slow-motion fitting. The discharge here was Joe's independent knowledge, not
+  the stats. **Fix = ONE comprehensive, stored, long-running confluence dataset** (rank every confluence
+  by avg-win-MAE once, indisputable) instead of ad-hoc re-cuts. That dataset is the next defined work.
+
 ## Open threads (NOT closed by this)
-- The **flip-count / continuation pattern** (treat early s3 shorts as long-resets until the Nth) —
-  never backtested; it needs Joe's two pins (what "reset" does · always-in vs discrete entry).
-- **Metric question:** every test used MFE (potential). A *realized* (target/stop) metric might
-  rank things differently — the confluence's higher-hit/lower-MFE split hints at it. Worth a look.
-- **Trade-exit #36** (exit-line TF scales with pk-source TF) — independent, still live.
+- **Entry/exit is the live frontier** (per the addendum) — the deep-drawdown is a cascade property;
+  #36 (TF-scaled exit) is promoted from next-week to relevant.
+- The **flip-count / continuation pattern** — never backtested; pin resolved (discrete entry = the
+  existing line-positioning cascade), still needs the "what reset does" pin before building.
+- **Risk-adjusted stop** — raw EV says wider; Sharpe-like may say tighter. Untested.
 
 See [[project_snf]].
