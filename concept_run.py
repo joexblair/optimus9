@@ -7,6 +7,7 @@ import sys; sys.path.insert(0, '/home/joe/thecodes')
 import datetime as dtm
 from datetime import timezone
 import numpy as np
+import re
 from itertools import combinations
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
@@ -18,10 +19,12 @@ STEP = 30000   # 30s bars
 db = DatabaseManager(**get_db_config()); db.connect()
 sysrow = db.execute('SELECT hi_boundary, lo_boundary FROM optimus9_system', fetch=True)[0]
 HI, LO = float(sysrow['hi_boundary']), float(sysrow['lo_boundary'])
+LABELS = set(sys.argv[1].split(',')) if len(sys.argv) > 1 else {'90', '6', '18'}   # itf_label = name number (≠ itf_seconds)
+def _lbl(nm): m = re.search(r'\d+', nm); return m.group() if m else None
 lines = [(r['ic_pk'], r['ind_name']) for r in db.execute(
-    "SELECT ic_pk, ind_name FROM pk_optimizer.vw_indicator_configs_live WHERE itf_seconds=30 ORDER BY ic_pk", fetch=True)]
+    "SELECT ic_pk, ind_name FROM pk_optimizer.vw_indicator_configs_live ORDER BY ic_pk", fetch=True) if _lbl(r['ind_name']) in LABELS]
 icp = {p: nm for p, nm in lines}
-print(f"lines={len(lines)} (itf=30) · OOB {HI}/{LO} · window {R0}→{R1}")
+print(f"lines={len(lines)} (itf_label∈{sorted(LABELS)}): {sorted(icp.values())} · OOB {HI}/{LO}")
 
 # ── DDL (re-runnable) ──
 for t in ('cf_cross_line', 'cf_cross', 'cf_pair_cross', 'cf_bias_walk', 'cf_group_member', 'cf_group'):
