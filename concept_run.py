@@ -115,9 +115,9 @@ for u in Wd.signals():
 db.executemany("INSERT INTO cf_bias_walk VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", bw_rows)
 print(f"stage3: {len(bw_rows)} bias-walk rows ({len(pls)} bias updates w/ a trade)")
 
-# ── analysis outputs (regenerated each run): UTC (session-independent) + 2dp view + persisted summary ──
+# ── analysis outputs (regenerated each run): FROM_UNIXTIME (UTC on this UTC-tz server) + 2dp + persisted summary ──
 db.execute('''CREATE OR REPLACE VIEW vw_cf_walk AS
-  SELECT g.members, g.sz, bw.x, TIMESTAMPADD(SECOND, FLOOR(bw.bias_ms/1000), '1970-01-01 00:00:00') AS bias_utc,
+  SELECT g.members, g.sz, bw.x, FROM_UNIXTIME(bw.bias_ms/1000) AS bias_utc,
          bw.bias_dir, ROUND(bw.bias_mae,2) AS bias_mae, bw.n_crosses,
          ROUND(bw.mean_rating,2) AS mean_rating, ROUND(bw.best_rating,2) AS best_rating, bw.nearest_bars
   FROM cf_bias_walk bw JOIN cf_group g ON g.group_pk = bw.group_pk''')
