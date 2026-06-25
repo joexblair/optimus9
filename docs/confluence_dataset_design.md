@@ -72,9 +72,17 @@ materialized whole. The concept-run's per-group `cf_cross` stays as the *validat
 MySQL-conf sizing waits for this redesign (no point tuning for a 2.3B-row table we shouldn't build).
 
 ## Analysis outputs (regenerated each run)
-- **`vw_cf_walk`** — joined view; `bias_ms`→`FROM_UNIXTIME` (UTC on this UTC-tz server), floats 2dp.
-  Point Excel here for raw (group × x × MAE).
-- **`cf_walk_summary`** — persisted table, per (group, x): `n`, `avg_abs_mae` (lower = better vs the
-  x-baseline), `avg_rating`. The sortable ranking.
+- **`vw_cf_walk`** — joined view; `bias_ms`→`FROM_UNIXTIME` (UTC), floats 2dp. Carries the 3D test:
+  `side_ok`, `s30a_present`, `mfe_ok`, `eff_mae`. Point Excel here for raw (group × x × MAE).
+- **`cf_walk_summary`** — per (group, x): `n`, `avg_abs_mae`, **`avg_abs_eff_mae`** (3D-injected),
+  `avg_rating`. Compare the two MAE columns to see the 3D nod's effect.
+
+## 3D test → eff_mae (`cf_bias`, on `swing_detect`)
+Per traded bias update: `side_ok` (leading side of its leg, leg-bounded walk) · `s30a_present` (s30M &
+s30m OOB at the pinnacle + s30r OOB within `lp_config.lp_s30r_lb`=19, for its lift-off) · `mfe_ok`
+(post-bias favourable move to the **next favourable pivot** ≥ 0.9%). `eff_mae = (side_ok AND mfe_ok) ?
+0 : bias_mae` — a zero for bias updates that rode a clean swing but entered late, so the slow-bias value
+isn't buried by the entry-MAE. s30a **recorded, not gated**. ⚠ `find_pivots` stalls on a leading NaN —
+ffill `close30` first. Stage-1: 27 traded · s30a 21 · side_ok 10 · mfe_ok 11 · 2 injected (eff 1.63 / raw 1.74).
 
 See [[snf_research]], [[project_snf]].
