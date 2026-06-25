@@ -112,6 +112,22 @@ class DatabaseManager:
     def executemany(self, sql: str, rows: list, chunk: int = 1000) -> int:
         return self._with_reconnect(lambda: self._executemany_impl(sql, rows, chunk))
 
+    @staticmethod
+    def _split_row_template(rest: str):
+        """Split `(%s,…) [ON DUPLICATE KEY UPDATE …]` into (row_template, suffix). The per-row
+        tuple is the first balanced-paren group; everything after is a once-appended suffix (so a
+        trailing ON DUPLICATE/RETURNING clause is NOT repeated per row). Suffix must hold no %s
+        placeholders (standard ON DUPLICATE uses VALUES(col), which doesn't)."""
+        depth = 0
+        for idx, ch in enumerate(rest):
+            if ch == '(':
+                depth += 1
+            elif ch == ')':
+                depth -= 1
+                if depth == 0:
+                    return rest[:idx + 1], rest[idx + 1:].strip()
+        return rest, ''                                    # no parens found — treat whole as tuple
+
     def _executemany_impl(self, sql: str, rows: list, chunk: int = 1000) -> int:
         """Batch insert via chunked multi-row INSERT — one statement per `chunk` rows, all chunks
         in ONE transaction so the returned first auto-increment ID is contiguous across the whole
@@ -127,7 +143,9 @@ class DatabaseManager:
             first_id = cursor.lastrowid
             cursor.close()
             return first_id
-        prefix, template = sql[:m.end()].rstrip(), sql[m.end():].strip()
+        prefix = sql[:m.end()].rstrip()
+        rest = sql[m.end():].strip()
+        row_tpl, suffix = self._split_row_template(rest)   # hoist a trailing ON DUPLICATE/etc out of the per-row repeat
         first_id = None
         own_txn = not self._conn.in_transaction            # don't nest if a caller opened one
         if own_txn:
@@ -135,8 +153,8 @@ class DatabaseManager:
         try:
             for i in range(0, len(rows), chunk):
                 batch = rows[i:i + chunk]
-                cursor.execute(f'{prefix} ' + ','.join([template] * len(batch)),
-                               [v for row in batch for v in row])
+                stmt = f'{prefix} ' + ','.join([row_tpl] * len(batch)) + (f' {suffix}' if suffix else '')
+                cursor.execute(stmt, [v for row in batch for v in row])
                 if first_id is None:
                     first_id = cursor.lastrowid
             if own_txn:

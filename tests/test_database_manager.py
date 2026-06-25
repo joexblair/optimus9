@@ -59,7 +59,31 @@ def test_sql_error_fails_fast_no_retry():
     assert reconnected['n'] == 0, 'SQL error must not reconnect'
 
 
+def test_executemany_hoists_on_duplicate_suffix():
+    # the bug: multi-row builder repeated ON DUPLICATE per row → syntax error.
+    # _split_row_template must keep the suffix once, after all value tuples.
+    sql = ('INSERT INTO t (a,b)\n VALUES (%s,%s)\n'
+           ' ON DUPLICATE KEY UPDATE a = IF(b=0, VALUES(a), a), b = VALUES(b)')
+    m = __import__('re').search(r'\bVALUES\s*', sql, 2)
+    rest = sql[m.end():].strip()
+    row_tpl, suffix = DatabaseManager._split_row_template(rest)
+    assert row_tpl == '(%s,%s)'
+    assert suffix.startswith('ON DUPLICATE KEY UPDATE')
+    # 3-row build: exactly 3 tuples, ON DUPLICATE appears exactly once at the end
+    built = 'INSERT INTO t (a,b) VALUES ' + ','.join([row_tpl] * 3) + ' ' + suffix
+    assert built.count('(%s,%s)') == 3
+    assert built.count('ON DUPLICATE KEY UPDATE') == 1
+    assert built.index('ON DUPLICATE') > built.rindex('(%s,%s)')   # suffix is last
+
+
+def test_split_plain_insert_has_no_suffix():
+    row_tpl, suffix = DatabaseManager._split_row_template('(%s,%s,%s)')
+    assert row_tpl == '(%s,%s,%s)' and suffix == ''
+
+
 if __name__ == '__main__':
     test_reconnects_and_retries_on_connection_loss()
     test_sql_error_fails_fast_no_retry()
+    test_executemany_hoists_on_duplicate_suffix()
+    test_split_plain_insert_has_no_suffix()
     print('ok')
