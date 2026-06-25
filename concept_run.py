@@ -44,11 +44,11 @@ db.execute("""CREATE TABLE cf_bias_walk (walk_pk INT PRIMARY KEY, bias_ms BIGINT
               group_pk INT, x TINYINT, n_crosses INT, mean_rating FLOAT, best_rating FLOAT, nearest_bars INT,
               INDEX(group_pk, x), INDEX(bias_ms))""")
 db.execute("""CREATE TABLE cf_bias (bias_ms BIGINT PRIMARY KEY, bias_dir TINYINT, bias_mae FLOAT,
-              side_ok BOOL, s30a_present BOOL, mfe_ok BOOL, eff_mae FLOAT)""")   # 3D test (swing_detect) → eff_mae
+              prox_mae FLOAT, prox_ok BOOL, s30a_present BOOL, mfe_ok BOOL, mfe FLOAT, eff_mae FLOAT)""")   # 3D test
 
 # ── line values on the 30s grid (via bias engine, forward-filled, sampled at 30s boundaries) ──
-cfg = bm.BiasConfig(osc='s3m', trigger_tf=6, gate='oob', entry_order='seq', s3_variant='m', xm45=False,
-                    mae=0.4, target=0.9, floater_anchor='last', verdict='pk', trigger_src='hlc3')
+cfg = bm.BiasConfig(osc='s12m', trigger_tf=12, gate='oob', entry_order='seq', s3_variant='m', xm45=False,
+                    mae=0.4, target=0.9, floater_anchor='last', verdict='pk', trigger_src='hlc3')   # bias = s12m (price-aligned)
 Wd = bm.BiasWindow(db, R1, cfg=cfg); ts = Wd.ts
 idx30 = np.where(ts % STEP == 0)[0]; ts30 = ts[idx30]
 vals = {}
@@ -102,7 +102,7 @@ db.executemany("INSERT INTO cf_cross VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", cx_rows)
 db.executemany("INSERT INTO cf_cross_line VALUES (%s,%s,%s)", cxl_rows)
 print(f"stage2b: {len(cx_rows)} group-crosses, {len(cxl_rows)} cross-line values")
 
-# ── stage 3: bias-walk (s3m, loose-stop MAE, x sweep 0..4) ──
+# ── stage 3: bias-walk (s12m bias, loose-stop MAE, x sweep 0..4) ──
 pls = {int(p['pk_t']): float(p['mae']) for p in Wd.placements(Wd.signals(), 2.0, 0.9, s3_lookback=2) if R0 <= p['pk_t'] < R1}
 cm = sorted(cross_mem, key=lambda c: c[1]); cm_t = np.array([c[1] for c in cm]); cm_gp = np.array([c[0] for c in cm]); cm_rt = np.array([c[2] for c in cm])
 bw_rows, wpk = [], 0
@@ -119,8 +119,9 @@ for u in Wd.signals():
 db.executemany("INSERT INTO cf_bias_walk VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", bw_rows)
 print(f"stage3: {len(bw_rows)} bias-walk rows ({len(pls)} bias updates w/ a trade)")
 
-# ── stage 3b: 3D test (swing_detect) → cf_bias. side_ok + mfe_ok ⇒ inject eff_mae=0; s30a recorded ──
+# ── stage 3b: 3D test (swing_detect) → cf_bias. prox_ok + mfe_ok ⇒ inject eff_mae=0; s30a recorded ──
 LP = int(db.execute("SELECT val FROM lp_config WHERE name='lp_s30r_lb'", fetch=True)[0]['val'])
+PROX = float(db.execute("SELECT val FROM lp_config WHERE name='lp_pin_prox'", fetch=True)[0]['val'])
 close30 = pd.Series(Wd.px[idx30]).ffill().bfill().to_numpy()   # find_pivots stalls on a leading NaN
 piv = find_pivots(close30, 0.9); lgs = swing_legs(close30, piv)
 lstart = np.array([lg['start'] for lg in lgs]); lend = np.array([lg['end'] for lg in lgs]); ldir = np.array([lg['dir'] for lg in lgs])
@@ -131,40 +132,38 @@ for u in Wd.signals():
     bms = int(u['t']); bd = 1 if u['call'] == 'BULL' else -1; mae = pls[bms]
     j = min(int(np.searchsorted(ts30, bms)), len(close30) - 1)
     li = np.where((lstart <= j) & (j <= lend))[0]
-    side_ok = s30a = mfe_ok = False
+    prox_ok = s30a = mfe_ok = False; prox_mae = mfe = 0.0
     if len(li):
-        k = int(li[0]); a, b = int(lstart[k]), int(lend[k])
-        wb = abs((close30[j] - close30[a]) / close30[a]) * 100.0
-        wf = abs((close30[b] - close30[j]) / close30[j]) * 100.0 if j < b else 0.0
-        side_ok = wb < wf
-        want_h = (bd == -1)                                   # BEAR wants an H pinnacle, BULL an L
-        pin = a if ((ldir[k] == -1) == want_h) else b         # H = start of a down-leg / end of an up-leg
+        k = int(li[0]); want_h = (bd == -1)                  # BEAR wants an H pinnacle, BULL an L
+        pin = int(lstart[k]) if ((ldir[k] == -1) == want_h) else int(lend[k])   # H = start of down-leg / end of up-leg
         oob = lambda v, q: (v[q] > HI) if want_h else (v[q] < LO)
         s30r_ok = any(oob(s30['s30r'], q) for q in range(max(0, pin - LP), pin + 1))   # s30r lift-off lookback
         s30a = bool(oob(s30['s30M'], pin) and oob(s30['s30m'], pin) and s30r_ok)
-        fav = 'H' if bd == 1 else 'L'                        # favourable extreme: bull→H, bear→L
+        fav = 'H' if bd == 1 else 'L'                        # walk to the next favourable pivot
         nxt = next((pi for pi, pk in piv if pi > j and pk == fav), None)
         seg = close30[j:(nxt + 1)] if nxt is not None else close30[j:]
-        mfe = float(((seg - close30[j]) / close30[j]).max() if bd == 1 else ((close30[j] - seg) / close30[j]).max()) * 100.0 if len(seg) else 0.0
-        mfe_ok = mfe >= 0.9
-    eff = 0.0 if (side_ok and mfe_ok) else mae
-    bias_rows.append((bms, bd, mae, int(side_ok), int(s30a), int(mfe_ok), eff))
-db.executemany("INSERT INTO cf_bias VALUES (%s,%s,%s,%s,%s,%s,%s)", bias_rows)
-nz = sum(1 for r in bias_rows if r[6] == 0.0 and r[2] != 0.0)
-print(f"stage3b: {len(bias_rows)} cf_bias · {nz} eff_mae injected→0 · s30a_present={sum(r[4] for r in bias_rows)} · side_ok={sum(r[3] for r in bias_rows)} · mfe_ok={sum(r[5] for r in bias_rows)}")
+        if len(seg):
+            d = (seg - close30[j]) / close30[j] * 100.0 * bd  # bias-signed %: +favourable / -adverse
+            mfe = float(d.max()); prox_mae = float(-d.min())  # prox_mae = worst adverse on the walk
+        prox_ok = prox_mae <= PROX; mfe_ok = mfe >= 0.9
+    eff = 0.0 if (prox_ok and mfe_ok) else mae
+    bias_rows.append((bms, bd, mae, round(prox_mae, 3), int(prox_ok), int(s30a), int(mfe_ok), round(mfe, 3), eff))
+db.executemany("INSERT INTO cf_bias VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)", bias_rows)
+nz = sum(1 for r in bias_rows if r[8] == 0.0 and r[2] != 0.0)
+print(f"stage3b: {len(bias_rows)} cf_bias · {nz} eff_mae injected→0 · prox_ok={sum(r[4] for r in bias_rows)} · s30a={sum(r[5] for r in bias_rows)} · mfe_ok={sum(r[6] for r in bias_rows)}")
 
 # ── analysis outputs (regenerated each run): FROM_UNIXTIME (UTC on this UTC-tz server) + 2dp + persisted summary ──
 db.execute('''CREATE OR REPLACE VIEW vw_cf_walk AS
   SELECT g.members, g.sz, bw.x, FROM_UNIXTIME(bw.bias_ms/1000) AS bias_utc,
-         bw.bias_dir, ROUND(bw.bias_mae,2) AS bias_mae, b.side_ok, b.s30a_present, b.mfe_ok,
-         ROUND(b.eff_mae,2) AS eff_mae, bw.n_crosses,
+         bw.bias_dir, ROUND(bw.bias_mae,2) AS bias_mae, ROUND(b.prox_mae,2) AS prox_mae, b.prox_ok,
+         b.s30a_present, b.mfe_ok, ROUND(b.mfe,2) AS mfe, ROUND(b.eff_mae,2) AS eff_mae, bw.n_crosses,
          ROUND(bw.mean_rating,2) AS mean_rating, ROUND(bw.best_rating,2) AS best_rating, bw.nearest_bars
   FROM cf_bias_walk bw JOIN cf_group g ON g.group_pk = bw.group_pk
   JOIN cf_bias b ON b.bias_ms = bw.bias_ms''')
 db.execute('DROP TABLE IF EXISTS cf_walk_summary')
 db.execute('''CREATE TABLE cf_walk_summary AS SELECT g.members, g.sz, bw.x, COUNT(*) n,
   ROUND(AVG(ABS(bw.bias_mae)),2) avg_abs_mae, ROUND(AVG(ABS(b.eff_mae)),2) avg_abs_eff_mae,
-  ROUND(AVG(bw.mean_rating),2) avg_rating
+  ROUND(AVG(b.prox_mae),2) avg_prox_mae, ROUND(AVG(bw.mean_rating),2) avg_rating
   FROM cf_bias_walk bw JOIN cf_group g ON g.group_pk=bw.group_pk
   JOIN cf_bias b ON b.bias_ms=bw.bias_ms GROUP BY g.members, g.sz, bw.x''')
 db.execute('ALTER TABLE cf_walk_summary ADD INDEX(x, avg_abs_mae), ADD INDEX(members(40))')

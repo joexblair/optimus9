@@ -73,16 +73,18 @@ MySQL-conf sizing waits for this redesign (no point tuning for a 2.3B-row table 
 
 ## Analysis outputs (regenerated each run)
 - **`vw_cf_walk`** — joined view; `bias_ms`→`FROM_UNIXTIME` (UTC), floats 2dp. Carries the 3D test:
-  `side_ok`, `s30a_present`, `mfe_ok`, `eff_mae`. Point Excel here for raw (group × x × MAE).
+  `prox_mae`, `prox_ok`, `s30a_present`, `mfe_ok`, `mfe`, `eff_mae`. Point Excel here for raw.
 - **`cf_walk_summary`** — per (group, x): `n`, `avg_abs_mae`, **`avg_abs_eff_mae`** (3D-injected),
-  `avg_rating`. Compare the two MAE columns to see the 3D nod's effect.
+  `avg_prox_mae`, `avg_rating`. Compare the MAE columns to see the 3D nod's effect.
 
 ## 3D test → eff_mae (`cf_bias`, on `swing_detect`)
-Per traded bias update: `side_ok` (leading side of its leg, leg-bounded walk) · `s30a_present` (s30M &
-s30m OOB at the pinnacle + s30r OOB within `lp_config.lp_s30r_lb`=19, for its lift-off) · `mfe_ok`
-(post-bias favourable move to the **next favourable pivot** ≥ 0.9%). `eff_mae = (side_ok AND mfe_ok) ?
-0 : bias_mae` — a zero for bias updates that rode a clean swing but entered late, so the slow-bias value
-isn't buried by the entry-MAE. s30a **recorded, not gated**. ⚠ `find_pivots` stalls on a leading NaN —
-ffill `close30` first. Stage-1: 27 traded · s30a 21 · side_ok 10 · mfe_ok 11 · 2 injected (eff 1.63 / raw 1.74).
+Bias stream = **s12m** (price-aligned). Per traded bias update, ONE walk to the next favourable pivot
+(H for bull, L for bear) yields two stored metrics: `prox_mae` (worst adverse % on the walk) and `mfe`
+(best favourable %). Verdict: `prox_ok` = prox_mae ≤ `lp_config.lp_pin_prox`(0.4 — near-pinnacle) AND
+`mfe_ok` = mfe ≥ 0.9 ⇒ `eff_mae = 0`, else `bias_mae`. `s30a_present` (s30M & s30m OOB at the pinnacle +
+s30r within `lp_s30r_lb`=19) recorded, not gated. **`side_ok` dropped** — `prox_mae` is the direct,
+SRP-clean version of the same axis (entry cleanliness); the leading-ratio was a loose proxy. ⚠
+`find_pivots` stalls on a leading NaN — ffill `close30`. s12m stage-1: 12 traded · prox_ok 2 · s30a 9 ·
+mfe_ok 2 · 2 injected (eff 1.50 / raw 1.82). ⚠ s12m sparse (12 vs s3m 27 trades) — fast cascade clips it.
 
 See [[snf_research]], [[project_snf]].
