@@ -71,4 +71,10 @@ for the sparse bias-walk-relevant crosses only. The fan moves to the sparse bias
 materialized whole. The concept-run's per-group `cf_cross` stays as the *validation* artifact.
 MySQL-conf sizing waits for this redesign (no point tuning for a 2.3B-row table we shouldn't build).
 
+## Analysis outputs (regenerated each run)
+- **`vw_cf_walk`** — joined view; `bias_ms`→UTC (session-independent), floats 2dp. Point Excel here for
+  raw (group × x × MAE).
+- **`cf_walk_summary`** — persisted table, per (group, x): `n`, `avg_abs_mae` (lower = better vs the
+  x-baseline), `avg_rating`. The sortable ranking.
+
 See [[snf_research]], [[project_snf]].

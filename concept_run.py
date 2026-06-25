@@ -115,6 +115,19 @@ for u in Wd.signals():
 db.executemany("INSERT INTO cf_bias_walk VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", bw_rows)
 print(f"stage3: {len(bw_rows)} bias-walk rows ({len(pls)} bias updates w/ a trade)")
 
+# ── analysis outputs (regenerated each run): UTC (session-independent) + 2dp view + persisted summary ──
+db.execute('''CREATE OR REPLACE VIEW vw_cf_walk AS
+  SELECT g.members, g.sz, bw.x, TIMESTAMPADD(SECOND, FLOOR(bw.bias_ms/1000), '1970-01-01 00:00:00') AS bias_utc,
+         bw.bias_dir, ROUND(bw.bias_mae,2) AS bias_mae, bw.n_crosses,
+         ROUND(bw.mean_rating,2) AS mean_rating, ROUND(bw.best_rating,2) AS best_rating, bw.nearest_bars
+  FROM cf_bias_walk bw JOIN cf_group g ON g.group_pk = bw.group_pk''')
+db.execute('DROP TABLE IF EXISTS cf_walk_summary')
+db.execute('''CREATE TABLE cf_walk_summary AS SELECT g.members, g.sz, bw.x, COUNT(*) n,
+  ROUND(AVG(ABS(bw.bias_mae)),2) avg_abs_mae, ROUND(AVG(bw.mean_rating),2) avg_rating
+  FROM cf_bias_walk bw JOIN cf_group g ON g.group_pk=bw.group_pk GROUP BY g.members, g.sz, bw.x''')
+db.execute('ALTER TABLE cf_walk_summary ADD INDEX(x, avg_abs_mae), ADD INDEX(members(40))')
+print('analysis: vw_cf_walk (UTC+2dp) + cf_walk_summary regenerated')
+
 # ── DoD: metric computable — rank groups by swing-proximity (avg bias_mae of crosses within x=2) ──
 print("\nDoD — top swing-proximity groups (lowest avg |MAE| of bias updates with a cross within x=2, n>=4):")
 q = db.execute("""SELECT bw.group_pk, g.members, COUNT(*) n, ROUND(AVG(ABS(bw.bias_mae)),2) avg_mae
