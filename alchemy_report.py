@@ -70,10 +70,19 @@ def add_pl_cascade_events(db, W, bs, end_ms, lookback_hours=120):
     return len(rows)
 
 
+def _bp_active(db, name):
+    """Is the bias producer active? (bias_producer.bp_active). A disabled producer goes dark — no event
+    rows printed (Joe 0627: easier to see the truth). Missing row = active (back-compat)."""
+    r = db.execute('SELECT bp_active FROM bias_producer WHERE bp_name = %s', (name,), fetch=True)
+    return (not r) or bool(r[0]['bp_active'])
+
+
 def add_bro_cross_events(db, W, end_ms, lookback_hours=120):
     """Insert a `bro_x_bias` event row per bro-cross flip (#37 / alchemy BRD): the weave-cease bias
     change. `breach_dir` tags the side (+1 bull / -1 bear); `bb_mage`/`bb_min` = the triggering set's
-    mage/min at the flip. SRP: appends event rows, mirrors add_s30a_events. Returns the row count."""
+    mage/min at the flip. Dark when the producer is disabled. Returns the row count."""
+    if not _bp_active(db, 'bro_cross'):
+        return 0
     start = end_ms - lookback_hours * 3600 * 1000
     rows = [(dtm.datetime.utcfromtimestamp(f['t'] / 1000), 'bro_x_bias', f['dir'], f['mage'], f['min'])
             for f in bro_cross_flips(db, W) if start <= f['t'] < end_ms]
@@ -83,8 +92,10 @@ def add_bro_cross_events(db, W, end_ms, lookback_hours=120):
 
 
 def add_pk_bias_events(db, W, end_ms, lookback_hours=120):
-    """Insert a `pk_bias` event row per bias-pk update (the pk producer's own bias signal — was invisible).
-    breach_dir tags direction (+1 bull / -1 bear). Mirrors add_bro_cross_events. Returns the row count."""
+    """Insert a `pk_bias` event row per bias-pk update (the pk producer's own bias signal).
+    breach_dir tags direction (+1 bull / -1 bear). Dark when the producer is disabled. Returns the count."""
+    if not _bp_active(db, 'pk'):
+        return 0
     start = end_ms - lookback_hours * 3600 * 1000
     m = {'BULL': 1, 'BEAR': -1}
     rows = [(dtm.datetime.utcfromtimestamp(int(u['t']) / 1000), 'pk_bias', m[u['call']])
