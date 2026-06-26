@@ -89,11 +89,18 @@ class TradeGateWalker:
         Every re-completion (e.g. s30r re-breaching) is a fresh candidate; the gate machine downstream
         singles out the winners (≥1 of a run's entries will stop — that's the feedback signal).
         Returns [(t_ms, kind, side)]: 'pl_cas_start' (s6m onset, side=es, ONCE per run) | 'pl_cas_end'
-        (each entry, side=-es). s6m must be tg_seq 1; wob length from lp_config.lp_xm45_wob (emerging xm45m)."""
+        (each entry, side=-es). s6m must be tg_seq 1. The re-arm/wob LINE is DB-selected (lp_cascade_rearm_ic,
+        the UI dropdown; default xm45m) and its wob length is that line's own ic_wobble (emerging)."""
         g = self._gates
         s6 = self._sign(g[0]['lines'][0])                         # s6m OOB sign per base bar
-        N = int(self._db.execute("SELECT val FROM lp_config WHERE name='lp_xm45_wob'", fetch=True)[0]['val'])
-        xm = self._W._line_emerging('xm45m')                      # emerging xm45m (5s)
+        ra = self._db.execute(                                    # the re-arm / wob line — DB-selected (UI dropdown)
+            '''SELECT CONCAT(s.is_prefix, itf.itf_label, il.il_suffix) nm, ic.ic_wobble
+               FROM indicator_configs ic JOIN indicator_series s ON s.is_pk = ic.ic_is_pk
+               JOIN indicator_lines il ON il.il_pk = ic.ic_il_pk
+               JOIN indicator_timeframes itf ON itf.itf_pk = ic.ic_itf_pk
+               WHERE ic.ic_pk = (SELECT val FROM lp_config WHERE name = 'lp_cascade_rearm_ic')''', fetch=True)[0]
+        N = int(ra['ic_wobble'])                                  # the re-arm line's own wobble (per-line ic_wobble)
+        xm = self._W._line_emerging(ra['nm'])                     # emerging re-arm line (5s) — default xm45m
         wob = IC.wobble_slayer(xm, N, OOB_HI, OOB_LO, anchored=True, strict=True)
         out, i, n = [], 1, self._n
         while i < n:
