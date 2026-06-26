@@ -18,7 +18,7 @@ so it only serves to instantiate the window + resolve the s30 line refs from the
 import datetime as dtm
 import numpy as np
 import bias_machine as bm
-from optimus9.analysis.bias_state import BiasState, bls3_bias_events, pk_bias_events, bro_cross_bias_events
+from optimus9.analysis.bias_state import BiasState, bls3_bias_events, pk_bias_events, bro_cross_bias_events, bro_cross_flips
 
 _EVENT = 's30a+Mwobs'
 _CFG = bm.BiasConfig(osc='s12m', trigger_tf=12, gate='oob', entry_order='seq', s3_variant='m',
@@ -58,6 +58,18 @@ def add_s30a_events(db, W, bs, end_ms, lookback_hours=120):
             rows.append((dtm.datetime.utcfromtimestamp(t / 1000), kind.split(':', 1)[1] + ' ok', side))
     if rows:
         db.executemany('INSERT INTO bl_review (bar_time, event, breach_dir) VALUES (%s, %s, %s)', rows)
+    return len(rows)
+
+
+def add_bro_cross_events(db, W, end_ms, lookback_hours=120):
+    """Insert a `bro_x_bias` event row per bro-cross flip (#37 / alchemy BRD): the weave-cease bias
+    change. `breach_dir` tags the side (+1 bull / -1 bear); `bb_mage`/`bb_min` = the triggering set's
+    mage/min at the flip. SRP: appends event rows, mirrors add_s30a_events. Returns the row count."""
+    start = end_ms - lookback_hours * 3600 * 1000
+    rows = [(dtm.datetime.utcfromtimestamp(f['t'] / 1000), 'bro_x_bias', f['dir'], f['mage'], f['min'])
+            for f in bro_cross_flips(db, W) if start <= f['t'] < end_ms]
+    if rows:
+        db.executemany('INSERT INTO bl_review (bar_time, event, breach_dir, bb_mage, bb_min) VALUES (%s, %s, %s, %s, %s)', rows)
     return len(rows)
 
 
