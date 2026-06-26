@@ -37,19 +37,19 @@ def pk_bias_events(W):
     return [(int(u['t']), m[u['call']]) for u in W.signals() if u['call'] in m]
 
 
-def bro_cross_flips(db, W, sets=('hb16', 'hbhl16', 'hblo16', 'hbhi16'), cluster_min=30):
-    """Bro-cross weave-cease flips → rich events (#37, docs/bias_mechanics_design.md). Returns a list of
-    dicts {t, dir, set, mage, min} — the bias feed (`bro_cross_bias_events`) and the bl_review event-row
-    overlay both derive from this (one computation, two views).
+def bro_cross_flips(db, W, sets=('hbhl16', 'hblo16', 'hbhi16'), cluster_min=30):
+    """Bro-cross flips → rich events (#37, docs/bias_mechanics_design.md). Returns dicts
+    {t, dir, set, mage, min} — the bias feed (`bro_cross_bias_events`) and the bl_review event overlay
+    both derive from this (one computation, two views).
 
-    Per set: confirm a flip once the EMERGING minion holds ONE side of the mage for `lp_bro_wob`
-    consecutive 5s bars (the weave ceased), OOB-gated (both lines OOB the same side). lo-breach (both
-    < lo, minion above mage) → +1 BULL; hi-breach (both > hi, mage above minion) → -1 BEAR. One flip per
-    direction change per set. Aggregate the 4 sets, then CLUSTER: keep the FIRST flip per `cluster_min`-min
-    cluster — an opposite direction = a new cluster (fires); a same direction within the window is
-    suppressed (the 4 sets crossing in succession = one bias change). `set`/`mage`/`min` = the triggering
-    set + its lines at the flip bar. Config-sourced: N from `lp_config.lp_bro_wob`, OOB from
-    `optimus9_system` (no hardcode)."""
+    Requires an ACTUAL crossover (Joe 0626): `sign(m-M)` must CHANGE — the mage crosses UNDER the minion
+    (lo-breach → +1 BULL) or OVER it (hi-breach → -1 BEAR) — and the new side then holds `lp_bro_wob`
+    consecutive 5s bars (the weave ceased), with both lines OOB on that side. Anchored to the cross
+    (`run_len == N`), so the lines merely DROPPING into OOB while the minion already sits on one side
+    does NOT fire (the prior bug: it triggered on the OOB-onset without a cross). Aggregate the sets,
+    then CLUSTER: keep the FIRST flip per `cluster_min`-min cluster (opposite dir = new cluster fires;
+    same dir within the window suppressed). hb16 dropped — too twitchy (Joe 0626). N from
+    `lp_config.lp_bro_wob`, OOB from `optimus9_system` (no hardcode). [TODO: per-set active flag in DB.]"""
     N = int(db.execute("SELECT val FROM lp_config WHERE name='lp_bro_wob'", fetch=True)[0]['val'])
     sysr = db.execute('SELECT hi_boundary, lo_boundary FROM optimus9_system', fetch=True)[0]
     HI, LO = float(sysr['hi_boundary']), float(sysr['lo_boundary'])
@@ -61,15 +61,14 @@ def bro_cross_flips(db, W, sets=('hb16', 'hbhl16', 'hblo16', 'hbhi16'), cluster_
         sign = np.where(fin, np.sign(m - M), 0).astype(int)
         chg = np.concatenate([[True], sign[1:] != sign[:-1]])
         idx = np.arange(nb); last_start = np.maximum.accumulate(np.where(chg, idx, -1)); run_len = idx - last_start + 1
-        last = 0
         for i in range(N, nb):
-            if not fin[i]:
+            if not fin[i] or run_len[i] != N:             # a cross that held EXACTLY N bars (weave ceased)
                 continue
-            held = run_len[i] >= N
-            d = 1 if (held and sign[i] > 0 and m[i] < LO and M[i] < LO) else \
-                (-1 if (held and sign[i] < 0 and m[i] > HI and M[i] > HI) else 0)
-            if d and d != last:
-                raw.append((int(ts[i]), d, st, float(M[i]), float(m[i]))); last = d
+            s = sign[i]
+            if s > 0 and m[i] < LO and M[i] < LO:          # mage crossed UNDER minion, both OOB-low → BULL
+                raw.append((int(ts[i]), 1, st, float(M[i]), float(m[i])))
+            elif s < 0 and m[i] > HI and M[i] > HI:        # mage crossed OVER minion, both OOB-high → BEAR
+                raw.append((int(ts[i]), -1, st, float(M[i]), float(m[i])))
     raw.sort(key=lambda x: x[0])
     window = cluster_min * 60 * 1000
     out, le_t, le_d = [], None, 0
