@@ -17,7 +17,7 @@ from logger import get_logger
 
 log = get_logger('bl_review_update'); t0 = time.perf_counter()
 el = lambda: f'{time.perf_counter() - t0:5.1f}s'
-END = int(dtm.datetime(2026, 6, 16, tzinfo=timezone.utc).timestamp() * 1000)   # window [0611, 0616)
+END = int(dtm.datetime(2026, 6, 22, tzinfo=timezone.utc).timestamp() * 1000)   # window [0615, 0622) — REAL tick data (0611 was synthetic)
 
 db = DatabaseManager(**get_db_config()); db.connect()
 det = BLDetect(db, lookback_hours=120, warmup_hours=48)                        # ALL active breaches (no scoping)

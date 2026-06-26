@@ -94,8 +94,12 @@ class TradeGateWalker:
         out, i, n = [], 1, self._n
         while i < n:
             if s6[i] != 0 and s6[i] != s6[i - 1]:                 # s6m OOB-onset
-                es = int(s6[i]); cap = min(i + SEQ_CAP, n); cursor = i; ok_all = True
-                for gate in g[1:]:                                # xm45a, gcs15a (in seq)
+                es = int(s6[i])
+                run_end = i                                       # (b) cascade is ARMED while s6m holds OOB
+                while run_end + 1 < n and s6[run_end + 1] == es:  # ...not capped 21min from onset
+                    run_end += 1
+                cap = run_end + 1; cursor = i; ok_all = True
+                for gate in g[1:]:                                # s30a, xm45a, gcs15a (in seq)
                     ok = self._gate_ok(gate, cursor, cap, es)
                     if ok is None:
                         ok_all = False; break
@@ -106,7 +110,7 @@ class TradeGateWalker:
                     if wj is not None and bias_arr[wj] == entry:  # BIAS GATE — the composite bias permits
                         out.append((int(self._ts[i]), 'pl_cas_start', es))
                         out.append((int(self._ts[wj]), 'pl_cas_end', entry))
-                        i = wj                                    # advance past this cascade
+                i = run_end                                       # one cascade per s6m OOB run
             i += 1
         return out
 
