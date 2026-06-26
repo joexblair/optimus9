@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Optimus9 — Strategy</title>
+<style>
+  :root { --bg:#1e2127; --panel:#262b33; --line:#3a414d; --text:#d8dee9; --muted:#8a93a3; --accent:#5e9cd6; --ok:#6ab04c; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:12px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:14px; }
+  header h1 { font-size:16px; margin:0; font-weight:600; }
+  #status { font-size:13px; color:var(--muted); margin-left:auto; }
+  .wrap { display:flex; gap:14px; padding:14px; height:calc(100vh - 110px); }
+  .left { flex:0 0 75%; overflow:auto; background:var(--panel); border:1px solid var(--line); border-radius:8px; }
+  .right { flex:1; display:flex; flex-direction:column; }
+  .right label { font-size:12px; color:var(--muted); margin-bottom:6px; display:block; }
+  #notes { flex:1; resize:none; background:var(--panel); color:var(--text); border:1px solid var(--line);
+           border-radius:8px; padding:12px; font:13px/1.5 ui-monospace,Menlo,monospace; }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted);
+       padding:10px 14px; border-bottom:1px solid var(--line); }
+  td { padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  tr.cfg td { background:#21252b; border-bottom:1px solid var(--line); padding:14px 18px 16px 46px; }
+  .toggle { width:24px; height:24px; border:1px solid var(--line); background:#2d333d; color:var(--accent);
+            border-radius:5px; font-size:16px; cursor:pointer; line-height:1; }
+  .name { font-weight:600; } .sub { color:var(--muted); font-size:12px; }
+  .en { text-align:center; width:90px; }
+  input[type=checkbox] { width:18px; height:18px; cursor:pointer; accent-color:var(--ok); }
+  .knob { display:flex; align-items:center; gap:10px; margin:6px 0; }
+  .knob span { color:var(--muted); min-width:130px; font:13px ui-monospace,monospace; }
+  .knob input { width:90px; background:#2d333d; color:var(--text); border:1px solid var(--line); border-radius:5px; padding:5px 8px; }
+  .summary { color:var(--muted); font-size:12px; font-style:italic; }
+  footer { padding:12px 18px; border-top:1px solid var(--line); display:flex; align-items:center; gap:14px; }
+  #save { background:var(--accent); color:#fff; border:none; padding:10px 22px; border-radius:6px; font-size:14px;
+          font-weight:600; cursor:pointer; } #save:disabled { opacity:.5; cursor:default; }
+  #result { font-size:13px; color:var(--ok); }
+</style>
+</head>
+<body>
+<header><h1>Optimus9 · Strategy</h1><span id="status">loading…</span></header>
+<div class="wrap">
+  <div class="left">
+    <table>
+      <thead><tr><th style="width:34px"></th><th>Producer</th><th class="en">Enabled</th></tr></thead>
+      <tbody id="grid"></tbody>
+    </table>
+  </div>
+  <div class="right">
+    <label>Notes (persistent)</label>
+    <textarea id="notes" maxlength="100000" placeholder="dialing notes…"></textarea>
+  </div>
+</div>
+<footer>
+  <button id="save" onclick="saveAndUpdate()">Save &amp; update</button>
+  <span id="result"></span>
+</footer>
+
+<script>
+let producers = [];
+
+async function load() {
+  producers = await (await fetch('/api/producers')).json();
+  const notes = await (await fetch('/api/notes')).json();
+  document.getElementById('notes').value = notes.text || '';
+  render();
+  document.getElementById('status').textContent = producers.length + ' modules';
+}
+
+function render() {
+  const g = document.getElementById('grid'); g.innerHTML = '';
+  producers.forEach((p, i) => {
+    const row = document.createElement('tr');
+    row.innerHTML = `<td><button class="toggle" id="tg${i}" onclick="toggle(${i})">+</button></td>
+      <td><div class="name">${p.label}</div><div class="sub">${p.name}</div></td>
+      <td class="en"><input type="checkbox" ${p.active ? 'checked' : ''} onchange="producers[${i}].active=this.checked"></td>`;
+    g.appendChild(row);
+    const cfg = document.createElement('tr');
+    cfg.className = 'cfg'; cfg.id = 'cfg' + i; cfg.style.display = 'none';
+    let inner = '';
+    p.config.forEach((c, j) => {
+      inner += `<div class="knob"><span>${c.key}</span>
+        <input value="${c.value ?? ''}" onchange="producers[${i}].config[${j}].value=this.value"></div>`;
+    });
+    if (!p.config.length) inner += '<div class="summary">no editable knobs</div>';
+    inner += `<div class="summary">${p.summary}</div>`;
+    cfg.innerHTML = `<td colspan="3">${inner}</td>`;
+    g.appendChild(cfg);
+  });
+}
+
+function toggle(i) {
+  const cfg = document.getElementById('cfg' + i), btn = document.getElementById('tg' + i);
+  const open = cfg.style.display === 'none';
+  cfg.style.display = open ? 'table-row' : 'none';
+  btn.textContent = open ? '−' : '+';   // − / +
+}
+
+async function saveAndUpdate() {
+  const btn = document.getElementById('save'), res = document.getElementById('result');
+  btn.disabled = true; res.style.color = 'var(--muted)'; res.textContent = 'saving + running strat_review…';
+  try {
+    const r = await (await fetch('/api/save', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ producers, notes: document.getElementById('notes').value })
+    })).json();
+    res.style.color = 'var(--ok)';
+    res.textContent = `strat_review updated — ${r.rows} rows · ${JSON.stringify(r.counts)}`;
+  } catch (e) { res.style.color = '#d65e5e'; res.textContent = 'error: ' + e; }
+  btn.disabled = false;
+}
+
+load();
+</script>
+</body>
+</html>
