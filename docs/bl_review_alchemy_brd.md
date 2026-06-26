@@ -38,9 +38,15 @@ The real entry cascade: **`s6m → xm45a → gcs15a → xm45min wob`**, the **la
 OOB-onset → xm45a → gcs15a (tg_seq, within SEQ_CAP) → the xm45min wob (reversal turn, `wobble_slayer` on
 emerging xm45m, n=`lp_xm45_wob`=2). It **rides the COMPOSITE bias** (bias_arr), NOT pk — so a bls3/bro/
 gravity-set bias now fires the cascade (the old pk-walked version structurally couldn't). Polarity:
-OOB-low→LONG (needs bias +1) / OOB-high→SHORT. Emits **`pl_cas_start`** (s6m onset, breach_dir=es) +
-**`pl_cas_end`** (the xm45min-wob entry = the trade, breach_dir=trade side −es). The **gravity** producer's
-reversal + bias both pass THROUGH this cascade and realize at the xm45m wob.
+OOB-low→LONG (needs bias +1) / OOB-high→SHORT. Emits **`pl_cas_start`** (s6m onset, breach_dir=es, ONCE
+per run) + **`pl_cas_end`** (each xm45min-wob entry, breach_dir=trade side −es) + **`TRADE`** (the actual
+trade fire, co-located with pl_cas_end — kept SEPARATE so future trade-gates filter TRADE without touching
+the cascade mechanic; currently 1:1). **MULTIPLE entries per s6m run** (Joe 0627): after each entry the
+cascade RE-ARMS — re-walks the gate-chain past the entry and fires again on the next gate-completion + wob
+while s6m holds (e.g. s30r re-breaching at 01:13:30 = a 2nd entry the 01:04 one didn't suppress). Every
+re-completion is a fresh candidate; ≥1 of a run's entries will stop — **that stop IS the feedback signal**
+the gate machine reads to single out winners. The **gravity** producer's reversal + bias both pass THROUGH
+this cascade and realize at the xm45m wob.
 - DB (seed_lp_cascade.py): `s6m` = BB 10│0.4│close @ TF6(360s); `trade_gate` s6m→xm45a→gcs15a; `lp_xm45_wob`=2.
 - Event overlays (alchemy_report): `pl_cas_start/end`, `bro_x_bias`, `pk_bias` — the producers made visible.
 

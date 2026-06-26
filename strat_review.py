@@ -1,22 +1,23 @@
 """
-strat_review.py — SKELETON (Joe 0627). The module-agnostic strategy report.
+strat_review.py — the module-agnostic strategy report (Joe 0627, canonical; replaces bl_review).
 
 bl_review was bl-CENTRIC (a report over bl_states; bl = the spine, everything else bolted on). strat_review
 inverts that: it's a chronological event timeline assembled from ACTIVE MODULES, NONE privileged. Each
 module emits rows into ONE common schema (IDENTICAL to bl_review — so Power Query just swaps the table
 name); the aggregator merges + persists + paints the composite bias. Toggle a module = a flag in its
-existing table (bias_producer / bl_lines / trade_gate) — "everything in one place", no new hierarchy.
+existing table (bias_producer / bl_lines) — "everything in one place", no new hierarchy.
 
-  MODULES (each = name → active-flag → emit-rows):
-    bl        — breach lifecycle (state/exit/context) + gate-open trades.  active = bias_producer.bl_state
-    cascade   — the lp-cascade entries (pl_cas_start/end).                 active = always (the trade machine)
-    pk        — pk-bias events.                                           active = bias_producer.pk
-    bro_cross — bro-cross flips (bro_x_bias).                             active = bias_producer.bro_cross
-  bias_state column = composite of the ACTIVE bias producers (paint_bias_state).
+  MODULES (each = bias_producer.bp_name → active-flag → emit-rows):
+    bl_state  — breach lifecycle (state/exit_raw/context).        bl_all where bl_line != 'gate'
+    trades    — gate-open trades (legacy; pl_cas supersedes).     bl_all where bl_line == 'gate'
+    cascade   — lp-cascade entries (pl_cas_start/end + TRADE).    rides the composite bias; re-arms per run
+    pk        — pk-bias events.                                   pk_bias
+    bro_cross — bro-cross flips.                                  bro_x_bias
+  bias_state column = composite of the ACTIVE bias producers (paint_bias_state). bl/trades share one
+  build_review compute, split by bl_line (SRP). Isolation proven: tests/strat_review_isolation.py.
 
-Same row-GENERATION as bl_review (reused, proven); BESPOKE module ORCHESTRATION (this file). When every
-module is active, strat_review === bl_review row-for-row. Disable bl → bl simply isn't in the flow.
-SKELETON: bl/cascade/pk/bro wired; the value columns reuse bl_review's builders. Full port is incremental.
+Same row-GENERATION as bl_review (reused, proven); BESPOKE module ORCHESTRATION (this file). All modules
+active → strat_review === bl_review row-for-row. Disable a module → it's fully out of the flow.
 """
 import datetime as dtm
 from datetime import timezone
@@ -47,12 +48,20 @@ def _utc(t_ms):
 
 # ── module emitters (each returns rows in the common schema) ───────────────────────────────────────
 def _cascade_rows(ctx):
-    """lp-cascade entries (pl_cas_start/end) — the trade machine, rides the composite bias."""
+    """lp-cascade entries (pl_cas_start/end) — the trade machine, rides the composite bias. Each
+    pl_cas_end also emits a `TRADE` event at the same time (Joe 0627): the actual trade fire. Kept
+    SEPARATE from pl_cas_end so future trade-gates can filter TRADE without touching the cascade
+    mechanic (pl_cas_end won't always become a trade). Currently 1:1 with pl_cas_end."""
     start = ctx['end_ms'] - _LOOKBACK_MS
     bias = ctx['bs'].direction_array(ctx['W'].ts)
-    return [_row(bar_time=_utc(t), event=kind, breach_dir=side)
-            for t, kind, side in TradeGateWalker(ctx['W'], ctx['db']).cascade(bias)
-            if start <= t < ctx['end_ms']]
+    rows = []
+    for t, kind, side in TradeGateWalker(ctx['W'], ctx['db']).cascade(bias):
+        if not (start <= t < ctx['end_ms']):
+            continue
+        rows.append(_row(bar_time=_utc(t), event=kind, breach_dir=side))
+        if kind == 'pl_cas_end':
+            rows.append(_row(bar_time=_utc(t), event='TRADE', breach_dir=side))   # the trade fires
+    return rows
 
 
 def _pk_rows(ctx):

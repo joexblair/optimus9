@@ -84,8 +84,12 @@ class TradeGateWalker:
         (xm45a, gcs15a) in tg_seq within SEQ_CAP, then the xm45min wob (the reversal turn off the OOB
         extreme). The entry fires ONLY if `bias_arr` (composite BiasState dir per base bar) permits the
         direction. Polarity: OOB-low (es=-1) → LONG (+1, needs bias +1); OOB-high (es=+1) → SHORT.
-        Returns [(t_ms, kind, side)]: 'pl_cas_start' (s6m onset, side=es) | 'pl_cas_end' (entry, side=-es).
-        s6m must be tg_seq 1; wob length from lp_config.lp_xm45_wob; wob on the EMERGING xm45m (5s)."""
+        MULTIPLE entries per s6m run (Joe 0627): after each entry the cascade RE-ARMS — re-walks the
+        gate-chain from past the entry and fires again on the next gate-completion + wob, while s6m holds.
+        Every re-completion (e.g. s30r re-breaching) is a fresh candidate; the gate machine downstream
+        singles out the winners (≥1 of a run's entries will stop — that's the feedback signal).
+        Returns [(t_ms, kind, side)]: 'pl_cas_start' (s6m onset, side=es, ONCE per run) | 'pl_cas_end'
+        (each entry, side=-es). s6m must be tg_seq 1; wob length from lp_config.lp_xm45_wob (emerging xm45m)."""
         g = self._gates
         s6 = self._sign(g[0]['lines'][0])                         # s6m OOB sign per base bar
         N = int(self._db.execute("SELECT val FROM lp_config WHERE name='lp_xm45_wob'", fetch=True)[0]['val'])
@@ -98,19 +102,25 @@ class TradeGateWalker:
                 run_end = i                                       # (b) cascade is ARMED while s6m holds OOB
                 while run_end + 1 < n and s6[run_end + 1] == es:  # ...not capped 21min from onset
                     run_end += 1
-                cap = run_end + 1; cursor = i; ok_all = True
-                for gate in g[1:]:                                # s30a, xm45a, gcs15a (in seq)
-                    ok = self._gate_ok(gate, cursor, cap, es)
-                    if ok is None:
-                        ok_all = False; break
-                    cursor = ok
-                if ok_all:
-                    entry = -es                                   # OOB-low → long(+1); OOB-high → short(-1)
-                    wj = next((j for j in range(cursor, cap) if wob[j] == entry), None)   # reversal turn
-                    if wj is not None and bias_arr[wj] == entry:  # BIAS GATE — the composite bias permits
-                        out.append((int(self._ts[i]), 'pl_cas_start', es))
+                cap = run_end + 1; entry = -es; cursor = i; started = False
+                while cursor < cap:                               # RE-ARM loop — multiple entries per run
+                    c = cursor; ok_all = True
+                    for gate in g[1:]:                            # re-walk s30a, xm45a, gcs15a from cursor
+                        ok = self._gate_ok(gate, c, cap, es)
+                        if ok is None:
+                            ok_all = False; break
+                        c = ok
+                    if not ok_all:
+                        break                                     # no further gate-chain completion this run
+                    wj = next((j for j in range(c, cap) if wob[j] == entry), None)   # next reversal turn
+                    if wj is None:
+                        break                                     # no further wob
+                    if bias_arr[wj] == entry:                     # BIAS GATE — composite bias permits
+                        if not started:
+                            out.append((int(self._ts[i]), 'pl_cas_start', es)); started = True
                         out.append((int(self._ts[wj]), 'pl_cas_end', entry))
-                i = run_end                                       # one cascade per s6m OOB run
+                    cursor = wj + 1                               # re-arm past this entry
+                i = run_end
             i += 1
         return out
 

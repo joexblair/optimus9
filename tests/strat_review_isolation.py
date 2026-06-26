@@ -9,7 +9,7 @@ from strat_review import build_strat_review
 MODULE_EVENTS = {            # bias_producer.bp_name -> its ALLOWED event types (context = run-up padding)
     'bl_state':  {'state', 'exit_raw', 'context'},   # the bl lifecycle module
     'trades':    {'gate_open', 'context'},
-    'cascade':   {'pl_cas_start', 'pl_cas_end'},
+    'cascade':   {'pl_cas_start', 'pl_cas_end', 'TRADE'},
     'pk':        {'pk_bias'},
     'bro_cross': {'bro_x_bias'},
 }
