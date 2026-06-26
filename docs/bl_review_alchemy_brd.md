@@ -32,12 +32,17 @@ after each gate lands.
 - **Per-gate `is_active` flag** (the existing `tg_active` pattern): each gate row toggles on/off in the DB
   → stage gates in/out and A/B them without code. "Add a gate = a row; toggle = a flag."
 
-### Gate — lp cascade (the gate CLOSEST to xm45min wob)
-The real entry cascade (a version of the test cascade, NOT scaffolding): **`s6m → xm45a → gcs15a →
-xm45min wob`**. It is the **last** gate before the wob fires. The other gates (bias, etc.) sit in front
-of it. The **gravity** producer's reversal trigger + bias update **pass THROUGH the lp cascade** — the
-actual *moment* of both the reversal trigger and the bias update is **at the xm45m wob** (the cascade's
-final stage), not at the gravity-detection bar.
+### Gate — lp cascade (the gate CLOSEST to xm45min wob) — DECOUPLED + BUILT (0626)
+The real entry cascade: **`s6m → xm45a → gcs15a → xm45min wob`**, the **last** gate before the wob fires.
+**DECOUPLED from pk** (the 17:04 fix): `TradeGateWalker.cascade(bias_arr)` walks the window for each s6m
+OOB-onset → xm45a → gcs15a (tg_seq, within SEQ_CAP) → the xm45min wob (reversal turn, `wobble_slayer` on
+emerging xm45m, n=`lp_xm45_wob`=2). It **rides the COMPOSITE bias** (bias_arr), NOT pk — so a bls3/bro/
+gravity-set bias now fires the cascade (the old pk-walked version structurally couldn't). Polarity:
+OOB-low→LONG (needs bias +1) / OOB-high→SHORT. Emits **`pl_cas_start`** (s6m onset, breach_dir=es) +
+**`pl_cas_end`** (the xm45min-wob entry = the trade, breach_dir=trade side −es). The **gravity** producer's
+reversal + bias both pass THROUGH this cascade and realize at the xm45m wob.
+- DB (seed_lp_cascade.py): `s6m` = BB 10│0.4│close @ TF6(360s); `trade_gate` s6m→xm45a→gcs15a; `lp_xm45_wob`=2.
+- Event overlays (alchemy_report): `pl_cas_start/end`, `bro_x_bias`, `pk_bias` — the producers made visible.
 
 ## Gate 1 — the bias machine (DIRECTION gate)
 Bias controls the direction a trade can be placed: **an xm45m wob CANNOT fire against bias** → no row.
