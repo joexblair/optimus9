@@ -208,14 +208,20 @@ class BLDetect:
             pmaj = self._line(base, fam['predictor_maj']) if fam['predictor_maj'] else nan()
             esup = self._line(base, fam['exit_support'])  if fam['exit_support']  else pmaj
             e3s  = self._line(base, fam['exit3_support']) if fam['exit3_support'] else None
-            # wobble_slayer signals (Joe 0622) — n + strict from bl_config, OOB from optimus9_system.
-            # On 5s emerging lines (wob_tf_seconds=5 → no subsample). run() consumes; doesn't recompute.
-            wn  = int(self._cfg['blc_wob_bars']); ws = bool(int(self._cfg['blc_wob_strict']))
-            whi = float(self._sys['hi_boundary']); wlo = float(self._sys['lo_boundary'])
-            e3l = e3s if e3s is not None else esup
-            wob = {'xs': IC.wobble_slayer(e3l,  wn, whi, wlo, anchored=True,  strict=ws),   # exit3 reversal
-                   'rs': IC.wobble_slayer(esup, wn, whi, wlo, anchored=False, strict=ws),   # re-engage (support back)
-                   'kk': IC.wobble_slayer(line, wn, whi, wlo, anchored=True,  strict=ws)}   # bobble debounce (K peel-off)
+            # wobble_slayer signals (Joe 0622) — the wob is an EMERGING-mode mechanism: it reads the
+            # developing line's intra-bar reversal to catch the turn early. A CLOSED breach line has no
+            # intra-bar movement (a flat staircase), so the wob is meaningless → wob=None → exit3 = the
+            # BB×K cross at the bar close, no re-engage (a closed line can't BB-twitch-fake an exit).
+            # Gated on the breach line's value_mode (Joe 0626); the mandatory curl (1→2) is unaffected.
+            if fam['k'].get('value_mode') == 'closed':
+                wob = None
+            else:
+                wn  = int(self._cfg['blc_wob_bars']); ws = bool(int(self._cfg['blc_wob_strict']))
+                whi = float(self._sys['hi_boundary']); wlo = float(self._sys['lo_boundary'])
+                e3l = e3s if e3s is not None else esup
+                wob = {'xs': IC.wobble_slayer(e3l,  wn, whi, wlo, anchored=True,  strict=ws),   # exit3 reversal
+                       'rs': IC.wobble_slayer(esup, wn, whi, wlo, anchored=False, strict=ws),   # re-engage (support back)
+                       'kk': IC.wobble_slayer(line, wn, whi, wlo, anchored=True,  strict=ws)}   # bobble debounce
             r = bl.run(line, pmin, pmaj, esup, e3s, seam=seam, wob=wob)
         return FamilyRun(line, pmin, pmaj, r, esup, e3s)
 
