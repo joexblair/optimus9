@@ -72,16 +72,22 @@ def build_strat_review(db, end_ms):
     log = get_logger('StratReview')
     bp = {r['bp_name']: bool(r['bp_active']) for r in db.execute('SELECT bp_name, bp_active FROM bias_producer', fetch=True)}
 
-    # bl module runs FIRST (populates bl_states for the bl_state bias producer) — only when active
-    if bp.get('bl_state'):
+    # breach detection (bl_states) — shared by the bl-lifecycle + trades modules; run if EITHER is active.
+    # SRP split: build_review's rows separate by bl_line — the breach lifecycle (bl_line=the line:
+    # state/exit/context) vs the gate-open trades (bl_line='gate': gate_open/context). One compute, two
+    # modules, clean attribution.
+    bl_all = []
+    if bp.get('bl_state') or bp.get('trades'):
         BLDetect(db, lookback_hours=120, warmup_hours=48).report(end_ms=end_ms)
+        bl_all = build_review(db, persist=False)
     W, bs = build_bias_state(db, end_ms)                              # composite bias from ACTIVE producers
     ctx = dict(db=db, W=W, bs=bs, end_ms=end_ms, bp=bp)
 
-    # the module registry — each emits rows; NONE is the foundation. Toggle = its flag.
+    # the module registry — each emits rows; NONE is the foundation. Toggle = its flag in bias_producer.
     modules = [
-        ('bl',        lambda: build_review(db, persist=False) if bp.get('bl_state') else []),
-        ('cascade',   lambda: _cascade_rows(ctx)),
+        ('bl',        lambda: [r for r in bl_all if r['bl_line'] != 'gate'] if bp.get('bl_state') else []),
+        ('trades',    lambda: [r for r in bl_all if r['bl_line'] == 'gate'] if bp.get('trades') else []),
+        ('cascade',   lambda: _cascade_rows(ctx) if bp.get('cascade') else []),
         ('pk',        lambda: _pk_rows(ctx) if bp.get('pk') else []),
         ('bro_cross', lambda: _bro_rows(ctx) if bp.get('bro_cross') else []),
     ]
