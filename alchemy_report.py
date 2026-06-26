@@ -63,6 +63,18 @@ def add_bro_cross_events(db, W, end_ms, lookback_hours=120):
     return len(rows)
 
 
+def add_pk_bias_events(db, W, end_ms, lookback_hours=120):
+    """Insert a `pk_bias` event row per bias-pk update (the pk producer's own bias signal — was invisible).
+    breach_dir tags direction (+1 bull / -1 bear). Mirrors add_bro_cross_events. Returns the row count."""
+    start = end_ms - lookback_hours * 3600 * 1000
+    m = {'BULL': 1, 'BEAR': -1}
+    rows = [(dtm.datetime.utcfromtimestamp(int(u['t']) / 1000), 'pk_bias', m[u['call']])
+            for u in W.signals() if u['call'] in m and start <= int(u['t']) < end_ms]
+    if rows:
+        db.executemany('INSERT INTO bl_review (bar_time, event, breach_dir) VALUES (%s, %s, %s)', rows)
+    return len(rows)
+
+
 def paint_bias_state(db, bs, end_ms):
     """Write bl_review.bias_state from the merged BiasState direction (Joe 0623 #32; 0626 alchemy BRD):
     +1 long / -1 short, held between events (bls3 flips + pk updates + bro-cross flips). 0 before the
