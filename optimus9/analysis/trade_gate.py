@@ -76,6 +76,40 @@ class TradeGateWalker:
             return oks, None
         return oks, (et, -bd)
 
+    def cascade(self, bias_arr):
+        """DECOUPLED lp cascade (alchemy BRD 0626) — NOT pk-triggered. The pk-walked `events()` could
+        only ride a pk-driven bias; this rides the COMPOSITE bias (bias sets the scene, cascade rides).
+
+        Walk the window: at each s6m OOB-ONSET (IB/other-side → es), walk the remaining gates
+        (xm45a, gcs15a) in tg_seq within SEQ_CAP, then the xm45min wob (the reversal turn off the OOB
+        extreme). The entry fires ONLY if `bias_arr` (composite BiasState dir per base bar) permits the
+        direction. Polarity: OOB-low (es=-1) → LONG (+1, needs bias +1); OOB-high (es=+1) → SHORT.
+        Returns [(t_ms, kind, side)]: 'pl_cas_start' (s6m onset, side=es) | 'pl_cas_end' (entry, side=-es).
+        s6m must be tg_seq 1; wob length from lp_config.lp_xm45_wob; wob on the EMERGING xm45m (5s)."""
+        g = self._gates
+        s6 = self._sign(g[0]['lines'][0])                         # s6m OOB sign per base bar
+        N = int(self._db.execute("SELECT val FROM lp_config WHERE name='lp_xm45_wob'", fetch=True)[0]['val'])
+        xm = self._W._line_emerging('xm45m')                      # emerging xm45m (5s)
+        wob = IC.wobble_slayer(xm, N, OOB_HI, OOB_LO, anchored=True, strict=True)
+        out, i, n = [], 1, self._n
+        while i < n:
+            if s6[i] != 0 and s6[i] != s6[i - 1]:                 # s6m OOB-onset
+                es = int(s6[i]); cap = min(i + SEQ_CAP, n); cursor = i; ok_all = True
+                for gate in g[1:]:                                # xm45a, gcs15a (in seq)
+                    ok = self._gate_ok(gate, cursor, cap, es)
+                    if ok is None:
+                        ok_all = False; break
+                    cursor = ok
+                if ok_all:
+                    entry = -es                                   # OOB-low → long(+1); OOB-high → short(-1)
+                    wj = next((j for j in range(cursor, cap) if wob[j] == entry), None)   # reversal turn
+                    if wj is not None and bias_arr[wj] == entry:  # BIAS GATE — the composite bias permits
+                        out.append((int(self._ts[i]), 'pl_cas_start', es))
+                        out.append((int(self._ts[wj]), 'pl_cas_end', entry))
+                        i = wj                                    # advance past this cascade
+            i += 1
+        return out
+
     def events(self):
         """All cascade events over the pk updates: [(t_ms, kind, side), …].
         kind = 'gate:<name>' (gate satisfied, side None) | 'entry' (s30-wob entry, side ±1)."""

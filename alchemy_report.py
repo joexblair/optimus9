@@ -36,26 +36,16 @@ def build_bias_state(db, end_ms, lookback_hours=120):
     return W, bs
 
 
-def add_s30a_events(db, W, bs, end_ms, lookback_hours=120):
-    """Insert the trade-gate cascade overlay into bl_review (Joe 0624, #32 D):
-      • the s30M-wob ENTRIES that are valid cascade entries (event 's30a+Mwobs'), BiasState-STACKED —
-        the cascade entry side must agree with the merged bias (side == -bias);
-      • a row per pre-req gate satisfied (event '<gate> ok', e.g. 's3 ok' / 'xm45 ok').
-    The gates are table-driven (trade_gate / trade_gate_line). breach_dir tags the side. Returns count."""
+def add_pl_cascade_events(db, W, bs, end_ms, lookback_hours=120):
+    """Insert the DECOUPLED lp-cascade overlay into bl_review (alchemy BRD 0626). Replaces the pk-walked
+    s30a overlay: the cascade (s6m → xm45a → gcs15a → xm45min wob) now rides the COMPOSITE bias, not the
+    pk producer (the 17:04 gate-gap fix). Two events: 'pl_cas_start' (s6m onset) + 'pl_cas_end' (the
+    xm45min-wob entry — the trade). breach_dir tags the side. Returns the row count."""
     from optimus9.analysis.trade_gate import TradeGateWalker
     start = end_ms - lookback_hours * 3600 * 1000
-    ts = W.ts; bias = bs.direction_array(ts)
-    rows = []
-    for t, kind, side in TradeGateWalker(W, db).events():
-        if not (start <= t < end_ms):
-            continue
-        if kind == 'entry':
-            j = int(np.searchsorted(ts, t, 'right')) - 1
-            if j < 0 or side != -bias[j]:                  # stack: the cascade entry must sit on the bias side
-                continue
-            rows.append((dtm.datetime.utcfromtimestamp(t / 1000), _EVENT, side))
-        else:                                              # 'gate:<name>' -> '<name> ok'
-            rows.append((dtm.datetime.utcfromtimestamp(t / 1000), kind.split(':', 1)[1] + ' ok', side))
+    bias = bs.direction_array(W.ts)
+    rows = [(dtm.datetime.utcfromtimestamp(t / 1000), kind, side)
+            for t, kind, side in TradeGateWalker(W, db).cascade(bias) if start <= t < end_ms]
     if rows:
         db.executemany('INSERT INTO bl_review (bar_time, event, breach_dir) VALUES (%s, %s, %s)', rows)
     return len(rows)

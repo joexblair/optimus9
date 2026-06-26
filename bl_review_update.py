@@ -12,7 +12,7 @@ from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.analysis.bl_detect import BLDetect
 from optimus9.analysis.bl_review import build_review
-from alchemy_report import build_bias_state, add_s30a_events, add_bro_cross_events, paint_bias_state
+from alchemy_report import build_bias_state, add_pl_cascade_events, add_bro_cross_events, paint_bias_state
 from logger import get_logger
 
 log = get_logger('bl_review_update'); t0 = time.perf_counter()
@@ -27,9 +27,9 @@ log.info(f'[{el()}] bl_states repopulated (full set) — building review ...')
 rows = build_review(db)
 gates = sum(1 for o in rows if o['stop_px'] is not None)
 W, bs = build_bias_state(db, END)                                             # window + merged bias (bls3 + pk)
-n_s30a = add_s30a_events(db, W, bs, END)                                       # alchemy overlay: s30M-wob fires
+n_cas = add_pl_cascade_events(db, W, bs, END)                                  # decoupled lp cascade: pl_cas_start/end
 n_bro = add_bro_cross_events(db, W, END)                                       # alchemy overlay: bro_x_bias flips
 n_bias = paint_bias_state(db, bs, END)                                        # bias_state := merged BiasState (bls3 + pk + bro-cross)
-log.info(f'[{el()}] DONE — bl_review {len(rows)} rows · {gates} gate-opens · {n_s30a} s30a+Mwobs · {n_bro} bro_x_bias · {n_bias} bias segments')
-print(f'bl_review updated: {len(rows)} rows, {gates} gate-opens, {n_s30a} s30a+Mwobs, {n_bro} bro_x_bias, {n_bias} bias segments')
+log.info(f'[{el()}] DONE — bl_review {len(rows)} rows · {gates} gate-opens · {n_cas} pl_cas · {n_bro} bro_x_bias · {n_bias} bias segments')
+print(f'bl_review updated: {len(rows)} rows, {gates} gate-opens, {n_cas} pl_cas, {n_bro} bro_x_bias, {n_bias} bias segments')
 db.disconnect()
