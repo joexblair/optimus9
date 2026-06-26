@@ -224,14 +224,15 @@ class BLDetect:
         the line's own tf_seconds. The TF is a property of the config (ic_itf_pk), so the
         calculator computes from a complete config — no caller re-sources the timeframe."""
         r = self._db.execute(
-            '''SELECT ic.*, itf.itf_seconds FROM indicator_configs ic
+            '''SELECT ic.*, itf.itf_seconds, vm.ivm_label AS value_mode FROM indicator_configs ic
                JOIN indicator_timeframes itf ON itf.itf_pk = ic.ic_itf_pk
+               LEFT JOIN indicator_value_modes vm ON vm.ivm_pk = ic.ic_ivm_pk
                WHERE ic.ic_pk = %s''', (ic_pk,), fetch=True)[0]
-        tf = int(r['itf_seconds'])
+        tf = int(r['itf_seconds']); vmode = r['value_mode'] or 'emerging'
         if r['ic_line_type'] == 'k':
-            return dict(kind='k', tf_seconds=tf, rsi_len=int(r['ic_rsi_len']),
+            return dict(kind='k', tf_seconds=tf, rsi_len=int(r['ic_rsi_len']), value_mode=vmode,
                         stc_len=int(r['ic_stc_len']), k_len=int(r['ic_k_len']), src=r['ic_src'])
-        return dict(kind='bb', tf_seconds=tf, bb_len=int(r['ic_bb_len']),
+        return dict(kind='bb', tf_seconds=tf, bb_len=int(r['ic_bb_len']), value_mode=vmode,
                     bb_mult=float(r['ic_bb_mult']), src=r['ic_src'])
 
     # ── public ───────────────────────────────────────────────────────────────
@@ -392,11 +393,18 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
 
     # ── internals ──────────────────────────────────────────────────────────
     def _line(self, base, cfg):
-        """Developing (lookahead) HTF line on the line's OWN TF (cfg['tf_seconds']),
-        5s-aligned — matches TV lookahead_on. The TF rides in the config, so a multi-line
-        engine computes each line on its declared timeframe by construction (no primary
-        leakage: mnm9=240, hb9=540, a support on a third TF would Just Work)."""
+        """HTF line on the line's OWN TF (cfg['tf_seconds']), 5s-aligned. Routes by the line's
+        `value_mode` (#33): 'emerging' (default) = lookahead developing line (TV lookahead_on);
+        'closed' = the line of the last CLOSED TF bar (resampled f_bb/f_k + align) — stabler, fewer
+        intra-bar crosses → fewer churny bls flips. The TF rides in the config (no primary leakage)."""
         secs = cfg['tf_seconds']
+        if cfg.get('value_mode') == 'closed':
+            fr = IC.resample(base, secs)
+            if cfg['kind'] == 'bb':
+                v = IC.f_bb(IC.build_source(fr, cfg['src']), cfg['bb_len'], cfg['bb_mult'])
+            else:
+                v = IC.f_k(IC.build_source(fr, cfg['src']), cfg['rsi_len'], cfg['stc_len'], cfg['k_len'])
+            return IC.align_to_base(v, fr, base)
         if cfg['kind'] == 'bb':
             return IC.f_bb_lookahead(base, secs, cfg['bb_len'], cfg['bb_mult'], cfg['src'])
         return IC.f_k_lookahead(base, secs, cfg['k_len'], cfg['rsi_len'], cfg['stc_len'], cfg['src'])

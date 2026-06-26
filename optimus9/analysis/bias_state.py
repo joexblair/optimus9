@@ -54,9 +54,12 @@ def bro_cross_flips(db, W, sets=('hbhl16', 'hblo16', 'hbhi16'), cluster_min=30):
     sysr = db.execute('SELECT hi_boundary, lo_boundary FROM optimus9_system', fetch=True)[0]
     HI, LO = float(sysr['hi_boundary']), float(sysr['lo_boundary'])
     ts = W.ts; nb = len(ts)
+    def line(name):                                          # route by the line's value_mode (#33)
+        r = db.execute("SELECT value_mode FROM vw_indicator_configs_live WHERE ind_name=%s", (name,), fetch=True)
+        return W._line(name) if (r and r[0]['value_mode'] == 'closed') else W._line_emerging(name)
     raw = []
     for st in sets:
-        m = W._line_emerging(st + 'm'); M = W._line_emerging(st + 'M')
+        m = line(st + 'm'); M = line(st + 'M')
         fin = np.isfinite(m) & np.isfinite(M)
         sign = np.where(fin, np.sign(m - M), 0).astype(int)
         chg = np.concatenate([[True], sign[1:] != sign[:-1]])
