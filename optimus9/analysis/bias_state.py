@@ -14,8 +14,14 @@ from datetime import timezone
 import numpy as np
 
 
-def bls3_bias_events(db, lines=('s22r',), end_ms=None, lookback_hours=120):
-    """bls3 flips across the line collection → direction events [(t_ms, -breach_dir)]."""
+def bl_state_bias_events(db, lines=('s22r',), end_ms=None, lookback_hours=120):
+    """bl state-change → direction events [(t_ms, dir)] (#37 bl-state-change, alchemy BRD). Fires on a
+    flip TO 1 AND a flip TO 3 of the specified breach line(s) — no LTF lines (they'd poison the bias):
+      • flips to 1 (breach starts / prediction-captured) → bias = breach_dir   (MOMENTUM into the breach)
+      • flips to 3 (breach completes)                    → bias = -breach_dir  (the REVERSAL)
+    So a HI breach reads BULL→BEAR as it matures 1→3; a LO breach BEAR→BULL. The to-1 half overrides
+    errant pk that fights the established trend; a 3→1 re-engage emits a fresh to-1 (momentum). Most-
+    recent-wins in BiasState (no weighting yet — #40)."""
     ph = ','.join(['%s'] * len(lines))
     rows = db.execute(
         f'''SELECT line_name, bar_time, state, breach_dir FROM bl_states
@@ -23,10 +29,13 @@ def bls3_bias_events(db, lines=('s22r',), end_ms=None, lookback_hours=120):
     start = (end_ms - lookback_hours * 3600 * 1000) if end_ms else None
     out, prev = [], {}
     for r in rows:
-        ln, st = r['line_name'], int(r['state'])
+        ln, st, bd = r['line_name'], int(r['state']), int(r['breach_dir'])
         t = int(r['bar_time'].replace(tzinfo=timezone.utc).timestamp() * 1000)
-        if st == 3 and prev.get(ln) != 3 and (end_ms is None or start <= t < end_ms):
-            out.append((t, -int(r['breach_dir'])))
+        if (end_ms is None or start <= t < end_ms) and bd != 0:
+            if st == 1 and prev.get(ln) != 1:
+                out.append((t, bd))                          # to-1: momentum (LO→bear, HI→bull)
+            elif st == 3 and prev.get(ln) != 3:
+                out.append((t, -bd))                         # to-3: reversal (LO→bull, HI→bear)
         prev[ln] = st
     return out
 

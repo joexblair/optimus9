@@ -18,7 +18,7 @@ so it only serves to instantiate the window + resolve the s30 line refs from the
 import datetime as dtm
 import numpy as np
 import bias_machine as bm
-from optimus9.analysis.bias_state import BiasState, bls3_bias_events, pk_bias_events, bro_cross_bias_events, bro_cross_flips
+from optimus9.analysis.bias_state import BiasState, bl_state_bias_events, pk_bias_events, bro_cross_bias_events, bro_cross_flips
 
 _EVENT = 's30a+Mwobs'
 _CFG = bm.BiasConfig(osc='s12m', trigger_tf=12, gate='oob', entry_order='seq', s3_variant='m',
@@ -30,7 +30,7 @@ def build_bias_state(db, end_ms, lookback_hours=120):
     consumers. Producers stack most-recent-wins (#37 BRD: composite bias)."""
     W = bm.BiasWindow(db, end_ms, cfg=_CFG)
     bs = (BiasState()
-          .feed(bls3_bias_events(db, ('s22r',), end_ms, lookback_hours))
+          .feed(bl_state_bias_events(db, ('s22r',), end_ms, lookback_hours))
           .feed(pk_bias_events(W))
           .feed(bro_cross_bias_events(db, W)))
     return W, bs
