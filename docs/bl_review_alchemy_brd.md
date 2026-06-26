@@ -29,6 +29,8 @@ Gates layer in front of the xm45m wob. An xm45m wob that fails any gate **prints
 became a trade). **Gate layering lives in DB table(s)** (the `trade_gate` mechanism) — **bl_review is
 simply the OUTPUT of strategy creation**, not where gates are hand-coded. Staged integration; measure PnL
 after each gate lands.
+- **Per-gate `is_active` flag** (the existing `tg_active` pattern): each gate row toggles on/off in the DB
+  → stage gates in/out and A/B them without code. "Add a gate = a row; toggle = a flag."
 
 ### Gate — lp cascade (the gate CLOSEST to xm45min wob)
 The real entry cascade (a version of the test cascade, NOT scaffolding): **`s6m → xm45a → gcs15a →
