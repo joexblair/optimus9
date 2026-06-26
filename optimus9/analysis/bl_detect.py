@@ -399,8 +399,8 @@ plotshape({nm}_pk == -1, title="raw pk short", style=shape.triangledown, locatio
         intra-bar crosses → fewer churny bls flips. The TF rides in the config (no primary leakage)."""
         secs = cfg['tf_seconds']
         if cfg.get('value_mode') == 'closed':
-            fr = IC.resample(base, secs)
-            if cfg['kind'] == 'bb':
+            fr = IC.resample(base, secs, 'midnight')          # midnight-anchored bars (TV grid) — non-day-
+            if cfg['kind'] == 'bb':                           # divisor TFs (7/22min) drift on the epoch grid
                 v = IC.f_bb(IC.build_source(fr, cfg['src']), cfg['bb_len'], cfg['bb_mult'])
             else:
                 v = IC.f_k(IC.build_source(fr, cfg['src']), cfg['rsi_len'], cfg['stc_len'], cfg['k_len'])
