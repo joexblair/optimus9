@@ -24,7 +24,7 @@ _TABLE = 'bl_review'
 LOOKBACK = 16                            # ±bars (5s) for "lookback-made-trade": a bias-aligned PK near the gate
 
 
-def build_review(db, pct: float = 0.9) -> list:
+def build_review(db, pct: float = 0.9, persist: bool = True) -> list:
     log = get_logger('BLReview')
     rows = db.execute(
         '''SELECT bls_pk, bar_time, line_name, px_smooth, breach_line,
@@ -137,16 +137,17 @@ def build_review(db, pct: float = 0.9) -> list:
                            int(r['breach_dir']), int(r['raw_pk'] or 0), r))
 
     out.sort(key=lambda o: (o['bar_time'], o['bl_line']))
-    _persist(db, out)
-    ng = sum(1 for o in out if o['stop_px'] is not None)
-    log.info(f'{_TABLE}: {len(out)} rows ({ng} combined gate-opens w/ stop/profit, '
-             f'{len(by_line)} lines) → table {_TABLE}')
-    return out
+    if persist:
+        _persist(db, out)
+        ng = sum(1 for o in out if o['stop_px'] is not None)
+        log.info(f'{_TABLE}: {len(out)} rows ({ng} combined gate-opens w/ stop/profit, '
+                 f'{len(by_line)} lines) → table {_TABLE}')
+    return out                                            # strat_review consumes rows (persist=False), aggregates as a module
 
 
-def _persist(db, rows):
-    db.execute(f'DROP TABLE IF EXISTS {_TABLE}')
-    db.execute(f'''CREATE TABLE {_TABLE} (
+def _persist(db, rows, table=_TABLE):
+    db.execute(f'DROP TABLE IF EXISTS {table}')
+    db.execute(f'''CREATE TABLE {table} (
         blr_pk BIGINT AUTO_INCREMENT PRIMARY KEY, bls_pk BIGINT, bar_time DATETIME,
         bl_line VARCHAR(16), event VARCHAR(12), state TINYINT, c_bls TINYINT, breach_dir TINYINT,
         predicted TINYINT, raw_pk TINYINT, bias_state TINYINT, lookback_trade TINYINT, thrown_out TINYINT,
@@ -159,5 +160,6 @@ def _persist(db, rows):
             'raw_pk', 'bias_state', 'lookback_trade', 'thrown_out', 'px_smooth', 'breach_line', 'bb_mage', 'bb_min', 'exit_bits',
             'stop_px', 'stop_at', 'profit_px', 'profit_at', 'swing_closest_dt', 'entry_dt', 'swing_adverse_dt']
     ph = ','.join(['%s'] * len(cols))
-    db.executemany(f"INSERT INTO {_TABLE} ({','.join(cols)}) VALUES ({ph})",
-                   [[r[c] for c in cols] for r in rows])
+    db.executemany(f"INSERT INTO {table} ({','.join(cols)}) VALUES ({ph})",
+                   [[r.get(c) for c in cols] for r in rows])
+    return cols

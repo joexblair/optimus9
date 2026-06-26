@@ -105,14 +105,14 @@ def add_pk_bias_events(db, W, end_ms, lookback_hours=120):
     return len(rows)
 
 
-def paint_bias_state(db, bs, end_ms):
-    """Write bl_review.bias_state from the merged BiasState direction (Joe 0623 #32; 0626 alchemy BRD):
-    +1 long / -1 short, held between events (bls3 flips + pk updates + bro-cross flips). 0 before the
-    first. bny30 is retired — bl_review reads the bias machine state. Returns the segment count."""
+def paint_bias_state(db, bs, end_ms, table='bl_review'):
+    """Write <table>.bias_state from the merged BiasState direction — composite of the ACTIVE bias
+    producers. +1 long / -1 short, held between events. 0 before the first. `table` lets strat_review
+    reuse this. Returns the segment count."""
     tl = bs.timeline()                                                 # [(t_ms, direction), ...] merged
-    db.execute('UPDATE bl_review SET bias_state = 0')                  # clear (incl. pre-first-event)
+    db.execute(f'UPDATE {table} SET bias_state = 0')                   # clear (incl. pre-first-event)
     for i, (t, d) in enumerate(tl):
         nxt = tl[i + 1][0] if i + 1 < len(tl) else end_ms
-        db.execute('UPDATE bl_review SET bias_state = %s WHERE bar_time >= %s AND bar_time < %s',
+        db.execute(f'UPDATE {table} SET bias_state = %s WHERE bar_time >= %s AND bar_time < %s',
                    (d, dtm.datetime.utcfromtimestamp(t / 1000), dtm.datetime.utcfromtimestamp(nxt / 1000)))
     return len(tl)
