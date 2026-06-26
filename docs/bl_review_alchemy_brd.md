@@ -83,17 +83,23 @@ agnostic `BiasState` (most-recent-wins). Producers (each = its own SRP unit, the
 - **`bny30_bias` retired** ("Barny's done his work — pasture"). New column **`bias_state`**, sourced from
   **`BiasState`**. The legacy `bny30_latched_bias` path is no longer read by bl_review. (Resolves Q4.)
 
-## Open questions
-RESOLVED: Q1 (gates = DB tables; bl_review = output) · Q2 (gravity through cascade, realizes at wob) ·
-Q3 (bl-state-change polarity table, both transitions, s22r-only, most-recent-wins) · Q4 (bny30→`bias_state`
-from BiasState).
+## Open questions — ALL RESOLVED (build-ready)
+- Q1 gates = DB tables (+ per-gate `is_active`); bl_review = output.
+- Q2 gravity through cascade, realizes at wob.
+- Q3 bl-state-change polarity (both transitions, s22r-only, most-recent-wins; #40 reopens weighting).
+- Q4 bny30 → `bias_state` column from BiasState.
+- **Q5** — `bb_mage`/`bb_min` = the source-relevant pair: `bro_x_bias` rows → bro mage/min; existing BL
+  rows → `bb_mage` (old `bb_main`/exit_support) + `bb_min` null.
+- **Cluster** — bro-cross suppresses **same-direction only** within 30 min (an opposite signal = a real
+  reversal = new cluster, fires immediately). NOT a flat 30-min suppress-all.
+- **N** = **6** — `lp_bro_wob=6` (set 0626; the winner, fires ~30s earlier, aligns with s6a + xm45m wob).
 
-STILL OPEN (needed for the build stages):
-- **Q5** bb_mage/bb_min semantics: `bro_x_bias` rows = bro mage/min; existing BL rows = `bb_mage` (old
-  `bb_main`/exit_support) + `bb_min` null?
-- **Cluster** — bro-cross "first per 30-min cluster": suppress same-direction only (opposite = new
-  cluster, fires), or all signals 30 min flat?
-- **N** = 6 (the winner) → set `lp_bro_wob=6`?
+## Build stages (Decompose — build-ready)
+1. **Seam:** bl_review `bny30_bias` → new `bias_state` column sourced from `BiasState`.
+2. **Bias gate v1:** producers pk + bro-cross → direction gate on xm45m wobs → measure trade PnL/stops.
+3. Add **gravity**, then **bl-state-change** (s22r) producers — each a stage, re-read stops.
+4. **TBC** mechanics (neutral, FIFO, weakness) as specced.
+Each gate = a `trade_gate` row + `is_active` flag (stage/AB without code).
 
 See [[project_bias_meld]] (TradeGateWalker), [[project_bias_machine]], [[bias_machine_eval_constraints]],
 docs/bias_mechanics_design.md (#37 producer mechanics).
