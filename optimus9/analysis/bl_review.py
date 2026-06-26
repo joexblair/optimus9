@@ -60,7 +60,7 @@ def build_review(db, pct: float = 0.9) -> list:
         e = (1 if src['exit1'] else 0) | (2 if src['exit2'] else 0) | (4 if src['exit3'] else 0)
         return {'bls_pk': src['bls_pk'], 'bar_time': bt, 'bl_line': line, 'event': ev,
                 'state': st, 'c_bls': int(src['combined_state']), 'breach_dir': bd, 'predicted': int(bool(src['predicted'])),
-                'raw_pk': raw, 'bny30_bias': int(src['bny30_bias'] or 0), 'lookback_trade': ltrade, 'thrown_out': None,
+                'raw_pk': raw, 'bias_state': int(src['bny30_bias'] or 0), 'lookback_trade': ltrade, 'thrown_out': None,   # placeholder; paint_bias_state overwrites from BiasState
                 'px_smooth': src['px_smooth'], 'breach_line': src['breach_line'],
                 'bb_main': src['bb_main'], 'exit_bits': e, 'stop_px': None, 'stop_at': None,
                 'profit_px': None, 'profit_at': None,                 # swing UTCs inherited from bl_states (close-based)
@@ -149,14 +149,14 @@ def _persist(db, rows):
     db.execute(f'''CREATE TABLE {_TABLE} (
         blr_pk BIGINT AUTO_INCREMENT PRIMARY KEY, bls_pk BIGINT, bar_time DATETIME,
         bl_line VARCHAR(16), event VARCHAR(12), state TINYINT, c_bls TINYINT, breach_dir TINYINT,
-        predicted TINYINT, raw_pk TINYINT, bny30_bias TINYINT, lookback_trade TINYINT, thrown_out TINYINT,
+        predicted TINYINT, raw_pk TINYINT, bias_state TINYINT, lookback_trade TINYINT, thrown_out TINYINT,
         px_smooth FLOAT, breach_line FLOAT, bb_main FLOAT,
         exit_bits TINYINT, stop_px FLOAT, stop_at DATETIME, profit_px FLOAT, profit_at DATETIME,
         swing_closest_dt DATETIME, entry_dt DATETIME, swing_adverse_dt DATETIME)''')
     if not rows:
         return
     cols = ['bls_pk', 'bar_time', 'bl_line', 'event', 'state', 'c_bls', 'breach_dir', 'predicted',
-            'raw_pk', 'bny30_bias', 'lookback_trade', 'thrown_out', 'px_smooth', 'breach_line', 'bb_main', 'exit_bits',
+            'raw_pk', 'bias_state', 'lookback_trade', 'thrown_out', 'px_smooth', 'breach_line', 'bb_main', 'exit_bits',
             'stop_px', 'stop_at', 'profit_px', 'profit_at', 'swing_closest_dt', 'entry_dt', 'swing_adverse_dt']
     ph = ','.join(['%s'] * len(cols))
     db.executemany(f"INSERT INTO {_TABLE} ({','.join(cols)}) VALUES ({ph})",

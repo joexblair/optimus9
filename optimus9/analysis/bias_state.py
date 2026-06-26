@@ -37,6 +37,46 @@ def pk_bias_events(W):
     return [(int(u['t']), m[u['call']]) for u in W.signals() if u['call'] in m]
 
 
+def bro_cross_bias_events(db, W, sets=('hb16', 'hbhl16', 'hblo16', 'hbhi16'), cluster_min=30):
+    """Bro-cross weave-cease flips → direction events [(t_ms, dir)] (#37, docs/bias_mechanics_design.md).
+
+    Per set: confirm a flip once the EMERGING minion holds ONE side of the mage for `lp_bro_wob`
+    consecutive 5s bars (the weave ceased), OOB-gated (both lines OOB the same side). lo-breach (both
+    < lo, minion above mage) → +1 BULL; hi-breach (both > hi, mage above minion) → -1 BEAR. One event
+    per direction flip per set. Aggregate the 4 sets, then CLUSTER: emit the FIRST flip per
+    `cluster_min`-minute cluster — an opposite direction = a new cluster (fires); a same direction within
+    the window is suppressed (the 4 sets crossing in succession = one bias change). Config-sourced: N from
+    `lp_config.lp_bro_wob`, OOB from `optimus9_system` (no hardcode)."""
+    N = int(db.execute("SELECT val FROM lp_config WHERE name='lp_bro_wob'", fetch=True)[0]['val'])
+    sysr = db.execute('SELECT hi_boundary, lo_boundary FROM optimus9_system', fetch=True)[0]
+    HI, LO = float(sysr['hi_boundary']), float(sysr['lo_boundary'])
+    ts = W.ts; nb = len(ts)
+    flips = []
+    for st in sets:
+        m = W._line_emerging(st + 'm'); M = W._line_emerging(st + 'M')
+        fin = np.isfinite(m) & np.isfinite(M)
+        sign = np.where(fin, np.sign(m - M), 0).astype(int)
+        chg = np.concatenate([[True], sign[1:] != sign[:-1]])
+        idx = np.arange(nb); last_start = np.maximum.accumulate(np.where(chg, idx, -1)); run_len = idx - last_start + 1
+        last = 0
+        for i in range(N, nb):
+            if not fin[i]:
+                continue
+            held = run_len[i] >= N
+            d = 1 if (held and sign[i] > 0 and m[i] < LO and M[i] < LO) else \
+                (-1 if (held and sign[i] < 0 and m[i] > HI and M[i] > HI) else 0)
+            if d and d != last:
+                flips.append((int(ts[i]), d)); last = d
+    # aggregate the 4 sets + cluster (first per cluster; opposite = new cluster, same within window suppressed)
+    flips.sort()
+    window = cluster_min * 60 * 1000
+    out, le_t, le_d = [], None, 0
+    for t, d in flips:
+        if d != le_d or (le_t is not None and t - le_t >= window):
+            out.append((t, d)); le_t, le_d = t, d
+    return out
+
+
 class BiasState:
     """Agnostic holder of a -1/0/+1 bias timeline. Fed direction events by any producer; merges
     most-recent-wins. Knows nothing of the source."""
