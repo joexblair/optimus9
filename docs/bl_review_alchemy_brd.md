@@ -44,6 +44,15 @@ reversal + bias both pass THROUGH this cascade and realize at the xm45m wob.
 - DB (seed_lp_cascade.py): `s6m` = BB 10│0.4│close @ TF6(360s); `trade_gate` s6m→xm45a→gcs15a; `lp_xm45_wob`=2.
 - Event overlays (alchemy_report): `pl_cas_start/end`, `bro_x_bias`, `pk_bias` — the producers made visible.
 
+### Data-driven producers (`bias_producer` table, 0626)
+Every bias producer toggles on/off via `bias_producer` (bp_name · bp_label · bp_active) — the tg_active
+pattern. `build_bias_state` reads bp_active=1 rows and feeds via a registry (bp_name → callable). pk /
+bro_cross / bl_state, all togglable with a DB flag, no code. bl_state sources its lines from
+`bl_lines.bl_is_active` (DRY). UI-shaped — one of the settings tables the coming bl_review UI is a view
+over (with trade_gate, bl_lines, indicator_value_modes, lp_config). NOTE: the bp toggle controls the bias
+FEED; the event overlays (pk_bias/bro_x_bias rows) print regardless (visibility ≠ feed) — open Q whether a
+disabled producer should also go dark.
+
 ## Gate 1 — the bias machine (DIRECTION gate)
 Bias controls the direction a trade can be placed: **an xm45m wob CANNOT fire against bias** → no row.
 The bias machine is a **composite**: it consumes direction events from several producers, all feeding the
