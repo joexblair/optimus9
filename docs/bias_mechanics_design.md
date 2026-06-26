@@ -19,8 +19,12 @@ crossover across four hb16 sets:
 - **lo-breach → BULL**: hb{set}16m crosses OVER hb{set}16M (minion over mage), both OOB-low.
 - **hi-breach → BEAR**: hb{set}16M crosses OVER hb{set}16m (mage over minion), both OOB-high.
 - Whichever set crosses **first** creates the new bias direction.
-- **Wobslay**: TF16 ⇒ chop expected at the crossover; both M and m use a wobslay tol = `lp_bro_wob` (12 × 5s
-  bars) per set.
+- **Weave-cease smoothing (BRD, corrected 0626):** the EMERGING min/mage lines are wavey (5s erratic
+  movement) and weave in/out of each other. The smoother is NOT wobble_slayer (a turn-off-extreme
+  detector — wrong tool) but a **run-length persistence debounce**: confirm a flip only once the minion
+  has held ONE side of the mage for **`lp_bro_wob` (=12) consecutive 5s bars** (the weave ceased). One
+  event per direction flip. Gated OOB (the breach context from the original spec). Validated: balanced
+  158 flips across all 4 sets vs the skewed wobble_slayer attempt. (`bro_emerg.py` / `cf_bro_emerg`.)
 - **`hb16` triggers the mechanic** (the canonical set; the other three are src-variant lenses).
 
 ### The 4 hb16 sets (all itf_pk=20 "16"/960s; configs Joe-supplied, authoritative — overwrite DB)
