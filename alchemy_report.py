@@ -25,14 +25,33 @@ _CFG = bm.BiasConfig(osc='s12m', trigger_tf=12, gate='oob', entry_order='seq', s
                      xm45=False, mae=0.4, target=0.9, floater_anchor='last', verdict='pk')
 
 
+def _active_breach_lines(db):
+    """The active breach line names (from bl_lines.bl_is_active) — bl_state's source, DRY."""
+    return tuple(r['nm'] for r in db.execute(
+        '''SELECT CONCAT(s.is_prefix, itf.itf_label, il.il_suffix) nm
+           FROM bl_lines bl JOIN indicator_configs ic ON ic.ic_pk = bl.bl_ic_pk
+           JOIN indicator_series s      ON s.is_pk  = ic.ic_is_pk
+           JOIN indicator_lines il      ON il.il_pk = ic.ic_il_pk
+           JOIN indicator_timeframes itf ON itf.itf_pk = ic.ic_itf_pk
+           WHERE bl.bl_is_active = 1 AND bl.bl_role = 'breach' ''', fetch=True))
+
+
 def build_bias_state(db, end_ms, lookback_hours=120):
-    """Build the bias window + the merged BiasState (bls3 + pk + bro-cross producers) once, for both
-    consumers. Producers stack most-recent-wins (#37 BRD: composite bias)."""
+    """Build the bias window + the merged BiasState — DATA-DRIVEN: feeds only the bias_producer rows
+    with bp_active=1 (the registry below maps bp_name → producer). Producers stack most-recent-wins
+    (#37 BRD: composite bias). Toggle a producer = a flag in bias_producer (the bl_review settings UI)."""
     W = bm.BiasWindow(db, end_ms, cfg=_CFG)
-    bs = (BiasState()
-          .feed(bl_state_bias_events(db, ('s22r',), end_ms, lookback_hours))
-          .feed(pk_bias_events(W))
-          .feed(bro_cross_bias_events(db, W)))
+    registry = {
+        'pk':        lambda: pk_bias_events(W),
+        'bro_cross': lambda: bro_cross_bias_events(db, W),
+        'bl_state':  lambda: bl_state_bias_events(db, _active_breach_lines(db), end_ms, lookback_hours),
+    }
+    active = [r['bp_name'] for r in db.execute(
+        'SELECT bp_name FROM bias_producer WHERE bp_active = 1 ORDER BY bp_seq', fetch=True)]
+    bs = BiasState()
+    for name in active:
+        if name in registry:
+            bs.feed(registry[name]())
     return W, bs
 
 
