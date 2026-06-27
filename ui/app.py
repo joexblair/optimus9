@@ -32,6 +32,7 @@ _NAME = ("CONCAT(s.is_prefix, itf.itf_label, il.il_suffix)")
 _JOIN = ("JOIN indicator_series s ON s.is_pk = ic.ic_is_pk "
          "JOIN indicator_lines il ON il.il_pk = ic.ic_il_pk "
          "JOIN indicator_timeframes itf ON itf.itf_pk = ic.ic_itf_pk")
+_LIVE = "WHERE ic.ic_pk IN (SELECT ic_pk FROM vw_indicator_configs_live)"   # one row per line — the live version only
 _ORDER = "ORDER BY s.is_prefix, itf.itf_label, il.il_suffix"
 
 
@@ -46,7 +47,7 @@ def _clean(r):
 
 
 def _lines(d):
-    return [_clean(r) for r in d.execute(f'SELECT ic.ic_pk, {_NAME} nm FROM indicator_configs ic {_JOIN} {_ORDER}', fetch=True)]
+    return [_clean(r) for r in d.execute(f'SELECT ic.ic_pk, {_NAME} nm FROM indicator_configs ic {_JOIN} {_LIVE} {_ORDER}', fetch=True)]
 
 
 def _detail(d, name, lines):
@@ -88,7 +89,7 @@ def ic_mods():
     d = _db()
     rows = d.execute(f'''SELECT ic.ic_pk, {_NAME} nm, ic.ic_line_type, ic.ic_src, ic.ic_bb_len, ic.ic_bb_mult,
                          ic.ic_k_len, ic.ic_rsi_len, ic.ic_stc_len, ic.ic_ivm_pk, ic.ic_wobble
-                         FROM indicator_configs ic {_JOIN} {_ORDER}''', fetch=True)
+                         FROM indicator_configs ic {_JOIN} {_LIVE} {_ORDER}''', fetch=True)
     modes = [_clean(m) for m in d.execute('SELECT ivm_pk, ivm_label FROM indicator_value_modes ORDER BY ivm_pk', fetch=True)]
     d.disconnect()
     return jsonify({'rows': [_clean(r) for r in rows], 'modes': modes})
@@ -128,8 +129,11 @@ def save():
             for c in det.get('lp', []):
                 d.execute('UPDATE lp_config SET val=%s WHERE name=%s', (c['value'], c['key']))
     for ic in data.get('ic_mods', []):
+        # stamp live_after = YESTERDAY (Joe 0627): immediately live, never future-dated → no calendar-drift
+        # (the view picks MAX live_after <= NOW()). Edit-in-place; no version history kept.
         d.execute('''UPDATE indicator_configs SET ic_src=%s, ic_bb_len=%s, ic_bb_mult=%s, ic_k_len=%s,
-                     ic_rsi_len=%s, ic_stc_len=%s, ic_ivm_pk=%s, ic_wobble=%s WHERE ic_pk=%s''',
+                     ic_rsi_len=%s, ic_stc_len=%s, ic_ivm_pk=%s, ic_wobble=%s,
+                     ic_live_after_dt=(CURDATE() - INTERVAL 1 DAY) WHERE ic_pk=%s''',
                   (_nz(ic['ic_src']), _nz(ic['ic_bb_len']), _nz(ic['ic_bb_mult']), _nz(ic['ic_k_len']),
                    _nz(ic['ic_rsi_len']), _nz(ic['ic_stc_len']), ic['ic_ivm_pk'], _nz(ic['ic_wobble']), ic['ic_pk']))
     if 'notes' in data:
