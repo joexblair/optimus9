@@ -77,6 +77,8 @@ class KlineSanitiser:
             self._log.warning(f'{src}: resolution {res}s coarser than 5s — cannot refine klinecollect; skipped')
             return {'source': src, 'skipped': f'{res}s coarser than 5s'}
         lo, hi = norm[0][0], norm[-1][0]
+        self._log.info(f'{src}  ·  range {dtm.datetime.utcfromtimestamp(lo / 1000)} → '
+                       f'{dtm.datetime.utcfromtimestamp(hi / 1000)}  ({res}s)')
         existing = {r['t']: (float(r['o']), float(r['h']), float(r['l']), float(r['c']))
                     for r in self._db.execute(
                         '''SELECT kc_timestamp t, kc_open o, kc_high h, kc_low l, kc_close c FROM kline_collection
