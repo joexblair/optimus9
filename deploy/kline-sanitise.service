@@ -1,0 +1,19 @@
+[Unit]
+Description=Optimus9 kline sanitise service — reconciles kline_collection OHLC against dropped TradingView CSVs
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=joe
+WorkingDirectory=/home/joe/thecodes
+ExecStart=/usr/bin/python3 /home/joe/thecodes/kline_sanitise_service.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+
+# Install:
+#   sudo cp deploy/kline-sanitise.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now kline-sanitise
+# Then drop TV CSVs into ./transfer/kline_sanitise/ ; check: journalctl -u kline-sanitise -f
