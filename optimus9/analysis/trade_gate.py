@@ -3,10 +3,9 @@ trade_gate.py (Joe 0624, #32 D) — the table-driven trade-gate cascade walker (
 
 Reads the ACTIVE gates from trade_gate / trade_gate_line (a gate is data; A/B via tg_active), walks
 them in tg_seq order on the bias side within SEQ_CAP, and emits the gate-ok events + the s30-wob
-entry — the same cascade that produces the bias-pk metric trades. Self-contained: each line's sign is
-computed from its ic_pk (resolve config → f_bb/f_k → align_to_base → _sign), so a NEW gate = an
-INSERT into the tables and zero code. The slight duplication of the engine's signs is deliberate
-(Joe: easier to debug).
+entry — the same cascade that produces the bias-pk metric trades. Each gate line's sign comes from
+W.line (#42, 0627) — the one value_mode-honouring reader, config from vw_indicator_configs_live — so
+emerging gates read REALTIME and a NEW gate = an INSERT into trade_gate/trade_gate_line, zero code.
 """
 import numpy as np
 from optimus9.compute.indicator_computer import IndicatorComputer as IC
@@ -31,19 +30,14 @@ class TradeGateWalker:
         return gates
 
     def _sign(self, ic_pk):
-        """Any line's OOB sign (+1 hi / -1 lo / 0 IB), base-aligned — replicates the engine's _line+_sign."""
+        """A gate line's OOB sign (+1 hi / -1 lo / 0 IB), base-aligned — via W.line (#42), which honours
+        the line's DB value_mode: emerging gates read REALTIME (the developing bar, validated 99.89% vs TV),
+        closed gates read the aligned closed bar. The toggle lives in vw_indicator_configs_live, not here."""
         if ic_pk in self._sign_cache:
             return self._sign_cache[ic_pk]
-        c = self._db.execute(
-            '''SELECT ic_line_type lt, ic_src src, ic_bb_len, ic_bb_mult, ic_rsi_len, ic_stc_len,
-                      ic_k_len, itf_seconds tf FROM vw_indicator_configs_live WHERE ic_pk=%s''',
-            (ic_pk,), fetch=True)[0]
-        fr = IC.resample(self._W.base, int(c['tf']))
-        if c['lt'] == 'bb':
-            v = IC.f_bb(IC.build_source(fr, c['src']), c['ic_bb_len'], float(c['ic_bb_mult']))
-        else:
-            v = IC.f_k(IC.build_source(fr, c['src']), c['ic_rsi_len'], c['ic_stc_len'], c['ic_k_len'])
-        aligned = IC.align_to_base(v, fr, self._W.base)
+        name = self._db.execute('SELECT ind_name FROM vw_indicator_configs_live WHERE ic_pk=%s',
+                                 (ic_pk,), fetch=True)[0]['ind_name']
+        aligned = self._W.line(name)                              # value_mode-honoured, config from the view
         sign = np.where(aligned >= OOB_HI, 1, np.where(aligned <= OOB_LO, -1, 0))
         self._sign_cache[ic_pk] = sign
         return sign
@@ -99,6 +93,9 @@ class TradeGateWalker:
                JOIN indicator_lines il ON il.il_pk = ic.ic_il_pk
                JOIN indicator_timeframes itf ON itf.itf_pk = ic.ic_itf_pk
                WHERE ic.ic_pk = (SELECT val FROM lp_config WHERE name = 'lp_cascade_rearm_ic')''', fetch=True)[0]
+        if ra['ic_wobble'] is None or int(ra['ic_wobble']) < 1:   # the entry wob never fires at n<1 (silent no-trades)
+            raise ValueError(f"cascade re-arm line {ra['nm']} needs ic_wobble >= 1 (set it in the ic fold) — "
+                             f"the entry wob is the trigger; 0/null means it never fires")
         N = int(ra['ic_wobble'])                                  # the re-arm line's own wobble (per-line ic_wobble)
         xm = self._W._line_emerging(ra['nm'])                     # emerging re-arm line (5s) — default xm45m
         wob = IC.wobble_slayer(xm, N, OOB_HI, OOB_LO, anchored=True, strict=True)

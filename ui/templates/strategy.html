@@ -92,9 +92,17 @@ function lineOptions(lines, sel) {
 function detailHtml(p, i) {
   const d = p.detail;
   if (d.kind === 'cascade') {
+    const grows = (d.gates || []).map((g, j) => `<tr>
+      <td class="en"><input type="checkbox" ${g.active ? 'checked' : ''} onchange="producers[${i}].detail.gates[${j}].active=this.checked"></td>
+      <td><input class="f sm" value="${g.seq}" onchange="producers[${i}].detail.gates[${j}].seq=+this.value"></td>
+      <td><span class="name">${g.name}</span></td>
+      <td class="sub">${g.lines.join(' · ')}</td>
+      <td><select class="f" onchange="producers[${i}].detail.gates[${j}].op=this.value">
+        <option ${g.op === 'AND' ? 'selected' : ''}>AND</option><option ${g.op === 'OR' ? 'selected' : ''}>OR</option></select></td></tr>`).join('');
     return `<div class="knob"><span>re-arm / wob line</span>
         <select class="f" onchange="producers[${i}].detail.rearm_ic=+this.value">${lineOptions(d.lines, d.rearm_ic)}</select></div>
-      <div class="summary">gate chain: ${d.gate_chain} → wob</div>`;
+      <table class="ic"><thead><tr><th class="en">On</th><th>seq</th><th>gate</th><th>lines</th><th>op</th></tr></thead><tbody>${grows}</tbody></table>
+      <div class="summary">chain: ${d.gate_chain} → wob  ·  toggle / reorder (seq) / op to play, then Save &amp; update</div>`;
   }
   if (d.kind === 'bl_state') {
     let rows = d.bl_lines.map((bl, j) => {

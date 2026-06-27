@@ -53,8 +53,14 @@ def _lines(d):
 def _detail(d, name, lines):
     if name == 'cascade':
         rearm = int(d.execute("SELECT val FROM lp_config WHERE name='lp_cascade_rearm_ic'", fetch=True)[0]['val'])
-        gates = [g['tg_name'] for g in d.execute('SELECT tg_name FROM trade_gate WHERE tg_active=1 ORDER BY tg_seq', fetch=True)]
-        return {'kind': 'cascade', 'rearm_ic': rearm, 'gate_chain': ' → '.join(gates), 'lines': lines}
+        grows = d.execute('SELECT tg_pk, tg_seq, tg_name, tg_op, tg_active FROM trade_gate ORDER BY tg_seq', fetch=True)
+        gates = [{'tg_pk': g['tg_pk'], 'seq': g['tg_seq'], 'name': g['tg_name'], 'op': g['tg_op'],
+                  'active': bool(g['tg_active']),
+                  'lines': [r['nm'] for r in d.execute(
+                      f'SELECT {_NAME} nm FROM trade_gate_line tgl JOIN indicator_configs ic ON ic.ic_pk=tgl.tgl_ic_pk '
+                      f'{_JOIN} WHERE tgl.tgl_tg_pk=%s {_ORDER}', (g['tg_pk'],), fetch=True)]} for g in grows]
+        chain = ' → '.join(g['name'] for g in gates if g['active'])
+        return {'kind': 'cascade', 'rearm_ic': rearm, 'gates': gates, 'gate_chain': chain, 'lines': lines}
     if name == 'bl_state':
         bls = d.execute(f'''SELECT bl.bl_pk, {_NAME} nm, bl.bl_is_active, bl.bl_role, bl.bl_support_ic_pk
                             FROM bl_lines bl JOIN indicator_configs ic ON ic.ic_pk = bl.bl_ic_pk {_JOIN}
@@ -121,6 +127,9 @@ def save():
         det = p.get('detail', {})
         if det.get('kind') == 'cascade':
             d.execute("UPDATE lp_config SET val=%s WHERE name='lp_cascade_rearm_ic'", (det['rearm_ic'],))
+            for g in det.get('gates', []):
+                d.execute('UPDATE trade_gate SET tg_active=%s, tg_seq=%s, tg_op=%s WHERE tg_pk=%s',
+                          (1 if g['active'] else 0, g['seq'], g['op'], g['tg_pk']))
         elif det.get('kind') == 'bl_state':
             for bl in det.get('bl_lines', []):
                 d.execute('UPDATE bl_lines SET bl_is_active=%s, bl_support_ic_pk=%s WHERE bl_pk=%s',
