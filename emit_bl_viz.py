@@ -128,9 +128,9 @@ while gci < array.size(gt)
     gci += 1
 plotshape(showPk and array.includes(pu, ms), style=shape.triangleup,   location=location.belowbar, color=color.new(color.lime, 0),    size=size.tiny, title="pk long")
 plotshape(showPk and array.includes(pd, ms), style=shape.triangledown, location=location.abovebar, color=color.new(color.fuchsia, 0), size=size.tiny, title="pk short")
-bgcolor(showGate and gc ? color.new(color.white, 90) : na, title="bny30 closed")
-bgcolor(showTrades and array.includes(tL, ms) ? color.new(color.green, 75) : na, title="trade long")
-bgcolor(showTrades and array.includes(tS, ms) ? color.new(color.red, 75)   : na, title="trade short")
+bgcolor(showGate and gc ? color.new(color.white, 0) : na, title="bny30 closed")
+bgcolor(showTrades and array.includes(tL, ms) ? color.new(color.green, 0) : na, title="trade long")
+bgcolor(showTrades and array.includes(tS, ms) ? color.new(color.red, 0)   : na, title="trade short")
 '''
     open(OUT, 'w').write(pine)
     nlab = sum(len(trans(sm[n])) for n in LINES)

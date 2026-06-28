@@ -101,7 +101,7 @@ if array.includes(tL, ms)
     label.new(bar_index, low, "L", color=color.new(color.green, 0), textcolor=color.white, style=label.style_label_up, size=size.small)
 if array.includes(tS, ms)
     label.new(bar_index, high, "S", color=color.new(color.red, 0), textcolor=color.white, style=label.style_label_down, size=size.small)
-bgcolor(showGate and gc ? color.new(color.gray, 88) : na, title="bny30 closed")
+bgcolor(showGate and gc ? color.new(color.gray, 0) : na, title="bny30 closed")
 bgcolor(array.includes(tL, ms) ? color.new(color.green, 0) : na, title="trade long")
 bgcolor(array.includes(tS, ms) ? color.new(color.red, 0)   : na, title="trade short")
 '''

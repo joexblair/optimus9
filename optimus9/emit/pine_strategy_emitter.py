@@ -476,7 +476,7 @@ bny30p_side = na(bny30p_line) ? 0 : (bny30p_line > GATE_OOB_HI ?  1 : bny30p_lin
 oob_side = f_fold_two(bny30M_side, bny30p_side)
 
 // Single orange bgcolor when gate is open (either direction)
-bgcolor(show_dbg_gate and oob_side != 0 ? color.new(color.orange, 80) : na, title='dbg_gate_open')
+bgcolor(show_dbg_gate and oob_side != 0 ? color.new(color.orange, 0) : na, title='dbg_gate_open')
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VOTE MACHINE
@@ -575,12 +575,12 @@ dbg_line_short = (not na(state_gca5m_c) and state_gca5m_c == -1.0) or (not na(st
 // layer tells the truth about what's driving fire_long/fire_short.
 s5_pk_final_effective = use_passthrough ? pk_raw : s5_pk_final
 
-bgcolor(show_dbg_line_state and dbg_line_long  ? color.new(color.green, 92) : na, title='dbg_line_long')
-bgcolor(show_dbg_line_state and dbg_line_short ? color.new(color.red,   92) : na, title='dbg_line_short')
-bgcolor(show_dbg_pk_raw     and pk_raw ==  1   ? color.new(color.lime,  78) : na, title='dbg_pk_raw_long')
-bgcolor(show_dbg_pk_raw     and pk_raw == -1   ? color.new(color.red,   78) : na, title='dbg_pk_raw_short')
-bgcolor(show_dbg_s5_final   and s5_pk_final_effective ==  1 ? color.new(color.lime, 60) : na, title='dbg_s5_final_long')
-bgcolor(show_dbg_s5_final   and s5_pk_final_effective == -1 ? color.new(color.red,  60) : na, title='dbg_s5_final_short')
+bgcolor(show_dbg_line_state and dbg_line_long  ? color.new(color.green, 0) : na, title='dbg_line_long')
+bgcolor(show_dbg_line_state and dbg_line_short ? color.new(color.red,   0) : na, title='dbg_line_short')
+bgcolor(show_dbg_pk_raw     and pk_raw ==  1   ? color.new(color.lime,  0) : na, title='dbg_pk_raw_long')
+bgcolor(show_dbg_pk_raw     and pk_raw == -1   ? color.new(color.red,   0) : na, title='dbg_pk_raw_short')
+bgcolor(show_dbg_s5_final   and s5_pk_final_effective ==  1 ? color.new(color.lime, 0) : na, title='dbg_s5_final_long')
+bgcolor(show_dbg_s5_final   and s5_pk_final_effective == -1 ? color.new(color.red,  0) : na, title='dbg_s5_final_short')
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STRATEGY ENTRIES + BRACKET EXITS

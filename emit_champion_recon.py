@@ -127,7 +127,7 @@ def build_ctx(det, db, end):
 def mod_walk(c):
     return dict(inp='showWalk = input.bool(true, "bls walk band (1 ylw · 2 org · 3 lime)")',
                 decl=f"var int[] stt = {arr(c['stt'])}\nvar int[] stv = {arr(c['stv'])}",
-                render="bgcolor(showWalk and cur==1 ? color.new(color.yellow,82) : showWalk and cur==2 ? "
+                render="bgcolor(showWalk and cur==1 ? color.new(color.yellow,0) : showWalk and cur==2 ? "
                        "color.new(color.orange,80) : showWalk and cur==3 ? color.new(color.lime,82) : na, title=\"bls walk\")")
 
 
@@ -157,7 +157,7 @@ def mod_pk_raw(c):
 def mod_bias_reset_wp(c):
     return dict(inp='showRstWP = input.bool(true, "bias reset WITH-p (navy)")',
                 decl=f"var int[] rstWP = {arr(c['rwp_t'])}",
-                render="bgcolor(showRstWP and array.includes(rstWP, ms) ? color.new(color.navy, 15) : na, title=\"bias reset WITH-p\")")
+                render="bgcolor(showRstWP and array.includes(rstWP, ms) ? color.new(color.navy, 0) : na, title=\"bias reset WITH-p\")")
 
 
 def mod_bias_reset_wop(c):

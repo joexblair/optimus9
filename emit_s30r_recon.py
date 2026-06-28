@@ -115,7 +115,7 @@ while si < array.size(stt)
         break
     cur := array.get(stv, si)
     si += 1
-bgcolor(showWalk and cur==1 ? color.new(color.yellow, 80) : showWalk and cur==2 ? color.new(color.orange, 78) : showWalk and cur==3 ? color.new(color.lime, 80) : na, title="bls walk")
+bgcolor(showWalk and cur==1 ? color.new(color.yellow, 0) : showWalk and cur==2 ? color.new(color.orange, 0) : showWalk and cur==3 ? color.new(color.lime, 0) : na, title="bls walk")
 // state-transition labels
 if array.includes(ltt, ms)
     li = array.indexof(ltt, ms)
