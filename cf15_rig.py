@@ -11,7 +11,7 @@ from datetime import timezone
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 import bias_machine as bm
-from optimus9.analysis.lr import lr_detect, lr_walk, WOB_N, FLOOR, TARGET
+from optimus9.analysis.lr import lr_detect, lr_walk, resolve_s30r_lb, WOB_N, FLOOR, TARGET
 
 
 def ms(dt): return int(dt.replace(tzinfo=timezone.utc).timestamp() * 1000)
@@ -22,9 +22,7 @@ def run_window(db, start_ms, end_ms, floor=FLOOR, wob_n=WOB_N):
     cfg = bm.BiasConfig(osc='s12m', trigger_tf=12, gate='oob', entry_order='seq', s3_variant='m', xm45=False,
                         mae=0.4, target=0.9, floater_anchor='last', verdict='pk', trigger_src='hlc3')
     W = bm.BiasWindow(db, end_ms, cfg=cfg)
-    LP = int(db.execute("SELECT val FROM lp_config WHERE name='lp_s30r_lb'", fetch=True)[0]['val'])
-    s30tf = W._ls.resolve('s30r')[0]                             # s30 TF (s) from the view — no hardcode
-    entries = lr_detect(W, floor=floor, wob_n=wob_n, s30r_lb_bars=LP * (s30tf // 5), start_ms=start_ms)
+    entries = lr_detect(W, floor=floor, wob_n=wob_n, s30r_lb_bars=resolve_s30r_lb(db, W), start_ms=start_ms)
     return lr_walk(W, entries)
 
 

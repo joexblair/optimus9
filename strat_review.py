@@ -26,7 +26,7 @@ from optimus9.analysis.bl_detect import BLDetect
 from optimus9.analysis.bl_review import build_review, _persist
 from alchemy_report import build_bias_state, paint_bias_state
 from optimus9.analysis.bias_state import pk_bias_events, bro_cross_flips
-from optimus9.analysis.trade_gate import TradeGateWalker
+from optimus9.analysis.lr import lr_detect, resolve_s30r_lb
 
 _TABLE = 'strat_review'
 _LOOKBACK_MS = 120 * 3600 * 1000
@@ -48,20 +48,13 @@ def _utc(t_ms):
 
 # ── module emitters (each returns rows in the common schema) ───────────────────────────────────────
 def _cascade_rows(ctx):
-    """lp-cascade entries (pl_cas_start/end) — the trade machine, rides the composite bias. Each
-    pl_cas_end also emits a `TRADE` event at the same time (Joe 0627): the actual trade fire. Kept
-    SEPARATE from pl_cas_end so future trade-gates can filter TRADE without touching the cascade
-    mechanic (pl_cas_end won't always become a trade). Currently 1:1 with pl_cas_end."""
+    """lr (latch-release) entries → one TRADE event each. lr_detect IS the production strategy now
+    (replaces the gate-chain TradeGateWalker, Joe 0628): arm on s6m breach → wobslay reversal → s30a
+    re-breach = the fire. The SAME lr_detect runs in o9-live, so prod's TRADE stream == the live machine's."""
     start = ctx['end_ms'] - _LOOKBACK_MS
-    bias = ctx['bs'].direction_array(ctx['W'].ts)
-    rows = []
-    for t, kind, side in TradeGateWalker(ctx['W'], ctx['db']).cascade(bias):
-        if not (start <= t < ctx['end_ms']):
-            continue
-        rows.append(_row(bar_time=_utc(t), event=kind, breach_dir=side))
-        if kind == 'pl_cas_end':
-            rows.append(_row(bar_time=_utc(t), event='TRADE', breach_dir=side))   # the trade fires
-    return rows
+    entries = lr_detect(ctx['W'], s30r_lb_bars=resolve_s30r_lb(ctx['db'], ctx['W']), start_ms=start)
+    return [_row(bar_time=_utc(tms), event='TRADE', breach_dir=bd)
+            for tms, es, bd, tj in entries if start <= tms < ctx['end_ms']]
 
 
 def _pk_rows(ctx):

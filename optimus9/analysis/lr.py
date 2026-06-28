@@ -42,6 +42,13 @@ def s30a_active(W, s30r_lb=0):
     return (M >= HI) & (m >= HI) & rhi & (s14 > 50), (M <= LO) & (m <= LO) & rlo & (s14 < 50)
 
 
+def resolve_s30r_lb(db, W):
+    """s30r lift-off lookback in 5s bars: lp_config `lp_s30r_lb` × (s30 TF in 5s units). The ONE source for
+    rig + strat_review producer + o9-live (no duplicated derivation). Folds into the lr_params loader (step 3)."""
+    lp = int(db.execute("SELECT val FROM lp_config WHERE name='lp_s30r_lb'", fetch=True)[0]['val'])
+    return lp * (W._ls.resolve('s30r')[0] // 5)
+
+
 def lr_detect(W, floor=FLOOR, wob_n=WOB_N, horizon=HORIZON, s30r_lb_bars=0, start_ms=None):
     """THE STRATEGY — find latch-release setups up to W's end, trades gated to >= start_ms.
     Returns [(trade_ms, es, bd, tj)]: es = s6m breach side (the arm), bd = -es (trade dir), tj = 5s bar idx.
