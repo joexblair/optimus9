@@ -22,15 +22,28 @@ WATCH = '/home/joe/thecodes/transfer/kline_sanitise'
 POLL_SECONDS = 10
 
 
+def _range_name(name, report):
+    """Processed-file name showing the data range, TV id dropped (Joe 0628):
+    BYBIT_FARTCOINUSDT.P-5S_36501.csv → BYBIT_FARTCOINUSDT.P-5S_0625to0627.csv. Idempotent on already-renamed
+    files (re-drop keeps the same range name). Skipped/range-less files keep their original name."""
+    rng = report.get('range')
+    if not rng:
+        return name
+    stem = name.rsplit('.', 1)[0].rsplit('_', 1)[0]   # drop '.csv', then the trailing '_<tv-id>'
+    mmdd = lambda s: s[5:7] + s[8:10]                 # 'YYYY-MM-DD ...' → 'MMDD'
+    return f'{stem}_{mmdd(rng[0])}to{mmdd(rng[1])}.csv'
+
+
 def scan_once(sanitiser, log):
-    """Process every pending CSV once: reconcile → archive. Returns the count processed."""
+    """Process every pending CSV once: reconcile → archive (renamed to its range). Returns count processed."""
     done = 0
     for path in sorted(glob.glob(os.path.join(WATCH, '*.csv'))):
         name = os.path.basename(path)
         try:
             report = sanitiser.reconcile(path)
-            log.info(f'sanitised {name}: {report}')
-            shutil.move(path, os.path.join(WATCH, 'processed', name))
+            dest = _range_name(name, report)
+            shutil.move(path, os.path.join(WATCH, 'processed', dest))
+            log.info(f'archived {name} → processed/{dest}')
             done += 1
         except Exception as e:
             log.error(f'FAILED {name}: {e}')
