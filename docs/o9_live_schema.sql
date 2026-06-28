@@ -1,0 +1,181 @@
+-- o9_live_schema.sql (Joe 0628) — the o9-live forward-test DB schema.
+-- COPIED config/reference + LIVE-data tables (DDL pulled from dev DB), NO backtesting/report tables.
+-- + the fake-exchange + pyramiding tables (new). See docs/o9_live_design.md.
+
+-- ===== COPIED: config / reference (seed rows from dev) + live-data (collector fills) =====
+CREATE TABLE `indicator_value_modes` (
+  `ivm_pk` int NOT NULL,
+  `ivm_label` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `ivm_description` varchar(160) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`ivm_pk`),
+  UNIQUE KEY `ivm_label` (`ivm_label`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `indicator_series` (
+  `is_pk` smallint unsigned NOT NULL AUTO_INCREMENT,
+  `is_prefix` varchar(5) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (`is_pk`),
+  UNIQUE KEY `uq_is_prefix` (`is_prefix`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `indicator_lines` (
+  `il_pk` smallint unsigned NOT NULL AUTO_INCREMENT,
+  `il_suffix` varchar(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `il_description` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`il_pk`),
+  UNIQUE KEY `uq_il_suffix` (`il_suffix`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `indicator_timeframes` (
+  `itf_pk` smallint unsigned NOT NULL AUTO_INCREMENT,
+  `itf_label` varchar(5) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `itf_seconds` smallint unsigned NOT NULL,
+  PRIMARY KEY (`itf_pk`),
+  UNIQUE KEY `uq_itf_label_seconds` (`itf_label`,`itf_seconds`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `indicator_configs` (
+  `ic_pk` int unsigned NOT NULL AUTO_INCREMENT,
+  `ic_is_pk` smallint unsigned NOT NULL,
+  `ic_itf_pk` smallint unsigned NOT NULL,
+  `ic_il_pk` smallint unsigned NOT NULL,
+  `ic_line_type` enum('bb','k') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `ic_live_after_dt` datetime NOT NULL DEFAULT '2000-01-01 00:00:00',
+  `ic_src` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `ic_high_boundary` decimal(6,2) NOT NULL DEFAULT '85.00',
+  `ic_low_boundary` decimal(6,2) NOT NULL DEFAULT '15.00',
+  `ic_bb_len` smallint unsigned DEFAULT NULL,
+  `ic_bb_mult` decimal(8,4) DEFAULT NULL,
+  `ic_k_len` smallint unsigned DEFAULT NULL,
+  `ic_rsi_len` smallint unsigned DEFAULT NULL,
+  `ic_stc_len` smallint unsigned DEFAULT NULL,
+  `ic_ivm_pk` int DEFAULT '1',
+  `ic_wobble` smallint unsigned DEFAULT NULL,
+  PRIMARY KEY (`ic_pk`),
+  UNIQUE KEY `uq_ic_instance_dt` (`ic_is_pk`,`ic_itf_pk`,`ic_il_pk`,`ic_live_after_dt`),
+  KEY `ic_itf_pk` (`ic_itf_pk`),
+  KEY `ic_il_pk` (`ic_il_pk`),
+  CONSTRAINT `indicator_configs_ibfk_1` FOREIGN KEY (`ic_is_pk`) REFERENCES `indicator_series` (`is_pk`),
+  CONSTRAINT `indicator_configs_ibfk_2` FOREIGN KEY (`ic_itf_pk`) REFERENCES `indicator_timeframes` (`itf_pk`),
+  CONSTRAINT `indicator_configs_ibfk_3` FOREIGN KEY (`ic_il_pk`) REFERENCES `indicator_lines` (`il_pk`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `lp_config` (
+  `name` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `val` double NOT NULL,
+  `note` varchar(160) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `trade_gate` (
+  `tg_pk` int NOT NULL AUTO_INCREMENT,
+  `tg_seq` int NOT NULL,
+  `tg_name` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tg_op` varchar(3) COLLATE utf8mb4_unicode_ci DEFAULT 'AND',
+  `tg_active` tinyint DEFAULT '1',
+  PRIMARY KEY (`tg_pk`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `trade_gate_line` (
+  `tgl_pk` int NOT NULL AUTO_INCREMENT,
+  `tgl_tg_pk` int NOT NULL,
+  `tgl_ic_pk` int NOT NULL,
+  PRIMARY KEY (`tgl_pk`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `kline_collection` (
+  `kc_pk` int unsigned NOT NULL AUTO_INCREMENT,
+  `kc_tp_pk` int unsigned NOT NULL,
+  `kc_timestamp` bigint NOT NULL,
+  `kc_open` decimal(20,8) NOT NULL,
+  `kc_high` decimal(20,8) NOT NULL,
+  `kc_low` decimal(20,8) NOT NULL,
+  `kc_close` decimal(20,8) NOT NULL,
+  `kc_volume` decimal(20,8) NOT NULL,
+  PRIMARY KEY (`kc_pk`),
+  UNIQUE KEY `uq_kc_tp_ts` (`kc_tp_pk`,`kc_timestamp`),
+  KEY `idx_kc_tp_ts` (`kc_tp_pk`,`kc_timestamp`),
+  CONSTRAINT `kline_collection_ibfk_1` FOREIGN KEY (`kc_tp_pk`) REFERENCES `trading_pairs` (`tp_pk`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `ticks` (
+  `tk_pk` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tk_tp_pk` int unsigned NOT NULL,
+  `tk_timestamp` bigint NOT NULL,
+  `tk_price` decimal(20,8) NOT NULL,
+  `tk_volume` decimal(20,8) NOT NULL,
+  `tk_side` enum('buy','sell') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tk_trade_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`tk_pk`),
+  UNIQUE KEY `uq_tk_tp_tid` (`tk_tp_pk`,`tk_trade_id`),
+  KEY `idx_tk_tp_ts` (`tk_tp_pk`,`tk_timestamp`),
+  CONSTRAINT `ticks_ibfk_1` FOREIGN KEY (`tk_tp_pk`) REFERENCES `trading_pairs` (`tp_pk`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- the live-config view
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vw_indicator_configs_live` AS select `ic`.`ic_pk` AS `ic_pk`,`ic`.`ic_is_pk` AS `ic_is_pk`,`ic`.`ic_itf_pk` AS `ic_itf_pk`,`ic`.`ic_il_pk` AS `ic_il_pk`,`ic`.`ic_line_type` AS `ic_line_type`,`ic`.`ic_live_after_dt` AS `ic_live_after_dt`,`ic`.`ic_src` AS `ic_src`,`ic`.`ic_high_boundary` AS `ic_high_boundary`,`ic`.`ic_low_boundary` AS `ic_low_boundary`,`ic`.`ic_bb_len` AS `ic_bb_len`,`ic`.`ic_bb_mult` AS `ic_bb_mult`,`ic`.`ic_k_len` AS `ic_k_len`,`ic`.`ic_rsi_len` AS `ic_rsi_len`,`ic`.`ic_stc_len` AS `ic_stc_len`,concat(`s`.`is_prefix`,`itf`.`itf_label`,`il`.`il_suffix`) AS `ind_name`,`itf`.`itf_seconds` AS `itf_seconds`,`ic`.`ic_ivm_pk` AS `ic_ivm_pk`,`vm`.`ivm_label` AS `value_mode` from ((((`indicator_configs` `ic` join `indicator_series` `s` on((`s`.`is_pk` = `ic`.`ic_is_pk`))) join `indicator_lines` `il` on((`il`.`il_pk` = `ic`.`ic_il_pk`))) join `indicator_timeframes` `itf` on((`itf`.`itf_pk` = `ic`.`ic_itf_pk`))) left join `indicator_value_modes` `vm` on((`vm`.`ivm_pk` = `ic`.`ic_ivm_pk`))) where (`ic`.`ic_live_after_dt` = (select max(`ic2`.`ic_live_after_dt`) from `indicator_configs` `ic2` where ((`ic2`.`ic_is_pk` = `ic`.`ic_is_pk`) and (`ic2`.`ic_il_pk` = `ic`.`ic_il_pk`) and (`ic2`.`ic_itf_pk` = `ic`.`ic_itf_pk`) and (`ic2`.`ic_live_after_dt` <= now()))));
+
+-- ===== NEW: fake-exchange + pyramiding (o9-live forward-test) =====
+-- Position model = Bybit one-way: cascade re-arms ADD to one accumulating same-side position
+-- (size grows, avg_entry re-weights), exits reduce it. Slippage = live order-book walk per fill.
+
+CREATE TABLE fx_order (
+  order_id      VARCHAR(40)  NOT NULL PRIMARY KEY,         -- our uuid (mirrors Bybit orderId)
+  order_link_id VARCHAR(40),                               -- client id (orderLinkId)
+  symbol        VARCHAR(20)  NOT NULL,
+  side          ENUM('Buy','Sell') NOT NULL,
+  order_type    ENUM('Market','Limit') NOT NULL,
+  qty           DECIMAL(20,8) NOT NULL,                    -- coins
+  price         DECIMAL(20,8),                             -- limit price (NULL for market)
+  reduce_only   TINYINT DEFAULT 0,
+  order_status  ENUM('New','Filled','Cancelled','Rejected') NOT NULL,
+  created_ms    BIGINT NOT NULL,
+  updated_ms    BIGINT,
+  INDEX(symbol), INDEX(created_ms)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE fx_position (
+  position_id    BIGINT AUTO_INCREMENT PRIMARY KEY,
+  symbol         VARCHAR(20) NOT NULL,
+  side           ENUM('Buy','Sell') NOT NULL,             -- one-way; pyramiding accumulates same-side
+  size           DECIMAL(20,8) NOT NULL,                  -- current accumulated size (coins)
+  avg_entry      DECIMAL(20,8) NOT NULL,                  -- volume-weighted avg entry
+  entry_count    INT DEFAULT 1,                           -- pyramid adds
+  leverage       INT DEFAULT 50,
+  stop_loss      DECIMAL(20,8),                           -- server-side SL price (0.5%)
+  status         ENUM('open','closed') NOT NULL,
+  opened_ms      BIGINT NOT NULL,
+  closed_ms      BIGINT,
+  realized_pnl   DECIMAL(20,8) DEFAULT 0,                 -- net of fees + slippage, on (partial/full) close
+  total_fees     DECIMAL(20,8) DEFAULT 0,
+  total_slip_bps DECIMAL(10,2),                           -- size-weighted avg slippage across fills
+  INDEX(symbol), INDEX(status), INDEX(opened_ms)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE fx_fill (
+  exec_id       BIGINT AUTO_INCREMENT PRIMARY KEY,        -- mirrors execId
+  order_id      VARCHAR(40) NOT NULL,
+  position_id   BIGINT NOT NULL,                          -- position this fill built / reduced
+  symbol        VARCHAR(20) NOT NULL,
+  side          ENUM('Buy','Sell') NOT NULL,
+  exec_price    DECIMAL(20,8) NOT NULL,                   -- order-book-walk avg fill
+  exec_qty      DECIMAL(20,8) NOT NULL,
+  mid_price     DECIMAL(20,8) NOT NULL,                   -- book mid at fill (slippage basis)
+  slippage_bps  DECIMAL(10,2) NOT NULL,                   -- (exec_price - mid)/mid, signed by side
+  fee           DECIMAL(20,8) NOT NULL,                   -- taker fee on this fill
+  is_maker      TINYINT DEFAULT 0,
+  closed_size   DECIMAL(20,8) DEFAULT 0,                  -- size reduced (exit fills)
+  exec_ms       BIGINT NOT NULL,
+  INDEX(order_id), INDEX(position_id), INDEX(exec_ms)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE o9_decision (                                 -- o9-live's per-5s output (to test the strategy output)
+  decision_id   BIGINT AUTO_INCREMENT PRIMARY KEY,
+  kline_ms      BIGINT NOT NULL,                          -- the 5s bar decided on
+  action        ENUM('open_long','open_short','add','close','hold') NOT NULL,
+  reason        VARCHAR(60),                              -- cf15_finisher | sl_hit | exit_signal | ...
+  order_id      VARCHAR(40),                              -- order it triggered (NULL for hold)
+  line_snapshot JSON,                                     -- W.line values at decision (audit/debug)
+  created_ms    BIGINT NOT NULL,
+  INDEX(kline_ms)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
