@@ -75,6 +75,14 @@ That last idea lands deep, Sifu — and it reframes the whole thing. Not "a remi
   processlist. Same root as "Test, don't theorise": the cost I could *see* (slow insert)
   wasn't the cost that *mattered* (the lock). Verify the blocker, then optimise.
 
+- **Sandbox the spec — validate without touching prod** — build a new spec as a throwaway
+  rig in its own isolation (own engine + own result table, e.g. `cf15_rig` → `cf15_walk`),
+  prove it fully, THEN apply to prod as a deliberate, separate step. The status quo stays
+  intact the whole time → nothing to break, nothing to untangle, and "apply to prod" is its
+  own gated decision, not a side-effect of the experiment. (cf15 was the first clean run of
+  this — 8-window validated entirely beside the live trade_gate cascade, never through it;
+  standard going forward, Joe 0628.)
+
 ## Cycle ritual
 Define → Explore → Scope → Decompose → Recycle. Plan mode = the scope gate; the
 design doc = DoD; memory = the CI ledger. Open *this* doc at init.

@@ -1,8 +1,8 @@
 -- o9_live_schema.sql (Joe 0628) — the o9-live forward-test DB schema.
--- COPIED config/reference + LIVE-data tables (DDL pulled from dev DB), NO backtesting/report tables.
--- + the fake-exchange + pyramiding tables (new). See docs/o9_live_design.md.
+-- COPIED config/reference + LIVE-data tables (trace-verified deps of cf15 run_window), NO backtest tables.
+-- + fake-exchange / pyramiding tables (new). See docs/o9_live_design.md.
 
--- ===== COPIED: config / reference (seed rows from dev) + live-data (collector fills) =====
+-- ===== COPIED: config/reference (seed from dev) + live-data (collector fills) =====
 CREATE TABLE `indicator_value_modes` (
   `ivm_pk` int NOT NULL,
   `ivm_label` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -60,27 +60,36 @@ CREATE TABLE `indicator_configs` (
   CONSTRAINT `indicator_configs_ibfk_3` FOREIGN KEY (`ic_il_pk`) REFERENCES `indicator_lines` (`il_pk`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE `optimus9_system` (
+  `sys_pk` bigint NOT NULL AUTO_INCREMENT,
+  `pxsmooth_dema_src` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT 'close',
+  `pxsmooth_dema_len` int DEFAULT '2',
+  `pxsmooth_dema_tf` int DEFAULT '5',
+  `hi_boundary` float DEFAULT '85',
+  `lo_boundary` float DEFAULT '15',
+  PRIMARY KEY (`sys_pk`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `bl_lines` (
+  `bl_pk` bigint NOT NULL AUTO_INCREMENT,
+  `bl_ic_pk` bigint NOT NULL,
+  `bl_line_name` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `bl_role` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `bl_exit_mask` int DEFAULT NULL,
+  `bl_pk_ic_pk` bigint DEFAULT NULL,
+  `bl_pk_line_name` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `bl_is_active` tinyint DEFAULT '0',
+  `bl_live_after_date` datetime DEFAULT '2000-01-01 00:00:00',
+  `bl_support_ic_pk` bigint DEFAULT NULL,
+  `bl_exit3_support_ic_pk` bigint DEFAULT NULL,
+  PRIMARY KEY (`bl_pk`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `lp_config` (
   `name` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
   `val` double NOT NULL,
   `note` varchar(160) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE `trade_gate` (
-  `tg_pk` int NOT NULL AUTO_INCREMENT,
-  `tg_seq` int NOT NULL,
-  `tg_name` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `tg_op` varchar(3) COLLATE utf8mb4_unicode_ci DEFAULT 'AND',
-  `tg_active` tinyint DEFAULT '1',
-  PRIMARY KEY (`tg_pk`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE `trade_gate_line` (
-  `tgl_pk` int NOT NULL AUTO_INCREMENT,
-  `tgl_tg_pk` int NOT NULL,
-  `tgl_ic_pk` int NOT NULL,
-  PRIMARY KEY (`tgl_pk`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `kline_collection` (
@@ -112,7 +121,7 @@ CREATE TABLE `ticks` (
   CONSTRAINT `ticks_ibfk_1` FOREIGN KEY (`tk_tp_pk`) REFERENCES `trading_pairs` (`tp_pk`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- the live-config view
+-- live-config view
 CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vw_indicator_configs_live` AS select `ic`.`ic_pk` AS `ic_pk`,`ic`.`ic_is_pk` AS `ic_is_pk`,`ic`.`ic_itf_pk` AS `ic_itf_pk`,`ic`.`ic_il_pk` AS `ic_il_pk`,`ic`.`ic_line_type` AS `ic_line_type`,`ic`.`ic_live_after_dt` AS `ic_live_after_dt`,`ic`.`ic_src` AS `ic_src`,`ic`.`ic_high_boundary` AS `ic_high_boundary`,`ic`.`ic_low_boundary` AS `ic_low_boundary`,`ic`.`ic_bb_len` AS `ic_bb_len`,`ic`.`ic_bb_mult` AS `ic_bb_mult`,`ic`.`ic_k_len` AS `ic_k_len`,`ic`.`ic_rsi_len` AS `ic_rsi_len`,`ic`.`ic_stc_len` AS `ic_stc_len`,concat(`s`.`is_prefix`,`itf`.`itf_label`,`il`.`il_suffix`) AS `ind_name`,`itf`.`itf_seconds` AS `itf_seconds`,`ic`.`ic_ivm_pk` AS `ic_ivm_pk`,`vm`.`ivm_label` AS `value_mode` from ((((`indicator_configs` `ic` join `indicator_series` `s` on((`s`.`is_pk` = `ic`.`ic_is_pk`))) join `indicator_lines` `il` on((`il`.`il_pk` = `ic`.`ic_il_pk`))) join `indicator_timeframes` `itf` on((`itf`.`itf_pk` = `ic`.`ic_itf_pk`))) left join `indicator_value_modes` `vm` on((`vm`.`ivm_pk` = `ic`.`ic_ivm_pk`))) where (`ic`.`ic_live_after_dt` = (select max(`ic2`.`ic_live_after_dt`) from `indicator_configs` `ic2` where ((`ic2`.`ic_is_pk` = `ic`.`ic_is_pk`) and (`ic2`.`ic_il_pk` = `ic`.`ic_il_pk`) and (`ic2`.`ic_itf_pk` = `ic`.`ic_itf_pk`) and (`ic2`.`ic_live_after_dt` <= now()))));
 
 -- ===== NEW: fake-exchange + pyramiding (o9-live forward-test) =====
