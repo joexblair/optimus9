@@ -1,0 +1,5 @@
+# o9-live forward-test deps (Phase 1 local / Phase 2 container image)
+flask>=3.0
+requests>=2.28
+websocket-client>=1.5
+mysql-connector-python>=8.0
