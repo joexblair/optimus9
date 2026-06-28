@@ -11,23 +11,25 @@ from datetime import timezone
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 import bias_machine as bm
-from optimus9.analysis.lr import lr_detect, lr_walk, resolve_s30r_lb, WOB_N, FLOOR, TARGET
+from optimus9.analysis.lr import lr_detect, lr_walk, lr_params, resolve_s30r_lb
 
 
 def ms(dt): return int(dt.replace(tzinfo=timezone.utc).timestamp() * 1000)
 
 
-def run_window(db, start_ms, end_ms, floor=FLOOR, wob_n=WOB_N):
-    """Build the window + run lr_detect → lr_walk for (start_ms, end_ms]. Returns the walked rows."""
+def run_window(db, start_ms, end_ms):
+    """Build the window + run lr_detect → lr_walk for (start_ms, end_ms]. Dials from lp_config. Returns rows."""
     cfg = bm.BiasConfig(osc='s12m', trigger_tf=12, gate='oob', entry_order='seq', s3_variant='m', xm45=False,
                         mae=0.4, target=0.9, floater_anchor='last', verdict='pk', trigger_src='hlc3')
     W = bm.BiasWindow(db, end_ms, cfg=cfg)
-    entries = lr_detect(W, floor=floor, wob_n=wob_n, s30r_lb_bars=resolve_s30r_lb(db, W), start_ms=start_ms)
-    return lr_walk(W, entries)
+    p = lr_params(db)
+    entries = lr_detect(W, p, s30r_lb_bars=resolve_s30r_lb(db, W), start_ms=start_ms)
+    return lr_walk(W, entries, p)
 
 
 def main():
     db = DatabaseManager(**get_db_config()); db.connect()
+    p = lr_params(db)
     R1 = ms(dtm.datetime(2026, 6, 22, tzinfo=timezone.utc))
     START = ms(dtm.datetime(2026, 6, 17, tzinfo=timezone.utc))    # window starts 06-17 00:00 (warmup precedes)
     rows = run_window(db, START, R1)
@@ -36,13 +38,13 @@ def main():
                   trade_dir TINYINT, mae FLOAT, mfe FLOAT, mfe_ok TINYINT, mfe_swing_side TINYINT,
                   wob_n INT, floor FLOAT)''')
     db.executemany('INSERT INTO cf15_walk VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
-                   [r[:8] + (WOB_N, FLOOR) for r in rows])
+                   [r[:8] + (p.wob_n, p.floor) for r in rows])
     if rows:
         mae = np.array([r[4] for r in rows]); mfe = np.array([r[5] for r in rows])
         ok = np.array([r[6] for r in rows]); side = np.array([r[7] for r in rows])
-        print(f"cf15_walk: {len(rows)} trades  ·  06-17 00:00 → 06-22  (WOB_N={WOB_N} FLOOR={FLOOR})")
+        print(f"cf15_walk: {len(rows)} trades  ·  06-17 00:00 → 06-22  (WOB_N={p.wob_n} FLOOR={p.floor})")
         print(f"  mfe_swing_side (entry on favourable leg):  {side.sum()}/{len(rows)} = {side.mean()*100:.0f}%")
-        print(f"  mfe_ok (favourable reached {TARGET}%):       {ok.sum()}/{len(rows)} = {ok.mean()*100:.0f}%")
+        print(f"  mfe_ok (favourable reached {p.target}%):       {ok.sum()}/{len(rows)} = {ok.mean()*100:.0f}%")
         print(f"  MAE  median {np.median(mae):.2f}%  mean {mae.mean():.2f}%  max {mae.max():.2f}%")
         print(f"  MFE  median {np.median(mfe):.2f}%  mean {mfe.mean():.2f}%  max {mfe.max():.2f}%")
     else:

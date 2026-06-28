@@ -14,12 +14,32 @@ Dials default here; step 3 hoists them to lp_config.
 import numpy as np
 import pandas as pd
 import datetime as dtm
+from dataclasses import dataclass
 from optimus9.compute.indicator_computer import IndicatorComputer as IC
 from optimus9.compute.swing_detect import find_pivots
 
 HI, LO = 85.0, 15.0
 STEP = 30000                                                 # 30s swing/price grid
-WOB_N, FLOOR, TARGET, HORIZON = 4, 8.0, 0.9, 90 * 12         # latch-release dials (→ lp_config in step 3)
+WOB_N, FLOOR, TARGET, HORIZON = 4, 8.0, 0.9, 90 * 12         # fallback defaults; live values from lp_config
+
+
+@dataclass
+class LRParams:
+    """The latch-release dial-set (one config object). Loaded from lp_config by lr_params()."""
+    floor: float = FLOOR
+    wob_n: int = WOB_N
+    horizon: int = HORIZON
+    target: float = TARGET
+
+
+def lr_params(db):
+    """The lr dials from lp_config (fall back to module defaults if a row is absent). The ONE dial source
+    for rig + strat_review producer + o9-live — no hardcode. (s30r lookback is derived separately, needs W.)"""
+    c = {r['name']: r['val'] for r in db.execute(
+        "SELECT name, val FROM lp_config WHERE name IN "
+        "('lp_lr_floor', 'lp_lr_wob_n', 'lp_lr_horizon', 'lp_lr_target')", fetch=True)}
+    return LRParams(floor=c.get('lp_lr_floor', FLOOR), wob_n=int(c.get('lp_lr_wob_n', WOB_N)),
+                    horizon=int(c.get('lp_lr_horizon', HORIZON)), target=c.get('lp_lr_target', TARGET))
 
 
 def _dts(t): return dtm.datetime.utcfromtimestamp(int(t) / 1000)
@@ -49,15 +69,15 @@ def resolve_s30r_lb(db, W):
     return lp * (W._ls.resolve('s30r')[0] // 5)
 
 
-def lr_detect(W, floor=FLOOR, wob_n=WOB_N, horizon=HORIZON, s30r_lb_bars=0, start_ms=None):
-    """THE STRATEGY — find latch-release setups up to W's end, trades gated to >= start_ms.
+def lr_detect(W, p, s30r_lb_bars=0, start_ms=None):
+    """THE STRATEGY — find latch-release setups up to W's end, trades gated to >= start_ms. p = LRParams.
     Returns [(trade_ms, es, bd, tj)]: es = s6m breach side (the arm), bd = -es (trade dir), tj = 5s bar idx.
     Computes its own detect signals (s6m breach + wobslay + s30a); emits entries only — no verdict."""
     ts = W.ts; n = len(ts)
     s6 = W._line_emerging('s6m')                                 # emerging s6m — the wobslay rides this
     s6c = W._line('s6m')                                         # CLOSED s6m — the breach / arm
     sign = np.where(s6c >= HI, 1, np.where(s6c <= LO, -1, 0))
-    wob = IC.wobble_slayer(s6, wob_n, HI, LO, anchored=True, strict=True)
+    wob = IC.wobble_slayer(s6, p.wob_n, HI, LO, anchored=True, strict=True)
     s30a_hi, s30a_lo = s30a_active(W, s30r_lb_bars)
     if start_ms is None:
         start_ms = int(ts[0])
@@ -65,15 +85,15 @@ def lr_detect(W, floor=FLOOR, wob_n=WOB_N, horizon=HORIZON, s30r_lb_bars=0, star
     while i < n:
         if sign[i] != 0 and sign[i] != sign[i - 1]:              # s6m breach onset, side es (the arm)
             es = int(sign[i]); rj = None
-            for j in range(i, min(n, i + horizon)):
+            for j in range(i, min(n, i + p.horizon)):
                 if sign[j] == -es:
                     break                                         # flipped opposite OOB → arm dies
-                if wob[j] == -es and j - wob_n >= 0 and abs(s6[j] - s6[j - wob_n]) >= floor:
+                if wob[j] == -es and j - p.wob_n >= 0 and abs(s6[j] - s6[j - p.wob_n]) >= p.floor:
                     rj = j; break                                 # floor-gated wobslay reversal
             if rj is not None:
                 side = s30a_hi if es == 1 else s30a_lo           # finisher = same side as the breach
-                cap = next((k for k in range(rj + 1, min(n, rj + horizon)) if sign[k] == -es),
-                           min(n, rj + horizon))                  # dies if s6m breaches the opposite side
+                cap = next((k for k in range(rj + 1, min(n, rj + p.horizon)) if sign[k] == -es),
+                           min(n, rj + p.horizon))                # dies if s6m breaches the opposite side
                 tj = next((k for k in range(rj + 1, cap) if side[k] and not side[k - 1]), None)
                 if tj is not None and int(ts[tj]) >= start_ms:
                     entries.append((int(ts[tj]), es, -es, int(tj)))
@@ -83,8 +103,8 @@ def lr_detect(W, floor=FLOOR, wob_n=WOB_N, horizon=HORIZON, s30r_lb_bars=0, star
     return entries
 
 
-def lr_walk(W, entries, target=TARGET):
-    """The BACKTEST VERDICT — MAE/MFE per entry to the 0.9% favourable swing. Returns
+def lr_walk(W, entries, p):
+    """The BACKTEST VERDICT — MAE/MFE per entry to the 0.9% favourable swing (p = LRParams). Returns
     [(trade_ms, dt, es, bd, mae, mfe, mfe_ok, mfe_swing_side, price)]. Computes its own price/swing signals."""
     ts = W.ts
     idx30 = np.where(ts % STEP == 0)[0]; ts30 = ts[idx30]
@@ -102,5 +122,5 @@ def lr_walk(W, entries, target=TARGET):
         if len(seg):
             d = (seg - close30[j]) / close30[j] * 100.0 * bd
             mfe = float(d.max()); mae = float(-d.min())
-        rows.append((tms, _dts(tms), es, bd, round(mae, 3), round(mfe, 3), int(mfe >= target), mfe_side, float(W.px[tj])))
+        rows.append((tms, _dts(tms), es, bd, round(mae, 3), round(mfe, 3), int(mfe >= p.target), mfe_side, float(W.px[tj])))
     return rows
