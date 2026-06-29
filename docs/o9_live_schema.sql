@@ -1,6 +1,6 @@
--- o9_live_schema.sql (Joe 0628) — the o9-live forward-test DB schema.
--- COPIED config/reference + LIVE-data tables (trace-verified deps of cf15 run_window), NO backtest tables.
--- + fake-exchange / pyramiding tables (new). See docs/o9_live_design.md.
+-- o9_live_schema.sql (Joe 0628) — o9-live forward-test DB schema.
+-- COPIED config/reference + live-data tables (trace-verified deps + FK parents), NO backtest tables.
+-- + fake-exchange / pyramiding tables. See docs/o9_live_design.md.
 
 -- ===== COPIED: config/reference (seed from dev) + live-data (collector fills) =====
 CREATE TABLE `indicator_value_modes` (
@@ -83,6 +83,15 @@ CREATE TABLE `bl_lines` (
   `bl_support_ic_pk` bigint DEFAULT NULL,
   `bl_exit3_support_ic_pk` bigint DEFAULT NULL,
   PRIMARY KEY (`bl_pk`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `trading_pairs` (
+  `tp_pk` int unsigned NOT NULL AUTO_INCREMENT,
+  `tp_symbol_bybit` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tp_symbol_bnc` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tp_active` tinyint(1) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`tp_pk`),
+  UNIQUE KEY `uq_tp_bybit` (`tp_symbol_bybit`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `lp_config` (
