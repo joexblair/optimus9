@@ -14,7 +14,7 @@ combine: finishers OR'd · bias AND'd · arms each independent. Add a finisher =
 import numpy as np
 import pandas as pd
 import datetime as dtm
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from optimus9.compute.indicator_computer import IndicatorComputer as IC
 from optimus9.compute.swing_detect import find_pivots
 
@@ -45,32 +45,44 @@ class LRConfig:
     floor: float; wob_n: int; horizon: int; target: float
     swing_ms: int; swing_pct: float; bias_mid: float; s30r_lb: int
     hi: float; lo: float
+    exit_rlb: int = 22; sl: float = 0.5
     arms: list = field(default_factory=list)
     finishers: list = field(default_factory=list)
     biases: list = field(default_factory=list)
+    exit_finishers: list = field(default_factory=list)
+
+
+def _gate_from_row(db, g):
+    """One lr_gate row → a Gate (its lines resolved ic_pk → name+TF+check). Shared by entry + exit loaders."""
+    lines = [LineRef(r['nm'], r['ch'], int(r['tf'])) for r in db.execute(
+        "SELECT i.ind_name nm, l.lrgl_check ch, i.itf_seconds tf FROM lr_gate_line l "
+        "JOIN vw_indicator_configs_live i ON i.ic_pk = l.lrgl_ic_pk WHERE l.lrgl_lrg_pk = %s",
+        (g['lrg_pk'],), fetch=True)]
+    return Gate(g['lrg_role'], g['lrg_name'], g['lrg_op'], lines)
 
 
 def lr_config(db):
     """Load the full lr config — gate-sets (active, by role) + knobs (lp_config) + OOB (optimus9_system).
-    The ONE config source for rig + strat_review producer + o9-live. Lines by ic_pk (no hardcoded names)."""
+    The ONE config source for rig + strat_review producer + o9-live. Lines by ic_pk (no hardcoded names).
+    exit_finishers = ALL finisher gates (active+inactive) — the exit ANDs them regardless of entry-active."""
     k = {r['name']: r['val'] for r in db.execute(
         "SELECT name, val FROM lp_config WHERE name IN ('lp_lr_floor','lp_lr_wob_n','lp_lr_horizon',"
-        "'lp_lr_target','lp_lr_swing_ms','lp_lr_swing_pct','lp_lr_bias_mid','lp_s30r_lb')", fetch=True)}
+        "'lp_lr_target','lp_lr_swing_ms','lp_lr_swing_pct','lp_lr_bias_mid','lp_s30r_lb',"
+        "'lp_lr_exit_rlb','lp_lr_sl')", fetch=True)}
     sb = db.execute("SELECT hi_boundary, lo_boundary FROM optimus9_system LIMIT 1", fetch=True)[0]
     roles = {'arm': [], 'finisher': [], 'bias': []}
     for g in db.execute("SELECT * FROM lr_gate WHERE lrg_active=1", fetch=True):
-        lines = [LineRef(r['nm'], r['ch'], int(r['tf'])) for r in db.execute(
-            "SELECT i.ind_name nm, l.lrgl_check ch, i.itf_seconds tf FROM lr_gate_line l "
-            "JOIN vw_indicator_configs_live i ON i.ic_pk = l.lrgl_ic_pk WHERE l.lrgl_lrg_pk = %s",
-            (g['lrg_pk'],), fetch=True)]
-        roles[g['lrg_role']].append(Gate(g['lrg_role'], g['lrg_name'], g['lrg_op'], lines))
+        roles[g['lrg_role']].append(_gate_from_row(db, g))
+    exit_fins = [_gate_from_row(db, g) for g in
+                 db.execute("SELECT * FROM lr_gate WHERE lrg_role='finisher' ORDER BY lrg_name", fetch=True)]
     return LRConfig(
         floor=k.get('lp_lr_floor', FLOOR), wob_n=int(k.get('lp_lr_wob_n', WOB_N)),
         horizon=int(k.get('lp_lr_horizon', HORIZON)), target=k.get('lp_lr_target', TARGET),
         swing_ms=int(k.get('lp_lr_swing_ms', STEP)), swing_pct=k.get('lp_lr_swing_pct', 0.9),
         bias_mid=k.get('lp_lr_bias_mid', 50.0), s30r_lb=int(k.get('lp_s30r_lb', 0)),
+        exit_rlb=int(k.get('lp_lr_exit_rlb', 22)), sl=float(k.get('lp_lr_sl', 0.5)),
         hi=float(sb['hi_boundary']), lo=float(sb['lo_boundary']),
-        arms=roles['arm'], finishers=roles['finisher'], biases=roles['bias'])
+        arms=roles['arm'], finishers=roles['finisher'], biases=roles['bias'], exit_finishers=exit_fins)
 
 
 def _dts(t): return dtm.datetime.utcfromtimestamp(int(t) / 1000)
@@ -175,3 +187,65 @@ def lr_walk(W, entries, cfg):
             mfe = float(d.max()); mae = float(-d.min())
         rows.append((tms, _dts(tms), es, bd, round(mae, 3), round(mfe, 3), int(mfe >= cfg.target), mfe_side, float(W.px[tj])))
     return rows
+
+
+# ── the EXIT (Joe 0629) — a separate concern from lr_detect (entry) / lr_walk (verdict) ─────────────
+def _exit_finisher_signal(W, cfg):
+    """The exit finisher = ALL finisher gates AND'd (s30a AND s15a), with the EXTENDED r-liftoff lookback
+    (cfg.exit_rlb vs entry's s30r_lb — they fire out of sync, so the window widens). → (hi, lo) bool arrays."""
+    ex_cfg = replace(cfg, s30r_lb=cfg.exit_rlb)
+    n = len(W.ts); hi = np.ones(n, bool); lo = np.ones(n, bool)
+    for g in cfg.exit_finishers:
+        ghi, glo = _gate_side(W, g, ex_cfg); hi &= ghi; lo &= glo
+    return hi, lo
+
+
+def lr_exit(W, entries, cfg):
+    """STAGE A exit — the finisher-core take-profit + SL floor (no predict/curl gate; that's stage B). Per
+    entry, walk the 5s grid: s6m breaches OOB favourable = arm; then s30a AND s15a fire favourable (extended
+    rlb) = take-profit. SL floor closes at -sl% if the exit never arrives; else horizon. The position direction
+    bd sets the favourable side (long bd=1 → hi · short bd=-1 → lo). Returns
+    [(trade_ms, exit_ms, bd, entry_px, exit_px, ret, reason)]."""
+    ts = W.ts; px = W.px; n = len(ts)
+    s6m = W.line('s6m'); arm_hi = s6m >= cfg.hi; arm_lo = s6m <= cfg.lo
+    fin_hi, fin_lo = _exit_finisher_signal(W, cfg)
+    rows = []
+    for tms, es, bd, tj in entries:
+        entry_px = float(px[tj]); fav_hi = (bd == 1)
+        arm = arm_hi if fav_hi else arm_lo
+        fin = fin_hi if fav_hi else fin_lo
+        armed = False; ek = None; reason = 'horizon'
+        for kk in range(tj + 1, min(n, tj + cfg.horizon)):
+            ret = (px[kk] - entry_px) / entry_px * 100.0 * bd
+            if ret <= -cfg.sl:
+                ek = kk; reason = 'SL'; break
+            if arm[kk]:
+                armed = True
+            if armed and fin[kk]:
+                ek = kk; reason = 'finisher'; break
+        if ek is None:
+            ek = min(n - 1, tj + cfg.horizon - 1)
+        exit_px = float(px[ek])
+        ret = -cfg.sl if reason == 'SL' else (exit_px - entry_px) / entry_px * 100.0 * bd
+        rows.append((tms, int(ts[ek]), bd, entry_px, exit_px, round(ret, 3), reason))
+    return rows
+
+
+def bracket_walk(W, entries, tp, sl, horizon):
+    """The fixed TP/SL bracket baseline (what the lr exit is measured against). Per entry, walk the 5s grid
+    → +tp or -sl whichever first, else horizon close. Returns ret% per entry."""
+    ts = W.ts; px = W.px; n = len(ts)
+    out = []
+    for tms, es, bd, tj in entries:
+        entry_px = float(px[tj]); r = None
+        for kk in range(tj + 1, min(n, tj + horizon)):
+            ret = (px[kk] - entry_px) / entry_px * 100.0 * bd
+            if ret >= tp:
+                r = tp; break
+            if ret <= -sl:
+                r = -sl; break
+        if r is None:
+            ek = min(n - 1, tj + horizon - 1)
+            r = (float(px[ek]) - entry_px) / entry_px * 100.0 * bd
+        out.append(round(r, 3))
+    return out
