@@ -17,6 +17,8 @@ import datetime as dtm
 from dataclasses import dataclass, field, replace
 from optimus9.compute.indicator_computer import IndicatorComputer as IC
 from optimus9.compute.swing_detect import find_pivots
+from optimus9.compute.breaching_line import predict_breach
+from optimus9.constants import FENCE_HI, FENCE_LO
 
 # fallback defaults (live values from lp_config / optimus9_system / lr_gate)
 HI, LO = 85.0, 15.0
@@ -45,7 +47,7 @@ class LRConfig:
     floor: float; wob_n: int; horizon: int; target: float
     swing_ms: int; swing_pct: float; bias_mid: float; s30r_lb: int
     hi: float; lo: float
-    exit_rlb: int = 22; sl: float = 0.5
+    exit_rlb: int = 22; sl: float = 0.5; curl_n: int = 1
     arms: list = field(default_factory=list)
     finishers: list = field(default_factory=list)
     biases: list = field(default_factory=list)
@@ -68,7 +70,7 @@ def lr_config(db):
     k = {r['name']: r['val'] for r in db.execute(
         "SELECT name, val FROM lp_config WHERE name IN ('lp_lr_floor','lp_lr_wob_n','lp_lr_horizon',"
         "'lp_lr_target','lp_lr_swing_ms','lp_lr_swing_pct','lp_lr_bias_mid','lp_s30r_lb',"
-        "'lp_lr_exit_rlb','lp_lr_sl')", fetch=True)}
+        "'lp_lr_exit_rlb','lp_lr_sl','lp_lr_curl_n')", fetch=True)}
     sb = db.execute("SELECT hi_boundary, lo_boundary FROM optimus9_system LIMIT 1", fetch=True)[0]
     roles = {'arm': [], 'finisher': [], 'bias': []}
     for g in db.execute("SELECT * FROM lr_gate WHERE lrg_active=1", fetch=True):
@@ -81,6 +83,7 @@ def lr_config(db):
         swing_ms=int(k.get('lp_lr_swing_ms', STEP)), swing_pct=k.get('lp_lr_swing_pct', 0.9),
         bias_mid=k.get('lp_lr_bias_mid', 50.0), s30r_lb=int(k.get('lp_s30r_lb', 0)),
         exit_rlb=int(k.get('lp_lr_exit_rlb', 22)), sl=float(k.get('lp_lr_sl', 0.5)),
+        curl_n=int(k.get('lp_lr_curl_n', 1)),
         hi=float(sb['hi_boundary']), lo=float(sb['lo_boundary']),
         arms=roles['arm'], finishers=roles['finisher'], biases=roles['bias'], exit_finishers=exit_fins)
 
@@ -200,29 +203,49 @@ def _exit_finisher_signal(W, cfg):
     return hi, lo
 
 
-def lr_exit(W, entries, cfg):
-    """STAGE A exit — the finisher-core take-profit + SL floor (no predict/curl gate; that's stage B). Per
-    entry, walk the 5s grid: s6m breaches OOB favourable = arm; then s30a AND s15a fire favourable (extended
-    rlb) = take-profit. SL floor closes at -sl% if the exit never arrives; else horizon. The position direction
-    bd sets the favourable side (long bd=1 → hi · short bd=-1 → lo). Returns
-    [(trade_ms, exit_ms, bd, entry_px, exit_px, ret, reason)]."""
-    ts = W.ts; px = W.px; n = len(ts)
-    s6m = W.line('s6m'); arm_hi = s6m >= cfg.hi; arm_lo = s6m <= cfg.lo
-    fin_hi, fin_lo = _exit_finisher_signal(W, cfg)
+def _finisher_signal(W, cfg, exit_on):
+    """The exit-trigger signal (extended rlb) for the chosen exit_on. 's30a'→s30a only · 's30a_s15a'→both AND'd."""
+    ex_cfg = replace(cfg, s30r_lb=cfg.exit_rlb)
+    gates = {g.name: g for g in cfg.exit_finishers}
+    hi, lo = _gate_side(W, gates['s30a'], ex_cfg)
+    if exit_on == 's30a_s15a':
+        h15, l15 = _gate_side(W, gates['s15a'], ex_cfg); hi, lo = hi & h15, lo & l15
+    return hi, lo
+
+
+def lr_exit(W, entries, cfg, curl_fam='s5', exit_on='s30a_s15a', predict_gate=True):
+    """The lr exit. Prediction + breach are FIXED on s5 (predict s5r via s5m/s5M; arm on s5m). Two knobs:
+      curl_fam — the curl line family (s5/s6/s7/s8): a slower r curls LATER, so the ride runs longer.
+      exit_on  — what ends the trade: 'curl' (exit at the curl) · 's30a' · 's30a_s15a' (finisher after the curl).
+    predict_gate=True: while s5m OOB favourable, re-test predict_breach every bar; if predicted, BLOCK the
+    trigger (ride) until s{curl_fam}r CURLS OOB. Hold through an s5m adverse flip (precursor, not failure);
+    SL floor (-sl%) is the stop, else horizon. Returns [(trade_ms, exit_ms, bd, entry_px, exit_px, ret, reason)]."""
+    ts, px, n = W.ts, W.px, len(W.ts)
+    s5m = W.line('s5m'); arm_hi = s5m >= cfg.hi; arm_lo = s5m <= cfg.lo
+    pred = predict_breach(W.line('s5r'), s5m, W.line('s5M'), cfg.hi, cfg.lo, FENCE_HI, FENCE_LO)
+    cr = W.line(f'{curl_fam}r')
+    cwob = IC.wobble_slayer(cr, cfg.curl_n, cfg.hi, cfg.lo, anchored=True, strict=True)
+    curl_hi = (cwob == -1) & (cr >= cfg.hi); curl_lo = (cwob == 1) & (cr <= cfg.lo)
+    fin_hi, fin_lo = _finisher_signal(W, cfg, exit_on)
     rows = []
     for tms, es, bd, tj in entries:
         entry_px = float(px[tj]); fav_hi = (bd == 1)
         arm = arm_hi if fav_hi else arm_lo
-        fin = fin_hi if fav_hi else fin_lo
-        armed = False; ek = None; reason = 'horizon'
+        curl = curl_hi if fav_hi else curl_lo
+        trig = curl if exit_on == 'curl' else (fin_hi if fav_hi else fin_lo)
+        blocked = ever_curled = False
+        ek = None; reason = 'horizon'
         for kk in range(tj + 1, min(n, tj + cfg.horizon)):
             ret = (px[kk] - entry_px) / entry_px * 100.0 * bd
             if ret <= -cfg.sl:
                 ek = kk; reason = 'SL'; break
-            if arm[kk]:
-                armed = True
-            if armed and fin[kk]:
-                ek = kk; reason = 'finisher'; break
+            if predict_gate and arm[kk] and not ever_curled:   # re-test while s5m OOB favourable
+                if pred[kk] == bd:
+                    blocked = True                         # predicted → ride (block the trigger)
+                if blocked and curl[kk]:
+                    blocked = False; ever_curled = True    # s{curl_fam}r curled OOB → release
+            if trig[kk] and not blocked:
+                ek = kk; reason = 'exit'; break
         if ek is None:
             ek = min(n - 1, tj + cfg.horizon - 1)
         exit_px = float(px[ek])

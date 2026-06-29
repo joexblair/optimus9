@@ -31,6 +31,7 @@ if ic('s6M') is None:
 KNOBS = [
     ('lp_lr_exit_rlb', 22.0, 'lr exit: r-line liftoff lookback (relative-TF bars) for the s30a&s15a exit finisher (entry uses 19)'),
     ('lp_lr_sl', 0.5, 'lr exit: stop-loss % — the loss floor (closes at -SL if the finisher exit never comes)'),
+    ('lp_lr_curl_n', 1.0, 'lr exit (stage B): s6r curl wobslay bars — the OOB turn that ends the "let it run" wait'),
 ]
 for name, val, note in KNOBS:
     if not db.execute("SELECT 1 FROM lp_config WHERE name=%s", (name,), fetch=True):

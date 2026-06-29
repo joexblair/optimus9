@@ -27,11 +27,12 @@ R1 = ms(dtm.datetime(2026, 6, 22, tzinfo=timezone.utc)); START = ms(dtm.datetime
 W = bm.BiasWindow(db, R1, cfg=cfg)
 lrcfg = lr_config(db)
 entries = lr_detect(W, lrcfg, start_ms=START)
-exits = lr_exit(W, entries, lrcfg)
+exits_a = lr_exit(W, entries, lrcfg, predict_gate=False, fam='s5')
+exits_b = lr_exit(W, entries, lrcfg, predict_gate=True, fam='s5')
 brk = bracket_walk(W, entries, 0.7, lrcfg.sl, lrcfg.horizon)
 walk = lr_walk(W, entries, lrcfg)
-entry_pxs = [r[3] for r in exits]
-print(f"entries: {len(entries)}  ·  exit_rlb={lrcfg.exit_rlb}  sl={lrcfg.sl}%")
+entry_pxs = [r[3] for r in exits_a]
+print(f"entries: {len(entries)}  ·  exit_rlb={lrcfg.exit_rlb}  sl={lrcfg.sl}%  curl_n={lrcfg.curl_n}")
 
 
 def summarise(name, rets, pxs):
@@ -42,23 +43,42 @@ def summarise(name, rets, pxs):
           f"gross/t={rets.mean():+.2f}%  net/t={net.mean():+.2f}%  PnL=${pnl.sum():+,.0f}  acct=${CAP0 + pnl.sum():,.0f}")
 
 
-reasons = {}
-for r in exits:
-    reasons[r[6]] = reasons.get(r[6], 0) + 1
-print("\nStage A exit reasons:", reasons)
-summarise("lr_exit (A)", [r[5] for r in exits], entry_pxs)
+def reasons_of(ex):
+    d = {}
+    for r in ex:
+        d[r[6]] = d.get(r[6], 0) + 1
+    return d
+
+
+print("\nreasons  A:", reasons_of(exits_a), " B:", reasons_of(exits_b))
+summarise("lr_exit A (bare)", [r[5] for r in exits_a], entry_pxs)
+summarise("lr_exit B (let-run)", [r[5] for r in exits_b], entry_pxs)
 summarise(f"bracket 0.7/{lrcfg.sl}", brk, entry_pxs)
 
 mfe = np.array([r[5] for r in walk]); ok = np.where(mfe >= 0.7)[0]
 summarise("mfe ceiling", [0.7] * len(ok), [entry_pxs[i] for i in ok])
 
+# B's question: of the trades whose swing FLIPPED (s5m breached adverse mid-hold), how many hit the SL?
+s5m = W.line('s5m')
+flip_by_reason = {}; n_flip = 0
+for ex, (etms, es, bd, tj) in zip(exits_b, entries):
+    ke = int(np.searchsorted(W.ts, ex[1]))                # exit bar
+    seg = s5m[tj + 1:ke + 1]
+    flipped = bool((seg <= lrcfg.lo).any()) if bd == 1 else bool((seg >= lrcfg.hi).any())
+    if flipped:
+        n_flip += 1
+        flip_by_reason[ex[6]] = flip_by_reason.get(ex[6], 0) + 1
+print(f"\nflipped trades (s5m breached adverse mid-hold): {n_flip}  ·  by exit reason: {flip_by_reason}")
+diff = sum(1 for a, b in zip(exits_a, exits_b) if a[1] != b[1])
+print(f"A (bare) ↔ B (let-run) differing exits: {diff}")
+
 # SL is the obvious suspect (half the trades stop out) — sweep it (entry MAE median ~0.68%)
 from dataclasses import replace
 mae = np.array([r[4] for r in walk])
 print(f"\nentry MAE: median {np.median(mae):.2f}%  mean {mae.mean():.2f}%  (the adverse excursion the SL fights)")
-print("SL sweep (lr_exit, finisher TP unchanged):")
+print("SL sweep (lr_exit B let-run, s5):")
 for sl in [0.5, 0.68, 0.9, 1.2, 1.5, 2.0]:
-    ex = lr_exit(W, entries, replace(lrcfg, sl=sl))
+    ex = lr_exit(W, entries, replace(lrcfg, sl=sl), predict_gate=True, fam='s5')
     nsl = sum(1 for r in ex if r[6] == 'SL')
     summarise(f"sl={sl} ({nsl}SL)", [r[5] for r in ex], [r[3] for r in ex])
 db.disconnect()
