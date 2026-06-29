@@ -11,6 +11,9 @@ DIALS = [
     ('lp_lr_wob_n', 4.0, 'lr: s6m wobslay bars (the reversal window)'),
     ('lp_lr_horizon', 1080.0, 'lr: setup search horizon in 5s bars (90 min) for reversal + s30a re-breach'),
     ('lp_lr_target', 0.9, 'lr: favourable swing target % -> mfe_ok'),
+    ('lp_lr_swing_ms', 30000.0, 'lr: swing/price grid in ms (30s cadence for the MAE/MFE walk + pivots)'),
+    ('lp_lr_swing_pct', 0.9, 'lr: ZigZag swing threshold % for find_pivots (favourable-pivot detection)'),
+    ('lp_lr_bias_mid', 50.0, 'lr: bias-gate midline — the mid-check fires above/below this'),
 ]
 
 db = DatabaseManager(**get_db_config()); db.connect()
