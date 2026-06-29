@@ -8,7 +8,7 @@ in lr_detect; the gate-sets are DATA (lr_gate/lr_gate_line), the knobs are DATA 
                                 AND all active BIAS gates agree) = the entry. Walks the gate-sets; emits only.
   lr_walk(W, entries, cfg)    — the BACKTEST verdict (MAE/MFE). Separate concern.
 
-Gate-sets: a gate = lines (ic_pk → name) + per-line `check` (oob | liftoff | mid) + an op (AND|OR). Roles
+Gate-sets: a gate = lines (ic_pk → name) + per-line `check` (oob | lookback | mid) + an op (AND|OR). Roles
 combine: finishers OR'd · bias AND'd · arms each independent. Add a finisher = a row, no code (#decouple).
 """
 import numpy as np
@@ -30,8 +30,8 @@ BASE_TF = 5                                                  # base kline interv
 @dataclass
 class LineRef:
     name: str                                               # ind_name (resolved from ic_pk)
-    check: str                                              # oob | liftoff | mid
-    tf: int                                                 # itf_seconds (liftoff lookback scales off this)
+    check: str                                              # oob | lookback | mid
+    tf: int                                                 # itf_seconds (lookback window scales off this)
 
 
 @dataclass
@@ -92,7 +92,7 @@ def _dts(t): return dtm.datetime.utcfromtimestamp(int(t) / 1000)
 
 
 def _roll_or(a, k):
-    """Rolling OR over the current + k preceding bars (the liftoff lookback)."""
+    """Rolling OR over the current + k preceding bars (the lookback window)."""
     out = a.copy()
     for s in range(1, int(k) + 1):
         out[s:] |= a[:-s]
@@ -101,13 +101,13 @@ def _roll_or(a, k):
 
 def _gate_side(W, gate, cfg):
     """A gate's per-side activation: each line's `check`, combined by the gate's op → (hi, lo) bool arrays.
-    Each line read via W.line (value_mode-honoured, #42). liftoff lookback auto-scales off the line's TF."""
+    Each line read via W.line (value_mode-honoured, #42). lookback window auto-scales off the line's TF."""
     hi, lo = [], []
     for ln in gate.lines:
         v = W.line(ln.name)
         if ln.check == 'oob':
             hi.append(v >= cfg.hi); lo.append(v <= cfg.lo)
-        elif ln.check == 'liftoff':
+        elif ln.check == 'lookback':
             lb = cfg.s30r_lb * (ln.tf // BASE_TF)
             hi.append(_roll_or(v >= cfg.hi, lb)); lo.append(_roll_or(v <= cfg.lo, lb))
         elif ln.check == 'mid':
@@ -194,7 +194,7 @@ def lr_walk(W, entries, cfg):
 
 # ── the EXIT (Joe 0629) — a separate concern from lr_detect (entry) / lr_walk (verdict) ─────────────
 def _exit_finisher_signal(W, cfg):
-    """The exit finisher = ALL finisher gates AND'd (s30a AND s15a), with the EXTENDED r-liftoff lookback
+    """The exit finisher = ALL finisher gates AND'd (s30a AND s15a), with the EXTENDED r-lookback window
     (cfg.exit_rlb vs entry's s30r_lb — they fire out of sync, so the window widens). → (hi, lo) bool arrays."""
     ex_cfg = replace(cfg, s30r_lb=cfg.exit_rlb)
     n = len(W.ts); hi = np.ones(n, bool); lo = np.ones(n, bool)

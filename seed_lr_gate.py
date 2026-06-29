@@ -17,7 +17,7 @@ db.execute('''CREATE TABLE IF NOT EXISTS lr_gate (
     lrg_active TINYINT NOT NULL DEFAULT 1)''')
 db.execute('''CREATE TABLE IF NOT EXISTS lr_gate_line (
     lrgl_pk INT AUTO_INCREMENT PRIMARY KEY, lrgl_lrg_pk INT NOT NULL, lrgl_ic_pk INT NOT NULL,
-    lrgl_check ENUM('oob','liftoff','mid') NOT NULL DEFAULT 'oob', INDEX(lrgl_lrg_pk))''')
+    lrgl_check ENUM('oob','lookback','mid') NOT NULL DEFAULT 'oob', INDEX(lrgl_lrg_pk))''')
 
 
 def ic(name):
@@ -46,9 +46,9 @@ if ic('s15M') is None:
 # 3) seed the gate-sets (1:1 with the current mechanic + the disabled s15a)
 GATES = [
     ('arm',      's6m_arm',   'AND', 1, [('s6m', 'oob')]),
-    ('finisher', 's30a',      'AND', 1, [('s30M', 'oob'), ('s30m', 'oob'), ('s30r', 'liftoff')]),
+    ('finisher', 's30a',      'AND', 1, [('s30M', 'oob'), ('s30m', 'oob'), ('s30r', 'lookback')]),
     ('bias',     's14_bias',  'AND', 1, [('s14M', 'mid')]),
-    ('finisher', 's15a',      'AND', 0, [('s15M', 'oob'), ('s15m', 'oob'), ('s15r', 'liftoff')]),
+    ('finisher', 's15a',      'AND', 0, [('s15M', 'oob'), ('s15m', 'oob'), ('s15r', 'lookback')]),
 ]
 for role, name, op, active, lines in GATES:
     if db.execute("SELECT lrg_pk FROM lr_gate WHERE lrg_name=%s", (name,), fetch=True):

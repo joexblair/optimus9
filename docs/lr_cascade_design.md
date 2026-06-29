@@ -7,7 +7,7 @@ the SHAPE is code, everything else is data. Reproduces cf15 exactly (rig 131 · 
 **Slow arm → reversal → fast finisher, gated by bias:**
 1. **ARM** — an arm gate's line breaches OOB (closed) → armed, side = breach side. (seed: `s6m`, TF6.)
 2. **REVERSAL** — the arm line's *emerging* value wobslay-reverses by ≥ `floor`.
-3. **FINISHER** — any active finisher gate re-breaches on the same side. (seed: `s30a` = s30M&s30m OOB + s30r liftoff, TF30s.)
+3. **FINISHER** — any active finisher gate re-breaches on the same side. (seed: `s30a` = s30M&s30m OOB + s30r lookback, TF30s.)
 4. **BIAS** — all active bias gates must agree (gates the finisher). (seed: `s14M` mid vs 50, TF7.)
 
 ## SHAPE (code) vs DATA (config)
@@ -17,7 +17,7 @@ the SHAPE is code, everything else is data. Reproduces cf15 exactly (rig 131 · 
 - **`lr_config(db) → LRConfig`** — the ONE loader: gate-sets + knobs + OOB. No hardcode.
 
 **Data:**
-- `lr_gate` (role · name · op[AND|OR] · active) + `lr_gate_line` (ic_pk · check[`oob`|`liftoff`|`mid`]). Lines by **ic_pk** (bias-producer tagging convention). Liftoff lookback auto-scales per line TF.
+- `lr_gate` (role · name · op[AND|OR] · active) + `lr_gate_line` (ic_pk · check[`oob`|`lookback`|`mid`]). Lines by **ic_pk** (bias-producer tagging convention). The `lookback` window auto-scales per line TF.
 - knobs → `lp_config` (`lp_lr_floor/wob_n/horizon/target/swing_ms/swing_pct/bias_mid` + `lp_s30r_lb`).
 - OOB → `optimus9_system.hi/lo_boundary`. Every gate line read via `W.line` (value_mode-honoured, #42).
 
