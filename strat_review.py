@@ -26,7 +26,7 @@ from optimus9.analysis.bl_detect import BLDetect
 from optimus9.analysis.bl_review import build_review, _persist
 from alchemy_report import build_bias_state, paint_bias_state
 from optimus9.analysis.bias_state import pk_bias_events, bro_cross_flips
-from optimus9.analysis.lr import lr_detect, lr_params, resolve_s30r_lb
+from optimus9.analysis.lr import lr_detect, lr_config
 
 _TABLE = 'strat_review'
 _LOOKBACK_MS = 120 * 3600 * 1000
@@ -52,7 +52,7 @@ def _cascade_rows(ctx):
     (replaces the gate-chain TradeGateWalker, Joe 0628): arm on s6m breach → wobslay reversal → s30a
     re-breach = the fire. The SAME lr_detect runs in o9-live, so prod's TRADE stream == the live machine's."""
     start = ctx['end_ms'] - _LOOKBACK_MS
-    entries = lr_detect(ctx['W'], lr_params(ctx['db']), s30r_lb_bars=resolve_s30r_lb(ctx['db'], ctx['W']), start_ms=start)
+    entries = lr_detect(ctx['W'], lr_config(ctx['db']), start_ms=start)
     return [_row(bar_time=_utc(tms), event='TRADE', breach_dir=bd)
             for tms, es, bd, tj in entries if start <= tms < ctx['end_ms']]
 
