@@ -32,6 +32,7 @@ class LineRef:
     name: str                                               # ind_name (resolved from ic_pk)
     check: str                                              # oob | lookback | mid
     tf: int                                                 # itf_seconds (lookback window scales off this)
+    lookback: int = 0                                       # per-line lookback bars (0 → fall back to lp_s30r_lb)
 
 
 @dataclass
@@ -50,14 +51,14 @@ class LRConfig:
     exit_rlb: int = 22; sl: float = 0.5; curl_n: int = 1
     arms: list = field(default_factory=list)
     finishers: list = field(default_factory=list)
-    biases: list = field(default_factory=list)
+    gates: list = field(default_factory=list)
     exit_finishers: list = field(default_factory=list)
 
 
 def _gate_from_row(db, g):
-    """One lr_gate row → a Gate (its lines resolved ic_pk → name+TF+check). Shared by entry + exit loaders."""
-    lines = [LineRef(r['nm'], r['ch'], int(r['tf'])) for r in db.execute(
-        "SELECT i.ind_name nm, l.lrgl_check ch, i.itf_seconds tf FROM lr_gate_line l "
+    """One lr_gate row → a Gate (its lines resolved ic_pk → name+TF+check+per-line lookback)."""
+    lines = [LineRef(r['nm'], r['ch'], int(r['tf']), int(r['lb'] or 0)) for r in db.execute(
+        "SELECT i.ind_name nm, l.lrgl_check ch, i.itf_seconds tf, l.lrgl_lookback lb FROM lr_gate_line l "
         "JOIN vw_indicator_configs_live i ON i.ic_pk = l.lrgl_ic_pk WHERE l.lrgl_lrg_pk = %s",
         (g['lrg_pk'],), fetch=True)]
     return Gate(g['lrg_role'], g['lrg_name'], g['lrg_op'], lines)
@@ -72,7 +73,7 @@ def lr_config(db):
         "'lp_lr_target','lp_lr_swing_ms','lp_lr_swing_pct','lp_lr_bias_mid','lp_s30r_lb',"
         "'lp_lr_exit_rlb','lp_lr_sl','lp_lr_curl_n')", fetch=True)}
     sb = db.execute("SELECT hi_boundary, lo_boundary FROM optimus9_system LIMIT 1", fetch=True)[0]
-    roles = {'arm': [], 'finisher': [], 'bias': []}
+    roles = {'arm': [], 'finisher': [], 'gate': []}
     for g in db.execute("SELECT * FROM lr_gate WHERE lrg_active=1", fetch=True):
         roles[g['lrg_role']].append(_gate_from_row(db, g))
     exit_fins = [_gate_from_row(db, g) for g in
@@ -85,7 +86,7 @@ def lr_config(db):
         exit_rlb=int(k.get('lp_lr_exit_rlb', 22)), sl=float(k.get('lp_lr_sl', 0.5)),
         curl_n=int(k.get('lp_lr_curl_n', 1)),
         hi=float(sb['hi_boundary']), lo=float(sb['lo_boundary']),
-        arms=roles['arm'], finishers=roles['finisher'], biases=roles['bias'], exit_finishers=exit_fins)
+        arms=roles['arm'], finishers=roles['finisher'], gates=roles['gate'], exit_finishers=exit_fins)
 
 
 def _dts(t): return dtm.datetime.utcfromtimestamp(int(t) / 1000)
@@ -99,19 +100,20 @@ def _roll_or(a, k):
     return out
 
 
-def _gate_side(W, gate, cfg):
+def _gate_side(W, gate, cfg, lookback_override=None):
     """A gate's per-side activation: each line's `check`, combined by the gate's op → (hi, lo) bool arrays.
-    Each line read via W.line (value_mode-honoured, #42). lookback window auto-scales off the line's TF."""
+    Each line read via W.line (value_mode-honoured, #42). The `lookback` window uses the line's per-line
+    lookback (or lookback_override for the exit's wider window; falls back to lp_s30r_lb), auto-scaled by TF."""
     hi, lo = [], []
     for ln in gate.lines:
         v = W.line(ln.name)
         if ln.check == 'oob':
             hi.append(v >= cfg.hi); lo.append(v <= cfg.lo)
         elif ln.check == 'lookback':
-            lb = cfg.s30r_lb * (ln.tf // BASE_TF)
+            lb = (lookback_override or ln.lookback or cfg.s30r_lb) * (ln.tf // BASE_TF)
             hi.append(_roll_or(v >= cfg.hi, lb)); lo.append(_roll_or(v <= cfg.lo, lb))
         elif ln.check == 'mid':
-            hi.append(v > cfg.bias_mid); lo.append(v < cfg.bias_mid)     # v = W.line (value_mode-honoured; s14M=closed)
+            hi.append(v > cfg.bias_mid); lo.append(v < cfg.bias_mid)
     comb = np.all if gate.op == 'AND' else np.any
     return comb(hi, axis=0), comb(lo, axis=0)
 
@@ -124,10 +126,10 @@ def _finisher_active(W, cfg):
     return hi, lo
 
 
-def _bias_ok(W, cfg):
-    """AND across active bias gates → (hi, lo). No bias gates → all-pass (un-gated)."""
+def _gate_ok(W, cfg):
+    """AND across active gate-role gates (clearances, e.g. s2r lookback) → (hi, lo). No gates → all-pass."""
     n = len(W.ts); hi = np.ones(n, bool); lo = np.ones(n, bool)
-    for g in cfg.biases:
+    for g in cfg.gates:
         ghi, glo = _gate_side(W, g, cfg); hi &= ghi; lo &= glo
     return hi, lo
 
@@ -135,7 +137,7 @@ def _bias_ok(W, cfg):
 def lr_detect(W, cfg, start_ms=None):
     """THE STRATEGY — walk the latch-release shape over the gate-sets. Returns [(trade_ms, es, bd, tj)].
     arm gate breaches OOB → armed; the arm line's wobslay reverses ≥ floor; then any active FINISHER
-    re-breaches (same side) AND all active BIAS gates agree → entry. Emits entries only — no verdict."""
+    re-breaches (same side) AND all active GATE clearances pass → entry. Emits entries only — no verdict."""
     ts = W.ts; n = len(ts)
     arm_line = cfg.arms[0].lines[0].name                     # the arm line (breach + wobslay)
     s6c = W._line(arm_line)                                   # CLOSED — the breach / arm
@@ -143,8 +145,8 @@ def lr_detect(W, cfg, start_ms=None):
     sign = np.where(s6c >= cfg.hi, 1, np.where(s6c <= cfg.lo, -1, 0))
     wob = IC.wobble_slayer(s6, cfg.wob_n, cfg.hi, cfg.lo, anchored=True, strict=True)
     fin_hi, fin_lo = _finisher_active(W, cfg)
-    bias_hi, bias_lo = _bias_ok(W, cfg)
-    side_hi = fin_hi & bias_hi; side_lo = fin_lo & bias_lo    # finisher gated by bias = the entry side
+    gate_hi, gate_lo = _gate_ok(W, cfg)
+    side_hi = fin_hi & gate_hi; side_lo = fin_lo & gate_lo    # finisher cleared by the gate(s) = the entry side
     if start_ms is None:
         start_ms = int(ts[0])
     entries = []; i = 1
@@ -193,23 +195,14 @@ def lr_walk(W, entries, cfg):
 
 
 # ── the EXIT (Joe 0629) — a separate concern from lr_detect (entry) / lr_walk (verdict) ─────────────
-def _exit_finisher_signal(W, cfg):
-    """The exit finisher = ALL finisher gates AND'd (s30a AND s15a), with the EXTENDED r-lookback window
-    (cfg.exit_rlb vs entry's s30r_lb — they fire out of sync, so the window widens). → (hi, lo) bool arrays."""
-    ex_cfg = replace(cfg, s30r_lb=cfg.exit_rlb)
-    n = len(W.ts); hi = np.ones(n, bool); lo = np.ones(n, bool)
-    for g in cfg.exit_finishers:
-        ghi, glo = _gate_side(W, g, ex_cfg); hi &= ghi; lo &= glo
-    return hi, lo
-
-
 def _finisher_signal(W, cfg, exit_on):
-    """The exit-trigger signal (extended rlb) for the chosen exit_on. 's30a'→s30a only · 's30a_s15a'→both AND'd."""
-    ex_cfg = replace(cfg, s30r_lb=cfg.exit_rlb)
+    """The exit-trigger signal for the chosen exit_on, with the EXTENDED exit lookback window (cfg.exit_rlb,
+    overriding the per-line entry lookback — they fire out of sync, so the exit widens). 's30a'→s30a only ·
+    's30a_s15a'→both AND'd."""
     gates = {g.name: g for g in cfg.exit_finishers}
-    hi, lo = _gate_side(W, gates['s30a'], ex_cfg)
+    hi, lo = _gate_side(W, gates['s30a'], cfg, lookback_override=cfg.exit_rlb)
     if exit_on == 's30a_s15a':
-        h15, l15 = _gate_side(W, gates['s15a'], ex_cfg); hi, lo = hi & h15, lo & l15
+        h15, l15 = _gate_side(W, gates['s15a'], cfg, lookback_override=cfg.exit_rlb); hi, lo = hi & h15, lo & l15
     return hi, lo
 
 
