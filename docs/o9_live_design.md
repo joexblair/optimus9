@@ -25,8 +25,15 @@ Bybit public WS ─┐
 ```
 
 ## Container 1 — o9-live
-**1a. Tick collector (SRP: ingest).** One long-lived WS to `publicTrade.FARTCOINUSDT` (real matched-trade tape). Bucket trades to 5s OHLCV off trade-time (not wall-clock); gap-bars emitted + flagged synthetic; **last-message watchdog** (the frozen-tape lesson — a dead conn looks quiet). Writes ticks + 5s klines. *Bybit's min native candle is 1m → 5s MUST be tick-built; mandatory, not optional.*
-- **A/B self-validation (POST fake-go-live):** once the system runs, compare the live 5s tape (Stream A) to the TV-sanitised tape (Stream B) over the same wall-clock → agreement confirms the live feed reproduces the validated tape; divergence flags a feed fault. Bonus: `publicTrade` carries no index wicks → surfaces non-tradeable wicks (#19).
+**1a. Tick ingest (SRP: ingest) — REUSE the existing collector, do NOT rebuild.** `TickCollector` already
+subscribes to Bybit's `publicTrade` WS → `ticks`; `bar_builder`/`kline_auditor` build the 5s klines →
+`kline_collection` (the proven tape; L1 self-heal handles the frozen-tape failure). o9-live points the
+*existing* collector + bar_builder at the o9-live DB and READS `kline_collection`. (Bybit's min native candle
+is 1m, so 5s is tick-built — which this already does.) The earlier "build an in-container collector" was a
+footwork miss (caught 0628).
+- **A/B self-validation (POST fake-go-live, OPTIONAL):** Joe's idea — a 2nd fresh collector cross-checking
+  the tape vs TV. May be **subsumed by the kline-sanitiser** (the live tape IS `kline_collection`, already
+  TV-corrected). Re-examine before building. Bonus if kept: `publicTrade` has no index wicks → surfaces #19.
 
 **1b. The strategy (SRP: decide) — collector-triggered.** When the collector (1a) prints a 5s kline (the kline build IS the clock — no separate timer/loop) it triggers → a bounded `BiasWindow(now)` (BUFFER = longest line lookback + cascade horizon ≈ hours, NOT the 7-day backtest span) → `lr_detect(W, lr_params(db), s30r_lb_bars=resolve_s30r_lb(db, W))` → the latest-bar entry → an **intent** (`open/add/close`, 66k). The SAME `lr_detect` (optimus9/analysis/lr.py) runs in prod (strat_review cascade producer) + the backtest ⇒ **live == prod == backtest by construction**. Never touches the exchange. *(Derive BUFFER by tracing the longest-lookback line — the one measurement that matters.)*
 
@@ -61,7 +68,7 @@ Live order-book walk at fill, per-leg. NOT flat, NOT volume-to-fill (rejected �
 
 ## Build milestones (decompose)
 1. Bybit v5 client wrapper (base-URL + signing seams) + fake-API contract skeleton (envelope, order/position/execution).
-2. Tick collector (publicTrade → 5s bars).
+2. Point the EXISTING `TickCollector` + `bar_builder` at the o9-live DB (reuse — no rebuild).
 3. Fake-API fill model (order-book walk + fees) + the pyramiding position store (`fx_*` per `o9_live_schema.sql`).
 4. o9-live loop (bounded `BiasWindow` → `lr_detect` → intent → adapter).
 5. Wire end-to-end locally (compose, WSL DB) + a live dry-run = **fake-go-live**.
