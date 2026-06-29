@@ -212,7 +212,8 @@ def lr_exit(W, entries, cfg, curl_fam='s5', exit_on='s30a_s15a', predict_gate=Tr
       exit_on  — what ends the trade: 'curl' (exit at the curl) · 's30a' · 's30a_s15a' (finisher after the curl).
     predict_gate=True: while s5m OOB favourable, re-test predict_breach every bar; if predicted, BLOCK the
     trigger (ride) until s{curl_fam}r CURLS OOB. Hold through an s5m adverse flip (precursor, not failure);
-    SL floor (-sl%) is the stop, else horizon. Returns [(trade_ms, exit_ms, bd, entry_px, exit_px, ret, reason)]."""
+    SL floor (-sl%) is the stop. NO time cap — holds to curl or SL (in backtest, runs to the data's end).
+    Returns [(trade_ms, exit_ms, bd, entry_px, exit_px, ret, reason)]."""
     ts, px, n = W.ts, W.px, len(W.ts)
     s5m = W.line('s5m'); arm_hi = s5m >= cfg.hi; arm_lo = s5m <= cfg.lo
     pred = predict_breach(W.line('s5r'), s5m, W.line('s5M'), cfg.hi, cfg.lo, FENCE_HI, FENCE_LO)
@@ -227,8 +228,8 @@ def lr_exit(W, entries, cfg, curl_fam='s5', exit_on='s30a_s15a', predict_gate=Tr
         curl = curl_hi if fav_hi else curl_lo
         trig = curl if exit_on == 'curl' else (fin_hi if fav_hi else fin_lo)
         blocked = ever_curled = False
-        ek = None; reason = 'horizon'
-        for kk in range(tj + 1, min(n, tj + cfg.horizon)):
+        ek = None; reason = 'end'
+        for kk in range(tj + 1, n):                          # NO exit timeout (Joe) — hold to curl or SL only
             ret = (px[kk] - entry_px) / entry_px * 100.0 * bd
             if ret <= -cfg.sl:
                 ek = kk; reason = 'SL'; break
@@ -240,7 +241,7 @@ def lr_exit(W, entries, cfg, curl_fam='s5', exit_on='s30a_s15a', predict_gate=Tr
             if trig[kk] and not blocked:
                 ek = kk; reason = 'exit'; break
         if ek is None:
-            ek = min(n - 1, tj + cfg.horizon - 1)
+            ek = n - 1                                        # reached the data's end (backtest), not a time cap
         exit_px = float(px[ek])
         ret = -cfg.sl if reason == 'SL' else (exit_px - entry_px) / entry_px * 100.0 * bd
         rows.append((tms, int(ts[ek]), bd, entry_px, exit_px, round(ret, 3), reason))
