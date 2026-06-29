@@ -52,15 +52,17 @@ def _lines(d):
 
 def _detail(d, name, lines):
     if name == 'cascade':
-        rearm = int(d.execute("SELECT val FROM lp_config WHERE name='lp_cascade_rearm_ic'", fetch=True)[0]['val'])
-        grows = d.execute('SELECT tg_pk, tg_seq, tg_name, tg_op, tg_active FROM trade_gate ORDER BY tg_seq', fetch=True)
-        gates = [{'tg_pk': g['tg_pk'], 'seq': g['tg_seq'], 'name': g['tg_name'], 'op': g['tg_op'],
-                  'active': bool(g['tg_active']),
-                  'lines': [r['nm'] for r in d.execute(
-                      f'SELECT {_NAME} nm FROM trade_gate_line tgl JOIN indicator_configs ic ON ic.ic_pk=tgl.tgl_ic_pk '
-                      f'{_JOIN} WHERE tgl.tgl_tg_pk=%s {_ORDER}', (g['tg_pk'],), fetch=True)]} for g in grows]
-        chain = ' → '.join(g['name'] for g in gates if g['active'])
-        return {'kind': 'cascade', 'rearm_ic': rearm, 'gates': gates, 'gate_chain': chain, 'lines': lines}
+        # the lr (latch-release) cascade: DB-driven gate-sets (lr_gate) + knobs (lp_lr_*). Retires trade_gate.
+        knobs = d.execute("SELECT name, val, note FROM lp_config WHERE name LIKE 'lp_lr_%' OR name='lp_s30r_lb' ORDER BY name", fetch=True)
+        grows = d.execute("SELECT lrg_pk, lrg_role, lrg_name, lrg_op, lrg_active FROM lr_gate "
+                          "ORDER BY FIELD(lrg_role,'arm','finisher','bias'), lrg_name", fetch=True)
+        gates = [{'lrg_pk': g['lrg_pk'], 'role': g['lrg_role'], 'name': g['lrg_name'], 'op': g['lrg_op'],
+                  'active': bool(g['lrg_active']),
+                  'lines': [{'nm': r['nm'], 'check': r['ch']} for r in d.execute(
+                      "SELECT i.ind_name nm, lgl.lrgl_check ch FROM lr_gate_line lgl "
+                      "JOIN vw_indicator_configs_live i ON i.ic_pk = lgl.lrgl_ic_pk WHERE lgl.lrgl_lrg_pk = %s",
+                      (g['lrg_pk'],), fetch=True)]} for g in grows]
+        return {'kind': 'cascade', 'knobs': [dict(k) for k in knobs], 'gates': gates}
     if name == 'bl_state':
         bls = d.execute(f'''SELECT bl.bl_pk, {_NAME} nm, bl.bl_is_active, bl.bl_role, bl.bl_support_ic_pk
                             FROM bl_lines bl JOIN indicator_configs ic ON ic.ic_pk = bl.bl_ic_pk {_JOIN}
@@ -126,10 +128,11 @@ def save():
         d.execute('UPDATE bias_producer SET bp_active=%s WHERE bp_name=%s', (1 if p['active'] else 0, p['name']))
         det = p.get('detail', {})
         if det.get('kind') == 'cascade':
-            d.execute("UPDATE lp_config SET val=%s WHERE name='lp_cascade_rearm_ic'", (det['rearm_ic'],))
+            for k in det.get('knobs', []):
+                d.execute("UPDATE lp_config SET val=%s WHERE name=%s", (k['val'], k['name']))
             for g in det.get('gates', []):
-                d.execute('UPDATE trade_gate SET tg_active=%s, tg_seq=%s, tg_op=%s WHERE tg_pk=%s',
-                          (1 if g['active'] else 0, g['seq'], g['op'], g['tg_pk']))
+                d.execute("UPDATE lr_gate SET lrg_active=%s, lrg_op=%s WHERE lrg_pk=%s",
+                          (1 if g['active'] else 0, g['op'], g['lrg_pk']))
         elif det.get('kind') == 'bl_state':
             for bl in det.get('bl_lines', []):
                 d.execute('UPDATE bl_lines SET bl_is_active=%s, bl_support_ic_pk=%s WHERE bl_pk=%s',

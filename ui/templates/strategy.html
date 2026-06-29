@@ -92,17 +92,19 @@ function lineOptions(lines, sel) {
 function detailHtml(p, i) {
   const d = p.detail;
   if (d.kind === 'cascade') {
+    const knobs = (d.knobs || []).map((k, j) =>
+      `<label class="knob" title="${(k.note || '').replace(/"/g, '&quot;')}"><span>${k.name.replace('lp_lr_', '').replace('lp_', '')}</span>
+        <input class="f sm" value="${k.val}" onchange="producers[${i}].detail.knobs[${j}].val=+this.value"></label>`).join('');
     const grows = (d.gates || []).map((g, j) => `<tr>
       <td class="en"><input type="checkbox" ${g.active ? 'checked' : ''} onchange="producers[${i}].detail.gates[${j}].active=this.checked"></td>
-      <td><input class="f sm" value="${g.seq}" onchange="producers[${i}].detail.gates[${j}].seq=+this.value"></td>
+      <td>${g.role}</td>
       <td><span class="name">${g.name}</span></td>
-      <td class="sub">${g.lines.join(' · ')}</td>
+      <td class="sub">${g.lines.map(l => l.nm + '(' + l.check + ')').join(' · ')}</td>
       <td><select class="f" onchange="producers[${i}].detail.gates[${j}].op=this.value">
         <option ${g.op === 'AND' ? 'selected' : ''}>AND</option><option ${g.op === 'OR' ? 'selected' : ''}>OR</option></select></td></tr>`).join('');
-    return `<div class="knob"><span>re-arm / wob line</span>
-        <select class="f" onchange="producers[${i}].detail.rearm_ic=+this.value">${lineOptions(d.lines, d.rearm_ic)}</select></div>
-      <table class="ic"><thead><tr><th class="en">On</th><th>seq</th><th>gate</th><th>lines</th><th>op</th></tr></thead><tbody>${grows}</tbody></table>
-      <div class="summary">chain: ${d.gate_chain} → wob  ·  toggle / reorder (seq) / op to play, then Save &amp; update</div>`;
+    return `<div class="knobs">${knobs}</div>
+      <table class="ic"><thead><tr><th class="en">On</th><th>role</th><th>gate</th><th>lines (check)</th><th>op</th></tr></thead><tbody>${grows}</tbody></table>
+      <div class="summary">latch-release: arm → wobslay reversal → finisher (gated by bias). Tick a finisher (e.g. s15a) to add it, tune the knobs, then Save &amp; update</div>`;
   }
   if (d.kind === 'bl_state') {
     let rows = d.bl_lines.map((bl, j) => {
