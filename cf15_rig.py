@@ -11,7 +11,7 @@ from datetime import timezone
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 import bias_machine as bm
-from optimus9.analysis.lr import lr_detect, lr_walk, lr_config
+from optimus9.analysis.lr import lr_detect, lr_walk, lr_exit, lr_config
 
 
 def ms(dt): return int(dt.replace(tzinfo=timezone.utc).timestamp() * 1000)
@@ -24,7 +24,9 @@ def run_window(db, start_ms, end_ms):
     W = bm.BiasWindow(db, end_ms, cfg=cfg)
     lrcfg = lr_config(db)
     entries = lr_detect(W, lrcfg, start_ms=start_ms)
-    return lr_walk(W, entries, lrcfg)
+    walk = lr_walk(W, entries, lrcfg)
+    exits = lr_exit(W, entries, lrcfg, curl_fam='s7', exit_on='curl')   # exit time/pct — best config (swappable)
+    return [w + (ex[1], round(ex[5], 3)) for w, ex in zip(walk, exits)]
 
 
 def main():
@@ -36,9 +38,9 @@ def main():
     db.execute('DROP TABLE IF EXISTS cf15_walk')
     db.execute('''CREATE TABLE cf15_walk (trade_ms BIGINT, trade_dt DATETIME, breach_side TINYINT,
                   trade_dir TINYINT, mae FLOAT, mfe FLOAT, mfe_ok TINYINT, mfe_swing_side TINYINT,
-                  wob_n INT, floor FLOAT)''')
-    db.executemany('INSERT INTO cf15_walk VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
-                   [r[:8] + (lrcfg.wob_n, lrcfg.floor) for r in rows])
+                  exit_ms BIGINT, exit_dt DATETIME, exit_pct FLOAT, wob_n INT, floor FLOAT)''')
+    db.executemany('INSERT INTO cf15_walk VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                   [r[:8] + (r[9], dtm.datetime.utcfromtimestamp(r[9] / 1000), r[10], lrcfg.wob_n, lrcfg.floor) for r in rows])
     if rows:
         mae = np.array([r[4] for r in rows]); mfe = np.array([r[5] for r in rows])
         ok = np.array([r[6] for r in rows]); side = np.array([r[7] for r in rows])
