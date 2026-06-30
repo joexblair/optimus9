@@ -79,7 +79,7 @@ prediction/reversal gate ahead of the finisher. **Pre-reqs** (◐ = partial / ow
 SRP nodes, plumbed: `arm (s5m OR s5r) → gate_open (predict/reverse/ib-clear → verdict) → finisher (qualify + trigger) → entries`.
 - ✓ **[1] `s5r_arm`** — divergence arm producer (59 arms/5d verified; slip=15 a param, **DB-knob owed**).
 - ✓ **[2] arm unify** (`s5m_arm` + `v2_arm`) — s5m straight-breach OR s5r, same-bar conflict → s5m wins, + window cap. **635 raw setups on the current 0.4 s5m** (586 are small-breach noise — the 0.65 re-clone + s7-exit test, task #45, tames that; gate+finisher filter the rest).
-- ☐ **[3] `gate_open`** — 3 producers (predict_events / reverse_events / ib_clear) → the open verdict (reasons a/b/c per the latch lifecycle above). `stale_exit` (flow-2) is an **AB toggle**, not baked in.
+- ✓ **[3] `gate_open`** (`gate_signals` producer + verdict) — the latch lifecycle, reasons a/b/c. Gate-open entry-proxy (pre-finisher) = **medMAE 0.27% / %<0.5 61%** (a=55 cleanest 0.18/90%, c=403 the bulk 0.26, b=177 0.48). The verify caught a `'a'` bug — it must be the OOB→IB **cross** (transition), not the static all-IB (which fired 544/635). MECHANISM CHOICES still to confirm: reverses = closed slope-flip · setup#2 "m reversed" = s3m/s4m slope-flip toward the trade · predict gated by s{n}m OOB. `stale_exit` (flow-2) is an **AB toggle**, not baked in.
 - ☐ **[4] finisher** — one window-walker (4×30s lookback + 2×30s fwd) feeding two verdicts: `qualify` (s30a+s15a) + `trigger` (s30M-wob).
 - ☐ **[5] wire + measure** — kernel-quality metric (no SL'd PnL).
 
