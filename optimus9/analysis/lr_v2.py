@@ -151,31 +151,33 @@ def s30M_wob(W, cfg, wob_n=2):
     return out
 
 
+def _finish(s30hi, s30lo, s15hi, s15lo, side, anchor, release, cap):
+    """SHARED finisher core (entry + exit — one responsibility, two callers). LATCH s30a AND s15a on `side`
+    (+1 hi / −1 lo) from `anchor` onward; they breach at their own times, the latch carries each. DELATCH
+    (fire) at `max(latched, release)` — both pre-latched ⇒ fire at `release`; a late finisher ⇒ fire when it
+    latches. Returns the trade/exit bar k, or None if both never latch in [anchor, cap)."""
+    s30 = s30hi if side == 1 else s30lo
+    s15 = s15hi if side == 1 else s15lo
+    g30 = g15 = False
+    for k in range(anchor, cap):
+        g30 = g30 or bool(s30[k]); g15 = g15 or bool(s15[k])
+        if g30 and g15:
+            return max(k, release)
+    return None
+
+
 def finisher(W, cfg, opens, rlb=19):
-    """[4] FINISHER (Joe 0630, LATCH model) — the finishers LATCH s30a/s15a breaches from the ARM (i) onward
-    (each: M & m OOB es-side + r OOB within the auto-scaled r-lookback), and DELATCH (fire) at the gate-open.
-    They breach at their OWN times — s15a can fire minutes before s30a; the latch carries each until both are in.
-    Trade fires once both have latched, but never before the gate-open → trade_k = max(latched, ok): both
-    pre-latched ⇒ trade AT the gate-open (the "trade immediately" path); a late finisher ⇒ trade when it latches
-    (the forward path). NO drop — every gate-open trades once both latch inside the setup window. The s30M wob
-    is no longer the trigger (the gate-open / delatch is); s30M is just a *component* of the s30a latch.
-    Returns [(trade_ms, es, bd, trade_k)]."""
+    """[4] FINISHER (LATCH model) — ENTRY caller of the shared `_finish` core: latch s30a+s15a on the es side
+    from the ARM (i), delatch at the gate-open (ok). s30M is just a component of the s30a latch (no separate wob
+    trigger). NO drop — every gate-open trades once both latch. Returns [(trade_ms, es, bd, trade_k)]."""
     ts = W.ts
     s30hi, s30lo = _finisher_signal(W, cfg, 's30M', 's30m', 's30r', rlb, 30)
     s15hi, s15lo = _finisher_signal(W, cfg, 's15M', 's15m', 's15r', rlb, 15)
     ent = []
     for (i, es, bd, ok, r, cap) in opens:
-        s30 = s30lo if es == -1 else s30hi
-        s15 = s15lo if es == -1 else s15hi
-        g30 = g15 = False; latched = None                            # LATCH from the ARM (i): accumulate each
-        for k in range(i, cap):                                       # finisher's breach independently
-            g30 = g30 or bool(s30[k]); g15 = g15 or bool(s15[k])
-            if g30 and g15:
-                latched = k; break                                   # both have now latched
-        if latched is None:
-            continue                                                 # never both latched inside the setup window
-        tk = max(latched, ok)                                        # DELATCH at the gate-open (or later if a finisher is late)
-        ent.append((int(ts[tk]), es, bd, tk))
+        tk = _finish(s30hi, s30lo, s15hi, s15lo, es, i, ok, cap)
+        if tk is not None:
+            ent.append((int(ts[tk]), es, bd, tk))
     return ent
 
 
@@ -198,3 +200,58 @@ def v2_walk(W, cfg, stale_exit=False):
         if e[3] not in seen:
             seen.add(e[3]); out.append(e)
     return out
+
+
+def lr_exit_v2(W, cfg, entries, predict=True, gate_fam='s7', slip=0.0, rlb=19):
+    """EXIT cascade = the entry machine pointed at the −es (favourable) extreme — ONE machine, two polarities.
+    Per entry (tms, es, bd, tj), arm_side = bd:
+      exit-arm : s5m breach on bd →
+      gate     : {gate_fam}r predict-then-breach on bd (predict_breach over its m/M pair; `predict` toggles the
+                 predict requirement — False = breach-only = the sweep's no-predict arm; `slip` moves the OOB
+                 boundary INWARD by `slip` so a near-OOB curl still counts as a breach) →
+      unlatch  : s5r reversal toward es (= −bd) — the curl predictor (s5r : {gate_fam}r :: s2M : s3r/s4r) →
+      finisher : `_finish(side=bd, anchor=exit-arm, release=unlatch)` = the exit bar (the SAME latch finisher).
+    AB knobs: gate_fam (s5/s6/s7 — the gate oscillator) · slip (boundary slip). SL floor (−cfg.sl%) every bar;
+    no time cap. Returns [(trade_ms, exit_ms, bd, entry_px, exit_px, ret, reason)] — same shape as lr_exit."""
+    ts, px, n = W.ts, W.px, len(W.ts)
+    hi, lo = cfg.hi, cfg.lo
+    ghi, glo = hi - slip, lo + slip                              # boundary slip: inward ⇒ easier gate breach
+    s5m, s5r = W.line('s5m'), W.line('s5r')
+    gr, gm, gM = W.line(f'{gate_fam}r'), W.line(f'{gate_fam}m'), W.line(f'{gate_fam}M')
+    predg = predict_breach(gr, gm, gM, hi, lo, FENCE_HI, FENCE_LO)
+    rev5 = _slope_flip(s5r)
+    s30hi, s30lo = _finisher_signal(W, cfg, 's30M', 's30m', 's30r', rlb, 30)
+    s15hi, s15lo = _finisher_signal(W, cfg, 's15M', 's15m', 's15r', rlb, 15)
+    rows = []
+    for tms, es, bd, tj in entries:
+        entry_px = float(px[tj])
+        arm = gate = unlatch = xk = None
+        predicted = not predict                                  # predict off ⇒ gate fires on the breach alone
+        ek = None; reason = 'end'
+        for k in range(tj + 1, n):
+            if (px[k] - entry_px) / entry_px * 100.0 * bd <= -cfg.sl:
+                ek = k; reason = 'SL'; break
+            if xk is not None:
+                if k >= xk:
+                    ek = k; reason = 'exit'; break
+            elif arm is None:
+                if (s5m[k] <= lo) if bd == -1 else (s5m[k] >= hi):
+                    arm = k
+            elif gate is None:
+                if predg[k] == bd:
+                    predicted = True
+                s7b = (gr[k] <= glo) if bd == -1 else (gr[k] >= ghi)
+                if predicted and s7b:
+                    gate = k
+            elif unlatch is None:
+                if rev5[k] == es:                                # s5r reverses toward es = the curl unlatch
+                    unlatch = k
+                    xk = _finish(s30hi, s30lo, s15hi, s15lo, bd, arm, unlatch, n)
+                    if xk is not None and k >= xk:               # both finishers already latched ⇒ exit now
+                        ek = k; reason = 'exit'; break
+        if ek is None:
+            ek = n - 1
+        exit_px = float(px[ek])
+        ret = -cfg.sl if reason == 'SL' else (exit_px - entry_px) / entry_px * 100.0 * bd
+        rows.append((tms, int(ts[ek]), bd, entry_px, exit_px, round(ret, 3), reason))
+    return rows
