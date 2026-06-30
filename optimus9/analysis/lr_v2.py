@@ -151,27 +151,31 @@ def s30M_wob(W, cfg, wob_n=2):
     return out
 
 
-def finisher(W, cfg, opens, lb_bars=24, rlb=19):
-    """[4] FINISHER (Joe 0630, corrected) — NOT a reject filter, a timing gate. The GATE = s30a AND s15a both
-    active (es-side, r-lookbacks); the finisher WAITS for it (lookback 4×30s = 24 5s-bars, then forward to the
-    setup cap). s30M is a *component* of s30a, so when the gate breaches s30M sits OOB and within seconds TURNS
-    = the s30M wobslay = the TRADE. So the trade = the first s30M-wob toward bd at-or-after the gate. NO drop —
-    every gate-open trades (the gate opens inside the setup window). Returns [(trade_ms, es, bd, trade_k)]."""
+def finisher(W, cfg, opens, rlb=19):
+    """[4] FINISHER (Joe 0630, LATCH model) — the finishers LATCH s30a/s15a breaches from the ARM (i) onward
+    (each: M & m OOB es-side + r OOB within the auto-scaled r-lookback), and DELATCH (fire) at the gate-open.
+    They breach at their OWN times — s15a can fire minutes before s30a; the latch carries each until both are in.
+    Trade fires once both have latched, but never before the gate-open → trade_k = max(latched, ok): both
+    pre-latched ⇒ trade AT the gate-open (the "trade immediately" path); a late finisher ⇒ trade when it latches
+    (the forward path). NO drop — every gate-open trades once both latch inside the setup window. The s30M wob
+    is no longer the trigger (the gate-open / delatch is); s30M is just a *component* of the s30a latch.
+    Returns [(trade_ms, es, bd, trade_k)]."""
     ts = W.ts
     s30hi, s30lo = _finisher_signal(W, cfg, 's30M', 's30m', 's30r', rlb, 30)
     s15hi, s15lo = _finisher_signal(W, cfg, 's15M', 's15m', 's15r', rlb, 15)
-    wob = s30M_wob(W, cfg)
     ent = []
     for (i, es, bd, ok, r, cap) in opens:
         s30 = s30lo if es == -1 else s30hi
         s15 = s15lo if es == -1 else s15hi
-        gate = s30 & s15                                              # GATE: both finishers active, es-side
-        gk = next((k for k in range(max(0, ok - lb_bars), cap) if gate[k]), None)   # gate opens (lookback or fwd)
-        if gk is None:
-            continue                                                 # gate never opened inside the setup window
-        tk = next((k for k in range(max(gk, ok), cap) if wob[k] == bd), None)       # s30M wob at-or-after the gate
-        if tk is not None:
-            ent.append((int(ts[tk]), es, bd, tk))
+        g30 = g15 = False; latched = None                            # LATCH from the ARM (i): accumulate each
+        for k in range(i, cap):                                       # finisher's breach independently
+            g30 = g30 or bool(s30[k]); g15 = g15 or bool(s15[k])
+            if g30 and g15:
+                latched = k; break                                   # both have now latched
+        if latched is None:
+            continue                                                 # never both latched inside the setup window
+        tk = max(latched, ok)                                        # DELATCH at the gate-open (or later if a finisher is late)
+        ent.append((int(ts[tk]), es, bd, tk))
     return ent
 
 
