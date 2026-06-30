@@ -9,8 +9,8 @@ winners read separately from the >0.5%-MAE drawdowns, split by direction:
 Thresholds are params (no hardcode): default WON_TARGET=0.7 (the costed-edge target), MAE_LIMIT=0.5.
 Time match is bar-containment, so it paints whatever chart TF you load it on.
 
-  python3 cf15_pine_emit.py            # 0.7 / 0.5
-  python3 cf15_pine_emit.py 0.9 0.5    # WON_TARGET MAE_LIMIT
+  python3 cf15_pine_emit.py            # 0.7 / 0.5 / cf15_walk
+  python3 cf15_pine_emit.py 0.7 0.5 kernel_walk   # WON_TARGET MAE_LIMIT TABLE
 """
 import sys; sys.path.insert(0, '/home/joe/thecodes')
 from optimus9.config import get_db_config
@@ -18,9 +18,10 @@ from optimus9 import DatabaseManager
 
 WON_TARGET = float(sys.argv[1]) if len(sys.argv) > 1 else 0.7
 MAE_LIMIT = float(sys.argv[2]) if len(sys.argv) > 2 else 0.5
+TABLE = sys.argv[3] if len(sys.argv) > 3 else 'cf15_walk'
 
 db = DatabaseManager(**get_db_config()); db.connect()
-rows = db.execute('SELECT trade_ms, trade_dir, mae, mfe FROM cf15_walk ORDER BY trade_ms', fetch=True)
+rows = db.execute(f'SELECT trade_ms, trade_dir, mae, mfe FROM {TABLE} ORDER BY trade_ms', fetch=True)
 db.disconnect()
 
 # colour index: 0 green=WON long · 1 red=WON short · 2 yellow=RISKY long · 3 blue=RISKY short
@@ -53,7 +54,7 @@ for i = 0 to array.size(t_arr) - 1
         break
 bgcolor(bg)
 '''
-path = '/home/joe/thecodes/cf15_trades.pine'
+path = f'/home/joe/thecodes/{TABLE.split("_")[0]}_trades.pine'
 open(path, 'w').write(body)
-print(f'cf15_walk: {len(rows)} trades → {n_won} WON (green/red) · {n_risky} RISKY mae>{MAE_LIMIT} (yellow/blue) · {n_scratch} scratch')
+print(f'{TABLE}: {len(rows)} trades → {n_won} WON (green/red) · {n_risky} RISKY mae>{MAE_LIMIT} (yellow/blue) · {n_scratch} scratch')
 print(f'→ {path}')

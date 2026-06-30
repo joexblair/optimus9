@@ -15,6 +15,7 @@ from optimus9.analysis.lr import lr_detect, lr_walk, lr_config
 from optimus9.compute.indicator_computer import IndicatorComputer as IC
 from optimus9.compute.breaching_line import predict_breach
 from optimus9.constants import FENCE_HI, FENCE_LO
+from optimus9.analysis.bias_state import bro_cross_flips
 
 
 def ms(s): return int(dtm.datetime.fromisoformat(s).replace(tzinfo=timezone.utc).timestamp() * 1000)
@@ -87,7 +88,17 @@ while i < n:
         continue
     i += 1
 
-new_mae = np.array([r[4] for r in lr_walk(W, entries, lrcfg)])
+new_walk = lr_walk(W, entries, lrcfg)
+new_mae = np.array([r[4] for r in new_walk])
+db.execute('DROP TABLE IF EXISTS kernel_walk')
+db.execute('CREATE TABLE kernel_walk (trade_ms BIGINT, trade_dt DATETIME, trade_dir TINYINT, mae FLOAT, mfe FLOAT)')
+db.executemany('INSERT INTO kernel_walk VALUES (%s,%s,%s,%s,%s)', [(r[0], r[1], r[3], r[4], r[5]) for r in new_walk])
+
+# bro-cross bias (hb33 sets) → kernel_bias, for the pine overlay (visual only, no cascade impact)
+flips = bro_cross_flips(db, W, sets=('hbhl33', 'hblo33', 'hbhi33'))
+db.execute('DROP TABLE IF EXISTS kernel_bias')
+db.execute('CREATE TABLE kernel_bias (flip_ms BIGINT, dir TINYINT)')
+db.executemany('INSERT INTO kernel_bias VALUES (%s,%s)', [(int(f['t']), int(f['dir'])) for f in flips])
 
 
 def stats(m):
