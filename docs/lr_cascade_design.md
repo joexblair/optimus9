@@ -42,8 +42,8 @@ The strategy page's cascade unfold renders the live `lr_gate` gate-sets (by role
 
 The evolved spec (Joe 0630). Replaces the s6m-arm / s30a-finisher baseline above with a richer arm + a
 prediction/reversal gate ahead of the finisher. **Pre-reqs** (◐ = partial / owed):
-- ◐ s6m multi 0.4 → **0.65** (kill the small breaches); test the multi vs the s7 exits. *[NOT done — the ABs below still ran on 0.4]*
-- ◐ clone s6 (incl multi 0.65) → **s5** (300s). *[s5 seeded, but off the 0.4 s6 — re-clone @ 0.65 owed]*
+- ✓ **s5m widened 0.4 → 0.65** (#45, ic_pk 88 + seed_s5). **NEUTRAL on the v2 entries** (raw arm 635→560, but entries n156→147 / medMAE 0.30→0.31) — the gate+finisher already subsume the small-breach noise, so the arm-multi never reaches the entries. **This validates the 0.30 as robust, not a 0.4-noise artifact.** s7-exit half of #45 still owed (s5m feeds the exit's s5r prediction).
+- s6m left at **0.4** — it's only the baseline (lr_detect/strat_review) + AB fallback now; not re-baselined unless an AB picks s6.
 - ✓ clone s2 → **s4** (240s) + **s3** (180s); s2/s3/s4 min-mult **0.56**.
 - ✓ clone hbhl6 / hblo16 / hbhi16 → **hb33** (1980s).
 
