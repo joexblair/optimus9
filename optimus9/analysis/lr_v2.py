@@ -34,3 +34,24 @@ def s5r_arm(W, cfg, slip=15):
         elif s4_hi and s5r[i] <= fence_lo:               # high leg + s5r low opposing → SHORT
             arms.append((i, 1, -1))
     return arms
+
+
+def s5m_arm(W, cfg):
+    """Straight-breach arm — s5m crosses OOB (closed) → arm; trade = the reversal (bd = -es).
+    Emits [(bar_i, es, bd)]. On the CURRENT 0.4-multi s5m until the 0.65 re-clone (task #45)."""
+    ts = W.ts; n = len(ts); hi, lo = cfg.hi, cfg.lo
+    s5m = W._line('s5m')
+    sign = np.where(s5m >= hi, 1, np.where(s5m <= lo, -1, 0))
+    return [(i, int(sign[i]), -int(sign[i])) for i in range(1, n) if sign[i] != 0 and sign[i] != sign[i - 1]]
+
+
+def v2_arm(W, cfg, horizon=None):
+    """[2] The v2 ARM = s5m straight-breach OR s5r divergence, unified → setups [(i, es, bd, cap, src)].
+    cap = the setup window (i + horizon). Same-bar opposite-side conflict → **s5m wins** (setdefault).
+    [TODO: window-level s5m-wins conflict + opposite-breach cap are refinements once gate_open needs them.]"""
+    horizon = horizon or cfg.horizon
+    n = len(W.ts)
+    m = {i: (es, bd, 's5m') for i, es, bd in s5m_arm(W, cfg)}
+    for i, es, bd in s5r_arm(W, cfg):
+        m.setdefault(i, (es, bd, 's5r'))                 # s5m already set → s5m wins
+    return [(i, es, bd, min(n, i + horizon), src) for i, (es, bd, src) in sorted(m.items())]

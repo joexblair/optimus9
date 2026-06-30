@@ -57,12 +57,11 @@ prediction/reversal gate ahead of the finisher. **Pre-reqs** (◐ = partial / ow
 
 **Flow (per window):**
 1. **s5m OR s5r breaches** → armed (s5m is THE arm; s5r the divergence arm above), `es` set, gate(s) latched, taking inputs.
-2. If s2r/s3r/s4r are in their lookbacks AND all 3 have progressed to IB *when s5m breaches* → **exit the flow, no trade**.
-3. Test s3r prediction continuously while s3m OOB; s4r while s4m OOB:
-   - s3r/s4r did NOT breach or predict → **ready-to-reverse** signalled; gate stays latched.
-   - all s2/s3/s4 cross to IB → gate **opens immediately**.
-   - s3r/s4r **predicted** → wait for the predicted line to breach; keep predicting; a 2nd r predicted → wait for it too (latched); either r **reverses before breaching** → gate opens immediately.
-   - on **ready-to-reverse** → gate opens when **s2Mage reverses** (boundary-agnostic).
+2. **[AB toggle: `stale_exit`]** if s2r/s3r/s4r are in their lookbacks AND all 3 have progressed to IB *when s5m breaches* → **exit the flow, no trade**. *(Tested with/without — Joe 0630; not assumed.)*
+3. **The latch** — test s3r predict while s3m OOB, s4r while s4m OOB. The gate opens by ONE of (lifecycle confirmed Joe 0630):
+   - **(a) all-IB** — s2/s3/s4 all cross to IB → open **immediately**.
+   - **(b) predict → reverse-before-breach** — an r predicted but reverses *before* it breaches (the predicted move aborted) → open **immediately**.
+   - **(c) ready-to-reverse → s2Mage reverse** (boundary-agnostic). Reached two ways: **setup#1** = an r predicted **then breached** → ready-to-reverse; **setup#2** = no prediction + s3m/s4m reversed. A 2nd r predicting just extends the latched wait.
 4. Gate open → **FINISHER QUALIFY**: over a **4×30s lookback** (then **forward, tolerance 2×30s** for late lines), did **s30a AND s15a** (s15a = ic 84/85/86, the TF15 twin of s30a) both signal — each honouring its r-lookback?
 5. **TRIGGER (last, separate): `s30M` wobslay** (closed, 2-wob). The trade fires on s30M-wob — which may *already* sit inside the 4×30s lookback (→ trade immediately, "on its own" = it fired before the gate opened) or be waited-for forward. **s30M-wob is NOT part of s30a/s15a.**
 6. **Bias (deferred):** while curating, trade at ⑤ WITHOUT a bias check; when the spec locks, consult the upstream/bro-cross bias and **adhere** (block counter-bias).
@@ -75,6 +74,14 @@ prediction/reversal gate ahead of the finisher. **Pre-reqs** (◐ = partial / ow
 - **Seeds:** s2m/s2M, s3, s4, s5 (off the 0.4 s6 — re-clone owed), hb33.
 - **Anchor fix (0630):** bias closed lines epoch→midnight (TV grid) — see `docs/epoch_anchor_spec.md`.
 - **bro-cross:** split + `require_oob` A/B — no-OOB whipsaws (301 vs 69/window) + same-bar set conflicts → OOB stays the stabiliser, IB crosses → grav-bias-flip.
+
+## v2 BUILD — `optimus9/analysis/lr_v2.py` (alongside the untouched baseline; integrate when proven)
+SRP nodes, plumbed: `arm (s5m OR s5r) → gate_open (predict/reverse/ib-clear → verdict) → finisher (qualify + trigger) → entries`.
+- ✓ **[1] `s5r_arm`** — divergence arm producer (59 arms/5d verified; slip=15 a param, **DB-knob owed**).
+- ✓ **[2] arm unify** (`s5m_arm` + `v2_arm`) — s5m straight-breach OR s5r, same-bar conflict → s5m wins, + window cap. **635 raw setups on the current 0.4 s5m** (586 are small-breach noise — the 0.65 re-clone + s7-exit test, task #45, tames that; gate+finisher filter the rest).
+- ☐ **[3] `gate_open`** — 3 producers (predict_events / reverse_events / ib_clear) → the open verdict (reasons a/b/c per the latch lifecycle above). `stale_exit` (flow-2) is an **AB toggle**, not baked in.
+- ☐ **[4] finisher** — one window-walker (4×30s lookback + 2×30s fwd) feeding two verdicts: `qualify` (s30a+s15a) + `trigger` (s30M-wob).
+- ☐ **[5] wire + measure** — kernel-quality metric (no SL'd PnL).
 
 ## AB results — STASHED, theory only (NOT locked)
 
