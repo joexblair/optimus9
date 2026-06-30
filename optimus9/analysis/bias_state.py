@@ -46,40 +46,54 @@ def pk_bias_events(W):
     return [(int(u['t']), m[u['call']]) for u in W.signals() if u['call'] in m]
 
 
-def bro_cross_flips(db, W, sets=('hbhl16', 'hblo16', 'hbhi16'), cluster_min=30):
-    """Bro-cross flips → rich events (#37, docs/bias_mechanics_design.md). Returns dicts
-    {t, dir, set, mage, min} — the bias feed (`bro_cross_bias_events`) and the bl_review event overlay
-    both derive from this (one computation, two views).
-
-    Requires an ACTUAL crossover (Joe 0626): `sign(m-M)` must CHANGE — the mage crosses UNDER the minion
-    (lo-breach → +1 BULL) or OVER it (hi-breach → -1 BEAR) — and the new side then holds `lp_bro_wob`
-    consecutive 5s bars (the weave ceased), with both lines OOB on that side. Anchored to the cross
-    (`run_len == N`), so the lines merely DROPPING into OOB while the minion already sits on one side
-    does NOT fire (the prior bug: it triggered on the OOB-onset without a cross). Aggregate the sets,
-    then CLUSTER: keep the FIRST flip per `cluster_min`-min cluster (opposite dir = new cluster fires;
-    same dir within the window suppressed). hb16 dropped — too twitchy (Joe 0626). N from
-    `lp_config.lp_bro_wob`, OOB from `optimus9_system` (no hardcode). [TODO: per-set active flag in DB.]"""
-    N = int(db.execute("SELECT val FROM lp_config WHERE name='lp_bro_wob'", fetch=True)[0]['val'])
-    sysr = db.execute('SELECT hi_boundary, lo_boundary FROM optimus9_system', fetch=True)[0]
-    HI, LO = float(sysr['hi_boundary']), float(sysr['lo_boundary'])
+def bro_cross_events(db, W, sets):
+    """Per-set cross SIGNAL streams (#37) — ONE computation, reused by every verdict. For each set:
+    {set, ts, m, M, sign, run_len, fin} where sign=sign(m-M) and run_len = how many consecutive bars
+    the current side has held. Pure event-construction (no hold/OOB verdict) — `bro_cross_flips` and
+    debug probes both consume THIS instead of re-deriving the cross, so the cross lives in one place.
+    value_mode-routed per line (#33)."""
     ts = W.ts; nb = len(ts)
-    def line(name):                                          # route by the line's value_mode (#33)
+    def line(name):
         r = db.execute("SELECT value_mode FROM vw_indicator_configs_live WHERE ind_name=%s", (name,), fetch=True)
         return W._line(name) if (r and r[0]['value_mode'] == 'closed') else W._line_emerging(name)
-    raw = []
+    streams = []
     for st in sets:
         m = line(st + 'm'); M = line(st + 'M')
         fin = np.isfinite(m) & np.isfinite(M)
         sign = np.where(fin, np.sign(m - M), 0).astype(int)
         chg = np.concatenate([[True], sign[1:] != sign[:-1]])
         idx = np.arange(nb); last_start = np.maximum.accumulate(np.where(chg, idx, -1)); run_len = idx - last_start + 1
-        for i in range(N, nb):
+        streams.append({'set': st, 'ts': ts, 'm': m, 'M': M, 'sign': sign, 'run_len': run_len, 'fin': fin})
+    return streams
+
+
+def bro_cross_flips(db, W, sets=('hbhl16', 'hblo16', 'hbhi16'), cluster_min=30, N=None):
+    """Bro-cross flips → rich events (#37, docs/bias_mechanics_design.md). The VERDICT over
+    `bro_cross_events`. Returns {t, dir, set, mage, min} — the bias feed (`bro_cross_bias_events`)
+    and the bl_review overlay both derive from this (one computation, two views).
+
+    Requires an ACTUAL crossover (Joe 0626): `sign(m-M)` CHANGES — mage crosses UNDER minion
+    (lo-breach → +1 BULL) or OVER it (hi-breach → -1 BEAR) — and the new side holds `N` consecutive 5s
+    bars (the weave ceased), with both lines OOB on that side. Anchored to `run_len == N`, so a line
+    merely DROPPING into OOB while the minion already sits one side does NOT fire. Aggregate the sets,
+    then CLUSTER: first flip per `cluster_min`-min cluster (opposite dir = new cluster; same dir
+    suppressed). `N` is the wobble/sustain tolerance — defaults to `lp_config.lp_bro_wob`; pass N to
+    test (N=1 = fire on the cross itself). OOB from `optimus9_system` (no hardcode).
+    [TODO: per-set active flag in DB; sets are still a default arg.]"""
+    if N is None:
+        N = int(db.execute("SELECT val FROM lp_config WHERE name='lp_bro_wob'", fetch=True)[0]['val'])
+    sysr = db.execute('SELECT hi_boundary, lo_boundary FROM optimus9_system', fetch=True)[0]
+    HI, LO = float(sysr['hi_boundary']), float(sysr['lo_boundary'])
+    raw = []
+    for s in bro_cross_events(db, W, sets):
+        ts, m, M, sign, run_len, fin, st = s['ts'], s['m'], s['M'], s['sign'], s['run_len'], s['fin'], s['set']
+        for i in range(N, len(ts)):
             if not fin[i] or run_len[i] != N:             # a cross that held EXACTLY N bars (weave ceased)
                 continue
-            s = sign[i]
-            if s > 0 and m[i] < LO and M[i] < LO:          # mage crossed UNDER minion, both OOB-low → BULL
+            sgn = sign[i]
+            if sgn > 0 and m[i] < LO and M[i] < LO:         # mage crossed UNDER minion, both OOB-low → BULL
                 raw.append((int(ts[i]), 1, st, float(M[i]), float(m[i])))
-            elif s < 0 and m[i] > HI and M[i] > HI:        # mage crossed OVER minion, both OOB-high → BEAR
+            elif sgn < 0 and m[i] > HI and M[i] > HI:       # mage crossed OVER minion, both OOB-high → BEAR
                 raw.append((int(ts[i]), -1, st, float(M[i]), float(m[i])))
     raw.sort(key=lambda x: x[0])
     window = cluster_min * 60 * 1000
