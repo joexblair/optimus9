@@ -161,7 +161,7 @@ class BiasWindow:
 
     # ── line builders ──
     def _raw(self, tf_sec, cfg):
-        fr = IC.resample(self.base, tf_sec)
+        fr = IC.resample(self.base, tf_sec, 'midnight')   # TV grid — match _line_emerging; non-day-divisor TFs drift on epoch
         if cfg[0] == 'bb':
             v = IC.f_bb(IC.build_source(fr, cfg[3]), cfg[1], cfg[2])
         else:
