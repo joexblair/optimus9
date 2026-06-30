@@ -119,7 +119,7 @@ def gate_open(W, cfg, setups, sig=None):
             if rtr and sig['rev2M'][k] == bd:                                        # (c) ready-to-reverse → s2Mage
                 opened = (k, 'c'); break
         if opened:
-            out.append((i, es, bd, opened[0], opened[1]))
+            out.append((i, es, bd, opened[0], opened[1], cap))
     return out
 
 
@@ -151,30 +151,27 @@ def s30M_wob(W, cfg, wob_n=2):
     return out
 
 
-def finisher(W, cfg, opens, lb_bars=24, fwd_bars=12, rlb=19):
-    """[4] FINISHER — per gate-open, QUALIFY (s30a AND s15a, es-side) over a 4×30s lookback (=24 5s-bars) then
-    forward tolerance 2×30s (=12), and TRIGGER on the s30M wobslay toward bd. Causal: if s30a+s15a+wob all
-    fired in the lookback → trade at the gate-open ("on its own"); else walk forward, trade when all three
-    complete. Returns entries [(trade_ms, es, bd, trade_k)]. MECHANISM CHOICES surfaced: finisher on the es
-    (re-breach) side · s30M-wob toward bd off the OOB extreme · window 24-back/12-fwd."""
-    ts = W.ts; n = len(ts)
+def finisher(W, cfg, opens, lb_bars=24, rlb=19):
+    """[4] FINISHER (Joe 0630, corrected) — NOT a reject filter, a timing gate. The GATE = s30a AND s15a both
+    active (es-side, r-lookbacks); the finisher WAITS for it (lookback 4×30s = 24 5s-bars, then forward to the
+    setup cap). s30M is a *component* of s30a, so when the gate breaches s30M sits OOB and within seconds TURNS
+    = the s30M wobslay = the TRADE. So the trade = the first s30M-wob toward bd at-or-after the gate. NO drop —
+    every gate-open trades (the gate opens inside the setup window). Returns [(trade_ms, es, bd, trade_k)]."""
+    ts = W.ts
     s30hi, s30lo = _finisher_signal(W, cfg, 's30M', 's30m', 's30r', rlb, 30)
     s15hi, s15lo = _finisher_signal(W, cfg, 's15M', 's15m', 's15r', rlb, 15)
     wob = s30M_wob(W, cfg)
     ent = []
-    for (i, es, bd, ok, r) in opens:
-        s30 = s30lo if es == -1 else s30hi              # finisher on the es (re-breach) side
+    for (i, es, bd, ok, r, cap) in opens:
+        s30 = s30lo if es == -1 else s30hi
         s15 = s15lo if es == -1 else s15hi
-        a = max(0, ok - lb_bars)
-        g30 = bool(np.any(s30[a:ok + 1])); g15 = bool(np.any(s15[a:ok + 1])); gw = bool(np.any(wob[a:ok + 1] == bd))
-        trade_k = ok if (g30 and g15 and gw) else None
-        if trade_k is None:
-            for k in range(ok + 1, min(n, ok + fwd_bars + 1)):
-                g30 |= bool(s30[k]); g15 |= bool(s15[k]); gw |= (wob[k] == bd)
-                if g30 and g15 and gw:
-                    trade_k = k; break
-        if trade_k is not None:
-            ent.append((int(ts[trade_k]), es, bd, trade_k))
+        gate = s30 & s15                                              # GATE: both finishers active, es-side
+        gk = next((k for k in range(max(0, ok - lb_bars), cap) if gate[k]), None)   # gate opens (lookback or fwd)
+        if gk is None:
+            continue                                                 # gate never opened inside the setup window
+        tk = next((k for k in range(max(gk, ok), cap) if wob[k] == bd), None)       # s30M wob at-or-after the gate
+        if tk is not None:
+            ent.append((int(ts[tk]), es, bd, tk))
     return ent
 
 
