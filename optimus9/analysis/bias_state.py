@@ -67,7 +67,7 @@ def bro_cross_events(db, W, sets):
     return streams
 
 
-def bro_cross_flips(db, W, sets=('hbhl16', 'hblo16', 'hbhi16'), cluster_min=30, N=None):
+def bro_cross_flips(db, W, sets=('hbhl16', 'hblo16', 'hbhi16'), cluster_min=30, N=None, require_oob=True):
     """Bro-cross flips → rich events (#37, docs/bias_mechanics_design.md). The VERDICT over
     `bro_cross_events`. Returns {t, dir, set, mage, min} — the bias feed (`bro_cross_bias_events`)
     and the bl_review overlay both derive from this (one computation, two views).
@@ -78,8 +78,10 @@ def bro_cross_flips(db, W, sets=('hbhl16', 'hblo16', 'hbhi16'), cluster_min=30, 
     merely DROPPING into OOB while the minion already sits one side does NOT fire. Aggregate the sets,
     then CLUSTER: first flip per `cluster_min`-min cluster (opposite dir = new cluster; same dir
     suppressed). `N` is the wobble/sustain tolerance — defaults to `lp_config.lp_bro_wob`; pass N to
-    test (N=1 = fire on the cross itself). OOB from `optimus9_system` (no hardcode).
-    [TODO: per-set active flag in DB; sets are still a default arg.]"""
+    test (N=1 = fire on the cross itself). `require_oob=True` gates the flip on both lines OOB on the breach
+    side; `require_oob=False` fires on the bare cross direction regardless of level (Joe 0630 A/B — the cross
+    IS the signal). OOB from `optimus9_system` (no hardcode).
+    [TODO: per-set active flag + require_oob to DB; sets are still a default arg.]"""
     if N is None:
         N = int(db.execute("SELECT val FROM lp_config WHERE name='lp_bro_wob'", fetch=True)[0]['val'])
     sysr = db.execute('SELECT hi_boundary, lo_boundary FROM optimus9_system', fetch=True)[0]
@@ -91,9 +93,9 @@ def bro_cross_flips(db, W, sets=('hbhl16', 'hblo16', 'hbhi16'), cluster_min=30, 
             if not fin[i] or run_len[i] != N:             # a cross that held EXACTLY N bars (weave ceased)
                 continue
             sgn = sign[i]
-            if sgn > 0 and m[i] < LO and M[i] < LO:         # mage crossed UNDER minion, both OOB-low → BULL
+            if sgn > 0 and (not require_oob or (m[i] < LO and M[i] < LO)):   # mage UNDER minion (lo) → BULL
                 raw.append((int(ts[i]), 1, st, float(M[i]), float(m[i])))
-            elif sgn < 0 and m[i] > HI and M[i] > HI:       # mage crossed OVER minion, both OOB-high → BEAR
+            elif sgn < 0 and (not require_oob or (m[i] > HI and M[i] > HI)): # mage OVER minion (hi) → BEAR
                 raw.append((int(ts[i]), -1, st, float(M[i]), float(m[i])))
     raw.sort(key=lambda x: x[0])
     window = cluster_min * 60 * 1000
