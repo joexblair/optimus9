@@ -42,8 +42,8 @@ The strategy page's cascade unfold renders the live `lr_gate` gate-sets (by role
 
 The evolved spec (Joe 0630). Replaces the s6m-arm / s30a-finisher baseline above with a richer arm + a
 prediction/reversal gate ahead of the finisher. **Pre-reqs** (◐ = partial / owed):
-- ✓ **s5m widened 0.4 → 0.65** (#45, ic_pk 88 + seed_s5). **NEUTRAL on the v2 entries** (raw arm 635→560, but entries n156→147 / medMAE 0.30→0.31) — the gate+finisher already subsume the small-breach noise, so the arm-multi never reaches the entries. **This validates the 0.30 as robust, not a 0.4-noise artifact.** s7-exit half of #45 still owed (s5m feeds the exit's s5r prediction).
-- s6m left at **0.4** — it's only the baseline (lr_detect/strat_review) + AB fallback now; not re-baselined unless an AB picks s6.
+- ✗ **s5m stays 0.4** — #45 RESOLVED (0630): the 0.4→0.65 widen was NEUTRAL on entries (gate+finisher subsume the small-breach noise; validates the 0.30 as robust) AND **worse on the s7 exit** (s5m feeds the exit's s5r prediction; 0.4 predicts better: 0.40 net +44.0% vs 0.65 +37.2% on s7·s30a_s15a·pg). **Test rejects the pre-req → keep 0.4.**
+- s6m left at **0.4** — baseline (lr_detect/strat_review) + AB fallback only.
 - ✓ clone s2 → **s4** (240s) + **s3** (180s); s2/s3/s4 min-mult **0.56**.
 - ✓ clone hbhl6 / hblo16 / hbhi16 → **hb33** (1980s).
 
@@ -83,7 +83,9 @@ SRP nodes, plumbed: `arm (s5m OR s5r) → gate_open (predict/reverse/ib-clear �
 - ✓ **[4] finisher** — `_finisher_signal` (s30a/s15a = M&m OOB + r-lookback, reuses `_roll_or`) · `s30M_wob` · `finisher` (qualify s30a AND s15a over 4×30s lookback + 2×30s fwd, trigger on s30M-wob). **KEY:** the std wobslay is dead on the closed s30M step-line → s30M-wob = slope-flip held 2 bars = **the deb2 mechanic literally** (the debounce *was* the s30M trigger, not a proxy). MECHANISM CHOICES surfaced: finisher on es side · s30M-wob toward bd · window 24-back/12-fwd.
 - ✓ **[5] wire + measure** (`v2_walk`) — **end-to-end: n=156, medMAE 0.30% / %<0.5 58% / %MFE≥.7 67%** (cleanest of the build; ref baseline 0.67, kernel 0.46). On the noisy 0.4 arm; no SL'd PnL.
 
-**`stale_exit` AB (flow-2):** OFF n=156/0.30 · ON n=49/0.48 — the stale-exit (as built = s2r/s3r/s4r all IB at the arm) **removes the good setups → keep it OFF**. (My stale is a simplification of the spec's lookback version — revisit.) ALL v2 numbers are **theory until proven** (0.4 noise, inferred finisher mechanisms).
+**`stale_exit` AB (flow-2):** OFF n=156/0.30 · ON n=49/0.48 — the stale-exit (as built = s2r/s3r/s4r all IB at the arm) **removes the good setups → keep it OFF**. (My stale is a simplification of the spec's lookback version — revisit.) All v2 numbers are **theory until proven** (inferred finisher mechanisms).
+
+**v2 EXIT (#45 resolved, `lr_v2_exit_ab.py`):** the v2 entries → `lr_exit` (s7) are **NET POSITIVE under the SL** — the first costed edge end-to-end. Best *reliable* config = **s7/s8 · `exit_on=s30a_s15a` · predict_gate=on · s5m=0.4**: **avg +0.28%/trade, 76% win, +44% net** (n156, 5d). Findings: every config nets + (clean entries pay off) · `predict_gate=on` wins (the ride) · `s30a_s15a` ≫ `curl` (same avg, **76% vs ~50% win**) · curl_fam minor. **Caveat: GROSS** — at the ~0.20% RT cost (cascade-edge work), net-of-cost ≈ **+0.08%/trade** (thin but +). The 76% win + medMAE-0.30 entries are the foundation.
 
 ## AB results — STASHED, theory only (NOT locked)
 
