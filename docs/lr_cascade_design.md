@@ -4,6 +4,10 @@ Status: BUILT + decoupled (0628→29). The SHAPE is code, everything else is dat
 stale cf15 snapshot: **bias dropped from the cascade** (set upstream, no place here), **s2r restored** as a
 clearance gate. This is the raw pl-cascade.
 
+**v2 TARGET (0630):** the *prediction-gated* pl-cascade — s5m/s5r arm, s3r/s4r prediction gates, s2Mage
+ready-to-reverse, s30M finisher (§v2). The entry-timing **KERNEL is proven** (§Build progress); the finishers
++ the full latch-flow are the build ahead. AB results **stashed** (§AB), NOT locked — **all theory until proven.**
+
 ## The mechanic
 **Slow arm → reversal → fast finisher, cleared by gate(s):**
 1. **ARM** — an arm gate's line breaches OOB (closed) → armed, side = breach side. (seed: `s6m`, TF6.)
@@ -33,6 +37,52 @@ NO bias in pl-cascade — bias is set upstream. (The old `s14M` mid-vs-50 was a 
 
 ## Configurable from the UI (no code)
 The strategy page's cascade unfold renders the live `lr_gate` gate-sets (by role, active-toggle + op + lines) + the 8 knobs (edit-in-place). **Add a finisher = a row + a tick.** Proven: ticking the seeded-disabled `s15a` (TF15s finisher) → cascade fires s30a OR s15a (more entries); untick → back. Same for the `s2r` gate (tick to clear-gate the finisher).
+
+## v2 — the prediction-gated pl-cascade (TARGET, in build; all theory until proven)
+
+The evolved spec (Joe 0630). Replaces the s6m-arm / s30a-finisher baseline above with a richer arm + a
+prediction/reversal gate ahead of the finisher. **Pre-reqs** (◐ = partial / owed):
+- ◐ s6m multi 0.4 → **0.65** (kill the small breaches); test the multi vs the s7 exits. *[NOT done — the ABs below still ran on 0.4]*
+- ◐ clone s6 (incl multi 0.65) → **s5** (300s). *[s5 seeded, but off the 0.4 s6 — re-clone @ 0.65 owed]*
+- ✓ clone s2 → **s4** (240s) + **s3** (180s); s2/s3/s4 min-mult **0.56**.
+- ✓ clone hbhl6 / hblo16 / hbhi16 → **hb33** (1980s).
+
+**Lines & purposes:**
+- **s5m** opens the gate (arm). **s5r** is also an arm (s5m OR s5r arms). s5r needs **s4m OOB** to fire; s5r uses an **OOB-slip 15** → morphs OOB to (70, 30); if s5r & s5m fire **opposite** sides, **s5m wins**.
+- **s3r / s4r** — prediction candidates AND gates. Closed-bar, 0 wob. s3min/mage are prediction support for s3r; s4min/mage for s4r.
+- **s2Mage reversal** — completes s3Mage/s4Mage when "ready to reverse". Closed-bar, 0 wob, **boundary-agnostic** (reverses anywhere). setup#1 = s3r or s4r OOB *after prediction*; setup#2 = s3r/s4r did NOT breach AND s3m+s4m reversed.
+- **s30M** — the trigger that makes the trade. Closed-bar, **2 wob**.
+- **hb33 ×3** — bro-cross bias testing ONLY (non-prod, visual; emerging + lp_bro_wob); NO impact on the cascade.
+
+**Flow (per window):**
+1. **s6m breaches** → armed, taking inputs. Gate(s) latched.
+2. If s2r/s3r/s4r are in their lookbacks AND all 3 have progressed to IB *when s5m breaches* → **exit the flow, no trade**.
+3. Test s3r prediction continuously while s3m OOB; s4r while s4m OOB:
+   - s3r/s4r did NOT breach or predict → **ready-to-reverse** signalled; gate stays latched.
+   - all s2/s3/s4 cross to IB → gate **opens immediately**.
+   - s3r/s4r **predicted** → wait for the predicted line to breach; keep predicting; a 2nd r predicted → wait for it too (latched); either r **reverses before breaching** → gate opens immediately.
+   - on **ready-to-reverse** → gate opens when **s2Mage reverses** (boundary-agnostic).
+4. Gate open → **finishers** begin: lookback **4×30s** for s30a+s15a (honouring both r lookbacks); trade immediately if they signalled in the lookback; else walk forward to s30a+s15a, **tolerance 2×30s** (lets late lines contribute).
+5. Read bias. While curating: trade on **s30Mage wobslay** WITHOUT the bias check. When the spec locks: bias consulted + adhered to.
+
+## Build progress — the KERNEL (a proven subset of v2)
+
+- **Entry-timing kernel:** arm (s6m) → reversal → **s3r OR s4r predict-then-breach** (arms) → **s2M slope-flip** = entry. Stands in for steps 3–4 (no s5m arm, no s2r/s3r/s4r lookback gates, no s30M finisher yet).
+- **Proven:** vs the s30a-finisher baseline (medMAE 0.67, %<0.5 43%), the kernel gives medMAE **0.46**, %<0.5 **55%** (n=77, valid setup window). The prediction→reversal timing sharpens entries.
+- **Engine (SRP):** `lr_setups` (producer: arm-breach+wobslay events) / `lr_detect` (finisher+gate verdict). `bro_cross_events` / `bro_cross_flips` (verdict; `N` + `require_oob` params). Harnesses: `lr_kernel_walk.py`, `lr_kernel_ab.py`.
+- **Seeds:** s2m/s2M, s3, s4, s5 (off the 0.4 s6 — re-clone owed), hb33.
+- **Anchor fix (0630):** bias closed lines epoch→midnight (TV grid) — see `docs/epoch_anchor_spec.md`.
+- **bro-cross:** split + `require_oob` A/B — no-OOB whipsaws (301 vs 69/window) + same-bar set conflicts → OOB stays the stabiliser, IB crosses → grav-bias-flip.
+
+## AB results — STASHED, theory only (NOT locked)
+
+Combo sweep (`lr_kernel_ab.py`): arm (s6m/s5m) × trigger (s3r/s4r/OR) × s2M-debounce (1/2/3 bd-closes) × arm wob-n. Entry quality only (no SL'd PnL):
+```
+baseline  s6m·OR·deb1·wob4:  n=77  medMAE 0.46  %<0.5 55  %MFE≥.7 70
+winner    s5m·OR·deb3·wob4:  n=83  medMAE 0.35  %<0.5 55  %MFE≥.7 69
+```
+- s2M **debounce is the biggest lever** (deb1→3: medMAE 0.46→0.35); s5m arm pays off WITH it; higher wob-n (7) worse everywhere; s4r-only weak; s3-only posts the highest %MFE≥.7 (76–78).
+- **KEY CAVEAT (Joe 0630):** the deb2/3 win likely **proxies the unbuilt finishers** — s30M-wob + s30a/s15a lookback-4 / tolerance-2 are themselves a confirm delay. **Not a standalone lever; re-test once the finishers are plumbed** (the debounce may be subsumed). And the ABs ran on the **pre-pre-req configs** (s6m multi 0.4, s5 off 0.4) — expect a shift after the 0.65 pre-req.
 
 ## Notes / open
 - **PnL ground rule (0629):** no $ / PnL figures discussed without a stop loss applied — winners-only ceilings are banned (they're what masked the entry problem). So this doc carries counts, not $.
