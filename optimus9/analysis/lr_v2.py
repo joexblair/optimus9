@@ -186,9 +186,14 @@ def _stale(W, cfg, setups, sig=None):
 
 
 def v2_walk(W, cfg, stale_exit=False):
-    """[5] WIRE — arm → (stale_exit?) → gate_open → finisher → entries. stale_exit = the flow-2 AB toggle."""
+    """[5] WIRE — arm → (stale_exit?) → gate_open → finisher → entries. stale_exit = the flow-2 AB toggle.
+    Dedup by trade bar: two arm setups can collapse to the same gate-open→finisher trade — one trade, once."""
     setups = v2_arm(W, cfg)
     sig = gate_signals(W, cfg)
     if stale_exit:
         setups = _stale(W, cfg, setups, sig)
-    return finisher(W, cfg, gate_open(W, cfg, setups, sig))
+    seen, out = set(), []
+    for e in finisher(W, cfg, gate_open(W, cfg, setups, sig)):
+        if e[3] not in seen:
+            seen.add(e[3]); out.append(e)
+    return out
