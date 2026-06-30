@@ -13,7 +13,9 @@ Each node is a pure producer or a verdict — no fusion (the footwork riff). Bui
 """
 import numpy as np
 from optimus9.compute.breaching_line import predict_breach
+from optimus9.compute.indicator_computer import IndicatorComputer as IC
 from optimus9.constants import FENCE_HI, FENCE_LO
+from optimus9.analysis.lr import _roll_or, BASE_TF
 
 
 def s5r_arm(W, cfg, slip=15):
@@ -119,3 +121,74 @@ def gate_open(W, cfg, setups, sig=None):
         if opened:
             out.append((i, es, bd, opened[0], opened[1]))
     return out
+
+
+def _finisher_signal(W, cfg, Mn, mn, rn, rlb, rtf):
+    """s30a/s15a-style finisher: M & m both OOB (same side) AND r OOB within the lookback (auto-scaled by TF,
+    same as the baseline _gate_side). Returns (hi, lo) per-bar bool. value_mode-honoured via W.line."""
+    M, m, r = W.line(Mn), W.line(mn), W.line(rn)
+    lb = rlb * (rtf // BASE_TF)
+    hi = (M >= cfg.hi) & (m >= cfg.hi) & _roll_or(r >= cfg.hi, lb)
+    lo = (M <= cfg.lo) & (m <= cfg.lo) & _roll_or(r <= cfg.lo, lb)
+    return hi, lo
+
+
+def s30M_wob(W, cfg, wob_n=2):
+    """The s30M TRIGGER — closed-bar slope turn held `wob_n` consecutive bd-steps (the spec's "2-wob"). The
+    std wobslay is dead on the closed step-line (flats break strict-monotonic); this is the slope-flip + N-bar
+    confirm — i.e. the SAME mechanic the kernel-AB debounce previewed. +1 = up-turn confirmed, -1 = down."""
+    s = W._line('s30M'); d = np.diff(s); out = np.zeros(len(s), np.int8); cur = 0
+    for k in range(1, len(s)):
+        st = d[k - 1]
+        if st > 0:
+            cur = cur + 1 if cur > 0 else 1
+        elif st < 0:
+            cur = cur - 1 if cur < 0 else -1
+        if cur == wob_n:
+            out[k] = 1
+        elif cur == -wob_n:
+            out[k] = -1
+    return out
+
+
+def finisher(W, cfg, opens, lb_bars=24, fwd_bars=12, rlb=19):
+    """[4] FINISHER — per gate-open, QUALIFY (s30a AND s15a, es-side) over a 4×30s lookback (=24 5s-bars) then
+    forward tolerance 2×30s (=12), and TRIGGER on the s30M wobslay toward bd. Causal: if s30a+s15a+wob all
+    fired in the lookback → trade at the gate-open ("on its own"); else walk forward, trade when all three
+    complete. Returns entries [(trade_ms, es, bd, trade_k)]. MECHANISM CHOICES surfaced: finisher on the es
+    (re-breach) side · s30M-wob toward bd off the OOB extreme · window 24-back/12-fwd."""
+    ts = W.ts; n = len(ts)
+    s30hi, s30lo = _finisher_signal(W, cfg, 's30M', 's30m', 's30r', rlb, 30)
+    s15hi, s15lo = _finisher_signal(W, cfg, 's15M', 's15m', 's15r', rlb, 15)
+    wob = s30M_wob(W, cfg)
+    ent = []
+    for (i, es, bd, ok, r) in opens:
+        s30 = s30lo if es == -1 else s30hi              # finisher on the es (re-breach) side
+        s15 = s15lo if es == -1 else s15hi
+        a = max(0, ok - lb_bars)
+        g30 = bool(np.any(s30[a:ok + 1])); g15 = bool(np.any(s15[a:ok + 1])); gw = bool(np.any(wob[a:ok + 1] == bd))
+        trade_k = ok if (g30 and g15 and gw) else None
+        if trade_k is None:
+            for k in range(ok + 1, min(n, ok + fwd_bars + 1)):
+                g30 |= bool(s30[k]); g15 |= bool(s15[k]); gw |= (wob[k] == bd)
+                if g30 and g15 and gw:
+                    trade_k = k; break
+        if trade_k is not None:
+            ent.append((int(ts[trade_k]), es, bd, trade_k))
+    return ent
+
+
+def _stale(W, cfg, setups, sig=None):
+    """Flow-2 STALE-EXIT (AB toggle): at the arm bar, s2r AND s3r AND s4r all already IB → drop the setup
+    (the move resolved before we could act). Returns the kept setups."""
+    sig = sig or gate_signals(W, cfg)
+    return [s for s in setups if not (not sig['oob2'][s[0]] and not sig['oob3'][s[0]] and not sig['oob4'][s[0]])]
+
+
+def v2_walk(W, cfg, stale_exit=False):
+    """[5] WIRE — arm → (stale_exit?) → gate_open → finisher → entries. stale_exit = the flow-2 AB toggle."""
+    setups = v2_arm(W, cfg)
+    sig = gate_signals(W, cfg)
+    if stale_exit:
+        setups = _stale(W, cfg, setups, sig)
+    return finisher(W, cfg, gate_open(W, cfg, setups, sig))
