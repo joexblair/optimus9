@@ -134,22 +134,18 @@ def _gate_ok(W, cfg):
     return hi, lo
 
 
-def lr_detect(W, cfg, start_ms=None):
-    """THE STRATEGY — walk the latch-release shape over the gate-sets. Returns [(trade_ms, es, bd, tj)].
-    arm gate breaches OOB → armed; the arm line's wobslay reverses ≥ floor; then any active FINISHER
-    re-breaches (same side) AND all active GATE clearances pass → entry. Emits entries only — no verdict."""
+def lr_setups(W, cfg):
+    """PRODUCER — the latch-release SETUP events, no entry verdict. arm gate breaches OOB → the arm line's
+    wobslay reverses ≥ floor. Emits [(arm_i, reversal_rj, es, bd, cap)] where cap is the window end (next
+    opposite breach, or rj+horizon). Consumers apply their OWN finisher over (rj, cap): lr_detect uses the
+    finisher+gate; the kernel walk uses s3r/s4r→s2M. SRP — build the setup here, decide the entry downstream."""
     ts = W.ts; n = len(ts)
     arm_line = cfg.arms[0].lines[0].name                     # the arm line (breach + wobslay)
     s6c = W._line(arm_line)                                   # CLOSED — the breach / arm
     s6 = W._line_emerging(arm_line)                           # emerging — the wobslay rides this
     sign = np.where(s6c >= cfg.hi, 1, np.where(s6c <= cfg.lo, -1, 0))
     wob = IC.wobble_slayer(s6, cfg.wob_n, cfg.hi, cfg.lo, anchored=True, strict=True)
-    fin_hi, fin_lo = _finisher_active(W, cfg)
-    gate_hi, gate_lo = _gate_ok(W, cfg)
-    side_hi = fin_hi & gate_hi; side_lo = fin_lo & gate_lo    # finisher cleared by the gate(s) = the entry side
-    if start_ms is None:
-        start_ms = int(ts[0])
-    entries = []; i = 1
+    setups = []; i = 1
     while i < n:
         if sign[i] != 0 and sign[i] != sign[i - 1]:           # arm breach onset, side es
             es = int(sign[i]); rj = None
@@ -159,15 +155,30 @@ def lr_detect(W, cfg, start_ms=None):
                 if wob[j] == -es and j - cfg.wob_n >= 0 and abs(s6[j] - s6[j - cfg.wob_n]) >= cfg.floor:
                     rj = j; break                             # floor-gated wobslay reversal
             if rj is not None:
-                side = side_hi if es == 1 else side_lo        # finisher = same side as the breach
                 cap = next((k for k in range(rj + 1, min(n, rj + cfg.horizon)) if sign[k] == -es),
                            min(n, rj + cfg.horizon))
-                tj = next((k for k in range(rj + 1, cap) if side[k] and not side[k - 1]), None)
-                if tj is not None and int(ts[tj]) >= start_ms:
-                    entries.append((int(ts[tj]), es, -es, int(tj)))
+                setups.append((i, rj, es, -es, cap))
             i = next((k for k in range(i + 1, n) if sign[k] != es), n)
             continue
         i += 1
+    return setups
+
+
+def lr_detect(W, cfg, start_ms=None):
+    """THE STRATEGY — apply the finisher+gate VERDICT over lr_setups. Returns [(trade_ms, es, bd, tj)].
+    Per setup: any active FINISHER re-breaches (same side) AND all active GATE clearances pass → entry."""
+    ts = W.ts
+    fin_hi, fin_lo = _finisher_active(W, cfg)
+    gate_hi, gate_lo = _gate_ok(W, cfg)
+    side_hi = fin_hi & gate_hi; side_lo = fin_lo & gate_lo    # finisher cleared by the gate(s) = the entry side
+    if start_ms is None:
+        start_ms = int(ts[0])
+    entries = []
+    for i, rj, es, bd, cap in lr_setups(W, cfg):
+        side = side_hi if es == 1 else side_lo                # finisher = same side as the breach
+        tj = next((k for k in range(rj + 1, cap) if side[k] and not side[k - 1]), None)
+        if tj is not None and int(ts[tj]) >= start_ms:
+            entries.append((int(ts[tj]), es, bd, int(tj)))
     return entries
 
 

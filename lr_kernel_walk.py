@@ -11,8 +11,7 @@ from collections import Counter
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 import bias_machine as bm
-from optimus9.analysis.lr import lr_detect, lr_walk, lr_config
-from optimus9.compute.indicator_computer import IndicatorComputer as IC
+from optimus9.analysis.lr import lr_detect, lr_walk, lr_config, lr_setups
 from optimus9.compute.breaching_line import predict_breach
 from optimus9.constants import FENCE_HI, FENCE_LO
 from optimus9.analysis.bias_state import bro_cross_flips
@@ -30,10 +29,6 @@ ts, px, hi, lo, n = W.ts, W.px, lrcfg.hi, lrcfg.lo, len(W.ts)
 
 base_mae = np.array([r[4] for r in lr_walk(W, lr_detect(W, lrcfg, start_ms=START), lrcfg)])
 
-al = lrcfg.arms[0].lines[0].name                                  # s6m
-s6c = W._line(al); s6 = W._line_emerging(al)
-sign = np.where(s6c >= hi, 1, np.where(s6c <= lo, -1, 0))
-wob6 = IC.wobble_slayer(s6, lrcfg.wob_n, hi, lo, anchored=True, strict=True)
 s3r, s3m, s3M = W._line('s3r'), W._line('s3m'), W._line('s3M')
 s4r, s4m, s4M = W._line('s4r'), W._line('s4m'), W._line('s4M')
 pred3 = predict_breach(s3r, s3m, s3M, hi, lo, FENCE_HI, FENCE_LO)
@@ -52,11 +47,11 @@ for _k in range(1, n):
         _last = -1
 
 
-def new_entry(rj, es):
+def new_entry(rj, es, cap):
     """s3r OR s4r predict-then-breach (arms) → THEN the first s2M reversal toward the trade side IS the entry."""
     bd = -es
     p3 = p4 = armed = False
-    for k in range(rj + 1, min(n, rj + lrcfg.horizon)):
+    for k in range(rj + 1, cap):
         if pred3[k] == es:
             p3 = True
         if pred4[k] == es:
@@ -70,23 +65,11 @@ def new_entry(rj, es):
     return None
 
 
-entries, trigs = [], []
-i = 1
-while i < n:
-    if sign[i] != 0 and sign[i] != sign[i - 1]:
-        es = int(sign[i]); rj = None
-        for j in range(i, min(n, i + lrcfg.horizon)):
-            if sign[j] == -es:
-                break
-            if wob6[j] == -es and j - lrcfg.wob_n >= 0 and abs(s6[j] - s6[j - lrcfg.wob_n]) >= lrcfg.floor:
-                rj = j; break
-        if rj is not None:
-            k = new_entry(rj, es)
-            if k is not None and ts[k] >= START:
-                entries.append((int(ts[k]), es, -es, k))
-        i = next((kk for kk in range(i + 1, n) if sign[kk] != es), n)
-        continue
-    i += 1
+entries = []
+for _i, rj, es, bd, cap in lr_setups(W, lrcfg):       # plumb the producer — no copied arm/reversal walk
+    k = new_entry(rj, es, cap)
+    if k is not None and ts[k] >= START:
+        entries.append((int(ts[k]), es, -es, k))
 
 new_walk = lr_walk(W, entries, lrcfg)
 new_mae = np.array([r[4] for r in new_walk])
