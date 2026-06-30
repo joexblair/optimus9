@@ -48,22 +48,24 @@ prediction/reversal gate ahead of the finisher. **Pre-reqs** (◐ = partial / ow
 - ✓ clone hbhl6 / hblo16 / hbhi16 → **hb33** (1980s).
 
 **Lines & purposes:**
-- **s5m** opens the gate (arm). **s5r** is also an arm (s5m OR s5r arms). s5r needs **s4m OOB** to fire; s5r uses an **OOB-slip 15** → morphs OOB to (70, 30); if s5r & s5m fire **opposite** sides, **s5m wins**.
+- **s5m** — THE v2 arm (replaces s6m; s6 is only used if an AB picks it). s5m OR s5r arms the cascade.
+- **s5r** — a **divergence** arm on the side *opposing* the breach. Stoch-RSI veers off a leg as its momentum slows; we wait for **s4m to breach OOB on the side opposite s5r**, and s4m's OOB travel *pulls s5r back to the leg* — that pull is the signal. Fires when s5r is OOB-opposing (**OOB-slip 15** → its fence is 70/30, so "OOB" = outside 30–70) AND s4m is OOB on the breach side. e.g. s4m breaches LOW + s5r ≥70 → arms a **LONG**. If s5r & s5m fire **opposite** sides → **s5m wins**.
 - **s3r / s4r** — prediction candidates AND gates. Closed-bar, 0 wob. s3min/mage are prediction support for s3r; s4min/mage for s4r.
 - **s2Mage reversal** — completes s3Mage/s4Mage when "ready to reverse". Closed-bar, 0 wob, **boundary-agnostic** (reverses anywhere). setup#1 = s3r or s4r OOB *after prediction*; setup#2 = s3r/s4r did NOT breach AND s3m+s4m reversed.
 - **s30M** — the trigger that makes the trade. Closed-bar, **2 wob**.
 - **hb33 ×3** — bro-cross bias testing ONLY (non-prod, visual; emerging + lp_bro_wob); NO impact on the cascade.
 
 **Flow (per window):**
-1. **s6m breaches** → armed, taking inputs. Gate(s) latched.
+1. **s5m OR s5r breaches** → armed (s5m is THE arm; s5r the divergence arm above), `es` set, gate(s) latched, taking inputs.
 2. If s2r/s3r/s4r are in their lookbacks AND all 3 have progressed to IB *when s5m breaches* → **exit the flow, no trade**.
 3. Test s3r prediction continuously while s3m OOB; s4r while s4m OOB:
    - s3r/s4r did NOT breach or predict → **ready-to-reverse** signalled; gate stays latched.
    - all s2/s3/s4 cross to IB → gate **opens immediately**.
    - s3r/s4r **predicted** → wait for the predicted line to breach; keep predicting; a 2nd r predicted → wait for it too (latched); either r **reverses before breaching** → gate opens immediately.
    - on **ready-to-reverse** → gate opens when **s2Mage reverses** (boundary-agnostic).
-4. Gate open → **finishers** begin: lookback **4×30s** for s30a+s15a (honouring both r lookbacks); trade immediately if they signalled in the lookback; else walk forward to s30a+s15a, **tolerance 2×30s** (lets late lines contribute).
-5. Read bias. While curating: trade on **s30Mage wobslay** WITHOUT the bias check. When the spec locks: bias consulted + adhered to.
+4. Gate open → **FINISHER QUALIFY**: over a **4×30s lookback** (then **forward, tolerance 2×30s** for late lines), did **s30a AND s15a** (s15a = ic 84/85/86, the TF15 twin of s30a) both signal — each honouring its r-lookback?
+5. **TRIGGER (last, separate): `s30M` wobslay** (closed, 2-wob). The trade fires on s30M-wob — which may *already* sit inside the 4×30s lookback (→ trade immediately, "on its own" = it fired before the gate opened) or be waited-for forward. **s30M-wob is NOT part of s30a/s15a.**
+6. **Bias (deferred):** while curating, trade at ⑤ WITHOUT a bias check; when the spec locks, consult the upstream/bro-cross bias and **adhere** (block counter-bias).
 
 ## Build progress — the KERNEL (a proven subset of v2)
 
