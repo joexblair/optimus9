@@ -52,19 +52,21 @@ def bro_cross_events(db, W, sets):
     the current side has held. Pure event-construction (no hold/OOB verdict) — `bro_cross_flips` and
     debug probes both consume THIS instead of re-deriving the cross, so the cross lives in one place.
     value_mode-routed per line (#33)."""
-    ts = W.ts; nb = len(ts)
+    ts = W.ts
     def line(name):
         r = db.execute("SELECT value_mode FROM vw_indicator_configs_live WHERE ind_name=%s", (name,), fetch=True)
         return W._line(name) if (r and r[0]['value_mode'] == 'closed') else W._line_emerging(name)
-    streams = []
-    for st in sets:
-        m = line(st + 'm'); M = line(st + 'M')
-        fin = np.isfinite(m) & np.isfinite(M)
-        sign = np.where(fin, np.sign(m - M), 0).astype(int)
-        chg = np.concatenate([[True], sign[1:] != sign[:-1]])
-        idx = np.arange(nb); last_start = np.maximum.accumulate(np.where(chg, idx, -1)); run_len = idx - last_start + 1
-        streams.append({'set': st, 'ts': ts, 'm': m, 'M': M, 'sign': sign, 'run_len': run_len, 'fin': fin})
-    return streams
+    return [bro_stream(ts, line(st + 'm'), line(st + 'M'), st) for st in sets]
+
+
+def bro_stream(ts, m, M, st):
+    """One set's cross-signal stream from its (m, M) line arrays — PURE (no db/W), so the live path AND
+    parameter sweeps both feed it. {set, ts, m, M, sign=sign(m−M), run_len=bars the current side has held, fin}."""
+    fin = np.isfinite(m) & np.isfinite(M)
+    sign = np.where(fin, np.sign(m - M), 0).astype(int)
+    chg = np.concatenate([[True], sign[1:] != sign[:-1]])
+    idx = np.arange(len(ts)); last_start = np.maximum.accumulate(np.where(chg, idx, -1)); run_len = idx - last_start + 1
+    return {'set': st, 'ts': ts, 'm': m, 'M': M, 'sign': sign, 'run_len': run_len, 'fin': fin}
 
 
 def bro_cross_flips(db, W, sets=('hbhl16', 'hblo16', 'hbhi16'), cluster_min=30, N=None, require_oob=True):
@@ -86,17 +88,26 @@ def bro_cross_flips(db, W, sets=('hbhl16', 'hblo16', 'hbhi16'), cluster_min=30, 
         N = int(db.execute("SELECT val FROM lp_config WHERE name='lp_bro_wob'", fetch=True)[0]['val'])
     sysr = db.execute('SELECT hi_boundary, lo_boundary FROM optimus9_system', fetch=True)[0]
     HI, LO = float(sysr['hi_boundary']), float(sysr['lo_boundary'])
+    return bro_verdict(bro_cross_events(db, W, sets), N, HI, LO, cluster_min, require_oob)
+
+
+def bro_verdict(streams, N, HI, LO, cluster_min=30, require_oob=True):
+    """The bro-cross VERDICT over pre-built streams — PURE (no db/W), so the live path AND sweeps both feed it.
+    A cross held EXACTLY N bars (the weave ceased) with both lines OOB on the breach side fires a flip; aggregate
+    all sets, then cluster (first flip per cluster_min-min cluster; opposite dir = new cluster, same dir suppressed)."""
     raw = []
-    for s in bro_cross_events(db, W, sets):
+    for s in streams:
         ts, m, M, sign, run_len, fin, st = s['ts'], s['m'], s['M'], s['sign'], s['run_len'], s['fin'], s['set']
-        for i in range(N, len(ts)):
-            if not fin[i] or run_len[i] != N:             # a cross that held EXACTLY N bars (weave ceased)
-                continue
-            sgn = sign[i]
-            if sgn > 0 and (not require_oob or (m[i] < LO and M[i] < LO)):   # mage UNDER minion (lo) → BULL
-                raw.append((int(ts[i]), 1, st, float(M[i]), float(m[i])))
-            elif sgn < 0 and (not require_oob or (m[i] > HI and M[i] > HI)): # mage OVER minion (hi) → BEAR
-                raw.append((int(ts[i]), -1, st, float(M[i]), float(m[i])))
+        hit = fin & (run_len == N); hit[:N] = False        # a cross that held EXACTLY N bars (weave ceased)
+        if require_oob:                                     # both lines OOB on the breach side
+            bull = hit & (sign > 0) & (m < LO) & (M < LO)   # mage UNDER minion (lo) → BULL
+            bear = hit & (sign < 0) & (m > HI) & (M > HI)   # mage OVER minion (hi) → BEAR
+        else:
+            bull = hit & (sign > 0); bear = hit & (sign < 0)
+        for i in np.nonzero(bull)[0]:
+            raw.append((int(ts[i]), 1, st, float(M[i]), float(m[i])))
+        for i in np.nonzero(bear)[0]:
+            raw.append((int(ts[i]), -1, st, float(M[i]), float(m[i])))
     raw.sort(key=lambda x: x[0])
     window = cluster_min * 60 * 1000
     out, le_t, le_d = [], None, 0
