@@ -80,25 +80,32 @@ def param_to_config(pv):
     return cfg
 
 
-def gen_configs(target, block=6, per_block=32):
-    """Overlapping covering blocks, BOUNDED by target. Each block = a random `block`-param subset (others at
-    DEFAULT), contributing up to `per_block` of its factorial. Blocks accumulate pair-coverage; target caps total.
-    ~target/per_block blocks → with target=5000/per_block=32 ≈ 156 blocks → ~all 2346 pairs covered."""
+def gen_configs(target, block=6, breadth_combos=8, depth_combos=24):
+    """Overlapping covering blocks, BOUNDED by target. Phase 1 (BREADTH): seed each block with a still-UNCOVERED
+    pair so EVERY setting-pair co-varies in some block (Joe: 'all settings interact with all other settings').
+    Phase 2 (DEPTH): random blocks with deeper value-samples fill the remaining budget. Deterministic (SEED)."""
     rng = random.Random(SEED)
-    need = {frozenset((a, b)) for i, a in enumerate(PARAMS) for b in PARAMS[i + 1:]}
+    need = {tuple(sorted((a, b))) for i, a in enumerate(PARAMS) for b in PARAMS[i + 1:]}   # sorted → deterministic
     seen, out = set(), []
-    while len(out) < target:
-        blk = rng.sample(PARAMS, block)
-        for pair in itertools.combinations(blk, 2):
-            need.discard(frozenset(pair))
+
+    def emit(blk, k):
+        for pair in itertools.combinations(sorted(blk), 2):
+            need.discard(pair)
         combos = list(itertools.product(*[PARAM_SPACE[p] for p in blk])); rng.shuffle(combos)
-        for combo in combos[:per_block]:
+        for combo in combos[:k]:
             if len(out) >= target:
-                break
+                return
             pv = dict(DEFAULT); pv.update(dict(zip(blk, combo)))
             key = tuple(pv[p] for p in PARAMS)
             if key not in seen:
                 seen.add(key); out.append(pv)
+
+    while need and len(out) < target:                              # breadth: guarantee every pair co-varies
+        nl = sorted(need); a, b = nl[rng.randrange(len(nl))]
+        rest = rng.sample([p for p in PARAMS if p not in (a, b)], block - 2)
+        emit([a, b] + rest, breadth_combos)
+    while len(out) < target:                                       # depth: deeper value-samples until budget
+        emit(rng.sample(PARAMS, block), depth_combos)
     globals()['_UNCOVERED'] = len(need)
     return out
 

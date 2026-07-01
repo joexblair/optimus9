@@ -33,9 +33,15 @@ its live base ±deltas. Knobs + hb33 bias params live in `KNOB_SPACE`/`KNOB_DEFA
 shipping config, so any un-swept param stays at ship value.
 
 ## Covering-block generation (Joe's "overlapping subsets")
-`gen_configs(target)` draws random `block`-param subsets (others at DEFAULT), each contributing ≤`per_block` of its
-factorial, **bounded by target**. Blocks accumulate pair-coverage → every setting interacts with every other.
-Deterministic (`SEED`) so resume aligns idx.
+`gen_configs(target)` is two-phase, **bounded by target**, deterministic (`SEED`) so resume aligns idx:
+- **Breadth** — each block is *seeded with a still-uncovered param-pair*, then filled to `block` size. Guarantees
+  **every** setting-pair co-varies in some block (all 2346 pairs at 69 params; `_UNCOVERED`==0). `breadth_combos`
+  value-samples per block.
+- **Depth** — random blocks with `depth_combos` (deeper) samples spend the leftover budget.
+
+A purely-random draw left ~743/2346 pairs uncovered at 5500 — the seed-an-uncovered-pair step is what closes it.
+Changing `KNOB_SPACE` changes the idx→config map → **drop `sweep_results` before a fresh full run** (resume keys on
+idx, not on config content).
 
 ## Extending it (the post-o9-live path)
 - **New filter/knob:** add its values to `KNOB_SPACE` + default to `KNOB_DEFAULT`, map it in `param_to_config`,
