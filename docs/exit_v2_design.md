@@ -111,8 +111,12 @@ finisher  _finish: latch s30a+s15a from the arm, delatch at the unlatch  →  ex
 - **Lever B — s7r-strand rescue:** 67 refugees, all with catchable curls (ceiling +60.7%, real TBD).
 - **Relationship (MEASURED 0701):** of the 67 refugees — **32 are also bias-rejected** (bias handles them at
   entry), **35 are bias-KEPT** (unique to the strand rescue), and the bias rejects 129/266 overall. **~50/50 →
-  largely COMPLEMENTARY.** Neither lever subsumes the other; **build both, stacked** — bias filters entries up
-  front, strand rescue saves whichever survivors then strand. One window — OOS may shift the split.
+  largely COMPLEMENTARY at the *entry* level. **BUT stacked at the P&L level they are NOT additive** (capstone
+  0701): ALL 266 + cascade + strand = net-of-cost **+0.208/trade, total +55.3%**; adding the bias filter →
+  **+0.361/trade & 77% win but total drops to +49.5%** — the strand rescue rescues trades the filter would
+  reject, so once rescued into profit, filtering them *removes* profit. **Strand rescue = primary lever (flips
+  net-of-cost positive alone); bias filter = a quality-vs-volume dial** (fewer/cleaner/higher-win at less total).
+  Which wins is a strategic call — raw profit favours no-filter, capital-efficiency favours filter. **OOS decides.**
 
 **Open, to nail before/while building:**
 1. Strand rescue: the s7r fence (20/80?), the exact "receding" test (Δ toward 50 over one s15a cycle?), the
