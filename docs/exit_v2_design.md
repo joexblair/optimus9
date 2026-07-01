@@ -48,18 +48,34 @@ finisher  _finish: latch s30a+s15a from the arm, delatch at the unlatch  →  ex
   = 25% of the book, 47% of all SLs** (predict=False: 142 SLs, 67 stranded).
 - **Premise (validated):** ALL 67 had a favourable **s5r + s5M** curl *before* the SL — the price handed us a
   window, the s7r gate just wouldn't let us take it. None were lost causes.
-- **Mechanism (Joe 0701) — two jobs, cleanly split:**
-  - **s7r-momentum GATE (the "tractor beam"):** while s7r is being pulled toward the breach (outside a ~20/80
-    fence AND still approaching), HOLD. Poll each **s15a cycle** (exit-side s15a breach → next exit-side s15a
-    breach; lookback baked in). If s7r **recedes toward 50** (breach won't come) → **release** the gate; else wait
-    another cycle.
-  - **s5r + s5M reversal TRIGGER:** once released, s5r AND s5M reversing toward es opens the finisher → exit.
-  - **SRP:** momentum *decides* (gate), reversal *fires* (trigger). The reversal alone is too loose (fast lines
-    wiggle in any window); **the s7r gate is what turns "any wiggle" into "the real curl."**
-  - **Gate-as-data:** the exit gate now has multiple openers (s7r-breach · s5r+s5M-when-s7r-recedes) → rows in a
-    gate table (like `lr_gate`), not hardcoded branches.
-- **Sizing:** **ceiling +60.7% swing** (−33.5% SL → +27.2% recovered, 98% win) — but this is the LOOSE upper bound
-  (earliest wiggle, s7r gate not yet applied). **Real capture = a fraction; the built mechanism measures it.**
+- **Mechanism (Joe 0701) — three jobs, cleanly split:**
+  - **① s7r-momentum GATE (the "tractor beam"):** while s7r is being pulled toward the breach, HOLD. **Poll each
+    `s15m` wob (2-bar wob)** — s15a is too sparse — and collect the s7r value. When s7r **recedes** (moves *away*
+    from the breach it was approaching, back toward 50) across polls → **release** the gate; else wait for the next
+    wob.
+  - **② s5r + s5M reversal TRIGGER:** the reversal fires the finisher — but ONLY once the beam is released. While
+    the beam holds, a reversal creates *no action* (fast lines wiggle; the beam is what turns "any wiggle" into
+    "the real curl").
+  - **③ favourable-side GUARD (the gotcha):** the finisher may only fire while **s5m is on the favourable side**.
+    If the next finisher signal lands while s5m has swung to the ADVERSE OOB (the worst exit), **keep the gate
+    closed, let s5m run back to the favourable side, and re-test.** Loop until a favourable-side finisher fires
+    **or the SL closes it** — the re-test is free downside (a strand trade would SL anyway; it only adds upside).
+  - **SRP:** momentum *decides* (gate) · reversal *fires* (trigger) · s5m-side *guards* (no adverse exits).
+  - **Redundancy (the happy-accident payoff):** the three layers are three *different-TF* confirmations that must
+    AGREE before an exit fires — s7r (slow) exhaustion · s5r/s5M (fast) turn · s5m (fast) side. No single signal
+    can force an exit; a **stale slow-finisher gets vetoed by the fast s5m** (exactly the 23:24 catch). It's the
+    LTF-completes-HTF basis of the whole strategy, now applied to the exit.
+  - **Gate-as-data:** multiple openers (s7r-breach · s5r+s5M-when-s7r-recedes-and-s5m-favourable) → gate-table rows.
+- **06-18 worked example (LONG exit; tape-verified against TV closed):**
+  | time | poll s7r | s5m | note |
+  |---|---|---|---|
+  | 22:52:15 | 68.5 | hi-oob | poll; s7r climbing toward the breach |
+  | 23:00:00 | 84.1 | hi-oob | s5m+s5M reverse — **no action** (s7r 84.1, deep in the beam near 85) |
+  | 23:02:45 | 84.1 | hi-oob | beam holds |
+  | 23:08:45 | **72.1** | IB | s7r **receded 84→72 → release the gate** |
+  | 23:24:00 | 47.1 | **lo-oob** | finisher hi-signal fires but s5m is adverse → **hold, wait for s5m to return, re-test** |
+- **Sizing:** **ceiling +60.7% swing** (−33.5% SL → +27.2% recovered, 98% win) — LOOSE upper bound (earliest
+  wiggle, no s7r gate). **Real capture = a fraction; the built mechanism (with the tractor-beam + guard) measures it.**
 
 ## 4. Bias entry-filter — the hb33 lever (sweep complete)
 - **What:** the hb33 bro-cross bias (3 sets `hbhl33`/`hblo33`/`hbhi33`; first OOB Mage×min cross flips the state,
