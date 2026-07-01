@@ -255,3 +255,45 @@ def lr_exit_v2(W, cfg, entries, predict=True, gate_fam='s7', slip=0.0, rlb=19):
         ret = -cfg.sl if reason == 'SL' else (exit_px - entry_px) / entry_px * 100.0 * bd
         rows.append((tms, int(ts[ek]), bd, entry_px, exit_px, round(ret, 3), reason))
     return rows
+
+
+def strand_rescue(W, cfg, entries, cascade_exits, fence_hi=80.0, fence_lo=20.0):
+    """The SIDEWAYS-market exit (Joe 0701). For trades the cascade SL'd because s7r NEVER breaches (strands),
+    the finishers take the **s5r curl at the favourable extreme** — because s7r is *invisible* (inside the 20/80
+    fence), so no bigger move is coming and holding just bleeds into the SL. If at the curl s7r is *visible*
+    (outside the fence, so it might yet breach), HOLD to the next same-side s5m breach and re-test. s5m-favourable
+    guard on the exit (no adverse-side exits). Re-works only the SLs. Returns cascade_exits with strands rescued.
+    NOTE: fence 80/20 = spec values; hoist to the DB (like the OOB boundary) later — see [[thresholds_constants]]."""
+    ts, px, n = W.ts, W.px, len(W.ts)
+    hi, lo = cfg.hi, cfg.lo
+    s5m, s5r, s7r = W.line('s5m'), W.line('s5r'), W.line('s7r')
+    rev5 = _slope_flip(s5r)
+    exd = {x[0]: x for x in cascade_exits}
+    out = []
+    for tms, es, bd, tj in entries:
+        x = exd[tms]
+        if x[6] != 'SL':
+            out.append(x); continue                              # only re-work the SLs
+        kx = int(np.searchsorted(ts, x[1]))
+        arm = next((j for j in range(tj + 1, kx + 1) if (s5m[j] <= lo if bd == -1 else s5m[j] >= hi)), None)
+        breached = arm is not None and ((s7r[arm:kx + 1] <= lo).any() if bd == -1 else (s7r[arm:kx + 1] >= hi).any())
+        if arm is None or breached:
+            out.append(x); continue                              # not a strand — keep the SL
+        entry_px = float(px[tj]); ek = None; j = arm
+        while j <= kx:
+            visible = (s7r[j] >= fence_hi) if bd == 1 else (s7r[j] <= fence_lo)
+            adverse = (s5m[j] <= lo) if bd == 1 else (s5m[j] >= hi)
+            if rev5[j] == es and visible:                        # s7r still in play → hold to the next s5m breach
+                nb = next((q for q in range(j + 1, kx + 1) if (s5m[q] <= lo if bd == -1 else s5m[q] >= hi)), None)
+                if nb is None:
+                    break                                        # no next breach → let the SL stand
+                j = nb; continue
+            if rev5[j] == es and not adverse:                    # s7r invisible + s5m favourable → finishers exit
+                ek = j; break
+            j += 1
+        if ek is None:
+            out.append(x)                                        # no clean curl → keep the SL
+        else:
+            ret = (px[ek] - entry_px) / entry_px * 100.0 * bd
+            out.append((tms, int(ts[ek]), bd, entry_px, float(px[ek]), round(ret, 3), 'strand'))
+    return out

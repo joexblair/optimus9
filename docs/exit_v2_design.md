@@ -82,8 +82,16 @@ finisher  _finish: latch s30a+s15a from the arm, delatch at the unlatch  →  ex
   | 23:02:45 | 84.1 | hi-oob | beam holds |
   | 23:08:45 | **72.1** | IB | s7r **receded 84→72 → release the gate** |
   | 23:24:00 | 47.1 | **lo-oob** | finisher hi-signal fires but s5m is adverse → **hold, wait for s5m to return, re-test** |
-- **Sizing:** **ceiling +60.7% swing** (−33.5% SL → +27.2% recovered, 98% win) — LOOSE upper bound (earliest
-  wiggle, no s7r gate). **Real capture = a fraction; the built mechanism (with the tractor-beam + guard) measures it.**
+- **BUILT & clarified (`strand_rescue`, Joe 0701):** the spec's mechanism was over-built — the s7r tractor-beam is
+  a *rare* branch, not the spine. **s7r is *invisible* (mid, inside the 20/80 fence) for 65 of 67 strands** — they
+  never approach the breach (that's *why* they strand), so the finishers simply take the **s5r curl at the
+  favourable extreme**. The tractor-beam **hold-while-visible-until-the-next-s5m-breach** fires on only **2/67**.
+  **Full stack — cascade + strand_rescue (predict=False):** SL **142→75** · net **+47.8→+108.5%** · win **45→70%**
+  · net-of-cost **−0.020 → +0.208** — the sideways rescue **more than doubles net and flips net-of-cost solidly
+  positive**, before the bias filter. Sanity-checked: forward-walk, real entry→extreme moves (median 1-min
+  arm→exit), *not* a degenerate peak-exit. One 5-day window; OOS owed.
+- *Superseded ceiling (kept for context):* the loose "+60.7%" earlier was the earliest-wiggle upper bound; the
+  built number lands at the same magnitude but for the right reason (the curl at the extreme, s7r invisible).
 
 ## 4. Bias entry-filter — the hb33 lever (sweep complete)
 - **What:** the hb33 bro-cross bias (3 sets `hbhl33`/`hblo33`/`hbhi33`; first OOB Mage×min cross flips the state,
