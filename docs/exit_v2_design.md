@@ -128,3 +128,17 @@ finisher  _finish: latch s30a+s15a from the arm, delatch at the unlatch  →  ex
    gate-as-data schema.
 2. Build order: strand rescue vs bias filter first (or measure their overlap first).
 3. Out-of-sample validation for both levers (2nd real-tick window).
+
+## Sizing & equity map (0701) — `build_v2_walk.py`
+- **Dynamic sizing (the survival mechanism):** notional = **5× account** (Joe: safety-first), lots =
+  `min(66,000 coins, 5×account/price)`, **compounding** — a loss shrinks the *next* lot, so it can't blow up.
+  Fixed 66k *liquidated* (max DD 636 > 500 account); proportional never does (it ramps to the 66k cap as the
+  account grows, then holds). Note: FARTCOIN ≈ $0.11–0.15, so 66k coins ≈ $7.5–9.9k notional.
+- **5× projection** ($500 start · 0.20% est cost · full 555-trade / 10.3-day window): **$500 → $8,770 (17.5×)**,
+  max DD **34%**, hits the 66k cap at trade 219, min equity $347 (survives).
+- **Leverage tradeoff:** 2x $3.9k/15%DD · 3x $6.6k/22% · **5x $8.8k/34% (chosen)** · 8x $9.5k/50% — diminishing
+  above 5×.
+- **CAVEATS (not a promise):** a *backtest* ceiling on the training window, at the **estimated 0.20% cost** and
+  15–20× effective leverage. The DB `ticks` table is empty (68 rows); **real fills + true Bybit order-book
+  slippage come from o9-live** — that's the validation, this is the target to beat. `v2_walk` carries per-trade
+  entry_px / lot / notional / pnl_usdt / equity.
