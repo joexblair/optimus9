@@ -116,7 +116,12 @@ finisher  _finish: latch s30a+s15a from the arm, delatch at the unlatch  →  ex
   **+0.361/trade & 77% win but total drops to +49.5%** — the strand rescue rescues trades the filter would
   reject, so once rescued into profit, filtering them *removes* profit. **Strand rescue = primary lever (flips
   net-of-cost positive alone); bias filter = a quality-vs-volume dial** (fewer/cleaner/higher-win at less total).
-  Which wins is a strategic call — raw profit favours no-filter, capital-efficiency favours filter. **OOS decides.**
+  Which wins is a strategic call — raw profit favours no-filter, capital-efficiency favours filter.
+- **OOS VALIDATED (0701, full 10.3-day / 555-trade window):** strand rescue holds — net-of-cost **+0.196 across all
+  555** (~identical to the 5-day +0.208; it's a mechanism, so 555 trades are essentially all-OOS). Bias filter (config
+  fit on the back-5-days) **generalises to the front-6-days OOS**: +0.215 vs +0.184/trade, win 73 vs 68 — real +
+  positive but the lift **shrinks** vs in-sample (+0.031 vs +0.086), the expected residual overfit. **Both levers
+  de-risked.** Strand rescue = robust primary; bias filter = a genuine-but-modest quality dial.
 
 **Open, to nail before/while building:**
 1. Strand rescue: the s7r fence (20/80?), the exact "receding" test (Δ toward 50 over one s15a cycle?), the
