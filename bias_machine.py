@@ -129,9 +129,11 @@ class BiasConfig:
 class BiasWindow:
     """One rolling window. Precomputes the shared lines + s30 wobs; lazily caches per-TF lines."""
 
-    def __init__(self, db, end, lookback=168, warmup=80, cfg=None):
+    def __init__(self, db, end, lookback=168, warmup=80, cfg=None, line_overrides=None):
         self.cfg = cfg or BiasConfig()
         self._ls = LineStore(db)
+        if line_overrides:                                    # sweep hook: inject line configs in-memory
+            self._ls._cache.update(line_overrides)            # {ind_name: (tf_seconds, cfg_tuple, value_mode)}
         det = BLDetect(db, lookback_hours=lookback, warmup_hours=warmup)
         base, ts, _ws, _x, px = det._setup(end)
         self.base, self.ts, self.px = base, ts, px
