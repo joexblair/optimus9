@@ -101,8 +101,10 @@ finisher  _finish: latch s30a+s15a from the arm, delatch at the unlatch  →  ex
 ## Two validated levers, and the open decisions
 - **Lever A — bias entry-filter:** ~2× net-of-cost (sweep confirmed, robust).
 - **Lever B — s7r-strand rescue:** 67 refugees, all with catchable curls (ceiling +60.7%, real TBD).
-- **Likely relationship:** both may weed/rescue overlapping trades (against-grain entries that also strand) —
-  worth measuring the intersection before stacking them.
+- **Relationship (MEASURED 0701):** of the 67 refugees — **32 are also bias-rejected** (bias handles them at
+  entry), **35 are bias-KEPT** (unique to the strand rescue), and the bias rejects 129/266 overall. **~50/50 →
+  largely COMPLEMENTARY.** Neither lever subsumes the other; **build both, stacked** — bias filters entries up
+  front, strand rescue saves whichever survivors then strand. One window — OOS may shift the split.
 
 **Open, to nail before/while building:**
 1. Strand rescue: the s7r fence (20/80?), the exact "receding" test (Δ toward 50 over one s15a cycle?), the
