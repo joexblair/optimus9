@@ -46,6 +46,9 @@ finisher  _finish: latch s30a+s15a from the arm, delatch at the unlatch  →  ex
 ## 3. Strand rescue — the 67 refugees  ⭐ NEW
 - **Problem:** when **s7r never breaches**, the gate never opens and the trade rides to SL. This hits **67 trades
   = 25% of the book, 47% of all SLs** (predict=False: 142 SLs, 67 stranded).
+- **Regime (Joe 0701):** this is the **sideways-market exit** — s7r can't breach without a momentum leg, so in a
+  range trades strand precisely here. The s7r-breach cascade owns *trending*; the strand rescue owns *ranging*. A
+  clean regime-split, and why it's "an important addition to the suite."
 - **Premise (validated):** ALL 67 had a favourable **s5r + s5M** curl *before* the SL — the price handed us a
   window, the s7r gate just wouldn't let us take it. None were lost causes.
 - **Mechanism (Joe 0701) — three jobs, cleanly split:**
@@ -60,6 +63,11 @@ finisher  _finish: latch s30a+s15a from the arm, delatch at the unlatch  →  ex
     If the next finisher signal lands while s5m has swung to the ADVERSE OOB (the worst exit), **keep the gate
     closed, let s5m run back to the favourable side, and re-test.** Loop until a favourable-side finisher fires
     **or the SL closes it** — the re-test is free downside (a strand trade would SL anyway; it only adds upside).
+    **UNIVERSAL RULE (Joe confirmed): no finisher exit fires while s5m is adverse-OOB — on EVERY exit path.** Data
+    check: the *normal* cascade already has **0 adverse-OOB exits** (it exits promptly, before s5m can swing), so
+    the guard is a **safety rail + future-proof, not a hidden lever** — it only bites where the wait is long (the
+    strand rescue). [Minor: ~15 normal exits fire with s5m *IB* — mid, not adverse — the guard passes them; tighten
+    to favourable-OOB-only later if they read meh.]
   - **SRP:** momentum *decides* (gate) · reversal *fires* (trigger) · s5m-side *guards* (no adverse exits).
   - **Redundancy (the happy-accident payoff):** the three layers are three *different-TF* confirmations that must
     AGREE before an exit fires — s7r (slow) exhaustion · s5r/s5M (fast) turn · s5m (fast) side. No single signal
