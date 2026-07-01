@@ -29,7 +29,7 @@ W = bm.BiasWindow(db, ms('2026-06-22 00:00'), cfg=cfg); lrcfg = lr_config(db)
 base = W.base; ts = np.array(W.ts); n = len(ts)
 
 ent = [e for e in v2_walk(W, lrcfg) if e[0] >= ms('2026-06-17 00:00')]
-ogx = {x[0]: x[5] for x in lr_exit(W, ent, lrcfg, curl_fam='s7', exit_on='s30a_s15a', predict_gate=True)}
+ogx = {x[0]: x[5] for x in lr_exit(W, ent, lrcfg, curl_fam='s7', exit_on='s30a_s15a', predict_gate=True, arm_gate=True)}
 ent_bd = [(e[3], e[2], ogx[e[0]]) for e in ent]                 # (entry_k, bd, og_ret)
 base_net = sum(r for _, _, r in ent_bd); base_win = 100.0 * np.mean([r > 0 for _, _, r in ent_bd])
 

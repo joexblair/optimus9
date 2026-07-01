@@ -217,7 +217,7 @@ def _finisher_signal(W, cfg, exit_on):
     return hi, lo
 
 
-def lr_exit(W, entries, cfg, curl_fam='s5', exit_on='s30a_s15a', predict_gate=True):
+def lr_exit(W, entries, cfg, curl_fam='s5', exit_on='s30a_s15a', predict_gate=True, arm_gate=False):
     """The lr exit. Prediction + breach are FIXED on s5 (predict s5r via s5m/s5M; arm on s5m). Two knobs:
       curl_fam — the curl line family (s5/s6/s7/s8): a slower r curls LATER, so the ride runs longer.
       exit_on  — what ends the trade: 'curl' (exit at the curl) · 's30a' · 's30a_s15a' (finisher after the curl).
@@ -238,18 +238,20 @@ def lr_exit(W, entries, cfg, curl_fam='s5', exit_on='s30a_s15a', predict_gate=Tr
         arm = arm_hi if fav_hi else arm_lo
         curl = curl_hi if fav_hi else curl_lo
         trig = curl if exit_on == 'curl' else (fin_hi if fav_hi else fin_lo)
-        blocked = ever_curled = False
+        blocked = ever_curled = False; armed = not arm_gate  # arm_gate: gate the trigger on the s5m breach first
         ek = None; reason = 'end'
         for kk in range(tj + 1, n):                          # NO exit timeout (Joe) — hold to curl or SL only
             ret = (px[kk] - entry_px) / entry_px * 100.0 * bd
             if ret <= -cfg.sl:
                 ek = kk; reason = 'SL'; break
+            if arm[kk]:
+                armed = True                               # favourable s5m breach has occurred (the given)
             if predict_gate and arm[kk] and not ever_curled:   # re-test while s5m OOB favourable
                 if pred[kk] == bd:
                     blocked = True                         # predicted → ride (block the trigger)
                 if blocked and curl[kk]:
                     blocked = False; ever_curled = True    # s{curl_fam}r curled OOB → release
-            if trig[kk] and not blocked:
+            if armed and trig[kk] and not blocked:         # corrected exit: no trigger before the breach
                 ek = kk; reason = 'exit'; break
         if ek is None:
             ek = n - 1                                        # reached the data's end (backtest), not a time cap
