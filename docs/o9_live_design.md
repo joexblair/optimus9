@@ -94,3 +94,16 @@ Live order-book walk at fill, per-leg. NOT flat, NOT volume-to-fill (rejected �
   - **liquidity** — order-book depth (above).
   - **conviction** — HTF alignment: `hbhl33` reversal OOB primes a deeper next-`s5m` entry → size **up** (= bias-machine M-alignment state). `s7r` runway: `s7r` near exit-side OOB at entry → less room → size **down**.
   - **Kelly** — edge (win-rate + avg win/loss) from the rolling last-N live trades → one INPUT / AB candidate, not the whole lever (Joe: one-dimensional). The bottom-panel trade history *feeds* this — the UI closes the sizing loop.
+- **UI mockup:** live Artifact built 0702 (3-panel + control sliver + status strip + order-book drawer; marker hover/tap tooltips, PnL green/red). Mobile = **monitor** view (positions, DD, feed health, kill-switch; sizing controls hidden <820px); desktop = operate.
+
+## Phase-2 infra (confirmed 0702)
+- **1 VM, not 2** — skip cloud-pfSense (FreeBSD appliance can't colocate with Docker; no nested virt on standard Linodes). **WireGuard on the o9-live Linux VM** = the tunnel endpoint, site-to-site to on-prem pfSense (+ road-warrior peers incl. Joe's phone for the UI). WG replaces a 2nd pfSense box.
+- **VM:** Linode **Shared CPU 4GB / 2 vCPU, Singapore** (Bybit ap-southeast-1). Workload is I/O-light (WS collector + bounded per-5s loop + WG); Shared's neighbour-contention is a non-issue at 5s cadence. Resize→Dedicated later if real-money size wants zero jitter.
+- **DB:** Linode **Managed MySQL 2GB / 1 vCPU / 30GB, Singapore** (availability CONFIRMED; same region = intra-region sub-ms reads). Replaces the Phase-1 local WSL DB — seam = connection-string change (as designed).
+- **Tick retention:** `ticks` is the ONLY unbounded table → **rolling-window prune** (`kline_collection` is the durable artifact). Storage is the first thing to outgrow, not RAM/CPU — watch that one metric.
+- **Security:** Linode **Cloud Firewall** deny-all inbound except the WG UDP port → UI + SSH reachable ONLY over the tunnel; no public exposure of the trading surface. **LISH** (out-of-band console) = break-glass if the tunnel drops. Server-side **dead-man's-switch** auto-flattens if the loop dies → safety independent of Joe's access.
+- **Trading egress stays DIRECT Singapore→Bybit** — the tunnel is a MANAGEMENT plane only; never route Bybit order traffic through on-prem (adds latency + makes the home uplink a SPOF).
+- **Sequence:** o9-live shows real trades on the UI → **33h clean fake-API** → provision this infra → mainnet **MINIMAL lots** (smallest = $5 notional floor).
+
+## Post-launch roadmap
+- **FIRST job after infra (Joe, 0702): gcs5 / gcs1 finishers → replace `s30Mage`-wob.** Faster (5-second + 1-second) exit-finisher lines to trigger the exit turn sooner/more precisely than the current s30M-wob component of the finisher latch. **PREREQ — 1-second tape:** o9-live builds 5s bars today; **gcs1 needs a new tick-built 1s resolution** — surface + scope that before building. (gcs5M was parked at tc=108, see [[project_gate_sweep]].) Interrogate the finisher-latch interaction before coding — don't bolt a new trigger onto a fused method.
