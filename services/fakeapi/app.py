@@ -15,11 +15,30 @@ from fastapi.responses import JSONResponse
 
 from .auth import AuthEmulator
 from .errors import FakeApiError
+from .fill import OrderBookWalker
+from .store import FxStore
+from .engine import MatchingEngine
 
 # test credentials from env (never hard-coded); the o9-live fake adapter signs with the same pair
 _CREDS = {os.environ.get("O9_FAKE_API_KEY", "o9-fake-key"):
           os.environ.get("O9_FAKE_API_SECRET", "o9-fake-secret")}
 _auth = AuthEmulator(_CREDS)
+_TAKER_BPS = float(os.environ.get("O9_TAKER_BPS", "5.5"))   # config, not hard-coded
+
+# symbol -> live order-book snapshot; OrderBookFeed updates this (⑤), tests set it directly
+LIVE_BOOK: dict = {}
+_ENGINE = None
+
+
+def get_engine():
+    """Lazy — so importing the app (fill/auth tests) needs no DB; built on first order."""
+    global _ENGINE
+    if _ENGINE is None:
+        from optimus9.config import get_db_config
+        from optimus9 import DatabaseManager
+        db = DatabaseManager(**get_db_config()); db.connect()   # PK_DB_NAME=o9_live in the container env
+        _ENGINE = MatchingEngine(FxStore(db), OrderBookWalker(_TAKER_BPS), lambda s: LIVE_BOOK.get(s))
+    return _ENGINE
 
 app = FastAPI(title="o9 fake-API (Bybit v5 mock)", version="0.1")
 
@@ -50,9 +69,15 @@ def health():
 async def order_create(request: Request):
     await _require_auth(request)
     body = await request.json()
-    # SKELETON: accept the order; real book-walk fill + fx store = milestone ③
-    return _envelope({"orderId": f"stub-{int(time.time() * 1000)}",
-                      "orderLinkId": body.get("orderLinkId", "")})
+    try:
+        res = get_engine().submit(
+            body["symbol"], body["side"], body["qty"],
+            order_type=body.get("orderType", "Market"),
+            order_link_id=body.get("orderLinkId", ""),
+            reduce_only=bool(body.get("reduceOnly", False)))
+    except ValueError as e:            # e.g. empty book / no liquidity
+        return _envelope(ret_code=110001, ret_msg=str(e))
+    return _envelope({"orderId": res["order_id"], "orderLinkId": body.get("orderLinkId", "")})
 
 
 @app.post("/v5/position/trading-stop")
