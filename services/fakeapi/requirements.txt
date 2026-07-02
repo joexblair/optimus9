@@ -1,0 +1,3 @@
+# fake-API container deps (isolated from the o9-live image)
+fastapi>=0.115
+uvicorn[standard]>=0.30

@@ -88,10 +88,9 @@ Docker Compose owns lifecycle/restart/healthchecks; the Supervisor adds only the
 - **Stops:** soft 0.5% in o9-live `StopManager` (hidden) + wide ~0.7% exchange backstop (`triggerBy=MarkPrice`).
 
 ## Parallel fake-API + mainnet (after 33h) — the `Stack` capability, pulled forward
-Post-33h Joe runs **fakeAPI (paper shadow) + Bybit mainnet (minimal lots) in parallel**. This needs the container-manager to run **>1 stack** — a lightweight `Supervisor`-over-`Stack(config)`, pulled forward from the deferred fleet work (the deploy pipeline — ReleaseManager/Canary/Promoter — STAYS deferred). **FORK to decide when we build that phase (not now, not blocking the single-stack build):**
-- **(a) two o9-live instances** (fake stack + mainnet stack) — clean failure isolation, but 2× compute + they'd drift as separate windows.
-- **(b) one instance, fan the intent to two adapters** (fakeAdapter + bybitAdapter), two `TradeLedger` books, one UI showing both — decide-once, directly comparable fills (validates the cost model). Coupling + independent order-failure handling.
-- Sub-Q: matched size (clean fill comparison) vs independent size (mainnet-minimal / paper-normal). Lean: **(b)** for the comparability, run both at mainnet-minimal size during the overlap.
+Post-33h Joe runs **fakeAPI (paper shadow) + Bybit mainnet (minimal lots) in parallel**. This needs the container-manager to run **>1 stack** — a lightweight `Supervisor`-over-`Stack(config)`, pulled forward from the deferred fleet work (the deploy pipeline — ReleaseManager/Canary/Promoter — STAYS deferred).
+- **CHOSEN (0702): (a) two full o9-live instances** (fake stack + mainnet stack), clean failure isolation. Purpose = **aggregate comparison** (is the real book tracking the paper baseline — win%/net/DD), which is drift-tolerant. Drift is **small** — independent collectors → tapes differ only at bar-boundary tick-assignment / dropped-msg / reconnect edges, and the gapless reconciler (execId) keeps them tightly aligned → a handful of marginal edge trades, not wholesale. It costs clean trade-for-trade attribution, which the cautious minimal-lot start doesn't need.
+- **Escape hatch (a′)** if fill-by-fill cost validation is wanted later: share ONE collector/tape, run two strategy+adapter+ledger instances off it → identical decisions (zero drift), same isolation, only execution timing differs. One line of plumbing to switch.
 
 ## Params to pin at build
 - **BUFFER** hours — derive from the longest-lookback line.
