@@ -101,6 +101,27 @@ CREATE TABLE `lp_config` (
   PRIMARY KEY (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- lr cascade gate-sets (roles arm/finisher/gate) — lr_config/lr_detect read these (were missing 0702)
+CREATE TABLE `lr_gate` (
+  `lrg_pk` int NOT NULL AUTO_INCREMENT,
+  `lrg_role` enum('arm','finisher','gate') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `lrg_name` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `lrg_op` enum('AND','OR') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'AND',
+  `lrg_active` tinyint NOT NULL DEFAULT '1',
+  PRIMARY KEY (`lrg_pk`),
+  UNIQUE KEY `lrg_name` (`lrg_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `lr_gate_line` (
+  `lrgl_pk` int NOT NULL AUTO_INCREMENT,
+  `lrgl_lrg_pk` int NOT NULL,
+  `lrgl_ic_pk` int NOT NULL,
+  `lrgl_check` enum('oob','lookback','mid') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'oob',
+  `lrgl_lookback` int DEFAULT NULL,
+  PRIMARY KEY (`lrgl_pk`),
+  KEY `lrgl_lrg_pk` (`lrgl_lrg_pk`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `kline_collection` (
   `kc_pk` int unsigned NOT NULL AUTO_INCREMENT,
   `kc_tp_pk` int unsigned NOT NULL,
