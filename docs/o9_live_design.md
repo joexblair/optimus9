@@ -74,3 +74,23 @@ Live order-book walk at fill, per-leg. NOT flat, NOT volume-to-fill (rejected �
 5. Wire end-to-end locally (compose, WSL DB) + a live dry-run = **fake-go-live**.
 6. A/B feed validation (live tape vs TV) — *post* fake-go-live.
 7. Phase 2: Linode deploy (Singapore, GHCR, firewall/no-published-ports, chrony+sync-gate, autoheal, dead-man's-switch).
+
+## Live UI + sizing (0702, riffing — interrogate before building)
+### Layout (3-panel, single trading page)
+- **Top 20%** — rolling price as a graph line + trade entry/exit markers.
+- **Middle 50%** — OPEN positions, one row each, realtime stats (unrealised PnL, PnL, …) + an **[Exit]** button on the right.
+- **Bottom 30%** — scrollable list of the last 100 trades; per-row: **gross & net PnL, entry & exit px, slippage, MAE, account balance**.
+- Bling: build as a live Artifact mockup first, iterate, then wire to the o9-live DB.
+
+### Auto-sizing
+- **Bybit FARTCOINUSDT limits:** minOrderQty 1 · qtyStep 1 · maxOrderQty 3,000,000 · **minNotional $5**. So "smallest order" = the **$5 notional floor ≈ 35–45 coins** @ $0.11–0.15 (notional binds, not min-qty). `max_order` (66k) sits far under the 3M ceiling.
+- **LAUNCH = (a) manual modes** — revises DECISION #3 (fixed-66k) into a live control (Joe's reason: begin mainnet with caution + get intel up front):
+  - **smallest** — $5 floor (cautious mainnet start) · **fixed** — `max_order` (66k, backtest-match) · **dynamic 5×** — `min(max_order, 5×equity/price)` (the validated compounding model that made $500→$15,026).
+  - **`split_count`** modifier (default 1 = whole order). Splitting decided by the fake-API **book-walk (true per-slice slip)**, NOT the 5s bar high–low range (that's volatility, not one order's impact). Re-opens the design's "no-split" call — which was on a *calm deep* book; **reversal-entry books are thin**, so measure it there.
+  - mode / max_order / leverage = **DB knobs**, never hardcoded. **Live mainnet results = validation / AB.**
+- **Order-book-aware sizing (NEW, Joe):** o9-live (container 1, the *decide* role) consumes the `orderbook` WS to **size to available liquidity** (size down on a thin book). Mainnet-correct (real Bybit has no fake-API). **SEAM:** one shared book source between o9-live sizing + fake-API fills — avoid two divergent reads in the forward-test.
+- **Conviction sizing (ROADMAP b/c, post-launch) — multi-factor within a risk-cap ceiling; reuses existing producers, not new machinery:**
+  - **safety** — risk-cap %: size so the 0.5% SL loses ≤ X% of equity (the ceiling; Joe picks X).
+  - **liquidity** — order-book depth (above).
+  - **conviction** — HTF alignment: `hbhl33` reversal OOB primes a deeper next-`s5m` entry → size **up** (= bias-machine M-alignment state). `s7r` runway: `s7r` near exit-side OOB at entry → less room → size **down**.
+  - **Kelly** — edge (win-rate + avg win/loss) from the rolling last-N live trades → one INPUT / AB candidate, not the whole lever (Joe: one-dimensional). The bottom-panel trade history *feeds* this — the UI closes the sizing loop.
