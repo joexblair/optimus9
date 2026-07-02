@@ -19,8 +19,11 @@ Companion to `o9_live_design.md` (architecture) + `o9_live_schema.sql` (tables).
 | `lr_detect` / `LRConfig` | REUSE | cascade producer + config (live==prod==backtest) | (existing) |
 | `TradeIntent` | NEW | value obj `{action, side, reason, ts}` — the seam, **not a baked verdict** | — |
 | `PositionSizer` | NEW | **SIZE only** — intent+acct+book → orders | `size(intent, acct, book) → [Order]` |
-| `ExchangeAdapter` | NEW | **EXECUTE only** — order → v5 calls (see fork ✚) | `place/reduce/close/set_leverage/positions/executions` |
+| `ExchangeAdapter` «iface» | NEW | **EXECUTE only** — our exchange-AGNOSTIC intent contract (defined by OUR needs, not Bybit's API) | `place/reduce/close/set_backstop/positions/executions` |
+| └ `BybitAdapter` | NEW | the Bybit impl — maps the contract → v5 calls; fake vs real = client construction only | (future: other exchanges = new impls) |
 | `BybitV5Client` | NEW | thin `requests` wrapper; seams: `base_url`(ctor) · `Signer` | `get(path,params) / post(path,body)` |
+| `MarkFeed` | NEW | `tickers` WS → mark/index ticks (feeds StopManager; logs `last−mark` divergence #19/#39) | `mark() / index()` |
+| `StopManager` | NEW | **SOFT STOP** — per mark-tick vs each trade's 0.5% stop → close intent; level HIDDEN from the exchange | `on_mark(px) → [close]` |
 | `Signer` «iface» | NEW | request auth | `sign(ts, recv, payload) → headers` |
 | ├ `HmacSigner` | NEW | real Bybit v5 HMAC-SHA256 (primary — exercises auth on the fake path too) | |
 | └ `PassThroughSigner` | NEW | debug bypass only | |
@@ -41,11 +44,14 @@ Companion to `o9_live_design.md` (architecture) + `o9_live_schema.sql` (tables).
 | `OrderBookWalker` | NEW | **FILL PRICE** — walk live book for size → avg fill + slip; taker 5.5 bps, per-leg |
 | `OrderBookFeed` | NEW | orderbook WS → depth (shared-source seam with o9-live) |
 | `MatchingEngine` | NEW | **LIFECYCLE** — apply fills → positions; one-way pyramid grow/reweight/reduce |
-| `StopMonitor` | NEW | **STOP** — watch **mark** vs open SL 0.5%, honouring the order's `triggerBy` → close fill |
-| `MarkFeed` | NEW | `tickers` WS → `markPrice` + `indexPrice` ticks (mark tape); logs `last − mark` divergence (#19/#39) |
+| `StopMonitor` | NEW | **BACKSTOP only** — emulate the WIDE exchange SL (~0.7%, `triggerBy=MarkPrice`) → close fill (the tight 0.5% soft-stop is o9-live's `StopManager`) |
 | `FxStore` | NEW | `fx_order` / `fx_position` / `fx_fill` persistence (exchange truth) |
 
-**Mark price (settled 0702):** the SL is placed with **`triggerBy=MarkPrice`** — on mainnet **real Bybit triggers on mark** (a last-price super-wick that doesn't move mark won't stop us; the #44 fix, zero custom code). The fake-API *emulates* this: `StopMonitor` reads the `MarkFeed` and honours `triggerBy`. **mark = trigger truth · order-book walk = fill truth · signals stay on LAST** (no basis swap). `ExchangeAdapter` carries `trigger_by` on the SL / trading-stop call; default `MarkPrice`.
+**Stops (settled 0702) — SOFT primary + WIDE exchange backstop:**
+- **Primary = SOFT stop in o9-live** (`StopManager` watches the `MarkFeed` per tick → market close at the 0.5% level). The stop level **never reaches the exchange** → no stop-hunting ("intent away from prying eyes").
+- **Backstop = a WIDE SL (~0.7%) placed WITH the exchange** via `triggerBy=MarkPrice` — the failsafe for total o9-live failure (crash/disconnect). Wider than the soft stop, so it only fires if the soft one couldn't. `ExchangeAdapter.set_backstop(trigger_by=MarkPrice)`.
+- **Trade-off (accepted):** a soft stop carries execution risk if o9-live↔exchange hiccups *at* the stop moment — the wide backstop is exactly what caps that.
+- **mark = trigger truth · book-walk = fill truth · signals stay on LAST** (no basis swap). fakeAPI's `StopMonitor` emulates ONLY the wide backstop; the shared mark feed serves both.
 
 Routes: `POST /v5/order/create`, `/position/trading-stop`, `/position/set-leverage` · `GET /v5/position/list`, `/execution/list`. String numerics (Decimal). Error codes 10002/10004/110043.
 
@@ -76,9 +82,18 @@ Docker Compose owns lifecycle/restart/healthchecks; the Supervisor adds only the
 ## Build order (agreed)
 ① fakeAPI contract skeleton + `BybitV5Client` (the seam) → ② point existing collector at o9-live DB → ③ fakeAPI fill model + `FxStore` → ④ o9-live loop (RunWindow→lr_detect→intent→sizer→adapter) → ⑤ `UiServer` wired to the mockup → ⑥ minimal Supervisor → local **fake-go-live**.
 
-## Open forks / params to pin at build
-- ✚ **Adapter shape:** ONE `ExchangeAdapter` + client-swap (base_url+signer) rather than separate Fake/Bybit adapters — the fake speaks the *identical* v5 contract, so two adapters would duplicate the mapping. (Recommended; supersedes the two-impl sketch.)
-- **fakeAPI framework:** FastAPI + uvicorn (fakeAPI container only) — pending nod.
+## Resolved (0702)
+- **Adapter shape:** abstract `ExchangeAdapter` (exchange-agnostic contract) + `BybitAdapter` impl; fake-vs-real = client construction (base_url+signer), NOT a separate adapter. Future exchanges = new impls under the interface.
+- **Framework:** FastAPI + uvicorn — `UiServer` on **o9-live** (bespoke view, always) + fakeAPI mock REST (test-only).
+- **Stops:** soft 0.5% in o9-live `StopManager` (hidden) + wide ~0.7% exchange backstop (`triggerBy=MarkPrice`).
+
+## Parallel fake-API + mainnet (after 33h) — the `Stack` capability, pulled forward
+Post-33h Joe runs **fakeAPI (paper shadow) + Bybit mainnet (minimal lots) in parallel**. This needs the container-manager to run **>1 stack** — a lightweight `Supervisor`-over-`Stack(config)`, pulled forward from the deferred fleet work (the deploy pipeline — ReleaseManager/Canary/Promoter — STAYS deferred). **FORK to decide when we build that phase (not now, not blocking the single-stack build):**
+- **(a) two o9-live instances** (fake stack + mainnet stack) — clean failure isolation, but 2× compute + they'd drift as separate windows.
+- **(b) one instance, fan the intent to two adapters** (fakeAdapter + bybitAdapter), two `TradeLedger` books, one UI showing both — decide-once, directly comparable fills (validates the cost model). Coupling + independent order-failure handling.
+- Sub-Q: matched size (clean fill comparison) vs independent size (mainnet-minimal / paper-normal). Lean: **(b)** for the comparability, run both at mainnet-minimal size during the overlap.
+
+## Params to pin at build
 - **BUFFER** hours — derive from the longest-lookback line.
 - **Reduce attribution** — FIFO.
-- **Order-book source** — shared between o9-live sizer + fakeAPI fill model.
+- **Order-book + mark source** — shared between o9-live (sizer / StopManager) + fakeAPI (fill / backstop).
