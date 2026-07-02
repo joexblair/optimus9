@@ -142,3 +142,20 @@ finisher  _finish: latch s30a+s15a from the arm, delatch at the unlatch  →  ex
   15–20× effective leverage. The DB `ticks` table is empty (68 rows); **real fills + true Bybit order-book
   slippage come from o9-live** — that's the validation, this is the target to beat. `v2_walk` carries per-trade
   entry_px / lot / notional / pnl_usdt / equity.
+
+## Extreme sweep (0702) — the arm was mis-tuned
+5500-config covering-block sweep (see [[project_sweep_harness]]), worst-window minimax over 7 windows
+(05-18→06-24). **One robust lever surfaced: `s5m_len` 10 → 6** (the arm BB — its cross into OOB fires entry).
+- **Unanimous:** all top-40 configs use s5m_len=6; next-most-tweaked knob only 7/40. Strategy knobs otherwise
+  converge to ship (curl=s7 · gate=s7 · exit_rlb=22 · slip=0 · **bias=OFF** — the sweep independently re-confirms
+  the bias filter doesn't lift net).
+- **Isolated** (s5m_len=6 only, else ship): worst-window **+33.0 → +68.7**, trades 554→685, win 68→77%.
+- **OOS-validated** on fresh post-06-24 data (06-27/29, 07-01): beats ship **3/3**, +48–62 pts net, +5–6% win.
+  Not regime-fit. Mechanism: len=10 arm too slow — a tighter band catches setups earlier → more trades AND
+  higher win. The winner's extra +20pts (SL/pred/scattered lines) never isolate/repeat → **overfit tail, discarded.**
+- **Shipped:** `indicator_configs` s5m new version (ic_pk=115, `ic_live_after_dt` 2026-07-02, `ic_bb_len` 6);
+  old len=10 (ic_pk=88) retained for audit. Live path verified (`evaluate({})` reads len=6).
+- **New equity** (`build_v2_walk.py`, same $500 / 0.20% / 5×): **$500 → $15,026 (30.1×)**, 682 trades, 77% win,
+  **max DD 21.8%** (early, trade 38 @ ~$600 → $469 min; survives). Better than the old arm on BOTH axes
+  ($8,770→$15,026 return, 34%→21.8% DD). Same caveats: one window, in-sample-compounded, estimated cost —
+  o9-live is the referee.
