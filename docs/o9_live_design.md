@@ -61,7 +61,7 @@ Live order-book walk at fill, per-leg. NOT flat, NOT volume-to-fill (rejected �
 
 ## DECISIONS (resolved 0628)
 1. **Warmup source** — copy the sanitised history (TV-true, on hand) to seed the buffer; collector appends live. *(Phase 1; Phase 2 may REST-backfill.)*
-2. **Producer scope** — **cf15 cascade only** (the validated mechanic; no unvalidated producers).
+2. **Producer scope** — **v2 (`lr_v2`: cascade + strand-rescue, `s5m_len=6`)** — the OOS-validated shipped edge (UPDATED 0702; the 0628 "cf15 only" is superseded now v2 is validated). Reuses `lr_config` → identical DB deps.
 3. **Position sizing** — **fixed 66k coins** (match the backtest; sizing is a later lever).
 4. **Live recompute** — bounded-buffer `run_window` per 5s (see 1b); derive BUFFER from the longest-lookback line. Trivial once bounded.
 5. **PYRAMIDING** — multiple cascade entries **accumulate into one same-side position** (Bybit one-way: size grows, avg-entry re-weights; exits reduce). Built this way from the start, not retrofitted.
