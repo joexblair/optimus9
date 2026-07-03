@@ -13,7 +13,7 @@ SYM = "FARTCOINUSDT"
 
 @pytest.fixture
 def db():
-    cfg = get_db_config(); cfg["database"] = "o9_live"
+    cfg = get_db_config(); cfg["database"] = "o9_live_test"
     d = DatabaseManager(**cfg); d.connect()
     for t in ("o9_ledger", "o9_account"):
         d.execute("TRUNCATE TABLE %s" % t)

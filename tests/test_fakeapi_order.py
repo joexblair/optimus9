@@ -15,7 +15,7 @@ from optimus9.live.exchange import HmacSigner
 
 
 def test_signed_order_fills_and_stores():
-    cfg = get_db_config(); cfg["database"] = "o9_live"
+    cfg = get_db_config(); cfg["database"] = "o9_live_test"
     db = DatabaseManager(**cfg); db.connect()
     for t in ("fx_fill", "fx_order", "fx_position"):
         db.execute("TRUNCATE TABLE %s" % t)

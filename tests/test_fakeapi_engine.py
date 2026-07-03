@@ -18,7 +18,7 @@ EXIT = {"bids": [["0.13600", "500000"]], "asks": [["0.13620", "500000"]]}    # b
 
 @pytest.fixture
 def db():
-    cfg = get_db_config(); cfg["database"] = "o9_live"
+    cfg = get_db_config(); cfg["database"] = "o9_live_test"
     d = DatabaseManager(**cfg); d.connect()
     for t in ("fx_fill", "fx_order", "fx_position"):
         d.execute("TRUNCATE TABLE %s" % t)
