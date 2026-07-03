@@ -1,0 +1,10 @@
+.git
+**/__pycache__
+*.pyc
+*.log
+sweep_full.log
+transfer/
+docs/
+.claude/
+*.xlsx
+*.csv

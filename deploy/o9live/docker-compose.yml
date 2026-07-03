@@ -1,0 +1,24 @@
+# o9-live stack — Phase 1 (local WSL). MySQL stays on the host; containers reach it via host-gateway.
+services:
+  fakeapi:
+    build: { context: ../.., dockerfile: deploy/o9live/Dockerfile.fakeapi }
+    environment:
+      - O9_LIVE_BOOK=FARTCOINUSDT          # stream the real order book
+      - PK_DB_NAME=o9_live
+      - PK_DB_HOST=host.docker.internal
+      - O9_FAKE_API_KEY=o9-fake-key
+      - O9_FAKE_API_SECRET=o9-fake-secret
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8098/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+  o9live:
+    build: { context: ../.., dockerfile: deploy/o9live/Dockerfile.o9live }
+    depends_on:
+      fakeapi: { condition: service_healthy }
+    environment:
+      - O9_FAKEAPI_URL=http://fakeapi:8098
+      - PK_DB_HOST=host.docker.internal    # dev tape (until own collector); o9_live records
+    extra_hosts: ["host.docker.internal:host-gateway"]

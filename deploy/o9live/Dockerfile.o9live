@@ -1,0 +1,10 @@
+# o9-live container — collector (own tape) + realtime strategy loop → adapter → fakeAPI
+FROM python:3.12-slim
+WORKDIR /app
+COPY deploy/o9live/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . /app
+ENV PYTHONPATH=/app
+# NOTE: the OWN o9_live collector (TickCollector+bar_builder → o9_live) is the remaining wiring;
+# for the first bring-up the launcher reads the live tape. See docs/o9_live_design.md.
+CMD ["python3", "-u", "ops/run_o9live.py"]
