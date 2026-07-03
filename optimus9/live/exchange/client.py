@@ -42,22 +42,31 @@ class BybitV5Client:
         self._session = session or requests.Session()
         self._now_ms = clock or (lambda: int(time.time() * 1000))  # injectable for tests
 
+    def _send(self, method: str, url: str, headers: dict, data=None):
+        """Transport resilience: retry ONCE on a dropped connection (keep-alive reset) with a fresh session.
+        Business errors (non-zero retCode) are NOT retried — they surface via _envelope."""
+        for attempt in range(2):
+            try:
+                return self._session.request(method, url, headers=headers, data=data, timeout=self._timeout)
+            except requests.exceptions.ConnectionError:
+                if attempt:
+                    raise
+                self._session = requests.Session()
+
     def get(self, path: str, params: dict | None = None) -> dict:
         # sorted for a deterministic query string; the signed string == the sent string
         query = urlencode(sorted((params or {}).items()))
         ts = self._now_ms()
         headers = self._signer.auth_headers(ts, self._recv, query)
         url = f"{self._base}{path}" + (f"?{query}" if query else "")
-        resp = self._session.get(url, headers=headers, timeout=self._timeout)
-        return self._envelope(resp, path)
+        return self._envelope(self._send("GET", url, headers), path)
 
     def post(self, path: str, body: dict | None = None) -> dict:
         raw = json.dumps(body or {}, separators=(",", ":"))  # serialize ONCE; sign + send the same bytes
         ts = self._now_ms()
         headers = self._signer.auth_headers(ts, self._recv, raw)
         headers["Content-Type"] = "application/json"
-        resp = self._session.post(f"{self._base}{path}", data=raw, headers=headers, timeout=self._timeout)
-        return self._envelope(resp, path)
+        return self._envelope(self._send("POST", f"{self._base}{path}", headers, data=raw), path)
 
     def _envelope(self, resp: requests.Response, path: str) -> dict:
         """Parse the Bybit universal envelope {retCode, retMsg, result, ...}; raise on non-zero."""

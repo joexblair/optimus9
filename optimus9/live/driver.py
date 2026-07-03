@@ -31,7 +31,7 @@ class RealtimeDriver:
         time.sleep(max(0.0, (nxt - now) / 1000.0))
 
     def run(self, max_bars=None):
-        n = 0
+        n = errs = 0
         while max_bars is None or n < max_bars:
             self._sleep_to_seam()
             ts, px = self._latest_bar()
@@ -40,8 +40,13 @@ class RealtimeDriver:
             self._last = ts
             now_ms = ts + self.bar + self.delay                  # decision instant for the just-closed bar
             t0 = time.time()
-            placed = self.app.on_bar(now_ms, px)
-            self.log("bar %d close=%.5f decide=%.0fms → %d order(s)%s"
-                     % (ts, px, (time.time() - t0) * 1000, len(placed),
-                        (" " + str(placed)) if placed else ""))
+            try:                                                 # a transient blip must not kill the loop
+                placed = self.app.on_bar(now_ms, px)
+                errs = 0
+                self.log("bar %d close=%.5f decide=%.0fms → %d order(s)%s"
+                         % (ts, px, (time.time() - t0) * 1000, len(placed),
+                            (" " + str(placed)) if placed else ""))
+            except Exception as e:
+                errs += 1
+                self.log("bar %d ERROR (%d consecutive): %s: %s" % (ts, errs, type(e).__name__, e))
             n += 1
