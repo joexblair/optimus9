@@ -59,10 +59,19 @@ async def _on_fake_error(request: Request, exc: FakeApiError):
     return JSONResponse(status_code=200, content=_envelope(ret_code=exc.ret_code, ret_msg=exc.ret_msg))
 
 
+@app.on_event("startup")
+def _start_orderbook_feed():
+    """If O9_LIVE_BOOK=<symbol> is set, stream the real book into LIVE_BOOK (else use /dev/book in tests)."""
+    sym = os.environ.get("O9_LIVE_BOOK")
+    if sym:
+        from .feed import OrderBookFeed
+        OrderBookFeed(sym, lambda s, b: LIVE_BOOK.__setitem__(s, b)).start()
+
+
 @app.get("/health")
 def health():
     """Liveness probe for the container-manager HealthGate."""
-    return {"status": "ok", "ts": int(time.time() * 1000)}
+    return {"status": "ok", "ts": int(time.time() * 1000), "book": list(LIVE_BOOK)}
 
 
 @app.post("/v5/order/create")
