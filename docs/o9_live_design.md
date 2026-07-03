@@ -105,5 +105,13 @@ Live order-book walk at fill, per-leg. NOT flat, NOT volume-to-fill (rejected �
 - **Trading egress stays DIRECT Singapore→Bybit** — the tunnel is a MANAGEMENT plane only; never route Bybit order traffic through on-prem (adds latency + makes the home uplink a SPOF).
 - **Sequence:** o9-live shows real trades on the UI → **33h clean fake-API** → provision this infra → mainnet **MINIMAL lots** (smallest = $5 notional floor).
 
+## Kline decision timing — the seam contract (Joe, 0703)
+The live trigger is **precise**, not a poll. Per bar:
+- Ticks are collected **up to the last millisecond of the bar** (bar TF = 5s now, **1s soon**).
+- **Grace = 300ms after the seam** to capture late ticks that belong to the just-closed bar. (5s → 300ms; the **1s-bar grace is TBD** — expected ~300ms; **Singapore latency tests hone it**.)
+- **At seam+301ms, `klinecollect` calls the machine** (`StrategyLoop`) → it decides on the **just-closed bar** → may initiate a trade. The kline build IS the clock (no separate timer).
+- **Late tick after 301ms:** the kline is **updated** with it (non-sanitised) and that value flows to *subsequent* line calcs. The decision already fired at 301ms on the 301ms snapshot — **we accept the trade used the pre-late-tick kline.**
+- **Loop contract:** the decision bar = the bar that closed at the seam; `StrategyLoop.decide(now_ms=seam+301ms)` → the window's last *closed* bar is the seam bar. The collector supplies `now_ms`; the loop never polls on its own clock. (A window ending mid-bar sees `last_closed = seam−TF`; that was a test artifact, not the live path.)
+
 ## Post-launch roadmap
 - **FIRST job after infra (Joe, 0702): gcs5 / gcs1 finishers → replace `s30Mage`-wob.** Faster (5-second + 1-second) exit-finisher lines to trigger the exit turn sooner/more precisely than the current s30M-wob component of the finisher latch. **PREREQ — 1-second tape:** o9-live builds 5s bars today; **gcs1 needs a new tick-built 1s resolution** — surface + scope that before building. (gcs5M was parked at tc=108, see [[project_gate_sweep]].) Interrogate the finisher-latch interaction before coding — don't bolt a new trigger onto a fused method.
