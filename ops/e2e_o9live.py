@@ -14,6 +14,7 @@ from optimus9.live.exchange import HmacSigner, BybitV5Client, BybitAdapter
 from optimus9.live.sizing import PositionSizer
 from optimus9.live.strategy import StrategyLoop
 from optimus9.live.app import O9LiveApp
+from optimus9.live.ledger import O9Ledger
 from sweep_eval import BASE_BIAS
 
 URL = "http://127.0.0.1:8098"
@@ -26,7 +27,7 @@ def ms(s): return int(dtm.datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
 dev = DatabaseManager(**get_db_config()); dev.connect()          # dev tape (pk_optimizer)
 o9cfg = get_db_config(); o9cfg["database"] = "o9_live"
 o9 = DatabaseManager(**o9cfg); o9.connect()
-for t in ("fx_fill", "fx_order", "fx_position"):
+for t in ("fx_fill", "fx_order", "fx_position", "o9_ledger", "o9_account"):
     o9.execute("TRUNCATE TABLE %s" % t)
 
 bcfg = bm.BiasConfig(**BASE_BIAS); lc = lr_config(dev)
@@ -53,10 +54,13 @@ print("dev/book:", requests.post(URL + "/dev/book", json=book, timeout=5).json()
 
 client = BybitV5Client(URL, HmacSigner("o9-fake-key", "o9-fake-secret"))
 adapter = BybitAdapter(client, SYM)
-app = O9LiveApp(strat, PositionSizer(max_order=66000), adapter, SYM, mode="fixed")
+ledger = O9Ledger(o9, SYM, start_equity=500)
+app = O9LiveApp(strat, PositionSizer(max_order=66000), adapter, ledger, SYM, mode="fixed")
 
 placed = app.on_bar(e[0] + 5000, entry_px)                       # seam+301ms on the entry bar
 print("PLACED:", placed)
 print("fx_position:", o9.execute("SELECT side, size, avg_entry FROM fx_position WHERE symbol=%s", (SYM,), fetch=True))
-print("app.position() (read back via adapter over HTTP):", app.position())
+print("app.position() (exchange, via HTTP):", app.position())
+print("o9_ledger (o9 OWN record):", o9.execute("SELECT side,qty,entry_px,status FROM o9_ledger WHERE symbol=%s", (SYM,), fetch=True))
+print("o9_account (o9 tally):", o9.execute("SELECT equity,trade_count FROM o9_account WHERE acct_id=1", fetch=True))
 dev.disconnect(); o9.disconnect()

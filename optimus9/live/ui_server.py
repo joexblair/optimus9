@@ -27,23 +27,23 @@ def _db():
 
 
 def _trades(limit=100):
+    # o9-live reads its OWN tables (o9_ledger / o9_account) — NOT the exchange's fx_* (SRP; and fx_* won't
+    # exist on mainnet where the exchange is Bybit). slip is an exchange metric surfaced via reconciliation.
     d = _db()
-    rows = d.execute("""
-        SELECT p.position_id, p.side, p.avg_entry, p.realized_pnl, p.total_fees, p.opened_ms, p.closed_ms,
-          (SELECT f.exec_price FROM fx_fill f WHERE f.position_id=p.position_id AND f.closed_size>0
-             ORDER BY f.exec_ms DESC LIMIT 1) exit_px,
-          (SELECT AVG(f.slippage_bps) FROM fx_fill f WHERE f.position_id=p.position_id) slip
-        FROM fx_position p WHERE p.status='closed' ORDER BY p.closed_ms""", fetch=True)
+    rows = d.execute("SELECT side, entry_px, exit_px, gross, net, closed_ms FROM o9_ledger "
+                     "WHERE status='closed' ORDER BY closed_ms", fetch=True)
+    acct = d.execute("SELECT equity FROM o9_account WHERE acct_id=1", fetch=True)
     d.disconnect()
     bal, out = START_EQUITY, []
     for r in rows:                                   # ascending → running balance
-        net = float(r["realized_pnl"]); bal += net
+        net = float(r["net"]); bal += net
         out.append({
             "ms": int(r["closed_ms"]), "dir": r["side"],
-            "gross": round(net + float(r["total_fees"] or 0), 2), "net": round(net, 2),
-            "entry": float(r["avg_entry"]), "exit": float(r["exit_px"] or 0),
-            "slip": round(float(r["slip"] or 0), 2), "bal": round(bal, 2)})
-    return out[-limit:][::-1], bal                    # newest first
+            "gross": round(float(r["gross"] or net), 2), "net": round(net, 2),
+            "entry": float(r["entry_px"]), "exit": float(r["exit_px"] or 0),
+            "slip": 0.0, "bal": round(bal, 2)})
+    equity = float(acct[0]["equity"]) if acct else bal
+    return out[-limit:][::-1], equity                 # newest first; equity = o9's tally
 
 
 @app.get("/api/history")

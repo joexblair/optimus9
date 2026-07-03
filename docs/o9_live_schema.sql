@@ -218,3 +218,34 @@ CREATE TABLE o9_decision (                                 -- o9-live's per-5s o
   created_ms    BIGINT NOT NULL,
   INDEX(kline_ms)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ===== o9-live OWNED (client-side, NOT the exchange's fx_*) — the UI reads these; reconciled to the exchange =====
+-- Independent-rows trades (Joe's UI model), built from fills o9 receives via the adapter (mirror of fx_fill).
+CREATE TABLE o9_ledger (
+  led_id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+  symbol         VARCHAR(20) NOT NULL,
+  side           ENUM('Buy','Sell') NOT NULL,
+  qty            DECIMAL(20,8) NOT NULL,
+  entry_px       DECIMAL(20,8) NOT NULL,                  -- o9's observed entry fill
+  exit_px        DECIMAL(20,8),                           -- o9's observed exit fill
+  entry_order_id VARCHAR(40),
+  exit_order_id  VARCHAR(40),
+  gross          DECIMAL(20,8),                           -- o9's computed gross
+  net            DECIMAL(20,8),                           -- o9's computed net (after est fee)
+  fee            DECIMAL(20,8),
+  mae            DECIMAL(10,4),                           -- filled when live price-tracking lands (nullable)
+  reason         VARCHAR(40),
+  status         ENUM('open','closed') NOT NULL,
+  opened_ms      BIGINT NOT NULL,
+  closed_ms      BIGINT,
+  INDEX(symbol), INDEX(status), INDEX(opened_ms)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- o9's OWN running equity tally (NOT the exchange balance — reconciled to Bybit daily; see the recon task).
+CREATE TABLE o9_account (
+  acct_id        INT PRIMARY KEY,                         -- single row (1)
+  equity         DECIMAL(20,8) NOT NULL,
+  realized_total DECIMAL(20,8) NOT NULL DEFAULT 0,
+  trade_count    INT NOT NULL DEFAULT 0,
+  updated_ms     BIGINT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

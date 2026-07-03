@@ -107,7 +107,14 @@ async def position_list(request: Request):
 @app.get("/v5/execution/list")
 async def execution_list(request: Request):
     await _require_auth(request)
-    return _envelope({"category": "linear", "list": []})
+    sym = request.query_params.get("symbol")
+    limit = int(request.query_params.get("limit", 50))
+    rows = get_engine()._store._db.execute(
+        "SELECT order_id, side, exec_price, exec_qty, fee, exec_ms FROM fx_fill WHERE symbol=%s "
+        "ORDER BY exec_ms DESC LIMIT %s", (sym, limit), fetch=True) if sym else []
+    lst = [{"orderId": r["order_id"], "side": r["side"], "execPrice": str(r["exec_price"]),
+            "execQty": str(r["exec_qty"]), "execFee": str(r["fee"]), "execTime": str(r["exec_ms"])} for r in rows]
+    return _envelope({"category": "linear", "list": lst})
 
 
 @app.post("/dev/book")
