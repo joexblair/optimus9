@@ -95,10 +95,24 @@ async def set_leverage(request: Request):
 @app.get("/v5/position/list")
 async def position_list(request: Request):
     await _require_auth(request)
-    return _envelope({"category": "linear", "list": []})
+    sym = request.query_params.get("symbol")
+    p = get_engine()._store.open_position(sym) if sym else None
+    lst = [] if not p else [{
+        "symbol": p["symbol"], "side": p["side"], "size": str(p["size"]),
+        "avgPrice": str(p["avg_entry"]), "leverage": str(p["leverage"]),
+        "positionValue": str(round(float(p["size"]) * float(p["avg_entry"]), 8)), "unrealisedPnl": "0"}]
+    return _envelope({"category": "linear", "list": lst})
 
 
 @app.get("/v5/execution/list")
 async def execution_list(request: Request):
     await _require_auth(request)
     return _envelope({"category": "linear", "list": []})
+
+
+@app.post("/dev/book")
+async def dev_book(request: Request):
+    """Test/dev only — inject an order-book snapshot until the live OrderBookFeed is wired (⑤)."""
+    body = await request.json()
+    LIVE_BOOK[body["symbol"]] = {"bids": body["bids"], "asks": body["asks"]}
+    return {"ok": True}
