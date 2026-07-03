@@ -129,7 +129,7 @@ class BiasConfig:
 class BiasWindow:
     """One rolling window. Precomputes the shared lines + s30 wobs; lazily caches per-TF lines."""
 
-    def __init__(self, db, end, lookback=168, warmup=80, cfg=None, line_overrides=None, base_cache=None):
+    def __init__(self, db, end, lookback=168, warmup=80, cfg=None, line_overrides=None, base_cache=None, lean=False):
         self.cfg = cfg or BiasConfig()
         self._ls = LineStore(db)
         if line_overrides:                                    # sweep hook: inject line configs in-memory
@@ -143,26 +143,28 @@ class BiasWindow:
         self.W1 = min(int(ts[-1]), end)
         self.W0 = self.W1 - lookback * H
         self._tfcache = {}
-        c = self.cfg
-        # every named line is resolved LIVE from vw_indicator_configs_live (no tuples)
-        self.s6r = self._line('s6r')                          # anchor ruler (ups_s6r_anchor)
-        if c.osc_from_trigger:                                # osc value = the trigger line itself (grindable, e.g. blp6m)
-            otf = c.trigger_tf * 60; self._osc = self.tf(c.trigger_tf)['ma']
-        else:
-            otf, _ = self._ls.resolve(c.osc); self._osc = self._line(c.osc)
-        self._bpt = otf // 5                                  # base 5s bars per osc-TF bar
-        self.s14M = self._line(c.gate_M)
-        self.s14M_sign = _sign(self.s14M)
-        self.s14r_sign = _sign(self._line(c.gate_r))          # gate = s14M OR s14r OOB
-        self.s14m_sign = _sign(self._line(c.gate_m))
-        self._build_s30_wobs()
-        self.s3m_sign = _sign(self._line(c.s3_m))             # s3 entry m
-        self.s3r_sign = _sign(self._line(c.s3_r))             # s3 entry r (= generic r @180)
-        self.s3M_sign = _sign(self._line(c.s3_M))             # s3 Major (alt to s3r in the entry)
-        self.xm45m_sign = _sign(self._line(c.xm45_m))         # xm45 set (TF45) — premature-s30a filter
-        self.xm45M_sign = _sign(self._line(c.xm45_M))
-        self.xm45r_recent = {s: self._recent_oob(_sign(self._line(c.xm45_r)), s, c.xm45r_lookback) for s in (1, -1)}
-        self._entry_cfg = dict(ordering=c.entry_order, variant=c.s3_variant, xm45=c.xm45)
+        self._lean = lean
+        if not lean:                                          # bias-machine precompute — v2/lr_v2 don't use it; lean=True skips it
+            c = self.cfg
+            # every named line is resolved LIVE from vw_indicator_configs_live (no tuples)
+            self.s6r = self._line('s6r')                      # anchor ruler (ups_s6r_anchor)
+            if c.osc_from_trigger:                            # osc value = the trigger line itself (grindable, e.g. blp6m)
+                otf = c.trigger_tf * 60; self._osc = self.tf(c.trigger_tf)['ma']
+            else:
+                otf, _ = self._ls.resolve(c.osc); self._osc = self._line(c.osc)
+            self._bpt = otf // 5                              # base 5s bars per osc-TF bar
+            self.s14M = self._line(c.gate_M)
+            self.s14M_sign = _sign(self.s14M)
+            self.s14r_sign = _sign(self._line(c.gate_r))      # gate = s14M OR s14r OOB
+            self.s14m_sign = _sign(self._line(c.gate_m))
+            self._build_s30_wobs()
+            self.s3m_sign = _sign(self._line(c.s3_m))         # s3 entry m
+            self.s3r_sign = _sign(self._line(c.s3_r))         # s3 entry r (= generic r @180)
+            self.s3M_sign = _sign(self._line(c.s3_M))         # s3 Major (alt to s3r in the entry)
+            self.xm45m_sign = _sign(self._line(c.xm45_m))     # xm45 set (TF45) — premature-s30a filter
+            self.xm45M_sign = _sign(self._line(c.xm45_M))
+            self.xm45r_recent = {s: self._recent_oob(_sign(self._line(c.xm45_r)), s, c.xm45r_lookback) for s in (1, -1)}
+            self._entry_cfg = dict(ordering=c.entry_order, variant=c.s3_variant, xm45=c.xm45)
 
     # ── line builders ──
     def _raw(self, tf_sec, cfg):
