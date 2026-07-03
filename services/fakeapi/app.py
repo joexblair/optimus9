@@ -64,7 +64,7 @@ def _start_orderbook_feed():
     """If O9_LIVE_BOOK=<symbol> is set, stream the real book into LIVE_BOOK (else use /dev/book in tests)."""
     sym = os.environ.get("O9_LIVE_BOOK")
     if sym:
-        from .feed import OrderBookFeed
+        from optimus9.live.feed import OrderBookFeed
         OrderBookFeed(sym, lambda s, b: LIVE_BOOK.__setitem__(s, b)).start()
 
 
