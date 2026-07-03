@@ -249,3 +249,14 @@ CREATE TABLE o9_account (
   trade_count    INT NOT NULL DEFAULT 0,
   updated_ms     BIGINT NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- operator control state — the UI writes, the loop reads next bar (sizing / halt / flatten). Single row (1).
+CREATE TABLE o9_control (
+  ctl_id      INT PRIMARY KEY,
+  mode        VARCHAR(16) NOT NULL DEFAULT 'fixed',       -- smallest | fixed | dynamic5x
+  max_order   INT NOT NULL DEFAULT 66000,
+  split       INT NOT NULL DEFAULT 1,
+  halted      TINYINT NOT NULL DEFAULT 0,                 -- kill-switch: stop opening new trades
+  flatten_req TINYINT NOT NULL DEFAULT 0,                 -- close the net position now (exit / kill)
+  updated_ms  BIGINT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

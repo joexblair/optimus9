@@ -14,6 +14,7 @@ from optimus9.live.exchange import HmacSigner, BybitV5Client, BybitAdapter
 from optimus9.live.sizing import PositionSizer
 from optimus9.live.strategy import StrategyLoop
 from optimus9.live.app import O9LiveApp
+from optimus9.live.control import O9Control
 from optimus9.live.ledger import O9Ledger
 from sweep_eval import BASE_BIAS
 
@@ -55,7 +56,7 @@ print("dev/book:", requests.post(URL + "/dev/book", json=book, timeout=5).json()
 client = BybitV5Client(URL, HmacSigner("o9-fake-key", "o9-fake-secret"))
 adapter = BybitAdapter(client, SYM)
 ledger = O9Ledger(o9, SYM, start_equity=500)
-app = O9LiveApp(strat, PositionSizer(max_order=66000), adapter, ledger, SYM, mode="fixed")
+app = O9LiveApp(strat, PositionSizer(max_order=66000), adapter, ledger, O9Control(o9), SYM)
 
 placed = app.on_bar(e[0] + 5000, entry_px)                       # seam+301ms on the entry bar
 print("PLACED:", placed)

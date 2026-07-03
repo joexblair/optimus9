@@ -15,6 +15,7 @@ from optimus9.live.sizing import PositionSizer
 from optimus9.live.strategy import StrategyLoop
 from optimus9.live.ledger import O9Ledger
 from optimus9.live.app import O9LiveApp
+from optimus9.live.control import O9Control
 from optimus9.live.driver import RealtimeDriver
 
 FAKEAPI = os.environ.get("O9_FAKEAPI_URL", "http://127.0.0.1:8098")
@@ -30,7 +31,8 @@ bcfg = bm.BiasConfig(**BASE_BIAS)
 strat = StrategyLoop(dev, bcfg, lr_config(dev), SYM, buffer_hours=6, warmup_hours=24)
 adapter = BybitAdapter(BybitV5Client(FAKEAPI, HmacSigner("o9-fake-key", "o9-fake-secret")), SYM)
 ledger = O9Ledger(o9, SYM, start_equity=float(os.environ.get("O9_START_EQUITY", "500")))
-app = O9LiveApp(strat, PositionSizer(max_order=66000), adapter, ledger, SYM, mode=MODE)
+control = O9Control(o9)
+app = O9LiveApp(strat, PositionSizer(max_order=66000), adapter, ledger, control, SYM)
 
 print("o9-live REALTIME · fakeAPI=%s · symbol=%s · mode=%s · equity=$%.0f" % (FAKEAPI, SYM, MODE, ledger.equity()), flush=True)
 RealtimeDriver(app, dev, tp).run(max_bars=None)                  # forever — trades when the strategy fires
