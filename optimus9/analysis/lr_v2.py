@@ -62,14 +62,17 @@ def v2_arm(W, cfg, horizon=None):
 
 
 def _slope_flip(line):
-    """Closed-line direction flip: +1 = down→up turn, -1 = up→down, else 0 (flats carry the run)."""
-    d = np.diff(line); flip = np.zeros(len(line), np.int8); cur = 0
-    for k in range(1, len(line)):
-        s = d[k - 1]
-        if s > 0:
-            flip[k] = 1 if cur < 0 else 0; cur = cur + 1 if cur > 0 else 1
-        elif s < 0:
-            flip[k] = -1 if cur > 0 else 0; cur = cur - 1 if cur < 0 else -1
+    """Closed-line direction flip: +1 = down→up turn, -1 = up→down, else 0 (flats carry the run).
+    Vectorized (was an O(N) Python loop; bit-exact). NaN steps = flat (the loop's NaN>0 / NaN<0 are False)."""
+    n = len(line); flip = np.zeros(n, np.int8)
+    if n < 2:
+        return flip
+    dd = np.diff(line); ss = np.where(np.isnan(dd), 0, np.sign(dd)).astype(np.int8)
+    idx = np.arange(len(ss)); nz = ss != 0
+    lastidx = np.maximum.accumulate(np.where(nz, idx, -1))          # last nonzero-sign index ≤ j
+    run = np.where(lastidx >= 0, ss[lastidx], 0).astype(np.int8)    # run sign through step j (0 pre-first)
+    prev = np.empty(len(ss), np.int8); prev[0] = 0; prev[1:] = run[:-1]   # run sign just before step j
+    flip[1:] = np.where(nz & (prev != 0) & (ss != prev), ss, 0).astype(np.int8)
     return flip
 
 
@@ -191,13 +194,17 @@ def _mage_rev(line, wob_n):
     confirmed only after wob_n consecutive same-direction steps (semantics-B: flats extend the run)."""
     if wob_n <= 0:
         return _slope_flip(line)
-    d = np.diff(line); out = np.zeros(len(line), np.int8); cur = 0
-    for k in range(1, len(line)):
-        s = d[k - 1]
-        cur = (cur + 1 if cur > 0 else 1) if s > 0 else (cur - 1 if cur < 0 else -1) if s < 0 else \
-              (cur + 1 if cur > 0 else cur - 1 if cur < 0 else 0)
-        if cur == wob_n: out[k] = 1
-        elif cur == -wob_n: out[k] = -1
+    n = len(line); out = np.zeros(n, np.int8)                       # vectorized (was O(N) loop; bit-exact)
+    if n < 2:
+        return out
+    dd = np.diff(line); ss = np.where(np.isnan(dd), 0, np.sign(dd)).astype(np.int8)   # NaN = flat (extends run)
+    idx = np.arange(len(ss)); nz = ss != 0
+    run = np.where(np.maximum.accumulate(np.where(nz, idx, -1)) >= 0,
+                   ss[np.maximum.accumulate(np.where(nz, idx, -1))], 0).astype(np.int8)
+    prevrun = np.empty(len(ss), np.int8); prevrun[0] = 0; prevrun[1:] = run[:-1]
+    startidx = np.maximum.accumulate(np.where(run != prevrun, idx, -1))   # last run-start (dir change/first)
+    cur = np.where(startidx >= 0, run * (idx - startidx + 1), 0)          # signed run-length (flats extend)
+    out[1:] = np.where(cur == wob_n, 1, np.where(cur == -wob_n, -1, 0)).astype(np.int8)
     return out
 
 
@@ -281,16 +288,21 @@ def oob_2_oob(line, hi, lo):
     """[AD·PRODUCER] Per bar: has `line` swept from the OPPOSITE OOB to THIS OOB with no return between?
     dir_hi[k] = came low→high directly (holds until it re-touches low); dir_lo = mirror. A causal impulse-leg
     / no-retracement detector (an ADX substitute) for the arm-delay big-leg gate (Joe 0704)."""
-    n = len(line); dh = dl = False; last = 0; DH = np.zeros(n, bool); DL = np.zeros(n, bool)
-    for k in range(n):
-        if line[k] >= hi:
-            if last == -1: dh = True
-            last = 1; dl = False
-        elif line[k] <= lo:
-            if last == 1: dl = True
-            last = -1; dh = False
-        DH[k] = dh; DL[k] = dl
-    return DH, DL
+    n = len(line); idx = np.arange(n)                              # vectorized (was O(N) loop; bit-exact)
+    th = line >= hi; tl = line <= lo                               # NaN → both False (carry state), as the loop
+    ext = np.where(th, 1, np.where(tl, -1, 0)).astype(np.int8)
+    fillidx = np.maximum.accumulate(np.where(ext != 0, idx, -1))
+    fill = np.where(fillidx >= 0, ext[fillidx], 0).astype(np.int8)
+    last_before = np.empty(n, np.int8)
+    if n:
+        last_before[0] = 0
+    if n > 1:
+        last_before[1:] = fill[:-1]                                # last extreme strictly before k
+    ls_dh = np.maximum.accumulate(np.where(th & (last_before == -1), idx, -1))   # dh SET at lo→hi
+    ls_dl = np.maximum.accumulate(np.where(tl & (last_before == 1), idx, -1))    # dl SET at hi→lo
+    lr_dh = np.maximum.accumulate(np.where(tl, idx, -1))                          # dh RESET at any lo touch
+    lr_dl = np.maximum.accumulate(np.where(th, idx, -1))                          # dl RESET at any hi touch
+    return ls_dh > lr_dh, ls_dl > lr_dl
 
 
 def bigleg_gate(W, cfg):
