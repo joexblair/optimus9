@@ -237,6 +237,7 @@ background-image:radial-gradient(1100px 520px at 82% -10%,rgba(47,214,190,.07),t
 .px{font-family:var(--mono);font-size:15px;font-weight:600}.sizing{display:flex;align-items:center;gap:9px;margin-left:6px}
 .seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:2px}.seg span{font-size:11.5px;color:var(--dim);padding:5px 11px;border-radius:4px;cursor:pointer}.seg span.on{background:var(--accent);color:#04120f;font-weight:600}
 .chip2{font-family:var(--mono);font-size:11.5px;color:var(--dim);border:1px solid var(--line);border-radius:5px;padding:4px 9px}.chip2 b{color:var(--ink)}
+.szin{width:56px;background:var(--bg);border:1px solid var(--line);color:var(--ink);font-family:var(--mono);font-size:11.5px;padding:2px 5px;border-radius:4px;text-align:right}.szin:focus{outline:1px solid var(--accent)}
 .spacer{flex:1}.kill{font:700 12px system-ui;letter-spacing:.05em;color:#fff;background:linear-gradient(180deg,#ff6b5f,#e33b30);border:1px solid #ff8a80;border-radius:6px;padding:7px 15px;cursor:pointer}
 .kill.resume{background:linear-gradient(180deg,#3fe08a,#1fb56a);border-color:#7ff0b5;color:#04120f}
 .bktog{display:none;font:600 11px system-ui;color:var(--accent);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:6px 10px;cursor:pointer}
@@ -276,7 +277,7 @@ td{padding:8px 14px;text-align:right;border-bottom:1px solid rgba(42,51,70,.5);w
 <header class="sliver panel"><span class=dot></span><span class=brand>o9<b>&middot;</b>live</span><span class=env>FAKE-API &middot; realtime</span>
  <span class="px num" id=px>&mdash;</span>
  <div class=sizing><span class=lbl>size</span><div class=seg id=seg><span data-m=smallest>Smallest</span><span data-m=fixed>Fixed</span><span data-m=dynamic5x>Dynamic 5&times;</span></div>
-  <span class=chip2>max <b id=maxo>&mdash;</b></span><span class=chip2>split <b id=split>&mdash;</b></span></div>
+  <span class=chip2>max <input class=szin id=maxo inputmode=numeric></span><span class=chip2>split <input class=szin id=split inputmode=numeric></span></div>
  <div class=spacer></div><button class=bktog id=bktog>Order book</button><button class=reset id=reset title="Reset the paper account on fakeAPI">Reset</button><button class=kill id=kill>&#9632; FLATTEN &amp; HALT</button></header>
 <div class="status panel">
  <div class=stat><span class=lbl>equity</span><span class="v num" id=eq>&mdash;</span></div>
@@ -373,7 +374,8 @@ function tick(){
   document.getElementById('dd').innerHTML=s.dd+'% <span style=color:#7C8699>/ '+s.dd_ref+'%</span>';document.getElementById('ddb').style.width=Math.min(100,s.dd/s.dd_ref*100)+'%';
   var cc=document.getElementById('casc'),stale=(s.feed.hb_age==null||s.feed.hb_age>15);
   cc.textContent=stale?'— no heartbeat':s.cascade.label;cc.className='chip '+(stale?'idle':s.cascade.tone);
-  document.getElementById('maxo').textContent=commas(s.sizing.max_order);document.getElementById('split').textContent=s.sizing.split;
+  var mo=document.getElementById('maxo');if(document.activeElement!==mo)mo.value=s.sizing.max_order;
+  var sp=document.getElementById('split');if(document.activeElement!==sp)sp.value=s.sizing.split;
   document.querySelectorAll('#seg span').forEach(el=>el.className=(el.dataset.m===s.sizing.mode?'on':''));
   document.getElementById('feed').innerHTML=buildFeed(s.feed);
   var k=document.getElementById('kill');if(s.halted){k.className='kill resume';k.textContent='▶ RESUME';}else{k.className='kill';k.innerHTML='&#9632; FLATTEN &amp; HALT';}
@@ -386,6 +388,9 @@ window.doExit=function(){if(confirm('Close the open position?'))post('/api/exit'
 document.getElementById('kill').onclick=function(){if(this.classList.contains('resume')){post('/api/resume').then(tick)}else if(confirm('FLATTEN & HALT — close everything and stop trading?')){post('/api/flatten').then(tick)}};
 document.getElementById('reset').onclick=function(){if(confirm('Reset the paper account?\n\nClears ALL trades & positions on fakeAPI, restores starting equity, and HALTS the loop (press Resume when ready).'))post('/api/reset').then(tick)};
 document.querySelectorAll('#seg span').forEach(el=>el.onclick=function(){post('/api/sizing?mode='+el.dataset.m).then(tick)});
+function szpost(k,v){if(v!==''&&!isNaN(v)&&Number(v)>0)post('/api/sizing?'+k+'='+encodeURIComponent(v)).then(tick)}
+document.getElementById('maxo').addEventListener('change',function(){szpost('max',this.value)});
+document.getElementById('split').addEventListener('change',function(){szpost('split',this.value)});
 document.getElementById('bktog').onclick=function(){document.getElementById('book').classList.toggle('open')};
 (function(){var cv=document.getElementById('cv');
  cv.addEventListener('mousemove',function(e){var r=cv.getBoundingClientRect();var m=findMark(e.clientX-r.left,e.clientY-r.top);cv.style.cursor=m?'pointer':'default';showTip(m);});
