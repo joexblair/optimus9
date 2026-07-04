@@ -7,7 +7,8 @@ sys.path.insert(0, '/home/joe/thecodes')
 import numpy as np
 import bias_machine as bm
 from optimus9.analysis.lr import lr_config
-from optimus9.analysis.lr_v2 import v2_arm, arm_delay, gate_open, v2_phase, oob_2_oob, bigleg_gate
+from optimus9.analysis.lr_v2 import (v2_arm, arm_delay, gate_open, v2_phase, oob_2_oob, bigleg_gate,
+                                     gate_signals, _mage_rev, _finisher_signal, s_qualify)
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from sweep_eval import BASE_BIAS
@@ -65,4 +66,44 @@ ch, cl = bigleg_gate(W, lr)
 print('  big-leg gate now: hi(long)=%s lo(short)=%s' % (bool(ch[T]), bool(cl[T])))
 ph = v2_phase(W, lr, 0)
 print('  cascade: %s [%s]' % (ph['label'], ph['tone']))
+
+# --- CASCADE FLOW (Joe's register: arm pulled out by prediction · which reversal we wait for · finisher latched-but-gated) ---
+bd = (1 if live and max(live, key=lambda s: s[0])[2] == 1 else -1) if live else 0
+sig = gate_signals(W, lr)
+rev5M = _mage_rev(np.asarray(W.line('s5M'), float), lr.arm_wob)          # arm-delay hold release
+revGate = sig['rev2M']                                                    # gate path-c (s1M/s2M) reversal
+revTrig = _mage_rev(np.asarray(W.line('gcs5M'), float), lr.fin_mage_wob)  # finisher trigger (gcs5M)
+q15 = s_qualify(W, lr, 's15m', 's15M', 's15r', lr.s15r_lb)
+q30 = s_qualify(W, lr, 's30m', 's30M', 's30r', lr.s30r_lb)
+
+
+def hhmm(t):
+    return time.strftime('%H:%M:%S', time.gmtime(int(t) / 1000))
+
+
+def last_toward(a, want, back=600):
+    return next((k for k in range(T, max(T - back, 0), -1) if a[k] == want), None)
+
+
+def q_side(q, bd, back=600):
+    arr = q[0] if bd == -1 else q[1]                                      # qhi=short-side, qlo=long-side
+    return next((k for k in range(T, max(T - back, 0), -1) if arr[k]), None)
+
+
+side = 'LONG' if bd == 1 else 'SHORT' if bd == -1 else '—'
+p3, p4 = sig['pred3'][T], sig['pred4'][T]
+r5 = last_toward(rev5M, bd); rg = last_toward(revGate, bd); rt = last_toward(revTrig, bd)
+q15k, q30k = q_side(q15, bd), q_side(q30, bd)
+
+
+def ago(k):
+    return 'none' if k is None else '%s (%d bars ago)' % (hhmm(ts[k]), T - k)
+
+
+print('  FLOW (arm=%s):' % side)
+print('    prediction pull now: s3r=%s s4r=%s' % (('%+d' % p3 if p3 else '—'), ('%+d' % p4 if p4 else '—')))
+print('    s5Mage reversal (arm-delay release): %s' % ago(r5))
+print('    s2Mage reversal (gate path-c open):  %s' % ago(rg))
+print('    s15a qualified: %s   s30a qualified: %s' % (ago(q15k), ago(q30k)))
+print('    gcs5M trigger (finisher fire): %s' % ago(rt))
 db.disconnect()
