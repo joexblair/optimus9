@@ -38,3 +38,7 @@ class O9Control:
 
     def resume(self):
         self.db.execute("UPDATE o9_control SET halted=0, updated_ms=%s WHERE ctl_id=1", (self._now(),))
+
+    def halt(self):                                          # stop trading (no close); clear any stale flatten
+        self.db.execute("UPDATE o9_control SET halted=1, flatten_req=0, updated_ms=%s WHERE ctl_id=1",
+                        (self._now(),))

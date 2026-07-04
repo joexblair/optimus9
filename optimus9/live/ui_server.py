@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dtm
 import os
 import time
+import urllib.request
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
@@ -18,6 +19,7 @@ from optimus9 import DatabaseManager
 from optimus9.live.feed import OrderBookFeed
 from optimus9.live.control import O9Control
 
+FAKEAPI = os.environ.get("O9_FAKEAPI_URL", "http://127.0.0.1:8098")
 START_EQUITY = float(os.environ.get("O9_START_EQUITY", "500"))
 DD_REF = float(os.environ.get("O9_DD_REF", "21.8"))
 SYMBOL = os.environ.get("O9_SYMBOL", "FARTCOINUSDT")
@@ -159,6 +161,29 @@ def resume():
     o9 = _db(); O9Control(o9).resume(); o9.disconnect(); return {"ok": True}
 
 
+@app.post("/api/reset")
+def reset_account():
+    """Reset the paper account. Clears o9's OWN store (ledger + decisions), restores equity to start,
+    tells the fakeAPI to clear its mock exchange (fx_*), and HALTS the loop (operator resumes when ready).
+    Durable by design: everything is MySQL rows — this is the deliberate wipe, nothing resets on restart."""
+    o9 = _db(); now = int(time.time() * 1000)
+    for t in ("o9_ledger", "o9_decision"):                          # o9's own trade/decision record
+        o9.execute("TRUNCATE TABLE %s" % t)
+    o9.execute("INSERT INTO o9_account (acct_id, equity, realized_total, trade_count, updated_ms) "
+               "VALUES (1,%s,0,0,%s) ON DUPLICATE KEY UPDATE equity=%s, realized_total=0, trade_count=0, "
+               "updated_ms=%s", (START_EQUITY, now, START_EQUITY, now))
+    O9Control(o9).halt()                                            # stop trading on the fresh account
+    o9.disconnect()
+    fakeapi_ok = False
+    try:                                                            # fakeAPI owns fx_* → it resets its own
+        req = urllib.request.Request(FAKEAPI + "/dev/reset", method="POST")
+        with urllib.request.urlopen(req, timeout=5) as r:
+            fakeapi_ok = (r.status == 200)
+    except Exception:
+        fakeapi_ok = False
+    return {"ok": True, "equity": START_EQUITY, "fakeapi_reset": fakeapi_ok, "halted": True}
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
     return _PAGE
@@ -185,6 +210,7 @@ background-image:radial-gradient(1100px 520px at 82% -10%,rgba(47,214,190,.07),t
 .spacer{flex:1}.kill{font:700 12px system-ui;letter-spacing:.05em;color:#fff;background:linear-gradient(180deg,#ff6b5f,#e33b30);border:1px solid #ff8a80;border-radius:6px;padding:7px 15px;cursor:pointer}
 .kill.resume{background:linear-gradient(180deg,#3fe08a,#1fb56a);border-color:#7ff0b5;color:#04120f}
 .bktog{display:none;font:600 11px system-ui;color:var(--accent);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:6px 10px;cursor:pointer}
+.reset{font:600 11px system-ui;color:var(--warn);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 12px;margin-right:6px;cursor:pointer}.reset:hover{border-color:var(--warn)}
 .status{display:flex;align-items:stretch;overflow-x:auto}
 .stat{display:flex;flex-direction:column;gap:3px;padding:9px 14px;border-right:1px solid var(--line);justify-content:center;white-space:nowrap}.stat .v{font-family:var(--mono);font-size:15px;font-weight:600}
 .feed{display:flex;gap:12px}.feed i{font-style:normal;display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11.5px;color:var(--dim)}
@@ -215,7 +241,7 @@ td{padding:8px 14px;text-align:right;border-bottom:1px solid rgba(42,51,70,.5);w
  <span class="px num" id=px>&mdash;</span>
  <div class=sizing><span class=lbl>size</span><div class=seg id=seg><span data-m=smallest>Smallest</span><span data-m=fixed>Fixed</span><span data-m=dynamic5x>Dynamic 5&times;</span></div>
   <span class=chip2>max <b id=maxo>&mdash;</b></span><span class=chip2>split <b id=split>&mdash;</b></span></div>
- <div class=spacer></div><button class=bktog id=bktog>Order book</button><button class=kill id=kill>&#9632; FLATTEN &amp; HALT</button></header>
+ <div class=spacer></div><button class=bktog id=bktog>Order book</button><button class=reset id=reset title="Reset the paper account on fakeAPI">Reset</button><button class=kill id=kill>&#9632; FLATTEN &amp; HALT</button></header>
 <div class="status panel">
  <div class=stat><span class=lbl>equity</span><span class="v num" id=eq>&mdash;</span></div>
  <div class=stat><span class=lbl>day pnl</span><span class="v num" id=day>&mdash;</span></div>
@@ -288,6 +314,7 @@ function tick(){
  })}
 window.doExit=function(){if(confirm('Close the open position?'))post('/api/exit').then(tick)};
 document.getElementById('kill').onclick=function(){if(this.classList.contains('resume')){post('/api/resume').then(tick)}else if(confirm('FLATTEN & HALT — close everything and stop trading?')){post('/api/flatten').then(tick)}};
+document.getElementById('reset').onclick=function(){if(confirm('Reset the paper account?\n\nClears ALL trades & positions on fakeAPI, restores starting equity, and HALTS the loop (press Resume when ready).'))post('/api/reset').then(tick)};
 document.querySelectorAll('#seg span').forEach(el=>el.onclick=function(){post('/api/sizing?mode='+el.dataset.m).then(tick)});
 document.getElementById('bktog').onclick=function(){document.getElementById('book').classList.toggle('open')};
 tick();setInterval(tick,1500);

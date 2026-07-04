@@ -132,3 +132,18 @@ async def dev_book(request: Request):
     body = await request.json()
     LIVE_BOOK[body["symbol"]] = {"bids": body["bids"], "asks": body["asks"]}
     return {"ok": True}
+
+
+@app.post("/dev/reset")
+async def dev_reset():
+    """Dev/ops — reset this mock exchange's OWN state (fx_order/fill/position). The engine is stateless
+    (re-reads FxStore per order) so a TRUNCATE is a full reset — no engine rebuild. o9's ledger/account
+    is o9's own store; the UI reset handler clears that side and calls this."""
+    from optimus9.config import get_db_config
+    from optimus9 import DatabaseManager
+    db = DatabaseManager(**get_db_config()); db.connect()            # PK_DB_NAME=o9_live in the container env
+    tables = ("fx_fill", "fx_order", "fx_position")                 # fixed names (DDL can't be parameterized)
+    for t in tables:
+        db.execute("TRUNCATE TABLE %s" % t)
+    db.disconnect()
+    return {"ok": True, "reset": list(tables)}
