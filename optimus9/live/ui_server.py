@@ -244,7 +244,7 @@ background-image:radial-gradient(1100px 520px at 82% -10%,rgba(47,214,190,.07),t
 .reset{font:600 11px system-ui;color:var(--warn);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 12px;margin-right:6px;cursor:pointer}.reset:hover{border-color:var(--warn)}
 .status{display:flex;align-items:stretch;overflow-x:auto}
 .stat{display:flex;flex-direction:column;gap:3px;padding:9px 14px;border-right:1px solid var(--line);justify-content:center;white-space:nowrap}.stat .v{font-family:var(--mono);font-size:15px;font-weight:600}
-.feed{display:flex;gap:7px 12px;flex-wrap:wrap;max-width:360px}.feed i{font-style:normal;display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;color:var(--dim)}
+.feed{display:flex;gap:8px 15px;flex-wrap:wrap;max-width:520px}.feed i{font-style:normal;display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:12px;color:var(--dim)}
 .fdot{width:6px;height:6px;border-radius:50%;background:var(--long)}.fdot.warn{background:var(--warn)}.fdot.bad{background:var(--short)}
 .casc{margin-left:auto;border-right:0;align-items:flex-end}.chip{font-family:var(--mono);font-size:11.5px;padding:4px 10px;border-radius:5px;background:rgba(47,214,190,.14);color:var(--accent);border:1px solid rgba(47,214,190,.34)}
 .chip.wait{background:rgba(245,166,35,.14);color:var(--warn);border-color:rgba(245,166,35,.34)}
