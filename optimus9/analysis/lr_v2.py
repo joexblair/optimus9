@@ -102,7 +102,7 @@ def gate_open(W, cfg, setups, sig=None):
     sig = sig or gate_signals(W, cfg)
     out = []
     for (i, es, bd, cap, src) in setups:
-        p3 = p4 = b3 = b4 = False; xin2 = xin3 = xin4 = False; opened = None
+        p3 = p4 = b3 = b4 = rtr = False; xin2 = xin3 = xin4 = False; opened = None
         for k in range(i + 1, cap):
             if sig['oob2'][k - 1] and not sig['oob2'][k]: xin2 = True                 # s2r crossed OOB→IB
             if sig['oob3'][k - 1] and not sig['oob3'][k]: xin3 = True
@@ -115,7 +115,9 @@ def gate_open(W, cfg, setups, sig=None):
             if p4 and sig['brc4'][k] == es: b4 = True
             if (p3 and not b3 and sig['rev3r'][k] == bd) or (p4 and not b4 and sig['rev4r'][k] == bd):
                 opened = (k, 'b'); break                                             # (b) reverse before breach
-            rtr = b3 or b4 or (not p3 and not p4 and (sig['rev3m'][k] == bd or sig['rev4m'][k] == bd))
+            # rtr is a LATCH (Joe 0703): once ready-to-reverse is signalled it PERSISTS, so s2Mage is free to
+            # reverse and open the gate on ANY later bar (not a same-bar coincidence). The LTF finishers then time the entry.
+            rtr = rtr or b3 or b4 or (not p3 and not p4 and (sig['rev3m'][k] == bd or sig['rev4m'][k] == bd))
             if rtr and sig['rev2M'][k] == bd:                                        # (c) ready-to-reverse → s2Mage
                 opened = (k, 'c'); break
         if opened:
@@ -166,16 +168,82 @@ def _finish(s30hi, s30lo, s15hi, s15lo, side, anchor, release, cap):
     return None
 
 
-def finisher(W, cfg, opens, rlb=19):
+def finisher(W, cfg, opens):
     """[4] FINISHER (LATCH model) — ENTRY caller of the shared `_finish` core: latch s30a+s15a on the es side
     from the ARM (i), delatch at the gate-open (ok). s30M is just a component of the s30a latch (no separate wob
-    trigger). NO drop — every gate-open trades once both latch. Returns [(trade_ms, es, bd, trade_k)]."""
+    trigger). NO drop — every gate-open trades once both latch. Returns [(trade_ms, es, bd, trade_k)].
+    r-lookback split (Joe 0703): s30a honours cfg.s30r_lb, s15a honours cfg.s15r_lb — two independent DB knobs
+    (lp_s30r_lb / lp_s15r_lb), how far back each scans for a same-side r breach."""
     ts = W.ts
-    s30hi, s30lo = _finisher_signal(W, cfg, 's30M', 's30m', 's30r', rlb, 30)
-    s15hi, s15lo = _finisher_signal(W, cfg, 's15M', 's15m', 's15r', rlb, 15)
+    s30hi, s30lo = _finisher_signal(W, cfg, 's30M', 's30m', 's30r', cfg.s30r_lb, 30)
+    s15hi, s15lo = _finisher_signal(W, cfg, 's15M', 's15m', 's15r', cfg.s15r_lb, 15)
     ent = []
     for (i, es, bd, ok, r, cap) in opens:
         tk = _finish(s30hi, s30lo, s15hi, s15lo, es, i, ok, cap)
+        if tk is not None:
+            ent.append((int(ts[tk]), es, bd, tk))
+    return ent
+
+
+def _mage_rev(line, wob_n):
+    """Boundary-agnostic reversal detector. wob_n<=0 → slope-flip (first turn); wob_n>=1 → the turn is
+    confirmed only after wob_n consecutive same-direction steps (semantics-B: flats extend the run)."""
+    if wob_n <= 0:
+        return _slope_flip(line)
+    d = np.diff(line); out = np.zeros(len(line), np.int8); cur = 0
+    for k in range(1, len(line)):
+        s = d[k - 1]
+        cur = (cur + 1 if cur > 0 else 1) if s > 0 else (cur - 1 if cur < 0 else -1) if s < 0 else \
+              (cur + 1 if cur > 0 else cur - 1 if cur < 0 else 0)
+        if cur == wob_n: out[k] = 1
+        elif cur == -wob_n: out[k] = -1
+    return out
+
+
+def s_qualify(W, cfg, mn, Mn, rn, r_lb):
+    """[4v2·PRODUCER] Mage-anchored qualify for one TF line-set (Joe 0704). s{TF}a qualifies at the s{TF}Mage
+    reversal (wob cfg.fin_mage_wob) toward the trade side, with m OOB (+ M OOB unless cfg.fin_s30M_oob=0 →
+    m-only) and a same-side OOB r within r_lb base-bars back. Returns (qhi, qlo): es-high (bd short) / es-low
+    (bd long) qualify bars. value_mode-honoured via W.line (emerging = causal)."""
+    m, M, r = W.line(mn), W.line(Mn), W.line(rn)
+    revM = _mage_rev(M, cfg.fin_mage_wob); hi, lo = cfg.hi, cfg.lo; strict = bool(cfg.fin_s30M_oob)
+    n = len(M); qhi = np.zeros(n, bool); qlo = np.zeros(n, bool); r_hi, r_lo = r >= hi, r <= lo
+    for k in range(n):
+        if revM[k] == -1 and m[k] >= hi and (M[k] >= hi or not strict) and r_hi[max(0, k - r_lb):k + 1].any():
+            qhi[k] = True
+        if revM[k] == 1 and m[k] <= lo and (M[k] <= lo or not strict) and r_lo[max(0, k - r_lb):k + 1].any():
+            qlo[k] = True
+    return qhi, qlo
+
+
+def q1_gate(qA, qB, w0, w1):
+    """[4v2·VERDICT] Ordered latch — both A (fast/LTF) and B (slow/HTF) must qualify in [w0,w1). Returns the
+    Q1-complete bar = max of the two first-qualifies (LTF banks first, HTF completes it), or None."""
+    jA = next((k for k in range(w0, w1) if qA[k]), None)
+    jB = next((k for k in range(w0, w1) if qB[k]), None)
+    return max(jA, jB) if (jA is not None and jB is not None) else None
+
+
+def fin_trigger(revT, bd, q1, cap):
+    """[4v2·VERDICT] First reversal on the trigger line toward bd at/after Q1 → the entry bar (or None)."""
+    return next((k for k in range(q1, cap) if revT[k] == bd), None)
+
+
+def finisher_v2(W, cfg, opens, trig_line='gcs5M'):
+    """[4v2·WIRE] Mage-anchored ordered-qualify finisher (Joe 0704). Q1 = s15a banks → s30a (ordered latch,
+    each honouring its own r_lb); trigger = a reversal on `trig_line` toward bd after Q1. trig_line = DATA
+    (gcs5M now; gcs1M post-1s-tape — never baked). Returns [(trade_ms, es, bd, trade_k)]; caller dedups."""
+    ts = W.ts
+    q15h, q15l = s_qualify(W, cfg, 's15m', 's15M', 's15r', cfg.s15r_lb)
+    q30h, q30l = s_qualify(W, cfg, 's30m', 's30M', 's30r', cfg.s30r_lb)
+    revT = _mage_rev(W.line(trig_line), cfg.fin_mage_wob)
+    ent = []
+    for (i, es, bd, ok, r, cap) in opens:
+        qA, qB = (q15h, q30h) if es == 1 else (q15l, q30l)
+        q1 = q1_gate(qA, qB, max(0, ok - cfg.fin_lb), min(cap, ok + cfg.fin_fwd))
+        if q1 is None:
+            continue
+        tk = fin_trigger(revT, bd, q1, cap)
         if tk is not None:
             ent.append((int(ts[tk]), es, bd, tk))
     return ent

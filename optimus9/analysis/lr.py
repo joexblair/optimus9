@@ -46,9 +46,10 @@ class Gate:
 @dataclass
 class LRConfig:
     floor: float; wob_n: int; horizon: int; target: float
-    swing_ms: int; swing_pct: float; bias_mid: float; s30r_lb: int
+    swing_ms: int; swing_pct: float; bias_mid: float; s30r_lb: int; s15r_lb: int
     hi: float; lo: float
     exit_rlb: int = 22; sl: float = 0.5; curl_n: int = 1
+    fin_mage_wob: int = 0; fin_s30M_oob: int = 1; fin_lb: int = 42; fin_fwd: int = 12
     arms: list = field(default_factory=list)
     finishers: list = field(default_factory=list)
     gates: list = field(default_factory=list)
@@ -70,8 +71,9 @@ def lr_config(db):
     exit_finishers = ALL finisher gates (active+inactive) — the exit ANDs them regardless of entry-active."""
     k = {r['name']: r['val'] for r in db.execute(
         "SELECT name, val FROM lp_config WHERE name IN ('lp_lr_floor','lp_lr_wob_n','lp_lr_horizon',"
-        "'lp_lr_target','lp_lr_swing_ms','lp_lr_swing_pct','lp_lr_bias_mid','lp_s30r_lb',"
-        "'lp_lr_exit_rlb','lp_lr_sl','lp_lr_curl_n')", fetch=True)}
+        "'lp_lr_target','lp_lr_swing_ms','lp_lr_swing_pct','lp_lr_bias_mid','lp_s30r_lb','lp_s15r_lb',"
+        "'lp_lr_exit_rlb','lp_lr_sl','lp_lr_curl_n',"
+        "'lp_fin_mage_wob','lp_fin_s30M_oob','lp_fin_lb','lp_fin_fwd')", fetch=True)}
     sb = db.execute("SELECT hi_boundary, lo_boundary FROM optimus9_system LIMIT 1", fetch=True)[0]
     roles = {'arm': [], 'finisher': [], 'gate': []}
     for g in db.execute("SELECT * FROM lr_gate WHERE lrg_active=1", fetch=True):
@@ -83,8 +85,11 @@ def lr_config(db):
         horizon=int(k.get('lp_lr_horizon', HORIZON)), target=k.get('lp_lr_target', TARGET),
         swing_ms=int(k.get('lp_lr_swing_ms', STEP)), swing_pct=k.get('lp_lr_swing_pct', 0.9),
         bias_mid=k.get('lp_lr_bias_mid', 50.0), s30r_lb=int(k.get('lp_s30r_lb', 0)),
+        s15r_lb=int(k.get('lp_s15r_lb', k.get('lp_s30r_lb', 0))),
         exit_rlb=int(k.get('lp_lr_exit_rlb', 22)), sl=float(k.get('lp_lr_sl', 0.5)),
         curl_n=int(k.get('lp_lr_curl_n', 1)),
+        fin_mage_wob=int(k.get('lp_fin_mage_wob', 0)), fin_s30M_oob=int(k.get('lp_fin_s30M_oob', 1)),
+        fin_lb=int(k.get('lp_fin_lb', 42)), fin_fwd=int(k.get('lp_fin_fwd', 12)),
         hi=float(sb['hi_boundary']), lo=float(sb['lo_boundary']),
         arms=roles['arm'], finishers=roles['finisher'], gates=roles['gate'], exit_finishers=exit_fins)
 
