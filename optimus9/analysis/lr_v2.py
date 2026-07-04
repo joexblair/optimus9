@@ -342,19 +342,43 @@ def arm_delay(W, cfg, setups):
     return out
 
 
+def fin_unlatch(q15, q30, i, cap, fin_lb, fin_fwd):
+    """[4v2·M1] Finisher lookback on arm unlatch (Joe 0704). If s15a AND s30a were both qualified in the
+    proximal box [unlatch-fin_lb, unlatch+fin_fwd], the trade fires on the NEXT same-side s15a at/after the
+    unlatch (the unlatch bar itself isn't an optimal entry). Returns the trade bar, or None."""
+    w0, w1 = max(0, i - fin_lb), min(cap, i + fin_fwd + 1)
+    if q15[w0:w1].any() and q30[w0:w1].any():
+        return next((k for k in range(i, cap) if q15[k]), None)
+    return None
+
+
+def fin_gate(q15, q30, ok, cap):
+    """[4v2·M2] Post-s3s4-gate finisher (Joe 0704). After the s3s4 gate opens (ok), the finishers get a chance
+    with NO time limit (until the arm cancels = cap); trade the bar BOTH s15a + s30a are qualified. Returns the
+    trade bar, or None. (No gcs5M trigger — 'trade when they qualify'.)"""
+    j15 = next((k for k in range(ok, cap) if q15[k]), None)
+    j30 = next((k for k in range(ok, cap) if q30[k]), None)
+    return max(j15, j30) if (j15 is not None and j30 is not None) else None
+
+
 def v2_walk_ad(W, cfg):
-    """[5·AD·WIRE] The arm-delay stack (Joe 0704, the o9-live shipping producer): arm → arm_delay (big-leg →
-    s5Mage reversal) → gate_open → finisher_v2(window per cfg.fin_both) → gcs5M trigger. Dedup by trade bar.
-    cfg.arm_bigleg=0 disables the delay · cfg.fin_both=1 uses both finisher windows (union)."""
+    """[5·AD·WIRE] The arm-delay stack (Joe 0704, o9-live producer): arm → arm_delay-s7r (big-leg → s5Mage
+    reversal / unlatch) → per arm: M1 finisher-lookback-on-arm-unlatch, else (if the s3s4 gate opened) M2
+    post-gate finisher. Trade placed on the next same-side s15a (M1) / both-qualified bar (M2). Dedup by bar."""
     setups = v2_arm(W, cfg)
     if cfg.arm_bigleg:
         setups = arm_delay(W, cfg, setups)
-    sig = gate_signals(W, cfg)
-    win = 'both' if cfg.fin_both else 'lookback'
-    seen, out = set(), []
-    for e in finisher_v2(W, cfg, gate_open(W, cfg, setups, sig), 'gcs5M', win):
-        if e[3] not in seen:
-            seen.add(e[3]); out.append(e)
+    opens = {o[0]: o for o in gate_open(W, cfg, setups)}                  # arm bar -> gate-open tuple
+    q15h, q15l = s_qualify(W, cfg, 's15m', 's15M', 's15r', cfg.s15r_lb)
+    q30h, q30l = s_qualify(W, cfg, 's30m', 's30M', 's30r', cfg.s30r_lb)
+    ts = W.ts; seen, out = set(), []
+    for (i, es, bd, cap, src) in setups:
+        q15, q30 = (q15h, q30h) if es == 1 else (q15l, q30l)             # qhi = short-side, qlo = long-side
+        tk = fin_unlatch(q15, q30, i, cap, cfg.fin_lb, cfg.fin_fwd)      # M1
+        if tk is None and i in opens:
+            tk = fin_gate(q15, q30, opens[i][3], cap)                    # M2 (only if M1 didn't fire)
+        if tk is not None and tk not in seen:
+            seen.add(tk); out.append((int(ts[tk]), es, bd, tk))
     return out
 
 
