@@ -113,13 +113,16 @@ def chart(bars: int = 150):
     ks = dev.execute("SELECT kc_timestamp t, kc_close c FROM kline_collection WHERE kc_tp_pk="
                      "(SELECT tp_pk FROM trading_pairs WHERE tp_symbol_bybit=%s) "
                      "ORDER BY kc_timestamp DESC LIMIT %s", (SYMBOL, bars), fetch=True)
-    trs = o9.execute("SELECT side, entry_px, exit_px, opened_ms, closed_ms FROM o9_ledger ORDER BY led_id", fetch=True)
+    trs = o9.execute("SELECT side, qty, entry_px, exit_px, net, reason, opened_ms, closed_ms "
+                     "FROM o9_ledger ORDER BY led_id", fetch=True)
     dev.disconnect(); o9.disconnect()
     mk = []
-    for t in trs:
-        mk.append({"t": int(t["opened_ms"]), "px": float(t["entry_px"]), "kind": "entry"})
+    for t in trs:                                                    # markers carry tooltip fields (hover)
+        mk.append({"t": int(t["opened_ms"]), "px": float(t["entry_px"]), "kind": "entry",
+                   "side": t["side"], "qty": float(t["qty"]), "reason": t["reason"] or ""})
         if t["closed_ms"]:
-            mk.append({"t": int(t["closed_ms"]), "px": float(t["exit_px"] or 0), "kind": "exit"})
+            mk.append({"t": int(t["closed_ms"]), "px": float(t["exit_px"] or 0), "kind": "exit",
+                       "side": t["side"], "net": round(float(t["net"] or 0), 2), "reason": t["reason"] or ""})
     return {"series": [[int(k["t"]), float(k["c"])] for k in reversed(ks)], "markers": mk}
 
 
@@ -221,6 +224,10 @@ background-image:radial-gradient(1100px 520px at 82% -10%,rgba(47,214,190,.07),t
 .main{flex:1;display:flex;flex-direction:column;gap:8px;min-height:0}
 .chart{height:24%;min-height:120px;position:relative;padding:10px}canvas{position:absolute;inset:10px;width:calc(100% - 20px);height:calc(100% - 20px)}
 .chleg{position:absolute;left:14px;bottom:8px;display:flex;gap:14px;font-size:10.5px;color:var(--dim);z-index:2}
+.mtip{position:absolute;z-index:6;pointer-events:none;opacity:0;transform:translateY(3px);transition:opacity .12s,transform .12s;background:rgba(18,23,36,.97);border:1px solid var(--line);border-radius:6px;padding:7px 10px;font-family:var(--mono);font-size:11px;line-height:1.55;white-space:nowrap;box-shadow:0 8px 26px rgba(0,0,0,.45)}
+.mtip.show{opacity:1;transform:translateY(0)}
+.mtip .hd{font-family:system-ui;font-weight:600;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px}
+.mtip .k{color:var(--faint)}
 .posw{flex:1;display:flex;flex-direction:column;min-height:90px}.hist{height:30%;min-height:120px;display:flex;flex-direction:column}
 .ph{display:flex;gap:10px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line)}.ph h2{margin:0;font-size:13px}.ph .c{font-family:var(--mono);font-size:11.5px;color:var(--dim)}
 .scroll{overflow:auto;flex:1}table{width:100%;min-width:560px;border-collapse:collapse;font-family:var(--mono);font-size:12px}
@@ -251,7 +258,7 @@ td{padding:8px 14px;text-align:right;border-bottom:1px solid rgba(42,51,70,.5);w
  <div class="stat casc"><span class=lbl>cascade state</span><span class=chip id=casc>&mdash;</span></div></div>
 <div class=body>
  <div class=main>
-  <div class="chart panel"><canvas id=cv></canvas><div class=chleg><span style=color:var(--short)>&#9660; entry</span><span style=color:var(--long)>&#9650; exit</span><span style=color:var(--accent)>&mdash; price</span></div></div>
+  <div class="chart panel"><canvas id=cv></canvas><div class=mtip id=mtip></div><div class=chleg><span style=color:var(--short)>&#9660; entry</span><span style=color:var(--long)>&#9650; exit</span><span style=color:var(--accent)>&mdash; price</span></div></div>
   <div class="posw panel"><div class=ph><h2>Open positions</h2><span class=c id=pc>&mdash;</span></div>
    <div class=scroll><table><thead><tr><th class=l>Side</th><th>Size</th><th>Entry</th><th>Mark</th><th>Unreal $</th><th>Unreal %</th><th>Age</th><th></th></tr></thead><tbody id=pb></tbody></table>
    <div class=empty id=pe>flat &mdash; no open positions</div></div></div>
@@ -268,7 +275,7 @@ function commas(v){return Math.round(v).toLocaleString()}
 function hhmm(ms){return new Date(ms).toISOString().slice(5,19).replace('T',' ')}
 function fdot(a){return a==null?'bad':a>12?'bad':a>6?'warn':''}
 function post(u){return fetch(u,{method:'POST'})}
-var CH={series:[],markers:[]};
+var CH={series:[],markers:[]},HOV=null;
 function drawChart(){var cv=document.getElementById('cv'),ctx=cv.getContext('2d'),w=cv.width=cv.clientWidth,h=cv.height=cv.clientHeight;
  var s=CH.series;if(s.length<2)return;var ys=s.map(p=>p[1]),lo=Math.min.apply(0,ys),hi=Math.max.apply(0,ys),pad=(hi-lo)*.12||1e-4;lo-=pad;hi+=pad;
  var t0=s[0][0],t1=s[s.length-1][0],X=t=>(t-t0)/(t1-t0||1)*w,Y=v=>h-(v-lo)/(hi-lo)*h;
@@ -277,11 +284,26 @@ function drawChart(){var cv=document.getElementById('cv'),ctx=cv.getContext('2d'
  ctx.beginPath();ctx.moveTo(X(s[0][0]),Y(s[0][1]));s.forEach(p=>ctx.lineTo(X(p[0]),Y(p[1])));ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.fillStyle=gr;ctx.fill();
  ctx.beginPath();ctx.moveTo(X(s[0][0]),Y(s[0][1]));s.forEach(p=>ctx.lineTo(X(p[0]),Y(p[1])));ctx.strokeStyle='#2FD6BE';ctx.lineWidth=1.6;ctx.stroke();
  var lp=s[s.length-1];ctx.beginPath();ctx.arc(X(lp[0]),Y(lp[1]),3,0,7);ctx.fillStyle='#2FD6BE';ctx.fill();
- CH.markers.forEach(function(m){if(m.t<t0)return;var x=X(m.t),y=Y(m.px),up=m.kind=='exit';ctx.beginPath();
+ CH.markers.forEach(function(m){if(m.t<t0)return;var x=X(m.t),y=Y(m.px),up=m.kind=='exit';m._x=x;m._y=up?y+13:y-13;ctx.beginPath();
   if(up){ctx.moveTo(x,y+9);ctx.lineTo(x-5,y+17);ctx.lineTo(x+5,y+17)}else{ctx.moveTo(x,y-9);ctx.lineTo(x-5,y-17);ctx.lineTo(x+5,y-17)}
-  ctx.closePath();ctx.fillStyle=up?'#33D17A':'#FF5D5D';ctx.fill()})}
+  ctx.closePath();ctx.fillStyle=up?'#33D17A':'#FF5D5D';ctx.fill();
+  if(m===HOV){ctx.beginPath();ctx.arc(x,m._y,11,0,7);ctx.strokeStyle=up?'#33D17A':'#FF5D5D';ctx.globalAlpha=.7;ctx.lineWidth=1.4;ctx.stroke();ctx.globalAlpha=1}})}
+function tipRows(m){var tm=hhmm(m.t).slice(6);
+ if(m.kind=='entry')return[['time',tm],['side',m.side],['size',commas(m.qty)],['fill',m.px.toFixed(5)]];
+ return[['time',tm],['fill',m.px.toFixed(5)],['net',money(m.net)],['reason',m.reason||'—']];}
+function findMark(px,py){var best=null,bd=18;CH.markers.forEach(function(m){if(m._x==null)return;var d=Math.hypot(px-m._x,py-m._y);if(d<bd){bd=d;best=m}});return best;}
+function showTip(m){HOV=m;drawChart();var mt=document.getElementById('mtip');
+ if(!m){mt.classList.remove('show');return;}
+ var cl=m.kind=='exit'?'#33D17A':'#FF5D5D';
+ mt.innerHTML="<div class=hd style='color:"+cl+"'>"+(m.kind=='exit'?'Exit':'Entry')+"</div>"+tipRows(m).map(function(r){
+   var v=r[1],c='';if(/^\+\$/.test(v))c=" style='color:#33D17A'";else if(/^-\$/.test(v))c=" style='color:#FF5D5D'";
+   return "<span class=k>"+r[0]+"</span>&nbsp;&nbsp;<span"+c+">"+v+"</span>";}).join('<br>');
+ mt.classList.add('show');
+ var cv=document.getElementById('cv'),cw=cv.clientWidth,ch=cv.clientHeight,tw=mt.offsetWidth,th=mt.offsetHeight;
+ mt.style.left=(cv.offsetLeft+Math.min(Math.max(0,m._x+14),cw-tw))+'px';
+ mt.style.top=(cv.offsetTop+Math.min(Math.max(0,m._y-th-8),ch-th))+'px';}
 function tick(){
- fetch('/api/chart').then(r=>r.json()).then(c=>{CH=c;drawChart()});
+ fetch('/api/chart').then(r=>r.json()).then(c=>{CH=c;if(HOV)HOV=CH.markers.filter(function(m){return m.t==HOV.t&&m.kind==HOV.kind})[0]||null;showTip(HOV);});
  fetch('/api/book').then(r=>r.json()).then(function(b){
   document.getElementById('spr').textContent=b.spread_bps!=null?b.spread_bps+'bps':'—';
   document.getElementById('bmid').textContent=b.mid?b.mid.toFixed(5):'—';
@@ -317,5 +339,9 @@ document.getElementById('kill').onclick=function(){if(this.classList.contains('r
 document.getElementById('reset').onclick=function(){if(confirm('Reset the paper account?\n\nClears ALL trades & positions on fakeAPI, restores starting equity, and HALTS the loop (press Resume when ready).'))post('/api/reset').then(tick)};
 document.querySelectorAll('#seg span').forEach(el=>el.onclick=function(){post('/api/sizing?mode='+el.dataset.m).then(tick)});
 document.getElementById('bktog').onclick=function(){document.getElementById('book').classList.toggle('open')};
+(function(){var cv=document.getElementById('cv');
+ cv.addEventListener('mousemove',function(e){var r=cv.getBoundingClientRect();var m=findMark(e.clientX-r.left,e.clientY-r.top);cv.style.cursor=m?'pointer':'default';showTip(m);});
+ cv.addEventListener('mouseleave',function(){showTip(null);});
+ cv.addEventListener('touchstart',function(e){var t=e.touches[0],r=cv.getBoundingClientRect();var m=findMark(t.clientX-r.left,t.clientY-r.top);if(m){e.preventDefault();showTip(m);}else showTip(null);},{passive:false});})();
 tick();setInterval(tick,1500);
 </script></body></html>"""
