@@ -70,7 +70,8 @@ print('  cascade: %s [%s]' % (ph['label'], ph['tone']))
 # --- CASCADE FLOW (Joe's register: arm pulled out by prediction · which reversal we wait for · finisher latched-but-gated) ---
 bd = (1 if live and max(live, key=lambda s: s[0])[2] == 1 else -1) if live else 0
 sig = gate_signals(W, lr)
-rev5M = _mage_rev(np.asarray(W.line('s5M'), float), lr.arm_wob)          # arm-delay hold release
+rev5M = _mage_rev(np.asarray(W.line('s5M'), float), lr.arm_wob)          # arm-delay hold release (fast tide)
+rev7M = _mage_rev(np.asarray(W.line('s7M'), float), lr.arm_wob)          # slow tide — Joe's high-conf tell
 revGate = sig['rev2M']                                                    # gate path-c (s1M/s2M) reversal
 revTrig = _mage_rev(np.asarray(W.line('gcs5M'), float), lr.fin_mage_wob)  # finisher trigger (gcs5M)
 q15 = s_qualify(W, lr, 's15m', 's15M', 's15r', lr.s15r_lb)
@@ -102,7 +103,10 @@ def ago(k):
 
 print('  FLOW (arm=%s):' % side)
 print('    prediction pull now: s3r=%s s4r=%s' % (('%+d' % p3 if p3 else '—'), ('%+d' % p4 if p4 else '—')))
-print('    s5Mage reversal (arm-delay release): %s' % ago(r5))
+r7 = last_toward(rev7M, bd)
+print('    s5Mage reversal (fast tide / arm-delay release): %s' % ago(r5))
+print('    s7Mage reversal (SLOW tide — high-conf tell): %s%s' % (ago(r7),
+      '   <- BOTH tides reversed = strong turn' if (r5 is not None and r7 is not None) else ''))
 print('    s2Mage reversal (gate path-c open):  %s' % ago(rg))
 print('    s15a qualified: %s   s30a qualified: %s' % (ago(q15k), ago(q30k)))
 print('    gcs5M trigger (finisher fire): %s' % ago(rt))
