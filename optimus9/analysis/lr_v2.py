@@ -214,12 +214,13 @@ def s_qualify(W, cfg, mn, Mn, rn, r_lb):
     m-only) and a same-side OOB r within r_lb base-bars back. Returns (qhi, qlo): es-high (bd short) / es-low
     (bd long) qualify bars. value_mode-honoured via W.line (emerging = causal)."""
     m, M, r = W.line(mn), W.line(Mn), W.line(rn)
+    rlb = r_lb * (W._ls.resolve(rn)[0] // 5)          # r_lb is in the r-line's OWN TF bars → convert to base(5s) bars
     revM = _mage_rev(M, cfg.fin_mage_wob); hi, lo = cfg.hi, cfg.lo; strict = bool(cfg.fin_s30M_oob)
     n = len(M); qhi = np.zeros(n, bool); qlo = np.zeros(n, bool); r_hi, r_lo = r >= hi, r <= lo
     for k in range(n):
-        if revM[k] == -1 and m[k] >= hi and (M[k] >= hi or not strict) and r_hi[max(0, k - r_lb):k + 1].any():
+        if revM[k] == -1 and m[k] >= hi and (M[k] >= hi or not strict) and r_hi[max(0, k - rlb):k + 1].any():
             qhi[k] = True
-        if revM[k] == 1 and m[k] <= lo and (M[k] <= lo or not strict) and r_lo[max(0, k - r_lb):k + 1].any():
+        if revM[k] == 1 and m[k] <= lo and (M[k] <= lo or not strict) and r_lo[max(0, k - rlb):k + 1].any():
             qlo[k] = True
     return qhi, qlo
 
