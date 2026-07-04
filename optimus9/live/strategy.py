@@ -47,13 +47,14 @@ class StrategyLoop:
 
     def intents(self, W, position: dict | None) -> list[TradeIntent]:
         ent = self._producer(W, self._lr)
-        exits = strand_rescue(W, self._lr, ent,
-                              lr_exit_v2(W, self._lr, ent, predict=self._predict, gate_fam=self._gate_fam))
         T = int(W.ts[-1])                 # the just-closed bar
         out: list[TradeIntent] = []
 
-        # exit the held position if an exit for its side fires on bar T (fill-on-signal → close the net)
+        # exit the held position if an exit for its side fires on bar T (fill-on-signal → close the net).
+        # The exit walk is only read here → compute it ONLY when holding (skipped when flat, most bars: ~0.44s saved).
         if position:
+            exits = strand_rescue(W, self._lr, ent,
+                                  lr_exit_v2(W, self._lr, ent, predict=self._predict, gate_fam=self._gate_fam))
             if any(x[1] == T and _SIDE[x[2]] == position["side"] for x in exits):
                 close_side = "Sell" if position["side"] == "Buy" else "Buy"
                 out.append(TradeIntent("close", side=close_side, qty=float(position["size"]),
