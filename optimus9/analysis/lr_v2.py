@@ -73,10 +73,11 @@ def _slope_flip(line):
     return flip
 
 
-def gate_signals(W, cfg):
-    """[3] PRODUCER — per-bar signals the latch verdict consumes (s3r/s4r/s2M closed, per spec). MECHANISM
-    CHOICES (surfaced for review): reverses = closed slope-flip · all-IB = s2r/s3r/s4r in-band · m-reversed
-    (setup#2) = s3m/s4m slope-flip · prediction gated by s{n}m OOB ("test while OOB")."""
+def gate_signals(W, cfg, gate_rev='s1M'):
+    """[3] PRODUCER — per-bar signals the latch verdict consumes. MECHANISM CHOICES (surfaced for review):
+    reverses = slope-flip · all-IB = s2r/s3r/s4r in-band · m-reversed (setup#2) = s3m/s4m slope-flip ·
+    prediction gated by s{n}m OOB ("test while OOB"). gate_rev = the gate reversal Mage line (DATA, Joe 0704):
+    's1M' (60s, default) or 's2M' (120s) — a sweep knob now both exist. Boundary-agnostic reversal."""
     hi, lo = cfg.hi, cfg.lo
     s3r, s3m, s3M = W._line('s3r'), W._line('s3m'), W._line('s3M')
     s4r, s4m, s4M = W._line('s4r'), W._line('s4m'), W._line('s4M')
@@ -89,7 +90,7 @@ def gate_signals(W, cfg):
         's3m_oob': (s3m >= hi) | (s3m <= lo), 's4m_oob': (s4m >= hi) | (s4m <= lo),
         'rev3r': _slope_flip(s3r), 'rev4r': _slope_flip(s4r),          # r reversal (reverse-before-breach)
         'rev3m': _slope_flip(s3m), 'rev4m': _slope_flip(s4m),          # m reversal (setup#2)
-        'rev2M': _slope_flip(W._line('s2M')),                          # s2Mage reversal (path c)
+        'rev2M': _slope_flip(W._line(gate_rev)),                       # gate Mage reversal (path c) — s1M/s2M
         # per-line OOB state — path 'a' fires when all 3 CROSS OOB→IB (a transition, not the static all-IB)
         'oob2': (s2r >= hi) | (s2r <= lo), 'oob3': (s3r >= hi) | (s3r <= lo), 'oob4': (s4r >= hi) | (s4r <= lo),
     }
