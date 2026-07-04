@@ -16,11 +16,12 @@ from optimus9.live.strategy import StrategyLoop
 from optimus9.live.ledger import O9Ledger
 from optimus9.live.app import O9LiveApp
 from optimus9.live.control import O9Control
+from optimus9.live.health import HealthStore
 from optimus9.live.driver import RealtimeDriver
 
 FAKEAPI = os.environ.get("O9_FAKEAPI_URL", "http://127.0.0.1:8098")
 SYM = os.environ.get("O9_SYMBOL", "FARTCOINUSDT")
-MODE = os.environ.get("O9_SIZE_MODE", "fixed")
+MODE = os.environ.get("O9_SIZE_MODE", "dynamic5x")               # ramp to the 66k-coin cap via leverage
 
 dev = DatabaseManager(**get_db_config()); dev.connect()          # live tape (own o9_live collector = later)
 o9cfg = get_db_config(); o9cfg["database"] = "o9_live"
@@ -32,7 +33,8 @@ strat = StrategyLoop(dev, bcfg, lr_config(dev), SYM, buffer_hours=12, warmup_hou
 adapter = BybitAdapter(BybitV5Client(FAKEAPI, HmacSigner("o9-fake-key", "o9-fake-secret")), SYM)
 ledger = O9Ledger(o9, SYM, start_equity=float(os.environ.get("O9_START_EQUITY", "500")))
 control = O9Control(o9)
-app = O9LiveApp(strat, PositionSizer(max_order=66000), adapter, ledger, control, SYM)
+health = HealthStore(o9)                                          # cascade phase + loop_ms heartbeat → UI
+app = O9LiveApp(strat, PositionSizer(max_order=66000), adapter, ledger, control, SYM, health=health)
 
 print("o9-live REALTIME · fakeAPI=%s · symbol=%s · mode=%s · equity=$%.0f" % (FAKEAPI, SYM, MODE, ledger.equity()), flush=True)
 RealtimeDriver(app, dev, tp).run(max_bars=None)                  # forever — trades when the strategy fires

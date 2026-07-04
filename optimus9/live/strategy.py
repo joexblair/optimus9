@@ -11,10 +11,11 @@ None, or {'side': 'Buy'|'Sell', 'size': float}.
 from __future__ import annotations
 
 import bias_machine as bm
-from optimus9.analysis.lr_v2 import v2_walk, v2_walk_ad, lr_exit_v2, strand_rescue
+from optimus9.analysis.lr_v2 import v2_walk, v2_walk_ad, lr_exit_v2, strand_rescue, v2_phase
 from optimus9.live.sizing import TradeIntent
 
 _SIDE = {1: "Buy", -1: "Sell"}
+_SIDE_N = {"Buy": 1, "Sell": -1}
 
 
 class StrategyLoop:
@@ -31,8 +32,20 @@ class StrategyLoop:
         self._producer = producer         # entries producer (W,cfg)->entries — DATA (Joe 0704): v2_walk_ad (arm-delay,
         #                                   the shipping stack) or v2_walk. NEVER baked; the loop consumes the stream.
 
+    def window(self, now_ms: int):
+        """Build the bounded window ending at now (the shared input to intents + phase — build ONCE per bar)."""
+        return bm.BiasWindow(self._db, now_ms, lookback=self._buf, warmup=self._warm, cfg=self._bias, lean=True)
+
+    def phase(self, W, position: dict | None) -> dict:
+        """Live cascade readout at bar T (SRP: reports, never trades). in_position from the live net side."""
+        side = _SIDE_N.get(position["side"], 0) if position else 0
+        return v2_phase(W, self._lr, in_position=side, exit_fam=self._gate_fam)
+
     def decide(self, now_ms: int, position: dict | None) -> list[TradeIntent]:
-        W = bm.BiasWindow(self._db, now_ms, lookback=self._buf, warmup=self._warm, cfg=self._bias, lean=True)
+        """Compat entry: build the window and return this bar's intents (callers that don't need the phase)."""
+        return self.intents(self.window(now_ms), position)
+
+    def intents(self, W, position: dict | None) -> list[TradeIntent]:
         ent = self._producer(W, self._lr)
         exits = strand_rescue(W, self._lr, ent,
                               lr_exit_v2(W, self._lr, ent, predict=self._predict, gate_fam=self._gate_fam))
