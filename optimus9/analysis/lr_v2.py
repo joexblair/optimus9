@@ -336,6 +336,43 @@ def v2_walk_ad(W, cfg):
     return out
 
 
+def v2_phase(W, cfg, in_position=0, exit_fam='s7'):
+    """[AD·READOUT] Live cascade phase at the latest bar T (SRP: REPORTS state, never decides/enters — reuses the
+    SAME arm→arm_delay→gate_open streams as v2_walk_ad, so the readout can't diverge from the entry producer).
+    Three concurrent tracks composed like the terminal chip:
+      arm   — the latest v2_arm setup whose window still covers T (s5m breach / s5r divergence)
+      gate  — that arm's gate_open verdict: 'open' (reason a/b/c) once open_k<=T, else 'latched' (waiting)
+      exit  — driven by the loop's live net side (in_position: +1/-1/0); the exit machine is watching to close
+    tone = 'go' (gate-open or holding) · 'wait' (armed/latched) · 'idle' (flat) — drives the block colour."""
+    T = len(W.ts) - 1
+    setups = v2_arm(W, cfg)
+    if cfg.arm_bigleg:
+        setups = arm_delay(W, cfg, setups)
+    opens = {s[0]: (s[3], s[4]) for s in gate_open(W, cfg, setups)}   # arm_bar -> (open_k, reason)
+    arm = gate = greason = None
+    live = [s for s in setups if s[0] <= T < s[3]]                    # arm windows still open at T
+    if live:
+        i, es, bd, cap, src = max(live, key=lambda s: s[0])          # the most-recent live arm
+        arm = src
+        if i in opens and opens[i][0] <= T:
+            gate, greason = 'open', opens[i][1]
+        else:
+            gate = 'latched'
+    tracks = []
+    if arm:
+        tracks.append(arm + ' armed')
+    if gate == 'open':
+        tracks.append('GATE OPEN ' + greason)
+    elif gate == 'latched':
+        tracks.append('gate latched')
+    if in_position:
+        tracks.append(exit_fam + ' exit-watch')
+    tone = 'go' if (gate == 'open' or in_position) else 'wait' if arm else 'idle'
+    return {'label': ' · '.join(tracks) if tracks else 'flat', 'tone': tone, 'arm': arm,
+            'gate': gate, 'gate_reason': greason, 'in_position': bool(in_position),
+            'exit': exit_fam if in_position else None}
+
+
 def lr_exit_v2(W, cfg, entries, predict=True, gate_fam='s7', slip=0.0, rlb=19):
     """EXIT cascade = the entry machine pointed at the −es (favourable) extreme — ONE machine, two polarities.
     Per entry (tms, es, bd, tj), arm_side = bd:
