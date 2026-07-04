@@ -230,23 +230,29 @@ def fin_trigger(revT, bd, q1, cap):
     return next((k for k in range(q1, cap) if revT[k] == bd), None)
 
 
-def finisher_v2(W, cfg, opens, trig_line='gcs5M'):
+def finisher_v2(W, cfg, opens, trig_line='gcs5M', window='lookback'):
     """[4v2·WIRE] Mage-anchored ordered-qualify finisher (Joe 0704). Q1 = s15a banks → s30a (ordered latch,
     each honouring its own r_lb); trigger = a reversal on `trig_line` toward bd after Q1. trig_line = DATA
-    (gcs5M now; gcs1M post-1s-tape — never baked). Returns [(trade_ms, es, bd, trade_k)]; caller dedups."""
+    (gcs5M now; gcs1M post-1s-tape — never baked). `window` (Joe 0704): 'lookback' = 7×30s back from gate-open
+    (the spec) · 'forward' = build from the arm forward (arm-delay) · 'both' = union (both proven profitable).
+    Returns [(trade_ms, es, bd, trade_k)]; caller dedups."""
     ts = W.ts
     q15h, q15l = s_qualify(W, cfg, 's15m', 's15M', 's15r', cfg.s15r_lb)
     q30h, q30l = s_qualify(W, cfg, 's30m', 's30M', 's30r', cfg.s30r_lb)
     revT = _mage_rev(W.line(trig_line), cfg.fin_mage_wob)
+    wins = {'lookback': ('lb',), 'forward': ('fw',), 'both': ('lb', 'fw')}[window]
     ent = []
     for (i, es, bd, ok, r, cap) in opens:
         qA, qB = (q15h, q30h) if es == 1 else (q15l, q30l)
-        q1 = q1_gate(qA, qB, max(0, ok - cfg.fin_lb), min(cap, ok + cfg.fin_fwd))
-        if q1 is None:
-            continue
-        tk = fin_trigger(revT, bd, q1, cap)
-        if tk is not None:
-            ent.append((int(ts[tk]), es, bd, tk))
+        for wn in wins:
+            w0, w1 = (max(0, ok - cfg.fin_lb), min(cap, ok + cfg.fin_fwd)) if wn == 'lb' \
+                else (i, min(cap, i + cfg.fin_lb + cfg.fin_fwd))
+            q1 = q1_gate(qA, qB, w0, w1)
+            if q1 is None:
+                continue
+            tk = fin_trigger(revT, bd, q1, cap)
+            if tk is not None:
+                ent.append((int(ts[tk]), es, bd, tk))
     return ent
 
 
@@ -266,6 +272,65 @@ def v2_walk(W, cfg, stale_exit=False):
         setups = _stale(W, cfg, setups, sig)
     seen, out = set(), []
     for e in finisher(W, cfg, gate_open(W, cfg, setups, sig)):
+        if e[3] not in seen:
+            seen.add(e[3]); out.append(e)
+    return out
+
+
+def oob_2_oob(line, hi, lo):
+    """[AD·PRODUCER] Per bar: has `line` swept from the OPPOSITE OOB to THIS OOB with no return between?
+    dir_hi[k] = came low→high directly (holds until it re-touches low); dir_lo = mirror. A causal impulse-leg
+    / no-retracement detector (an ADX substitute) for the arm-delay big-leg gate (Joe 0704)."""
+    n = len(line); dh = dl = False; last = 0; DH = np.zeros(n, bool); DL = np.zeros(n, bool)
+    for k in range(n):
+        if line[k] >= hi:
+            if last == -1: dh = True
+            last = 1; dl = False
+        elif line[k] <= lo:
+            if last == 1: dl = True
+            last = -1; dh = False
+        DH[k] = dh; DL[k] = dl
+    return DH, DL
+
+
+def bigleg_gate(W, cfg):
+    """[AD·VERDICT] Big-leg condition per side (Joe 0704): s5Mage AND s7Mage each travelled directly to the es
+    side, AND s7r predicted-or-breached (== es) — a strong impulse leg still under momentum. Returns
+    (cond_hi, cond_lo) per-bar bool for es=+1 / es=-1. Lines value_mode-honoured (emerging = causal)."""
+    hi, lo = cfg.hi, cfg.lo
+    s5M, s7M, s7m, s7r = W.line('s5M'), W.line('s7M'), W.line('s7m'), W.line('s7r')
+    d5h, d5l = oob_2_oob(s5M, hi, lo); d7h, d7l = oob_2_oob(s7M, hi, lo)
+    p7 = predict_breach(s7r, s7m, s7M, hi, lo, FENCE_HI, FENCE_LO)
+    return (d5h & d7h & ((s7r >= hi) | (p7 == 1)), d5l & d7l & ((s7r <= lo) | (p7 == -1)))
+
+
+def arm_delay(W, cfg, setups):
+    """[AD·VERDICT] Dynamic arm-delay (Joe 0704) — Elder's 'tide' screen. Per arm setup: if the big-leg gate
+    fires (a strong leg still running), HOLD the arm to the s5Mage reversal (wob cfg.arm_wob) toward bd — don't
+    enter the ripple before the tide turns; else keep the breach arm. Returns re-timed setups. NOTE: the spec's
+    unconditional 'base = s5m reversal' for non-big-leg is NOT here (the validated build kept the breach arm)."""
+    ch, cl = bigleg_gate(W, cfg); rev5M = _mage_rev(W.line('s5M'), cfg.arm_wob); out = []
+    for (i, es, bd, cap, src) in setups:
+        cond = ch if es == 1 else cl
+        kc = next((k for k in range(i + 1, cap) if cond[k]), None)
+        if kc is None:
+            out.append((i, es, bd, cap, src)); continue
+        da = next((k for k in range(kc, cap) if rev5M[k] == bd), None)
+        out.append((da if da is not None else i, es, bd, cap, src))
+    return out
+
+
+def v2_walk_ad(W, cfg):
+    """[5·AD·WIRE] The arm-delay stack (Joe 0704, the o9-live shipping producer): arm → arm_delay (big-leg →
+    s5Mage reversal) → gate_open → finisher_v2(window per cfg.fin_both) → gcs5M trigger. Dedup by trade bar.
+    cfg.arm_bigleg=0 disables the delay · cfg.fin_both=1 uses both finisher windows (union)."""
+    setups = v2_arm(W, cfg)
+    if cfg.arm_bigleg:
+        setups = arm_delay(W, cfg, setups)
+    sig = gate_signals(W, cfg)
+    win = 'both' if cfg.fin_both else 'lookback'
+    seen, out = set(), []
+    for e in finisher_v2(W, cfg, gate_open(W, cfg, setups, sig), 'gcs5M', win):
         if e[3] not in seen:
             seen.add(e[3]); out.append(e)
     return out
