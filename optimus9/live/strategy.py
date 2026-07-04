@@ -11,7 +11,7 @@ None, or {'side': 'Buy'|'Sell', 'size': float}.
 from __future__ import annotations
 
 import bias_machine as bm
-from optimus9.analysis.lr_v2 import v2_walk, lr_exit_v2, strand_rescue
+from optimus9.analysis.lr_v2 import v2_walk, v2_walk_ad, lr_exit_v2, strand_rescue
 from optimus9.live.sizing import TradeIntent
 
 _SIDE = {1: "Buy", -1: "Sell"}
@@ -19,7 +19,7 @@ _SIDE = {1: "Buy", -1: "Sell"}
 
 class StrategyLoop:
     def __init__(self, db, bias_cfg, lr_cfg, symbol, buffer_hours=24, warmup_hours=80,
-                 predict=False, gate_fam="s7"):
+                 predict=False, gate_fam="s7", producer=v2_walk_ad):
         self._db = db
         self._bias = bias_cfg             # BiasConfig — for BiasWindow (lines)
         self._lr = lr_cfg                 # LRConfig  — for the v2 cascade producer
@@ -28,10 +28,12 @@ class StrategyLoop:
         self._warm = warmup_hours
         self._predict = predict
         self._gate_fam = gate_fam
+        self._producer = producer         # entries producer (W,cfg)->entries — DATA (Joe 0704): v2_walk_ad (arm-delay,
+        #                                   the shipping stack) or v2_walk. NEVER baked; the loop consumes the stream.
 
     def decide(self, now_ms: int, position: dict | None) -> list[TradeIntent]:
         W = bm.BiasWindow(self._db, now_ms, lookback=self._buf, warmup=self._warm, cfg=self._bias, lean=True)
-        ent = v2_walk(W, self._lr)
+        ent = self._producer(W, self._lr)
         exits = strand_rescue(W, self._lr, ent,
                               lr_exit_v2(W, self._lr, ent, predict=self._predict, gate_fam=self._gate_fam))
         T = int(W.ts[-1])                 # the just-closed bar
