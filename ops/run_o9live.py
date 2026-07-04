@@ -29,7 +29,7 @@ o9 = DatabaseManager(**o9cfg); o9.connect()
 tp = dev.execute("SELECT tp_pk FROM trading_pairs WHERE tp_symbol_bybit=%s", (SYM,), fetch=True)[0]["tp_pk"]
 
 bcfg = bm.BiasConfig(**BASE_BIAS)
-strat = StrategyLoop(dev, bcfg, lr_config(dev), SYM, buffer_hours=12, warmup_hours=24)   # 12h > arm-delay's <=8h oob_2_oob lookback
+strat = StrategyLoop(dev, bcfg, lr_config(dev), SYM, buffer_hours=8, warmup_hours=6)   # sweep-measured floors lb=6h/wm=4h (+margin); reproduces 12/24 exactly. TODO DB-source
 adapter = BybitAdapter(BybitV5Client(FAKEAPI, HmacSigner("o9-fake-key", "o9-fake-secret")), SYM)
 ledger = O9Ledger(o9, SYM, start_equity=float(os.environ.get("O9_START_EQUITY", "500")))
 control = O9Control(o9)
