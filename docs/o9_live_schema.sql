@@ -260,3 +260,24 @@ CREATE TABLE o9_control (
   flatten_req TINYINT NOT NULL DEFAULT 0,                 -- close the net position now (exit / kill)
   updated_ms  BIGINT NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- live health heartbeat — the running processes WRITE, the UI READS (mirror of o9_control's direction).
+-- cascade phase (loop, via v2_phase) + feed-health counters (loop/adapter/feed). Tape-health
+-- (kline gaps / frozen / synthetic) is computed live in the UI from kline_collection, not stored. Single row (1).
+CREATE TABLE o9_health (
+  health_id       INT PRIMARY KEY,                        -- single row (1)
+  phase_label     VARCHAR(64) NOT NULL DEFAULT 'flat',    -- composed cascade chip (v2_phase)
+  phase_tone      VARCHAR(8)  NOT NULL DEFAULT 'idle',    -- go | wait | idle → block colour
+  arm             VARCHAR(8),                             -- s5m | s5r | NULL
+  gate            VARCHAR(8),                             -- open | latched | NULL
+  gate_reason     VARCHAR(4),                             -- a | b | c | NULL
+  exit_line       VARCHAR(8),                             -- s7 | NULL (exit-watch)
+  loop_ms         INT,                                    -- decision-loop latency (bar-close → order sent)
+  rtt_ms          INT,                                    -- exchange round-trip
+  clock_skew_ms   INT,                                    -- local vs exchange server time
+  pubtrade_age_ms INT,                                    -- last publicTrade age
+  order_rejects   INT NOT NULL DEFAULT 0,                 -- session cumulative
+  ws_reconnects   INT NOT NULL DEFAULT 0,
+  db_reconnects   INT NOT NULL DEFAULT 0,
+  updated_ms      BIGINT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

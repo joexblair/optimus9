@@ -18,6 +18,7 @@ from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.live.feed import OrderBookFeed
 from optimus9.live.control import O9Control
+from optimus9.live.health import HealthStore
 
 FAKEAPI = os.environ.get("O9_FAKEAPI_URL", "http://127.0.0.1:8098")
 START_EQUITY = float(os.environ.get("O9_START_EQUITY", "500"))
@@ -46,6 +47,24 @@ def _closed(o9):
 def _price(dev):
     k = dev.execute("SELECT kc_timestamp t, kc_close c FROM kline_collection ORDER BY kc_timestamp DESC LIMIT 1", fetch=True)
     return (float(k[0]["c"]), int(k[0]["t"])) if k else (0.0, None)
+
+
+def _tape_health(dev, bars=240, frozen_win=12):
+    """Live tape integrity from kline_collection (not stored — the real live-fail modes, computed each poll):
+    gaps = missing 5s prints · frozen = last frozen_win bars collapse to one close (dead-conn dojis) ·
+    synthetic = ruler-line bars (high==low, wiggle=0 patch gap-fills). All grounded in past incidents."""
+    ks = dev.execute("SELECT kc_timestamp t, kc_high h, kc_low l, kc_close c, kc_volume v FROM kline_collection "
+                     "WHERE kc_tp_pk=(SELECT tp_pk FROM trading_pairs WHERE tp_symbol_bybit=%s) "
+                     "ORDER BY kc_timestamp DESC LIMIT %s", (SYMBOL, bars), fetch=True)
+    if not ks:
+        return {"gaps": None, "frozen": None, "synthetic": None, "bars": 0}
+    ks = list(reversed(ks))
+    ts = [int(k["t"]) for k in ks]
+    missing = sum(max(0, round((ts[i] - ts[i - 1]) / 5000.0) - 1) for i in range(1, len(ts)))
+    tail = ks[-frozen_win:]
+    frozen = len({round(float(k["c"]), 10) for k in tail}) <= 1 and len(tail) >= frozen_win
+    synthetic = sum(1 for k in tail if float(k["h"]) == float(k["l"]))     # ruler bars (no range)
+    return {"gaps": int(missing), "frozen": bool(frozen), "synthetic": int(synthetic), "bars": len(ks)}
 
 
 @app.get("/api/history")
@@ -83,9 +102,9 @@ def state():
     acct = o9.execute("SELECT equity FROM o9_account WHERE acct_id=1", fetch=True)
     rows = _closed(o9)
     pos = o9.execute("SELECT side, SUM(qty) q FROM o9_ledger WHERE status='open' GROUP BY side", fetch=True)
-    dec = o9.execute("SELECT action, reason FROM o9_decision ORDER BY decision_id DESC LIMIT 1", fetch=True)
     ctl = O9Control(o9).read()
-    price, tms = _price(dev); o9.disconnect(); dev.disconnect()
+    hlth = HealthStore(o9).read()
+    price, tms = _price(dev); tape = _tape_health(dev); o9.disconnect(); dev.disconnect()
     equity = float(acct[0]["equity"]) if acct else START_EQUITY
     tape_age = round((int(time.time() * 1000) - tms - 5000) / 1000.0, 1) if tms else None
     bal, peak, wins = START_EQUITY, START_EQUITY, 0
@@ -97,12 +116,20 @@ def state():
             day_pnl += net
     dd = round((peak - equity) / peak * 100, 1) if peak > 0 else 0.0
     open_pos = {"side": pos[0]["side"], "size": float(pos[0]["q"])} if pos else None
-    cascade = (dec[0]["action"] + ((" · " + dec[0]["reason"]) if dec[0]["reason"] else "")) if dec else "idle"
+    hb_age = round((int(time.time() * 1000) - int(hlth["updated_ms"])) / 1000.0, 1) if hlth["updated_ms"] else None
     return {"equity": round(equity, 2), "start": START_EQUITY, "net": round(equity - START_EQUITY, 2),
             "day_pnl": round(day_pnl, 2), "exposure": round(open_pos["size"] * price if open_pos else 0, 0),
             "exposure_x": round(open_pos["size"] * price / equity, 2) if open_pos and equity else 0,
             "dd": dd, "dd_ref": DD_REF, "trades": len(rows), "win": round(wins / len(rows) * 100, 1) if rows else 0.0,
-            "price": price, "tape_age": tape_age, "book_ok": bool(UI_BOOK.get(SYMBOL)), "cascade": cascade,
+            "price": price, "tape_age": tape_age, "book_ok": bool(UI_BOOK.get(SYMBOL)),
+            "cascade": {"label": hlth["phase_label"], "tone": hlth["phase_tone"], "arm": hlth["arm"],
+                        "gate": hlth["gate"], "gate_reason": hlth["gate_reason"], "exit": hlth["exit_line"]},
+            "feed": {"tape_age": tape_age, "gaps": tape["gaps"], "frozen": tape["frozen"],
+                     "synthetic": tape["synthetic"], "book_ok": bool(UI_BOOK.get(SYMBOL)),
+                     "loop_ms": hlth["loop_ms"], "rtt_ms": hlth["rtt_ms"], "clock_skew_ms": hlth["clock_skew_ms"],
+                     "pubtrade_age_ms": hlth["pubtrade_age_ms"], "order_rejects": hlth["order_rejects"],
+                     "ws_reconnects": hlth["ws_reconnects"], "db_reconnects": hlth["db_reconnects"],
+                     "hb_age": hb_age},
             "sizing": {"mode": ctl["mode"], "max_order": ctl["max_order"], "split": ctl["split"]},
             "halted": bool(ctl["halted"])}
 
@@ -216,9 +243,11 @@ background-image:radial-gradient(1100px 520px at 82% -10%,rgba(47,214,190,.07),t
 .reset{font:600 11px system-ui;color:var(--warn);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 12px;margin-right:6px;cursor:pointer}.reset:hover{border-color:var(--warn)}
 .status{display:flex;align-items:stretch;overflow-x:auto}
 .stat{display:flex;flex-direction:column;gap:3px;padding:9px 14px;border-right:1px solid var(--line);justify-content:center;white-space:nowrap}.stat .v{font-family:var(--mono);font-size:15px;font-weight:600}
-.feed{display:flex;gap:12px}.feed i{font-style:normal;display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+.feed{display:flex;gap:7px 12px;flex-wrap:wrap;max-width:360px}.feed i{font-style:normal;display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;color:var(--dim)}
 .fdot{width:6px;height:6px;border-radius:50%;background:var(--long)}.fdot.warn{background:var(--warn)}.fdot.bad{background:var(--short)}
 .casc{margin-left:auto;border-right:0;align-items:flex-end}.chip{font-family:var(--mono);font-size:11.5px;padding:4px 10px;border-radius:5px;background:rgba(47,214,190,.14);color:var(--accent);border:1px solid rgba(47,214,190,.34)}
+.chip.wait{background:rgba(245,166,35,.14);color:var(--warn);border-color:rgba(245,166,35,.34)}
+.chip.idle{background:rgba(124,134,153,.12);color:var(--dim);border-color:var(--line)}
 .ddbar{width:130px;height:5px;border-radius:3px;background:var(--bg);overflow:hidden;margin-top:3px}.ddbar i{display:block;height:100%;background:linear-gradient(90deg,var(--long),var(--warn))}
 .body{flex:1;display:flex;gap:8px;min-height:0}
 .main{flex:1;display:flex;flex-direction:column;gap:8px;min-height:0}
@@ -274,6 +303,24 @@ function money(v){return (v<0?'-$':'+$')+Math.abs(v).toFixed(2).replace(/\B(?=(\
 function commas(v){return Math.round(v).toLocaleString()}
 function hhmm(ms){return new Date(ms).toISOString().slice(5,19).replace('T',' ')}
 function fdot(a){return a==null?'bad':a>12?'bad':a>6?'warn':''}
+function hi(v,w,b){return v==null?'bad':v>=b?'bad':v>=w?'warn':''}   // higher = worse (rtt/loop)
+function fitem(cls,txt){return '<i><span class="fdot '+cls+'"></span>'+txt+'</i>'}
+function buildFeed(f){
+ var kl=f.frozen?'bad':(f.gaps>2?'bad':(f.synthetic>0||f.gaps>0)?'warn':'');
+ var klt='kline '+(f.frozen?'FROZEN':((f.gaps==null?'—':f.gaps)+'g/'+(f.synthetic==null?'—':f.synthetic)+'r'));
+ var sk=f.clock_skew_ms==null?'bad':(Math.abs(f.clock_skew_ms)>=100?'bad':Math.abs(f.clock_skew_ms)>=30?'warn':'');
+ var pt=f.pubtrade_age_ms==null?'bad':fdot(f.pubtrade_age_ms/1000);
+ return [fitem(fdot(f.tape_age),'tape '+(f.tape_age==null?'—':f.tape_age+'s')),
+  fitem(kl,klt),
+  fitem(f.book_ok?'':'bad','book '+(f.book_ok?'live':'—')),
+  fitem(pt,'pubTrade '+(f.pubtrade_age_ms==null?'—':(f.pubtrade_age_ms/1000).toFixed(1)+'s')),
+  fitem(sk,'skew '+(f.clock_skew_ms==null?'—':(f.clock_skew_ms>0?'+':'')+f.clock_skew_ms+'ms')),
+  fitem(hi(f.rtt_ms,150,400),'RTT '+(f.rtt_ms==null?'—':f.rtt_ms+'ms')),
+  fitem(hi(f.loop_ms,300,600),'loop '+(f.loop_ms==null?'—':f.loop_ms+'ms')),
+  fitem(f.order_rejects?'bad':'','rej '+(f.order_rejects==null?'—':f.order_rejects)),
+  fitem(f.ws_reconnects?'warn':'','ws '+(f.ws_reconnects==null?'—':f.ws_reconnects)),
+  fitem(f.db_reconnects?'warn':'','db '+(f.db_reconnects==null?'—':f.db_reconnects)),
+  fitem(f.hb_age==null?'bad':(f.hb_age>15?'bad':f.hb_age>7?'warn':''),'hb '+(f.hb_age==null?'—':f.hb_age+'s'))].join('');}
 function post(u){return fetch(u,{method:'POST'})}
 var CH={series:[],markers:[]},HOV=null;
 function drawChart(){var cv=document.getElementById('cv'),ctx=cv.getContext('2d'),w=cv.width=cv.clientWidth,h=cv.height=cv.clientHeight;
@@ -324,10 +371,11 @@ function tick(){
   var d=document.getElementById('day');d.textContent=money(s.day_pnl);d.className='v num '+(s.day_pnl>=0?'pos':'neg');
   document.getElementById('exp').textContent=s.exposure?('$'+commas(s.exposure)+' · '+s.exposure_x+'×'):'flat';
   document.getElementById('dd').innerHTML=s.dd+'% <span style=color:#7C8699>/ '+s.dd_ref+'%</span>';document.getElementById('ddb').style.width=Math.min(100,s.dd/s.dd_ref*100)+'%';
-  document.getElementById('casc').textContent=s.cascade;
+  var cc=document.getElementById('casc'),stale=(s.feed.hb_age==null||s.feed.hb_age>15);
+  cc.textContent=stale?'— no heartbeat':s.cascade.label;cc.className='chip '+(stale?'idle':s.cascade.tone);
   document.getElementById('maxo').textContent=commas(s.sizing.max_order);document.getElementById('split').textContent=s.sizing.split;
   document.querySelectorAll('#seg span').forEach(el=>el.className=(el.dataset.m===s.sizing.mode?'on':''));
-  document.getElementById('feed').innerHTML='<i><span class="fdot '+fdot(s.tape_age)+'"></span>publicTrade '+(s.tape_age==null?'—':s.tape_age+'s')+'</i><i><span class="fdot '+(s.book_ok?'':'bad')+'"></span>orderbook '+(s.book_ok?'live':'—')+'</i>';
+  document.getElementById('feed').innerHTML=buildFeed(s.feed);
   var k=document.getElementById('kill');if(s.halted){k.className='kill resume';k.textContent='▶ RESUME';}else{k.className='kill';k.innerHTML='&#9632; FLATTEN &amp; HALT';}
   document.getElementById('hc').textContent=s.trades+' closed · '+s.win+'% win · start $'+s.start;
   document.getElementById('he').style.display=h.length?'none':'block';
