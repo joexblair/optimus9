@@ -51,14 +51,23 @@ def s5m_arm(W, cfg):
 
 def v2_arm(W, cfg, horizon=None):
     """[2] The v2 ARM = s5m straight-breach OR s5r divergence, unified → setups [(i, es, bd, cap, src)].
-    cap = the setup window (i + horizon). Same-bar opposite-side conflict → **s5m wins** (setdefault).
-    [TODO: window-level s5m-wins conflict + opposite-breach cap are refinements once gate_open needs them.]"""
+    cap = the arm's life = min(OPPOSITE-side s5m breach, i + horizon) (Joe 0704, opt-a): the arm cancels the
+    moment s5m breaches the other side (a hi-breach kills a lo-arm, and vice-versa); the 1.5h horizon stays a
+    backstop. Same-bar opposite-side conflict → **s5m wins** (setdefault)."""
     horizon = horizon or cfg.horizon
-    n = len(W.ts)
+    n = len(W.ts); hi, lo = cfg.hi, cfg.lo
+    s5m = W._line('s5m'); sign = np.where(s5m >= hi, 1, np.where(s5m <= lo, -1, 0))
+    idx = np.arange(n)
+    nxt_hi = np.minimum.accumulate(np.where(sign == 1, idx, n)[::-1])[::-1]   # next hi-breach bar >= k
+    nxt_lo = np.minimum.accumulate(np.where(sign == -1, idx, n)[::-1])[::-1]  # next lo-breach bar >= k
     m = {i: (es, bd, 's5m') for i, es, bd in s5m_arm(W, cfg)}
     for i, es, bd in s5r_arm(W, cfg):
         m.setdefault(i, (es, bd, 's5r'))                 # s5m already set → s5m wins
-    return [(i, es, bd, min(n, i + horizon), src) for i, (es, bd, src) in sorted(m.items())]
+    out = []
+    for i, (es, bd, src) in sorted(m.items()):
+        opp = (nxt_lo[i + 1] if es == 1 else nxt_hi[i + 1]) if i + 1 < n else n   # opposite-side breach = -es
+        out.append((i, es, bd, min(opp, i + horizon), src))
+    return out
 
 
 def _slope_flip(line):
