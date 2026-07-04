@@ -26,12 +26,23 @@ def d5(t): return dtm.datetime.fromtimestamp(t / 1000, timezone.utc).strftime('%
 R0, R1 = ms('2026-06-16 00:00'), ms('2026-06-23 00:00')   # week starting 06-16
 
 db = DatabaseManager(**get_db_config()); db.connect(); ls = bm.LineStore(db); cfg = bm.BiasConfig(**BASE_BIAS); lr = lr_config(db)
-SPEC = {'s2m': (8, 0.56, 'close'), 's2M': (37, 0.72, 'hlcc4'), 's3m': (8, 0.56, 'close'), 's3M': (37, 0.72, 'ohlc4'),
-        's4m': (8, 0.56, 'close'), 's4M': (37, 0.72, 'ohlc4'), 's5m': (8, 0.40, 'ohlc4'), 's5M': (37, 0.83, 'ohlc4'),
+SPEC = {'s2m': (6, 0.56, 'close'), 's2M': (37, 0.72, 'hlcc4'), 's3m': (6, 0.56, 'close'), 's3M': (37, 0.72, 'ohlc4'),
+        's4m': (6, 0.56, 'close'), 's4M': (37, 0.72, 'ohlc4'), 's5m': (8, 0.40, 'ohlc4'), 's5M': (37, 0.83, 'ohlc4'),
         's7m': (10, 0.77, 'ohlc4'), 's7M': (37, 0.83, 'ohlc4'), 's15m': (7, 0.74, 'hlcc4'), 's15M': (37, 0.83, 'ohlc4'),
-        's30m': (10, 0.60, 'hlc3'), 's30M': (37, 0.83, 'ohlc4')}
-ovr = {ln: (ls.resolve(ln)[0], ('bb', a, b, c), ls.value_mode(ln)) for ln, (a, b, c) in SPEC.items()}
+        's30m': (10, 0.60, 'hlc3'), 's30M': (37, 0.83, 'ohlc4')}   # m-lines len 6 (s5m=8, protects the arm timing)
+ovr = {ln: (ls.resolve(ln)[0], ('bb', a, b, c), 'emerging') for ln, (a, b, c) in SPEC.items()}
 ovr['s2M'] = (60, ('bb', 37, 0.72, 'hlcc4'), 'emerging')   # s15r/s30r/gcs5M from the DB (correct configs)
+# ── in-use line configs → pine remarks (Joe 0704: store the config in the script) ──
+def _cfgline(ln):
+    (tf, c, vm) = ovr[ln] if ln in ovr else (ls.resolve(ln) + (ls.value_mode(ln),))
+    desc = ('bb %s·%s·%s' % (c[1], c[2], c[3])) if c[0] == 'bb' else ('k %s·%s·%s·%s' % (c[3], c[1], c[2], c[4]))
+    return '// %-6s tf=%-5ss %-18s vm=%s' % (ln, tf, desc, vm)
+CFG_LINES = ['s2m', 's2M', 's3m', 's3M', 's4m', 's4M', 's5m', 's5M', 's7m', 's7M',
+             's15m', 's15M', 's15r', 's30m', 's30M', 's30r', 'gcs5M']
+CFG_REMARKS = '\n'.join(_cfgline(ln) for ln in CFG_LINES)
+FIN_REMARK = ('// finisher_v2: trig=%s mage_wob=%d s30M_oob=%d s15r_lb=%d s30r_lb=%d fin_lb=%d fin_fwd=%d '
+              '· exit=lr_exit_v2(s7,predict=F)+strand_rescue · stop=%.2f%%' % (
+                  TRIG, lr.fin_mage_wob, lr.fin_s30M_oob, lr.s15r_lb, lr.s30r_lb, lr.fin_lb, lr.fin_fwd, lr.sl))
 W = bm.BiasWindow(db, R1, lookback=168, warmup=80, cfg=cfg, lean=True, line_overrides=ovr); W._line = W._line_emerging
 ts = W.ts
 
@@ -84,23 +95,32 @@ def pc(nm, ch, loc, col, sz='tiny', ttl=''):
     c = col if col.startswith('#') else 'color.' + col
     return ('plotchar(showEvents and array.binary_search(%s, time) >= 0, char="%s", location=location.%s, '
             'color=%s, size=size.%s, title="%s")' % (nm, ch, loc, c, sz, ttl))
+ARRS = [('tct', tct), ('tci', tci), ('armL', E['armL']), ('armH', E['armH']),
+        ('gA', E['gA']), ('gB', E['gB']), ('gC', E['gC']), ('s15', E['s15a']), ('s30', E['s30a']),
+        ('enL', E['enL']), ('enS', E['enS']), ('stl', E['stale'])]
+def emit_arr(nm, vals):
+    """Wrap an array in a function (TV main-body op-limit fix). Chunk >400 into concat'd sub-functions."""
+    if len(vals) <= 400:
+        return 'f_%s() =>\n    %s' % (nm, arr(vals)), '%s = f_%s()' % (nm, nm)
+    chunks = [vals[i:i + 400] for i in range(0, len(vals), 400)]
+    d = '\n'.join('f_%s_%d() =>\n    %s' % (nm, i, arr(c)) for i, c in enumerate(chunks))
+    d += '\nf_%s() =>\n    a = f_%s_0()\n' % (nm, nm)
+    d += ''.join('    array.concat(a, f_%s_%d())\n' % (nm, i) for i in range(1, len(chunks)))
+    d += '    a'
+    return d, '%s = f_%s()' % (nm, nm)
+_pairs = [emit_arr(nm, v) for nm, v in ARRS]
+ARR_DEFS = '\n'.join(p[0] for p in _pairs); ARR_CALLS = '\n'.join(p[1] for p in _pairs)
 body = f'''//@version=5
 indicator("lp-cascade v2 ({d5(R0)}→{d5(R1)}) trig {TRIG}  ▲▼arm · abc gate · ●s15a ■s30a · ★entry · ✕stale", overlay = true)
 showTrades = input.bool(true, "① trades (bgcolor)")
 showEvents = input.bool(true, "② cascade events (symbols)")
 showKey    = input.bool(true, "key table")
-tct  = {arr(tct)}
-tci  = {arr(tci)}
-armL = {arr(E['armL'])}
-armH = {arr(E['armH'])}
-gA   = {arr(E['gA'])}
-gB   = {arr(E['gB'])}
-gC   = {arr(E['gC'])}
-s15  = {arr(E['s15a'])}
-s30  = {arr(E['s30a'])}
-enL  = {arr(E['enL'])}
-enS  = {arr(E['enS'])}
-stl  = {arr(E['stale'])}
+// ── in-use line configs (emerging/causal; overrides — DB alignment pending) ──
+{CFG_REMARKS}
+{FIN_REMARK}
+// ── data arrays (wrapped in functions — TV main-body op-limit) ──
+{ARR_DEFS}
+{ARR_CALLS}
 // ── MODULE 1: trades (4-bgcolor outcome) ──
 bg = color(na)
 if showTrades
