@@ -17,12 +17,13 @@ from optimus9.analysis.lr import lr_config
 from sweep_eval import BASE_BIAS
 from optimus9.live.strategy import StrategyLoop
 from optimus9.compute.swing_detect import find_pivots
+from optimus9.analysis.lr_v2 import s5Mage_arm
 
 dev = DatabaseManager(**get_db_config()); dev.connect()
 cfg = lr_config(dev); HI, LO = cfg.hi, cfg.lo
 strat = StrategyLoop(dev, bm.BiasConfig(**BASE_BIAS), cfg, 'FARTCOINUSDT', buffer_hours=336, warmup_hours=48)
 W = strat.window(int(time.time() * 1000)); ts = W.ts
-s5M = np.asarray(W.line('s5M'), float); px = np.asarray(W.px, float)
+px = np.asarray(W.px, float)
 dev.disconnect()
 days = (int(ts[-1]) - int(ts[0])) / 86400000.0
 v0 = int(np.argmax(~np.isnan(px)))
@@ -30,27 +31,14 @@ piv = [p[0] + v0 for p in find_pivots(px[v0:], 0.9)]
 
 
 def arms_for(wob):
-    """Joe's wob_no_fire_latch — first wob signal per breach. Emits (bar, es, bd)."""
-    out = []; pending = 0; cnt = 0
-    for k in range(1, len(s5M)):
-        if s5M[k] <= LO and s5M[k - 1] > LO:
-            pending = 1; cnt = 0                      # lo-breach → await non-decreasing wob (LONG)
-        elif s5M[k] >= HI and s5M[k - 1] < HI:
-            pending = -1; cnt = 0                     # hi-breach → await non-increasing wob (SHORT)
-        if pending == -1:                             # hi: count bars NOT printing higher
-            cnt = cnt + 1 if s5M[k] <= s5M[k - 1] else 0
-            if cnt >= wob:
-                out.append((k, 1, -1)); pending = 0; cnt = 0
-        elif pending == 1:                            # lo: count bars NOT printing lower
-            cnt = cnt + 1 if s5M[k] >= s5M[k - 1] else 0
-            if cnt >= wob:
-                out.append((k, -1, 1)); pending = 0; cnt = 0
-    return out
+    """The ENGINE's s5Mage_arm (two-wob latch) at this wob — single source, sweep == engine."""
+    cfg.arm_wob = wob
+    return s5Mage_arm(W, cfg)
 
 
-print('s5Mage arm — wob_no_fire_latch (first wob/breach), %dd, %d real swings\n' % (round(days), len(piv)))
+print('s5Mage arm — TWO-wob latch (breach-confirm + reversal), %dd, %d real swings\n' % (round(days), len(piv)))
 print('%-4s %8s %7s %8s %8s %9s' % ('wob', 'n', 'n/day', 'MAE', 'MFE', 'MFE/|MAE|'))
-for wob in (0, 2, 4, 6, 8, 10):
+for wob in range(0, 13):
     maes, mfes = [], []
     for i, es, bd in arms_for(wob):
         j = bisect.bisect_right(piv, int(i))

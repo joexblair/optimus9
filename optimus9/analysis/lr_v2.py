@@ -50,30 +50,36 @@ def s5m_arm(W, cfg):
 
 
 def s5Mage_arm(W, cfg):
-    """[1·s5Mage] ARM via wob_no_fire_latch (Joe 0705 spec): the latch OPENS on an OOB breach and CLOSES (arm
-    fires) on the first wob signal = cfg.arm_wob sequential 5s bars that do NOT print a higher value than the
-    prior bar (hi-breach → non-increasing) / NOT lower (lo-breach → non-decreasing). Same value COUNTS; a
-    contrary print resets the count to 0 and RESUMES (unbroken any time after the breach — NOT from the breach).
-    One arm per breach. lo-breach → LONG (es=-1, bd=+1); hi-breach → SHORT (es=+1, bd=-1). s5Mage = W.line('s5M')
-    emerging/causal; wob in 5s bars (intended). The reversal IS the unlatched arm (arm_delay skipped). Selected
-    via cfg.arm_mode. NB: replaces the old _mage_rev sign-run detector, which mis-timed the fire (flat-at-turn
-    attributed to the prior up-direction) — 20:16 breach fired 20:33 under _mage_rev vs 20:27 under this spec."""
+    """[1·s5Mage] ARM via the TWO-wob latch (Joe 0705 spec) — a wob_breach confirms the OOB entry (filters
+    boundary chop), then a wob_signal confirms the reversal and fires the arm:
+      1. an emerging s5Mage bar CROSSES the boundary (≥hi / ≤lo) → start the breach-confirm count.
+      2. **wob_breach** (opens the latch): cfg.arm_wob consecutive bars NOT printing a LOWER value (hi-breach,
+         non-decreasing) / NOT higher (lo-breach). Same value counts; a contrary print resets-and-resumes.
+      3. **wob_signal** (closes the latch → ARM): cfg.arm_wob consecutive bars NOT printing a HIGHER value
+         (hi-breach, non-increasing) / NOT lower (lo-breach). Same value counts; contrary resets-and-resumes.
+    hi-breach → SHORT (es=+1, bd=-1); lo-breach → LONG (es=-1, bd=+1). s5Mage = W.line('s5M') emerging/causal;
+    wob in 5s bars (intended). The reversal IS the unlatched arm (arm_delay skipped). Selected via cfg.arm_mode.
+    Two-gate design fixes boundary-chop re-arming: a wiggle over the line can't confirm the breach."""
     hi, lo = cfg.hi, cfg.lo; wob = cfg.arm_wob
     s5M = W.line('s5M')
-    out, pending, cnt = [], 0, 0
+    out = []
+    state = 0; br = 0; cnt = 0                            # 0 idle · 1 confirming breach · 2 latched (await reversal)
     for k in range(1, len(s5M)):
-        if s5M[k] <= lo and s5M[k - 1] > lo:
-            pending = 1; cnt = 0                         # fresh lo breach → await non-decreasing wob (LONG)
-        elif s5M[k] >= hi and s5M[k - 1] < hi:
-            pending = -1; cnt = 0                        # fresh hi breach → await non-increasing wob (SHORT)
-        if pending == -1:                                # hi: count bars NOT printing higher (same-value counts)
-            cnt = cnt + 1 if s5M[k] <= s5M[k - 1] else 0
+        if state == 0:
+            if s5M[k] >= hi and s5M[k - 1] < hi:
+                br = 1; state = 1; cnt = 0               # hi-breach cross
+            elif s5M[k] <= lo and s5M[k - 1] > lo:
+                br = -1; state = 1; cnt = 0              # lo-breach cross
+        elif state == 1:                                 # CONFIRM breach: sustain (hi=non-decreasing, lo=non-increasing)
+            ok = (s5M[k] >= s5M[k - 1]) if br == 1 else (s5M[k] <= s5M[k - 1])
+            cnt = cnt + 1 if ok else 0
             if cnt >= wob:
-                out.append((k, 1, -1)); pending = 0; cnt = 0
-        elif pending == 1:                               # lo: count bars NOT printing lower
-            cnt = cnt + 1 if s5M[k] >= s5M[k - 1] else 0
+                state = 2; cnt = 0                       # wob_breach → latch OPEN
+        elif state == 2:                                 # REVERSAL signal: hi=non-increasing, lo=non-decreasing
+            ok = (s5M[k] <= s5M[k - 1]) if br == 1 else (s5M[k] >= s5M[k - 1])
+            cnt = cnt + 1 if ok else 0
             if cnt >= wob:
-                out.append((k, -1, 1)); pending = 0; cnt = 0
+                out.append((k, br, -br)); state = 0; cnt = 0   # es=br, bd=-br → ARM
     return out
 
 
