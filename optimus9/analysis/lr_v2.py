@@ -382,6 +382,22 @@ def v2_walk_ad(W, cfg):
     return out
 
 
+def v2_walk_diag(W, cfg):
+    """[DIAG·#54] Realtime-fidelity PROBE (Joe 0704) — NOT a real producer; swap in via StrategyLoop(producer=).
+    Arm permanently UNLATCHED + s3s4/fin_gate permanently OPEN + fin_unlatch OFF → fire a trade on EVERY
+    finisher signal, so the live UI open-time can be eyeballed against the finisher bar (the seam+301ms decision
+    offset). 'signal' = an s15a bar (the trade-placement line); cfg.fin_both=1 also requires s30a co-qualified
+    within fin_lb (the fin_gate 'both' condition), =0 fires on s15a alone. Side = finisher polarity. Causal."""
+    q15h, q15l = s_qualify(W, cfg, 's15m', 's15M', 's15r', cfg.s15r_lb)
+    q30h, q30l = s_qualify(W, cfg, 's30m', 's30M', 's30r', cfg.s30r_lb)
+    ts = W.ts; lb = cfg.fin_lb; both = bool(cfg.fin_both); out = []
+    for es, bd, q15, q30 in ((1, -1, q15h, q30h), (-1, 1, q15l, q30l)):        # (es,bd): qhi=short/Sell, qlo=long/Buy
+        for k in range(len(ts)):
+            if q15[k] and (not both or q30[max(0, k - lb):k + 1].any()):
+                out.append((int(ts[k]), es, bd, k))
+    return sorted(out)
+
+
 def v2_phase(W, cfg, in_position=0, exit_fam='s7'):
     """[AD·READOUT] Live cascade phase at the latest bar T (SRP: REPORTS state, never decides/enters — reuses the
     SAME arm→arm_delay→gate_open streams as v2_walk_ad, so the readout can't diverge from the entry producer).

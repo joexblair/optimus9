@@ -40,7 +40,7 @@ def _db(name="o9_live"):
 
 
 def _closed(o9):
-    return o9.execute("SELECT side, entry_px, exit_px, gross, net, closed_ms FROM o9_ledger "
+    return o9.execute("SELECT side, entry_px, exit_px, gross, net, opened_ms, closed_ms FROM o9_ledger "
                       "WHERE status='closed' ORDER BY closed_ms", fetch=True)
 
 
@@ -73,7 +73,7 @@ def history(limit: int = 100):
     bal, out = START_EQUITY, []
     for r in rows:
         net = float(r["net"]); bal += net
-        out.append({"ms": int(r["closed_ms"]), "dir": r["side"], "gross": round(float(r["gross"] or net), 2),
+        out.append({"oms": int(r["opened_ms"]), "ms": int(r["closed_ms"]), "dir": r["side"], "gross": round(float(r["gross"] or net), 2),
                     "net": round(net, 2), "entry": float(r["entry_px"]), "exit": float(r["exit_px"] or 0),
                     "bal": round(bal, 2)})
     return {"trades": out[-limit:][::-1]}
@@ -244,7 +244,8 @@ background-image:radial-gradient(1100px 520px at 82% -10%,rgba(47,214,190,.07),t
 .reset{font:600 11px system-ui;color:var(--warn);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 12px;margin-right:6px;cursor:pointer}.reset:hover{border-color:var(--warn)}
 .status{display:flex;align-items:stretch;overflow-x:auto}
 .stat{display:flex;flex-direction:column;gap:3px;padding:9px 14px;border-right:1px solid var(--line);justify-content:center;white-space:nowrap}.stat .v{font-family:var(--mono);font-size:15px;font-weight:600}
-.feed{display:flex;gap:8px 15px;flex-wrap:wrap;max-width:520px}.feed i{font-style:normal;display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:12px;color:var(--dim)}
+.feed{display:flex;gap:14px;flex-wrap:nowrap;overflow-x:auto;flex:1}.feed i{font-style:normal;display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:12px;color:var(--dim);white-space:nowrap}
+.feedbar{display:flex;align-items:center;gap:12px;padding:5px 12px}.feedbar .lbl{flex:none}
 .fdot{width:6px;height:6px;border-radius:50%;background:var(--long)}.fdot.warn{background:var(--warn)}.fdot.bad{background:var(--short)}
 .casc{margin-left:auto;border-right:0;align-items:flex-end}.chip{font-family:var(--mono);font-size:11.5px;padding:4px 10px;border-radius:5px;background:rgba(47,214,190,.14);color:var(--accent);border:1px solid rgba(47,214,190,.34)}
 .chip.wait{background:rgba(245,166,35,.14);color:var(--warn);border-color:rgba(245,166,35,.34)}
@@ -284,16 +285,16 @@ td{padding:8px 14px;text-align:right;border-bottom:1px solid rgba(42,51,70,.5);w
  <div class=stat><span class=lbl>day pnl</span><span class="v num" id=day>&mdash;</span></div>
  <div class=stat><span class=lbl>exposure</span><span class="v num" id=exp>&mdash;</span></div>
  <div class=stat><span class=lbl>live drawdown vs backtest</span><span class=num id=dd style=font-size:12px>&mdash;</span><span class=ddbar><i id=ddb style=width:0></i></span></div>
- <div class=stat><span class=lbl>feed health</span><div class=feed id=feed></div></div>
  <div class="stat casc"><span class=lbl>cascade state</span><span class=chip id=casc>&mdash;</span></div></div>
 <div class=body>
  <div class=main>
   <div class="chart panel"><canvas id=cv></canvas><div class=mtip id=mtip></div><div class=chleg><span style=color:var(--short)>&#9660; entry</span><span style=color:var(--long)>&#9650; exit</span><span style=color:var(--accent)>&mdash; price</span></div></div>
+  <div class="feedbar panel"><span class=lbl>feed health</span><div class=feed id=feed></div></div>
   <div class="posw panel"><div class=ph><h2>Open positions</h2><span class=c id=pc>&mdash;</span></div>
    <div class=scroll><table><thead><tr><th class=l>Side</th><th>Size</th><th>Entry</th><th>Mark</th><th>Unreal $</th><th>Unreal %</th><th>Age</th><th></th></tr></thead><tbody id=pb></tbody></table>
    <div class=empty id=pe>flat &mdash; no open positions</div></div></div>
   <div class="hist panel"><div class=ph><h2>Trade history</h2><span class=c id=hc>&mdash;</span></div>
-   <div class=scroll><table><thead><tr><th class=l>Closed</th><th>Dir</th><th>Gross</th><th>Net</th><th>Entry</th><th>Exit</th><th>Balance</th></tr></thead><tbody id=tb></tbody></table>
+   <div class=scroll><table><thead><tr><th class=l>Opened</th><th class=l>Closed</th><th>Dir</th><th>Gross</th><th>Net</th><th>Entry</th><th>Exit</th><th>Balance</th></tr></thead><tbody id=tb></tbody></table>
    <div class=empty id=he>waiting for the first realtime signal&hellip;</div></div></div>
  </div>
  <div class="book panel" id=book><h3><span>Order book</span><span id=spr>&mdash;</span></h3><div class=ladder id=asks></div>
@@ -382,7 +383,7 @@ function tick(){
   document.getElementById('hc').textContent=s.trades+' closed · '+s.win+'% win · start $'+s.start;
   document.getElementById('he').style.display=h.length?'none':'block';
   document.getElementById('tb').innerHTML=h.map(function(t){var cl=t.net>=0?'pos':'neg',sd=t.dir=='Sell'?'s':'b',nm=t.dir=='Sell'?'SHORT':'LONG';
-   return '<tr><td class=l>'+hhmm(t.ms)+'</td><td class=l><span class="side '+sd+'">'+nm+'</span></td><td class="'+(t.gross>=0?'pos':'neg')+'">'+money(t.gross)+'</td><td class="'+cl+'">'+money(t.net)+'</td><td>'+t.entry.toFixed(5)+'</td><td>'+t.exit.toFixed(5)+'</td><td>$'+commas(t.bal)+'</td></tr>'}).join('');
+   return '<tr><td class=l>'+hhmm(t.oms)+'</td><td class=l>'+hhmm(t.ms)+'</td><td class=l><span class="side '+sd+'">'+nm+'</span></td><td class="'+(t.gross>=0?'pos':'neg')+'">'+money(t.gross)+'</td><td class="'+cl+'">'+money(t.net)+'</td><td>'+t.entry.toFixed(5)+'</td><td>'+t.exit.toFixed(5)+'</td><td>$'+commas(t.bal)+'</td></tr>'}).join('');
  })}
 window.doExit=function(){if(confirm('Close the open position?'))post('/api/exit').then(tick)};
 document.getElementById('kill').onclick=function(){if(this.classList.contains('resume')){post('/api/resume').then(tick)}else if(confirm('FLATTEN & HALT — close everything and stop trading?')){post('/api/flatten').then(tick)}};

@@ -13,6 +13,7 @@ from sweep_eval import BASE_BIAS
 from optimus9.live.exchange import HmacSigner, BybitV5Client, BybitAdapter
 from optimus9.live.sizing import PositionSizer
 from optimus9.live.strategy import StrategyLoop
+from optimus9.analysis.lr_v2 import v2_walk_ad, v2_walk_diag
 from optimus9.live.ledger import O9Ledger
 from optimus9.live.app import O9LiveApp
 from optimus9.live.control import O9Control
@@ -22,6 +23,8 @@ from optimus9.live.driver import RealtimeDriver
 FAKEAPI = os.environ.get("O9_FAKEAPI_URL", "http://127.0.0.1:8098")
 SYM = os.environ.get("O9_SYMBOL", "FARTCOINUSDT")
 MODE = os.environ.get("O9_SIZE_MODE", "dynamic5x")               # ramp to the 66k-coin cap via leverage
+PRODUCER = os.environ.get("O9_PRODUCER", "ad")                   # 'ad'=v2_walk_ad (real cascade) · 'diag'=free-fire #54 probe
+_PRODUCERS = {"ad": v2_walk_ad, "diag": v2_walk_diag}
 
 dev = DatabaseManager(**get_db_config()); dev.connect()          # live tape (own o9_live collector = later)
 o9cfg = get_db_config(); o9cfg["database"] = "o9_live"
@@ -29,12 +32,13 @@ o9 = DatabaseManager(**o9cfg); o9.connect()
 tp = dev.execute("SELECT tp_pk FROM trading_pairs WHERE tp_symbol_bybit=%s", (SYM,), fetch=True)[0]["tp_pk"]
 
 bcfg = bm.BiasConfig(**BASE_BIAS)
-strat = StrategyLoop(dev, bcfg, lr_config(dev), SYM, buffer_hours=8, warmup_hours=6)   # sweep-measured floors lb=6h/wm=4h (+margin); reproduces 12/24 exactly. TODO DB-source
+strat = StrategyLoop(dev, bcfg, lr_config(dev), SYM, buffer_hours=8, warmup_hours=6,   # sweep-measured floors lb=6h/wm=4h (+margin); reproduces 12/24 exactly. TODO DB-source
+                     producer=_PRODUCERS[PRODUCER])
 adapter = BybitAdapter(BybitV5Client(FAKEAPI, HmacSigner("o9-fake-key", "o9-fake-secret")), SYM)
 ledger = O9Ledger(o9, SYM, start_equity=float(os.environ.get("O9_START_EQUITY", "500")))
 control = O9Control(o9)
 health = HealthStore(o9)                                          # cascade phase + loop_ms heartbeat → UI
 app = O9LiveApp(strat, PositionSizer(max_order=66000), adapter, ledger, control, SYM, health=health)
 
-print("o9-live REALTIME · fakeAPI=%s · symbol=%s · mode=%s · equity=$%.0f" % (FAKEAPI, SYM, MODE, ledger.equity()), flush=True)
+print("o9-live REALTIME · fakeAPI=%s · symbol=%s · mode=%s · producer=%s · equity=$%.0f" % (FAKEAPI, SYM, MODE, PRODUCER, ledger.equity()), flush=True)
 RealtimeDriver(app, dev, tp).run(max_bars=None)                  # forever — trades when the strategy fires
