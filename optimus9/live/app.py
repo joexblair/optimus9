@@ -17,21 +17,25 @@ def _ms():
 
 
 class O9LiveApp:
-    def __init__(self, strategy, sizer, adapter, ledger, control, symbol, health=None, log=print):
+    def __init__(self, strategy, sizer, adapter, ledger, control, symbol, health=None, log=print, state_logger=None):
         self.strategy = strategy      # StrategyLoop (decide)
         self.sizer = sizer            # PositionSizer (size)
         self.adapter = adapter        # ExchangeAdapter (execute) — fake or real Bybit
         self.ledger = ledger          # O9Ledger — o9's OWN record + tally (equity for sizing)
         self.control = control        # O9Control — operator state (sizing / halt / flatten), DB-backed
         self.health = health          # HealthStore — cascade phase + loop_ms (observability; None = off)
+        self.state_logger = state_logger   # StateLogger — edge-triggered cascade state-change log (None = off)
         self.symbol = symbol
         self.log = log
 
-    def _write_phase(self, W, pos):
+    def _write_phase(self, W, pos, now_ms, price):
         if self.health:                                  # observability MUST NOT break the trading loop
             try:
                 self.health.set_phase(self.strategy.phase(W, pos))
-                self.health.set_cascade(*self.strategy.state_mask(W))   # cascade mirror-grid mask
+                mask, es, armed = self.strategy.state_mask(W)
+                self.health.set_cascade(mask, es, armed)              # cascade mirror-grid mask
+                if self.state_logger:
+                    self.state_logger.record(W, mask, es, now_ms, price)   # edge-triggered state-change log
             except Exception as e:
                 self.log("o9-live: health phase write failed: %s" % e)
 
@@ -92,7 +96,7 @@ class O9LiveApp:
 
         pos = self.position()
         W = self.strategy.window(now_ms)                     # build ONCE — shared by phase + intents
-        self._write_phase(W, pos)                            # cascade block reflects the machine's view every bar
+        self._write_phase(W, pos, now_ms, price)             # cascade block + state-change log reflect the machine every bar
 
         if ctl["halted"]:
             self.ledger.log_decision(now_ms, "hold", "halted")
