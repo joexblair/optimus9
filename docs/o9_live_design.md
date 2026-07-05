@@ -124,3 +124,19 @@ Ran a **free-fire diagnostic producer** (`v2_walk_diag`, swap in via `O9_PRODUCE
 - **Exit `'end'`-sentinel live bug — FIXED.** `lr_exit_v2` marks an unresolved trade `reason='end'` at `exit_ms=window-last-bar`. Live, that bar is **always T**, so `strategy.intents()` closed the position every bar on the phantom 'end'. Fix: exclude `x[6]=='end'` in the live exit check — only a real `exit`/`SL`/`strand` closes the stack (the pyramid-exit model: pyramid toward s7r's reversal, exit all at the reversal / SL). Confirmed: holds went from a flat 5s to real durations (130s–385s → real SL).
 - **Synthetic backfill DISABLED + sunset** (`SyntheticBackfiller`, `run.py` supervisor auto-thread): the 1m→12×5s split manufactured the flat filler bars. Repopulation now via TV CSV → KlineSanitiser. See `docs/sunset_register.md`.
 - **s15 finisher signed off** (timing · entries · large-bar skip · emerging-early · filler-clean · exit-holds). **s30a co-qual re-enabled** (`lp_fin_both=1`, fires 207→140). Next: continue re-enabling upstream (gate, arm).
+
+## 0705 — option B exit model + diag co-qual fixes
+- **Exit model B (per-leg SL + shared reversal-TP).** The pyramid stack shares ONE take-profit — a real reversal
+  exit (`exit`/`strand`) for the held side closes ALL legs together (`ledger.record_close`). But each leg carries
+  its OWN stop: a leg closes at its own −sl% from its own entry (partial close via `record_close_leg(led_id)`), so
+  every leg gets a fighting chance to clear its MAE hump (legs opened before the swing have different MAE). Rationale
+  (Joe): blanket-SL-on-worst-leg (A) drags the survivors out; VWAP-SL (C) couples their fates. Touch-points:
+  `TradeIntent.led_id` · `O9Ledger.open_legs()`/`record_close_leg()`/`_close_rows()` · `StrategyLoop.intents(W,pos,legs)`
+  · `O9LiveApp` (pass legs, per-leg close, closes never split). **OWED: backtest reconciliation** — `lr_exit_v2` still
+  models each entry as fully independent (own SL AND own reversal), so live (shared-TP) diverges from the backtest exit;
+  reconcile to shared-TP at the next re-baseline.
+- **Diag co-qual made bidirectional.** `v2_walk_diag` fin_both=1 now fires at the PAIR-COMPLETION bar (the later of
+  s15a/s30a), EITHER order, when the other qualified within fin_lb+fin_fwd (causal, backward-only at the fire bar).
+  Fixes late-s30a pairs being missed (s15a→s30a 35s later fired nothing before).
+- **`lp_fin_dedup` knob (DB, sweepable).** Collapse pair-completion fires within N base-bars of the last same-side
+  fire (one per "s30a umbrella"). 0=off (every fire). Default 0; sweep to tune once the full cascade is live.
