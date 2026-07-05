@@ -50,23 +50,30 @@ def s5m_arm(W, cfg):
 
 
 def s5Mage_arm(W, cfg):
-    """[1·s5Mage] ARM = the FIRST wob-confirmed s5Mage reversal AFTER an OOB breach, one per breach (Joe 0705).
-    lo-breach (oversold) → await up-reversal → LONG (es=-1, bd=+1); hi-breach → down-reversal → SHORT (es=+1,
-    bd=-1). s5Mage = W.line('s5M') (emerging/causal); wob = cfg.arm_wob (our defined wobble). Emits [(bar_i,
-    es, bd)] — the reversal IS the unlatched arm (arm_delay is skipped in this mode). Selected via cfg.arm_mode."""
-    hi, lo = cfg.hi, cfg.lo
+    """[1·s5Mage] ARM via wob_no_fire_latch (Joe 0705 spec): the latch OPENS on an OOB breach and CLOSES (arm
+    fires) on the first wob signal = cfg.arm_wob sequential 5s bars that do NOT print a higher value than the
+    prior bar (hi-breach → non-increasing) / NOT lower (lo-breach → non-decreasing). Same value COUNTS; a
+    contrary print resets the count to 0 and RESUMES (unbroken any time after the breach — NOT from the breach).
+    One arm per breach. lo-breach → LONG (es=-1, bd=+1); hi-breach → SHORT (es=+1, bd=-1). s5Mage = W.line('s5M')
+    emerging/causal; wob in 5s bars (intended). The reversal IS the unlatched arm (arm_delay skipped). Selected
+    via cfg.arm_mode. NB: replaces the old _mage_rev sign-run detector, which mis-timed the fire (flat-at-turn
+    attributed to the prior up-direction) — 20:16 breach fired 20:33 under _mage_rev vs 20:27 under this spec."""
+    hi, lo = cfg.hi, cfg.lo; wob = cfg.arm_wob
     s5M = W.line('s5M')
-    rev = _mage_rev(s5M, cfg.arm_wob)                    # +1 up-turn / -1 down-turn (wob-confirmed)
-    out, pending = [], 0
+    out, pending, cnt = [], 0, 0
     for k in range(1, len(s5M)):
         if s5M[k] <= lo and s5M[k - 1] > lo:
-            pending = 1                                  # fresh lo breach → await up-reversal (LONG)
+            pending = 1; cnt = 0                         # fresh lo breach → await non-decreasing wob (LONG)
         elif s5M[k] >= hi and s5M[k - 1] < hi:
-            pending = -1                                 # fresh hi breach → await down-reversal (SHORT)
-        if pending == 1 and rev[k] == 1:
-            out.append((k, -1, 1)); pending = 0          # es=-1 (lo side), bd=+1 (long)
-        elif pending == -1 and rev[k] == -1:
-            out.append((k, 1, -1)); pending = 0          # es=+1 (hi side), bd=-1 (short)
+            pending = -1; cnt = 0                        # fresh hi breach → await non-increasing wob (SHORT)
+        if pending == -1:                                # hi: count bars NOT printing higher (same-value counts)
+            cnt = cnt + 1 if s5M[k] <= s5M[k - 1] else 0
+            if cnt >= wob:
+                out.append((k, 1, -1)); pending = 0; cnt = 0
+        elif pending == 1:                               # lo: count bars NOT printing lower
+            cnt = cnt + 1 if s5M[k] >= s5M[k - 1] else 0
+            if cnt >= wob:
+                out.append((k, -1, 1)); pending = 0; cnt = 0
     return out
 
 

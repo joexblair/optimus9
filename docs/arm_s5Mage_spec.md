@@ -5,10 +5,16 @@ and hard to reason about; Joe's model is the **s5Mage reversal off an OOB extrem
 config-selectable arm lets both the backtest (`v2_walk`) and o9-live (`v2_walk_ad`) run the *same*,
 readable arm, and a Pine (from the engine) marks exactly what the engine arms on.
 
-## The mechanic (`s5Mage_arm` in `lr_v2.py`)
-- **Arm = the FIRST wob-confirmed s5Mage reversal AFTER an OOB breach, one per breach.**
-  - lo-breach (oversold) → await up-reversal → **LONG** (es=−1, bd=+1)
-  - hi-breach → await down-reversal → **SHORT** (es=+1, bd=−1)
+## The mechanic (`s5Mage_arm` in `lr_v2.py`) — **wob_no_fire_latch** (Joe 0705 spec)
+- **The latch OPENS on an OOB breach and CLOSES (arm fires) on the first wob signal.**
+- **wob signal = `arm_wob` sequential 5s bars that do NOT print a higher value** than the prior bar
+  (hi-breach → **non-increasing**) / NOT lower (lo-breach → **non-decreasing**).
+  - **Same value COUNTS** toward the wob; **only a contrary print resets** the count to 0 — and it **RESUMES**
+    counting (unbroken *any time* after the breach, NOT from the breach). One arm per breach.
+  - lo-breach (oversold) → **LONG** (es=−1, bd=+1) · hi-breach → **SHORT** (es=+1, bd=−1)
+- **wob is in 5s bars** (intended — confirmed by Joe). Replaces the old `_mage_rev` sign-run detector, which
+  mis-timed the fire (a flat at the turn was attributed to the prior up-direction): the 20:16 breach fired
+  **20:33 under `_mage_rev` vs 20:27 under this spec**.
 - **s5Mage = `W.line('s5M')`** — the canonical DB line **37·0.83·ohlc4 @ 300s, emerging/causal**.
   - Mult 0.70 vs 0.83 does **not** change reversal timing (slope-flip), only OOB-breach frequency. 0.83
     gives **24.3/day @ wob-8** (≈ Joe's ~25/day observation); 0.70 gives 28.2/day. Left on the canonical
