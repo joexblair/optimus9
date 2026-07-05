@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import bias_machine as bm
 from optimus9.analysis.lr_v2 import (v2_walk, v2_walk_ad, lr_exit_v2, strand_rescue, v2_phase, v2_state_mask,
-                                     cascade_substrate)
+                                     cascade_substrate, v2_mech_events)
 from optimus9.live.sizing import TradeIntent
 
 _SIDE = {1: "Buy", -1: "Sell"}
@@ -52,6 +52,11 @@ class StrategyLoop:
         """Agnostic PURE cascade substrate at bar T for the state-log (SRP: reports deterministic facts, both
         sides, es-free). Cannot diverge from the producer — the honest layer of the event log."""
         return cascade_substrate(W, self._lr)
+
+    def mech_events(self, W):
+        """Producer-truth mechanism OCCURRENCES at bar T (arm/gate/rtr/stale/trade) from v2_cascade — the SAME
+        chain as the entries, per-arm (no thrash). Completes 'every board cell' alongside substrate()."""
+        return v2_mech_events(W, self._lr)
 
     def decide(self, now_ms: int, position: dict | None) -> list[TradeIntent]:
         """Compat entry: build the window and return this bar's intents (callers that don't need the phase)."""

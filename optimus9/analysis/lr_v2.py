@@ -361,25 +361,79 @@ def fin_gate(q15, q30, ok, cap):
     return max(j15, j30) if (j15 is not None and j30 is not None) else None
 
 
-def v2_walk_ad(W, cfg):
-    """[5·AD·WIRE] The arm-delay stack (Joe 0704, o9-live producer): arm → arm_delay-s7r (big-leg → s5Mage
-    reversal / unlatch) → per arm: M1 finisher-lookback-on-arm-unlatch, else (if the s3s4 gate opened) M2
-    post-gate finisher. Trade placed on the next same-side s15a (M1) / both-qualified bar (M2). Dedup by bar."""
+def v2_cascade(W, cfg):
+    """[5·AD·CHAIN] SINGLE-SOURCE cascade chain per arm (Joe 0705) — the producer's OWN computation, consumed by
+    BOTH the entry producer (v2_walk_ad) and the mechanism-event log (v2_mech_events) so they CANNOT diverge. Per
+    setup: (arm_bar, es, bd, cap, src, gate_bar|None, gate_reason|None, trade_bar|None, path). arm_bar = the
+    UNLATCH bar (small leg = the breach; big leg = the s5Mage-reversal, per arm_delay). path: 'M1' fin_unlatch
+    (NO gate) · 'M2' fin_gate (post-gate) · None (no trade)."""
     setups = v2_arm(W, cfg)
     if cfg.arm_bigleg:
         setups = arm_delay(W, cfg, setups)
-    opens = {o[0]: o for o in gate_open(W, cfg, setups)}                  # arm bar -> gate-open tuple
+    opens = {o[0]: o for o in gate_open(W, cfg, setups)}                  # arm bar -> (i,es,bd,open_k,reason,cap)
     q15h, q15l = s_qualify(W, cfg, 's15m', 's15M', 's15r', cfg.s15r_lb)
     q30h, q30l = s_qualify(W, cfg, 's30m', 's30M', 's30r', cfg.s30r_lb)
-    ts = W.ts; seen, out = set(), []
+    chain = []
     for (i, es, bd, cap, src) in setups:
         q15, q30 = (q15h, q30h) if es == 1 else (q15l, q30l)             # qhi = short-side, qlo = long-side
-        tk = fin_unlatch(q15, q30, i, cap, cfg.fin_lb, cfg.fin_fwd)      # M1
-        if tk is None and i in opens:
-            tk = fin_gate(q15, q30, opens[i][3], cap)                    # M2 (only if M1 didn't fire)
+        o = opens.get(i); gb = o[3] if o else None; gr = o[4] if o else None
+        tk = fin_unlatch(q15, q30, i, cap, cfg.fin_lb, cfg.fin_fwd); path = 'M1'   # M1: no gate
+        if tk is None and o is not None:
+            tk = fin_gate(q15, q30, gb, cap); path = 'M2'                # M2 only if M1 didn't fire AND gate opened
+        if tk is None:
+            path = None
+        chain.append((i, es, bd, cap, src, gb, gr, tk, path))
+    return chain
+
+
+def v2_walk_ad(W, cfg):
+    """[5·AD·WIRE] The arm-delay stack (Joe 0704, o9-live producer): arm → arm_delay-s7r (big-leg → s5Mage
+    reversal / unlatch) → per arm: M1 finisher-lookback-on-arm-unlatch, else (if the s3s4 gate opened) M2
+    post-gate finisher. Trade placed on the next same-side s15a (M1) / both-qualified bar (M2). Dedup by bar.
+    Now a THIN consumer of v2_cascade (single source → the mechanism-event log can't diverge from the entries)."""
+    ts = W.ts; seen, out = set(), []
+    for (i, es, bd, cap, src, gb, gr, tk, path) in v2_cascade(W, cfg):
         if tk is not None and tk not in seen:
             seen.add(tk); out.append((int(ts[tk]), es, bd, tk))
     return out
+
+
+def v2_mech_events(W, cfg):
+    """[AD·EMIT] Producer-truth mechanism OCCURRENCES at the latest bar T (Joe 0705) — sourced from v2_cascade (the
+    SAME chain as the entries, so no divergence). Per-arm, NOT max-live → no reselection thrash (each arm/gate
+    emitted ONCE at its own bar). Emits (state, side, meta) for events whose bar == T:
+      'arm'        @ each setup's unlatch bar  — meta = src (s5m/s5r)
+      'stale_exit' @ the arm bar (if AB toggle) — meta = None
+      'rtr'        @ the ready-to-reverse latch bar (per-arm replay) — meta = None
+      's3s4_gate'  @ each gate-open bar          — meta = reason (a/b/c)
+      'trade'      @ each trade bar              — meta = path (M1/M2)
+    Occurrences, not latch states — the reset-on-trade is a GRID concern, not the log's. EVERY board cell is now
+    covered (Joe 0705): line/finisher/predict/rev/run/wait via cascade_substrate, arm/gate/rtr/stale/trade here."""
+    T = len(W.ts) - 1
+    sig = gate_signals(W, cfg)
+    ev = []
+    for (i, es, bd, cap, src, gb, gr, tk, path) in v2_cascade(W, cfg):
+        if i == T:
+            ev.append(('arm', int(es), src))
+            if (not sig['oob2'][i]) and (not sig['oob3'][i]) and (not sig['oob4'][i]):
+                ev.append(('stale_exit', int(es), None))                 # AB toggle: all r's into IB at the arm
+        if gb == T:
+            ev.append(('s3s4_gate', int(es), gr))
+        if tk == T:
+            ev.append(('trade', int(es), path))
+        if i < T <= cap:                                                 # rtr: does the latch FIRST fire at T?
+            p3 = p4 = _b3 = _b4 = rtr = False; rtr_bar = None
+            for k in range(i + 1, min(cap, T + 1)):
+                if sig['pred3'][k] == es and sig['s3m_oob'][k]: p3 = True
+                if sig['pred4'][k] == es and sig['s4m_oob'][k]: p4 = True
+                if p3 and sig['brc3'][k] == es: _b3 = True
+                if p4 and sig['brc4'][k] == es: _b4 = True
+                nr = rtr or _b3 or _b4 or (not p3 and not p4 and (sig['rev3m'][k] == bd or sig['rev4m'][k] == bd))
+                if nr and not rtr: rtr_bar = k
+                rtr = nr
+            if rtr_bar == T:
+                ev.append(('rtr', int(es), None))
+    return ev
 
 
 def v2_walk_diag(W, cfg):
@@ -540,6 +594,15 @@ def cascade_substrate(W, cfg):
     b['s7r_predict'] = int(predict_breach(s7r, s7m, s7M, hi, lo, FENCE_HI, FENCE_LO)[T])
     rev7 = _mage_rev(s7M, cfg.fin_mage_wob); nz = np.flatnonzero(rev7[:T + 1])
     b['s7M_rev'] = int(rev7[nz[-1]]) if nz.size else 0
+    # s3s4 board cells (predict-testing / awaiting-r) — both-side signed, es-free (derived, pure)
+    s3m, s3M, s3r = L('s3m')[T], L('s3M')[T], L('s3r')[T]; s4m, s4M, s4r = L('s4m')[T], L('s4M')[T], L('s4r')[T]
+    b['s3s4_run'] = 1 if (s3m >= hi or s4m >= hi) else (-1 if (s3m <= lo or s4m <= lo) else 0)   # m OOB either
+
+    def _allsd(sd, *vs):
+        return all((v >= hi) if sd == 1 else (v <= lo) for v in vs)
+
+    b['s3s4_wait'] = (1 if _allsd(1, s3m, s3M, s4m, s4M) and not _allsd(1, s3r, s4r)              # m+M all breached,
+                      else (-1 if _allsd(-1, s3m, s3M, s4m, s4M) and not _allsd(-1, s3r, s4r) else 0))  # r not yet
     return b
 
 

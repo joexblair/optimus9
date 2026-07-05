@@ -35,8 +35,9 @@ class O9LiveApp:
                 self.health.set_phase(self.strategy.phase(W, pos))
                 mask, es, armed = self.strategy.state_mask(W, since_ms=self._last_trade_ms)
                 self.health.set_cascade(mask, es, armed)              # cascade mirror-grid mask (side-locked view)
-                if self.state_logger:                                 # log the PURE substrate (both-sides, can't lie)
-                    self.state_logger.record(W, self.strategy.substrate(W), mask, es, now_ms, price)
+                if self.state_logger:                                 # EVERY board cell: substrate + producer mech-events
+                    self.state_logger.record(W, self.strategy.substrate(W), self.strategy.mech_events(W),
+                                             mask, es, now_ms, price)
             except Exception as e:
                 self.log("o9-live: health phase write failed: %s" % e)
 

@@ -27,22 +27,28 @@ class StateLogger:
     def _ensure(self):
         self.db.execute("""CREATE TABLE IF NOT EXISTS o9_state_log (
             sl_id BIGINT AUTO_INCREMENT PRIMARY KEY, kline_ms BIGINT NOT NULL, state VARCHAR(32) NOT NULL,
-            old_v TINYINT NOT NULL, new_v TINYINT NOT NULL, mask BIGINT NOT NULL, es TINYINT NOT NULL,
+            old_v TINYINT NOT NULL, new_v TINYINT NOT NULL, meta VARCHAR(16), mask BIGINT NOT NULL, es TINYINT NOT NULL,
             price DECIMAL(20,8), created_ms BIGINT NOT NULL, KEY k_ts (kline_ms), KEY k_state (state))""")
+        try:                                             # additive for pre-meta tables (arm/gate reason, trade path)
+            self.db.execute("ALTER TABLE o9_state_log ADD COLUMN meta VARCHAR(16) AFTER new_v")
+        except Exception:
+            pass
         self.db.execute("""CREATE TABLE IF NOT EXISTS o9_state_log_line (
             sll_id BIGINT AUTO_INCREMENT PRIMARY KEY, sl_id BIGINT NOT NULL, line VARCHAR(16) NOT NULL,
             val DECIMAL(12,4), KEY k_sl (sl_id))""")
 
-    def record(self, W, sub, mask, es, kline_ms, price):
-        """Diff the substrate dict vs the prior bar; for each flipped state write a signed event (old_v→new_v ∈
-        {-1,0,1}) + a line snapshot + a file line. `mask` is stored for reference (the side-locked grid view — NOT
-        diffed). No-change bars are a no-op. First call sets the baseline (no log)."""
+    def record(self, W, sub, mech, mask, es, kline_ms, price):
+        """Write EVERY board event this bar: (1) substrate flips (diff vs prior bar, signed old_v→new_v ∈ {-1,0,1});
+        (2) producer mechanism OCCURRENCES (arm/gate/rtr/stale/trade — old_v=0→new_v=side, meta=src/reason/path).
+        Each row gets a line snapshot + a file line. `mask` stored for reference (side-locked grid view). First
+        call sets the substrate baseline (no flips), but mech occurrences still log."""
         prev = self._last
         self._last = dict(sub)
-        if prev is None:
-            return
-        changes = [(k, prev.get(k, 0), v) for k, v in sub.items() if prev.get(k, 0) != v]
-        if not changes:
+        rows = []                                                        # (state, old, new, meta)
+        if prev is not None:
+            rows += [(k, prev.get(k, 0), v, None) for k, v in sub.items() if prev.get(k, 0) != v]
+        rows += [(st, 0, int(side), meta) for (st, side, meta) in (mech or [])]
+        if not rows:
             return
         T = len(W.ts) - 1
         vals = {}
@@ -52,20 +58,20 @@ class StateLogger:
             except Exception:
                 pass
         now = self._now()
-        for state, old, new in changes:
-            self.db.execute("INSERT INTO o9_state_log (kline_ms,state,old_v,new_v,mask,es,price,created_ms) "
-                            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
-                            (int(kline_ms), state, int(old), int(new), int(mask), int(es), price, now))
+        for state, old, new, meta in rows:
+            self.db.execute("INSERT INTO o9_state_log (kline_ms,state,old_v,new_v,meta,mask,es,price,created_ms) "
+                            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                            (int(kline_ms), state, int(old), int(new), meta, int(mask), int(es), price, now))
             sl_id = self.db.execute("SELECT LAST_INSERT_ID() id", fetch=True)[0]['id']
             for ln, v in vals.items():
                 self.db.execute("INSERT INTO o9_state_log_line (sl_id,line,val) VALUES (%s,%s,%s)", (sl_id, ln, v))
-            self._append_file(kline_ms, state, old, new, mask, es, price)
+            self._append_file(kline_ms, state, old, new, meta, es, price)
 
-    def _append_file(self, kline_ms, state, old, new, mask, es, price):
+    def _append_file(self, kline_ms, state, old, new, meta, es, price):
         try:
             with open(self.logfile, 'a') as f:
-                f.write("%s  %-12s %d->%d  side=%-5s px=%s  mask=%d\n" % (
+                f.write("%s  %-12s %+d->%+d %-4s side=%-5s px=%s\n" % (
                     time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(int(kline_ms) / 1000)),
-                    state, old, new, ('SHORT' if es == 1 else 'LONG' if es == -1 else '-'), price, mask))
+                    state, old, new, (meta or ''), ('SHORT' if es == 1 else 'LONG' if es == -1 else '-'), price))
         except Exception:
             pass

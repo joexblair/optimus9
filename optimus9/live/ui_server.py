@@ -93,14 +93,14 @@ def trade_events(led_id: int):
     t = t[0]; this_open = int(t["opened_ms"])
     pv = o9.execute("SELECT MAX(opened_ms) m FROM o9_ledger WHERE opened_ms < %s", (this_open,), fetch=True)
     win_start = int(pv[0]["m"]) if pv and pv[0]["m"] else this_open - 3600000     # prev trade, or 1h back
-    rows = o9.execute("SELECT sl_id, kline_ms, state, old_v, new_v FROM o9_state_log "
+    rows = o9.execute("SELECT sl_id, kline_ms, state, old_v, new_v, meta FROM o9_state_log "
                       "WHERE kline_ms > %s AND kline_ms <= %s ORDER BY kline_ms, sl_id",
                       (win_start, this_open + 5000), fetch=True)                  # +5s = the trigger→trade bar gap
     events = []
     for r in rows:
         ln = o9.execute("SELECT line, val FROM o9_state_log_line WHERE sl_id=%s", (r["sl_id"],), fetch=True)
         events.append({"state": r["state"], "ms": int(r["kline_ms"]), "old": int(r["old_v"]), "new": int(r["new_v"]),
-                       "lines": {x["line"]: float(x["val"]) for x in ln}})
+                       "meta": r["meta"], "lines": {x["line"]: float(x["val"]) for x in ln}})
     o9.disconnect()
     return {"trade": {"led": t["led_id"], "side": t["side"], "entry": float(t["entry_px"]),
                       "opened_ms": this_open, "net": round(float(t["net"] or 0), 2)}, "events": events}
@@ -478,7 +478,8 @@ function openTradeModal(led){
   document.getElementById('tmbody').innerHTML=window._TMEV.length?window._TMEV.map(function(e,i){
     var d=function(v){return v>0?'hi':v<0?'lo':'in';};
     var col=e.new>0?'var(--short)':(e.new<0?'var(--long)':'var(--dim)');
-    return '<tr data-ev='+i+'><td class=l>'+e.state+'</td><td>'+fmthms(e.ms)+'</td><td style="color:'+col+'">'+d(e.old)+' → '+d(e.new)+'</td></tr>';}).join(''):'<tr><td class=l colspan=3 style="color:var(--dim)">no logged cascade events in this trade window</td></tr>';
+    var nm=e.state+(e.meta?' <span style="color:var(--dim)">('+e.meta+')</span>':'');
+    return '<tr data-ev='+i+'><td class=l>'+nm+'</td><td>'+fmthms(e.ms)+'</td><td style="color:'+col+'">'+d(e.old)+' → '+d(e.new)+'</td></tr>';}).join(''):'<tr><td class=l colspan=3 style="color:var(--dim)">no logged cascade events in this trade window</td></tr>';
   document.getElementById('tmodal').classList.add('show');});
 }
 function closeTradeModal(){document.getElementById('tmodal').classList.remove('show');document.getElementById('tmtip').classList.remove('show');}
