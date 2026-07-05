@@ -28,7 +28,7 @@ def s5r_arm(W, cfg, slip=15):
     no gate/finisher verdict. e.g. s4m low + s5r ≥70 → LONG. TODO: source `slip` from lp_config (no-hardcode)."""
     ts = W.ts; n = len(ts); hi, lo = cfg.hi, cfg.lo
     fence_hi, fence_lo = hi - slip, lo + slip            # 70 / 30 — s5r's opposing-side OOB fence
-    s4m = W._line('s4m'); s5r = W._line('s5r')
+    s4m = W.line('s4m'); s5r = W.line('s5r')            # #58 flip: emerging/causal (was _line = look-ahead)
     arms = []
     for i in range(1, n):
         s4_lo = s4m[i] <= lo and s4m[i - 1] > lo         # fresh s4m LOW breach (the leg)
@@ -44,7 +44,7 @@ def s5m_arm(W, cfg):
     """Straight-breach arm — s5m crosses OOB (closed) → arm; trade = the reversal (bd = -es).
     Emits [(bar_i, es, bd)]. On the CURRENT 0.4-multi s5m until the 0.65 re-clone (task #45)."""
     ts = W.ts; n = len(ts); hi, lo = cfg.hi, cfg.lo
-    s5m = W._line('s5m')
+    s5m = W.line('s5m')                                 # #58 flip: emerging/causal (was _line = look-ahead)
     sign = np.where(s5m >= hi, 1, np.where(s5m <= lo, -1, 0))
     return [(i, int(sign[i]), -int(sign[i])) for i in range(1, n) if sign[i] != 0 and sign[i] != sign[i - 1]]
 
@@ -56,7 +56,7 @@ def v2_arm(W, cfg, horizon=None):
     backstop. Same-bar opposite-side conflict → **s5m wins** (setdefault)."""
     horizon = horizon or cfg.horizon
     n = len(W.ts); hi, lo = cfg.hi, cfg.lo
-    s5m = W._line('s5m'); sign = np.where(s5m >= hi, 1, np.where(s5m <= lo, -1, 0))
+    s5m = W.line('s5m'); sign = np.where(s5m >= hi, 1, np.where(s5m <= lo, -1, 0))   # #58 flip: emerging/causal
     idx = np.arange(n)
     nxt_hi = np.minimum.accumulate(np.where(sign == 1, idx, n)[::-1])[::-1]   # next hi-breach bar >= k
     nxt_lo = np.minimum.accumulate(np.where(sign == -1, idx, n)[::-1])[::-1]  # next lo-breach bar >= k
@@ -91,9 +91,9 @@ def gate_signals(W, cfg, gate_rev='s1M'):
     prediction gated by s{n}m OOB ("test while OOB"). gate_rev = the gate reversal Mage line (DATA, Joe 0704):
     's1M' (60s, default) or 's2M' (120s) — a sweep knob now both exist. Boundary-agnostic reversal."""
     hi, lo = cfg.hi, cfg.lo
-    s3r, s3m, s3M = W._line('s3r'), W._line('s3m'), W._line('s3M')
-    s4r, s4m, s4M = W._line('s4r'), W._line('s4m'), W._line('s4M')
-    s2r = W._line('s2r')
+    s3r, s3m, s3M = W.line('s3r'), W.line('s3m'), W.line('s3M')     # #58 flip: emerging/causal (was _line look-ahead)
+    s4r, s4m, s4M = W.line('s4r'), W.line('s4m'), W.line('s4M')
+    s2r = W.line('s2r')
     return {
         'pred3': predict_breach(s3r, s3m, s3M, hi, lo, FENCE_HI, FENCE_LO),
         'pred4': predict_breach(s4r, s4m, s4M, hi, lo, FENCE_HI, FENCE_LO),
@@ -102,7 +102,7 @@ def gate_signals(W, cfg, gate_rev='s1M'):
         's3m_oob': (s3m >= hi) | (s3m <= lo), 's4m_oob': (s4m >= hi) | (s4m <= lo),
         'rev3r': _slope_flip(s3r), 'rev4r': _slope_flip(s4r),          # r reversal (reverse-before-breach)
         'rev3m': _slope_flip(s3m), 'rev4m': _slope_flip(s4m),          # m reversal (setup#2)
-        'rev2M': _slope_flip(W._line(gate_rev)),                       # gate Mage reversal (path c) — s1M/s2M
+        'rev2M': _slope_flip(W.line(gate_rev)),                        # #58 flip: emerging/causal · gate Mage rev (path c)
         # per-line OOB state — path 'a' fires when all 3 CROSS OOB→IB (a transition, not the static all-IB)
         'oob2': (s2r >= hi) | (s2r <= lo), 'oob3': (s3r >= hi) | (s3r <= lo), 'oob4': (s4r >= hi) | (s4r <= lo),
     }
