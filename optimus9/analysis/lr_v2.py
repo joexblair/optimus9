@@ -49,20 +49,47 @@ def s5m_arm(W, cfg):
     return [(i, int(sign[i]), -int(sign[i])) for i in range(1, n) if sign[i] != 0 and sign[i] != sign[i - 1]]
 
 
+def s5Mage_arm(W, cfg):
+    """[1·s5Mage] ARM = the FIRST wob-confirmed s5Mage reversal AFTER an OOB breach, one per breach (Joe 0705).
+    lo-breach (oversold) → await up-reversal → LONG (es=-1, bd=+1); hi-breach → down-reversal → SHORT (es=+1,
+    bd=-1). s5Mage = W.line('s5M') (emerging/causal); wob = cfg.arm_wob (our defined wobble). Emits [(bar_i,
+    es, bd)] — the reversal IS the unlatched arm (arm_delay is skipped in this mode). Selected via cfg.arm_mode."""
+    hi, lo = cfg.hi, cfg.lo
+    s5M = W.line('s5M')
+    rev = _mage_rev(s5M, cfg.arm_wob)                    # +1 up-turn / -1 down-turn (wob-confirmed)
+    out, pending = [], 0
+    for k in range(1, len(s5M)):
+        if s5M[k] <= lo and s5M[k - 1] > lo:
+            pending = 1                                  # fresh lo breach → await up-reversal (LONG)
+        elif s5M[k] >= hi and s5M[k - 1] < hi:
+            pending = -1                                 # fresh hi breach → await down-reversal (SHORT)
+        if pending == 1 and rev[k] == 1:
+            out.append((k, -1, 1)); pending = 0          # es=-1 (lo side), bd=+1 (long)
+        elif pending == -1 and rev[k] == -1:
+            out.append((k, 1, -1)); pending = 0          # es=+1 (hi side), bd=-1 (short)
+    return out
+
+
 def v2_arm(W, cfg, horizon=None):
-    """[2] The v2 ARM = s5m straight-breach OR s5r divergence, unified → setups [(i, es, bd, cap, src)].
-    cap = the arm's life = min(OPPOSITE-side s5m breach, i + horizon) (Joe 0704, opt-a): the arm cancels the
-    moment s5m breaches the other side (a hi-breach kills a lo-arm, and vice-versa); the 1.5h horizon stays a
-    backstop. Same-bar opposite-side conflict → **s5m wins** (setdefault)."""
+    """[2] The v2 ARM, config-selected by cfg.arm_mode (Joe 0705):
+      's5m'    (current) — s5m straight-breach OR s5r divergence, unified.
+      's5Mage' (troubleshooting) — s5Mage first-OOB-reversal (arm_delay skipped; the reversal IS the arm).
+    setups [(i, es, bd, cap, src)]. cap = min(OPPOSITE-side breach on the arm line, i + horizon) (opt-a): the arm
+    cancels when the arm line breaches the other side; the 1.5h horizon is the backstop."""
     horizon = horizon or cfg.horizon
     n = len(W.ts); hi, lo = cfg.hi, cfg.lo
-    s5m = W.line('s5m'); sign = np.where(s5m >= hi, 1, np.where(s5m <= lo, -1, 0))   # #58 flip: emerging/causal
+    if getattr(cfg, 'arm_mode', 's5m') == 's5Mage':
+        arm_line = W.line('s5M')                         # s5Mage arm; cap on the opposite s5Mage breach
+        m = {i: (es, bd, 's5Ma') for i, es, bd in s5Mage_arm(W, cfg)}
+    else:
+        arm_line = W.line('s5m')
+        m = {i: (es, bd, 's5m') for i, es, bd in s5m_arm(W, cfg)}
+        for i, es, bd in s5r_arm(W, cfg):
+            m.setdefault(i, (es, bd, 's5r'))             # s5m already set → s5m wins
+    sign = np.where(arm_line >= hi, 1, np.where(arm_line <= lo, -1, 0))
     idx = np.arange(n)
     nxt_hi = np.minimum.accumulate(np.where(sign == 1, idx, n)[::-1])[::-1]   # next hi-breach bar >= k
     nxt_lo = np.minimum.accumulate(np.where(sign == -1, idx, n)[::-1])[::-1]  # next lo-breach bar >= k
-    m = {i: (es, bd, 's5m') for i, es, bd in s5m_arm(W, cfg)}
-    for i, es, bd in s5r_arm(W, cfg):
-        m.setdefault(i, (es, bd, 's5r'))                 # s5m already set → s5m wins
     out = []
     for i, (es, bd, src) in sorted(m.items()):
         opp = (nxt_lo[i + 1] if es == 1 else nxt_hi[i + 1]) if i + 1 < n else n   # opposite-side breach = -es
@@ -331,6 +358,8 @@ def arm_delay(W, cfg, setups):
     fires (a strong leg still running), HOLD the arm to the s5Mage reversal (wob cfg.arm_wob) toward bd — don't
     enter the ripple before the tide turns; else keep the breach arm. Returns re-timed setups. NOTE: the spec's
     unconditional 'base = s5m reversal' for non-big-leg is NOT here (the validated build kept the breach arm)."""
+    if getattr(cfg, 'arm_mode', 's5m') == 's5Mage':
+        return setups                                    # Joe 0705: the s5Mage arm IS the reversal — no delay
     ch, cl = bigleg_gate(W, cfg); rev5M = _mage_rev(W.line('s5M'), cfg.arm_wob); out = []
     for (i, es, bd, cap, src) in setups:
         cond = ch if es == 1 else cl

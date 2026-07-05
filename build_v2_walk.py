@@ -16,7 +16,7 @@ from optimus9.analysis.lr import lr_config, lr_walk
 from optimus9.analysis.lr_v2 import v2_walk, lr_exit_v2, strand_rescue
 
 # --- scenario params (→ config table later) ---
-R1_END = '2026-06-22 00:00'      # window end (bias_window anchor)
+R1_END = dtm.datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')   # window end = NOW → last 7 days (lookback=168h)
 START_USDT = 500.0               # opening balance
 LEVERAGE = 5.0                   # notional / account — Joe: safety-first 5x
 MAX_LOT = 66000                  # FARTCOIN coin cap
