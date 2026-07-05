@@ -431,7 +431,12 @@ def cmd_supervisor(args, db: DatabaseManager) -> int:
             bdb.disconnect()
         except Exception as e:
             _log.error(f'background backfill failed (live collection unaffected): {e}')
-    threading.Thread(target=_backfill, daemon=True).start()
+    # SUNSET (Joe 2026-07-05): synthetic 1m→5s backfill DISABLED. It manufactured phantom flat filler bars
+    # (one Bybit 1m split into 12 identical 5s bars) that drift oscillators into false reversals. filler_invisible
+    # (optimus9_system) now makes no-trade gaps invisible to the lines; real history repopulates from TV CSV →
+    # KlineSanitiser. _backfill + SyntheticBackfiller are kept (not deleted) pending review — docs/sunset_register.md.
+    # threading.Thread(target=_backfill, daemon=True).start()   # DISABLED
+    _log.info('synthetic backfill disabled (sunset) — gaps handled by filler_invisible + TV-CSV repopulation')
 
     pm = ProcessManager()
     pm.register(WorkerSpec(
@@ -455,6 +460,9 @@ def cmd_supervisor(args, db: DatabaseManager) -> int:
 
 
 def cmd_backfill_synthetic(args, db: DatabaseManager) -> int:
+    # SUNSET (Joe 2026-07-05): manufactures synthetic filler bars — prefer TV-CSV → KlineSanitiser repopulation.
+    # Kept as a manual emergency path pending sunset review — docs/sunset_register.md.
+    _log.warning('SUNSET: backfill_synthetic makes synthetic filler bars; prefer TV-CSV repopulation (docs/sunset_register.md)')
     client = BybitKlineClient()
     return SyntheticBackfiller(db, client).backfill(args.tp_pk, args.symbol) or 0
 

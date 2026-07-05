@@ -45,6 +45,11 @@ class SyntheticBackfiller:
     Fetches Bybit 1m futures history, splits to 12 × 5s, writes to kline_collection.
     Provides synthetic 5s bar history before live tick collection has accumulated.
     Live tick-derived bars overwrite synthetic ones (ON DUPLICATE KEY UPDATE in BarBuilder).
+
+    SUNSET (Joe 2026-07-05): the 1m→12×5s split produces phantom flat filler bars that drift oscillators into
+    false reversals (o9-live 07-04, see project_filler_invisible). The auto-backfill (run.py supervisor) is
+    DISABLED; filler_invisible (optimus9_system) makes no-trade gaps invisible to the lines and real history
+    repopulates from TV CSV → KlineSanitiser. Class kept pending removal review — docs/sunset_register.md.
     """
 
     _LOOKBACK_WEEKS = 5

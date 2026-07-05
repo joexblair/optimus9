@@ -1,4 +1,7 @@
 """
+SUNSET (Joe 2026-07-05): one-off recovery script leaning on SyntheticBackfiller (now sunset). For future
+freezes, prefer TV-CSV → KlineSanitiser real-price recovery over synthetic 1m→5s fill. See docs/sunset_register.md.
+
 One-off recovery: the 06-04 06:21:55 → 06-05 09:36:15 kline freeze.
 
 Root cause: the live tick socket choked (06-27) and the collector wrote its last

@@ -10,7 +10,7 @@ from optimus9 import DatabaseManager
 DIALS = [
     ('lp_arm_wob', 2.0, 'arm-delay: s5Mage-reversal wobslay n for the big-leg delay (sweep; start 2)'),
     ('lp_arm_bigleg', 1.0, 'arm-delay: 1=delay the arm to the s5Mage reversal on big legs · 0=off'),
-    ('lp_fin_both', 1.0, 'finisher: 1=both windows (lookback+forward, union) · 0=lookback only'),
+    ('lp_fin_both', 1.0, 'DIAG probe (v2_walk_diag) only: 1=require s30a co-qual within fin_lb · 0=s30a always true, fire every s15a. Real cascade ignores it.'),
 ]
 db = DatabaseManager(**get_db_config()); db.connect()
 for name, val, note in DIALS:
