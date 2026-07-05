@@ -40,7 +40,7 @@ def _db(name="o9_live"):
 
 
 def _closed(o9):
-    return o9.execute("SELECT side, entry_px, exit_px, gross, net, opened_ms, closed_ms FROM o9_ledger "
+    return o9.execute("SELECT led_id, side, entry_px, exit_px, gross, net, opened_ms, closed_ms FROM o9_ledger "
                       "WHERE status='closed' ORDER BY closed_ms", fetch=True)
 
 
@@ -73,10 +73,45 @@ def history(limit: int = 100):
     bal, out = START_EQUITY, []
     for r in rows:
         net = float(r["net"]); bal += net
-        out.append({"oms": int(r["opened_ms"]), "ms": int(r["closed_ms"]), "dir": r["side"], "gross": round(float(r["gross"] or net), 2),
-                    "net": round(net, 2), "entry": float(r["entry_px"]), "exit": float(r["exit_px"] or 0),
-                    "bal": round(bal, 2)})
+        out.append({"led": int(r["led_id"]), "oms": int(r["opened_ms"]), "ms": int(r["closed_ms"]), "dir": r["side"],
+                    "gross": round(float(r["gross"] or net), 2), "net": round(net, 2), "entry": float(r["entry_px"]),
+                    "exit": float(r["exit_px"] or 0), "bal": round(bal, 2)})
     return {"trades": out[-limit:][::-1]}
+
+
+@app.get("/api/trade_events")
+def trade_events(led_id: int):
+    """The cascade events that created a trade — o9_state_log flips in (prev-trade-open, this-open+buffer], each
+    state's start(0->1)→close(1->0), with its line snapshot (for the modal's hover). Segmented per-trade by the
+    latch-reset (latches close on a trade), so the window between the prior trade and this one = this trade's cascade."""
+    o9 = _db()
+    t = o9.execute("SELECT led_id, side, entry_px, opened_ms, net FROM o9_ledger WHERE led_id=%s", (led_id,), fetch=True)
+    if not t:
+        o9.disconnect(); return {"trade": None, "events": []}
+    t = t[0]; this_open = int(t["opened_ms"])
+    pv = o9.execute("SELECT MAX(opened_ms) m FROM o9_ledger WHERE opened_ms < %s", (this_open,), fetch=True)
+    win_start = int(pv[0]["m"]) if pv and pv[0]["m"] else this_open - 3600000     # prev trade, or 1h back
+    rows = o9.execute("SELECT sl_id, kline_ms, state, old_v, new_v FROM o9_state_log "
+                      "WHERE kline_ms > %s AND kline_ms <= %s ORDER BY kline_ms, sl_id",
+                      (win_start, this_open + 90000), fetch=True)                 # +90s to catch the trade-reset closes
+    starts, events = {}, []
+    for r in rows:
+        st = r["state"]
+        if r["new_v"] == 1 and r["old_v"] == 0:
+            starts[st] = (int(r["kline_ms"]), r["sl_id"])
+        elif r["new_v"] == 0 and r["old_v"] == 1 and st in starts:
+            s_ms, s_id = starts.pop(st)
+            events.append({"state": st, "start_ms": s_ms, "close_ms": int(r["kline_ms"]), "sl_id": s_id})
+    for st, (s_ms, s_id) in starts.items():                                      # still open at the trade
+        events.append({"state": st, "start_ms": s_ms, "close_ms": None, "sl_id": s_id})
+    events.sort(key=lambda e: e["start_ms"])
+    for e in events:
+        ln = o9.execute("SELECT line, val FROM o9_state_log_line WHERE sl_id=%s", (e["sl_id"],), fetch=True)
+        e["lines"] = {x["line"]: float(x["val"]) for x in ln}
+        del e["sl_id"]
+    o9.disconnect()
+    return {"trade": {"led": t["led_id"], "side": t["side"], "entry": float(t["entry_px"]),
+                      "opened_ms": this_open, "net": round(float(t["net"] or 0), 2)}, "events": events}
 
 
 @app.get("/api/cascade_grid")
@@ -263,6 +298,18 @@ background-image:radial-gradient(1100px 520px at 82% -10%,rgba(47,214,190,.07),t
 .grids{display:flex;gap:8px;margin-top:3px}.cg{border-collapse:collapse;table-layout:fixed;width:280px;min-width:0}
 .cg td{height:32px;font-family:var(--mono);font-size:11px;font-weight:600;line-height:1.1;text-align:center;vertical-align:middle;padding:1px 2px;border:1px solid var(--line);white-space:normal;overflow-wrap:anywhere;overflow:hidden;color:transparent}
 #cgL td.on{color:var(--short)}#cgR td.on{color:var(--long)}.cg td.rsv{color:var(--dim);opacity:.6}
+.trow{cursor:pointer}
+.tmodal{position:fixed;inset:0;background:rgba(8,11,18,.72);z-index:50;display:none;align-items:center;justify-content:center}
+.tmodal.show{display:flex}
+.tmbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;min-width:440px;max-width:92vw;max-height:82vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.tmhead{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12.5px;color:var(--ink);position:sticky;top:0;background:var(--panel)}
+.tmx{cursor:pointer;color:var(--dim);font-size:20px;line-height:1;padding-left:14px}.tmx:hover{color:var(--short)}
+.tmtab{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+.tmtab th{font:600 10px system-ui;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);text-align:right;padding:8px 16px;border-bottom:1px solid var(--line)}.tmtab th.l{text-align:left}
+.tmtab td{padding:7px 16px;text-align:right;border-bottom:1px solid rgba(42,51,70,.5);white-space:nowrap;color:var(--ink)}.tmtab td.l{text-align:left;color:var(--accent);font-weight:600}
+.tmtab tr:hover{background:rgba(47,214,190,.07)}
+.tmtip{position:fixed;z-index:60;pointer-events:none;opacity:0;transition:opacity .1s;background:rgba(18,23,36,.98);border:1px solid var(--line);border-radius:6px;padding:8px 11px;font-family:var(--mono);font-size:10.5px;line-height:1.7;box-shadow:0 8px 26px rgba(0,0,0,.5);max-width:340px;white-space:normal}
+.tmtip.show{opacity:1}.tmtip .k{color:var(--faint)}
 .chip.wait{background:rgba(245,166,35,.14);color:var(--warn);border-color:rgba(245,166,35,.34)}
 .chip.idle{background:rgba(124,134,153,.12);color:var(--dim);border-color:var(--line)}
 .ddbar{width:130px;height:5px;border-radius:3px;background:var(--bg);overflow:hidden;margin-top:3px}.ddbar i{display:block;height:100%;background:linear-gradient(90deg,var(--long),var(--warn))}
@@ -315,7 +362,12 @@ td{padding:8px 14px;text-align:right;border-bottom:1px solid rgba(42,51,70,.5);w
  <div class="book panel" id=book><h3><span>Order book</span><span id=spr>&mdash;</span></h3><div class=ladder id=asks></div>
   <div class=spread><span>mid <b id=bmid style=color:var(--ink)>&mdash;</b></span><span id=bok></span></div><div class=ladder id=bids></div>
   <div class=slip><span id=slipl>walk &mdash;</span><b id=slipv>&mdash;</b></div></div>
-</div></div><script>
+</div></div>
+<div class=tmodal id=tmodal onclick="if(event.target==this)closeTradeModal()"><div class=tmbox>
+ <div class=tmhead><span id=tmtitle>Trade</span><span class=tmx onclick=closeTradeModal()>&times;</span></div>
+ <table class=tmtab><thead><tr><th class=l>Event</th><th>Start</th><th>Close</th><th>Held</th></tr></thead><tbody id=tmbody></tbody></table>
+</div></div><div class=tmtip id=tmtip></div>
+<script>
 function money(v){return (v<0?'-$':'+$')+Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',')}
 function commas(v){return Math.round(v).toLocaleString()}
 function hhmm(ms){return new Date(ms).toISOString().slice(5,19).replace('T',' ')}
@@ -397,7 +449,7 @@ function tick(){
   document.getElementById('hc').textContent=s.trades+' closed · '+s.win+'% win · start $'+s.start;
   document.getElementById('he').style.display=h.length?'none':'block';
   document.getElementById('tb').innerHTML=h.map(function(t){var cl=t.net>=0?'pos':'neg',sd=t.dir=='Sell'?'s':'b',nm=t.dir=='Sell'?'SHORT':'LONG';
-   return '<tr><td class=l>'+hhmm(t.oms)+'</td><td class=l>'+hhmm(t.ms)+'</td><td class=l><span class="side '+sd+'">'+nm+'</span></td><td class="'+(t.gross>=0?'pos':'neg')+'">'+money(t.gross)+'</td><td class="'+cl+'">'+money(t.net)+'</td><td>'+t.entry.toFixed(5)+'</td><td>'+t.exit.toFixed(5)+'</td><td>$'+commas(t.bal)+'</td></tr>'}).join('');
+   return '<tr class=trow onclick="openTradeModal('+t.led+')"><td class=l>'+hhmm(t.oms)+'</td><td class=l>'+hhmm(t.ms)+'</td><td class=l><span class="side '+sd+'">'+nm+'</span></td><td class="'+(t.gross>=0?'pos':'neg')+'">'+money(t.gross)+'</td><td class="'+cl+'">'+money(t.net)+'</td><td>'+t.entry.toFixed(5)+'</td><td>'+t.exit.toFixed(5)+'</td><td>$'+commas(t.bal)+'</td></tr>'}).join('');
  })}
 window.doExit=function(){if(confirm('Close the open position?'))post('/api/exit').then(tick)};
 document.getElementById('kill').onclick=function(){if(this.classList.contains('resume')){post('/api/resume').then(tick)}else if(confirm('FLATTEN & HALT — close everything and stop trading?')){post('/api/flatten').then(tick)}};
@@ -425,5 +477,27 @@ function renderCascade(cas,stale){
  if(stale){sd.textContent='no hb';sd.style.color='var(--dim)';}
  else{sd.textContent=cas.armed?(cas.es==1?'SHORT':'LONG'):'flat';sd.style.color=cas.armed?(cas.es==1?'var(--short)':'var(--long)'):'var(--dim)';}}
 fetch('/api/cascade_grid').then(r=>r.json()).then(function(g){CGRID=g.cells;buildGrids();});
+function fmthms(ms){return ms?new Date(ms).toISOString().slice(11,19):'—';}
+function openTradeModal(led){
+ fetch('/api/trade_events?led_id='+led).then(r=>r.json()).then(function(d){
+  if(!d.trade)return; var tr=d.trade;
+  document.getElementById('tmtitle').innerHTML='Trade #'+tr.led+' &middot; <b style="color:'+(tr.side=='Sell'?'var(--short)':'var(--long)')+'">'+(tr.side=='Sell'?'SHORT':'LONG')+'</b> @ '+tr.entry.toFixed(5)+' &middot; '+fmthms(tr.opened_ms)+' &middot; '+(tr.net>=0?'+':'')+'$'+tr.net;
+  window._TMEV=d.events||[];
+  document.getElementById('tmbody').innerHTML=window._TMEV.length?window._TMEV.map(function(e,i){
+    var held=e.close_ms?Math.round((e.close_ms-e.start_ms)/1000)+'s':'open';
+    return '<tr data-ev='+i+'><td class=l>'+e.state+'</td><td>'+fmthms(e.start_ms)+'</td><td>'+(e.close_ms?fmthms(e.close_ms):'—')+'</td><td>'+held+'</td></tr>';}).join(''):'<tr><td class=l colspan=4 style="color:var(--dim)">no logged cascade events in this trade window</td></tr>';
+  document.getElementById('tmodal').classList.add('show');});
+}
+function closeTradeModal(){document.getElementById('tmodal').classList.remove('show');document.getElementById('tmtip').classList.remove('show');}
+document.addEventListener('keydown',function(e){if(e.key=='Escape')closeTradeModal();});
+(function(){var body=document.getElementById('tmbody'),tip=document.getElementById('tmtip');
+ body.addEventListener('mousemove',function(e){var tr=e.target.closest('tr');
+  if(!tr||tr.dataset.ev==null||!window._TMEV){tip.classList.remove('show');return;}
+  var ev=window._TMEV[+tr.dataset.ev]; if(!ev||!ev.lines){tip.classList.remove('show');return;}
+  tip.innerHTML=Object.keys(ev.lines).map(function(k){return '<span class=k>'+k+'</span> '+ev.lines[k].toFixed(1);}).join('&nbsp;&nbsp; ');
+  tip.classList.add('show');
+  tip.style.left=Math.min(e.clientX+14,window.innerWidth-tip.offsetWidth-12)+'px';
+  tip.style.top=Math.min(e.clientY+14,window.innerHeight-tip.offsetHeight-12)+'px';});
+ body.addEventListener('mouseleave',function(){tip.classList.remove('show');});})();
 tick();setInterval(tick,1500);
 </script></body></html>"""
