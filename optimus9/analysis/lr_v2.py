@@ -383,18 +383,26 @@ def v2_walk_ad(W, cfg):
 
 
 def v2_walk_diag(W, cfg):
-    """[DIAG·#54] Realtime-fidelity PROBE (Joe 0704) — NOT a real producer; swap in via StrategyLoop(producer=).
-    Arm permanently UNLATCHED + s3s4/fin_gate permanently OPEN + fin_unlatch OFF → fire a trade on EVERY
-    finisher signal, so the live UI open-time can be eyeballed against the finisher bar (the seam+301ms decision
-    offset). 'signal' = an s15a bar (the trade-placement line); cfg.fin_both=1 also requires s30a co-qualified
-    within fin_lb (the fin_gate 'both' condition), =0 fires on s15a alone. Side = finisher polarity. Causal."""
+    """[DIAG·#54] Realtime-fidelity PROBE (Joe 0704-05) — NOT a real producer; swap in via StrategyLoop(producer=).
+    Arm always UNLATCHED + s3s4/fin_gate always OPEN + fin_unlatch OFF → fire on the finisher signal so the live UI
+    open-time can be eyeballed against the finisher bar (seam+301ms offset). cfg.fin_both=0 → fire on every s15a
+    alone. fin_both=1 → require the s15a+s30a PAIR: fire at the pair-completion bar (the LATER qualifier), EITHER
+    order, when the other finisher qualified within fin_lb+fin_fwd bars (the spec's proximal-box span). Causal —
+    backward-only at the fire bar (a late s30a completes the pair at ITS bar, not the earlier s15a's). Side =
+    finisher polarity."""
     q15h, q15l = s_qualify(W, cfg, 's15m', 's15M', 's15r', cfg.s15r_lb)
     q30h, q30l = s_qualify(W, cfg, 's30m', 's30M', 's30r', cfg.s30r_lb)
-    ts = W.ts; lb = cfg.fin_lb; both = bool(cfg.fin_both); out = []
+    ts = W.ts; both = bool(cfg.fin_both); win = cfg.fin_lb + cfg.fin_fwd; dd = cfg.fin_dedup; out = []
     for es, bd, q15, q30 in ((1, -1, q15h, q30h), (-1, 1, q15l, q30l)):        # (es,bd): qhi=short/Sell, qlo=long/Buy
+        last = -(1 << 30)                                                      # last FIRED bar this side (dedup anchor)
         for k in range(len(ts)):
-            if q15[k] and (not both or q30[max(0, k - lb):k + 1].any()):
-                out.append((int(ts[k]), es, bd, k))
+            if not both:
+                fire = bool(q15[k])
+            else:
+                w0 = max(0, k - win)                                           # pair completes at k (later qualifier), either order
+                fire = bool((q15[k] and q30[w0:k + 1].any()) or (q30[k] and q15[w0:k + 1].any()))
+            if fire and (dd <= 0 or k - last >= dd):                           # fin_dedup=0 → every fire · >0 → one per umbrella
+                out.append((int(ts[k]), es, bd, k)); last = k
     return sorted(out)
 
 

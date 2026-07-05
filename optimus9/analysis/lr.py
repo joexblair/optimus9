@@ -50,7 +50,7 @@ class LRConfig:
     hi: float; lo: float
     exit_rlb: int = 22; sl: float = 0.5; curl_n: int = 1
     fin_mage_wob: int = 0; fin_s30M_oob: int = 1; fin_lb: int = 42; fin_fwd: int = 12
-    arm_wob: int = 2; arm_bigleg: int = 1; fin_both: int = 1
+    arm_wob: int = 2; arm_bigleg: int = 1; fin_both: int = 1; fin_dedup: int = 0
     arms: list = field(default_factory=list)
     finishers: list = field(default_factory=list)
     gates: list = field(default_factory=list)
@@ -75,7 +75,7 @@ def lr_config(db):
         "'lp_lr_target','lp_lr_swing_ms','lp_lr_swing_pct','lp_lr_bias_mid','lp_s30r_lb','lp_s15r_lb',"
         "'lp_lr_exit_rlb','lp_lr_sl','lp_lr_curl_n',"
         "'lp_fin_mage_wob','lp_fin_s30M_oob','lp_fin_lb','lp_fin_fwd',"
-        "'lp_arm_wob','lp_arm_bigleg','lp_fin_both')", fetch=True)}
+        "'lp_arm_wob','lp_arm_bigleg','lp_fin_both','lp_fin_dedup')", fetch=True)}
     sb = db.execute("SELECT hi_boundary, lo_boundary FROM optimus9_system LIMIT 1", fetch=True)[0]
     roles = {'arm': [], 'finisher': [], 'gate': []}
     for g in db.execute("SELECT * FROM lr_gate WHERE lrg_active=1", fetch=True):
@@ -93,6 +93,7 @@ def lr_config(db):
         fin_mage_wob=int(k.get('lp_fin_mage_wob', 0)), fin_s30M_oob=int(k.get('lp_fin_s30M_oob', 1)),
         fin_lb=int(k.get('lp_fin_lb', 42)), fin_fwd=int(k.get('lp_fin_fwd', 12)),
         arm_wob=int(k.get('lp_arm_wob', 2)), arm_bigleg=int(k.get('lp_arm_bigleg', 1)), fin_both=int(k.get('lp_fin_both', 1)),
+        fin_dedup=int(k.get('lp_fin_dedup', 0)),
         hi=float(sb['hi_boundary']), lo=float(sb['lo_boundary']),
         arms=roles['arm'], finishers=roles['finisher'], gates=roles['gate'], exit_finishers=exit_fins)
 
