@@ -45,23 +45,33 @@ class StrategyLoop:
         """Compat entry: build the window and return this bar's intents (callers that don't need the phase)."""
         return self.intents(self.window(now_ms), position)
 
-    def intents(self, W, position: dict | None) -> list[TradeIntent]:
+    def intents(self, W, position: dict | None, legs: list | None = None) -> list[TradeIntent]:
+        """Option B exit model (Joe 0705): the pyramid stack shares ONE take-profit (the s7r-reversal cascade
+        closes all legs together), but each leg carries its OWN stop-loss (per-leg −sl% from its own entry, so
+        every leg gets a fighting chance to clear its MAE hump). `legs` = O9Ledger.open_legs() (per-leg entries)."""
         ent = self._producer(W, self._lr)
         T = int(W.ts[-1])                 # the just-closed bar
         out: list[TradeIntent] = []
 
-        # exit the held position if an exit for its side fires on bar T (fill-on-signal → close the net).
-        # The exit walk is only read here → compute it ONLY when holding (skipped when flat, most bars: ~0.44s saved).
+        # Exit walk only read here → compute ONLY when holding (skipped when flat, most bars).
         if position:
             exits = strand_rescue(W, self._lr, ent,
                                   lr_exit_v2(W, self._lr, ent, predict=self._predict, gate_fam=self._gate_fam))
-            # x[6]=='end' is lr_exit_v2's BACKTEST boundary sentinel (unresolved trade → exit_ms=window-last-bar).
-            # Live, the window-last-bar is ALWAYS T, so every still-open entry reports a phantom 'end' at T →
-            # excluded here. Only a REAL exit ('exit'/'SL'/'strand') = the s7r-reversal cascade closes the stack.
-            if any(x[1] == T and x[6] != 'end' and _SIDE[x[2]] == position["side"] for x in exits):
+            # SHARED take-profit: a REAL reversal exit ('exit'/'strand') for the held side at T → close the WHOLE
+            # stack. ('end' is lr_exit_v2's backtest window-boundary sentinel = ALWAYS T live → never an exit;
+            # 'SL' is now per-leg below, NOT a stack-wide close.)
+            if any(x[1] == T and x[6] in ("exit", "strand") and _SIDE[x[2]] == position["side"] for x in exits):
                 close_side = "Sell" if position["side"] == "Buy" else "Buy"
-                out.append(TradeIntent("close", side=close_side, qty=float(position["size"]),
-                                       reason="exit", ts=T))
+                out.append(TradeIntent("close", side=close_side, qty=float(position["size"]), reason="exit", ts=T))
+            elif legs:
+                # PER-LEG stop-loss: each leg closes at its OWN −sl% from its OWN entry (partial close of that leg).
+                px_T = float(W.px[-1]); sl = float(self._lr.sl)
+                for lg in legs:
+                    entry = float(lg["entry_px"]); d = 1.0 if lg["side"] == "Buy" else -1.0
+                    if (px_T - entry) / entry * 100.0 * d <= -sl:
+                        close_side = "Sell" if lg["side"] == "Buy" else "Buy"
+                        out.append(TradeIntent("close", side=close_side, qty=float(lg["qty"]),
+                                               reason="SL", ts=T, led_id=int(lg["led_id"])))
 
         # a new entry printed on bar T → open (flat) or add (same-side pyramid)
         for e in ent:

@@ -56,12 +56,16 @@ class O9LiveApp:
         return None
 
     def _execute(self, intent, price, mode, split, now_ms, placed):
-        for o in self.sizer.size(intent, self.ledger.equity(), price, mode=mode, split=split):
+        spl = 1 if intent.action in ("close", "reduce") else split   # never split a close (would over-reduce a leg)
+        for o in self.sizer.size(intent, self.ledger.equity(), price, mode=mode, split=spl):
             oid = self.adapter.place(o)
             fpx = self._fill_price(oid)
             if intent.action in ("open", "add"):
                 self.ledger.record_open(o.side, o.qty, fpx, oid, intent.reason, now_ms)
                 act = "add" if intent.action == "add" else ("open_long" if o.side == "Buy" else "open_short")
+            elif intent.led_id is not None:                          # option B per-leg SL → close just this leg
+                self.ledger.record_close_leg(intent.led_id, fpx, oid, now_ms)
+                act = "close_leg"
             else:
                 self.ledger.record_close(fpx, oid, now_ms)
                 act = "close"
@@ -94,7 +98,8 @@ class O9LiveApp:
             self._write_loop_ms(t0)
             return placed
 
-        intents = self.strategy.intents(W, pos)
+        legs = self.ledger.open_legs() if pos else None      # per-leg entries for option B per-leg SL
+        intents = self.strategy.intents(W, pos, legs)
         if not intents:
             self.ledger.log_decision(now_ms, "hold")
             self._write_loop_ms(t0)

@@ -18,6 +18,7 @@ class TradeIntent:
     qty: float = 0.0       # reduce/close: the size to close. open/add: 0 → sizer computes
     reason: str = ""
     ts: int = 0
+    led_id: int | None = None   # per-leg close (option B per-leg SL) → close just this ledger leg; None = whole stack
 
 
 @dataclass

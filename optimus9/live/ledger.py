@@ -36,12 +36,15 @@ class O9Ledger:
                         "opened_ms) VALUES (%s,%s,%s,%s,%s,%s,'open',%s)",
                         (self.symbol, side, qty, entry_px, order_id, reason, ts))
 
-    def record_close(self, exit_px, order_id, ts) -> float:
-        """Close all open o9 trades (one-way net exit) at exit_px; compute o9's realized per trade; tally."""
-        opens = self.db.execute("SELECT * FROM o9_ledger WHERE symbol=%s AND status='open' ORDER BY opened_ms",
-                                (self.symbol,), fetch=True)
+    def open_legs(self) -> list:
+        """Per-leg open trades (option B per-leg SL needs each leg's own entry). Aggregate = open_position()."""
+        return self.db.execute("SELECT led_id, side, qty, entry_px, opened_ms FROM o9_ledger "
+                               "WHERE symbol=%s AND status='open' ORDER BY opened_ms", (self.symbol,), fetch=True)
+
+    def _close_rows(self, rows, exit_px, order_id, ts) -> float:
+        """Close the given open rows at exit_px; compute o9's realized per trade; tally the account."""
         total = 0.0
-        for t in opens:
+        for t in rows:
             d = 1.0 if t["side"] == "Buy" else -1.0
             qty, entry = float(t["qty"]), float(t["entry_px"])
             gross = d * (exit_px - entry) * qty
@@ -51,11 +54,23 @@ class O9Ledger:
             self.db.execute("UPDATE o9_ledger SET exit_px=%s, exit_order_id=%s, gross=%s, net=%s, fee=%s, "
                             "status='closed', closed_ms=%s WHERE led_id=%s",
                             (exit_px, order_id, round(gross, 8), round(net, 8), round(fee, 8), ts, t["led_id"]))
-        if opens:
+        if rows:
             self.db.execute("UPDATE o9_account SET equity=equity+%s, realized_total=realized_total+%s, "
                             "trade_count=trade_count+%s, updated_ms=%s WHERE acct_id=1",
-                            (round(total, 8), round(total, 8), len(opens), self._now()))
+                            (round(total, 8), round(total, 8), len(rows), self._now()))
         return total
+
+    def record_close(self, exit_px, order_id, ts) -> float:
+        """Close ALL open o9 trades (one-way net exit / shared reversal-TP)."""
+        opens = self.db.execute("SELECT * FROM o9_ledger WHERE symbol=%s AND status='open' ORDER BY opened_ms",
+                                (self.symbol,), fetch=True)
+        return self._close_rows(opens, exit_px, order_id, ts)
+
+    def record_close_leg(self, led_id, exit_px, order_id, ts) -> float:
+        """Close ONE leg (option B per-leg SL) — the rest of the pyramid stack stays open. Idempotent
+        (selects status='open' by led_id → a second call is a no-op)."""
+        rows = self.db.execute("SELECT * FROM o9_ledger WHERE led_id=%s AND status='open'", (led_id,), fetch=True)
+        return self._close_rows(rows, exit_px, order_id, ts)
 
     # ── decision audit (o9's own log) ──
     def log_decision(self, kline_ms, action, reason="", order_id=None):
