@@ -29,6 +29,11 @@ class HealthStore:
                         (ph["label"], ph["tone"], ph["arm"], ph["gate"], ph["gate_reason"],
                          ph["exit"], self._now()))
 
+    def set_cascade(self, mask: int, es: int, armed: bool):
+        """Write the cascade-state mask (v2_state_mask) for the UI mirror-grids — the per-bar bitfield + side."""
+        self.db.execute("UPDATE o9_health SET cascade_mask=%s, cascade_es=%s, cascade_armed=%s, updated_ms=%s "
+                        "WHERE health_id=1", (int(mask), int(es), 1 if armed else 0, self._now()))
+
     def set_metrics(self, **kw):
         """Patch process metrics; only the passed keys change (loop_ms/rtt_ms/clock_skew_ms/pubtrade_age_ms)."""
         cur = self.read()

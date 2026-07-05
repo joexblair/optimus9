@@ -31,6 +31,7 @@ class O9LiveApp:
         if self.health:                                  # observability MUST NOT break the trading loop
             try:
                 self.health.set_phase(self.strategy.phase(W, pos))
+                self.health.set_cascade(*self.strategy.state_mask(W))   # cascade mirror-grid mask
             except Exception as e:
                 self.log("o9-live: health phase write failed: %s" % e)
 

@@ -443,6 +443,63 @@ def v2_phase(W, cfg, in_position=0, exit_fam='s7'):
             'exit': exit_fam if in_position else None}
 
 
+def v2_state_mask(W, cfg, states, in_position=0):
+    """[AD·READOUT] Per-bar cascade-state MASK at T for the o9-live UI mirror-grids (Joe 0705). SRP: REPORTS
+    state, never decides — reuses the SAME v2_arm→arm_delay→gate streams as v2_walk_ad so the readout can't
+    diverge. Side-dependent on the active arm's es (option B: most-recent setup es when between arms). `states`
+    = cascade_state registry rows [{'state','bit','active'}]. Returns (mask:int, es:int, armed:bool).
+    State rules are PROVISIONAL — line cells are certain, the derived ones (run/wait/rtr/…) get validated live."""
+    T = len(W.ts) - 1
+    hi, lo = cfg.hi, cfg.lo
+    setups = v2_arm(W, cfg)
+    if cfg.arm_bigleg and setups:
+        setups = arm_delay(W, cfg, setups)
+    if not setups:
+        return 0, 0, False
+    live = [s for s in setups if s[0] <= T < s[3]]
+    armed = bool(live)
+    i, es, bd, cap, src = max(live, key=lambda s: s[0]) if live else max(setups, key=lambda s: s[0])
+    def oob(v):
+        return (v >= hi) if es == 1 else (v <= lo)
+    L = W.line
+    sig = gate_signals(W, cfg)
+    b = {}
+    b['s5m'] = oob(L('s5m')[T]); b['s5M'] = oob(L('s5M')[T])
+    b['s15m'] = oob(L('s15m')[T]); b['s15M'] = oob(L('s15M')[T])
+    b['s30m'] = oob(L('s30m')[T]); b['s30M'] = oob(L('s30M')[T])
+    b['arm'] = armed and i <= T                                          # arm = s5Mage reversal (delayed) has fired
+    s7r, s7m, s7M = L('s7r'), L('s7m'), L('s7M')
+    b['s7r_predict'] = predict_breach(s7r, s7m, s7M, hi, lo, FENCE_HI, FENCE_LO)[T] == es
+    rev7 = _mage_rev(s7M, cfg.fin_mage_wob); nz = np.flatnonzero(rev7[:T + 1])
+    b['s7M_rev'] = bool(nz.size) and rev7[nz[-1]] == es                  # most-recent s7Mage reversal toward es (persists)
+    q15h, q15l = s_qualify(W, cfg, 's15m', 's15M', 's15r', cfg.s15r_lb)
+    q30h, q30l = s_qualify(W, cfg, 's30m', 's30M', 's30r', cfg.s30r_lb)
+    q15, q30 = (q15h, q30h) if es == 1 else (q15l, q30l)
+    flb = cfg.fin_lb
+    b['s15a'] = bool(q15[max(0, T - flb):T + 1].any()); b['s30a'] = bool(q30[max(0, T - flb):T + 1].any())
+    s3m, s3M, s3r = L('s3m'), L('s3M'), L('s3r'); s4m, s4M, s4r = L('s4m'), L('s4M'), L('s4r')
+    b['s3s4_run'] = bool(oob(s3m[T]) or oob(s4m[T]))                     # predict-testing (m OOB)
+    all_mM = oob(s3m[T]) and oob(s3M[T]) and oob(s4m[T]) and oob(s4M[T])
+    b['s3s4_wait'] = bool(all_mM and not (oob(s3r[T]) and oob(s4r[T])))  # m+M all breached, awaiting r capture
+    b['stale_exit'] = bool((not sig['oob2'][i]) and (not sig['oob3'][i]) and (not sig['oob4'][i]))  # AB toggle at arm
+    p3 = p4 = _b3 = _b4 = rtr = False                                    # rtr latch — replay lifecycle for THIS arm to T
+    for k in range(i + 1, min(cap, T + 1)):
+        if sig['pred3'][k] == es and sig['s3m_oob'][k]: p3 = True
+        if sig['pred4'][k] == es and sig['s4m_oob'][k]: p4 = True
+        if p3 and sig['brc3'][k] == es: _b3 = True
+        if p4 and sig['brc4'][k] == es: _b4 = True
+        rtr = rtr or _b3 or _b4 or (not p3 and not p4 and (sig['rev3m'][k] == bd or sig['rev4m'][k] == bd))
+    b['rtr'] = bool(rtr)
+    opens = {s[0]: s[3] for s in gate_open(W, cfg, setups, sig)}
+    b['s3s4_gate'] = bool(i in opens and opens[i] <= T)
+    b['s1m'] = b['s1M'] = b['s1a'] = False                               # 1s tape — reserved
+    mask = 0
+    for st in states:
+        if st.get('active') and b.get(st['state']):
+            mask |= (1 << int(st['bit']))
+    return mask, int(es), armed
+
+
 def lr_exit_v2(W, cfg, entries, predict=True, gate_fam='s7', slip=0.0, rlb=19):
     """EXIT cascade = the entry machine pointed at the −es (favourable) extreme — ONE machine, two polarities.
     Per entry (tms, es, bd, tj), arm_side = bd:

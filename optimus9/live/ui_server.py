@@ -79,6 +79,16 @@ def history(limit: int = 100):
     return {"trades": out[-limit:][::-1]}
 
 
+@app.get("/api/cascade_grid")
+def cascade_grid():
+    """The cascade_state registry (grid layout) — read once by the UI to build the mirror-grids."""
+    dev = _db("pk_optimizer")
+    rows = dev.execute("SELECT state, bit, cell_col, cell_row, label, active FROM cascade_state "
+                       "ORDER BY cell_col, cell_row", fetch=True)
+    dev.disconnect()
+    return {"cells": rows}
+
+
 @app.get("/api/positions")
 def positions():
     o9 = _db(); dev = _db("pk_optimizer")
@@ -123,7 +133,8 @@ def state():
             "dd": dd, "dd_ref": DD_REF, "trades": len(rows), "win": round(wins / len(rows) * 100, 1) if rows else 0.0,
             "price": price, "tape_age": tape_age, "book_ok": bool(UI_BOOK.get(SYMBOL)),
             "cascade": {"label": hlth["phase_label"], "tone": hlth["phase_tone"], "arm": hlth["arm"],
-                        "gate": hlth["gate"], "gate_reason": hlth["gate_reason"], "exit": hlth["exit_line"]},
+                        "gate": hlth["gate"], "gate_reason": hlth["gate_reason"], "exit": hlth["exit_line"],
+                        "mask": int(hlth["cascade_mask"]), "es": int(hlth["cascade_es"]), "armed": int(hlth["cascade_armed"])},
             "feed": {"tape_age": tape_age, "gaps": tape["gaps"], "frozen": tape["frozen"],
                      "synthetic": tape["synthetic"], "book_ok": bool(UI_BOOK.get(SYMBOL)),
                      "loop_ms": hlth["loop_ms"], "rtt_ms": hlth["rtt_ms"], "clock_skew_ms": hlth["clock_skew_ms"],
@@ -248,6 +259,9 @@ background-image:radial-gradient(1100px 520px at 82% -10%,rgba(47,214,190,.07),t
 .feedbar{display:flex;align-items:center;gap:12px;padding:5px 12px}.feedbar .lbl{flex:none}
 .fdot{width:6px;height:6px;border-radius:50%;background:var(--long)}.fdot.warn{background:var(--warn)}.fdot.bad{background:var(--short)}
 .casc{margin-left:auto;border-right:0;align-items:flex-end}.chip{font-family:var(--mono);font-size:11.5px;padding:4px 10px;border-radius:5px;background:rgba(47,214,190,.14);color:var(--accent);border:1px solid rgba(47,214,190,.34)}
+.csd{font-family:var(--mono);font-size:11px}
+.grids{display:flex;gap:7px;margin-top:3px}.cg{border-collapse:collapse}.cg td{height:14px;min-width:50px;max-width:74px;font-family:var(--mono);font-size:8.5px;line-height:1;text-align:center;padding:1px 3px;border:1px solid var(--line);white-space:nowrap;overflow:hidden;color:transparent}
+.cgL td.on{color:var(--short)}.cgR td.on{color:var(--long)}.cg td.rsv{color:var(--faint);opacity:.45}
 .chip.wait{background:rgba(245,166,35,.14);color:var(--warn);border-color:rgba(245,166,35,.34)}
 .chip.idle{background:rgba(124,134,153,.12);color:var(--dim);border-color:var(--line)}
 .ddbar{width:130px;height:5px;border-radius:3px;background:var(--bg);overflow:hidden;margin-top:3px}.ddbar i{display:block;height:100%;background:linear-gradient(90deg,var(--long),var(--warn))}
@@ -285,7 +299,7 @@ td{padding:8px 14px;text-align:right;border-bottom:1px solid rgba(42,51,70,.5);w
  <div class=stat><span class=lbl>day pnl</span><span class="v num" id=day>&mdash;</span></div>
  <div class=stat><span class=lbl>exposure</span><span class="v num" id=exp>&mdash;</span></div>
  <div class=stat><span class=lbl>live drawdown vs backtest</span><span class=num id=dd style=font-size:12px>&mdash;</span><span class=ddbar><i id=ddb style=width:0></i></span></div>
- <div class="stat casc"><span class=lbl>cascade state</span><span class=chip id=casc>&mdash;</span></div></div>
+ <div class="stat casc"><span class=lbl>cascade <b id=cascside class=csd>&mdash;</b></span><div class=grids><table class=cg id=cgL></table><table class=cg id=cgR></table></div></div></div>
 <div class=body>
  <div class=main>
   <div class="chart panel"><canvas id=cv></canvas><div class=mtip id=mtip></div><div class=chleg><span style=color:var(--short)>&#9660; entry</span><span style=color:var(--long)>&#9650; exit</span><span style=color:var(--accent)>&mdash; price</span></div></div>
@@ -373,8 +387,7 @@ function tick(){
   var d=document.getElementById('day');d.textContent=money(s.day_pnl);d.className='v num '+(s.day_pnl>=0?'pos':'neg');
   document.getElementById('exp').textContent=s.exposure?('$'+commas(s.exposure)+' · '+s.exposure_x+'×'):'flat';
   document.getElementById('dd').innerHTML=s.dd+'% <span style=color:#7C8699>/ '+s.dd_ref+'%</span>';document.getElementById('ddb').style.width=Math.min(100,s.dd/s.dd_ref*100)+'%';
-  var cc=document.getElementById('casc'),stale=(s.feed.hb_age==null||s.feed.hb_age>15);
-  cc.textContent=stale?'— no heartbeat':s.cascade.label;cc.className='chip '+(stale?'idle':s.cascade.tone);
+  renderCascade(s.cascade,(s.feed.hb_age==null||s.feed.hb_age>15));
   var mo=document.getElementById('maxo');if(document.activeElement!==mo)mo.value=s.sizing.max_order;
   var sp=document.getElementById('split');if(document.activeElement!==sp)sp.value=s.sizing.split;
   document.querySelectorAll('#seg span').forEach(el=>el.className=(el.dataset.m===s.sizing.mode?'on':''));
@@ -397,5 +410,19 @@ document.getElementById('bktog').onclick=function(){document.getElementById('boo
  cv.addEventListener('mousemove',function(e){var r=cv.getBoundingClientRect();var m=findMark(e.clientX-r.left,e.clientY-r.top);cv.style.cursor=m?'pointer':'default';showTip(m);});
  cv.addEventListener('mouseleave',function(){showTip(null);});
  cv.addEventListener('touchstart',function(e){var t=e.touches[0],r=cv.getBoundingClientRect();var m=findMark(t.clientX-r.left,t.clientY-r.top);if(m){e.preventDefault();showTip(m);}else showTip(null);},{passive:false});})();
+var CGRID=null;
+function buildGrids(){['cgL','cgR'].forEach(function(id){var t=document.getElementById(id),h='';for(var r=1;r<=4;r++){h+='<tr>';for(var c=1;c<=5;c++){h+='<td id="'+id+'_'+c+'_'+r+'"></td>';}h+='</tr>';}t.innerHTML=h;});}
+function renderCascade(cas,stale){
+ if(!CGRID)return;var mask=stale?0:(cas.mask||0);
+ CGRID.forEach(function(cl){
+  var L=document.getElementById('cgL_'+cl.cell_col+'_'+cl.cell_row),R=document.getElementById('cgR_'+cl.cell_col+'_'+cl.cell_row);
+  if(!L||!R)return;var on=(mask&(1<<cl.bit))!==0;
+  if(!cl.active){L.textContent=cl.label;L.className='rsv';R.textContent='';R.className='';}
+  else if(on){L.textContent='';L.className='';R.textContent=cl.label;R.className='on';}
+  else{L.textContent=cl.label;L.className='on';R.textContent='';R.className='';}});
+ var sd=document.getElementById('cascside');
+ if(stale){sd.textContent='no hb';sd.style.color='var(--dim)';}
+ else{sd.textContent=cas.armed?(cas.es==1?'SHORT':'LONG'):'flat';sd.style.color=cas.armed?(cas.es==1?'var(--short)':'var(--long)'):'var(--dim)';}}
+fetch('/api/cascade_grid').then(r=>r.json()).then(function(g){CGRID=g.cells;buildGrids();});
 tick();setInterval(tick,1500);
 </script></body></html>"""

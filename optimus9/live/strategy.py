@@ -11,7 +11,7 @@ None, or {'side': 'Buy'|'Sell', 'size': float}.
 from __future__ import annotations
 
 import bias_machine as bm
-from optimus9.analysis.lr_v2 import v2_walk, v2_walk_ad, lr_exit_v2, strand_rescue, v2_phase
+from optimus9.analysis.lr_v2 import v2_walk, v2_walk_ad, lr_exit_v2, strand_rescue, v2_phase, v2_state_mask
 from optimus9.live.sizing import TradeIntent
 
 _SIDE = {1: "Buy", -1: "Sell"}
@@ -31,6 +31,7 @@ class StrategyLoop:
         self._gate_fam = gate_fam
         self._producer = producer         # entries producer (W,cfg)->entries — DATA (Joe 0704): v2_walk_ad (arm-delay,
         #                                   the shipping stack) or v2_walk. NEVER baked; the loop consumes the stream.
+        self._cascade = db.execute("SELECT state,bit,active FROM cascade_state", fetch=True) or []   # UI-grid registry (cached)
 
     def window(self, now_ms: int):
         """Build the bounded window ending at now (the shared input to intents + phase — build ONCE per bar)."""
@@ -40,6 +41,10 @@ class StrategyLoop:
         """Live cascade readout at bar T (SRP: reports, never trades). in_position from the live net side."""
         side = _SIDE_N.get(position["side"], 0) if position else 0
         return v2_phase(W, self._lr, in_position=side, exit_fam=self._gate_fam)
+
+    def state_mask(self, W):
+        """Cascade-state mask at bar T for the UI mirror-grids (SRP: reports, never trades). (mask, es, armed)."""
+        return v2_state_mask(W, self._lr, self._cascade)
 
     def decide(self, now_ms: int, position: dict | None) -> list[TradeIntent]:
         """Compat entry: build the window and return this bar's intents (callers that don't need the phase)."""
