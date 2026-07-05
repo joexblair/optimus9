@@ -92,7 +92,7 @@ def positions():
         out.append({"id": r["led_id"], "side": r["side"], "qty": qty, "entry": entry, "mark": price,
                     "unreal": round(d * (price - entry) * qty, 2),
                     "unreal_pct": round(d * (price - entry) / entry * 100, 3) if entry else 0,
-                    "age": int((time.time() * 1000 - int(r["opened_ms"])) / 1000), "reason": r["reason"]})
+                    "opened": int(r["opened_ms"]), "reason": r["reason"]})
     return {"positions": out, "price": price}
 
 
@@ -291,7 +291,7 @@ td{padding:8px 14px;text-align:right;border-bottom:1px solid rgba(42,51,70,.5);w
   <div class="chart panel"><canvas id=cv></canvas><div class=mtip id=mtip></div><div class=chleg><span style=color:var(--short)>&#9660; entry</span><span style=color:var(--long)>&#9650; exit</span><span style=color:var(--accent)>&mdash; price</span></div></div>
   <div class="feedbar panel"><span class=lbl>feed health</span><div class=feed id=feed></div></div>
   <div class="posw panel"><div class=ph><h2>Open positions</h2><span class=c id=pc>&mdash;</span></div>
-   <div class=scroll><table><thead><tr><th class=l>Side</th><th>Size</th><th>Entry</th><th>Mark</th><th>Unreal $</th><th>Unreal %</th><th>Age</th><th></th></tr></thead><tbody id=pb></tbody></table>
+   <div class=scroll><table><thead><tr><th class=l>Side</th><th>Size</th><th>Entry</th><th>Mark</th><th>Unreal $</th><th>Unreal %</th><th>Start</th><th></th></tr></thead><tbody id=pb></tbody></table>
    <div class=empty id=pe>flat &mdash; no open positions</div></div></div>
   <div class="hist panel"><div class=ph><h2>Trade history</h2><span class=c id=hc>&mdash;</span></div>
    <div class=scroll><table><thead><tr><th class=l>Opened</th><th class=l>Closed</th><th>Dir</th><th>Gross</th><th>Net</th><th>Entry</th><th>Exit</th><th>Balance</th></tr></thead><tbody id=tb></tbody></table>
@@ -365,7 +365,7 @@ function tick(){
   document.getElementById('pc').textContent=ps.length?(ps.length+' open'):'flat';
   document.getElementById('pe').style.display=ps.length?'none':'block';
   document.getElementById('pb').innerHTML=ps.map(function(t){var sd=t.side=='Sell'?'s':'b',nm=t.side=='Sell'?'SHORT':'LONG',cl=t.unreal>=0?'pos':'neg';
-   return '<tr><td class=l><span class="side '+sd+'">'+nm+'</span></td><td>'+commas(t.qty)+'</td><td>'+t.entry.toFixed(5)+'</td><td>'+t.mark.toFixed(5)+'</td><td class="'+cl+'">'+money(t.unreal)+'</td><td class="'+cl+'">'+t.unreal_pct.toFixed(2)+'%</td><td>'+t.age+'s</td><td><button class=exit onclick="doExit()">Exit</button></td></tr>'}).join('');});
+   return '<tr><td class=l><span class="side '+sd+'">'+nm+'</span></td><td>'+commas(t.qty)+'</td><td>'+t.entry.toFixed(5)+'</td><td>'+t.mark.toFixed(5)+'</td><td class="'+cl+'">'+money(t.unreal)+'</td><td class="'+cl+'">'+t.unreal_pct.toFixed(2)+'%</td><td>'+new Date(t.opened).toISOString().slice(11,19)+'</td><td><button class=exit onclick="doExit()">Exit</button></td></tr>'}).join('');});
  Promise.all([fetch('/api/state').then(r=>r.json()),fetch('/api/history').then(r=>r.json())]).then(function(x){
   var s=x[0],h=x[1].trades;
   document.getElementById('px').textContent=s.price?s.price.toFixed(5):'—';
