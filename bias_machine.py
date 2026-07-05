@@ -129,7 +129,8 @@ class BiasConfig:
 class BiasWindow:
     """One rolling window. Precomputes the shared lines + s30 wobs; lazily caches per-TF lines."""
 
-    def __init__(self, db, end, lookback=168, warmup=80, cfg=None, line_overrides=None, base_cache=None, lean=False):
+    def __init__(self, db, end, lookback=168, warmup=80, cfg=None, line_overrides=None, base_cache=None, lean=False,
+                 filler_invisible=None):
         self.cfg = cfg or BiasConfig()
         self._ls = LineStore(db)
         if line_overrides:                                    # sweep hook: inject line configs in-memory
@@ -147,6 +148,24 @@ class BiasWindow:
         self.W0 = self.W1 - lookback * H
         self._tfcache = {}
         self._lean = lean
+        # filler-invisible (Joe 0705): no-trade V=0 carry-forward bars are phantom flat bars that TV/Bybit omit but our
+        # BarBuilder carries forward — feeding them to an oscillator invents false reversals. When ON, lines compute on the
+        # EVENT tape (real-trade bars only) and forward-fill back onto the full 5s grid; the walk keeps self.base intact.
+        if filler_invisible is None:
+            try:
+                _r = db.execute("SELECT filler_invisible FROM optimus9_system WHERE sys_pk=1", fetch=True)
+                filler_invisible = bool(_r and _r[0].get('filler_invisible'))
+            except Exception:
+                filler_invisible = False
+        self._filler_invisible = bool(filler_invisible)
+        if self._filler_invisible and 'volume' in self.base.columns:
+            _m = self.base['volume'].to_numpy(dtype=float) > 0                    # real-trade bars only
+            self._lbase = self.base[_m].reset_index(drop=True)
+            _ets = self._lbase['timestamp'].to_numpy(dtype=np.int64)
+            _fts = self.base['timestamp'].to_numpy(dtype=np.int64)
+            self._evt_remap = np.clip(np.searchsorted(_ets, _fts, side='right') - 1, 0, None)   # full grid → last real bar
+        else:
+            self._lbase = self.base; self._evt_remap = None
         if not lean:                                          # bias-machine precompute — v2/lr_v2 don't use it; lean=True skips it
             c = self.cfg
             # every named line is resolved LIVE from vw_indicator_configs_live (no tuples)
@@ -171,7 +190,7 @@ class BiasWindow:
 
     # ── line builders ──
     def _raw(self, tf_sec, cfg):
-        fr = IC.resample(self.base, tf_sec, 'midnight')   # TV grid — match _line_emerging; non-day-divisor TFs drift on epoch
+        fr = IC.resample(self._lbase, tf_sec, 'midnight')  # event tape (filler-invisible) → align_to_base forward-fills onto the full grid
         if cfg[0] == 'bb':
             v = IC.f_bb(IC.build_source(fr, cfg[3]), cfg[1], cfg[2])
         else:
@@ -191,9 +210,12 @@ class BiasWindow:
         f_*_lookahead. For the blp set (Joe 0620). anchor='midnight' (TV-aligned, the blp default;
         non-day-divisor TFs drift on the epoch grid — TODO: source the anchor from a DB column)."""
         tf_sec, cfg = self._ls.resolve(ind_name)
+        b = self._lbase                                    # event tape when filler-invisible
         if cfg[0] == 'bb':
-            return IC.f_bb_lookahead(self.base, tf_sec, cfg[1], cfg[2], cfg[3], anchor=anchor)
-        return IC.f_k_lookahead(self.base, tf_sec, cfg[3], cfg[1], cfg[2], cfg[4], anchor=anchor)
+            out = IC.f_bb_lookahead(b, tf_sec, cfg[1], cfg[2], cfg[3], anchor=anchor)
+        else:
+            out = IC.f_k_lookahead(b, tf_sec, cfg[3], cfg[1], cfg[2], cfg[4], anchor=anchor)
+        return out[self._evt_remap] if self._evt_remap is not None else out   # remap event grid → full 5s grid
 
     def line(self, ind_name):
         """THE value_mode-honoring line read (#42) — the one place every consumer should call. Dispatches
