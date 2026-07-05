@@ -55,7 +55,10 @@ class StrategyLoop:
         if position:
             exits = strand_rescue(W, self._lr, ent,
                                   lr_exit_v2(W, self._lr, ent, predict=self._predict, gate_fam=self._gate_fam))
-            if any(x[1] == T and _SIDE[x[2]] == position["side"] for x in exits):
+            # x[6]=='end' is lr_exit_v2's BACKTEST boundary sentinel (unresolved trade → exit_ms=window-last-bar).
+            # Live, the window-last-bar is ALWAYS T, so every still-open entry reports a phantom 'end' at T →
+            # excluded here. Only a REAL exit ('exit'/'SL'/'strand') = the s7r-reversal cascade closes the stack.
+            if any(x[1] == T and x[6] != 'end' and _SIDE[x[2]] == position["side"] for x in exits):
                 close_side = "Sell" if position["side"] == "Buy" else "Buy"
                 out.append(TradeIntent("close", side=close_side, qty=float(position["size"]),
                                        reason="exit", ts=T))
