@@ -40,7 +40,7 @@ ledger = O9Ledger(o9, SYM, start_equity=float(os.environ.get("O9_START_EQUITY", 
 control = O9Control(o9)
 health = HealthStore(o9)                                          # cascade phase + loop_ms heartbeat → UI
 STATE_LOG = os.environ.get("O9_STATE_LOG", "/home/joe/thecodes/o9_state.log")
-state_logger = StateLogger(o9, dev, STATE_LOG)                    # edge-triggered cascade state-change log (DB + file)
+state_logger = StateLogger(o9, STATE_LOG)                         # edge-triggered cascade state-change log (DB + file)
 app = O9LiveApp(strat, PositionSizer(max_order=66000), adapter, ledger, control, SYM,
                 health=health, state_logger=state_logger)
 

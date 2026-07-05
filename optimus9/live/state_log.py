@@ -1,8 +1,11 @@
 """StateLogger — edge-triggered cascade state-change log (Joe 0705, phase-3 of the UI mods).
 
-SRP: given the per-bar cascade mask + the window, detect FLIPS on the `logged` registry states and write each as an
-event to o9_state_log, plus a RELATIONAL snapshot (o9_state_log_line) of all cascade line values at that bar, plus a
-line to a log file. The running loop WRITES; troubleshooting READS. Observability — must never break trading.
+SRP: given the per-bar AGNOSTIC substrate (cascade_substrate — pure, both-sides, signed states that CANNOT diverge
+from the producer) + the window, detect FLIPS on any state and write each as an event to o9_state_log, plus a
+RELATIONAL snapshot (o9_state_log_line) of all cascade line values at that bar, plus a line to a log file. Warts and
+all: every pure-state flip is recorded; the trade-trigger sits 1 bar before its trade (attribute by time). The
+stateful latches (arm/gate/rtr) are NOT logged here — they must be producer-emitted (the DESYNC lives there; a
+re-derived latch would poison the dig). The running loop WRITES; troubleshooting READS. Must never break trading.
 """
 from __future__ import annotations
 
@@ -14,12 +17,11 @@ LINES = ['s5m', 's5M', 's5r', 's7m', 's7M', 's7r', 's2M', 's3m', 's3M', 's3r',
 
 
 class StateLogger:
-    def __init__(self, o9db, cfgdb, logfile, clock=None):
+    def __init__(self, o9db, logfile, clock=None):       # cfgdb dropped: substrate is registry-free (pure states)
         self.db = o9db                                   # o9_live — event tables live here
         self._now = clock or (lambda: int(time.time() * 1000))
         self.logfile = logfile
-        self._logged = cfgdb.execute("SELECT state, bit, label FROM cascade_state WHERE logged=1", fetch=True) or []
-        self._last = None                                # prior-bar mask (in-memory; first bar = baseline, no log)
+        self._last = None                                # prior-bar substrate dict (in-memory; first bar = baseline)
         self._ensure()
 
     def _ensure(self):
@@ -31,15 +33,15 @@ class StateLogger:
             sll_id BIGINT AUTO_INCREMENT PRIMARY KEY, sl_id BIGINT NOT NULL, line VARCHAR(16) NOT NULL,
             val DECIMAL(12,4), KEY k_sl (sl_id))""")
 
-    def record(self, W, mask, es, kline_ms, price):
-        """Diff mask vs the prior bar; for each flipped `logged` state write an event + a line snapshot + a file
-        line. No-change bars are a no-op. First call sets the baseline (no log)."""
+    def record(self, W, sub, mask, es, kline_ms, price):
+        """Diff the substrate dict vs the prior bar; for each flipped state write a signed event (old_v→new_v ∈
+        {-1,0,1}) + a line snapshot + a file line. `mask` is stored for reference (the side-locked grid view — NOT
+        diffed). No-change bars are a no-op. First call sets the baseline (no log)."""
         prev = self._last
-        self._last = mask
+        self._last = dict(sub)
         if prev is None:
             return
-        changes = [(s['state'], (prev >> s['bit']) & 1, (mask >> s['bit']) & 1)
-                   for s in self._logged if ((prev >> s['bit']) & 1) != ((mask >> s['bit']) & 1)]
+        changes = [(k, prev.get(k, 0), v) for k, v in sub.items() if prev.get(k, 0) != v]
         if not changes:
             return
         T = len(W.ts) - 1

@@ -11,7 +11,8 @@ None, or {'side': 'Buy'|'Sell', 'size': float}.
 from __future__ import annotations
 
 import bias_machine as bm
-from optimus9.analysis.lr_v2 import v2_walk, v2_walk_ad, lr_exit_v2, strand_rescue, v2_phase, v2_state_mask
+from optimus9.analysis.lr_v2 import (v2_walk, v2_walk_ad, lr_exit_v2, strand_rescue, v2_phase, v2_state_mask,
+                                     cascade_substrate)
 from optimus9.live.sizing import TradeIntent
 
 _SIDE = {1: "Buy", -1: "Sell"}
@@ -46,6 +47,11 @@ class StrategyLoop:
         """Cascade-state mask at bar T for the UI mirror-grids (SRP: reports, never trades). (mask, es, armed).
         since_ms → the 3 latch states close on a trade (troubleshooting test — readout only)."""
         return v2_state_mask(W, self._lr, self._cascade, since_ms=since_ms)
+
+    def substrate(self, W):
+        """Agnostic PURE cascade substrate at bar T for the state-log (SRP: reports deterministic facts, both
+        sides, es-free). Cannot diverge from the producer — the honest layer of the event log."""
+        return cascade_substrate(W, self._lr)
 
     def decide(self, now_ms: int, position: dict | None) -> list[TradeIntent]:
         """Compat entry: build the window and return this bar's intents (callers that don't need the phase)."""

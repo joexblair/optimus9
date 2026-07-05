@@ -509,6 +509,40 @@ def v2_state_mask(W, cfg, states, in_position=0, since_ms=0):
     return mask, int(es), armed
 
 
+def cascade_substrate(W, cfg):
+    """[PURE·READOUT] The AGNOSTIC per-bar cascade substrate at T for the o9-live state-log (Joe 0705). SRP:
+    reports only the DETERMINISTIC facts — pure functions of W (line OOB direction, finisher fires, s7r predict,
+    s7Mage reversal), BOTH sides, es-FREE. Unlike v2_state_mask (side-locked to the active arm, for the visual
+    grid) this CANNOT diverge from v2_walk_ad: same W, same pure math ⇒ bit-identical arrays. The STATEFUL latches
+    (arm/gate/rtr) are DELIBERATELY absent — they're where the DESYNC lives, so they must be emitted by the producer
+    itself, never re-derived here (a re-derived latch during the dig is noise dressed as data). Returns {state:int}
+    @ T, signed: +1 hi-breach · 0 in-bounds · -1 lo-breach (finishers/predict/rev: +1 hi · -1 lo · 0 none)."""
+    T = len(W.ts) - 1
+    hi, lo = cfg.hi, cfg.lo
+    L = W.line
+
+    def sgn(v):
+        return 1 if v >= hi else (-1 if v <= lo else 0)               # agnostic breach direction
+
+    b = {}
+    for ln in ('s5m', 's5M', 's15m', 's15M', 's30m', 's30M', 's3m', 's3M', 's4m', 's4M', 's7m', 's7M'):
+        b[ln] = sgn(L(ln)[T])
+    q15h, q15l = s_qualify(W, cfg, 's15m', 's15M', 's15r', cfg.s15r_lb)
+    q30h, q30l = s_qualify(W, cfg, 's30m', 's30M', 's30r', cfg.s30r_lb)
+    flb = cfg.fin_lb
+
+    def fin(qh, ql):                                                   # finisher fired in the lookback, either side
+        h = bool(qh[max(0, T - flb):T + 1].any()); l = bool(ql[max(0, T - flb):T + 1].any())
+        return 1 if h else (-1 if l else 0)                           # rare both-true → hi (v1 diagnostic; refine if seen)
+
+    b['s15a'] = fin(q15h, q15l); b['s30a'] = fin(q30h, q30l)
+    s7r, s7m, s7M = L('s7r'), L('s7m'), L('s7M')
+    b['s7r_predict'] = int(predict_breach(s7r, s7m, s7M, hi, lo, FENCE_HI, FENCE_LO)[T])
+    rev7 = _mage_rev(s7M, cfg.fin_mage_wob); nz = np.flatnonzero(rev7[:T + 1])
+    b['s7M_rev'] = int(rev7[nz[-1]]) if nz.size else 0
+    return b
+
+
 def lr_exit_v2(W, cfg, entries, predict=True, gate_fam='s7', slip=0.0, rlb=19):
     """EXIT cascade = the entry machine pointed at the −es (favourable) extreme — ONE machine, two polarities.
     Per entry (tms, es, bd, tj), arm_side = bd:
