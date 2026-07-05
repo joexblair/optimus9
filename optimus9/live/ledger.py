@@ -36,6 +36,11 @@ class O9Ledger:
                         "opened_ms) VALUES (%s,%s,%s,%s,%s,%s,'open',%s)",
                         (self.symbol, side, qty, entry_px, order_id, reason, ts))
 
+    def last_trade_ms(self) -> int:
+        """Most recent trade open time (for the latch-reset troubleshooting test); 0 if none."""
+        r = self.db.execute("SELECT MAX(opened_ms) m FROM o9_ledger WHERE symbol=%s", (self.symbol,), fetch=True)
+        return int(r[0]["m"]) if r and r[0]["m"] else 0
+
     def open_legs(self) -> list:
         """Per-leg open trades (option B per-leg SL needs each leg's own entry). Aggregate = open_position()."""
         return self.db.execute("SELECT led_id, side, qty, entry_px, opened_ms FROM o9_ledger "

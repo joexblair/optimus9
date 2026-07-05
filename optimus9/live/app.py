@@ -25,6 +25,7 @@ class O9LiveApp:
         self.control = control        # O9Control — operator state (sizing / halt / flatten), DB-backed
         self.health = health          # HealthStore — cascade phase + loop_ms (observability; None = off)
         self.state_logger = state_logger   # StateLogger — edge-triggered cascade state-change log (None = off)
+        self._last_trade_ms = ledger.last_trade_ms()   # latch-reset test: the 3 latch states close on a trade
         self.symbol = symbol
         self.log = log
 
@@ -32,7 +33,7 @@ class O9LiveApp:
         if self.health:                                  # observability MUST NOT break the trading loop
             try:
                 self.health.set_phase(self.strategy.phase(W, pos))
-                mask, es, armed = self.strategy.state_mask(W)
+                mask, es, armed = self.strategy.state_mask(W, since_ms=self._last_trade_ms)
                 self.health.set_cascade(mask, es, armed)              # cascade mirror-grid mask
                 if self.state_logger:
                     self.state_logger.record(W, mask, es, now_ms, price)   # edge-triggered state-change log
@@ -67,6 +68,7 @@ class O9LiveApp:
             fpx = self._fill_price(oid)
             if intent.action in ("open", "add"):
                 self.ledger.record_open(o.side, o.qty, fpx, oid, intent.reason, now_ms)
+                self._last_trade_ms = now_ms                          # a trade closes the 3 latch states (test)
                 act = "add" if intent.action == "add" else ("open_long" if o.side == "Buy" else "open_short")
             elif intent.led_id is not None:                          # option B per-leg SL → close just this leg
                 self.ledger.record_close_leg(intent.led_id, fpx, oid, now_ms)

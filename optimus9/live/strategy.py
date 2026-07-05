@@ -42,9 +42,10 @@ class StrategyLoop:
         side = _SIDE_N.get(position["side"], 0) if position else 0
         return v2_phase(W, self._lr, in_position=side, exit_fam=self._gate_fam)
 
-    def state_mask(self, W):
-        """Cascade-state mask at bar T for the UI mirror-grids (SRP: reports, never trades). (mask, es, armed)."""
-        return v2_state_mask(W, self._lr, self._cascade)
+    def state_mask(self, W, since_ms=0):
+        """Cascade-state mask at bar T for the UI mirror-grids (SRP: reports, never trades). (mask, es, armed).
+        since_ms → the 3 latch states close on a trade (troubleshooting test — readout only)."""
+        return v2_state_mask(W, self._lr, self._cascade, since_ms=since_ms)
 
     def decide(self, now_ms: int, position: dict | None) -> list[TradeIntent]:
         """Compat entry: build the window and return this bar's intents (callers that don't need the phase)."""
