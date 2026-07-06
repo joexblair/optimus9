@@ -9,9 +9,13 @@ readable arm, and a Pine (from the engine) marks exactly what the engine arms on
 Two wob gates: a **wob_breach** confirms the OOB entry is real (filters boundary chop), then a **wob_signal**
 confirms the reversal and fires the arm.
 1. an emerging s5Mage bar **crosses** the boundary (≥85 / ≤15) → start the breach-confirm count.
-2. **wob_breach (opens the latch):** `arm_wob` consecutive bars NOT printing a **lower** value (hi-breach →
-   non-decreasing / the line sustains up) / NOT **higher** (lo-breach). A wiggle over the line that immediately
-   falls can't confirm — that's what kills the boundary-chop re-arming.
+2. **wob_breach (opens the latch):** `arm_wob` consecutive bars that **STAY OOB** (hi-breach: value **≥ hi**;
+   lo: ≤ lo) **AND** print NOT-**lower** (hi → non-decreasing) / NOT-higher (lo). A lower-than-prior print
+   *while still OOB* resets-and-resumes. **If the value falls back IB before the count completes, the hunt is
+   ENDED** — abandon → idle, a fresh IB→OOB cross is required to retry (Joe 0706). This is what kills the
+   boundary-chop false arm: a wiggle that pokes over the line, dips IB, then pushes back up **cannot** confirm
+   (its climb-back is on IB bars). Fixed the false 07-05 20:18:35 arm (cross 20:15:05 → IB at 20:15:35 before
+   7 → hunt ended). Arm rate 22.9 → 13.4/day; filler-bar arms 27 → 12.
 3. **wob_signal (closes the latch → ARM):** `arm_wob` consecutive bars NOT printing a **higher** value
    (hi-breach → non-increasing / the reversal) / NOT **lower** (lo-breach).
 - **Same value COUNTS** in both gates; **only a contrary print resets** the count to 0 and it **RESUMES**
@@ -43,6 +47,14 @@ confirms the reversal and fires the arm.
 ## Pine (`s5Mage_rev_emit.py` → `s5Mage_arm.pine`)
 - Calls the engine's `s5Mage_arm(W, cfg)` directly → the Pine marks **exactly** the engine's arm bars
   (white bgcolor, 5s bar-containment match). `python3 s5Mage_rev_emit.py` regenerates it.
+- **Filler-shift (display-only, Joe 0706):** if an arm fires on a **no-trade filler bar** (`volume==0`), the
+  Pine timestamp walks FORWARD to the next real (V>0) bar. TV omits no-trade bars, so a marker on a filler bar
+  has no chart bar to paint → invisible. The shift lands it on the first bar TV actually draws. The **engine
+  arm time is unchanged** — this is purely so the on-chart marker is visible. ~27/366 arms shift (14d).
+  - **Root note:** filler bars are carry-forward FLAT, and the wob "same value counts" rule means a flat
+    filler run of `arm_wob` bars can tick the wob on its own → a **spurious arm on a dead tape**. The display
+    shift makes these visible but does NOT suppress them; the real fix (count only V>0 bars in the arm/wob) is
+    a separate, open decision. See `pk_optimizer.s5Mage_arm_events` (`arm_bar_filler=1`) and [[project_filler_invisible]].
 
 ## Initial result (raw, untuned — HOLD LIGHTLY)
 - `v2_walk` on the s5Mage arm (7d): **$500 → $178 (0.4×) — loses.** But the gate/finisher/exit are still

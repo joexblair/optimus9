@@ -20,11 +20,23 @@ cfg = lr_config(dev)
 W = bm.BiasWindow(dev, int(time.time() * 1000), lookback=336, warmup=48,
                   cfg=bm.BiasConfig(**BASE_BIAS), lean=True)   # s5M from the DB (canonical)
 ts = W.ts
-evts = [int(ts[i]) for i, es, bd in s5Mage_arm(W, cfg)]
+vol = W.base['volume'].to_numpy(dtype=float)
+n = len(ts)
+evts = []
+shifted = 0
+for i, es, bd in s5Mage_arm(W, cfg):
+    k = i
+    while k < n and vol[k] == 0:            # arm on a NO-TRADE filler bar → walk to the next real (V>0) bar
+        k += 1                              # so TV (which omits fillers) has a bar to paint. Display-only.
+    if k < n:
+        evts.append(int(ts[k]))
+        if k != i:
+            shifted += 1
 dev.disconnect()
 
 days = (int(ts[-1]) - int(ts[0])) / 86400000.0
-print('s5Mage_arm (arm_wob=%s): %d arms over %.1fd = %.1f/day' % (cfg.arm_wob, len(evts), days, len(evts) / days))
+print('s5Mage_arm (arm_wob=%s): %d arms over %.1fd = %.1f/day  (%d shifted off a filler bar to the next real bar)'
+      % (cfg.arm_wob, len(evts), days, len(evts) / days, shifted))
 
 arr = 'array.from(' + ', '.join(map(str, evts)) + ')'
 body = '''//@version=5

@@ -53,8 +53,11 @@ def s5Mage_arm(W, cfg):
     """[1·s5Mage] ARM via the TWO-wob latch (Joe 0705 spec) — a wob_breach confirms the OOB entry (filters
     boundary chop), then a wob_signal confirms the reversal and fires the arm:
       1. an emerging s5Mage bar CROSSES the boundary (≥hi / ≤lo) → start the breach-confirm count.
-      2. **wob_breach** (opens the latch): cfg.arm_wob consecutive bars NOT printing a LOWER value (hi-breach,
-         non-decreasing) / NOT higher (lo-breach). Same value counts; a contrary print resets-and-resumes.
+      2. **wob_breach** (opens the latch): cfg.arm_wob consecutive bars that STAY OOB (hi-breach: value ≥hi;
+         lo-breach: ≤lo) AND print NOT-lower (hi, non-decreasing) / not-higher (lo). Same value counts; a
+         lower-than-prior print while still OOB resets-and-resumes. **If the value falls back IB before the
+         count completes, the hunt is ENDED** (abandon → idle; a fresh cross is required) — this kills the
+         boundary-chop false arm (a wiggle over the line that dips IB then pushes back up can't confirm).
       3. **wob_signal** (closes the latch → ARM): cfg.arm_wob consecutive bars NOT printing a HIGHER value
          (hi-breach, non-increasing) / NOT lower (lo-breach). Same value counts; contrary resets-and-resumes.
     hi-breach → SHORT (es=+1, bd=-1); lo-breach → LONG (es=-1, bd=+1). s5Mage = W.line('s5M') emerging/causal;
@@ -70,11 +73,14 @@ def s5Mage_arm(W, cfg):
                 br = 1; state = 1; cnt = 0               # hi-breach cross
             elif s5M[k] <= lo and s5M[k - 1] > lo:
                 br = -1; state = 1; cnt = 0              # lo-breach cross
-        elif state == 1:                                 # CONFIRM breach: sustain (hi=non-decreasing, lo=non-increasing)
-            ok = (s5M[k] >= s5M[k - 1]) if br == 1 else (s5M[k] <= s5M[k - 1])
-            cnt = cnt + 1 if ok else 0
-            if cnt >= wob:
-                state = 2; cnt = 0                       # wob_breach → latch OPEN
+        elif state == 1:                                 # CONFIRM breach: must STAY OOB (Joe 0706) + sustain (hi=non-decreasing)
+            if (s5M[k] < hi) if br == 1 else (s5M[k] > lo):
+                state = 0; cnt = 0                       # fell back IB before confirming → hunt ENDED, abandon (needs a fresh cross)
+            else:
+                ok = (s5M[k] >= s5M[k - 1]) if br == 1 else (s5M[k] <= s5M[k - 1])
+                cnt = cnt + 1 if ok else 0               # still OOB: a lower-than-prior print resets-and-resumes
+                if cnt >= wob:
+                    state = 2; cnt = 0                   # wob_breach → latch OPEN
         elif state == 2:                                 # REVERSAL signal: hi=non-increasing, lo=non-decreasing
             ok = (s5M[k] <= s5M[k - 1]) if br == 1 else (s5M[k] >= s5M[k - 1])
             cnt = cnt + 1 if ok else 0
