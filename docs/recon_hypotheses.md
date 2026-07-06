@@ -59,8 +59,12 @@ extend hypotheses/scripts → rest.
   #54's gap is downstream (exit/sizing/hedge), not the cascade signals.
 
 ## OPEN hypotheses (next wakes)
-- **stale_exit honoring** — backtest emits `stale_exit` beside some arms (AB toggle → "no trade"). Does o9-live log
-  and *honor* it (no trade), or arm+trade anyway? First candidate for a real divergence.
+- ~~**stale_exit honoring**~~ **RESOLVED 0707:** `stale_exit` is **emit-only** in the AD path. `_stale()` is called
+  only by `v2_walk(stale_exit=True)`; `v2_cascade` (consumed by BOTH `v2_walk_ad` and `v2_mech_events`) never gates
+  on it. So o9-live and backtest AGREE (both trade through it) — **not a reconcile divergence.** BUT the spec says
+  `stale_exit` → "exit flow, no trade" (flow-2 AB toggle) and the shipping AD producer doesn't enforce it → a
+  **spec-vs-build gap, parked for Joe's call** (whether the AD path should honor stale_exit). `bt_extra_events`
+  detail is currently hidden in the suite's per-event line (verdict=None → shows `--`); surface the detail if chasing.
 - **over-fire on the OLD (pre-reset) stream** — the handover's ~9% over-fire was measured on the multi-process,
   look-ahead-confounded data; re-measure on the clean stream as it accumulates (may evaporate).
 - **batch-window efficiency** — a single window read at each event's bar-index should equal the per-event K−BAR
