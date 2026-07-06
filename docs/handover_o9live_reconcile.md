@@ -16,7 +16,7 @@ mechanic reconciles *to* it. (I drifted into "realizable strategy" framing yeste
   - UI `setsid python3 -m uvicorn optimus9.live.ui_server:app --host 0.0.0.0 --port 8099 >> ui_server.log 2>&1 & disown`
   - fakeAPI runs on :8098 (no restart needed).
   - **The loop reloads ALL lp_config at startup** — audit `lp_arm_mode`/`lp_lr_sl` before any restart (I once restarted onto the stale s5Mage arm by accident).
-- Resume path when ready: `curl -XPOST :8099/api/resume`. Clean reset: `curl -XPOST :8099/api/reset` (now also wipes the event stream).
+- Resume path when ready: `curl -XPOST :8099/api/resume`. Reset: `curl -XPOST :8099/api/reset` — clears the paper ACCOUNT only (ledger/decision/forecast + equity + fakeAPI); the diagnostic event stream (o9_state_log/_line + arm_gate_recon) is DURABLE across resets (fix 6c93ae2, Joe 0707 — the earlier "wipe the event stream too" cost 11.6h of reconcile history).
 
 ## THE PLAN (next steps, in order, with reasons)
 0. **FIRST JOB (Joe's ask): an alert that fires whenever o9-live ARMS.** ✅ BUILT 0707 — `optimus9/live/arm_alert.py`
