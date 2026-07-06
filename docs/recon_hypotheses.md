@@ -78,6 +78,23 @@ extend hypotheses/scripts → rest.
   Deltas: my window resolved to 10.8d actual (warmup +12h) vs 10.3d (→~25 more trades); SINGLE-POSITION 241/7.5×
   vs Joe's 224/10.0× (definition/window differs — his accounting lives in `ker_*.py`). Same producer/config/data.
 
+### 0707c — the 33h clock (recon_tracker) + position events + stale_exit flow
+- **GOAL (Joe):** o9-live reconciles vs backtest for **33 CONTINUOUS hours**; document every change. o9 stays LIVE.
+- **`recon_tracker.py` built** = the 33h clock. Daemon reusing `recon_suite` Repro/audit_event; audits new
+  arm/gate/trade vs backtest + watches `o9_ledger` positions. Emits SPARSE alerts (replaces the noisy per-arm feed):
+  `DIVERGENCE` (resets the clock), `POSITION` open/close (with **EXIT-OVERSHOOT** = the #54 SL-past flag), hourly
+  `SYNC` heartbeat (consecutive in-sync hours). Persists `o9_live.recon_track` (durable counter). Running as Monitor.
+  Validated: led2 close correctly flagged EXIT-OVERSHOOT (−1.84% past 0.9% SL); 25 events matched, 0 divergence.
+- **Position events (Joe's ask):** the cascade `trade` event ≠ the executed position (`o9_ledger`). Tracker watches
+  the ledger so live opens/closes + exit failures surface — the #54 bug shows up here, not in the cascade stream.
+- **`stale_exit` flow shared with Joe.** Build: `gate_signals` → `oob2/3/4` = s2r/s3r/s4r OOB (emerging); at the arm
+  bar, `stale := all three IB`. Two consumers: `_stale()` ENFORCES (drops setup) but ONLY in `v2_walk(stale_exit=True)`;
+  `v2_mech_events` EMITS always. AD path = emit-only. **Spec-vs-build gap:** spec says "in lookbacks AND all IB"; code
+  checks only all-IB. Parked for Joe's decision.
+- **RESTART for bar_ms — DEFERRED:** o9 holds 2 open SHORT positions (led3/led4, underwater in a rising tape). Restart
+  = a ~1-bar SL-management gap on live losing shorts; bar_ms isn't urgent. Wait until flat, then restart (clean
+  kill-old-first — no single-instance guard yet).
+
 ## OPEN hypotheses (next wakes)
 - ~~**stale_exit honoring**~~ **RESOLVED 0707:** `stale_exit` is **emit-only** in the AD path. `_stale()` is called
   only by `v2_walk(stale_exit=True)`; `v2_cascade` (consumed by BOTH `v2_walk_ad` and `v2_mech_events`) never gates
