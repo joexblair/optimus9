@@ -19,10 +19,15 @@ mechanic reconciles *to* it. (I drifted into "realizable strategy" framing yeste
 - Resume path when ready: `curl -XPOST :8099/api/resume`. Clean reset: `curl -XPOST :8099/api/reset` (now also wipes the event stream).
 
 ## THE PLAN (next steps, in order, with reasons)
-0. **FIRST JOB (Joe's ask): an alert that fires whenever o9-live ARMS.** Poll `o9_live.o9_state_log` for new
-   `state='arm'` rows (dedup by kline_ms — see the double-logging bug below); emit a notification with es/price/kline_ms.
-   Model it on `ops/monitor_closed_trades.py` / `ops/o9_healthcheck.py`. **Why:** lets us test the event-mismatch
-   theories in near-realtime instead of post-hoc — watch a live arm, diff it against the backtest at that bar.
+0. **FIRST JOB (Joe's ask): an alert that fires whenever o9-live ARMS.** ✅ BUILT 0707 — `optimus9/live/arm_alert.py`
+   (commit 6ddfa27). Standalone read-only poller of `o9_live.o9_state_log` for `state='arm'`, dedup by kline_ms
+   (collapses the 2-10x double-log), emits side/px/kline_ms + lag → stdout + tail-able `live/arm_alerts.log`.
+   Run: `cd /home/joe/thecodes && python3 -m optimus9.live.arm_alert` (currently running detached; tails the log).
+   Channel = terminal tail log (Joe was AFK; recommended default — poller core is channel-agnostic, toast/UI is an
+   additive edit if wanted). **Corrections vs the original plan:** the `ops/monitor_*` model files don't exist (real
+   code lives under `live/`); and the side label is es 1=LONG / -1=SHORT per `strategy.py:18 _SIDE` (I nearly
+   inverted it). **Why:** lets us test event-mismatch theories in near-realtime — watch a live arm, diff it against
+   the backtest at that bar. NOTE: arms log even while halted (halt stops trades, not the cascade) — usable now.
 1. **Build a clean Source-of-Truth backtest.** `build_v2_walk.py` uses **`v2_walk`**, but o9-live runs **`v2_walk_ad`**
    — the "SoT" table is BOTH stale ($177, 06-25→07-05) AND the wrong producer. **There is no clean SoT right now.**
    Decide the producer (almost certainly **`v2_walk_ad`, to match o9-live**), rebuild the table with `arm_mode=s5m` +
