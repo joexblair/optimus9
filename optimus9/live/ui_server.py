@@ -235,7 +235,9 @@ def reset_account():
     tells the fakeAPI to clear its mock exchange (fx_*), and HALTS the loop (operator resumes when ready).
     Durable by design: everything is MySQL rows — this is the deliberate wipe, nothing resets on restart."""
     o9 = _db(); now = int(time.time() * 1000)
-    for t in ("o9_ledger", "o9_decision"):                          # o9's own trade/decision record
+    # o9's own trade/decision record + the event/log tables that feed the UI (consolidated, Joe 0706 — was
+    # a few manual TRUNCATEs; a clean reset must wipe the event stream too so measurement starts from zero).
+    for t in ("o9_ledger", "o9_decision", "o9_state_log", "o9_state_log_line", "arm_gate_recon", "o9_forecast"):
         o9.execute("TRUNCATE TABLE %s" % t)
     o9.execute("INSERT INTO o9_account (acct_id, equity, realized_total, trade_count, updated_ms) "
                "VALUES (1,%s,0,0,%s) ON DUPLICATE KEY UPDATE equity=%s, realized_total=0, trade_count=0, "
