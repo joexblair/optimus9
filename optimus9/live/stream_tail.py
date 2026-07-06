@@ -23,7 +23,8 @@ STATES = ("arm", "s3s4_gate")
 
 
 def _side(es: int) -> str:
-    return "LONG" if es == 1 else "SHORT" if es == -1 else "-"   # authoritative: strategy.py _SIDE (1=Buy, -1=Sell)
+    # es = OOB breach side; trade goes against it (bd=-es). Ground truth: o9_ledger Sell at es=+1 trade. es=+1 -> SHORT.
+    return "SHORT" if es == 1 else "LONG" if es == -1 else "-"
 
 
 def _utc(ms: int) -> str:

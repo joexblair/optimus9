@@ -25,8 +25,9 @@ mechanic reconciles *to* it. (I drifted into "realizable strategy" framing yeste
    Run: `cd /home/joe/thecodes && python3 -m optimus9.live.arm_alert` (currently running detached; tails the log).
    Channel = terminal tail log (Joe was AFK; recommended default — poller core is channel-agnostic, toast/UI is an
    additive edit if wanted). **Corrections vs the original plan:** the `ops/monitor_*` model files don't exist (real
-   code lives under `live/`); and the side label is es 1=LONG / -1=SHORT per `strategy.py:18 _SIDE` (I nearly
-   inverted it). **Why:** lets us test event-mismatch theories in near-realtime — watch a live arm, diff it against
+   code lives under `live/`); and the side label is **es 1=SHORT / -1=LONG** (es = OOB breach side; the trade goes AGAINST it, bd=-es,
+   side=`_SIDE[bd]`). GROUND TRUTH: o9_ledger opened a Sell at the es=+1 trade event. (I flip-flopped this twice —
+   `_SIDE` maps `bd`, not the logged `es`; the ledger is the arbiter.) **Why:** lets us test event-mismatch theories in near-realtime — watch a live arm, diff it against
    the backtest at that bar. NOTE: arms log even while halted (halt stops trades, not the cascade) — usable now.
 1. **Build a clean Source-of-Truth backtest.** `build_v2_walk.py` uses **`v2_walk`**, but o9-live runs **`v2_walk_ad`**
    — the "SoT" table is BOTH stale ($177, 06-25→07-05) AND the wrong producer. **There is no clean SoT right now.**

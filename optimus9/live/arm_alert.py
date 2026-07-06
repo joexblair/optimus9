@@ -23,8 +23,9 @@ LOGFILE = os.environ.get("O9_ALERT_LOG", os.path.join(os.path.dirname(__file__),
 
 
 def _side(es: int) -> str:
-    # authoritative map (strategy.py _SIDE): es 1 = Buy = LONG, es -1 = Sell = SHORT
-    return "LONG" if es == 1 else "SHORT" if es == -1 else "-"
+    # es = the OOB BREACH side; the trade goes AGAINST it (bd = -es; side = _SIDE[bd]). GROUND TRUTH: o9_ledger
+    # opened a Sell at the es=+1 trade event (20:42:15). So es=+1 -> SHORT, es=-1 -> LONG.
+    return "SHORT" if es == 1 else "LONG" if es == -1 else "-"
 
 
 def _utc(ms: int) -> str:
