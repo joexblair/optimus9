@@ -52,6 +52,7 @@ class LRConfig:
     fin_mage_wob: int = 0; fin_s30M_oob: int = 1; fin_lb: int = 42; fin_fwd: int = 12
     arm_wob: int = 2; arm_bigleg: int = 1; fin_both: int = 1; fin_dedup: int = 0
     arm_mode: str = 's5m'   # 's5m' (breach+divergence, current) | 's5Mage' (first-OOB-reversal, Joe 0705 troubleshooting)
+    arm_line: str = 's5M'   # the s5Mage arm LINE (Joe 0706 st5 experiment): 's5M' default · 'st5M' = the s5-clone TF-sweep line
     arms: list = field(default_factory=list)
     finishers: list = field(default_factory=list)
     gates: list = field(default_factory=list)

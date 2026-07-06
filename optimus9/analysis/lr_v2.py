@@ -64,7 +64,7 @@ def s5Mage_arm(W, cfg):
     wob in 5s bars (intended). The reversal IS the unlatched arm (arm_delay skipped). Selected via cfg.arm_mode.
     Two-gate design fixes boundary-chop re-arming: a wiggle over the line can't confirm the breach."""
     hi, lo = cfg.hi, cfg.lo; wob = cfg.arm_wob
-    s5M = W.line('s5M')
+    s5M = W.line(cfg.arm_line)                            # arm line (Joe 0706): 's5M' default · 'st5M' = s5-clone TF-sweep
     out = []
     state = 0; br = 0; cnt = 0                            # 0 idle · 1 confirming breach · 2 latched (await reversal)
     for k in range(1, len(s5M)):
@@ -98,7 +98,7 @@ def v2_arm(W, cfg, horizon=None):
     horizon = horizon or cfg.horizon
     n = len(W.ts); hi, lo = cfg.hi, cfg.lo
     if getattr(cfg, 'arm_mode', 's5m') == 's5Mage':
-        arm_line = W.line('s5M')                         # s5Mage arm; cap on the opposite s5Mage breach
+        arm_line = W.line(cfg.arm_line)                  # s5Mage arm; cap on the opposite s5Mage breach (cfg.arm_line)
         m = {i: (es, bd, 's5Ma') for i, es, bd in s5Mage_arm(W, cfg)}
     else:
         arm_line = W.line('s5m')
