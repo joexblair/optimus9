@@ -140,3 +140,18 @@ Ran a **free-fire diagnostic producer** (`v2_walk_diag`, swap in via `O9_PRODUCE
   Fixes late-s30a pairs being missed (s15a→s30a 35s later fired nothing before).
 - **`lp_fin_dedup` knob (DB, sweepable).** Collapse pair-completion fires within N base-bars of the last same-side
   fire (one per "s30a umbrella"). 0=off (every fire). Default 0; sweep to tune once the full cascade is live.
+
+## #54 fix — o9-live 33%↔backtest 67% gap = the per-leg SL clipping strand-rescue winners (Joe 0706)
+- **Root cause:** matched o9-live↔backtest trades had *identical entries* (px diff +0.004%) but live +0.09%/54%
+  vs backtest +0.50%/92% — o9-live's hard **−0.7% per-leg SL** (`strategy.py:88`, on `W.px[-1]` bar-close) fires
+  *before* `strand_rescue`'s s5r-curl (which is why the backtest wins). **MAE proof:** 0% of backtest winners dip
+  past −0.7% (min −0.69) — the SL sat knife-edge on the winners' floor; live's realtime trigger tips it a hair.
+- **FIX shipped:** `lp_lr_sl` 0.7 → **0.9** (both schemas). Backtest-inert (37.5x flat 0.7→1.3), stops 0% winners.
+- **#44 reclassified:** o9-live processes per-CLOSED-bar; the SL reads the bar close, NOT an intrabar wick — so
+  wick-ignore/index_price doesn't apply here. The widen is the correct fix. (True #44 = a separate index-price build.)
+- **KER entry-router = redundant** with `v2_walk_ad` (arm-delay already filters to 71%); KER-on-SL inert/hurts. Shelved.
+- **UI reset consolidated:** `/api/reset` now also TRUNCATEs `o9_state_log`, `o9_state_log_line`, `arm_gate_recon`,
+  `o9_forecast` (was manual) — one button = clean measurement base.
+- **Restart runbook:** loop = `O9_PRODUCER=ad setsid python3 ops/run_o9live.py >> o9live_run.log 2>&1 & disown` ·
+  UI = `setsid python3 -m uvicorn optimus9.live.ui_server:app --host 0.0.0.0 --port 8099 >> ui_server.log 2>&1 & disown`.
+  **The loop reloads ALL of `lr_config`/`lp_config` at startup — audit `lp_arm_mode`/`lp_lr_sl`/etc. before restarting.**
