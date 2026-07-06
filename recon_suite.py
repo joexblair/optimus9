@@ -29,7 +29,7 @@ SYM = "FARTCOINUSDT"
 BAR = 5000
 DELAY = 301                         # seam grace; decision instant = bar_open + BAR + DELAY
 LINE_EPS = 0.05                     # line-fidelity tolerance (rounding is 4dp; 0.05 is generous)
-STATES = ("arm", "s3s4_gate")
+STATES = ("arm", "s3s4_gate", "trade")     # audited event types (trade added 0707 — Joe flagged the 20:42:15 trade)
 
 
 def _utc(ms):
@@ -126,15 +126,16 @@ def main():
     strat = StrategyLoop(dev, bm.BiasConfig(**BASE_BIAS), lr_config(dev), SYM, buffer_hours=8, warmup_hours=6)
     repro = Repro(dev, strat)
 
+    inph = "(%s)" % ",".join(["%s"] * len(STATES))
     if args and args[0] == "K":
-        rows = o9.execute("SELECT MIN(sl_id) sl_id,kline_ms,state,es,meta FROM o9_state_log WHERE kline_ms=%s AND "
-                          "state IN ('arm','s3s4_gate') GROUP BY kline_ms,state,es,meta ORDER BY kline_ms",
-                          (int(args[1]),), fetch=True)
+        rows = o9.execute("SELECT MIN(sl_id) sl_id,kline_ms,state,es,meta FROM o9_state_log WHERE kline_ms=%%s AND "
+                          "state IN %s GROUP BY kline_ms,state,es,meta ORDER BY kline_ms" % inph,
+                          (int(args[1]), *STATES), fetch=True)
     else:
         n = int(args[0]) if args else 20
-        rows = o9.execute("SELECT MIN(sl_id) sl_id,kline_ms,state,es,meta FROM o9_state_log WHERE state IN "
-                          "('arm','s3s4_gate') GROUP BY kline_ms,state,es,meta ORDER BY MIN(sl_id) DESC LIMIT %s",
-                          (n,), fetch=True)
+        rows = o9.execute("SELECT MIN(sl_id) sl_id,kline_ms,state,es,meta FROM o9_state_log WHERE state IN %s "
+                          "GROUP BY kline_ms,state,es,meta ORDER BY MIN(sl_id) DESC LIMIT %%s" % inph,
+                          (*STATES, n), fetch=True)
         rows = list(reversed(rows))
 
     env = process_singleton()

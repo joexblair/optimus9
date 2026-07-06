@@ -34,6 +34,30 @@ extend hypotheses/scripts → rest.
   events by `kline_ms = ts+5301`, so they never align by ms → the `arm_gate_recon` table would read all-one-sided.
   Superseded for per-event work by `recon_suite.py`; fix or retire before trusting `arm_gate_recon`.
 
+## Troubleshooting log
+
+### 0707 — kline_ms mislabel (Joe's catch) + trade reconcile
+- **Steps:** read `driver.py` (`_latest_bar` returns `kc_timestamp`=bar OPEN; `now_ms=ts+bar+delay=ts+5301`), `app.py:39`
+  (`record(..., now_ms, ...)` stores `now_ms` in the `kline_ms` column), grepped kline_ms consumers.
+- **Result — it's a MISLABEL, not a timing fault.** The kline prints correctly at seam+301 per spec (ticks
+  00.000–04.999 → printed at +301). But o9-live stores the **decision instant** (`ts+5301`) in the `kline_ms`
+  column, when that column should hold the **actual bar open** (`ts` = `W.ts[-1]`, the just-closed bar). My earlier
+  `K−5000` offline hack was compensating for this instead of naming it. `created_ms` already holds the write instant.
+- **Blast radius of relabeling:** `ui_server.py:96` joins `o9_state_log.kline_ms` against **ledger trade-times** (which
+  use `now_ms`) to attribute cascade events to a trade. Switching state_log to bar-open skews that join by 5301ms
+  unless the ledger side is shifted too. So the relabel is NOT free.
+- **DECISION FORK (open — Joe's reason needed):**
+  - *Opt-1 relabel at source* — store `W.ts[-1]` as kline_ms. Honest bar stamp; must also shift the UI attribution
+    bounds −5301 (or move the ledger to bar-open). Bigger ripple.
+  - *Opt-2 keep now_ms, document only* — kline_ms stays = decision instant (self-consistent with ledger/created_ms
+    clock). recon_suite already maps K→bar via `−5301`. Smallest change; "mislabel" is then just a naming note.
+  - *Opt-3 (Claude's rec) add `bar_ms` column* = `W.ts[-1]` — additive, zero ripple; gives reconciliation a true bar
+    key while leaving the ledger-join clock intact. One column = one meaning (the bar it describes vs when decided).
+- **Trade reconcile (Joe flagged 20:42:15):** both trade events (20:42:15, 20:52:25 — M2, LONG, halted so no order)
+  reconcile **bit-exact** (0.00000 line diff; backtest emits `('trade',1,'M2')`). `trade` added to recon_suite STATES.
+- **Net:** clean post-reset stream = **6/6 matched (arm+gate+trade), 0 spurious.** Event-level reconcile is CLEAN;
+  #54's gap is downstream (exit/sizing/hedge), not the cascade signals.
+
 ## OPEN hypotheses (next wakes)
 - **stale_exit honoring** — backtest emits `stale_exit` beside some arms (AB toggle → "no trade"). Does o9-live log
   and *honor* it (no trade), or arm+trade anyway? First candidate for a real divergence.
