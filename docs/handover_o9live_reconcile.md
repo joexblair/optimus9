@@ -65,6 +65,11 @@ mechanic reconciles *to* it. (I drifted into "realizable strategy" framing yeste
   Joe's read is ground truth, the data is the arbiter. Never hardcode (DB). Autonomous commit when right (granular,
   green, to main). When the data contradicts what I built, welcome the catch — no ego ledger.
 
+## TASKS CARRIED FORWARD
+The harness TaskList is session-scoped and won't auto-carry. **All 59 tasks live in `docs/task_register.md`**
+(statuses as of 0707, IDs preserved). Re-seed into the harness via TaskCreate if you want live tracking.
+Active thread = #54 (reconcile) → #55 (hedge) → the exit fix.
+
 ## LOOSE ENDS / HOUSEKEEPING
 - Orphaned DB seeds (Joe's call to sunset): `s1m`/`s1r` (dropped s1a test), `st` series + `st5m/st5M/st5r` + itf_pk 27.
 - Stale s5Mage knobs: `lp_arm_wob=7`, `arm_line` (commits 4533bfb/7adf5e8) — harmless (arm_mode=0 → unused).
