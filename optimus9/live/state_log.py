@@ -28,11 +28,14 @@ class StateLogger:
         self.db.execute("""CREATE TABLE IF NOT EXISTS o9_state_log (
             sl_id BIGINT AUTO_INCREMENT PRIMARY KEY, kline_ms BIGINT NOT NULL, state VARCHAR(32) NOT NULL,
             old_v TINYINT NOT NULL, new_v TINYINT NOT NULL, meta VARCHAR(16), mask BIGINT NOT NULL, es TINYINT NOT NULL,
-            price DECIMAL(20,8), created_ms BIGINT NOT NULL, KEY k_ts (kline_ms), KEY k_state (state))""")
-        try:                                             # additive for pre-meta tables (arm/gate reason, trade path)
-            self.db.execute("ALTER TABLE o9_state_log ADD COLUMN meta VARCHAR(16) AFTER new_v")
-        except Exception:
-            pass
+            price DECIMAL(20,8), created_ms BIGINT NOT NULL, bar_ms BIGINT, KEY k_ts (kline_ms), KEY k_state (state),
+            KEY k_bar (bar_ms))""")
+        for _alter in ("ADD COLUMN meta VARCHAR(16) AFTER new_v",       # additive for pre-meta tables
+                       "ADD COLUMN bar_ms BIGINT, ADD KEY k_bar (bar_ms)"):   # Opt-3 (Joe 0707): the TRUE bar open
+            try:
+                self.db.execute("ALTER TABLE o9_state_log " + _alter)
+            except Exception:
+                pass
         self.db.execute("""CREATE TABLE IF NOT EXISTS o9_state_log_line (
             sll_id BIGINT AUTO_INCREMENT PRIMARY KEY, sl_id BIGINT NOT NULL, line VARCHAR(16) NOT NULL,
             val DECIMAL(12,4), KEY k_sl (sl_id))""")
@@ -51,6 +54,8 @@ class StateLogger:
         if not rows:
             return
         T = len(W.ts) - 1
+        bar_ms = int(W.ts[T])         # Opt-3 (Joe 0707): the TRUE bar open this event is about. kline_ms stays =
+        #                               now_ms (decision instant = bar_ms+5301, kept for the ledger-join clock).
         vals = {}
         for ln in LINES:
             try:
@@ -59,9 +64,9 @@ class StateLogger:
                 pass
         now = self._now()
         for state, old, new, meta in rows:
-            self.db.execute("INSERT INTO o9_state_log (kline_ms,state,old_v,new_v,meta,mask,es,price,created_ms) "
-                            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                            (int(kline_ms), state, int(old), int(new), meta, int(mask), int(es), price, now))
+            self.db.execute("INSERT INTO o9_state_log (kline_ms,state,old_v,new_v,meta,mask,es,price,created_ms,bar_ms) "
+                            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                            (int(kline_ms), state, int(old), int(new), meta, int(mask), int(es), price, now, bar_ms))
             sl_id = self.db.execute("SELECT LAST_INSERT_ID() id", fetch=True)[0]['id']
             for ln, v in vals.items():
                 self.db.execute("INSERT INTO o9_state_log_line (sl_id,line,val) VALUES (%s,%s,%s)", (sl_id, ln, v))

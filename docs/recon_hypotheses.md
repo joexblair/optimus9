@@ -30,9 +30,10 @@ extend hypotheses/scripts → rest.
 - **Double-log root = orphan loop processes** (restarts with no single-instance guard → N concurrent writers → same
   arm 2–10× with different `created_ms`). A lone correct loop cannot double-write (driver fires `on_bar` once/bar;
   `v2_arm` dedups setups by bar-index). It is a **write-layer artifact, not a spurious cascade event**.
-- **`recon_arm_gate.py` alignment bug (suspected, unverified):** keys backtest events by bar-open `ts[i]` but o9
-  events by `kline_ms = ts+5301`, so they never align by ms → the `arm_gate_recon` table would read all-one-sided.
-  Superseded for per-event work by `recon_suite.py`; fix or retire before trusting `arm_gate_recon`.
+- **`recon_arm_gate.py` alignment bug — CONFIRMED 0707 (ran it, looked):** output is all one-sided. It keys bt
+  events by bar-open `ts[i]` but filters/aligns against the o9 `kline_ms` range (=bar-open+5301), so bt halves fall
+  below the low bound and drop — o9 events 20:40–21:29 got NO backtest counterpart. `arm_gate_recon` is NOT a usable
+  reconcile view. **RETIRE in favour of `recon_suite.py`** (or, if kept, key both sides on the bar via `kline_ms−5301`).
 
 ## Troubleshooting log
 
@@ -46,13 +47,14 @@ extend hypotheses/scripts → rest.
 - **Blast radius of relabeling:** `ui_server.py:96` joins `o9_state_log.kline_ms` against **ledger trade-times** (which
   use `now_ms`) to attribute cascade events to a trade. Switching state_log to bar-open skews that join by 5301ms
   unless the ledger side is shifted too. So the relabel is NOT free.
-- **DECISION FORK (open — Joe's reason needed):**
-  - *Opt-1 relabel at source* — store `W.ts[-1]` as kline_ms. Honest bar stamp; must also shift the UI attribution
-    bounds −5301 (or move the ledger to bar-open). Bigger ripple.
-  - *Opt-2 keep now_ms, document only* — kline_ms stays = decision instant (self-consistent with ledger/created_ms
-    clock). recon_suite already maps K→bar via `−5301`. Smallest change; "mislabel" is then just a naming note.
-  - *Opt-3 (Claude's rec) add `bar_ms` column* = `W.ts[-1]` — additive, zero ripple; gives reconciliation a true bar
-    key while leaving the ledger-join clock intact. One column = one meaning (the bar it describes vs when decided).
+- **DECISION — Opt-3, agreed (Joe 0707, same reasons):** add a **`bar_ms`** column = `W.ts[-1]` (the true bar open
+  the event is about); leave `kline_ms` = now_ms (decision instant, kept for the ledger-join clock). One column = one
+  meaning: `bar_ms` = which bar, `kline_ms`/`created_ms` = when decided/written. Additive, zero ripple to the UI join.
+  - *Implemented:* `state_log.py` `_ensure()` adds the column (+`k_bar` index); `record()` writes `int(W.ts[T])`.
+    Live table ALTERed 0707. **Code deploys on the next loop restart** (existing rows have `bar_ms=NULL`; new rows
+    populate). recon can then key on `bar_ms` directly (no `−5301` arithmetic); recon_suite still uses `kline_ms−5000`
+    until bar_ms is populated across the window. (Opt-1 rejected: ripples the UI attribution join −5301. Opt-2
+    rejected: leaves the mislabel.)
 - **Trade reconcile (Joe flagged 20:42:15):** both trade events (20:42:15, 20:52:25 — M2, LONG, halted so no order)
   reconcile **bit-exact** (0.00000 line diff; backtest emits `('trade',1,'M2')`). `trade` added to recon_suite STATES.
 - **Net:** clean post-reset stream = **6/6 matched (arm+gate+trade), 0 spurious.** Event-level reconcile is CLEAN;
