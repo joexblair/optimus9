@@ -231,13 +231,16 @@ def resume():
 
 @app.post("/api/reset")
 def reset_account():
-    """Reset the paper account. Clears o9's OWN store (ledger + decisions), restores equity to start,
+    """Reset the paper ACCOUNT only. Clears o9's trade/decision/forecast store, restores equity to start,
     tells the fakeAPI to clear its mock exchange (fx_*), and HALTS the loop (operator resumes when ready).
+    The diagnostic event stream (o9_state_log/_line) + arm_gate_recon are NOT touched — durable audit trail.
     Durable by design: everything is MySQL rows — this is the deliberate wipe, nothing resets on restart."""
     o9 = _db(); now = int(time.time() * 1000)
-    # o9's own trade/decision record + the event/log tables that feed the UI (consolidated, Joe 0706 — was
-    # a few manual TRUNCATEs; a clean reset must wipe the event stream too so measurement starts from zero).
-    for t in ("o9_ledger", "o9_decision", "o9_state_log", "o9_state_log_line", "arm_gate_recon", "o9_forecast"):
+    # Account/trading state ONLY. The diagnostic event stream (o9_state_log/_line) + the recon (arm_gate_recon)
+    # are DURABLE across resets by design (Joe 0707): they are the audit trail for the o9-live<->backtest reconcile,
+    # keyed by kline_ms (a continuous time series, not per-run). Wiping them on a paper-account reset was scope-creep
+    # that cost 11.6h of reconcile history; recon_arm_gate.py rebuilds arm_gate_recon itself when it runs.
+    for t in ("o9_ledger", "o9_decision", "o9_forecast"):
         o9.execute("TRUNCATE TABLE %s" % t)
     o9.execute("INSERT INTO o9_account (acct_id, equity, realized_total, trade_count, updated_ms) "
                "VALUES (1,%s,0,0,%s) ON DUPLICATE KEY UPDATE equity=%s, realized_total=0, trade_count=0, "
