@@ -58,6 +58,24 @@ extend hypotheses/scripts → rest.
 - **Net:** clean post-reset stream = **6/6 matched (arm+gate+trade), 0 spurious.** Event-level reconcile is CLEAN;
   #54's gap is downstream (exit/sizing/hedge), not the cascade signals.
 
+### 0707b — live-trading anomaly, #54 exit bug caught, side-label inversion, purity + PnL
+- **o9-live is NOT halted** (`o9_control.halted=0`, cleared ~20:50 — a resume). Live paper-trading since: 2 closed
+  trades, net **−$43.10**, equity $500→$456.90. Contradicts the handover's "do not resume" — surfaced to Joe.
+- **Live #54 exit-bug instance:** led2 SHORT entry 0.16494 → exit **0.16798 = −1.84%** — blew clean past the 0.9%
+  SL (the flip-past-SL downstream gap). led1 was a clean short (+0.37%, exit worked). 1 of 2 exits failed = the exact
+  reconcile target, caught live.
+- **SIDE-LABEL INVERSION (my bug, ledger caught it):** `es` = the OOB *breach* side; the trade goes AGAINST it
+  (`bd=-es`, side=`_SIDE[bd]`). GROUND TRUTH: o9_ledger opened a **Sell at the es=+1 trade event**. So **es=+1 →
+  SHORT, es=-1 → LONG**. `arm_alert`/`stream_tail` `_side` corrected + feeders restarted; earlier "_SIDE fix" (which
+  fed `es` into a `bd` map) was the error. Recon MATCH verdicts unaffected (es↔es); only the human label was wrong.
+- **PURITY (Joe Q1): NO 5301 in the backtest.** `lr_exit_v2` enters at `px[tj]`, walks forward `tj+1..n`, takes
+  SL/exit at `px[k]`/`px[ek]` — each price known at that bar's close; no look-ahead. The 5301 is only o9-live's
+  state_log label. (`W.px` is a resampled close, ~1e-6 off raw kc_close — immaterial, not look-ahead.)
+- **PnL SUMMARY (Joe Q2): close match, same data confirmed.** `backtest_pnl.py` v2_walk_ad 10.3d:
+  FULL n=681 $500→$22,944 (45.9×) win 71% avgNet +0.353% — vs Joe's 656 / $22,659 / 45.3× / 71% / +0.364%.
+  Deltas: my window resolved to 10.8d actual (warmup +12h) vs 10.3d (→~25 more trades); SINGLE-POSITION 241/7.5×
+  vs Joe's 224/10.0× (definition/window differs — his accounting lives in `ker_*.py`). Same producer/config/data.
+
 ## OPEN hypotheses (next wakes)
 - ~~**stale_exit honoring**~~ **RESOLVED 0707:** `stale_exit` is **emit-only** in the AD path. `_stale()` is called
   only by `v2_walk(stale_exit=True)`; `v2_cascade` (consumed by BOTH `v2_walk_ad` and `v2_mech_events`) never gates
