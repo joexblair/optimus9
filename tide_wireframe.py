@@ -12,49 +12,28 @@ import sys; sys.path.insert(0, "/home/joe/thecodes")
 import time, datetime as dtm
 from datetime import timezone
 import numpy as np
-import bias_machine as bm
-from optimus9.config import get_db_config
-from optimus9 import DatabaseManager
-from optimus9.analysis.lr import lr_config
-from optimus9.analysis.lr_v2 import s_qualify, _mage_rev, fin_unlatch
-from optimus9.compute.breaching_line import predict_breach, FENCE_HI, FENCE_LO
-from sweep_eval import BASE_BIAS
+from optimus9.analysis.jig import Jig                    # the test-jig facade (causal/score) — docs/jig.md
+from optimus9.analysis.lr_v2 import fin_unlatch          # packaged finisher latch (not yet a jig endpoint)
 
 PROX = 33; MID = 50; SEAM = 300000; ARM_MAX = 1080     # arm-delay bound = 90min (knob)
 WINDOW_H = 48; WARMUP_H = 24                            # trade window / warmup (hours)
 hm = lambda t: time.strftime('%m-%d %H:%M', time.gmtime(int(t) / 1000))
 
 
-def curl_seams(ts_c, c, direction):
-    out = set()
-    for k in range(2, len(c)):
-        if direction == 1 and c[k - 1] < c[k] and c[k - 1] <= c[k - 2]:
-            out.add(int(ts_c[k]))
-        if direction == -1 and c[k - 1] > c[k] and c[k - 1] >= c[k - 2]:
-            out.add(int(ts_c[k]))
-    return out
-
-
 def main():
-    dev = DatabaseManager(**get_db_config()); dev.connect()
-    cfg = lr_config(dev); HI, LO = cfg.hi, cfg.lo
-    now = int(dtm.datetime(2026, 7, 7, 20, 0, tzinfo=timezone.utc).timestamp() * 1000)   # PINNED window end (reproducible A/B)
-    cutoff = now - WINDOW_H * 3600 * 1000
-    ovr = {'s10r': (600, ('k', 6, 6, 5, 'hl2'), 'emerging')}
-    W = bm.BiasWindow(dev, now, lookback=WINDOW_H + WARMUP_H, warmup=WARMUP_H, cfg=bm.BiasConfig(**BASE_BIAS), line_overrides=ovr)
-    ts = np.asarray(W.ts); px = np.asarray(W.px, float); n = len(ts)
-    L = {k: np.asarray(W.line(k), float) for k in ('s2m', 's3r', 's4r', 's2M', 's5M', 's7M', 's5m', 's10r', 's5r')}
-    q15h, q15l = s_qualify(W, cfg, 's15m', 's15M', 's15r', cfg.s15r_lb)
-    q30h, q30l = s_qualify(W, cfg, 's30m', 's30M', 's30r', cfg.s30r_lb)
-    pred10 = predict_breach(L['s10r'], L['s5m'], L['s5M'], HI, LO, FENCE_HI, FENCE_LO)
-    pred5 = predict_breach(L['s5r'], L['s5m'], L['s5M'], HI, LO, FENCE_HI, FENCE_LO)   # arm-delay: s5r continuation
-    rev5 = np.asarray(_mage_rev(L['s5M'], cfg.arm_wob))                                 # s5Mage reversal (experimental)
-    dev.disconnect()
-
-    s2sign = np.where(L['s2m'] >= HI, 1, np.where(L['s2m'] <= LO, -1, 0))
-    s5sign = np.where(L['s5m'] >= HI, 1, np.where(L['s5m'] <= LO, -1, 0))
-    cm = (ts % SEAM) == 0
-    ts_c = ts[cm]; s10c = L['s10r'][cm]; s5rc = L['s5r'][cm]
+    end = int(dtm.datetime(2026, 7, 7, 20, 0, tzinfo=timezone.utc).timestamp() * 1000)   # PINNED window end (reproducible A/B)
+    J = Jig(end, hours=WINDOW_H, warmup=WARMUP_H, overrides={'s10r': (600, ('k', 6, 6, 5, 'hl2'), 'emerging')})
+    cfg = J.cfg; HI, LO = J.hi, J.lo; ts = J.ts; px = J.px; n = J.n
+    now = end; cutoff = now - WINDOW_H * 3600 * 1000
+    L = {k: J.causal.line(k) for k in ('s2m', 's3r', 's4r', 's2M', 's5M', 's7M', 's5m', 's10r', 's5r')}
+    q15h, q15l = J.causal.finishers('s15')
+    q30h, q30l = J.causal.finishers('s30')
+    pred10 = J.causal.predict(L['s10r'], L['s5m'], L['s5M'])
+    pred5 = J.causal.predict(L['s5r'], L['s5m'], L['s5M'])         # arm-delay: s5r continuation
+    rev5 = J.causal.reversal(L['s5M'], cfg.arm_wob)               # s5Mage reversal (experimental)
+    s2sign = J.causal.sign('s2m')
+    s5sign = J.causal.sign('s5m')
+    ts_c, s10c = J.causal.coarse('s10r', SEAM); _, s5rc = J.causal.coarse('s5r', SEAM)
 
     ent = []
     for i in range(1, n):
@@ -120,7 +99,7 @@ def main():
             start = next((k for k in range(pt, n) if (L['s10r'][k] >= HI if d == 1 else L['s10r'][k] <= LO)), b2) if pt is not None else b2
             msk = ts_c >= ts[start]; tsc, s10 = ts_c[msk], s10c[msk]
             stall = {int(tsc[k]) for k in range(1, len(s10)) if (s10[k] <= s10[k - 1] if d == 1 else s10[k] >= s10[k - 1])}
-            for st in sorted(curl_seams(tsc, s10, -d) | stall):
+            for st in sorted(J.causal.curl(tsc, s10, -d) | stall):
                 x = next((k for k in range(int(np.searchsorted(ts, st)), n) if exq[k]), None)
                 if x is not None:
                     return x
@@ -128,7 +107,7 @@ def main():
 
         def route2():                                                   # R2: s5r curl -> s30a+s15a
             msk = ts_c >= ts[b2]; tsc, s5r = ts_c[msk], s5rc[msk]
-            for st in sorted(curl_seams(tsc, s5r, -d)):
+            for st in sorted(J.causal.curl(tsc, s5r, -d)):
                 x = next((k for k in range(int(np.searchsorted(ts, st)), n) if both[k]), None)
                 if x is not None:
                     return x
@@ -161,6 +140,11 @@ def main():
             att['reval_fail'] = att.get('reval_fail', 0) + 1; continue
         entries.append((e, side))
 
+    # ── entry quality via the jig (EXIT-INDEPENDENT): MAE/MFE to the next favourable swing + mfe_side, aligned to entries
+    lr_ent = [(int(ts[e]), (1 if side == 'short' else -1), (1 if side == 'long' else -1), e) for e, side in entries]
+    eq = J.score.entry_quality(lr_ent)                     # [(tms, dt, es, bd, mae, mfe, mfe_ok, mfe_side, px)]
+    eq_mae = [r[4] for r in eq]; eq_mfe = [r[5] for r in eq]; eq_side = [int(r[7]) for r in eq]
+
     def run_mode(mode):
         out = []
         for e, side in entries:
@@ -190,15 +174,19 @@ def main():
     print("=== tide wireframe A/B — PINNED %s -> %s (%dh) — lock OFF to isolate the exit ===" % (hm(cutoff), hm(now), WINDOW_H))
     print("entry funnel: %d Mage-tide signals -> arm-delayed=%d, finisher-miss[both=%d s15=%d s30=%d], reval-fail=%d -> %d entries"
           % (len(ent), att['ad_delayed'], att['miss_both'], att['miss15'], att['miss30'], att.get('reval_fail', 0), len(entries)))
+    if eq:
+        print("ENTRY QUALITY (exit-independent, to next swing): medMAE=%.2f medMFE=%.2f MFE/|MAE|=%.2f | opened-on-MFE-side %d/%d"
+              % (np.median(eq_mae), np.median(eq_mfe), np.median(eq_mfe) / max(abs(np.median(eq_mae)), 1e-9), sum(eq_side), len(eq_side)))
     summ("NEW exclusive (spec)", excl)
     summ("OLD race (bug)", race)
 
-    print("\n-- bottom-10 by NEW MAE (SAME entry both columns; NEW = your spec, OLD = the bug) --")
-    print("%-11s %-5s | %-7s %6s %6s %-5s | %-7s %6s %6s %-5s" % ("entry", "side", "NEWout", "MAE", "MFE", "rte", "OLDout", "MAE", "MFE", "rte"))
-    for k in sorted(range(len(excl)), key=lambda j: excl[j][4])[:10]:
+    print("\n-- bottom-10 by ENTRY-QUALITY MAE (exit-independent; eMAE/mfeS same both modes; NEW vs OLD = the exit) --")
+    print("%-11s %-5s %5s %4s | %-7s %6s %6s %-5s | %-7s %6s %6s %-5s"
+          % ("entry", "side", "eMAE", "mfeS", "NEWout", "MAE", "MFE", "rte", "OLDout", "MAE", "MFE", "rte"))
+    for k in sorted(range(len(entries)), key=lambda j: eq_mae[j])[:10]:
         a_, b_ = excl[k], race[k]
-        print("%-11s %-5s | %-7s %6.2f %6.2f %-5s | %-7s %6.2f %6.2f %-5s"
-              % (a_[0], a_[2], a_[1][6:], a_[4], a_[5], a_[6], b_[1][6:], b_[4], b_[5], b_[6]))
+        print("%-11s %-5s %5.2f %4d | %-7s %6.2f %6.2f %-5s | %-7s %6.2f %6.2f %-5s"
+              % (a_[0], a_[2], eq_mae[k], eq_side[k], a_[1][6:], a_[4], a_[5], a_[6], b_[1][6:], b_[4], b_[5], b_[6]))
 
     onl = sum(1 for k in range(1, n) if ts[k] >= cutoff and pred10[k] == -1 and pred10[k - 1] != -1)
     onh = sum(1 for k in range(1, n) if ts[k] >= cutoff and pred10[k] == 1 and pred10[k - 1] != 1)
