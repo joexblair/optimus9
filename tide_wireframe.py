@@ -22,7 +22,11 @@ hm = lambda t: time.strftime('%m-%d %H:%M', time.gmtime(int(t) / 1000))
 
 def main():
     end = int(dtm.datetime(2026, 7, 7, 20, 0, tzinfo=timezone.utc).timestamp() * 1000)   # PINNED window end (reproducible A/B)
-    J = Jig(end, hours=WINDOW_H, warmup=WARMUP_H, overrides={'s10r': (600, ('k', 6, 6, 5, 'hl2'), 'emerging')})
+    OVR = {'s10r': (600, ('k', 6, 6, 5, 'hl2'), 'emerging'),
+           's1m': (60, ('bb', 6, 0.56, 'close'), 'emerging'),     # s1 = s2's config at a faster TF (60s vs 120s)
+           's1M': (60, ('bb', 37, 0.72, 'hlcc4'), 'emerging'),
+           's1r': (60, ('k', 6, 6, 5, 'close'), 'emerging')}
+    J = Jig(end, hours=WINDOW_H, warmup=WARMUP_H, overrides=OVR)
     cfg = J.cfg; HI, LO = J.hi, J.lo; ts = J.ts; px = J.px; n = J.n
     now = end; cutoff = now - WINDOW_H * 3600 * 1000
     L = {k: J.causal.line(k) for k in ('s2m', 's3r', 's4r', 's2M', 's5M', 's7M', 's5m', 's10r', 's5r')}
@@ -129,7 +133,7 @@ def main():
 
     # ── config-driven build + report (Joe 0707): strict s15a∧s30a vs N-of-9 finisher ──
     S2R_LB = cfg.s15r_lb                                        # s2 r-lookback (knob; "the same lookback")
-    parts = {tf: J.causal.finisher_parts(tf, r_lb=(S2R_LB if tf == 's2' else None)) for tf in ('s2', 's15', 's30')}
+    parts = {tf: J.causal.finisher_parts(tf, r_lb=(S2R_LB if tf in ('s2', 's1') else None)) for tf in ('s2', 's1', 's15', 's30')}
     armed = [(arm_delay(i, side), side) for i, side in ent]     # arm-delay layered once (config-independent)
     ad_delayed = att['ad_delayed']
     si = lambda a, k: (int(a[k]) if np.isfinite(a[k]) else 0)
@@ -148,16 +152,20 @@ def main():
         h15, h30 = q15[w0:w1].any(), q30[w0:w1].any()
         return None, ('both' if not h15 and not h30 else ('s30' if not h30 else 's15'))
 
-    def fin_nof9(N, tol):                                     # >=N of 9 lines (3 sets x {Mage-OOB, Mage-rev, r-in-lb})
+    def fin_nof9(N, tol, box_lb=None, sets=('s2', 's15', 's30'), anchor='brk'):   # >=N of 9: 3 sets x {Mage, Mage, r}
+        blb = cfg.fin_lb if box_lb is None else box_lb
         def f(a, side):
             sd = 'lo' if side == 'long' else 'hi'
-            w0, w1 = max(0, a - cfg.fin_lb), min(n, a + tol + 1)
+            w0, w1 = max(0, a - blb), min(n, a + tol + 1)
             events = []
-            for tf in ('s2', 's15', 's30'):
+            for tf in sets:
                 P = parts[tf]; Moob = P['Moob_' + sd]; Mrev = P['Mrev_' + sd]; rlb = P['rlb_' + sd]
-                rev = [k for k in range(w0, w1) if Moob[k] and Mrev[k]]   # Mage OOB and reversing (2 lines)
-                if rev:
-                    events.append((rev[0], 2 + (1 if any(rlb[k] for k in rev) else 0)))   # +1 if r in lookback
+                if anchor == 'brk':
+                    ev = [k for k in range(max(1, w0), w1) if Moob[k] and not Moob[k - 1]]   # Mage BREACH (fresh OOB cross)
+                else:
+                    ev = [k for k in range(w0, w1) if Moob[k] and Mrev[k]]                   # Mage OOB and reversing
+                if ev:
+                    events.append((ev[0], 2 + (1 if any(rlb[k] for k in ev) else 0)))        # +1 if r in lookback
             events.sort(); cum = 0
             for k0, lines in events:
                 cum += lines
@@ -214,10 +222,9 @@ def main():
         return trades
 
     strict_trades = report("STRICT s15a AND s30a", build(fin_strict))
-    for N in (8, 7, 6):
-        for tol30 in (2, 4):                                   # tolerance sweep: 2x30s (default), 4x30s
-            print()
-            report("7of9  N=%d  tol=%dx30s" % (N, tol30), build(fin_nof9(N, tol30 * 6)))
+    for N in (7, 6):
+        print(); report("7of9 BREACH  sets=(s2,s15,s30)  N=%d  tol=2x30s" % N, build(fin_nof9(N, 12, sets=('s2', 's15', 's30'))))
+        print(); report("7of9 BREACH  sets=(s1,s15,s30)  N=%d  tol=2x30s" % N, build(fin_nof9(N, 12, sets=('s1', 's15', 's30'))))
     excl = strict_trades                                       # pine = the strict config
 
     # ── auto-pine via jig.score.emit_labels (entry + exit labels; green=long / red=short) ──
