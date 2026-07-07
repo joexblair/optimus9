@@ -3,10 +3,12 @@ wireframe consume the SAME machine (no fork). J = a Jig built with the right lin
 non-line knob dict (defaults below). Returns metrics: entries + entry-quality (exit-independent) + realised-at-exit.
 Causal/emerging throughout (reads via the jig). Spec: docs/tide_exit_design.md."""
 import numpy as np
+from optimus9.analysis.lr_v2 import gate_open, gate_signals
 
 DEFAULTS = dict(
     PROX=33, MID=50,
     ad_anchor='rev', ad_line='s5M', ad_wob=None, ad_predict=True, arm_max=1080,      # ad_wob None -> cfg.arm_wob
+    use_gate=False, gate_horizon=1080,                                               # arm -> s3s4 gate (required) -> finisher
     fin_mode='nof9', fin_sets=('s2', 's15', 's30'), N=6, tol=12, box_lb=None, rev_sets=(),   # rev_sets: which sets require the Mage REVERSING (precise); the rest fire at the Mage BREACH (early)
     seam=300000, stall_floor=0.0, wait_breach=True, s2r_lb=None,                      # s2r_lb None -> cfg.s15r_lb
 )
@@ -119,9 +121,21 @@ def run_config(J, K0):
                 return x
         return n - 1
 
+    armed = [(arm_delay(i, side), side) for i, side in ent]
+    opens = None
+    if K['use_gate']:                                            # arm -> s3s4 gate (REQUIRED) -> finisher runs from gate-open bar
+        sig = gate_signals(J.W, cfg)
+        setups = [(a, (-1 if s == 'long' else 1), (1 if s == 'long' else -1), min(n, a + K['gate_horizon']), 't') for a, s in armed]
+        opens = {}
+        for o in gate_open(J.W, cfg, setups, sig):
+            opens.setdefault(o[0], o[3])                         # arm_bar -> gate-open bar (ok)
     entries = []
-    for i, side in ent:
-        a = arm_delay(i, side); e = finisher(a, side)
+    for a, side in armed:
+        if opens is not None:
+            if a not in opens:
+                continue                                        # no s3s4 gate opened -> groomed out
+            a = opens[a]
+        e = finisher(a, side)
         if e is None or not reval(e, side):
             continue
         entries.append((e, side))
