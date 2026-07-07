@@ -14,8 +14,9 @@ WARMUP_D, LOOK_D = 2, 7
 S1 = {'s1m': (60, ('bb', 6, 0.56, 'close'), 'emerging'), 's1M': (60, ('bb', 37, 0.72, 'hlcc4'), 'emerging'),
       's1r': (60, ('k', 6, 6, 5, 'close'), 'emerging')}
 OVR = {'s10r': (600, ('k', 6, 6, 5, 'close'), 'emerging'), **S1}
-BEST = dict(fin_sets=('s1', 's15', 's30'), rev_sets=(), N=6, tol=24, wait_breach=False, seam=150000, stall_floor=0.0)
-LEAKY = dict(BEST); LEAKY['wait_breach'] = True
+SCALP = dict(fin_sets=('s1', 's15', 's30'), rev_sets=(), N=6, tol=24, wait_breach=False, seam=150000, stall_floor=0.0)
+BEST = dict(SCALP, use_gate=False)                          # scalp, NO s3s4 gate
+LEAKY = dict(SCALP, use_gate=True)                          # scalp, WITH s3s4 gate (arm->gate->finisher)
 
 
 def window_ends():
@@ -29,9 +30,9 @@ def window_ends():
 
 def main():
     ends = window_ends()
-    print("=== multi-window: realized per week — wb=OFF vs wb=ON — %d windows x 7d ===" % len(ends))
+    print("=== multi-window: realized per week — GATE-off vs GATE-on (scalp) — %d windows x 7d ===" % len(ends))
     print("%-11s %4s | %7s %6s %6s %4s | %7s %6s %6s %4s" %
-          ("win_end", "n", "OFFret", "OFFmae", "OFFmfe", "win", "ONret", "ONmae", "ONmfe", "win"))
+          ("win_end", "n", "NOGret", "NOGmae", "NOGmfe", "win", "GATret", "GATmae", "GATmfe", "win"))
     bests = []; leaks = []
     for end in ends:
         J = Jig(int(end.timestamp() * 1000), hours=LOOK_D * 24, warmup=WARMUP_D * 24, overrides=OVR)
@@ -41,10 +42,10 @@ def main():
               (end.strftime("%Y-%m-%d"), b['n'], b['r_ret'], b['r_mae'], b['r_mfe'], b['win'],
                l['r_ret'], l['r_mae'], l['r_mfe'], l['win']))
     md = lambda rows, k: np.median([r[k] for r in rows])
-    print("\nMEDIAN  wb=OFF: ret %+.3f  MAE %.2f  MFE %.2f  win %.2f  | wb=ON: ret %+.3f  MAE %.2f  MFE %.2f  win %.2f"
+    print("\nMEDIAN  GATEoff: ret %+.3f  MAE %.2f  MFE %.2f  win %.2f  | GATEon: ret %+.3f  MAE %.2f  MFE %.2f  win %.2f"
           % (md(bests, 'r_ret'), md(bests, 'r_mae'), md(bests, 'r_mfe'), md(bests, 'win'),
              md(leaks, 'r_ret'), md(leaks, 'r_mae'), md(leaks, 'r_mfe'), md(leaks, 'win')))
-    print("WORST-window ret  wb=OFF %+.3f  wb=ON %+.3f" % (min(r['r_ret'] for r in bests), min(r['r_ret'] for r in leaks)))
+    print("WORST-window ret  GATEoff %+.3f  GATEon %+.3f" % (min(r['r_ret'] for r in bests), min(r['r_ret'] for r in leaks)))
 
 
 if __name__ == "__main__":
