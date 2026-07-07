@@ -127,67 +127,103 @@ def main():
             xx, ww = min(cand, key=lambda z: z[0]); return (xx, ww, b2)
         return (None, 'no-exit', b2)
 
-    # build the entry set ONCE (lock OFF -> identical entries for both exit modes; isolates the exit variable)
-    entries = []
-    for i, side in ent:
-        a = arm_delay(i, side)                                  # (a) arm-delay layered on the Mage-tide arm
-        e = finish_entry(a, side)
-        if e is None:
-            continue
-        okM = (L['s5M'][e] > MID and L['s7M'][e] > MID and L['s2M'][e] > MID) if side == 'long' \
-            else (L['s5M'][e] < MID and L['s7M'][e] < MID and L['s2M'][e] < MID)   # re-validate confluence at entry
-        if not okM:
-            att['reval_fail'] = att.get('reval_fail', 0) + 1; continue
-        entries.append((e, side))
+    # ── config-driven build + report (Joe 0707): strict s15a∧s30a vs N-of-9 finisher ──
+    S2R_LB = cfg.s15r_lb                                        # s2 r-lookback (knob; "the same lookback")
+    parts = {tf: J.causal.finisher_parts(tf, r_lb=(S2R_LB if tf == 's2' else None)) for tf in ('s2', 's15', 's30')}
+    armed = [(arm_delay(i, side), side) for i, side in ent]     # arm-delay layered once (config-independent)
+    ad_delayed = att['ad_delayed']
+    si = lambda a, k: (int(a[k]) if np.isfinite(a[k]) else 0)
+    pts = lambda k, d: ('T' if pred10[k] == d else 'F')
 
-    # ── entry quality via the jig (EXIT-INDEPENDENT): MAE/MFE to the next favourable swing + mfe_side, aligned to entries
-    lr_ent = [(int(ts[e]), (1 if side == 'short' else -1), (1 if side == 'long' else -1), e) for e, side in entries]
-    eq = J.score.entry_quality(lr_ent)                     # [(tms, dt, es, bd, mae, mfe, mfe_ok, mfe_side, px)]
-    eq_mae = [r[4] for r in eq]; eq_mfe = [r[5] for r in eq]; eq_side = [int(r[7]) for r in eq]
+    def reval(e, side):                                        # Mage-tide confluence STILL holds at the entry bar?
+        return (L['s5M'][e] > MID and L['s7M'][e] > MID and L['s2M'][e] > MID) if side == 'long' \
+            else (L['s5M'][e] < MID and L['s7M'][e] < MID and L['s2M'][e] < MID)
 
-    def run_mode(mode):
+    def fin_strict(a, side):                                  # both s15a AND s30a in the box -> next s15a
+        q15, q30 = (q15l, q30l) if side == 'long' else (q15h, q30h)
+        e = fin_unlatch(q15, q30, a, n, cfg.fin_lb, cfg.fin_fwd)
+        if e is not None:
+            return e, None
+        w0, w1 = max(0, a - cfg.fin_lb), min(n, a + cfg.fin_fwd + 1)
+        h15, h30 = q15[w0:w1].any(), q30[w0:w1].any()
+        return None, ('both' if not h15 and not h30 else ('s30' if not h30 else 's15'))
+
+    def fin_nof9(N, tol):                                     # >=N of 9 lines (3 sets x {Mage-OOB, Mage-rev, r-in-lb})
+        def f(a, side):
+            sd = 'lo' if side == 'long' else 'hi'
+            w0, w1 = max(0, a - cfg.fin_lb), min(n, a + tol + 1)
+            events = []
+            for tf in ('s2', 's15', 's30'):
+                P = parts[tf]; Moob = P['Moob_' + sd]; Mrev = P['Mrev_' + sd]; rlb = P['rlb_' + sd]
+                rev = [k for k in range(w0, w1) if Moob[k] and Mrev[k]]   # Mage OOB and reversing (2 lines)
+                if rev:
+                    events.append((rev[0], 2 + (1 if any(rlb[k] for k in rev) else 0)))   # +1 if r in lookback
+            events.sort(); cum = 0
+            for k0, lines in events:
+                cum += lines
+                if cum >= N:
+                    return max(k0, a), None
+            return None, 'count'
+        return f
+
+    def build(fin):
+        entries = []; fmiss = 0; rfail = 0; bd = {'both': 0, 's15': 0, 's30': 0}
+        for a, side in armed:
+            e, kind = fin(a, side)
+            if e is None:
+                fmiss += 1
+                if kind in bd:
+                    bd[kind] += 1
+                continue
+            if not reval(e, side):
+                rfail += 1; continue
+            entries.append((e, side))
+        return entries, fmiss, rfail, bd
+
+    def run_mode(entries):
         out = []
         for e, side in entries:
-            x, why, b2 = exit_walk(e, side, mode)
+            x, why, b2 = exit_walk(e, side, 'exclusive')
             if x is None:
                 x = n - 1
             d = -1 if side == 'short' else 1
             seg = (px[e:x + 1] - px[e]) / px[e] * 100.0 * d
-            mae_v = float(np.nanmin(seg)); mfe_v = float(np.nanmax(seg)); dur = round((ts[x] - ts[e]) / 60000)
-            if b2 is not None and b2 > e:
-                sd = (px[e:b2 + 1] - px[e]) / px[e] * 100.0 * d
-                drift = round((ts[b2] - ts[e]) / 60000); maed = float(np.nanmin(sd))
-            else:
-                drift = 0; maed = 0.0
-            out.append([hm(ts[e]), hm(ts[x]), side, dur, round(mae_v, 2), round(mfe_v, 2), why, drift, round(maed, 2), e, x])
+            out.append([hm(ts[e]), hm(ts[x]), side, round((ts[x] - ts[e]) / 60000),
+                        round(float(np.nanmin(seg)), 2), round(float(np.nanmax(seg)), 2), why, e, x])
         return out
 
-    excl = run_mode('exclusive')                                # the spec exit (predict-true -> R1, else R2)
-    si = lambda a, k: (int(a[k]) if np.isfinite(a[k]) else 0)
-    pts = lambda k, d: ('T' if pred10[k] == d else 'F')
-
-    # ── STANDARD REPORT (Joe 0707). MAE/MFE = ENTRY-QUALITY (to next swing, EXIT-INDEPENDENT); exit_route = context. ──
-    def report(label, trades):
+    def report(label, res):
+        entries, fmiss, rfail, bd = res
+        trades = run_mode(entries)
+        lr_ent = [(int(ts[e]), (1 if side == 'short' else -1), (1 if side == 'long' else -1), e) for e, side in entries]
+        eq = J.score.entry_quality(lr_ent) if entries else []
+        emae = [r[4] for r in eq]; emfe = [r[5] for r in eq]; eside = [int(r[7]) for r in eq]
         print("=== %s ===" % label)
         print("window range:  %s -> %s" % (hm(cutoff), hm(now)))
         print("raw signals: %d | entries: %d | medMAE %.2f | medMFE %.2f | mfe side entry: %d"
-              % (len(ent), len(entries), (np.median(eq_mae) if eq else 0), (np.median(eq_mfe) if eq else 0), sum(eq_side)))
-        print("finisher-miss = %d (both=%d, s15=%d, s30=%d), confluence-lost=%d, arm-delayed=%d (delayed, not dropped)."
-              % (att['miss_both'] + att['miss15'] + att['miss30'], att['miss_both'], att['miss15'], att['miss30'],
-                 att.get('reval_fail', 0), att['ad_delayed']))
+              % (len(ent), len(entries), (np.median(emae) if eq else 0), (np.median(emfe) if eq else 0), sum(eside)))
+        fstr = ("finisher-miss = %d (both=%d, s15=%d, s30=%d)" % (fmiss, bd['both'], bd['s15'], bd['s30'])) \
+            if bd['both'] + bd['s15'] + bd['s30'] == fmiss else ("finisher-miss = %d" % fmiss)
+        print("%s, confluence-lost=%d, arm-delayed=%d (delayed, not dropped)." % (fstr, rfail, ad_delayed))
         print("\ntop 5 MAE trades\ndatetime | MAE | MFE | exit_route")
-        for k in sorted(range(len(trades)), key=lambda j: -eq_mae[j])[:5]:
-            print("%s | %.2f | %.2f | %s" % (trades[k][0], eq_mae[k], eq_mfe[k], trades[k][6]))
+        for k in sorted(range(len(entries)), key=lambda j: -emae[j])[:5]:
+            print("%s | %.2f | %.2f | %s" % (trades[k][0], emae[k], emfe[k], trades[k][6]))
         print("\nbottom 5 MFE trades\ndatetime | MAE | MFE | exit_route")
-        for k in sorted(range(len(trades)), key=lambda j: eq_mfe[j])[:5]:
-            print("%s | %.2f | %.2f | %s" % (trades[k][0], eq_mae[k], eq_mfe[k], trades[k][6]))
+        for k in sorted(range(len(entries)), key=lambda j: emfe[j])[:5]:
+            print("%s | %.2f | %.2f | %s" % (trades[k][0], emae[k], emfe[k], trades[k][6]))
+        return trades
 
-    report("tide wireframe — strict s15a AND s30a finisher", excl)
+    strict_trades = report("STRICT s15a AND s30a", build(fin_strict))
+    for N in (8, 7, 6):
+        for tol30 in (2, 4):                                   # tolerance sweep: 2x30s (default), 4x30s
+            print()
+            report("7of9  N=%d  tol=%dx30s" % (N, tol30), build(fin_nof9(N, tol30 * 6)))
+    excl = strict_trades                                       # pine = the strict config
 
     # ── auto-pine via jig.score.emit_labels (entry + exit labels; green=long / red=short) ──
     labels = []
     for t in excl:
-        e, x = t[9], t[10]; side = t[2]; lng = side == 'long'; d = 1 if lng else -1
+        e, x = t[7], t[8]; side = t[2]; lng = side == 'long'; d = 1 if lng else -1
         labels.append({'ts': int(ts[e]), 'y': float(px[e]), 'green': lng, 'up': True,
                        'text': "%s IN %s\\ns3r%d s4r%d\\ns5M%d s7M%d s2M%d\\ns10r%d pred:%s"
                        % ('LONG' if lng else 'SHORT', hm(ts[e])[6:], si(L['s3r'], e), si(L['s4r'], e),
