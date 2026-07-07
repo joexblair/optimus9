@@ -9,7 +9,8 @@ EXIT (short): re-test predict_breach(s10r,s5m,s5M) on each favourable s5m-breach
   exit on s30a+s15a. Both paths race; earliest exit wins. long = mirror.
 """
 import sys; sys.path.insert(0, "/home/joe/thecodes")
-import time
+import time, datetime as dtm
+from datetime import timezone
 import numpy as np
 import bias_machine as bm
 from optimus9.config import get_db_config
@@ -37,7 +38,8 @@ def curl_seams(ts_c, c, direction):
 def main():
     dev = DatabaseManager(**get_db_config()); dev.connect()
     cfg = lr_config(dev); HI, LO = cfg.hi, cfg.lo
-    now = int(time.time() * 1000); cutoff = now - WINDOW_H * 3600 * 1000
+    now = int(dtm.datetime(2026, 7, 7, 20, 0, tzinfo=timezone.utc).timestamp() * 1000)   # PINNED window end (reproducible A/B)
+    cutoff = now - WINDOW_H * 3600 * 1000
     ovr = {'s10r': (600, ('k', 6, 6, 5, 'hl2'), 'emerging')}
     W = bm.BiasWindow(dev, now, lookback=WINDOW_H + WARMUP_H, warmup=WARMUP_H, cfg=bm.BiasConfig(**BASE_BIAS), line_overrides=ovr)
     ts = np.asarray(W.ts); px = np.asarray(W.px, float); n = len(ts)
@@ -92,108 +94,116 @@ def main():
             att['ad_delayed'] += 1; return a
         return i
 
-    def exit_walk(e, side):
-        # CASCADE-gated (Joe 0707): the exit monitor engages only after s5m favourable-breach -> s30a+s15a. From that
-        # stage the s10r stall/curl runs REGARDLESS of predict; predict (STATE) only adds wait-for-s10r-breach.
-        # s5r-curl races -> s30a+s15a. earliest wins. no cascade -> no exit (held).
-        d = 1 if side == 'long' else -1                                  # favourable continuation dir
-        exq = q15h if side == 'long' else q15l                           # exit at the favourable extreme
+    def exit_walk(e, side, mode):
+        # exit routes (your spec): predict s10r at the s5m-breach->s30a+s15a stage. R1(predict TRUE)=watch s10r, exit on
+        # stall/curl -> favourable s15a. R2(predict FALSE)=when s5r curls -> s30a+s15a. mode='exclusive'=IF/ELSE (spec);
+        # mode='race'=run both, earliest wins (the old bug).
+        d = 1 if side == 'long' else -1
+        exq = q15h if side == 'long' else q15l
         both = (q15h & q30h) if side == 'long' else (q15l & q30l)
-        f15c, f30c = (q15h, q30h) if side == 'long' else (q15l, q30l)    # cascade-stage finishers
+        f15c, f30c = (q15h, q30h) if side == 'long' else (q15l, q30l)
         b2 = None; pos = e + 1
         while pos < n:
-            b1 = next((k for k in range(pos, n) if s5sign[k] == d and s5sign[k - 1] != d), None)   # favourable s5m breach
+            b1 = next((k for k in range(pos, n) if s5sign[k] == d and s5sign[k - 1] != d), None)
             if b1 is None:
                 break
             w1 = min(n, b1 + 43)
             a15 = np.flatnonzero(f15c[b1:w1]); a30 = np.flatnonzero(f30c[b1:w1])
             if a15.size and a30.size:
-                b2 = b1 + int(max(a15[0], a30[0])); break               # s5m breach -> s30a+s15a stage reached
+                b2 = b1 + int(max(a15[0], a30[0])); break
             pos = b1 + 1
         if b2 is None:
             return (None, 'no-exit', None)
-        # EXCLUSIVE branches (Joe 0707 fix): predict TRUE -> s10-track ONLY (s5r-curl suppressed); else -> s5r-curl.
-        pt = next((k for k in range(b2, n) if pred10[k] == d), None)     # predict STATE
-        if pt is not None:                                              # predict TRUE -> s10r track only
-            start = next((k for k in range(pt, n) if (L['s10r'][k] >= HI if d == 1 else L['s10r'][k] <= LO)), b2)
+        pt = next((k for k in range(b2, n) if pred10[k] == d), None)     # predict s10r TRUE (state) at/after the stage
+
+        def route1():                                                   # R1: watch s10r -> stall/curl -> favourable s15a
+            start = next((k for k in range(pt, n) if (L['s10r'][k] >= HI if d == 1 else L['s10r'][k] <= LO)), b2) if pt is not None else b2
             msk = ts_c >= ts[start]; tsc, s10 = ts_c[msk], s10c[msk]
             stall = {int(tsc[k]) for k in range(1, len(s10)) if (s10[k] <= s10[k - 1] if d == 1 else s10[k] >= s10[k - 1])}
             for st in sorted(curl_seams(tsc, s10, -d) | stall):
                 x = next((k for k in range(int(np.searchsorted(ts, st)), n) if exq[k]), None)
                 if x is not None:
-                    return (x, 's10mon', b2)
-            return (None, 'no-exit', b2)
-        msk = ts_c >= ts[b2]; tsc, s5r = ts_c[msk], s5rc[msk]           # predict FALSE -> s5r-curl only
-        for st in sorted(curl_seams(tsc, s5r, -d)):
-            x = next((k for k in range(int(np.searchsorted(ts, st)), n) if both[k]), None)
-            if x is not None:
-                return (x, 's5rcurl', b2)
+                    return x
+            return None
+
+        def route2():                                                   # R2: s5r curl -> s30a+s15a
+            msk = ts_c >= ts[b2]; tsc, s5r = ts_c[msk], s5rc[msk]
+            for st in sorted(curl_seams(tsc, s5r, -d)):
+                x = next((k for k in range(int(np.searchsorted(ts, st)), n) if both[k]), None)
+                if x is not None:
+                    return x
+            return None
+
+        if mode == 'exclusive':                                         # YOUR SPEC: predict-true -> R1 only, else R2 only
+            if pt is not None:
+                x = route1(); return (x, 's10r', b2) if x is not None else (None, 'no-exit', b2)
+            x = route2(); return (x, 's5r', b2) if x is not None else (None, 'no-exit', b2)
+        cand = []                                                       # OLD BUG: run both, earliest wins
+        x1, x2 = route1(), route2()
+        if x1 is not None:
+            cand.append((x1, 's10r'))
+        if x2 is not None:
+            cand.append((x2, 's5r'))
+        if cand:
+            xx, ww = min(cand, key=lambda z: z[0]); return (xx, ww, b2)
         return (None, 'no-exit', b2)
 
-    trades = []; races = []; open_until = -1
+    # build the entry set ONCE (lock OFF -> identical entries for both exit modes; isolates the exit variable)
+    entries = []
     for i, side in ent:
-        if i <= open_until:
-            att['lock'] += 1; continue
         a = arm_delay(i, side)                                  # (a) arm-delay layered on the Mage-tide arm
         e = finish_entry(a, side)
         if e is None:
             continue
-        # re-validate the Mage-tide confluence AT THE ENTRY (leg may have travelled since the arm — Joe 0707)
         okM = (L['s5M'][e] > MID and L['s7M'][e] > MID and L['s2M'][e] > MID) if side == 'long' \
-            else (L['s5M'][e] < MID and L['s7M'][e] < MID and L['s2M'][e] < MID)
+            else (L['s5M'][e] < MID and L['s7M'][e] < MID and L['s2M'][e] < MID)   # re-validate confluence at entry
         if not okM:
             att['reval_fail'] = att.get('reval_fail', 0) + 1; continue
-        x, why, b2 = exit_walk(e, side)
-        if x is None:
-            x = n - 1
-        att['traded'] += 1
-        d = -1 if side == 'short' else 1
-        seg = (px[e:x + 1] - px[e]) / px[e] * 100.0 * d
-        if not seg.size:
-            continue
-        mae_v = float(np.nanmin(seg)); mfe_v = float(np.nanmax(seg)); dur = round((ts[x] - ts[e]) / 60000)
-        # drift window [entry, b2] vs monitored [b2, exit]
-        if b2 is not None and b2 > e:
-            sd = (px[e:b2 + 1] - px[e]) / px[e] * 100.0 * d
-            drift_min = round((ts[b2] - ts[e]) / 60000); mae_drift = float(np.nanmin(sd))
-        else:
-            drift_min = 0; mae_drift = 0.0
-        trades.append((hm(ts[e]), hm(ts[x]), side, dur, round(mae_v, 2), round(mfe_v, 2), why, drift_min, round(mae_drift, 2)))
-        races.append((e, x, side, mae_v, mfe_v, why, dur))
-        open_until = x
+        entries.append((e, side))
 
-    print("=== tide wireframe — last %dh — %d entries qualified ===" % (WINDOW_H, len(ent)))
-    print("attrition: lock=%d  finisher-miss[both=%d s15=%d s30=%d]  arm-delayed=%d  reval-fail=%d  -> traded=%d"
-          % (att['lock'], att['miss_both'], att['miss15'], att['miss30'], att['ad_delayed'], att.get('reval_fail', 0), att['traded']))
-    print("%-11s %-11s %-5s %5s %7s %7s %-9s %6s %8s" % ("entry", "exit", "side", "min", "MAE%", "MFE%", "path", "driftM", "MAEdrift"))
-    for r in trades:
-        print("%-11s %-11s %-5s %5s %7s %7s %-9s %6s %8s" % r)
-    if trades:
-        mae = np.array([t[4] for t in trades]); mfe = np.array([t[5] for t in trades])
-        dm = np.array([t[7] for t in trades]); mad = np.array([t[8] for t in trades])
-        np10 = sum(1 for t in trades if t[6] == 's10mon')
-        # how much of each trade's MAE happened DURING the unmonitored drift window:
-        share = [abs(t[8]) / abs(t[4]) for t in trades if t[4] < 0]
-        print("\nmedian MAE=%.2f  median MFE=%.2f  MFE/|MAE|=%.2f  | s10mon=%d s5rcurl=%d  | MFE>=0.5%%: %d/%d"
-              % (np.median(mae), np.median(mfe), np.median(mfe) / max(abs(np.median(mae)), 1e-9),
-                 np10, len(trades) - np10, int((mfe >= 0.5).sum()), len(trades)))
-        print("DRIFT WINDOW [entry->b2]: median %d min unmonitored; median %.0f%% of each trade's MAE lands in it"
-              % (int(np.median(dm)), 100 * float(np.median(share)) if share else 0))
-    onl = [int(ts[k]) for k in range(1, n) if ts[k] >= cutoff and pred10[k] == -1 and pred10[k - 1] != -1]
-    onh = [int(ts[k]) for k in range(1, n) if ts[k] >= cutoff and pred10[k] == 1 and pred10[k - 1] != 1]
-    print("\npredict-STATE onsets (last %dh):" % WINDOW_H)
-    print("  LO (down/short-fuel): " + " ".join(hm(t)[6:] for t in onl))
-    print("  HI (up/long-fuel):    " + " ".join(hm(t)[6:] for t in onh))
-    print("""
---- WIREFRAME ASSUMPTIONS (flag any misread) ---
-1. entry = Mage-tide arm (s2m breach + s3r|s4r oversold + s5M&s7M&s2M same side of MID) -> ARM-DELAY (if s5r predicts
-   the faded move continues, hold to s5Mage OOB+reverse; s5Mage-rev wob=cfg.arm_wob, EXPERIMENTAL) -> finisher (both
-   s15a+s30a; lookback->arm, else walk fwd 2x30s).
-2. lock ≈ sequential no-overlap. NOT the full opposing-arm latch.
-3. exit CASCADE-gated: s5m favourable-breach -> s30a+s15a stage; from there s10r stall/curl runs regardless of predict
-   (predict STATE only adds wait-for-s10r-breach). s5r-curl races -> s30a+s15a. no cascade -> no exit (held).
-4. floor knob = 0 (higher-or-flat = stall — hair-trigger; the real knob loosens it). curl = coarse causal, no OS gate.
-5. MAE/MFE = signed favourable excursion entry->exit (%). MFE = hindsight ceiling (harness), not realised PnL.""")
+    def run_mode(mode):
+        out = []
+        for e, side in entries:
+            x, why, b2 = exit_walk(e, side, mode)
+            if x is None:
+                x = n - 1
+            d = -1 if side == 'short' else 1
+            seg = (px[e:x + 1] - px[e]) / px[e] * 100.0 * d
+            mae_v = float(np.nanmin(seg)); mfe_v = float(np.nanmax(seg)); dur = round((ts[x] - ts[e]) / 60000)
+            if b2 is not None and b2 > e:
+                sd = (px[e:b2 + 1] - px[e]) / px[e] * 100.0 * d
+                drift = round((ts[b2] - ts[e]) / 60000); maed = float(np.nanmin(sd))
+            else:
+                drift = 0; maed = 0.0
+            out.append([hm(ts[e]), hm(ts[x]), side, dur, round(mae_v, 2), round(mfe_v, 2), why, drift, round(maed, 2), e, x])
+        return out
+
+    excl = run_mode('exclusive'); race = run_mode('race')
+
+    def summ(name, tr):
+        mae = np.array([t[4] for t in tr]); mfe = np.array([t[5] for t in tr]); dm = np.array([t[7] for t in tr])
+        r1 = sum(1 for t in tr if t[6] == 's10r'); r2 = sum(1 for t in tr if t[6] == 's5r'); nx = sum(1 for t in tr if t[6] == 'no-exit')
+        print("[%-21s] n=%d medMAE=%.2f medMFE=%.2f MFE/|MAE|=%.2f | R1(s10r)=%d R2(s5r)=%d no-exit=%d | MFE>=0.5%%:%d driftMed=%dm"
+              % (name, len(tr), np.median(mae), np.median(mfe), np.median(mfe) / max(abs(np.median(mae)), 1e-9),
+                 r1, r2, nx, int((mfe >= 0.5).sum()), int(np.median(dm))))
+
+    print("=== tide wireframe A/B — PINNED %s -> %s (%dh) — lock OFF to isolate the exit ===" % (hm(cutoff), hm(now), WINDOW_H))
+    print("entry funnel: %d Mage-tide signals -> arm-delayed=%d, finisher-miss[both=%d s15=%d s30=%d], reval-fail=%d -> %d entries"
+          % (len(ent), att['ad_delayed'], att['miss_both'], att['miss15'], att['miss30'], att.get('reval_fail', 0), len(entries)))
+    summ("NEW exclusive (spec)", excl)
+    summ("OLD race (bug)", race)
+
+    print("\n-- bottom-10 by NEW MAE (SAME entry both columns; NEW = your spec, OLD = the bug) --")
+    print("%-11s %-5s | %-7s %6s %6s %-5s | %-7s %6s %6s %-5s" % ("entry", "side", "NEWout", "MAE", "MFE", "rte", "OLDout", "MAE", "MFE", "rte"))
+    for k in sorted(range(len(excl)), key=lambda j: excl[j][4])[:10]:
+        a_, b_ = excl[k], race[k]
+        print("%-11s %-5s | %-7s %6.2f %6.2f %-5s | %-7s %6.2f %6.2f %-5s"
+              % (a_[0], a_[2], a_[1][6:], a_[4], a_[5], a_[6], b_[1][6:], b_[4], b_[5], b_[6]))
+
+    onl = sum(1 for k in range(1, n) if ts[k] >= cutoff and pred10[k] == -1 and pred10[k - 1] != -1)
+    onh = sum(1 for k in range(1, n) if ts[k] >= cutoff and pred10[k] == 1 and pred10[k - 1] != 1)
+    print("\npredict-STATE onsets: LO=%d HI=%d | assume: lock OFF (A/B), floor=0 stall, MFE=hindsight ceiling, arm-delay wob=cfg.arm_wob" % (onl, onh))
+    races = [(t[9], t[10], t[2], t[4], t[5], t[6], t[3]) for t in excl]   # pine = the NEW (spec) trades
 
     # ── pine emit: the races as labels (entry+exit, live values; green=long / red=short) ──
     si = lambda a, k: (int(a[k]) if np.isfinite(a[k]) else 0)
