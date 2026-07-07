@@ -1,7 +1,7 @@
 """tide_sweep.py — parallel sweeps over the tide-trigger machine (tide_machine.run_config). One subset per process:
   1 = FINISHER precision  : rev_sets x N x tol           (which sets require Mage-REVERSING vs breach; s1 finisher fixed)
   2 = EXIT s10r gauge     : s10r_tf x src x seam x wait-breach x stall-floor
-  3 = ARM-DELAY           : anchor x tide-line x wob x predict x ARM_MAX
+  3 = ENTRY (arm+oversold): anchor x tide-line x wob x predict x PROX (oversold threshold)
 Fin set fixed at s1 (the validated tight config — Joe: don't sweep finisher TFs). Writes tide_sweep_{n}.txt ranked by
 realised r_ret. Run:  python3 tide_sweep.py {1|2|3}
 """
@@ -38,9 +38,9 @@ def sweep2():
 
 def sweep3():
     J = Jig(END, hours=48, warmup=24, overrides={**s10r(600, 'hl2'), **S1}); rows = []
-    for anch, line, wob, pred, amax in itertools.product(['brk', 'rev'], ['s5M', 's7M'], [2, 4, 6, 8], [True, False], [540, 1080]):
-        m = run_config(J, {'fin_sets': FIN, 'ad_anchor': anch, 'ad_line': line, 'ad_wob': wob, 'ad_predict': pred, 'arm_max': amax})
-        rows.append(('ad=%s line=%s wob=%d pred=%-5s amax=%dm' % (anch, line, wob, str(pred), amax // 12), m))
+    for anch, line, wob, pred, prox in itertools.product(['brk', 'rev'], ['s5M', 's7M'], [2, 4, 6, 8], [True, False], [25, 33, 40]):
+        m = run_config(J, {'fin_sets': FIN, 'ad_anchor': anch, 'ad_line': line, 'ad_wob': wob, 'ad_predict': pred, 'PROX': prox})
+        rows.append(('ad=%s line=%s wob=%d pred=%-5s PROX=%d' % (anch, line, wob, str(pred), prox), m))
     J.close(); return rows
 
 
