@@ -180,10 +180,10 @@ def main():
     summ("NEW exclusive (spec)", excl)
     summ("OLD race (bug)", race)
 
-    print("\n-- bottom-10 by ENTRY-QUALITY MAE (exit-independent; eMAE/mfeS same both modes; NEW vs OLD = the exit) --")
+    print("\n-- WORST-10 entries by ENTRY-QUALITY MAE (exit-independent, higher=worse; eMAE/mfeS same both modes; NEW vs OLD = the exit) --")
     print("%-11s %-5s %5s %4s | %-7s %6s %6s %-5s | %-7s %6s %6s %-5s"
           % ("entry", "side", "eMAE", "mfeS", "NEWout", "MAE", "MFE", "rte", "OLDout", "MAE", "MFE", "rte"))
-    for k in sorted(range(len(entries)), key=lambda j: eq_mae[j])[:10]:
+    for k in sorted(range(len(entries)), key=lambda j: -eq_mae[j])[:10]:
         a_, b_ = excl[k], race[k]
         print("%-11s %-5s %5.2f %4d | %-7s %6.2f %6.2f %-5s | %-7s %6.2f %6.2f %-5s"
               % (a_[0], a_[2], eq_mae[k], eq_side[k], a_[1][6:], a_[4], a_[5], a_[6], b_[1][6:], b_[4], b_[5], b_[6]))
