@@ -112,24 +112,22 @@ def main():
             pos = b1 + 1
         if b2 is None:
             return (None, 'no-exit', None)
-        pt = next((k for k in range(b2, n) if pred10[k] == d), None)     # predict STATE -> wait-for-breach
-        start = (next((k for k in range(pt, n) if (L['s10r'][k] >= HI if d == 1 else L['s10r'][k] <= LO)), b2)
-                 if pt is not None else b2)
-        cand = []
-        msk = ts_c >= ts[start]; tsc, s10 = ts_c[msk], s10c[msk]        # A: s10r stall/curl (regardless of predict)
-        stall = {int(tsc[k]) for k in range(1, len(s10)) if (s10[k] <= s10[k - 1] if d == 1 else s10[k] >= s10[k - 1])}
-        for st in sorted(curl_seams(tsc, s10, -d) | stall):
-            x = next((k for k in range(int(np.searchsorted(ts, st)), n) if exq[k]), None)
-            if x is not None:
-                cand.append((x, 's10mon')); break
-        msk = ts_c >= ts[b2]; tsc, s5r = ts_c[msk], s5rc[msk]           # B: s5r-curl -> s30a+s15a
+        # EXCLUSIVE branches (Joe 0707 fix): predict TRUE -> s10-track ONLY (s5r-curl suppressed); else -> s5r-curl.
+        pt = next((k for k in range(b2, n) if pred10[k] == d), None)     # predict STATE
+        if pt is not None:                                              # predict TRUE -> s10r track only
+            start = next((k for k in range(pt, n) if (L['s10r'][k] >= HI if d == 1 else L['s10r'][k] <= LO)), b2)
+            msk = ts_c >= ts[start]; tsc, s10 = ts_c[msk], s10c[msk]
+            stall = {int(tsc[k]) for k in range(1, len(s10)) if (s10[k] <= s10[k - 1] if d == 1 else s10[k] >= s10[k - 1])}
+            for st in sorted(curl_seams(tsc, s10, -d) | stall):
+                x = next((k for k in range(int(np.searchsorted(ts, st)), n) if exq[k]), None)
+                if x is not None:
+                    return (x, 's10mon', b2)
+            return (None, 'no-exit', b2)
+        msk = ts_c >= ts[b2]; tsc, s5r = ts_c[msk], s5rc[msk]           # predict FALSE -> s5r-curl only
         for st in sorted(curl_seams(tsc, s5r, -d)):
             x = next((k for k in range(int(np.searchsorted(ts, st)), n) if both[k]), None)
             if x is not None:
-                cand.append((x, 's5rcurl')); break
-        if cand:
-            xx, ww = min(cand, key=lambda z: z[0])
-            return (xx, ww, b2)
+                return (x, 's5rcurl', b2)
         return (None, 'no-exit', b2)
 
     trades = []; races = []; open_until = -1
@@ -140,6 +138,11 @@ def main():
         e = finish_entry(a, side)
         if e is None:
             continue
+        # re-validate the Mage-tide confluence AT THE ENTRY (leg may have travelled since the arm — Joe 0707)
+        okM = (L['s5M'][e] > MID and L['s7M'][e] > MID and L['s2M'][e] > MID) if side == 'long' \
+            else (L['s5M'][e] < MID and L['s7M'][e] < MID and L['s2M'][e] < MID)
+        if not okM:
+            att['reval_fail'] = att.get('reval_fail', 0) + 1; continue
         x, why, b2 = exit_walk(e, side)
         if x is None:
             x = n - 1
@@ -160,8 +163,8 @@ def main():
         open_until = x
 
     print("=== tide wireframe — last %dh — %d entries qualified ===" % (WINDOW_H, len(ent)))
-    print("attrition: lock=%d  finisher-miss[both=%d s15=%d s30=%d]  arm-delayed=%d  -> traded=%d"
-          % (att['lock'], att['miss_both'], att['miss15'], att['miss30'], att['ad_delayed'], att['traded']))
+    print("attrition: lock=%d  finisher-miss[both=%d s15=%d s30=%d]  arm-delayed=%d  reval-fail=%d  -> traded=%d"
+          % (att['lock'], att['miss_both'], att['miss15'], att['miss30'], att['ad_delayed'], att.get('reval_fail', 0), att['traded']))
     print("%-11s %-11s %-5s %5s %7s %7s %-9s %6s %8s" % ("entry", "exit", "side", "min", "MAE%", "MFE%", "path", "driftM", "MAEdrift"))
     for r in trades:
         print("%-11s %-11s %-5s %5s %7s %7s %-9s %6s %8s" % r)
