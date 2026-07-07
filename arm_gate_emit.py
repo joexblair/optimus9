@@ -51,9 +51,10 @@ def main():
         if int(ts[anchor]) >= cutoff:
             arm_ts.append(int(ts[anchor]))                            # pine `time` is ms (lp_cascade pattern)
 
-    # --- s3s4 GATE opens ---
-    gate_ts = sorted({int(ts[ok]) for (i, es, bd, ok, reason, cap) in gate_open(W, lr_config(dev), v2_arm(W, lr_config(dev)))
-                      if int(ts[ok]) >= cutoff})
+    # --- s3s4 GATE opens, split by direction (es=-1 long/green · es=+1 short/red; ledger ground truth) ---
+    gates = gate_open(W, lr_config(dev), v2_arm(W, lr_config(dev)))
+    gate_long = sorted({int(ts[ok]) for (i, es, bd, ok, rsn, cap) in gates if int(ts[ok]) >= cutoff and es == -1})
+    gate_short = sorted({int(ts[ok]) for (i, es, bd, ok, rsn, cap) in gates if int(ts[ok]) >= cutoff and es == 1})
     arm_ts = sorted(set(arm_ts))
     dev.disconnect()
 
@@ -70,25 +71,28 @@ def main():
         d += "    a"
         return d, "%s = f_%s()" % (nm, nm)
 
-    pairs = [emit_arr("armA", arm_ts), emit_arr("gateA", gate_ts)]
+    pairs = [emit_arr("armA", arm_ts), emit_arr("gateL", gate_long), emit_arr("gateS", gate_short)]
     defs = "\n".join(p[0] for p in pairs); calls = "\n".join(p[1] for p in pairs)
     body = f'''//@version=5
-indicator("arm+s3s4 gate ({d5(cutoff)}→{d5(now)})  white=arm  green=gate", overlay = true)
+indicator("arm+s3s4 gate ({d5(cutoff)}→{d5(now)})  white=arm  green=gate long  red=gate short", overlay = true)
 showArm  = input.bool(true, "arm (white bg)")
-showGate = input.bool(true, "s3s4 gate open (green bg)")
-// arm = s5m armed, predicted by s10r, delayed to r-reversal (wob {WOB}). gate = s3s4 open (a/b/c).
+showGate = input.bool(true, "s3s4 gate open (green long / red short)")
+// arm = s5m armed, predicted by s10r, delayed to r-reversal (wob {WOB}). gate = s3s4 open (a/b/c), es-directional.
 {defs}
 {calls}
 bg = color(na)
 if showArm and array.binary_search(armA, time) >= 0
-    bg := color.new(color.white, 55)
-if showGate and array.binary_search(gateA, time) >= 0
-    bg := color.new(color.green, 55)      // gate takes priority on a shared bar
+    bg := color.new(color.white, 0)
+if showGate and array.binary_search(gateL, time) >= 0
+    bg := color.new(color.green, 0)       // gate long — priority over arm
+if showGate and array.binary_search(gateS, time) >= 0
+    bg := color.new(color.red, 0)         // gate short
 bgcolor(bg)
 '''
     path = "/home/joe/thecodes/arm_gate.pine"
     open(path, "w").write(body)
-    print("arms=%d  gates=%d  (last %dd) -> %s" % (len(arm_ts), len(gate_ts), WINDOW_DAYS, path))
+    print("arms=%d  gate_long=%d  gate_short=%d  (last %dd) -> %s" % (
+        len(arm_ts), len(gate_long), len(gate_short), WINDOW_DAYS, path))
 
 
 if __name__ == "__main__":
