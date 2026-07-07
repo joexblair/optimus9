@@ -14,9 +14,9 @@ WARMUP_D, LOOK_D = 2, 7
 S1 = {'s1m': (60, ('bb', 6, 0.56, 'close'), 'emerging'), 's1M': (60, ('bb', 37, 0.72, 'hlcc4'), 'emerging'),
       's1r': (60, ('k', 6, 6, 5, 'close'), 'emerging')}
 OVR = {'s10r': (600, ('k', 6, 6, 5, 'close'), 'emerging'), **S1}
-SCALP = dict(fin_sets=('s1', 's15', 's30'), rev_sets=(), N=6, tol=24, wait_breach=False, seam=150000, stall_floor=0.0)
-BEST = dict(SCALP, use_gate=False)                          # scalp, NO s3s4 gate
-LEAKY = dict(SCALP, use_gate=True)                          # scalp, WITH s3s4 gate (arm->gate->finisher)
+RIDE = dict(fin_sets=('s1', 's15', 's30'), rev_sets=(), N=6, tol=24, wait_breach=True, seam=150000, stall_floor=0.0)  # wb=ON (ride)
+BEST = dict(RIDE, use_gate=False)                          # ride, NO s3s4 gate
+LEAKY = dict(RIDE, use_gate=True)                          # ride, WITH s3s4 gate (arm->gate->finisher)
 
 
 def window_ends():
@@ -30,7 +30,7 @@ def window_ends():
 
 def main():
     ends = window_ends()
-    print("=== multi-window: realized per week — GATE-off vs GATE-on (scalp) — %d windows x 7d ===" % len(ends))
+    print("=== multi-window: realized per week — RIDE wb=ON: GATE-off vs GATE-on — %d windows x 7d ===" % len(ends))
     print("%-11s %4s | %7s %6s %6s %4s | %7s %6s %6s %4s" %
           ("win_end", "n", "NOGret", "NOGmae", "NOGmfe", "win", "GATret", "GATmae", "GATmfe", "win"))
     bests = []; leaks = []
