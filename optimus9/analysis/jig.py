@@ -17,7 +17,7 @@ import bias_machine as bm
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.analysis.lr import lr_config, lr_walk
-from optimus9.analysis.lr_v2 import s_qualify, v2_arm, gate_open
+from optimus9.analysis.lr_v2 import s_qualify, v2_arm, gate_open, _mage_rev
 from optimus9.compute.breaching_line import predict_breach, FENCE_HI, FENCE_LO
 from optimus9.compute.swing_detect import find_pivots, legs, swing_mask
 from sweep_eval import BASE_BIAS
@@ -61,6 +61,11 @@ class _Causal:
 
     def predict(self, k, m, M):
         return predict_breach(k, m, M, self.j.hi, self.j.lo, FENCE_HI, FENCE_LO)
+
+    def reversal(self, line, wob):
+        """Boundary-agnostic reversal of a line (lr_v2._mage_rev): +1 up-turn / -1 down-turn confirmed after `wob`
+        consecutive same-direction steps (wob<=0 = first slope-flip). Causal — fires from steps <= the bar."""
+        return np.asarray(_mage_rev(np.asarray(line, float), wob))
 
     def coarse(self, name, seam_ms):
         """Sample an EMERGING line at every seam_ms boundary (e.g. 300000 = 5-min). -> (ts_c, vals)."""
