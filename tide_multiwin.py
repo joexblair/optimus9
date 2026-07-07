@@ -29,19 +29,22 @@ def window_ends():
 
 def main():
     ends = window_ends()
-    print("=== multi-window: BEST (wb=off) vs LEAKY (wb=on) — %d windows x 7d ===" % len(ends))
-    print("%-12s %4s | %8s %5s | %8s %5s" % ("win_end", "n", "BEST_ret", "win", "LEAK_ret", "win"))
+    print("=== multi-window: realized per week — wb=OFF vs wb=ON — %d windows x 7d ===" % len(ends))
+    print("%-11s %4s | %7s %6s %6s %4s | %7s %6s %6s %4s" %
+          ("win_end", "n", "OFFret", "OFFmae", "OFFmfe", "win", "ONret", "ONmae", "ONmfe", "win"))
     bests = []; leaks = []
     for end in ends:
         J = Jig(int(end.timestamp() * 1000), hours=LOOK_D * 24, warmup=WARMUP_D * 24, overrides=OVR)
         b = run_config(J, BEST); l = run_config(J, LEAKY); J.close()
-        bests.append((b['r_ret'], b['win'], b['n'])); leaks.append((l['r_ret'], l['win']))
-        print("%-12s %4d | %+8.3f %5.2f | %+8.3f %5.2f" % (end.strftime("%Y-%m-%d"), b['n'], b['r_ret'], b['win'], l['r_ret'], l['win']))
-    br = np.array([x[0] for x in bests]); bw = np.array([x[1] for x in bests]); lr = np.array([x[0] for x in leaks])
-    print("\nBEST  r_ret: median %+.3f  worst %+.3f  | win median %.2f  | %d/%d windows positive"
-          % (np.median(br), br.min(), np.median(bw), int((br > 0).sum()), len(br)))
-    print("LEAKY r_ret: median %+.3f  worst %+.3f" % (np.median(lr), lr.min()))
-    print("lift (BEST - LEAKY) median: %+.3f" % np.median(br - lr))
+        bests.append(b); leaks.append(l)
+        print("%-11s %4d | %+7.3f %6.2f %6.2f %4.2f | %+7.3f %6.2f %6.2f %4.2f" %
+              (end.strftime("%Y-%m-%d"), b['n'], b['r_ret'], b['r_mae'], b['r_mfe'], b['win'],
+               l['r_ret'], l['r_mae'], l['r_mfe'], l['win']))
+    md = lambda rows, k: np.median([r[k] for r in rows])
+    print("\nMEDIAN  wb=OFF: ret %+.3f  MAE %.2f  MFE %.2f  win %.2f  | wb=ON: ret %+.3f  MAE %.2f  MFE %.2f  win %.2f"
+          % (md(bests, 'r_ret'), md(bests, 'r_mae'), md(bests, 'r_mfe'), md(bests, 'win'),
+             md(leaks, 'r_ret'), md(leaks, 'r_mae'), md(leaks, 'r_mfe'), md(leaks, 'win')))
+    print("WORST-window ret  wb=OFF %+.3f  wb=ON %+.3f" % (min(r['r_ret'] for r in bests), min(r['r_ret'] for r in leaks)))
 
 
 if __name__ == "__main__":
