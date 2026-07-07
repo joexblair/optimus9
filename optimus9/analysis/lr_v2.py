@@ -263,20 +263,31 @@ def _mage_rev(line, wob_n):
     return out
 
 
-def s_qualify(W, cfg, mn, Mn, rn, r_lb):
-    """[4v2·PRODUCER] Mage-anchored qualify for one TF line-set (Joe 0704). s{TF}a qualifies at the s{TF}Mage
-    reversal (wob cfg.fin_mage_wob) toward the trade side, with m OOB (+ M OOB unless cfg.fin_s30M_oob=0 →
-    m-only) and a same-side OOB r within r_lb base-bars back. Returns (qhi, qlo): es-high (bd short) / es-low
-    (bd long) qualify bars. value_mode-honoured via W.line (emerging = causal)."""
+def _rolling_any(mask, lb):
+    """Per bar k: is `mask` True anywhere in [max(0,k-lb), k]? Vectorized `mask[max(0,k-lb):k+1].any()`."""
+    n = len(mask); last = np.maximum.accumulate(np.where(mask, np.arange(n), -1))
+    return last >= np.maximum(0, np.arange(n) - lb)
+
+
+def s_qualify_parts(W, cfg, mn, Mn, rn, r_lb):
+    """[4v2·PRODUCER·PARTS] The per-bar COMPONENTS of s{TF}a (Joe 0707, for N-of-9). Dict of per-side bools:
+      m_hi/m_lo (m OOB) · Moob_hi/Moob_lo (Mage OOB) · Mrev_hi/Mrev_lo (Mage reversed toward the side, wob
+      cfg.fin_mage_wob) · rlb_hi/rlb_lo (same-side r OOB within r_lb base-bars back). value_mode-honoured via W.line."""
     m, M, r = W.line(mn), W.line(Mn), W.line(rn)
     rlb = r_lb * (W._ls.resolve(rn)[0] // 5)          # r_lb is in the r-line's OWN TF bars → convert to base(5s) bars
-    revM = _mage_rev(M, cfg.fin_mage_wob); hi, lo = cfg.hi, cfg.lo; strict = bool(cfg.fin_s30M_oob)
-    n = len(M); qhi = np.zeros(n, bool); qlo = np.zeros(n, bool); r_hi, r_lo = r >= hi, r <= lo
-    for k in range(n):
-        if revM[k] == -1 and m[k] >= hi and (M[k] >= hi or not strict) and r_hi[max(0, k - rlb):k + 1].any():
-            qhi[k] = True
-        if revM[k] == 1 and m[k] <= lo and (M[k] <= lo or not strict) and r_lo[max(0, k - rlb):k + 1].any():
-            qlo[k] = True
+    revM = _mage_rev(M, cfg.fin_mage_wob); hi, lo = cfg.hi, cfg.lo
+    return dict(m_hi=(m >= hi), m_lo=(m <= lo), Moob_hi=(M >= hi), Moob_lo=(M <= lo),
+                Mrev_hi=(revM == -1), Mrev_lo=(revM == 1),
+                rlb_hi=_rolling_any(r >= hi, rlb), rlb_lo=_rolling_any(r <= lo, rlb))
+
+
+def s_qualify(W, cfg, mn, Mn, rn, r_lb):
+    """[4v2·PRODUCER] Mage-anchored qualify (Joe 0704) = the AND of s_qualify_parts: s{TF}a fires at the s{TF}Mage
+    reversal (wob cfg.fin_mage_wob) toward the trade side, with m OOB (+ M OOB unless cfg.fin_s30M_oob=0 → m-only) and
+    a same-side OOB r within r_lb base-bars back. Returns (qhi, qlo): es-high (bd short) / es-low (bd long)."""
+    p = s_qualify_parts(W, cfg, mn, Mn, rn, r_lb); ns = not bool(cfg.fin_s30M_oob)
+    qhi = p['Mrev_hi'] & p['m_hi'] & (p['Moob_hi'] | ns) & p['rlb_hi']
+    qlo = p['Mrev_lo'] & p['m_lo'] & (p['Moob_lo'] | ns) & p['rlb_lo']
     return qhi, qlo
 
 

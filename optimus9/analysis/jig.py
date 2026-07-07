@@ -17,7 +17,7 @@ import bias_machine as bm
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.analysis.lr import lr_config, lr_walk
-from optimus9.analysis.lr_v2 import s_qualify, v2_arm, gate_open, _mage_rev
+from optimus9.analysis.lr_v2 import s_qualify, s_qualify_parts, v2_arm, gate_open, _mage_rev
 from optimus9.compute.breaching_line import predict_breach, FENCE_HI, FENCE_LO
 from optimus9.compute.swing_detect import find_pivots, legs, swing_mask
 from sweep_eval import BASE_BIAS
@@ -52,6 +52,15 @@ class _Causal:
         if lb is None:
             raise ValueError("no r_lb for %s — pass r_lb=" % tf)
         return s_qualify(self.j.W, self.j.cfg, '%sm' % tf, '%sM' % tf, '%sr' % tf, lb)
+
+    def finisher_parts(self, tf, r_lb=None):
+        """The per-bar COMPONENTS of s{tf}a (s_qualify_parts) for N-of-9: dict of per-side bools
+        m_hi/lo, Moob_hi/lo (Mage OOB), Mrev_hi/lo (Mage reversed), rlb_hi/lo (r OOB within r_lb back).
+        r_lb defaults to cfg.{tf}r_lb; pass r_lb= for a tf without a DB lookback (e.g. s2)."""
+        lb = r_lb if r_lb is not None else getattr(self.j.cfg, '%sr_lb' % tf, None)
+        if lb is None:
+            raise ValueError("no r_lb for %s — pass r_lb=" % tf)
+        return s_qualify_parts(self.j.W, self.j.cfg, '%sm' % tf, '%sM' % tf, '%sr' % tf, lb)
 
     def arms(self):
         return v2_arm(self.j.W, self.j.cfg)                                 # [(i, es, bd, cap, src)]

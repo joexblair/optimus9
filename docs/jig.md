@@ -25,6 +25,7 @@ logic forks the truth and drifts.
 - **`line(name)`** — the value_mode-honoured 5s array for one line (emerging = causal).
 - **`sign(name)`** — per-bar OOB sign of a line: `+1` hi / `−1` lo / `0` in-band.
 - **`finishers(tf, r_lb=None)`** — the packaged `s{tf}a` qualify (Mage-reversal → r-lookback) as `(qhi, qlo)`.
+- **`finisher_parts(tf, r_lb=None)`** — the per-bar COMPONENTS of `s{tf}a` (Mage-OOB · Mage-reversed · r-in-lookback) for N-of-9 gates.
 - **`arms()`** — the v2 arm events `[(i, es, bd, cap, src)]`.
 - **`gates(arms=None)`** — the s3s4 gate opens for a set of arms.
 - **`predict(k, m, M)`** — per-bar predicted-breach direction of line `k` from anchor BBs `m`/`M`.
@@ -92,6 +93,12 @@ q2h,  q2l  = J.causal.finishers('s2', r_lb=J.cfg.s15r_lb)
 ```
 Do NOT hand-roll the finisher latch either — for the entry latch (both in a box → trade on the next same-side s15a)
 use `lr_v2.fin_unlatch`.
+
+### `causal.finisher_parts(tf, r_lb=None) -> dict`
+Delegates to **`s_qualify_parts`** (the SRP-split components of `s_qualify`). Returns per-side bool arrays:
+`m_hi/m_lo` (m OOB), `Moob_hi/Moob_lo` (Mage OOB), `Mrev_hi/Mrev_lo` (Mage reversed toward the side, wob
+`cfg.fin_mage_wob`), `rlb_hi/rlb_lo` (same-side r OOB within `r_lb` back). `s_qualify = Mrev & m & (Moob | ¬strict) &
+rlb`. For **N-of-9** finisher gates: count the components across `s2/s15/s30` in the box instead of AND-ing them.
 
 ### `causal.arms() -> list`
 Delegates to **`v2_arm`**. Returns `[(i, es, bd, cap, src)]` — bar index, side (es=+1 short / −1 long), bd=−es, the
