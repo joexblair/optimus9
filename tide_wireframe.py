@@ -162,76 +162,42 @@ def main():
             out.append([hm(ts[e]), hm(ts[x]), side, dur, round(mae_v, 2), round(mfe_v, 2), why, drift, round(maed, 2), e, x])
         return out
 
-    excl = run_mode('exclusive'); race = run_mode('race')
-
-    def summ(name, tr):
-        mae = np.array([t[4] for t in tr]); mfe = np.array([t[5] for t in tr]); dm = np.array([t[7] for t in tr])
-        r1 = sum(1 for t in tr if t[6] == 's10r'); r2 = sum(1 for t in tr if t[6] == 's5r'); nx = sum(1 for t in tr if t[6] == 'no-exit')
-        print("[%-21s] n=%d medMAE=%.2f medMFE=%.2f MFE/|MAE|=%.2f | R1(s10r)=%d R2(s5r)=%d no-exit=%d | MFE>=0.5%%:%d driftMed=%dm"
-              % (name, len(tr), np.median(mae), np.median(mfe), np.median(mfe) / max(abs(np.median(mae)), 1e-9),
-                 r1, r2, nx, int((mfe >= 0.5).sum()), int(np.median(dm))))
-
-    print("=== tide wireframe A/B — PINNED %s -> %s (%dh) — lock OFF to isolate the exit ===" % (hm(cutoff), hm(now), WINDOW_H))
-    print("entry funnel: %d Mage-tide signals -> arm-delayed=%d, finisher-miss[both=%d s15=%d s30=%d], reval-fail=%d -> %d entries"
-          % (len(ent), att['ad_delayed'], att['miss_both'], att['miss15'], att['miss30'], att.get('reval_fail', 0), len(entries)))
-    if eq:
-        print("ENTRY QUALITY (exit-independent, to next swing): medMAE=%.2f medMFE=%.2f MFE/|MAE|=%.2f | opened-on-MFE-side %d/%d"
-              % (np.median(eq_mae), np.median(eq_mfe), np.median(eq_mfe) / max(abs(np.median(eq_mae)), 1e-9), sum(eq_side), len(eq_side)))
-    summ("NEW exclusive (spec)", excl)
-    summ("OLD race (bug)", race)
-
-    print("\n-- WORST-10 entries by ENTRY-QUALITY MAE (exit-independent, higher=worse; eMAE/mfeS same both modes; NEW vs OLD = the exit) --")
-    print("%-11s %-5s %5s %4s | %-7s %6s %6s %-5s | %-7s %6s %6s %-5s"
-          % ("entry", "side", "eMAE", "mfeS", "NEWout", "MAE", "MFE", "rte", "OLDout", "MAE", "MFE", "rte"))
-    for k in sorted(range(len(entries)), key=lambda j: -eq_mae[j])[:10]:
-        a_, b_ = excl[k], race[k]
-        print("%-11s %-5s %5.2f %4d | %-7s %6.2f %6.2f %-5s | %-7s %6.2f %6.2f %-5s"
-              % (a_[0], a_[2], eq_mae[k], eq_side[k], a_[1][6:], a_[4], a_[5], a_[6], b_[1][6:], b_[4], b_[5], b_[6]))
-
-    onl = sum(1 for k in range(1, n) if ts[k] >= cutoff and pred10[k] == -1 and pred10[k - 1] != -1)
-    onh = sum(1 for k in range(1, n) if ts[k] >= cutoff and pred10[k] == 1 and pred10[k - 1] != 1)
-    print("\npredict-STATE onsets: LO=%d HI=%d | assume: lock OFF (A/B), floor=0 stall, MFE=hindsight ceiling, arm-delay wob=cfg.arm_wob" % (onl, onh))
-    races = [(t[9], t[10], t[2], t[4], t[5], t[6], t[3]) for t in excl]   # pine = the NEW (spec) trades
-
-    # ── pine emit: the races as labels (entry+exit, live values; green=long / red=short) ──
+    excl = run_mode('exclusive')                                # the spec exit (predict-true -> R1, else R2)
     si = lambda a, k: (int(a[k]) if np.isfinite(a[k]) else 0)
-    pt = lambda k, d: ('T' if pred10[k] == d else 'F')          # s10r prediction state at bar k (favourable dir d)
-    T = []; Y = []; TXT = []; UP = []; GRN = []
-    for (e, x, side, mae, mfe, why, dur) in races:
-        lng = side == 'long'; g = 'true' if lng else 'false'; d = 1 if lng else -1
-        T.append(int(ts[e])); Y.append(round(float(px[e]), 6))
-        TXT.append("%s IN %s\\ns3r%d s4r%d\\ns5M%d s7M%d s2M%d\\ns10r%d pred:%s" % ('LONG' if lng else 'SHORT',
-                    hm(ts[e])[6:], si(L['s3r'], e), si(L['s4r'], e), si(L['s5M'], e), si(L['s7M'], e),
-                    si(L['s2M'], e), si(L['s10r'], e), pt(e, d)))
-        UP.append('true'); GRN.append(g)
-        T.append(int(ts[x])); Y.append(round(float(px[x]), 6))
-        TXT.append("%s OUT %s %dm\\nMAE%.1f MFE%.1f\\ns10r%d s5r%d pred:%s" % (why, hm(ts[x])[6:], dur, mae, mfe,
-                    si(L['s10r'], x), si(L['s5r'], x), pt(x, d)))
-        UP.append('false'); GRN.append(g)
-    ai = lambda v: "array.from(" + ", ".join(str(int(z)) for z in v) + ")"
-    af = lambda v: "array.from(" + ", ".join(str(z) for z in v) + ")"
-    as_ = lambda v: "array.from(" + ", ".join('"%s"' % z for z in v) + ")"
-    ab = lambda v: "array.from(" + ", ".join(v) + ")"
-    body = ('''//@version=5
-indicator("tide races (last %dh) — entry+exit labels, green=long red=short", overlay = true, max_labels_count = 500)''' % WINDOW_H + '''
-f_t()   => %s
-f_y()   => %s
-f_txt() => %s
-f_up()  => %s
-f_grn() => %s
-if barstate.islast
-    tt = f_t()
-    yy = f_y()
-    tx = f_txt()
-    up = f_up()
-    gr = f_grn()
-    for i = 0 to array.size(tt) - 1
-        col = array.get(gr, i) ? color.new(color.green, 15) : color.new(color.red, 15)
-        stl = array.get(up, i) ? label.style_label_up : label.style_label_down
-        label.new(array.get(tt, i), array.get(yy, i), array.get(tx, i), xloc = xloc.bar_time, color = col, style = stl, textcolor = color.white, size = size.normal)
-''' % (ai(T), af(Y), as_(TXT), ab(UP), ab(GRN)))
-    open("/home/joe/thecodes/tide_races.pine", "w").write(body)
-    print("\n-> tide_races.pine  (%d labels = %d races x2)" % (len(T), len(races)))
+    pts = lambda k, d: ('T' if pred10[k] == d else 'F')
+
+    # ── STANDARD REPORT (Joe 0707). MAE/MFE = ENTRY-QUALITY (to next swing, EXIT-INDEPENDENT); exit_route = context. ──
+    def report(label, trades):
+        print("=== %s ===" % label)
+        print("window range:  %s -> %s" % (hm(cutoff), hm(now)))
+        print("raw signals: %d | entries: %d | medMAE %.2f | medMFE %.2f | mfe side entry: %d"
+              % (len(ent), len(entries), (np.median(eq_mae) if eq else 0), (np.median(eq_mfe) if eq else 0), sum(eq_side)))
+        print("finisher-miss = %d (both=%d, s15=%d, s30=%d), confluence-lost=%d, arm-delayed=%d (delayed, not dropped)."
+              % (att['miss_both'] + att['miss15'] + att['miss30'], att['miss_both'], att['miss15'], att['miss30'],
+                 att.get('reval_fail', 0), att['ad_delayed']))
+        print("\ntop 5 MAE trades\ndatetime | MAE | MFE | exit_route")
+        for k in sorted(range(len(trades)), key=lambda j: -eq_mae[j])[:5]:
+            print("%s | %.2f | %.2f | %s" % (trades[k][0], eq_mae[k], eq_mfe[k], trades[k][6]))
+        print("\nbottom 5 MFE trades\ndatetime | MAE | MFE | exit_route")
+        for k in sorted(range(len(trades)), key=lambda j: eq_mfe[j])[:5]:
+            print("%s | %.2f | %.2f | %s" % (trades[k][0], eq_mae[k], eq_mfe[k], trades[k][6]))
+
+    report("tide wireframe — strict s15a AND s30a finisher", excl)
+
+    # ── auto-pine via jig.score.emit_labels (entry + exit labels; green=long / red=short) ──
+    labels = []
+    for t in excl:
+        e, x = t[9], t[10]; side = t[2]; lng = side == 'long'; d = 1 if lng else -1
+        labels.append({'ts': int(ts[e]), 'y': float(px[e]), 'green': lng, 'up': True,
+                       'text': "%s IN %s\\ns3r%d s4r%d\\ns5M%d s7M%d s2M%d\\ns10r%d pred:%s"
+                       % ('LONG' if lng else 'SHORT', hm(ts[e])[6:], si(L['s3r'], e), si(L['s4r'], e),
+                          si(L['s5M'], e), si(L['s7M'], e), si(L['s2M'], e), si(L['s10r'], e), pts(e, d))})
+        labels.append({'ts': int(ts[x]), 'y': float(px[x]), 'green': lng, 'up': False,
+                       'text': "%s OUT %s %dm\\nMAE%.1f MFE%.1f\\ns10r%d s5r%d pred:%s"
+                       % (t[6], hm(ts[x])[6:], t[3], t[4], t[5], si(L['s10r'], x), si(L['s5r'], x), pts(x, d))})
+    npine = J.score.emit_labels(labels, "/home/joe/thecodes/tide_races.pine",
+                                "tide races %s->%s (%dh)" % (hm(cutoff), hm(now), WINDOW_H))
+    print("\n-> tide_races.pine (%d labels)" % npine)
 
 
 if __name__ == "__main__":
