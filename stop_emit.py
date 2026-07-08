@@ -11,14 +11,16 @@ from optimus9 import DatabaseManager
 from optimus9.analysis.jig import Jig
 
 HOURS = int(sys.argv[1]) if len(sys.argv) > 1 else 12
+TF_S = int(sys.argv[2]) if len(sys.argv) > 2 else 15                 # CHART timeframe (s) — snap labels to its bar grid
 END = int(dtm.datetime.now(timezone.utc).timestamp() * 1000)
 OVR = {'s10r': (600, ('k', 6, 6, 5, 'close'), 'emerging')}          # exit-curl line (matches tide_emit)
+snap = lambda t: int(t) // (TF_S * 1000) * (TF_S * 1000)            # floor to the chart's bar so xloc.bar_time lands on it
 hm = lambda t: time.strftime('%m-%d %H:%M', time.gmtime(int(t) / 1000))
 
 
 def losers(hours):
     c = get_db_config(); c['database'] = 'o9_live'; d = DatabaseManager(**c); d.connect()
-    rows = d.execute('''SELECT side, entry_px, exit_px, net, opened_ms, closed_ms
+    rows = d.execute('''SELECT led_id, side, entry_px, exit_px, net, opened_ms, closed_ms
         FROM o9_ledger WHERE status='closed' AND net<0 AND closed_ms>=%s ORDER BY opened_ms''',
         (END - hours * 3600000,), fetch=True)
     d.disconnect(); return rows
@@ -37,14 +39,14 @@ def main():
         x = int(np.searchsorted(ts, int(r['closed_ms']) // 5000 * 5000))
         if e >= len(ts):
             continue
-        labels.append({'ts': int(ts[e]), 'y': float(r['entry_px']), 'green': lng, 'up': True,
-                       'text': "%s IN %s\\ns3r%d s4r%d\\ns5M%d s7M%d s2M%d\\ns10r%d"
-                       % ('LONG' if lng else 'SHORT', hm(ts[e])[6:], si(L['s3r'], e), si(L['s4r'], e),
+        labels.append({'ts': snap(ts[e]), 'y': float(r['entry_px']), 'green': lng, 'up': True,
+                       'text': "L%d %s IN %s\\ns3r%d s4r%d\\ns5M%d s7M%d s2M%d\\ns10r%d"
+                       % (r['led_id'], 'LONG' if lng else 'SHORT', hm(ts[e])[6:], si(L['s3r'], e), si(L['s4r'], e),
                           si(L['s5M'], e), si(L['s7M'], e), si(L['s2M'], e), si(L['s10r'], e))})
         if x < len(ts):
-            labels.append({'ts': int(ts[x]), 'y': float(r['exit_px']), 'green': lng, 'up': False,
-                           'text': "OUT %s  net %+.2f\\ns5M%d s2M%d s10r%d"
-                           % (hm(ts[x])[6:], float(r['net']), si(L['s5M'], x), si(L['s2M'], x), si(L['s10r'], x))})
+            labels.append({'ts': snap(ts[x]), 'y': float(r['exit_px']), 'green': lng, 'up': False,
+                           'text': "L%d OUT %s  net %+.2f\\ns5M%d s2M%d s10r%d"
+                           % (r['led_id'], hm(ts[x])[6:], float(r['net']), si(L['s5M'], x), si(L['s2M'], x), si(L['s10r'], x))})
     J.close()
     n = J.score.emit_labels(labels, "/home/joe/thecodes/stop_trades.pine",
                             "o9 LOSING trades %s->%s (%d)" % (hm(END - HOURS * 3600000), hm(END), len(rows)))
