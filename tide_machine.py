@@ -144,12 +144,13 @@ def run_config(J, K0):
     lr_ent = [(int(ts[e]), (1 if side == 'short' else -1), (1 if side == 'long' else -1), e) for e, side in entries]
     eq = J.score.entry_quality(lr_ent)
     e_mae = np.median([r[4] for r in eq]); e_mfe = np.median([r[5] for r in eq]); mfeside = sum(int(r[7]) for r in eq)
-    rets = []; rmae = []; rmfe = []
+    rets = []; rmae = []; rmfe = []; trades = []
     for e, side in entries:
         x = exit_walk(e, side); d = 1 if side == 'long' else -1
         seg = (px[e:x + 1] - px[e]) / px[e] * 100.0 * d          # realized excursion entry->exit (signed favourable)
         rets.append(float(seg[-1])); rmae.append(float(np.nanmin(seg))); rmfe.append(float(np.nanmax(seg)))
+        trades.append((int(e), int(x), side, round(float(seg[-1]), 3), round(float(np.nanmin(seg)), 3)))
     rets = np.array(rets)
     return dict(n=len(entries), e_mae=round(float(e_mae), 3), e_mfe=round(float(e_mfe), 3), mfeside=mfeside,
                 r_ret=round(float(np.median(rets)), 3), win=round(float((rets > 0).mean()), 3),
-                r_mae=round(float(np.median(rmae)), 3), r_mfe=round(float(np.median(rmfe)), 3))
+                r_mae=round(float(np.median(rmae)), 3), r_mfe=round(float(np.median(rmfe)), 3), trades=trades)
