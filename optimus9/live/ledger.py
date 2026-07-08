@@ -71,6 +71,19 @@ class O9Ledger:
                                 (self.symbol,), fetch=True)
         return self._close_rows(opens, exit_px, order_id, ts)
 
+    def record_close_side(self, side, exit_px, order_id, ts) -> float:
+        """Close all open o9 trades on ONE side (hedge: a side's reversal-TP closes only that side's stack;
+        the opposite leg lives on independently)."""
+        opens = self.db.execute("SELECT * FROM o9_ledger WHERE symbol=%s AND side=%s AND status='open' "
+                                "ORDER BY opened_ms", (self.symbol, side), fetch=True)
+        return self._close_rows(opens, exit_px, order_id, ts)
+
+    def open_by_side(self) -> dict:
+        """o9's open position per side (hedge view): {'Buy': {'side','size'}, 'Sell': {...}} — only open sides."""
+        rows = self.db.execute("SELECT side, SUM(qty) q FROM o9_ledger WHERE symbol=%s AND status='open' "
+                               "GROUP BY side", (self.symbol,), fetch=True)
+        return {r["side"]: {"side": r["side"], "size": float(r["q"])} for r in rows}
+
     def record_close_leg(self, led_id, exit_px, order_id, ts) -> float:
         """Close ONE leg (option B per-leg SL) — the rest of the pyramid stack stays open. Idempotent
         (selects status='open' by led_id → a second call is a no-op)."""

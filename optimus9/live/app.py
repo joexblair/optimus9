@@ -48,13 +48,14 @@ class O9LiveApp:
             except Exception as e:
                 self.log("o9-live: health loop_ms write failed: %s" % e)
 
-    def position(self) -> dict | None:
-        """The live position, read back from the EXCHANGE (authoritative), not a local guess."""
-        lst = self.adapter.positions()
-        if not lst:
-            return None
-        p = lst[0]
-        return {"side": p["side"], "size": float(p["size"])}
+    def position(self) -> dict:
+        """The live positions PER SIDE, read back from the EXCHANGE (authoritative), not a local guess.
+        Hedge mode: up to two open legs. Returns {side: {'side','size'}} — empty dict {} when flat."""
+        out = {}
+        for p in self.adapter.positions():
+            if float(p["size"]) > 0:
+                out[p["side"]] = {"side": p["side"], "size": float(p["size"])}
+        return out
 
     def _fill_price(self, order_id) -> float | None:
         for ex in self.adapter.executions():
@@ -74,8 +75,9 @@ class O9LiveApp:
             elif intent.led_id is not None:                          # option B per-leg SL → close just this leg
                 self.ledger.record_close_leg(intent.led_id, fpx, oid, now_ms)
                 act = "close_leg"
-            else:
-                self.ledger.record_close(fpx, oid, now_ms)
+            else:                                                    # whole-stack close → only THIS side's stack
+                pos_side = "Buy" if o.side == "Sell" else "Sell"     # the leg being closed (opposite the order side)
+                self.ledger.record_close_side(pos_side, fpx, oid, now_ms)
                 act = "close"
             self.ledger.log_decision(now_ms, act, intent.reason, oid)
             placed.append({"action": intent.action, "side": o.side, "qty": o.qty, "order_id": oid, "fill": fpx})
@@ -89,11 +91,10 @@ class O9LiveApp:
         self.sizer.max_order = int(ctl["max_order"])
         placed = []
 
-        if ctl["flatten_req"]:                               # kill-switch or exit button
-            pos = self.position()
-            if pos:
-                close_side = "Sell" if pos["side"] == "Buy" else "Buy"
-                self._execute(TradeIntent("close", side=close_side, qty=pos["size"], reason="operator_flatten"),
+        if ctl["flatten_req"]:                               # kill-switch or exit button — close BOTH legs
+            for side, p in self.position().items():
+                close_side = "Sell" if side == "Buy" else "Buy"
+                self._execute(TradeIntent("close", side=close_side, qty=p["size"], reason="operator_flatten"),
                               price, ctl["mode"], 1, now_ms, placed)
             self.control.clear_flatten()
 
