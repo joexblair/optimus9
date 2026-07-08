@@ -83,7 +83,8 @@ async def order_create(request: Request):
             body["symbol"], body["side"], body["qty"],
             order_type=body.get("orderType", "Market"),
             order_link_id=body.get("orderLinkId", ""),
-            reduce_only=bool(body.get("reduceOnly", False)))
+            reduce_only=bool(body.get("reduceOnly", False)),
+            position_idx=body.get("positionIdx"))       # hedge mode: 1=long, 2=short (None → derived one-way)
     except ValueError as e:            # e.g. empty book / no liquidity
         return _envelope(ret_code=110001, ret_msg=str(e))
     return _envelope({"orderId": res["order_id"], "orderLinkId": body.get("orderLinkId", "")})
@@ -105,11 +106,16 @@ async def set_leverage(request: Request):
 async def position_list(request: Request):
     await _require_auth(request)
     sym = request.query_params.get("symbol")
-    p = get_engine()._store.open_position(sym) if sym else None
-    lst = [] if not p else [{
-        "symbol": p["symbol"], "side": p["side"], "size": str(p["size"]),
-        "avgPrice": str(p["avg_entry"]), "leverage": str(p["leverage"]),
-        "positionValue": str(round(float(p["size"]) * float(p["avg_entry"]), 8)), "unrealisedPnl": "0"}]
+    st = get_engine()._store
+    lst = []
+    if sym:
+        for idx in (1, 2):                              # hedge mode: return BOTH legs that are open
+            p = st.open_leg(sym, idx)
+            if p:
+                lst.append({
+                    "symbol": p["symbol"], "side": p["side"], "positionIdx": p["position_idx"],
+                    "size": str(p["size"]), "avgPrice": str(p["avg_entry"]), "leverage": str(p["leverage"]),
+                    "positionValue": str(round(float(p["size"]) * float(p["avg_entry"]), 8)), "unrealisedPnl": "0"})
     return _envelope({"category": "linear", "list": lst})
 
 

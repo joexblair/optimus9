@@ -176,7 +176,8 @@ CREATE TABLE fx_order (
 CREATE TABLE fx_position (
   position_id    BIGINT AUTO_INCREMENT PRIMARY KEY,
   symbol         VARCHAR(20) NOT NULL,
-  side           ENUM('Buy','Sell') NOT NULL,             -- one-way; pyramiding accumulates same-side
+  side           ENUM('Buy','Sell') NOT NULL,             -- the leg's fixed direction (positionIdx 1→Buy, 2→Sell)
+  position_idx   TINYINT NOT NULL DEFAULT 1,              -- Bybit hedge mode: 1=long leg, 2=short leg (both open at once)
   size           DECIMAL(20,8) NOT NULL,                  -- current accumulated size (coins)
   avg_entry      DECIMAL(20,8) NOT NULL,                  -- volume-weighted avg entry
   entry_count    INT DEFAULT 1,                           -- pyramid adds
@@ -188,7 +189,7 @@ CREATE TABLE fx_position (
   realized_pnl   DECIMAL(20,8) DEFAULT 0,                 -- net of fees + slippage, on (partial/full) close
   total_fees     DECIMAL(20,8) DEFAULT 0,
   total_slip_bps DECIMAL(10,2),                           -- size-weighted avg slippage across fills
-  INDEX(symbol), INDEX(status), INDEX(opened_ms)
+  INDEX(symbol), INDEX(status), INDEX(opened_ms), INDEX(symbol, position_idx, status)  -- per-leg open lookup
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE fx_fill (

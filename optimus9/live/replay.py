@@ -54,7 +54,7 @@ def replay(strat_db, store_db, bias_cfg, lr_cfg, symbol, end_ms, mode="fixed", m
 
     for (t, kind, bd, price) in events:
         book["b"] = synth_book(price)
-        pos = store.open_position(symbol)
+        pos = store.open_leg(symbol)                   # idx=None → any open leg (one-way harness, unchanged behaviour)
         if kind == "open":
             side = _SIDE[bd]
             action = "add" if (pos and pos["side"] == side) else ("open" if pos is None else None)

@@ -25,18 +25,25 @@ class FxStore:
             (oid, order_link_id, symbol, side, order_type, qty, price, int(reduce_only), status, ms, ms))
         return oid
 
-    # ── positions (one-way net) ──
-    def open_position(self, symbol) -> dict | None:
-        rows = self._db.execute(
-            "SELECT * FROM fx_position WHERE symbol=%s AND status='open' LIMIT 1", (symbol,), fetch=True)
+    # ── positions (hedge mode: one open leg per positionIdx, 1=long 2=short) ──
+    def open_leg(self, symbol, position_idx=None) -> dict | None:
+        """The open position row for a leg. position_idx=None → any open leg (one-way/aggregate readers)."""
+        if position_idx is None:
+            rows = self._db.execute(
+                "SELECT * FROM fx_position WHERE symbol=%s AND status='open' ORDER BY position_id LIMIT 1",
+                (symbol,), fetch=True)
+        else:
+            rows = self._db.execute(
+                "SELECT * FROM fx_position WHERE symbol=%s AND position_idx=%s AND status='open' LIMIT 1",
+                (symbol, position_idx), fetch=True)
         return rows[0] if rows else None
 
-    def create_position(self, symbol, side, size, avg_entry, fee, leverage=50) -> int:
+    def create_position(self, symbol, side, size, avg_entry, fee, position_idx=1, leverage=50) -> int:
         ms = self._now()
         self._db.execute(
-            "INSERT INTO fx_position (symbol, side, size, avg_entry, entry_count, leverage, status, "
-            "opened_ms, total_fees) VALUES (%s,%s,%s,%s,1,%s,'open',%s,%s)",
-            (symbol, side, size, avg_entry, leverage, ms, fee))
+            "INSERT INTO fx_position (symbol, side, position_idx, size, avg_entry, entry_count, leverage, "
+            "status, opened_ms, total_fees) VALUES (%s,%s,%s,%s,%s,1,%s,'open',%s,%s)",
+            (symbol, side, position_idx, size, avg_entry, leverage, ms, fee))
         return self._db.execute("SELECT LAST_INSERT_ID() id", fetch=True)[0]["id"]
 
     def grow_position(self, position_id, new_size, new_avg, fee_add):

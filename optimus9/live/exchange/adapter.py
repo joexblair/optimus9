@@ -36,8 +36,11 @@ class BybitAdapter(ExchangeAdapter):
         self._cat = category
 
     def place(self, order) -> str:
+        # hedge mode: positionIdx is the venue mapping (kept here, not in the venue-agnostic Order/sizer).
+        # Bybit rule — open long=Buy→1, open short=Sell→2; close long=Sell→1, close short=Buy→2.
+        idx = (2 if order.side == "Buy" else 1) if order.reduce_only else (1 if order.side == "Buy" else 2)
         body = {"category": self._cat, "symbol": self._sym, "side": order.side,
-                "orderType": order.order_type, "qty": _num(order.qty)}
+                "orderType": order.order_type, "qty": _num(order.qty), "positionIdx": idx}
         if order.reduce_only:
             body["reduceOnly"] = True
         if order.order_link_id:
