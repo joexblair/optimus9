@@ -39,10 +39,11 @@ def coarse_curl(ts, vals, seam, direction, with_val=False):
     return out
 
 
-def curl_exit(W, cfg, entries, gate_mode, unlatch_mode, seam_gate, seam_unlatch, gate_fam='s7', tp=None):
+def curl_exit(W, cfg, entries, gate_mode, unlatch_mode, seam_gate, seam_unlatch, gate_fam='s7', tp=None, trail=None, trail_arm=0.0):
     """lr_exit_v2 (predict off) with the gate + unlatch signals swappable. gate_mode: breach | curl (breach then
-    s7r OOB coarse-curl). unlatch_mode: flip | curl (s5r coarse-curl). tp = take-profit %: a limit that fills at
-    +tp the first bar the favourable excursion reaches it (checked each bar with the SL — whichever hits first)."""
+    s7r OOB coarse-curl). unlatch_mode: flip | curl (s5r coarse-curl). tp = take-profit % (limit fill at +tp).
+    trail = trailing-stop %: once in profit, track the peak favourable excursion and exit `trail` below it — rides
+    winners (the level follows the peak up) and cuts on a `trail` pullback. All checked each bar; first hit wins."""
     ts, px, n = np.asarray(W.ts), W.px, len(W.ts)
     hi, lo = cfg.hi, cfg.lo
     s5m, s5r = W.line('s5m'), W.line('s5r')
@@ -54,7 +55,7 @@ def curl_exit(W, cfg, entries, gate_mode, unlatch_mode, seam_gate, seam_unlatch,
     ucurl = {d: coarse_curl(ts, s5r, seam_unlatch, d) for d in (1, -1)} if unlatch_mode == 'curl' else None
     rows = []
     for tms, es, bd, tj in entries:
-        entry_px = float(px[tj]); arm = gate = unlatch = xk = None; breached = False
+        entry_px = float(px[tj]); arm = gate = unlatch = xk = None; breached = False; peak = 0.0
         ek = None; reason = 'end'
         for k in range(tj + 1, n):
             fav = (px[k] - entry_px) / entry_px * 100.0 * bd
@@ -62,6 +63,9 @@ def curl_exit(W, cfg, entries, gate_mode, unlatch_mode, seam_gate, seam_unlatch,
                 ek = k; reason = 'SL'; break
             if tp is not None and fav >= tp:
                 ek = k; reason = 'TP'; break
+            peak = max(peak, fav)
+            if trail is not None and peak >= trail_arm and peak > 0 and (peak - fav) >= trail:
+                ek = k; reason = 'TRAIL'; break                  # only trails once peak reached +trail_arm%
             if xk is not None:
                 if k >= xk:
                     ek = k; reason = 'exit'; break
@@ -91,7 +95,8 @@ def curl_exit(W, cfg, entries, gate_mode, unlatch_mode, seam_gate, seam_unlatch,
         if ek is None:
             ek = n - 1
         exit_px = float(px[ek])
-        ret = tp if reason == 'TP' else (-cfg.sl if reason == 'SL' else (exit_px - entry_px) / entry_px * 100.0 * bd)
+        ret = tp if reason == 'TP' else ((peak - trail) if reason == 'TRAIL'
+              else (-cfg.sl if reason == 'SL' else (exit_px - entry_px) / entry_px * 100.0 * bd))
         rows.append((tms, int(ts[ek]), bd, entry_px, exit_px, round(ret, 3), reason))
     return rows
 
@@ -105,7 +110,7 @@ def trades_from(W, lr, ent, exits):
         if x <= e or x >= len(px):
             continue
         seg = (px[e:x + 1] - px[e]) / px[e] * 100.0 * bd
-        ret = float(r) if reason == 'TP' else float(seg[-1])       # TP fills at the limit; else the realized close
+        ret = float(r) if reason in ('TP', 'TRAIL') else float(seg[-1])   # TP/trail fill at their level; else close
         tr.append((float(px[e]), ret, float(np.nanmin(seg)), float(np.nanmax(seg))))
     return tr
 
@@ -142,19 +147,20 @@ def main():
     print("baseline validated (curl_exit==lr_exit_v2). entries=%d over %dw" % (len(ent), SPAN_D // 7))
 
     GW, UW = 105000, 40000                              # curl winner from the seam sweep
-    runs = [('BASELINE breach+flip', 'breach', 'flip', None),
-            ('curl@105/40 no-TP', 'curl', 'curl', None)]
-    for tp in (0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 1.0, 1.5):
-        runs.append(('curl@105/40 +TP%.2f' % tp, 'curl', 'curl', tp))
+    runs = [('BASELINE breach+flip', 'breach', 'flip', {}),
+            ('curl@105/40 no-trail', 'curl', 'curl', {})]
+    for ta in (0.3, 0.5, 0.7):                          # only trail once peak reaches +ta%
+        for tr in (0.3, 0.5, 0.7):
+            runs.append(('curl arm%.1f/trail%.1f' % (ta, tr), 'curl', 'curl', {'trail_arm': ta, 'trail': tr}))
 
     rows = []
-    for label, gm, um, tp in runs:
-        s = score(trades_from(W, lr, ent, curl_exit(W, lr, ent, gm, um, GW, UW, tp=tp)))
+    for label, gm, um, kw in runs:
+        s = score(trades_from(W, lr, ent, curl_exit(W, lr, ent, gm, um, GW, UW, **kw)))
         rows.append((label, s))
     base_pnl = rows[0][1]['best']
     rows_sorted = sorted(rows, key=lambda r: -r[1]['best'])
 
-    lines = ["EXIT TP sweep on curl-winner gate@105/s5r@40 — v2_walk %dw (%d entries) | arbiter=PnL(best-stop)" % (SPAN_D // 7, len(ent)),
+    lines = ["EXIT TRAIL sweep on curl-winner gate@105/s5r@40 — v2_walk %dw (%d entries) | arbiter=PnL(best-stop)" % (SPAN_D // 7, len(ent)),
              "%-24s %5s %6s %7s %7s %9s" % ("variant", "n", "win%", "MAEmd", "MFEmd", "PnL$")]
     for label, s in rows_sorted:
         tag = " *base" if label.startswith('BASELINE') else " %+.1f%%" % (100 * (s['best'] / base_pnl - 1))
