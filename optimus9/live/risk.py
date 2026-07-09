@@ -69,6 +69,28 @@ class RiskGovernor:
             reason="halt_dd" if halt else ("cap" if over_cap else "ok"))
 
 
+def leg_further_along(bd: int, first_px: float, entry_px: float, tol_pct: float) -> bool:
+    """First-leg pyramid gate (Joe 0709, reference = the FIRST leg of the side).
+
+    A pyramid leg is only allowed FURTHER ALONG THE LEG than where the side opened — i.e. the trade is already
+    working. Adding at a WORSE price than the first entry is averaging into drawdown, which is what stacked
+    o9-live's five shorts (0.14344 -> 0.14390) into -$108 of stops on 0709.
+
+        short (bd=-1): allow iff entry_px <= first_px * (1 + tol)
+        long  (bd=+1): allow iff entry_px >= first_px * (1 - tol)
+
+    `tol_pct` is a small tolerance for retests (a wick back through the first entry). Percent, e.g. 0.10 = 0.1%.
+    It is SWEPT, never guessed, and the winner lands in `risk_config` (`pyramid_tol_pct`).
+
+    NOTE this is a variance-reducer, not free money (Joe): adding into drawdown AMPLIFIES a good entry -- a short
+    at 0.1000 then 0.1010, with price falling to 0.0990, earns MORE on the later leg. The gate improves
+    expectancy only if the drawdown-added legs carry negative expectancy on their own. Pure predicate: no state,
+    no I/O. Reference resets when the side goes flat (the caller drops the Position).
+    """
+    t = tol_pct / 100.0
+    return entry_px <= first_px * (1.0 + t) if bd == -1 else entry_px >= first_px * (1.0 - t)
+
+
 class RiskGate:
     """Applies a RiskVerdict to the intent stream (SRP: gate only — never sizes or decides). Drops vetoed
     opens/adds; closes & reduces always pass. `add_mode=taper` means adds still flow but at the reduced
