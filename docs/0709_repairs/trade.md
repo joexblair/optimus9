@@ -1,5 +1,50 @@
 # 0709 repairs — TRADE (stop · governor · sizing)
 
+## o9-live log seams
+
+| seam (UTC) | epoch ms | producer | what changed |
+|---|---|---|---|
+| **2026-07-09 10:15** | 1783592100000 | `arm` | Arm probe. Trade on every arm, no gate, no finisher, no exit signal. Tables truncated. `$500`. |
+| **2026-07-09 19:10:43** | 1783624243000 | `ad` | **Full cascade** (arm → gate → finishers → exit) on the fixed arm. Tables truncated. `$500`. |
+
+Data before a seam is not comparable to data after it. The arm-probe session (10:15→17:59) ended at
+**equity −$1,014**, 38 legs, 28 closes, 10 legs left open.
+
+---
+
+## X3b — HALTED 2026-07-09 19:05, before the 42d drawdown replay
+
+**Why:** the governor's value is a function of entry quality, and there was no entry quality to measure against.
+
+**[measured]** Gate on the arm-probe book (38 legs, no gate, no finisher): **+$822** (54% of the session loss).
+**[measured]** Gate on the 42d full-cascade book (2628 trades): **−22% to −47%**. Same gate, opposite sign.
+
+Both books are invalid for the decision: the first has no entry logic by construction; the second was built on
+the old breach-arm, which no longer exists.
+
+**Also found, and it changes the gate's own design:**
+```
+Buy stack first leg = led 16, opened 13:22:02 @ 0.14523313 — NEVER CLOSED (still open at session end)
+
+the 4 legs of the -$438 cluster, in open order:
+  led 19  14:23:12  0.14706055   net -114.97
+  led 20  14:35:52  0.14685649   net -106.27
+  led 22  14:55:02  0.14697641   net -104.36
+  led 24  15:08:57  0.14710937   net -112.53
+```
+All four sit above `0.14523313`, so all four are "further along" the first leg and the gate admits them. Against
+**led 19** as reference, led 20 and led 22 would be blocked (−$210 saved in that cluster).
+
+**A leg that never closes pins the reference for the rest of the session.** The Buy stack never went flat after
+13:22:02, so every later add measured itself against a price 1.3% away.
+
+**Reference fork, unresolved (Joe's call):** first leg (current) · best leg (max entry long / min short) ·
+last leg. The `+$822` above was computed with the first-leg reference and therefore already carries this hole.
+
+**Order restored (Joe, 0709):** re-wire loop → reset → re-baseline the 42d book on the fixed arm → *then* X3b,
+sizing, governor, scored on a book that exists.
+
+
 Milestones the bot must pass to be profitable. Source: the 0709 live arm probe (`O9_PRODUCER=arm`, 10:19→17:59,
 28 closes, 10 legs open at stop) plus 42d backtest. Parent: `docs/arm_delay_research.md` (CLOSED) ·
 `docs/dynamic_risk_spec.md`.
