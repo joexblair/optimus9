@@ -50,12 +50,13 @@ closed 28 legs: **3 orders closed >1 leg (the stack closes, all 3 winners), 21 c
 `20 per-leg SL closes = 20 errors.` Exact match, no residue. `3 multi-leg + 1 single-leg = the 4 recorded
 'close' rows.` The audit row is a convenience; **the order cardinality is the record.**
 
-**Proposed fix (staged, NOT run — Joe's call):**
+**FIXED 2026-07-09 19:14 UTC** (`migrate_decision_action.py`, Joe authorised):
 ```
-python3 migrate_decision_action.py
+before: enum('open_long','open_short','add','close','hold')
+after : enum('open_long','open_short','add','close','close_leg','reduce','hold')
 ```
-Adds `close_leg` and `reduce`. Additive, idempotent, safe with the loop running — the statement it repairs is
-already failing. `docs/o9_live_schema.sql` already updated.
+Additive, idempotent, run with the loop live. `docs/o9_live_schema.sql` matches. Errors since the 19:10:43
+seam: **0**.
 
 ---
 

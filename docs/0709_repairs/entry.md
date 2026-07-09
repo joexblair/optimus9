@@ -101,11 +101,51 @@ entered 20s later pay **+0.1292%** at 57.4% win. Arm A `+122.71%` → Arm B `+13
 
 ---
 
+---
+
+## 4. RE-BASELINE, 2026-07-09 19:05 UTC — the fixed arm's 42d book is net negative
+
+`rebaseline_fixed_arm.py`, same window, same exit, same knobs, `strand_rescue` excluded. **[measured]**
+
+```
+                 OLD (breach arm)      NEW (fixed arm)
+entries              2628                  1540
+net                +133.97%              -266.55%
+mean/trade         +0.0473%              -0.1731%
+win rate              51.5%                 43.7%
+avg winner          +1.060%               +0.921%
+avg loser           -1.022%               -1.023%
+stopped          1050 (40.0%)           717 (46.6%)
+MAE p50 / p90    0.639% / 0.999%      0.803% / 1.008%
+
+M1 -157.74%  ·  M2 -108.81%       (win 43.7% on both halves)
+reason=exit  n=818  +573.89%  81.8% win
+reason=SL    n=717  -845.68%  avg -1.179%
+stack-close cost  -35.0% -> -5.7%    depth_max 14 -> 7
+```
+
+**The old +133.97% was the look-ahead.** Removing it removes the edge.
+
+**Entry quality got worse, not better.** MAE p50 `0.639% -> 0.803%`. The arm that waits for the reversal enters
+*deeper into adverse excursion* than the arm that fired at the breach. The original arm-delay claim
+(`MAE 0.52 -> 0.32`) came from the forward scan.
+
+Three facts bound the interpretation:
+- `arm_wob = 7` — the reversal needs 7 consecutive same-direction bars. **[inferred]** the arm may now fire well
+  after the turn. Not measured.
+- Every knob in this run (`sl=0.90%`, the curl exit seams, `fin_lb`/`fin_fwd`) was swept against the breach-arm
+  book.
+- The hold path still never fires (big leg is 1.4% of bars).
+
+---
+
 ## Open, ranked
 
-1. **Make the hold branch execute once.** It is the only untested path in the arm.
-2. **Re-baseline the 42d book** on the fixed arm — every downstream number (A1's +11.46%, X3's stack-close
-   −35%, the 0.90% stop optimum) was fitted on the breach-arm book.
+1. **Sweep `arm_wob`.** A 7-bar confirmation on a 5-minute line may be the whole deficit. It has never been
+   swept against a causal arm.
+2. **Make the hold branch execute once.** It is the only untested path in the arm.
+3. **Re-sweep every knob** on the new book: `sl`, curl seams, `fin_lb`/`fin_fwd`, exit family. All were fitted
+   to the breach arm.
 3. **`s5r` coarse-curl as the base trigger** (Joe): A/B against the `s5m` reversal *after* the signals are
    known true.
 4. Confirm the `s5r` divergence arm obeys the same candidate rule.
