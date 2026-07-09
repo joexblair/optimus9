@@ -167,6 +167,19 @@ baseline) was measured on one 5-day window with the look-ahead arm. It does not 
 
 ---
 
+---
+
+## 6. Entry selection — see `entry_selection.md` (OPEN)
+
+The 42d causal book wins 42.1% against a 50.4% breakeven. Trade selection is the deficit.
+`[measured]` No single line value at the entry bar predicts stop-vs-signal-exit (best score 0.535, noise floor
+0.53). Line **state** does — `s7M` outside the boundary against the trade stops out 61.4% of the time — but no
+state rule moves the mean per trade off `-0.17%`. The loss is uniform.
+
+Full data, and what it bounds: **`docs/0709_repairs/entry_selection.md`**. Not closed.
+
+---
+
 ## Open, ranked
 
 1. **Sweep `arm_wob`.** A 7-bar confirmation on a 5-minute line may be the whole deficit. It has never been
