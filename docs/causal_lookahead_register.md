@@ -71,7 +71,7 @@ quietly disagreeing with the spec since 0704. The 20–50s `s15a` lag is underst
 |---|---|---|
 | B1 | `bias_machine.py:78` vs `bl_detect.py:237` | The `value_mode` default **disagrees with itself**: `closed` in one module, `emerging` in the other. A new line inherits look-ahead or not depending on which reads it. Nobody chose this. |
 | B2 | `lr_v2.py:226` `s30M_wob` | Reads a closed `_line`, bypassing `BiasWindow.line()`. **Zero callers** — dead. A trap for whoever rewires it. |
-| B3 | `lr_v2.py:780` `strand_rescue` | Harness-only by construction (gated on the completed `x[6]=='SL'`). Off the live exit path — but **exit_v2's headline `-0.020 → +0.208` rests on it.** That number cannot be earned live as written. |
+| B3 | `lr_v2.py:780` `strand_rescue` | ~~Off the live exit path.~~ **CORRECTED 0709: it IS on the live path.** `strategy.py:81` wraps `lr_exit_v2` in `strand_rescue`, and `:92` treats `'strand'` as a real exit. It is not *inside* `lr_exit_v2`, which is what I read, and I stated "off the live path" with confidence on that basis. Whether a rescue can be *executed* live (the SL order already went out at bar `k < T`) is **open and unexamined**. |
 | B4 | `lr.py:161` `lr_setups` | Closed `_line` read. v1 machine, not on the `ad` path. Off-path, not wrong. |
 
 ### C. Settled — verified clean, do not re-litigate
@@ -83,6 +83,24 @@ quietly disagreeing with the spec since 0704. The 20–50s `s15a` lag is underst
 - **Causal forward loops** (act at the first fire, or at `max()` of both fires): `gate_open`, `_finish`, `fin_gate`, `q1_gate`, `lr_exit_v2`, `v2_arm`'s `[::-1]` cap builder.
 - **Harness-by-design, forward on purpose**: `lr_walk` (MFE/MAE), `bracket_walk`, `bl_grind` scoring, `find_pivots`, `outcome_walker`, `profit_partition`. Correctly quarantined under `jig.score.*`.
 - **`closed` mode is not "future" at the live edge** — it is *stale*. It leaks only in the vectorized backtest, via A4. So the `emerging` mandate buys **backtest honesty**, not live safety.
+
+### E. Execution-layer misalignment — found 0709 while hunting "the bleed"
+
+The arbiter (align components with o9-live) is **necessary but not sufficient**: the backtest and live can agree
+on every arm/gate/trade event and still produce opposite PnL, because the divergence lives *downstream* of the
+producer. Live nets **−$144 over 13 trades**; `v2_walk` nets **+133.97% over 42d**.
+
+| # | Site | Finding |
+|---|---|---|
+| E1 | `strategy.py:92` | **Stack-close.** One reversal exit for a side closes that side's **whole stack**. The backtest gives every entry its **own** exit bar. Evidence: `0709_02/03/04` (Buy) all exit at `0.14365786`; `0709_10/11/12` (Sell) all exit at `0.14496807`. **This is not a live bug — Bybit hedge mode has ONE position per `positionIdx`.** You cannot exit leg 3 and hold leg 1. So `v2_walk`'s +133.97% is priced on 2,628 independent exits a real account cannot take. Same family as the ~18% pseudo-hedge premium, different mechanism, on the exit. |
+| E2 | `replay.py:35` | Replays **`v2_walk`**, not `v2_walk_ad`. Live runs `O9_PRODUCER=ad`. Every conclusion drawn from `replay.py` describes a machine we do not run. |
+| E3 | `replay.py:44` | `truncate=True` **by default**, and it `TRUNCATE`s `fx_fill`/`fx_order`/`fx_position`. Pointed at `o9_live` it wipes the paper account's exchange tables while `o9_ledger` survives ⇒ silent desync. Not yet fired. |
+| E4 | `o9_trade_archive.mae` | `NULL` on all 13 rows. The column exists; the loop never fills it. Blocks any MAE analysis on **live** data. |
+| E5 | stack arithmetic | Duplicated: `replay.py` (DB-backed, MatchingEngine, one-way, `v2_walk`) and `risk_stack_dist.py` (in-memory mirror, `v2_walk_ad`). **Two implementations of one mechanism** — in a branch whose whole theme is exactly that. Resolution: extract one pure `stack_model` (Joe: option (i), 0709). |
+
+**The bleed, localised.** Losers match (live −0.94% vs backtest stop 0.90%, SL rates 46% vs 40%). **Winners do
+not**: backtest signal-exits average **+1.060%** (MFE p50 1.225%); live's best of 13 is **+0.36%**. Live gives up
+≈0.8% per winner — and E1 is the mechanism.
 
 ### D. Open design questions (Joe's call, not resolved)
 
@@ -194,6 +212,70 @@ inherits the legacy leak.**
 
 **Status.** Module written. `lp_align_close_stamp` **not yet seeded**; `load(db)` **not yet called** from any
 entry point. Call sites to be agreed before wiring — that is where the silent-inherit risk actually lands.
+
+---
+
+---
+
+## Part 3 — Experiment log (thesis BEFORE, outcome AFTER)
+
+Process rule (Joe, 0709): **write the thesis before running, write the outcome after.** A prediction recorded
+after the fact is not a prediction. This section exists because five findings accumulated across a stretch of
+turns without reaching the register — the failure mode that loses a session's knowledge.
+
+### X1 · Q2 — "is `fin_unlatch` harmful?" · RUN 0709
+
+**Thesis (Joe):** *if there is a grouping of high MAE in M1, it might be.* My prior: M1 is the off-spec path, so
+I expected it to look worse.
+
+**Outcome — REFUTED, and inverted.**
+```
+M1 (arm-gated)   n=1747  net=+150.94%  win=52.3%  MAE p50=0.640% p90=0.994%  stopped 39.9%
+M2 (post-gate)   n= 881  net= -16.97%  win=50.1%  MAE p50=0.639% p90=1.005%  stopped 40.1%
+```
+**No MAE grouping.** Distributions identical to 3 d.p.; stop rates match. And the sign inverts: **M1 carries the
+entire book; M2 is net-negative.** Joe's premise — *"if the arm is late, we don't want to miss a trade"* — is the
+edge. My "should M1 exist" instinct would have deleted the profitable half of the machine. **Do not revisit
+without new evidence.**
+
+### X2 · Q1 — where is the bleed? · RUN 0709
+
+**Thesis:** the exit surrenders excursion. **Outcome — CONFIRMED, and localised to E1** (see section E). The
+losers match; the winners are cut to ~1/4 by the stack-close.
+
+### X3 · stack-close × governor 2×2 · PRE-REGISTERED, NOT YET RUN
+
+**Design.** One replay, two flags, over 42d on `v2_walk_ad` (the shipping producer):
+
+|  | per-leg exit | stack-close |
+|---|---|---|
+| **no governor** | current backtest baseline | what live does today |
+| **governor (first-leg)** | isolates the governor | the proposed live machine |
+
+`tol` swept `{0, 0.05%, 0.10%, 0.20%, 0.30%}` → winner lands in `risk_config`. Never hardcoded.
+
+**Governor rule (Joe, reference = (a) FIRST leg).** A new leg is allowed iff
+`entry_px <= first_leg_px * (1 + tol)` (short) / `>= first_leg_px * (1 - tol)` (long). Per side
+(`positionIdx`). Reference resets when the side goes flat.
+
+**My thesis, before running:** the governor matters **more** under stack-close.
+
+**Joe's correction, which sharpens it and which I had wrong:** *that is true only for a bad entry.* Adding into
+drawdown **amplifies a good entry** — a short at 0.1000 then 0.1010, with price falling to 0.0990, earns *more*
+on the later leg. Martingale cuts both ways.
+
+**Therefore the real thesis:** the governor is a **variance-reducer**. It improves expectancy **only if the
+drawdown-added legs carry negative expectancy on their own.** It necessarily caps the upside of good entries. So
+the 2×2 is not "does the governor help" — it is **"does entry quality survive the legs the governor would
+block?"** If the blocked legs are net-positive, the governor is a *cost* we pay for tail safety, and that
+trade-off must be named, not hidden inside a PnL number.
+
+**Falsifiable predictions:**
+1. Stack-close alone collapses the +133.97% materially (E1 is real).
+2. Governor(tol=0) reduces gross exposure and drawdown in both exit columns.
+3. **Unknown, and the point of the experiment:** the sign of governor-on-net under stack-close.
+
+**Outcome:** _(to be written after the run — do not leave blank)_
 
 ---
 
