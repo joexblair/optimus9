@@ -1,7 +1,7 @@
 """replay — drive the v2 producer's trades through the REAL sizer + fake-exchange fill/store, to
 populate o9_live.fx_* (the path to the first trade on the UI, and a stack-validation harness).
 
-Batch (not per-bar) for speed: run v2_walk + lr_exit_v2 + strand_rescue once → open/close events →
+Batch (not per-bar) for speed: run v2_walk_ad + lr_exit_v2 + strand_rescue once → open/close events →
 route each through PositionSizer → MatchingEngine (OrderBookWalker fill + FxStore). A synthetic book
 stands in for the live OrderBookFeed (real book-walk cost arrives with the WS feed). One-way: an entry
 opens/adds; the first exit while holding closes the net. Equity compounds realized PnL (for dynamic5x).
@@ -9,7 +9,7 @@ opens/adds; the first exit while holding closes the net. Equity compounds realiz
 from __future__ import annotations
 
 import bias_machine as bm
-from optimus9.analysis.lr_v2 import v2_walk, lr_exit_v2, strand_rescue
+from optimus9.analysis.lr_v2 import v2_walk_ad, lr_exit_v2, strand_rescue
 from optimus9.live.sizing import PositionSizer, TradeIntent
 from services.fakeapi.fill import OrderBookWalker
 from services.fakeapi.store import FxStore
@@ -32,7 +32,8 @@ def replay(strat_db, store_db, bias_cfg, lr_cfg, symbol, end_ms, mode="fixed", m
     # strat_db = the tape (pk_optimizer, until the collector fills o9_live); store_db = o9_live fx_*
     db = store_db
     W = bm.BiasWindow(strat_db, end_ms, cfg=bias_cfg, lean=True)
-    ent = v2_walk(W, lr_cfg)
+    ent = v2_walk_ad(W, lr_cfg)                        # the SHIPPING producer (O9_PRODUCER=ad). Was v2_walk:
+                                                       # this tool replayed a machine we do not run (register E2)
     exd = {x[0]: x for x in strand_rescue(W, lr_cfg, ent, lr_exit_v2(W, lr_cfg, ent, predict=False))}
 
     events = []                                        # (t, kind, bd, price)

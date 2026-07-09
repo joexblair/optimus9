@@ -93,10 +93,16 @@ producer. Live nets **−$144 over 13 trades**; `v2_walk` nets **+133.97% over 4
 | # | Site | Finding |
 |---|---|---|
 | E1 | `strategy.py:92` | **Stack-close.** One reversal exit for a side closes that side's **whole stack**. The backtest gives every entry its **own** exit bar. Evidence: `0709_02/03/04` (Buy) all exit at `0.14365786`; `0709_10/11/12` (Sell) all exit at `0.14496807`. **This is not a live bug — Bybit hedge mode has ONE position per `positionIdx`.** You cannot exit leg 3 and hold leg 1. So `v2_walk`'s +133.97% is priced on 2,628 independent exits a real account cannot take. Same family as the ~18% pseudo-hedge premium, different mechanism, on the exit. |
-| E2 | `replay.py:35` | Replays **`v2_walk`**, not `v2_walk_ad`. Live runs `O9_PRODUCER=ad`. Every conclusion drawn from `replay.py` describes a machine we do not run. |
-| E3 | `replay.py:44` | `truncate=True` **by default**, and it `TRUNCATE`s `fx_fill`/`fx_order`/`fx_position`. Pointed at `o9_live` it wipes the paper account's exchange tables while `o9_ledger` survives ⇒ silent desync. Not yet fired. |
+| E2 | `replay.py:35` | Replayed **`v2_walk`**, not `v2_walk_ad`. Live runs `O9_PRODUCER=ad`. Every conclusion ever drawn from `replay.py` described a machine we do not run. **FIXED 0709** (Joe: *"referring to v2_walk is an error on my side"*). |
+| E3 | `replay.py:31,46` | `truncate=True` **by default** → `TRUNCATE`s `fx_fill`/`fx_order`/`fx_position`. **Its own `__main__` sets `cfg["database"]="o9_live"`**, so `python3 optimus9/live/replay.py` wipes the live paper account's exchange books. `o9_ledger` survives ⇒ the loop reads *flat* from the (authoritative) exchange and opens on top of trades it still believes it holds; sizing runs off a fictional equity; orphaned ledger rows never close or archive; the recon guardrail reports a mismatch it can never resolve. **Fails silently.** OPEN — needs Joe. |
 | E4 | `o9_trade_archive.mae` | `NULL` on all 13 rows. The column exists; the loop never fills it. Blocks any MAE analysis on **live** data. |
-| E5 | stack arithmetic | Duplicated: `replay.py` (DB-backed, MatchingEngine, one-way, `v2_walk`) and `risk_stack_dist.py` (in-memory mirror, `v2_walk_ad`). **Two implementations of one mechanism** — in a branch whose whole theme is exactly that. Resolution: extract one pure `stack_model` (Joe: option (i), 0709). |
+| E5 | stack arithmetic | ~~Duplicated in `replay.py` and `risk_stack_dist.py`.~~ **CORRECTED 0709:** `replay.py` does **not** duplicate it — it *calls* `MatchingEngine`. I listed it as a copy from a skim of its docstring. The only hand-rolled mirror is **`risk_stack_dist.py`**. Resolution: `stack_model` extracted (`3004d33`); repoint `risk_stack_dist.py` at it. **Deeper, unresolved:** should `MatchingEngine` itself call `stack_model`, so there is truly one implementation? Touches the paper exchange. |
+| E6 | `replay.py:58` | **One-way harness** (`store.open_leg(symbol)`, `idx=None`; *"opposite side while holding — skip"*). Live is **hedge mode** since 0709 and holds two independent legs. `replay.py` cannot represent the machine it is meant to validate. |
+
+**Ownership, for the record** (`app.py:52`, `ledger.py:1`, `store.py:3`): `fx_order`/`fx_fill`/`fx_position` are
+**the exchange's truth** and are **authoritative** for the live position — the loop reads its position back from
+them. `o9_ledger` is **o9-live's own bookkeeping** (what our bot observed) and drives the UI + sizing. Two
+independent books, reconciled against each other. That is the whole point, and it is what E3 destroys.
 
 **The bleed, localised.** Losers match (live −0.94% vs backtest stop 0.90%, SL rates 46% vs 40%). **Winners do
 not**: backtest signal-exits average **+1.060%** (MFE p50 1.225%); live's best of 13 is **+0.36%**. Live gives up
