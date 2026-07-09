@@ -212,7 +212,11 @@ CREATE TABLE fx_fill (
 CREATE TABLE o9_decision (                                 -- o9-live's per-5s output (to test the strategy output)
   decision_id   BIGINT AUTO_INCREMENT PRIMARY KEY,
   kline_ms      BIGINT NOT NULL,                          -- the 5s bar decided on
-  action        ENUM('open_long','open_short','add','close','hold') NOT NULL,
+  -- 'close_leg' = option-B per-leg SL close (app.py:76); 'reduce' = partial reduceOnly (app.py:67).
+  -- Both were emitted by the code and ABSENT from this enum -> every per-leg SL close raised
+  -- 1265 "Data truncated for column 'action'", which propagated out of _execute and silently
+  -- skipped the remaining intents on that bar. Found 0709 by the arm-probe recon monitor.
+  action        ENUM('open_long','open_short','add','close','close_leg','reduce','hold') NOT NULL,
   reason        VARCHAR(60),                              -- cf15_finisher | sl_hit | exit_signal | ...
   order_id      VARCHAR(40),                              -- order it triggered (NULL for hold)
   line_snapshot JSON,                                     -- W.line values at decision (audit/debug)
