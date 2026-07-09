@@ -389,6 +389,64 @@ window and same-bar arms collapse in the dict. `matched` and `live-only` are the
 producer does, so live's arm (clamped `cap<=T+1`) *is* the arm under test. Live's arm events and its trades
 become the same series ⇒ 1:1 reconcilable against the backtest's arms.
 
+### X7 · THE FIX · `arm_delay` rebuilt to the spec · 0709 · `e10b856`
+
+**docs/arm_delay_research.md, "The mechanic (Joe's spec)"** — the BASE clause was never built. `arm_delay`'s own
+docstring admitted it: *"the spec's unconditional 'base = s5m reversal' for non-big-leg is NOT here."*
+
+> **A breach is never an arm.** It creates a candidate, nothing more.
+> The candidate's trigger is the **s5m reversal**. When that reversal arrives:
+>   - **big leg visible at that moment** → don't fire. **Hold**, and the trigger becomes the **s5Mage reversal**.
+>   - **no big leg visible** → the arm **fires there**, at the s5m reversal.
+>
+> The big-leg clause is a conditional **postponement** of the base trigger, not an alternative to it. Nothing
+> races. Nothing scans forward. The big leg is read at the reversal bar, from the past. Further breaches while a
+> candidate is pending on that side change nothing — same excursion, same candidate. Opposite-side s5m breach
+> cancels (spec §1). `cap` is gone.
+
+**Confirmed** (`arm_spec_confirm.py`, 07-06 20:30–21:35): arms = `20:59:55`, `21:24:25`, `21:29:40`. The six
+breach arms **ALL GONE**. Window-invariance **tested, not assumed**: 12 truncation points, **0 mismatches**.
+Full-window arms 1150 → 464.
+
+**Three wrong turns before it, all the same bias** — I kept trying to let the six survive in some form
+(reschedule → hold → squash-later). Each preserved the arm. A breach is not an arm.
+
+### X8 · s7M big-leg latch fires on an EMERGING wick · FOUND 0709 · PARKED (Joe: "tomorrow")
+
+Joe: *"s7Mage doesn't go OOB es until 2217."* True — **on the closed line**. Measured:
+```
+21:28:50   closed s7M: epoch 79.61 / midnight 78.20     emerging s7M: 85.24   <- gate reads this
+21:29:00   closed 78.40 / 78.20                          emerging 84.59
+22:17:00   closed 87.97 / 106.42                         emerging 92.97
+```
+The forming 7-min bar poked **0.24** above the 85 boundary and **closed back at 78.40**. `oob_2_oob` **latched**
+on that wick (`d7h`), and the latch persists until `s7M` returns ≤15. So the big leg at 21:28:50 rests on a
+transient emerging touch the bar never confirmed. **Causal — but possibly wrong.**
+
+Not the anchor: epoch vs midnight differ by −1.41 at that bar (though **+18.45** at 22:17 — the non-divisor 7m
+anchor is wild elsewhere, its own problem).
+
+**Open:** should a *latching* impulse detector latch on an emerging touch? Options: require a **closed** OOB
+(stale, not future ⇒ still live-legal), or require the emerging touch to persist N bars. Both testable.
+
+Also: in that window the leg lapsed **before** the s5m reversal at 21:29:40, so **all three arms fired on the
+base clause**. The hold path is **untested** by this window — find one where the leg is visible *at* a reversal.
+
+### X9 · Overnight recon · RUNNING 0709
+
+- `o9_live` runtime tables truncated (**config tables preserved** — `o9_live` holds `indicator_configs`,
+  `lp_config`, `lr_gate*`, `trading_pairs`; a literal `TRUNCATE ALL` would have wiped the line definitions).
+- Loop restarted on `causal/lookahead`, `O9_PRODUCER=arm`, `O9_DELAY_MS=2000`, equity `$500`.
+- `recon_arm_daemon.py` → `o9_recon` (52 cols: 21 lines × open/close + metadata). Per arm event it records the
+  line values at the bar's open (bar−1 close) and close, then re-derives the previous row from the klines **as
+  they are now**, window pinned to the same bar ⇒ any diff is the TAPE moving, not window growth.
+- Each pass it also diffs the backtest arm set. **After the causal fix an arm must NEVER disappear.** If one
+  does, something still reads the future — logged as `ARM-DRIFT`.
+- Monitor greps `DISCREPANCY|ARM-DRIFT|ERROR|Traceback|SKIP`.
+
+**Method (Joe):** *"always try to add more free dimensions when testing, you never know what you'll find."*
+open+close = two samples per bar; arm-triggered trades = a second, independent confirmation of the same event.
+
 **METHOD TRAP (cost one run).** `o9_state_log.kline_ms` is the **decision instant**, not the bar:
 `driver.py:41` → `now_ms = ts + bar + delay`. The acted bar is **one bar below the floor**. Flooring naively
 gives ~100% mismatch with every pair exactly 5s apart — reads as total divergence, is an off-by-one.
