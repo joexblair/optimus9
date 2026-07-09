@@ -99,6 +99,80 @@ R1+R2+R3               763  -135.78%  -0.1780%   44.7%    54.3%    44.7%   -0.21
 
 ---
 
+---
+
+## 4. Stop width — no width saves this book
+
+`stop_sweep_causal.py`. Entries computed once; only the exit varies. `lr.sl = 0.90%` was swept against the
+look-ahead book.
+
+**Prediction (before the run):** the stops sit hard against the boundary (MAE p90 `1.015%` vs a `0.90%` stop).
+Widening to `1.1-1.3%` should convert stops into signal exits and lift the mean, then degrade once the converted
+losers cost more than the recovered winners.
+
+**REFUTED.** No optimum. The mean improves monotonically as the stop widens, and the best row is the stop off.
+
+```
+stop%      n       net       mean      win%    be%    stop%   avgW     halves (mean)
+0.50    3308   -569.80%  -0.1722%   31.7%   41.3%   65.1%  +1.053%  -0.1796 / -0.1649
+0.70    3308   -585.20%  -0.1769%   37.4%   46.5%   57.1%  +1.046%  -0.1767 / -0.1771
+0.90    3308   -572.73%  -0.1731%   42.1%   50.4%   49.8%  +1.038%  -0.1761 / -0.1702
+1.10    3308   -537.21%  -0.1624%   45.6%   52.9%   43.4%  +1.039%  -0.1808 / -0.1440
+1.30    3308   -518.34%  -0.1567%   47.9%   54.8%   37.9%  +1.038%  -0.1917 / -0.1217
+1.50    3308   -516.93%  -0.1563%   49.5%   56.1%   33.2%  +1.035%  -0.1970 / -0.1155
+2.00    3308   -466.35%  -0.1410%   51.8%   57.6%   23.4%  +1.037%  -0.1949 / -0.0871
+3.00    3308   -454.58%  -0.1374%   53.3%   58.8%   12.8%  +1.026%  -0.1911 / -0.0838
+off     3308   -423.00%  -0.1279%   53.7%   58.8%    0.0%  +1.031%  -0.1662 / -0.0896   <- ceiling, never a config
+```
+
+- `0.90%` is not even a local optimum; `0.70%` is worse than both neighbours. The surface is noisy below 1%.
+- **With no stop at all the book still loses `-0.1279%` per trade.**
+- Win rate climbs `31.7% -> 53.7%`; breakeven climbs `41.3% -> 58.8%`. The losers absorb whatever the stop
+  stops absorbing.
+- Second halves improve as the stop widens while first halves worsen. **The book is not stationary across 42d.**
+
+---
+
+## 5. Arm at the 5-minute seam — removes trades, not deficit
+
+`seam_arm_ab.py`. Joe: *measure the s5m breach at the 5-minute emerging bar seam, not the first 5s bar that
+breached.* Only the `s5m` arm is re-sampled; the `s5r` divergence arm is untouched. 1-min and 2-min seams added
+to test whether any effect scales with the seam or appears only at one width.
+
+**Prediction (before the run):** fewer entries; median adverse excursion falls; average winner stays pinned near
+`+1.03%`; mean improves but stays negative.
+
+**Entries fell as predicted. Nothing else moved.**
+
+```
+                 n      net       mean      win%   be%   stop%   avgW      avgL      MAE p50
+every 5s bar   3309  -573.19%  -0.1732%  42.1%  50.4%  49.8%  +1.038%  -1.055%   0.895%
+1-min seam     2981  -547.09%  -0.1835%  41.9%  50.7%  50.1%  +1.027%  -1.058%   0.900%
+2-min seam     2791  -503.70%  -0.1805%  42.0%  50.6%  50.1%  +1.033%  -1.056%   0.900%
+5-min seam     2601  -451.16%  -0.1735%  42.3%  50.6%  49.8%  +1.032%  -1.056%   0.890%
+```
+
+- Entries `3309 -> 2601` (−21%). Mean per trade `-0.1732% -> -0.1735%`. The 1-min and 2-min seams are **worse**
+  than both ends — no monotone trend, so no mechanism.
+- **Median adverse excursion unchanged** (`0.895% -> 0.890%`). Entry quality did not lift.
+- The 708 entries the seam removes have the same expectancy as the ones it keeps.
+
+---
+
+## The invariant
+
+`avgW` has now held at **`+1.03%`** across:
+- 9 stop widths, including no stop at all
+- 4 arm samplings (5s, 1min, 2min, 5min seams)
+- 6 entry-state filters (`entry_state_filter_ab.py`)
+
+**Nothing moves the average winner.** `[measured]` The exit caps it.
+
+**PARKED (Joe, 0709):** revisit after the correct arm-delay spec exists. Until then, entry-side work on this
+book measures the same invariant from new angles.
+
+---
+
 ## What this bounds, and what it leaves open
 
 **Bounded (do not repeat):**
@@ -108,12 +182,16 @@ R1+R2+R3               763  -135.78%  -0.1780%   44.7%    54.3%    44.7%   -0.21
 - `breach_rev` as a stand-alone entry gate. `[measured]` no signal at any line.
 - The hb33 bias filter (`entry.md` §5). `[measured]` worse than baseline under both alignment stamps.
 
+**Also bounded (added after the stop and seam sweeps):**
+- Stop width, `0.5%` to no stop. `[measured]` no optimum; the book loses at every width.
+- Arm sampled at the 1 / 2 / 5-minute seam. `[measured]` removes 21% of entries, moves the mean by 0.0003%.
+
 **Open:**
 - The states are informative about **which exit fires** while being uninformative about **money**. A rule that
   cuts cheap stops also cuts fat winners. Any robust solution must separate those two, not trade one for the
   other.
 - Multivariate combinations were not tested. 84 single states were screened; interactions were not.
-- The stop is `0.90%` and 49.9% of trades hit it. That width was swept against the look-ahead book. With
-  `avg winner +1.038%` and `avg loser -1.055%` nearly symmetric, a trade converted from stop to signal-exit is
-  worth roughly two units. **Not yet swept on the causal book.**
+- **The exit caps the winner at `+1.03%`.** Every entry-side lever tried so far runs into that ceiling. The
+  next question is whether the ceiling is the exit signal's timing or the exit signal itself. **Not yet tested.**
 - Entry TIMING (when within the setup) was not varied. Only entry SELECTION (which setups) was.
+- **Blocked on the correct arm-delay spec (Joe, 0709).** Entry-side work resumes when it exists.
