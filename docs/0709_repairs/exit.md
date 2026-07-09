@@ -7,7 +7,7 @@ Milestones the bot must pass to be profitable. Source: the 0709 live arm probe (
 |---|---|---|
 | **winners** | 8, all from an *opposing* arm's stack-close. **No profit mechanism exists.** | The arm alone has no edge. Expected — no gate, no finisher. |
 | **stack-close** | One reversal exit closes the side's **whole** stack. Costs **35%** of the backtest book. | Not a bug — Bybit hedge mode holds ONE position per `positionIdx`. |
-| **exit attribution** | 8 winners, only **4** `close` decisions recorded. | 20 lost audit rows ⇒ we cannot say what closed 4 winners. |
+| **exit attribution** | **Recovered.** `exit_order_id` cardinality encodes the mechanism. All 8 winners = the 3 stack closes (+1 near-flat). | None. The audit row was a convenience, not the record. |
 
 ---
 
@@ -62,14 +62,31 @@ A third of `v2_walk`'s edge was priced on 2,628 independent exits a real account
 
 ---
 
-## 3. Exit attribution is missing
+## 3. Exit attribution — RECOVERED
 
-**[measured]** 28 closes. `o9_decision` holds `close: 4` and **zero** `close_leg` (the enum rejected them —
-see `misc.md`). 8 winners exist; only 4 stack-closes were recorded. **We cannot attribute 4 winners' exits.**
+`exit_order_id` **cardinality** encodes the mechanism, independent of the audit table. A stack close places ONE
+order for the whole side (`record_close_side`), so N legs share one `exit_order_id`. A per-leg stop places its
+own order (`record_close_leg`), so it appears alone.
 
-That is the concrete cost of the schema bug: not lost trades — **lost causality of the exits**.
+**[measured]** 24 exit orders closing 28 legs:
+```
+ 3 orders closed >1 leg  -> STACK CLOSES: 2 + 2 + 3 legs
+                            net +149.46 (10:49:27) · +192.33 (12:50:07) · +238.78 (15:55:27)   ALL WIN
+21 orders closed  1 leg  -> 20 losses (the stops) + 1 near-flat win (+0.09, 11:32:37)
+```
 
-**Proposed fix:** run `migrate_decision_action.py`, then re-run any probe whose exit attribution matters.
+**All 8 winners are the 7 legs inside the 3 stack closes, plus one $0.09 single-leg close.** Nothing is missing.
+
+`3 multi-leg closes + 1 single-leg close = the 4 recorded 'close' decisions.` The arithmetic was always
+consistent — an earlier reading compared a count of *decisions* against a count of *trades*, and a stack close
+is **one decision closing N legs**.
+
+**The finding underneath:** every real winner in 7h40m came from being **interrupted by an opposing arm**. The
+machine has no mechanism of its own for banking a profit. 20 of 28 closes (71%) were stops.
+
+**Proposed fix:** run `migrate_decision_action.py` so the audit is complete — but note the record was
+reconstructible without it. Do not treat `o9_decision` as the source of truth for exit mechanism; the order
+cardinality is.
 
 ---
 

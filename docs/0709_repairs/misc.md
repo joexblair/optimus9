@@ -42,8 +42,13 @@ action ENUM('open_long','open_short','add','close','hold')      -- before
 skipped** — with hedge legs, a stop on one side can silently drop an open on the other. The position itself
 closes (`record_close_leg` runs *before* `log_decision`), so **no trade was lost**: 38 arms → 38 trades.
 
-**What it did cost:** exit *attribution*. 28 closes, 8 winners, and `o9_decision` records only `close: 4`.
-**We cannot say what closed 4 of the winners.**
+**What it did cost: nothing recoverable.** `[measured]` The exit mechanism is encoded in `exit_order_id`
+cardinality — a stack close places ONE order for the whole side, a per-leg stop places its own. 24 exit orders
+closed 28 legs: **3 orders closed >1 leg (the stack closes, all 3 winners), 21 closed a single leg (20 stops +
+1 near-flat win)**. All 8 winners attributed without the audit table.
+
+`20 per-leg SL closes = 20 errors.` Exact match, no residue. `3 multi-leg + 1 single-leg = the 4 recorded
+'close' rows.` The audit row is a convenience; **the order cardinality is the record.**
 
 **Proposed fix (staged, NOT run — Joe's call):**
 ```
