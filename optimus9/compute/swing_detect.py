@@ -29,10 +29,19 @@ def find_pivots(price: np.ndarray, pct: float = 0.9) -> list:
         return []
     thr = pct / 100.0
     pivots = []
-    hi_i = lo_i = ext_i = 0
+    # Seed at the first FINITE bar, and skip non-finite bars in the walk. Seeding at index 0 when price[0] is
+    # NaN made every comparison against the running extreme False, so `trend` never left 0 and the function
+    # returned [] SILENTLY — a warmup prefix of 2 NaNs was enough (Joe 0709).
+    fin = np.flatnonzero(np.isfinite(price) & (price > 0))
+    if fin.size < 2:
+        return []
+    start = int(fin[0])
+    hi_i = lo_i = ext_i = start
     trend = 0                                    # 0 undecided, +1 rising, -1 falling
-    for i in range(1, n):
+    for i in range(start + 1, n):
         p = price[i]
+        if not np.isfinite(p) or p <= 0:
+            continue
         if trend == 0:
             if p > price[hi_i]:
                 hi_i = i
@@ -55,8 +64,8 @@ def find_pivots(price: np.ndarray, pct: float = 0.9) -> list:
 
     if trend != 0:
         pivots.append((int(ext_i), 'H' if trend == 1 else 'L'))
-    if pivots and pivots[0][0] != 0:
-        pivots.insert(0, (0, 'L' if pivots[0][1] == 'H' else 'H'))
+    if pivots and pivots[0][0] != start:
+        pivots.insert(0, (start, 'L' if pivots[0][1] == 'H' else 'H'))   # anchor at the first FINITE bar, not 0
     return pivots
 
 

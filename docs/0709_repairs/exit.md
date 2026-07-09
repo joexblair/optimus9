@@ -90,6 +90,39 @@ cardinality is.
 
 ---
 
+---
+
+## 3b. The exit is SOUND — settled 2026-07-09
+
+`pivot_entry_ceiling.py`. Hand the same exit machine a hindsight-perfect entry (`swing_detect.find_pivots`, a
+pivot is confirmed only after price moves `pct%` away, so this is a ceiling and never a strategy). 42d, breach
+arm, same stop, same cost.
+
+```
+                    n      net       mean      win%   stop%   avgW      avgL     MFE_in p50  capture p50
+v2 entries        3308  -576.82%  -0.1744%  42.0%  49.8%  +1.040%  -1.054%    0.733%      -0.403
+pivots 0.5%       5708  +1776.54% +0.3112%  59.9%  35.4%  +1.251%  -1.091%    1.278%       0.321
+pivots 0.9%       2065  +1457.69% +0.7059%  70.5%  27.4%  +1.485%  -1.153%    1.693%       0.527
+pivots 1.5%        811  +1021.11% +1.2591%  83.8%  14.9%  +1.724%  -1.156%    2.093%       0.637
+```
+
+- **`avgW` is NOT capped by the exit.** It moves `1.040 -> 1.251 -> 1.485 -> 1.724` as the entry improves,
+  monotonically across all three thresholds. The earlier claim — *"the exit caps the winner at ~1%"* — is
+  **refuted**. The invariant across 19 configurations was an artefact of every one of them producing the same
+  poor entries.
+- Stop rate falls `49.8% -> 14.9%`. On a correct entry the `0.90%` stop is rarely reached.
+- The v2 entries see less than half the favourable excursion a pivot entry sees (`MFE_in` p50 `0.733%` vs
+  `2.093%`).
+
+**The exit and the stop are not the deficit. The entry is.** Entry-side work lives in `entry_selection.md`.
+
+**Method note:** an earlier run measured `capture` (realized / best-excursion-in-trade) and post-exit excursion
+and drew conclusions from them. Both are **maximum statistics and positively biased by construction** — the
+maximum of any price path from any starting point is at or above zero. They were not used as evidence. The
+pivot ceiling supplied the control instead.
+
+---
+
 ## 4. Carried forward from the exit work (not re-measured on the new arm)
 
 - **[measured]** Curl-cascade (gate `s7r` breach-then-OOB-curl @105s + unlatch `s5r` coarse-curl @40s) = **+1.4%**

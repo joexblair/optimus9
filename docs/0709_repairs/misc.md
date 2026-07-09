@@ -77,6 +77,24 @@ before its output is treated as evidence.**
 
 ---
 
+## 3b. `find_pivots` returned `[]` on any series with a leading NaN — FIXED 2026-07-09
+
+**[read]** `swing_detect.find_pivots` seeded its running extremes at index 0. `BiasWindow.px` carries **2 NaN
+warmup bars**, so every comparison against the running extreme was `False`, `trend` never left 0, and the
+function returned an **empty list with no error**. Two bars were enough.
+
+`[measured]` On the cleaned 42d array: **2,065 pivots** at the 0.9% threshold. Before the fix: **0**.
+
+Fixed by seeding at the first finite bar, skipping non-finite bars in the walk, and anchoring the prepended
+pivot at that bar rather than index 0. Verified: identical pivots with and without a leading NaN, offset by the
+skipped bars. Suite 205 pass.
+
+**Consumers to re-check:** `lr_walk` (MFE/MAE entry-quality scoring), `bl_grind`'s swing scoring,
+`swing_mask`, `compare_pivots`, the gate-sweep Stage-0 labels. Any of them that passed a raw window read an
+empty pivot list. **Whether any live number was affected is unmeasured.**
+
+---
+
 ## 4. Tooling defects found while auditing
 
 | id | site | state |

@@ -173,6 +173,94 @@ book measures the same invariant from new angles.
 
 ---
 
+---
+
+## 6. Where the arm sits, and what waiting costs — 2026-07-09
+
+`pivot_causal_lag.py` · `arm_delay_sweep.py`. Reference points on one axis, all 42d, breach arm, same exit,
+cost 0.20%:
+
+```
+enter at a 0.9% swing pivot (hindsight)     mean +0.7071%   win 70.5%
+enter at that pivot's confirmation (legal)  mean -0.2246%   win 35.2%   toll = the 0.930% price penalty
+enter at the v2 arm                         mean -0.1745%   win 42.0%
+```
+
+**The v2 arm fires ~24 minutes and ~0.7% before the turn it is aiming at.** Symmetric on both sides:
+```
+v2 long  entries vs nearest 0.9% pivot (n=1684): 286 bars (24.0 min) early, price penalty p50 +0.696%, p90 +2.324%
+v2 short entries vs nearest 0.9% pivot (n=1623): 297 bars (24.8 min) early, price penalty p50 +0.639%, p90 +2.338%
+```
+
+**Confirmation is a fixed toll equal to the threshold.** Price penalty p50 `0.526%` / `0.930%` / `1.533%` for
+`pct` = 0.5 / 0.9 / 1.5, and all three books land within `0.008%` of each other (`-0.2229` / `-0.2246` /
+`-0.2166`). A 3× change in swing size moves nothing. **Waiting for a pivot to prove itself is worse than the
+v2 arm's 24-minute error.**
+
+**A fixed delay does not recover it.** Shift every v2 entry forward by D minutes:
+```
+D        0min      2      5     10     15     20     24     30     40     60
+mean  -0.1742  -.1954 -.1907 -.1935 -.1870 -.1752 -.1853 -.1901 -.1965 -.2072
+avgW  +1.039   +1.006 +1.000 +0.960 +0.914 +0.889 +0.874 +0.817 +0.843 +0.791
+avgL  -1.055   -1.031 -1.007 -0.986 -0.960 -0.945 -0.907 -0.887 -0.854 -0.862
+```
+`D=0` is the best row. No peak at 24 minutes, no peak anywhere. Delay compresses both sides of the trade; it
+does not select a better one. **The 24-minute gap is a median with no per-trade information in it.**
+
+---
+
+## 7. THE DEFICIT IS SELECTIVITY, NOT TIMING — 2026-07-09
+
+`detector_toll.py`. Every causal turn-detector already in `lr_v2`, scored two ways: a book built from its
+fires, and its toll against the 2065 pivots at 0.9%.
+
+```
+=== BOOK: enter at every fire ===
+  s5m rev wob2     n=175048  mean=-0.2128%  win=38.6%
+  s5m rev wob7     n= 16869  mean=-0.2069%  win=38.6%
+  s5M rev wob1     n=294498  mean=-0.2071%  win=38.9%
+  s5M rev wob2     n=174649  mean=-0.2128%  win=38.5%
+  s5M rev wob7     n= 16824  mean=-0.2072%  win=38.4%
+  s2M rev wob1     n=295884  mean=-0.2072%  win=38.9%
+  s5r curl 40s     n= 39287  mean=-0.2143%  win=38.7%
+  s7r curl 105s    n= 16501  mean=-0.2166%  win=38.3%
+
+=== TOLL vs the 2065 pivots (reference: confirmation lag 7.4 min, penalty +0.930%) ===
+  s5m rev wob2     matched 2065/2065   lag p50 0.2 min   penalty p50 +0.129%
+  s5M rev wob1     matched 2062/2065   lag p50 0.1 min   penalty p50 +0.059%
+  s2M rev wob1     matched 2064/2065   lag p50 0.1 min   penalty p50 +0.057%
+  s5r curl 40s     matched 2064/2065   lag p50 1.2 min   penalty p50 +0.343%
+  s7r curl 105s    matched 2063/2065   lag p50 2.8 min   penalty p50 +0.480%
+  s5m rev wob7     matched 2055/2065   lag p50 4.2 min   penalty p50 +0.532%
+  s5M rev wob7     matched 2050/2065   lag p50 4.3 min   penalty p50 +0.540%
+```
+
+**The detectors are not late.** `s5M rev wob1` fires 6 seconds after the pivot, at a price `0.059%` worse, and
+catches 2062 of 2065 turns. Its book still loses `-0.2071%`.
+
+**It fires 294,498 times to catch 2,065 pivots — a 0.7% hit rate.** The other 292,433 fires are turns that go
+nowhere.
+
+Gross expectancy, subtracting the `0.20%` round-trip cost:
+```
+pivot entry (hindsight)   +0.907%
+v2 arm                    +0.026%
+every detector            -0.007% to -0.017%
+```
+
+**Every causal turn-detector has zero gross edge. The v2 arm has a small positive one. A real turn is worth
++0.9%; an average turn is worth nothing.** We can see every turn to within tenths of a minute. We cannot see
+which one matters.
+
+**This is the whole problem.** Not when the turn happened — *which turns matter*.
+
+**NEXT (Joe, 0709): Joe is writing a jig for this.** The screen: for each of the ~300,000 fires, measure
+quantities knowable at that bar — how far price ran into the turn, time since the last turn, depth past the
+boundary, agreement across timeframes, volume — and find which separate the 2,065 from the rest. Same screening
+method as §2, on the right population.
+
+---
+
 ## What this bounds, and what it leaves open
 
 **Bounded (do not repeat):**
