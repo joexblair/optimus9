@@ -273,6 +273,10 @@ CREATE TABLE o9_health (
   gate            VARCHAR(8),                             -- open | latched | NULL
   gate_reason     VARCHAR(4),                             -- a | b | c | NULL
   exit_line       VARCHAR(8),                             -- s7 | NULL (exit-watch)
+  -- cascade mirror-grid (HealthStore.set_cascade; UI reads via int() → must be NOT NULL)
+  cascade_mask    INT     NOT NULL DEFAULT 0,             -- per-bar bitfield, bit=(col-1)*4+(row-1), 4x5 grid
+  cascade_es      TINYINT NOT NULL DEFAULT 0,             -- arm side: -1 | +1 (0 = none)
+  cascade_armed   TINYINT NOT NULL DEFAULT 0,             -- 0 | 1
   loop_ms         INT,                                    -- decision-loop latency (bar-close → order sent)
   rtt_ms          INT,                                    -- exchange round-trip
   clock_skew_ms   INT,                                    -- local vs exchange server time

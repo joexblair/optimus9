@@ -123,6 +123,19 @@ and is created above. (The old §6 listed the three self-creating tables and omi
 *into* `o9_live`, which contradicts §2's topology. The code reads config from the DEFAULT db (`o9_infra`), so those
 copies would be silently ignored — until someone edited the wrong one.
 
+**`o9_health` schema drift (found 0709 on the first fresh box).** `HealthStore.set_cascade()` (optimus9/live/health.py)
+writes `cascade_mask/cascade_es/cascade_armed`, and `ui_server.py` reads them via `int()` — but they were ALTERed onto
+WSL's table by hand and never landed in `docs/o9_live_schema.sql`. The loop survives (it catches the write and logs
+`health phase write failed: 1054 Unknown column 'cascade_mask'` every bar) but the UI cascade grid raises KeyError.
+The DDL is now fixed, so new DBs are fine. Any o9_live created BEFORE this commit needs:
+```
+ALTER TABLE o9_live.o9_health
+  ADD COLUMN cascade_mask  INT     NOT NULL DEFAULT 0 AFTER exit_line,
+  ADD COLUMN cascade_es    TINYINT NOT NULL DEFAULT 0 AFTER cascade_mask,
+  ADD COLUMN cascade_armed TINYINT NOT NULL DEFAULT 0 AFTER cascade_es;
+```
+NOT NULL DEFAULT 0 is required: `ui_server.py` does `int(hlth["cascade_mask"])`, which throws on NULL.
+
 Expected after §6: `o9_infra` = 15 base tables + 1 view; `o9_live` = 9 tables.
 
 ## 7. Verify config loaded (curl exit + risk knobs came across)
