@@ -106,6 +106,44 @@ masks, still owe an A/B.
 (760319 vs 760320 bars) and the shape check fired a phantom "CHANGE DETECTED". Entries agreed even then.
 Pin the window when A/B-ing anything against a growing tape.
 
+### 2026-07-09 · A1 MEASURED — `fin_unlatch` look-ahead **costs** money; the spec placement wins
+
+`fin_unlatch_damage.py` → **217 of 1897 M1 trades (11.4%)** are authorised by a `q30` that fires *after* the
+entry bar. Lag: min 1, p50 4, p90 8, max 10 bars (`fin_fwd`=12). Median **20 seconds**. These are the exact
+trades o9-live structurally cannot fire (`tk != T` when the late `q30` lands ⇒ `strategy.py:106` never acts).
+
+`fin_unlatch_ab.py` → build vs **spec §4** ("walk forward with 2×30s tolerance for a late line" = enter at the
+first `s15a` at/after the authorising `s30a`, i.e. what `fin_gate` already does with `max(j15,j30)`). 42d,
+0.20% RT, `lr_exit_v2` raw — **`strand_rescue` deliberately excluded** (register B3: gated on the completed
+`SL`, cannot run live, would launder the experiment).
+
+```
+ARM A  BUILD  n=2592  net=+122.71%  mean=+0.0473%  win=51.3%
+ARM B  SPEC   n=2512  net=+134.17%  mean=+0.0534%  win=51.4%
+
+cohort (ARM A): causal n=2414 mean=+0.0527%  |  CONTAMINATED n=178 net=-4.51% mean=-0.0253%
+matched 197:    early  net=-3.99%  mean=-0.0203%  win=51.3%
+                late   net=+25.45% mean=+0.1292%  win=57.4%   delta +0.1495%/trade
+```
+
+**The mechanism, and it inverts the usual story.** Look-ahead normally inflates a backtest by stealing future
+profit. Here the forward `.any()` doesn't buy information — it grants **permission to enter before the
+confirmation exists**. It fires on the `s15a` while the `s30a` is still in the future. Those premature entries
+are **net-negative**. Wait the 20s for the `s30a` to actually print and the same setups pay +0.1292%/trade at
+57.4% win. *The bug wasn't stealing profit; it was entering unconfirmed.*
+
+**Caveats, not to be dropped when this is quoted.**
+- The `+11.46%` net gain ≠ the `+29.44%` on the 197. Arm B has **80 fewer trades** (repaired entries either
+  dedup into an existing entry bar, or find no `s15a` after `j30` inside `cap`). Both are legitimate
+  consequences of the repair, and together they give back ≈+18%.
+- Counts differ by basis: 217 raw dirty M1 → 197 matched pairs → 178 surviving A's dedup. Reported separately,
+  never blended.
+- **One window (42d), one arbiter (per-trade net %).** Worst-window minimax may rank differently. Arbiter is
+  Joe's call and is still open.
+
+**Live implication.** o9-live drops all 217 → it has been silently *avoiding* a net-negative cohort. But it is
+also forfeiting the **+25.45%** the spec placement captures: ≈5 trades/day at +0.129%/trade, causal, reachable.
+
 ### 2026-07-09 · `optimus9/compute/compute_flags.py` — DB → compute flag injection (bootstrap)
 
 **Reason.** `IndicatorComputer` is `"Pure computation. No I/O."` by contract, so it cannot read its own knobs;
