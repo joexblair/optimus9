@@ -28,7 +28,7 @@ def synth_book(price: float, spread_bps: float = 1.6, levels: int = 10, depth: f
 
 
 def replay(strat_db, store_db, bias_cfg, lr_cfg, symbol, end_ms, mode="fixed", max_order=66000,
-           leverage=5.0, taker_bps=5.5, start_equity=500.0, truncate=True):
+           leverage=5.0, taker_bps=5.5, start_equity=500.0, truncate=False):
     # strat_db = the tape (pk_optimizer, until the collector fills o9_live); store_db = o9_live fx_*
     db = store_db
     W = bm.BiasWindow(strat_db, end_ms, cfg=bias_cfg, lean=True)
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     o9db = DatabaseManager(**cfg); o9db.connect()
     dev = DatabaseManager(**get_db_config()); dev.connect()
     r = replay(dev, o9db, bm.BiasConfig(**BASE_BIAS), lr_config(dev), "FARTCOINUSDT",
-               ms("2026-06-22 00:00"), mode="dynamic5x")
+               ms("2026-06-22 00:00"), mode="dynamic5x", truncate=True)
     print("replay:", r)
     print("fx_position:", o9db.execute("SELECT COUNT(*) c, SUM(status='closed') closed FROM fx_position", fetch=True)[0])
     print("fx_fill:", o9db.execute("SELECT COUNT(*) c FROM fx_fill", fetch=True)[0])

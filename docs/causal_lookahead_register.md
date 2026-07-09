@@ -281,7 +281,49 @@ trade-off must be named, not hidden inside a PnL number.
 2. Governor(tol=0) reduces gross exposure and drawdown in both exit columns.
 3. **Unknown, and the point of the experiment:** the sign of governor-on-net under stack-close.
 
-**Outcome:** _(to be written after the run — do not leave blank)_
+**Outcome (RUN 0709, `x3_stack_governor.py`, 42d, 2628 trades, unit notional, fee 5.5bps/side).**
+
+```
+exit model     tol%    net(units)  opens  closes  blocked  depth
+per-leg        off        0.514     2628    2628       0     16
+per-leg        0.00       0.270     1698    1698     930     14   (-47%)
+per-leg        0.05       0.277     1807    1807     821     14
+per-leg        0.10       0.287     1920    1920     708     14
+per-leg        0.20       0.391     2112    2112     516     14
+per-leg        0.30       0.402     2239    2239     389     14   (-22%)
+
+stack-close    off        0.334     2628    1179       0     11
+stack-close    0.00       0.216     1699    1179     929     11   (-35%)
+stack-close    0.30       0.320     2278    1179     350     11   ( -4%)
+
+stack-close COST vs per-leg (governor off): -0.180 units (-35.0%)
+```
+
+1. **Prediction 1 CONFIRMED.** Stack-close costs **35%** of net. E1 is real: a third of `v2_walk`'s edge was
+   priced on per-leg exits a single averaged position cannot take.
+2. **Prediction 2 REFUTED.** The governor does **not** reduce exposure where it matters: max stack depth under
+   stack-close is **11 with the governor and 11 without**. It blocks 930 legs and caps nothing.
+3. **My thesis REFUTED; Joe's correction CONFIRMED.** The governor was predicted to matter *more* under
+   stack-close. It matters **less** (−35% vs −47%). It destroys net at **every** tolerance in **both** columns,
+   and performance improves monotonically as the gate approaches doing nothing. **The blocked legs are
+   net-positive after the fees they save.** On this producer, over 42d, adding into drawdown amplifies good
+   entries more than it deepens bad ones — exactly as Joe said.
+
+**The pre-registered question — "does entry quality survive the legs the governor would block?" — answers YES.**
+Entry quality is high enough that averaging in pays.
+
+**WHAT THIS TEST CANNOT SAY.** It measures the **mean**. The governor is a **variance**-reducer. No equity
+drawdown, no worst-episode, no risk-of-ruin. `net` can neither convict nor acquit it. The live 0709 pyramid lost
+**$108** in a single episode while this book says such pyramids pay on average — both can be true, and the
+governor may be a fair price (~35% of the edge) for surviving the episode that ends the account. **Do not cite
+X3 as "the governor is bad."** It says: the governor costs 22–47% of the mean and does not cap depth. The risk
+side is unmeasured.
+
+**Follow-up (X3b), required before any governor decision:** equity-drawdown path, max adverse excursion on the
+averaged position, worst single episode, and depth under a *compounding* sizer. Also: `depth_max=16` under
+per-leg vs `11` under stack-close — stack-close self-caps depth because one exit flattens the side.
+
+**Not a live PnL:** no slippage, no order-book walk, no compounding. Stack semantics + governor only.
 
 ---
 
