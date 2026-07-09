@@ -10,7 +10,7 @@ from datetime import timezone
 from optimus9.analysis.jig import Jig
 from tide_machine import run_config
 
-END = int(dtm.datetime(2026, 7, 7, 20, 0, tzinfo=timezone.utc).timestamp() * 1000)
+END = int(dtm.datetime.now(timezone.utc).timestamp() * 1000)
 S1 = {'s1m': (60, ('bb', 6, 0.56, 'close'), 'emerging'), 's1M': (60, ('bb', 37, 0.72, 'hlcc4'), 'emerging'),
       's1r': (60, ('k', 6, 6, 5, 'close'), 'emerging')}
 FIN = ('s1', 's15', 's30')                                  # finisher fixed (validated); precision/exit/arm are the axes

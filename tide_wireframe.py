@@ -21,7 +21,7 @@ hm = lambda t: time.strftime('%m-%d %H:%M', time.gmtime(int(t) / 1000))
 
 
 def main():
-    end = int(dtm.datetime(2026, 7, 7, 20, 0, tzinfo=timezone.utc).timestamp() * 1000)   # PINNED window end (reproducible A/B)
+    end = int(dtm.datetime.now(timezone.utc).timestamp() * 1000)   # PINNED window end (reproducible A/B)
     OVR = {'s10r': (600, ('k', 6, 6, 5, 'hl2'), 'emerging'),
            's1m': (60, ('bb', 6, 0.56, 'close'), 'emerging'),     # s1 = s2's config at a faster TF (60s vs 120s)
            's1M': (60, ('bb', 37, 0.72, 'hlcc4'), 'emerging'),

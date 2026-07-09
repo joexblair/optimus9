@@ -1,0 +1,48 @@
+=== minimax sweep (greenfield causal, NO arm_delay) — 1960/1960 runs  [FINAL] ===
+windows end: 07-08, 06-28, 06-18, 06-08, 05-29 ; LOOK 5d, WARMUP 2d
+
+### TOP MAE — ranked by worst-window realised MAE (wMAE, least-negative = tightest) ###
+config                                        n |  eMAE  eMFE |   wMAE   wMFE |    mean   rMFE   tail  win
+s10r=360/close strict 2,1 PROX=33 gate=mid wb=F   59 |  0.49  0.87 |  -1.11   0.58 |  +0.110   0.93 -10.79 0.58
+s10r=360/close strict 2,1 PROX=40 gate=mid wb=F   61 |  0.53  0.88 |  -1.11   0.58 |  +0.178   0.95 -10.09 0.59
+s10r=720/close strict 2,1 PROX=40 gate=mid wb=F   61 |  0.53  0.88 |  -1.16   0.58 |  +0.240   0.95 -10.09 0.62
+s10r=360/close strict 1,1 PROX=33 gate=mid wb=F   43 |  0.61  0.90 |  -1.18   0.85 |  +0.000   0.94 -10.58 0.58
+s10r=360/close strict 1,1 PROX=40 gate=mid wb=F   47 |  0.64  0.89 |  -1.18   0.85 |  +0.089   0.88 -10.58 0.59
+s10r=720/close strict 2,1 PROX=33 gate=mid wb=F   59 |  0.49  0.87 |  -1.20   0.58 |  +0.163   0.98 -10.79 0.61
+s10r=360/close 7of9 N7    PROX=40 gate=mid wb=F  116 |  0.51  0.97 |  -1.22   0.54 |  -0.317   0.94 -12.53 0.62
+s10r=600/close strict 1,1 PROX=33 gate=mid wb=F   43 |  0.61  0.90 |  -1.23   0.88 |  +0.087   0.99 -10.58 0.60
+s10r=600/close strict 1,1 PROX=40 gate=mid wb=F   47 |  0.64  0.89 |  -1.23   0.88 |  +0.143   0.95 -10.58 0.62
+s10r=600/close strict 2,1 PROX=33 gate=mid wb=F   59 |  0.49  0.87 |  -1.23   0.58 |  +0.146   0.98 -10.79 0.60
+s10r=600/close strict 2,1 PROX=40 gate=mid wb=F   61 |  0.53  0.88 |  -1.23   0.58 |  +0.143   0.95 -10.09 0.62
+s10r=540/close strict 1,1 PROX=33 gate=mid wb=F   43 |  0.61  0.90 |  -1.23   0.88 |  +0.017   0.95 -10.58 0.57
+s10r=540/close strict 1,1 PROX=40 gate=mid wb=F   47 |  0.64  0.89 |  -1.23   0.88 |  +0.102   0.94 -10.58 0.58
+s10r=540/close strict 2,1 PROX=33 gate=mid wb=F   59 |  0.49  0.87 |  -1.23   0.58 |  +0.121   0.95 -10.79 0.58
+s10r=540/close strict 2,1 PROX=40 gate=mid wb=F   61 |  0.53  0.88 |  -1.23   0.58 |  +0.207   0.94 -10.09 0.57
+s10r=480/close strict 1,1 PROX=33 gate=mid wb=F   43 |  0.61  0.90 |  -1.23   0.85 |  +0.102   0.98 -10.58 0.61
+s10r=480/close strict 1,1 PROX=40 gate=mid wb=F   47 |  0.64  0.89 |  -1.23   0.88 |  +0.136   0.95 -10.58 0.62
+s10r=480/close strict 2,1 PROX=33 gate=mid wb=F   59 |  0.49  0.87 |  -1.23   0.67 |  +0.121   0.98 -10.79 0.63
+s10r=480/close strict 2,1 PROX=40 gate=mid wb=F   61 |  0.53  0.88 |  -1.23   0.62 |  +0.119   0.95 -10.09 0.64
+s10r=480/hl2   strict 1,1 PROX=33 gate=mid wb=F   43 |  0.61  0.90 |  -1.23   0.88 |  +0.045   1.02 -10.58 0.60
+
+### TOP MFE — ranked by worst-window realised MFE (wMFE, biggest = most reach) ###
+config                                        n |  eMAE  eMFE |   wMAE   wMFE |    mean   rMFE   tail  win
+s10r=600/hl2   strict 1,1 PROX=33 gate=oob wb=T   43 |  0.61  0.90 |  -2.52   1.34 |  +0.237   1.84 -11.25 0.60
+s10r=600/hl2   strict 1,1 PROX=33 gate=mid wb=T   43 |  0.61  0.90 |  -2.52   1.34 |  +0.139   1.78 -11.25 0.59
+s10r=600/hl2   strict 2,2 PROX=33 gate=oob wb=T  105 |  0.51  0.90 |  -2.38   1.34 |  +0.326   1.96 -10.92 0.60
+s10r=600/hl2   strict 1,1 PROX=33 gate=oob wb=F   43 |  0.61  0.90 |  -2.52   1.31 |  +0.094   1.62 -10.87 0.59
+s10r=600/hl2   strict 1,1 PROX=40 gate=oob wb=T   47 |  0.64  0.89 |  -2.33   1.31 |  +0.198   1.84 -11.25 0.60
+s10r=600/hl2   strict 1,1 PROX=40 gate=mid wb=T   47 |  0.64  0.89 |  -2.33   1.31 |  +0.163   1.75 -11.25 0.60
+s10r=600/hl2   strict 4,2 PROX=33 gate=oob wb=T  130 |  0.46  0.90 |  -2.08   1.31 |  +0.293   1.79 -10.24 0.60
+s10r=600/hl2   7of9 N6    PROX=33 gate=oob wb=T  327 |  0.50  0.90 |  -2.15   1.27 |  +0.094   1.84 -12.01 0.59
+s10r=600/hl2   strict 1,1 PROX=40 gate=oob wb=F   47 |  0.64  0.89 |  -2.33   1.27 |  +0.101   1.75 -10.87 0.60
+s10r=600/hl2   strict 2,2 PROX=33 gate=mid wb=T  105 |  0.51  0.90 |  -2.38   1.27 |  +0.190   1.79 -10.92 0.58
+s10r=600/hl2   strict 2,2 PROX=40 gate=oob wb=T  113 |  0.53  0.90 |  -2.14   1.25 |  +0.275   1.94 -10.58 0.60
+s10r=600/hl2   7of9 N6    PROX=33 gate=mid wb=T  327 |  0.50  0.90 |  -2.15   1.25 |  +0.024   1.79 -12.01 0.57
+s10r=600/hl2   7of9 N7    PROX=33 gate=oob wb=T  115 |  0.52  0.97 |  -2.17   1.25 |  +0.125   1.69 -12.53 0.55
+s10r=600/hl2   7of9 N7    PROX=33 gate=mid wb=T  115 |  0.52  0.97 |  -2.17   1.25 |  +0.044   1.67 -12.53 0.54
+s10r=600/hl2   strict 4,2 PROX=33 gate=mid wb=T  130 |  0.46  0.90 |  -2.08   1.24 |  +0.166   1.75 -10.24 0.59
+s10r=600/hl2   strict 4,2 PROX=40 gate=oob wb=T  141 |  0.50  0.90 |  -2.03   1.24 |  +0.255   1.94 -10.02 0.59
+s10r=600/hl2   strict 2,2 PROX=40 gate=mid wb=T  113 |  0.53  0.90 |  -2.14   1.24 |  +0.161   1.64 -10.58 0.59
+s10r=540/close strict 1,1 PROX=33 gate=oob wb=T   43 |  0.61  0.90 |  -2.61   1.24 |  -0.205   1.75 -11.25 0.60
+s10r=600/hl2   strict 2,1 PROX=33 gate=oob wb=T   59 |  0.49  0.87 |  -2.48   1.24 |  +0.237   1.90 -11.36 0.60
+s10r=600/hl2   strict 2,2 PROX=33 gate=oob wb=F  105 |  0.51  0.90 |  -2.38   1.24 |  +0.069   1.56 -10.71 0.61

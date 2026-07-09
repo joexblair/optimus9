@@ -25,6 +25,7 @@ logic forks the truth and drifts.
 - **`line(name)`** — the value_mode-honoured 5s array for one line (emerging = causal).
 - **`sign(name)`** — per-bar OOB sign of a line: `+1` hi / `−1` lo / `0` in-band.
 - **`finishers(tf, r_lb=None)`** — the packaged `s{tf}a` qualify (Mage-reversal → r-lookback) as `(qhi, qlo)`.
+- **`finisher_pair(box=12, tf_a='s15', tf_b='s30')`** — CAUSAL s30a+s15a co-occurrence EVENT: both fired within the trailing `box` (5s bars, default 12 = 2×30s) as `(hi, lo)`.
 - **`finisher_parts(tf, r_lb=None)`** — the per-bar COMPONENTS of `s{tf}a` (Mage-OOB · Mage-reversed · r-in-lookback) for N-of-9 gates.
 - **`arms()`** — the v2 arm events `[(i, es, bd, cap, src)]`.
 - **`gates(arms=None)`** — the s3s4 gate opens for a set of arms.
@@ -93,6 +94,18 @@ q2h,  q2l  = J.causal.finishers('s2', r_lb=J.cfg.s15r_lb)
 ```
 Do NOT hand-roll the finisher latch either — for the entry latch (both in a box → trade on the next same-side s15a)
 use `lr_v2.fin_unlatch`.
+
+### `causal.finisher_pair(box=12, tf_a='s15', tf_b='s30', r_lb_a=None, r_lb_b=None) -> (hi, lo)`
+The **s30a+s15a EVENT**: at bar k, True iff BOTH `s{tf_a}a` and `s{tf_b}a` fired within the trailing box `[k-box, k]`
+(causal — `_rolling_any` over each finisher). Replaces hand-rolled "both finishers in a window" conjunctions —
+feed this event stream, don't re-bake it in a consumer.
+- `box` — co-occurrence width in **5s bars**. Default **12 = 2×30s** (the finisher tolerance), NOT the 7×30s lookback.
+- `tf_a`/`tf_b` — the two finisher prefixes (default s15 + s30). `r_lb_a`/`r_lb_b` default to each tf's `cfg.{tf}r_lb`.
+- Returns **`(hi, lo)`** bool arrays: `hi` = short-side co-occurrence, `lo` = long-side.
+```python
+hi, lo = J.causal.finisher_pair()            # box=12 (2x30s)
+hi, lo = J.causal.finisher_pair(box=30)      # wider co-occurrence window
+```
 
 ### `causal.finisher_parts(tf, r_lb=None) -> dict`
 Delegates to **`s_qualify_parts`** (the SRP-split components of `s_qualify`). Returns per-side bool arrays:

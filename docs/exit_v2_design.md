@@ -1,4 +1,4 @@
-# Exit v2 + bias filter — design & real-world grounding (0701)
+# Exit v2 — design & real-world grounding (0701; bias filter removed 0709)
 
 Everything here is anchored to one real trade so ideas are easy to share: **06-17 18:46 SHORT** (FARTCOINUSDT).
 Data window = the real-tick span 06-17 → 06-22 (n=266 v2 entries). See also `lr_cascade_design.md` (cascade
@@ -93,18 +93,27 @@ finisher  _finish: latch s30a+s15a from the arm, delatch at the unlatch  →  ex
 - *Superseded ceiling (kept for context):* the loose "+60.7%" earlier was the earliest-wiggle upper bound; the
   built number lands at the same magnitude but for the right reason (the curl at the extreme, s7r invisible).
 
-## 4. Bias entry-filter — the hb33 lever (sweep complete)
-- **What:** the hb33 bro-cross bias (3 sets `hbhl33`/`hblo33`/`hbhi33`; first OOB Mage×min cross flips the state,
-  clustered) → **reject against-grain entries** (`bias == −bd`) at entry, before the exit ever runs.
-- **Sweep:** 84,700 combos = TF(9–36) × mage-len(19±5) × min-len(13±5) × hbhl33 mage-src(5) × min-src(5), scored
-  as filtered **avg_ret + win** on og_book (`bias_grav_sweep.py`, ~31 min; reuses `bro_stream`/`bro_verdict`).
-- **Result:** best config (tf26 / lenM24 / lenm9) **avg +0.389% / win 77% / kept 137** vs baseline +0.250 / 66% →
-  **~2× total net-of-cost** (+26% vs +13%), ~4× per-trade.
-- **Robustness:** **83,311 / 84,699 configs (98%) beat baseline** — rejecting a *random* half wouldn't, so the
-  with-grain signal is genuinely informative (counter-trend entries are broadly worse). Top avg is a **16-way tie**
-  → take *a* robust config, don't over-fit *the* config.
-- **Caveat:** one 5-day window; out-of-sample validation owed. Vindicates the OG-book choice — it exposed a signal
-  the cull-labels (50/50) hid.
+## 4. Bias entry-filter — REMOVED 0709 (disproven)
+
+The hb33 bro-cross bias entry-filter is **deleted as a candidate mechanic**. Re-tested on the 42d causal book
+(breach arm), both alignment stamps:
+
+```
+baseline (no filter)      n=3311  mean=-0.1737%  win=42.1%  breakeven=50.4%
+bias filter, leaky stamp  n=1689  mean=-0.2264%  win=41.6%  breakeven=52.9%
+bias filter, causal stamp n=1640  mean=-0.2097%  win=42.1%  breakeven=52.5%
+```
+
+It rejects ~50% of entries and is **worse than baseline under both stamps**. Win rate after filtering equals the
+unfiltered book: the rejections are uncorrelated with outcome.
+
+The original result here (`avg +0.389% / win 77%`, 84,700-combo sweep, 98% of configs beating baseline) was one
+5-day window on the look-ahead arm. It does not reproduce.
+
+Removed: `sweep_eval._bias_filter`, the `bias_filter` config key, `sweep_run`'s `bias_on` / `hb_*` / `bro_N`
+knobs. `bias_state.bro_stream` / `bro_verdict` remain — other consumers read them.
+Detail: `docs/0709_repairs/entry.md` sec.5.
+
 
 ## Two validated levers, and the open decisions
 - **Lever A — bias entry-filter:** ~2× net-of-cost (sweep confirmed, robust).

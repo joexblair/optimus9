@@ -79,7 +79,15 @@ extend hypotheses/scripts → rest.
   vs Joe's 224/10.0× (definition/window differs — his accounting lives in `ker_*.py`). Same producer/config/data.
 
 ### 0707c — the 33h clock (recon_tracker) + position events + stale_exit flow
-- **GOAL (Joe):** o9-live reconciles vs backtest for **33 CONTINUOUS hours**; document every change. o9 stays LIVE.
+- **GOAL (Joe 0707, REFINED):** o9-live **ENTRIES** reconcile vs the backtest for **33 CONTINUOUS hours**; document
+  every change. o9 stays LIVE. **Scope = entries only** (kill spurious entries + catch missed ones). **EXIT recon is
+  OUT** — the backtest's exits are non-causal (`strand_rescue` keys off the future SL bar, lr_v2.py:729-731), so o9
+  (causal) can't match them; they're a hindsight ceiling. **FINANCIAL/PnL recon is OUT** — the delay we accept is
+  seconds-to-update-the-walk, not exit-resolution. Entries ARE causal (arm→gate→finisher all backward-only) → the
+  clock can actually reach 33h. Engine = cold-run `v2_walk_ad` over a rolling window, diff entry sets vs o9.
+  **The recon loophole (why this matters):** the old recon compared o9 against a re-run of o9's OWN causal window →
+  entries matched tautologically. Cold-running the REAL backtest (not a reproduction) + a bidirectional entry set-diff
+  (spurious o9-only + missed bt-only) is the honest test. [Joe's catch, 0707.]
 - **`recon_tracker.py` built** = the 33h clock. Daemon reusing `recon_suite` Repro/audit_event; audits new
   arm/gate/trade vs backtest + watches `o9_ledger` positions. Emits SPARSE alerts (replaces the noisy per-arm feed):
   `DIVERGENCE` (resets the clock), `POSITION` open/close (with **EXIT-OVERSHOOT** = the #54 SL-past flag), hourly

@@ -48,3 +48,14 @@ This is *more* explicit than today's inference and removes the "opposite side me
 - Unit: two legs open at once; each pyramids + reduces independently; realized PnL per leg correct both directions.
 - Recon: replay a v2_walk window that books overlapping legs → fakeAPI holds both → realized PnL matches the
   hedge-premium-inclusive backtest (removes the ~18% haircut). See [[handover_o9live_reconcile]].
+
+## STATUS (Joe 0708) — BUILT + validated, NOT deployed
+- **Exchange side** (commit 8826016): schema+migration, FxStore.open_leg, MatchingEngine per-leg submit, app both-legs,
+  BybitAdapter positionIdx. Tests green.
+- **Client side** (commit 11fbcbb): StrategyLoop.intents = independent per-side legs (opposite entries open the other
+  leg, no longer dropped); O9Ledger.record_close_side; O9LiveApp.position() both legs. Tests green (24 hedge-related).
+- **Entry reconcile** (`reconcile_hedge_entries.py`, 30d): TRADES MATCH ✓ — hedge reproduces all 1953 static entries,
+  0 drops; one-way was dropping **515 (26%)** overlapping legs = the premium. DATA: tape carries **2.7% V=0 synthetic
+  filler** (known [[project_filler_invisible]] issue) — flagged; open question whether it shifts the entries (filler_invisible A/B).
+- **Deploy gate:** o9_live untouched, no restart. Cutover = stop loop → `migrate_hedge_mode.py o9_live` → restart in
+  hedge mode (natural home: the SG box). Re-derive `max_exposure_mult` from a hedge replay then ([[dynamic_risk_spec]]).

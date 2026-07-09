@@ -139,6 +139,34 @@ Three facts bound the interpretation:
 
 ---
 
+---
+
+## 5. hb33 bias entry-filter — DISPROVEN AND REMOVED, 2026-07-09
+
+Tested as the candidate to close the 8.3-point win-rate gap (`42.1%` actual vs `50.4%` breakeven). It rejected
+entries whose side opposed a 33-minute bias direction, built from three band pairs (`hbhl33`/`hblo33`/`hbhi33`)
+crossed and clustered.
+
+**[measured]** 42d, breach arm, both alignment stamps:
+```
+baseline (no filter)      n=3311  mean=-0.1737%  win=42.1%  breakeven=50.4%  stopped=49.8%
+bias filter, leaky stamp  n=1689  mean=-0.2264%  win=41.6%  breakeven=52.9%  stopped=50.1%
+bias filter, causal stamp n=1640  mean=-0.2097%  win=42.1%  breakeven=52.5%  stopped=49.6%
+```
+- Rejects ~50% of the book (49.0% / 50.5%).
+- **Both stamps are worse than baseline.** Not a look-ahead edge — no edge.
+- Win rate after filtering equals the unfiltered book. The rejections are uncorrelated with outcome.
+- Average winner shrinks enough to raise breakeven from `50.4%` to `52.5%`.
+
+The prior claim (`docs/exit_v2_design.md` §4: *"avg +0.389% / win 77%"*, 84,700-combo sweep, 98% of configs beat
+baseline) was measured on one 5-day window with the look-ahead arm. It does not reproduce.
+
+**Removed as a candidate mechanic (Joe, 0709):** `sweep_eval._bias_filter`, the `bias_filter` config key,
+`sweep_run`'s `bias_on` / `hb_*` / `bro_N` knobs, and `exit_v2_design.md` §4. `bias_state.bro_stream` /
+`bro_verdict` remain — other consumers read them.
+
+---
+
 ## Open, ranked
 
 1. **Sweep `arm_wob`.** A 7-bar confirmation on a 5-minute line may be the whole deficit. It has never been

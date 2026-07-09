@@ -23,18 +23,14 @@ def ms(s): return int(dtm.datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
 WINDOW_ENDS = [ms('2026-05-25 00:00') + i * 5 * 86400000 for i in range(7)]   # 05-25 … 06-24
 SRCS = ['close', 'ohlc4', 'hl2', 'hlc3', 'high', 'low']
 
-# knob + bias param space (value lists) and their defaults (= current shipping config)
+# knob param space (value lists) and their defaults (= current shipping config).
+# The hb33 bias entry-filter was REMOVED 0709 -- disproven on the 42d causal book: it rejects ~50%
+# of entries and both stamps score WORSE than baseline. See docs/0709_repairs/entry.md sec.5.
 KNOB_SPACE = {
     'SL': [0.33, 0.6, 0.7, 0.9], 'curl_fam': ['s5', 's6', 's7', 's8'], 'exit_rlb': [15, 22, 30],
     'predict': [False, True], 'slip': [0.0, 10.0, 20.0], 'gate_fam': ['s5', 's6', 's7'],
-    'bias_on': [False, True], 'hb_tf': [16, 26, 33], 'hb_lenM': [19, 22, 24], 'hb_lenm': [9, 13, 15],
-    'hb_multM': [0.58, 0.64, 0.70], 'hb_multm': [0.62, 0.68, 0.74],
-    'hb_srcM': ['close', 'hl2', 'hlc3', 'ohlc4', 'hlcc4'],   # blend set: 5 balanced srcs (high/low are hbhi/hblo's job)
-    'hb_srcm': ['close', 'hl2', 'hlc3', 'ohlc4', 'hlcc4'], 'bro_N': [1, 3, 6],
 }
-KNOB_DEFAULT = {'SL': 0.5, 'curl_fam': 's7', 'exit_rlb': 22, 'predict': False, 'slip': 0.0, 'gate_fam': 's7',
-                'bias_on': False, 'hb_tf': 33, 'hb_lenM': 19, 'hb_lenm': 13, 'hb_multM': 0.64, 'hb_multm': 0.68,
-                'hb_srcM': 'hl2', 'hb_srcm': 'ohlc4', 'bro_N': 1}
+KNOB_DEFAULT = {'SL': 0.5, 'curl_fam': 's7', 'exit_rlb': 22, 'predict': False, 'slip': 0.0, 'gate_fam': 's7'}
 
 # globals filled by init_space() BEFORE the Pool forks (children inherit)
 BB, KLINE, BASE_TUP, PARAM_SPACE, PARAMS, DEFAULT = {}, {}, {}, {}, [], {}
@@ -74,9 +70,6 @@ def param_to_config(pv):
         lo[nm] = (tf, cfgt, vmode)
     cfg = {'line_overrides': lo, 'lrcfg': {'sl': pv['SL'], 'exit_rlb': pv['exit_rlb'], 'curl_n': 1},
            'exit': {'predict': pv['predict'], 'gate_fam': pv['gate_fam'], 'slip': pv['slip']}}
-    if pv['bias_on']:
-        cfg['bias_filter'] = dict(tf=pv['hb_tf'], lenM=pv['hb_lenM'], lenm=pv['hb_lenm'], multM=pv['hb_multM'],
-                                  multm=pv['hb_multm'], srcM=pv['hb_srcM'], srcm=pv['hb_srcm'], N=pv['bro_N'], oob=True)
     return cfg
 
 

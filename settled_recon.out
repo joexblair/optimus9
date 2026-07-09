@@ -1,0 +1,4 @@
+=== settled-bar m/M desync: 301ms vs 700ms (skipped 47 unsettled) ===
+PRE-restart (301ms): 11 settled bars, median m/M diff = 0.708
+POST-restart (700ms): 3 settled bars, median m/M diff = 0.499
+VERDICT: 700ms reduced the desync (70% of the 301ms gap)

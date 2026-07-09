@@ -9,7 +9,7 @@ from optimus9.analysis.jig import Jig
 from tide_machine import run_config
 
 SANITISE = dtm.datetime(2026, 5, 18, tzinfo=timezone.utc)
-NOW = dtm.datetime(2026, 7, 7, 20, 0, tzinfo=timezone.utc)
+NOW = dtm.datetime.now(timezone.utc)
 WARMUP_D, LOOK_D = 2, 7
 S1 = {'s1m': (60, ('bb', 6, 0.56, 'close'), 'emerging'), 's1M': (60, ('bb', 37, 0.72, 'hlcc4'), 'emerging'),
       's1r': (60, ('k', 6, 6, 5, 'close'), 'emerging')}
