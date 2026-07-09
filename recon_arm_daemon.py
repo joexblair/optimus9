@@ -37,6 +37,7 @@ BAR = 5000
 LB_H, WM_H = 14, 6                      # window: 14h lookback / 6h warmup (live loop's floors + margin)
 POLL_S = 20
 TOL = 1e-9                              # bit-comparison; the tape either changed or it did not
+STABLE_MS = 2 * 3600 * 1000            # ignore arms within 2h of the sliding window's left edge (warmup zone)
 
 LINES = ('s2m', 's2M', 's2r', 's3m', 's3M', 's3r', 's4m', 's4M', 's4r', 's5m', 's5M', 's5r',
          's7m', 's7M', 's7r', 's15m', 's15M', 's15r', 's30m', 's30M', 's30r')
@@ -70,16 +71,23 @@ def ddl():
 
 
 def window_at(dev, bar_ms, cfg):
-    """A window ending exactly at `bar_ms` — the same edge the live loop had (driver: now = ts + bar + delay)."""
+    """A window covering `bar_ms`. BiasWindow admits a bar whose OPEN is <= now, so the edge can sit one bar
+    past the arm; we index the bar directly instead of relying on the edge. Every line is emerging/causal, so
+    its value AT bar j is independent of bars after j — which is precisely the invariance being tested."""
     return bm.BiasWindow(dev, bar_ms + BAR + 700, lookback=LB_H, warmup=WM_H, cfg=cfg, lean=True)
 
 
-def sample(W):
-    """-> {line: (open_v, close_v)}; close = value at the last bar, open = value at the bar before it."""
+def sample(W, bar_ms):
+    """-> {line: (open_v, close_v)} at `bar_ms`; open = the value at the PREVIOUS bar (this bar's open).
+    Returns None if the bar is absent from the window (a tape gap — itself worth knowing)."""
+    ts = np.asarray(W.ts)
+    j = int(np.searchsorted(ts, bar_ms))
+    if j >= len(ts) or int(ts[j]) != bar_ms or j == 0:
+        return None
     out = {}
     for n in LINES:
         v = np.asarray(W.line(n), float)
-        out[n] = (float(v[-2]) if len(v) > 1 else float('nan'), float(v[-1]))
+        out[n] = (float(v[j - 1]), float(v[j]))
     return out
 
 
@@ -102,10 +110,10 @@ def main():
                 if bar in seen:
                     continue
                 W = window_at(dev, bar, cfg)
-                if int(np.asarray(W.ts)[-1]) != bar:
-                    log("SKIP %s — window edge %s != arm bar" % (f(bar), f(int(np.asarray(W.ts)[-1]))))
+                s = sample(W, bar)
+                if s is None:
+                    log("SKIP %s — bar absent from the window (tape gap)" % f(bar))
                     continue
-                s = sample(W)
                 cols = ['armevent_ts', 'kline_close_ts', 'es', 'meta', 'price', 'created_ms']
                 vals = [bar, bar + BAR, int(r['es'] or 0), r['meta'], r['price'], int(time.time() * 1000)]
                 for n in LINES:
@@ -120,8 +128,8 @@ def main():
                 row = (o9.execute("SELECT * FROM o9_recon WHERE armevent_ts=%s", (last_recon,), fetch=True) or [None])[0]
                 if row and row.get('recon_status') is None:
                     W = window_at(dev, last_recon, cfg)
-                    if int(np.asarray(W.ts)[-1]) == last_recon:
-                        s = sample(W)
+                    s = sample(W, last_recon)
+                    if s is not None:
                         worst, md = None, 0.0
                         for n in LINES:
                             for k, i in (('open', 0), ('close', 1)):
@@ -147,8 +155,12 @@ def main():
             ts = np.asarray(W.ts)
             arms = {int(ts[a[0]]) for a in arm_delay(W, lr, v2_arm(W, lr))}
             if prev_arms is not None:
-                gone = sorted(a for a in prev_arms - arms if a >= int(ts[0]))
-                new = sorted(arms - prev_arms)
+                # The window SLIDES: its left edge advances each pass, and EMA/RMA seeds shift with it, so an
+                # arm sitting in the warmup zone can vanish for reasons that have nothing to do with causality.
+                # Only bars STABLE_MS past the current left edge are evidence about window-invariance.
+                floor = int(ts[0]) + STABLE_MS
+                gone = sorted(a for a in prev_arms - arms if a >= floor)
+                new = sorted(a for a in arms - prev_arms if a >= floor)
                 if gone:
                     log("ARM-DRIFT %d arm(s) DISAPPEARED (window-invariance broken): %s"
                         % (len(gone), [f(x) for x in gone[:5]]))
