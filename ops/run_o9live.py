@@ -14,6 +14,7 @@ from optimus9.live.exchange import HmacSigner, BybitV5Client, BybitAdapter
 from optimus9.live.sizing import PositionSizer
 from optimus9.live.strategy import StrategyLoop
 from optimus9.analysis.lr_v2 import v2_walk_ad, v2_walk_diag
+from optimus9.analysis.greenfield_producer import greenfield_cascade   # 0708: greenfield CAUSAL arm -> o9's s3s4 gate + o9's finisher
 from optimus9.live.ledger import O9Ledger
 from optimus9.live.app import O9LiveApp
 from optimus9.live.control import O9Control
@@ -24,8 +25,8 @@ from optimus9.live.driver import RealtimeDriver
 FAKEAPI = os.environ.get("O9_FAKEAPI_URL", "http://127.0.0.1:8098")
 SYM = os.environ.get("O9_SYMBOL", "FARTCOINUSDT")
 MODE = os.environ.get("O9_SIZE_MODE", "dynamic5x")               # ramp to the 66k-coin cap via leverage
-PRODUCER = os.environ.get("O9_PRODUCER", "ad")                   # 'ad'=v2_walk_ad (real cascade) · 'diag'=free-fire #54 probe
-_PRODUCERS = {"ad": v2_walk_ad, "diag": v2_walk_diag}
+PRODUCER = os.environ.get("O9_PRODUCER", "ad")                   # 'ad'=v2_walk_ad (look-ahead arm-delay) · 'gf'=greenfield CAUSAL entry (0708) · 'diag'=free-fire #54 probe
+_PRODUCERS = {"ad": v2_walk_ad, "gf": greenfield_cascade, "diag": v2_walk_diag}
 
 dev = DatabaseManager(**get_db_config()); dev.connect()          # live tape (own o9_live collector = later)
 o9cfg = get_db_config(); o9cfg["database"] = "o9_live"
@@ -45,4 +46,5 @@ app = O9LiveApp(strat, PositionSizer(max_order=66000), adapter, ledger, control,
                 health=health, state_logger=state_logger)
 
 print("o9-live REALTIME · fakeAPI=%s · symbol=%s · mode=%s · producer=%s · equity=$%.0f" % (FAKEAPI, SYM, MODE, PRODUCER, ledger.equity()), flush=True)
-RealtimeDriver(app, dev, tp).run(max_bars=None)                  # forever — trades when the strategy fires
+DELAY_MS = int(os.environ.get("O9_DELAY_MS", "700"))            # seam grace: wait for LATE ticks of the closed kline before reading (was 301ms; too short — late ticks mutated the BB → live<->backtest desync, Joe 0708)
+RealtimeDriver(app, dev, tp, delay_ms=DELAY_MS).run(max_bars=None)   # forever — trades when the strategy fires

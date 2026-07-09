@@ -9,7 +9,7 @@ from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 import bias_machine as bm
 from optimus9.analysis.lr import lr_config
-from optimus9.analysis.lr_v2 import v2_walk, lr_exit_v2, strand_rescue
+from optimus9.analysis.lr_v2 import v2_walk_ad, lr_exit_v2, strand_rescue
 from optimus9.live.exchange import HmacSigner, BybitV5Client, BybitAdapter
 from optimus9.live.sizing import PositionSizer
 from optimus9.live.strategy import StrategyLoop
@@ -33,7 +33,7 @@ for t in ("fx_fill", "fx_order", "fx_position", "o9_ledger", "o9_account"):
 
 bcfg = bm.BiasConfig(**BASE_BIAS); lc = lr_config(dev)
 Wf = bm.BiasWindow(dev, ms("2026-06-22 00:00"), cfg=bcfg, lean=True)
-ent = v2_walk(Wf, lc)
+ent = v2_walk_ad(Wf, lc)
 exd = {x[0]: x for x in strand_rescue(Wf, lc, ent, lr_exit_v2(Wf, lc, ent, predict=False))}
 
 strat = StrategyLoop(dev, bcfg, lc, SYM, buffer_hours=12, warmup_hours=40)
