@@ -447,6 +447,44 @@ base clause**. The hold path is **untested** by this window — find one where t
 **Method (Joe):** *"always try to add more free dimensions when testing, you never know what you'll find."*
 open+close = two samples per bar; arm-triggered trades = a second, independent confirmation of the same event.
 
+### X10 · Overnight rig — first 90 minutes · 0709
+
+**Recon: clean.** `o9_recon` 13 rows, **CLEAN=12, DRIFT=0**, zero `DISCREPANCY`. The klines re-derived from the
+tape as it is now reproduce the values recorded at each arm **bit-exactly**. `arms = trades = 13` — the arm
+event and the trade are one series, as intended.
+
+**The arm machine is correct.** Verified on live data, every arm bar: `breach_here? = False`, `rev5m != 0`,
+`bigleg = False` (base clause). Full trace 10:10–10:30:
+```
+breaches (es=+1): 10:10:30 · 10:17:10 · 10:19:25 · 10:19:35
+rev5m=-1 fires  : 10:11:20 · 10:14:05 · 10:16:40 · 10:19:00 · 10:20:15 · 10:21:55
+arms   (es=+1)  : 10:11:20 · 10:19:00 · 10:20:15
+```
+- breach 10:10:30 → candidate; **10:11:20 rev → ARM**, popped.
+- 10:14:05 and 10:16:40 rev with **no candidate → nothing**. *The reversal alone is not an arm either.*
+- breach 10:17:10 → candidate; **10:19:00 rev → ARM**, popped.
+- breach 10:19:25 → candidate; breach 10:19:35 **swallowed** (same excursion); **10:20:15 rev → ARM**.
+
+I had flagged "two same-side arms 75s apart with no intervening breach" as *my* bug. There **was** an intervening
+breach (10:19:25) — I inferred its absence from two sampled `s5m` values instead of checking. And `_mage_rev`
+fires on `cur == wob_n` exactly, i.e. **one bar per run, an edge, not a latch** — the other half of that wrong
+hypothesis. **No defect. Both halves of the gate are live.**
+
+**The account is not clean: $500 → $38 in 90 minutes.** The unwired `RiskGovernor` meeting an arm-triggered
+producer with `dynamic5x` and no exposure cap. Expected, and flagged before deploying. Two notes:
+- Below some equity the trades stop being informative (`dynamic5x` sizes off equity), so the *second dimension*
+  degenerates. The **arm events keep logging regardless** — `o9_recon` does not depend on trades.
+- **$462 / 13 trades ≈ $35 each**, well above the ~$21 a 0.9% stop costs on that notional. Either the pyramid
+  stacked, or the `close_leg` exception is skipping the intent that would close the other hedge leg (4 legs open).
+  **Do not read PnL until the migration lands.**
+
+**LIVE BUG FOUND BY THE RIG (pre-existing).** `o9_decision.action` lacks `'close_leg'` (`app.py:76`) and
+`'reduce'` (`app.py:67`). Every per-leg SL close raises `1265 Data truncated`, the exception propagates out of
+`_execute`, and **the remaining intents on that bar are skipped** — with hedge legs, a stop on one side can
+silently drop an open on the other. The position *does* close (`record_close_leg` precedes `log_decision`); only
+the audit row is lost. Staged: `migrate_decision_action.py` (additive, idempotent, safe with the loop running).
+**NOT RUN — Joe's call.**
+
 **METHOD TRAP (cost one run).** `o9_state_log.kline_ms` is the **decision instant**, not the bar:
 `driver.py:41` → `now_ms = ts + bar + delay`. The acted bar is **one bar below the floor**. Flooring naively
 gives ~100% mismatch with every pair exactly 5s apart — reads as total divergence, is an off-by-one.
