@@ -1,4 +1,31 @@
-# Arm-delay mechanic — research + ideas (0704)
+# Arm-delay mechanic — research + ideas (0704) · **CLOSED 0709**
+
+> **STATUS: CLOSED.** The mechanic below was specced 0704 and the **base clause was never built** — the build
+> armed at the s5m *breach* instead of waiting for the s5m *reversal*. Fixed 0709 (`e10b856`). The arm is now
+> causal and window-invariant, and it is **verified not tradeable alone** (that is what an arm is *for*: it
+> hands to the gate and the finishers).
+>
+> **Live probe, 0709 10:19 → 17:59 (7h40m), `O9_PRODUCER=arm`** — trade on every arm, no gate, no finisher.
+> This is the collateral dataset: each row is a milestone the bot must pass to be profitable.
+>
+> | mechanic | learnt | needs attention |
+> |---|---|---|
+> | **arm** | Spec's base clause was never built. Fixed, causal, window-invariant. 38 live arms, every one at an `s5m` reversal, none at a breach. | Nothing. |
+> | **big leg / hold** | Latches on an **emerging wick** — `s7M` touched `85.24`, closed `78.40`. Joe's `22:17` closed-line read was right. | **Hold path never executed.** 0 of 38 arms held. Untested branch. |
+> | **tape** | 37 of 38 arm bars re-derive bit-exact. `DRIFT=0`, `DISCREPANCY=0`. | Nothing. Klines are stable. |
+> | **arm→trade** | 38 arms → 38 trades, 1:1. | 20 `close_leg` errors. Migration staged. |
+> | **stop** | Only exit that exists. 20 stop-outs of 28 closes. Level `0.90%`, realized `~1.075%`. | The stop costs ~17% more than its label. |
+> | **winners** | 8, all from an *opposing* arm's stack-close. **No profit mechanism exists.** | The arm alone has no edge. Expected — no gate, no finisher. |
+> | **sizing/risk** | `qty` pinned at the `66000` cap on every trade. Never dynamic. −$1,514 over 28 closes. | `RiskGovernor` unwired. 10 legs open at stop. |
+> | **detector (mine)** | 1 `ARM-DRIFT` — my own warmup-edge artifact, fixed before the run proper. 0 since. | Nothing. |
+>
+> Each row is expanded, with timestamped examples and proposed fixes, in **`docs/0709_repairs/`**:
+> [entry.md](0709_repairs/entry.md) · [exit.md](0709_repairs/exit.md) · [trade.md](0709_repairs/trade.md) ·
+> [misc.md](0709_repairs/misc.md). Full narrative: `docs/causal_lookahead_register.md`.
+>
+> **The three "ideas to steal" below remain OPEN** and are now the natural next work on this mechanic —
+> especially (1), since the hold branch has never run.
+
 
 ## The mechanic (Joe's spec)
 A **dynamic arm-delay** plugged in *before* the gates — a "mini bias" on the arm:
