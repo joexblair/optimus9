@@ -18,3 +18,4 @@ transfer/kline_sanitise/
 sg_seed/
 optimus9_config.json
 .venv/
+run/

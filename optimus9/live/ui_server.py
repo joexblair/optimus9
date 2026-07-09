@@ -24,6 +24,8 @@ FAKEAPI = os.environ.get("O9_FAKEAPI_URL", "http://127.0.0.1:8098")
 START_EQUITY = float(os.environ.get("O9_START_EQUITY", "500"))
 DD_REF = float(os.environ.get("O9_DD_REF", "21.8"))
 SYMBOL = os.environ.get("O9_SYMBOL", "FARTCOINUSDT")
+# tape+config db = the configured DEFAULT (pk_optimizer on WSL, o9_infra on SG) — never hardcode it
+TAPE_DB = os.environ.get("O9_TAPE_DB", get_db_config()["database"])
 UI_BOOK: dict = {}
 app = FastAPI(title="o9-live")
 
@@ -109,7 +111,7 @@ def trade_events(led_id: int):
 @app.get("/api/cascade_grid")
 def cascade_grid():
     """The cascade_state registry (grid layout) — read once by the UI to build the mirror-grids."""
-    dev = _db("pk_optimizer")
+    dev = _db(TAPE_DB)
     rows = dev.execute("SELECT state, bit, cell_col, cell_row, label, active FROM cascade_state "
                        "ORDER BY cell_col, cell_row", fetch=True)
     dev.disconnect()
@@ -118,7 +120,7 @@ def cascade_grid():
 
 @app.get("/api/positions")
 def positions():
-    o9 = _db(); dev = _db("pk_optimizer")
+    o9 = _db(); dev = _db(TAPE_DB)
     rows = o9.execute("SELECT led_id, side, qty, entry_px, opened_ms, reason FROM o9_ledger "
                       "WHERE status='open' ORDER BY opened_ms", fetch=True)
     price, _ = _price(dev); o9.disconnect(); dev.disconnect()
@@ -135,7 +137,7 @@ def positions():
 
 @app.get("/api/state")
 def state():
-    o9 = _db(); dev = _db("pk_optimizer")
+    o9 = _db(); dev = _db(TAPE_DB)
     acct = o9.execute("SELECT equity FROM o9_account WHERE acct_id=1", fetch=True)
     rows = _closed(o9)
     pos = o9.execute("SELECT side, SUM(qty) q FROM o9_ledger WHERE status='open' GROUP BY side", fetch=True)
@@ -174,7 +176,7 @@ def state():
 
 @app.get("/api/chart")
 def chart(bars: int = 150):
-    dev = _db("pk_optimizer"); o9 = _db()
+    dev = _db(TAPE_DB); o9 = _db()
     ks = dev.execute("SELECT kc_timestamp t, kc_close c FROM kline_collection WHERE kc_tp_pk="
                      "(SELECT tp_pk FROM trading_pairs WHERE tp_symbol_bybit=%s) "
                      "ORDER BY kc_timestamp DESC LIMIT %s", (SYMBOL, bars), fetch=True)
