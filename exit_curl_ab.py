@@ -17,8 +17,8 @@ from optimus9.analysis.lr_v2 import (v2_walk_ad, lr_exit_v2, strand_rescue, _fin
 
 SPAN_D = 42
 START, LEV, MAX_LOT, COST = 500.0, 5.0, 66000, 0.20
-GATE_SEAMS = [105000, 210000]           # s7r: 1.75min, 3.5min
-UNLATCH_SEAMS = [75000, 150000]         # s5r: 1.25min, 2.5min
+GATE_SEAMS = [60000, 105000, 210000]    # s7r: 1min, 1.75min, 3.5min  (60 = finer, off-TF per Joe)
+UNLATCH_SEAMS = [40000, 75000, 150000]  # s5r: 40s, 1.25min, 2.5min   (40 = finer, off-TF)
 SUM_FILE = os.path.expanduser("~/.claude/hooks/last_summary.txt")
 
 
@@ -39,9 +39,10 @@ def coarse_curl(ts, vals, seam, direction, with_val=False):
     return out
 
 
-def curl_exit(W, cfg, entries, gate_mode, unlatch_mode, seam_gate, seam_unlatch, gate_fam='s7'):
+def curl_exit(W, cfg, entries, gate_mode, unlatch_mode, seam_gate, seam_unlatch, gate_fam='s7', tp=None):
     """lr_exit_v2 (predict off) with the gate + unlatch signals swappable. gate_mode: breach | curl (breach then
-    s7r OOB coarse-curl). unlatch_mode: flip | curl (s5r coarse-curl). Everything else identical."""
+    s7r OOB coarse-curl). unlatch_mode: flip | curl (s5r coarse-curl). tp = take-profit %: a limit that fills at
+    +tp the first bar the favourable excursion reaches it (checked each bar with the SL — whichever hits first)."""
     ts, px, n = np.asarray(W.ts), W.px, len(W.ts)
     hi, lo = cfg.hi, cfg.lo
     s5m, s5r = W.line('s5m'), W.line('s5r')
@@ -56,8 +57,11 @@ def curl_exit(W, cfg, entries, gate_mode, unlatch_mode, seam_gate, seam_unlatch,
         entry_px = float(px[tj]); arm = gate = unlatch = xk = None; breached = False
         ek = None; reason = 'end'
         for k in range(tj + 1, n):
-            if (px[k] - entry_px) / entry_px * 100.0 * bd <= -cfg.sl:
+            fav = (px[k] - entry_px) / entry_px * 100.0 * bd
+            if fav <= -cfg.sl:
                 ek = k; reason = 'SL'; break
+            if tp is not None and fav >= tp:
+                ek = k; reason = 'TP'; break
             if xk is not None:
                 if k >= xk:
                     ek = k; reason = 'exit'; break
@@ -87,7 +91,7 @@ def curl_exit(W, cfg, entries, gate_mode, unlatch_mode, seam_gate, seam_unlatch,
         if ek is None:
             ek = n - 1
         exit_px = float(px[ek])
-        ret = -cfg.sl if reason == 'SL' else (exit_px - entry_px) / entry_px * 100.0 * bd
+        ret = tp if reason == 'TP' else (-cfg.sl if reason == 'SL' else (exit_px - entry_px) / entry_px * 100.0 * bd)
         rows.append((tms, int(ts[ek]), bd, entry_px, exit_px, round(ret, 3), reason))
     return rows
 
@@ -101,7 +105,8 @@ def trades_from(W, lr, ent, exits):
         if x <= e or x >= len(px):
             continue
         seg = (px[e:x + 1] - px[e]) / px[e] * 100.0 * bd
-        tr.append((float(px[e]), float(seg[-1]), float(np.nanmin(seg)), float(np.nanmax(seg))))
+        ret = float(r) if reason == 'TP' else float(seg[-1])       # TP fills at the limit; else the realized close
+        tr.append((float(px[e]), ret, float(np.nanmin(seg)), float(np.nanmax(seg))))
     return tr
 
 
@@ -136,30 +141,25 @@ def main():
         print("VALIDATION FAILED: curl_exit baseline != lr_exit_v2 — abort"); dev.disconnect(); return
     print("baseline validated (curl_exit==lr_exit_v2). entries=%d over %dw" % (len(ent), SPAN_D // 7))
 
-    combos = [('breach', 'flip', None, None, 'BASELINE breach+flip')]
-    for gs in GATE_SEAMS:
-        for us in UNLATCH_SEAMS:
-            combos.append(('curl', 'curl', gs, us, 'gate-curl@%d/s5r@%d' % (gs // 1000, us // 1000)))
-    # also isolate each lever
-    for gs in GATE_SEAMS:
-        combos.append(('curl', 'flip', gs, UNLATCH_SEAMS[0], 'gate-curl@%d only' % (gs // 1000)))
-    for us in UNLATCH_SEAMS:
-        combos.append(('breach', 'curl', GATE_SEAMS[0], us, 's5r-curl@%d only' % (us // 1000)))
+    GW, UW = 105000, 40000                              # curl winner from the seam sweep
+    runs = [('BASELINE breach+flip', 'breach', 'flip', None),
+            ('curl@105/40 no-TP', 'curl', 'curl', None)]
+    for tp in (0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 1.0, 1.5):
+        runs.append(('curl@105/40 +TP%.2f' % tp, 'curl', 'curl', tp))
 
     rows = []
-    for gm, um, gs, us, label in combos:
-        ex = curl_exit(W, lr, ent, gm, um, gs or GATE_SEAMS[0], us or UNLATCH_SEAMS[0])
-        s = score(trades_from(W, lr, ent, ex))
+    for label, gm, um, tp in runs:
+        s = score(trades_from(W, lr, ent, curl_exit(W, lr, ent, gm, um, GW, UW, tp=tp)))
         rows.append((label, s))
     base_pnl = rows[0][1]['best']
     rows_sorted = sorted(rows, key=lambda r: -r[1]['best'])
 
-    lines = ["EXIT CURL A/B — v2_walk %dw (%d entries) | arbiter=PnL(best-stop)" % (SPAN_D // 7, len(ent)),
-             "%-22s %5s %6s %7s %7s %9s" % ("variant", "n", "win%", "MAEmd", "MFEmd", "PnL$")]
+    lines = ["EXIT TP sweep on curl-winner gate@105/s5r@40 — v2_walk %dw (%d entries) | arbiter=PnL(best-stop)" % (SPAN_D // 7, len(ent)),
+             "%-24s %5s %6s %7s %7s %9s" % ("variant", "n", "win%", "MAEmd", "MFEmd", "PnL$")]
     for label, s in rows_sorted:
-        tag = " *base" if label.startswith('BASELINE') else (" +%.0f%%" % (100 * (s['best'] / base_pnl - 1)) if s['best'] != base_pnl else "")
-        lines.append("%-22s %5d %5.1f %7.3f %7.3f %9.0f%s" %
-                     (label[:22], s['n'], 100 * s['win'], s['mae_med'], s['mfe_med'], s['best'], tag))
+        tag = " *base" if label.startswith('BASELINE') else " %+.1f%%" % (100 * (s['best'] / base_pnl - 1))
+        lines.append("%-24s %5d %5.1f %7.3f %7.3f %9.0f%s" %
+                     (label[:24], s['n'], 100 * s['win'], s['mae_med'], s['mfe_med'], s['best'], tag))
     win = rows_sorted[0]
     lines.append("WINNER: %s  PnL $%.0f  (baseline $%.0f, %+.1f%%)" %
                  (win[0], win[1]['best'], base_pnl, 100 * (win[1]['best'] / base_pnl - 1)))
