@@ -39,6 +39,12 @@ from ..constants import RSI_OVERBOUGHT, RSI_OVERSOLD
 class IndicatorComputer:
     """Pure computation. Replicates Pine Script f_bb, f_k, DEMA. No I/O."""
 
+    # Closed-mode alignment stamp. False = legacy bar-OPEN (leaks the window's own future into
+    # its mid-window base bars); True = bar-CLOSE (last COMPLETED window; Pine lookahead_off).
+    # This class is I/O-free by contract, so the value is injected by the caller, not read from
+    # the DB here. See align_to_base.
+    ALIGN_CLOSE_STAMP = False
+
     @staticmethod
     def resample(df: pd.DataFrame, target_seconds: int, anchor: str = 'epoch') -> pd.DataFrame:
         """Aggregate a 5s OHLCV DataFrame into target_seconds bars (numpy reduceat — was pandas groupby,
@@ -46,7 +52,9 @@ class IndicatorComputer:
         anchor='epoch' (default — bars on the epoch grid; the live BL path);
         'midnight' = re-anchored to UTC midnight each day (TV's non-day-divisor TF bars 7m/22m/…).
         Aggregation: timestamp/open = first, high = max, low = min, close = last, volume = sum;
-        empty bins are absent (only non-empty bo-groups become bars). Input ts is sorted → bo monotonic."""
+        empty bins are absent (only non-empty bo-groups become bars). Input ts is sorted → bo monotonic.
+        Also emits `close_ts` = bar-open + target_seconds — the instant the bar's aggregate becomes
+        knowable. `timestamp` (bar-open) identifies the bar; `close_ts` is when it may be READ."""
         ts = df['timestamp'].to_numpy(dtype=np.int64)
         cols = ('timestamp', 'open', 'high', 'low', 'close', 'volume')
         if len(ts) == 0:
@@ -58,6 +66,7 @@ class IndicatorComputer:
         last   = np.append(starts[1:], len(ts)) - 1                            # last row index per group
         return pd.DataFrame({
             'timestamp': ts[starts],                          # first ts in the bar
+            'close_ts':  bo[starts] + target_seconds * 1000,  # bar-close: when the aggregate is knowable
             'open':      o[starts],                           # first
             'high':      np.fmax.reduceat(h, starts),         # max (NaN-skipping, like pandas)
             'low':       np.fmin.reduceat(l, starts),         # min
@@ -75,16 +84,26 @@ class IndicatorComputer:
             return day + ((ts - day) // tf_ms) * tf_ms
         return (ts // tf_ms) * tf_ms
 
-    @staticmethod
-    def align_to_base(values: np.ndarray,
+    @classmethod
+    def align_to_base(cls,
+                      values: np.ndarray,
                       source_df: pd.DataFrame,
                       base_df:   pd.DataFrame) -> np.ndarray:
         """
         Forward-fill indicator values from source_df timestamps to base_df timestamps.
         Uses searchsorted for O(n log m) vectorised alignment.
         Mimics Pine Script request.security() — each base bar sees the last completed source bar.
+
+        Stamp choice (ALIGN_CLOSE_STAMP) — this is the closed-mode look-ahead seam:
+          False (legacy): align on `timestamp` (bar-OPEN). A base bar inside window w maps to w
+                 ITSELF — whose high/low/close aggregate w's whole span, including w's future.
+                 Backtest-only leak: live reads index -1, where the aggregate covers <= T.
+          True: align on `close_ts` (bar-CLOSE). A base bar maps to the last window that has
+                 actually CLOSED — the docstring's stated contract, and Pine's lookahead_off.
+        Falls back to `timestamp` (with the legacy leak) when source_df predates `close_ts`.
         """
-        src_ts  = source_df['timestamp'].to_numpy()
+        stamp   = 'close_ts' if (cls.ALIGN_CLOSE_STAMP and 'close_ts' in source_df.columns) else 'timestamp'
+        src_ts  = source_df[stamp].to_numpy()
         base_ts = base_df['timestamp'].to_numpy()
         idx     = np.searchsorted(src_ts, base_ts, side='right') - 1
         out     = np.full(len(base_ts), np.nan)
