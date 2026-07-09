@@ -14,6 +14,46 @@ sites below from the ~16 forward loops that are perfectly causal (`gate_open`, `
 
 ---
 
+## THE REASON (Joe, 0709) — applies to every change on this branch
+
+> **The backtest's components are not 100% aligned with the o9-live state events.**
+
+## THE ARBITER (Joe, 0709)
+
+> **Align the backtest's components 100% with the o9-live state events.**
+
+Not PnL. **Alignment.** o9-live is the reference implementation *because it is physically incapable of
+look-ahead* — its window ends at now. So the arbiter does not RANK the candidate arms; it says which arm is
+**admissible**. Every causal repair wins by definition, because live can only ever do the causal thing.
+
+PnL is therefore a **consequence**, not a criterion: it measures what alignment *costs*. (For A1 it cost
+`-11.46%` — i.e. alignment **paid**. See the changelog.)
+
+**Operationally:** the backtest's `v2_mech_events` (arm / stale_exit / rtr / s3s4_gate / trade) replayed over a
+window must equal o9-live's logged `o9_state_log` events bar-for-bar. Every disagreement is a defect in the
+backtest, not in live.
+
+## BUILD-AS-SHIPPED vs SPEC-AS-WRITTEN
+
+This is the frame for the whole document. `fin_lb=42` bars = **7×30s** and `fin_fwd=12` bars = **2×30s** —
+exactly spec §4's lookback and forward tolerance. **The knobs conform. The behaviour does not.**
+
+- **Entry placement.** `fin_unlatch` enters at the *first* `s15a`, where spec §4 says to *walk forward with
+  2×30s tolerance for a late line* — i.e. wait for it. Its sibling `fin_gate` already does exactly that with
+  `max(j15, j30)`. **The two finishers disagree with each other**, and one of them disagrees with the spec.
+- **Gate bypass (deeper).** Spec §4 opens *"Gate open → FINISHERS."* The gate can only open on an arm. But
+  `v2_cascade` tries `fin_unlatch` **first, off the arm bar, with no gate reference at all**, and only falls
+  through to the gate-dependent `fin_gate` if M1 returns `None`. So **M1 both bypasses and pre-empts the gate.**
+
+So D3 is not "a repair vs the build." It is **build-as-shipped vs spec-as-written**, and the build has been
+quietly disagreeing with the spec since 0704. The 20–50s `s15a` lag is understood and correct by design — but
+**it is not yet unpacked**, and it will be, after the remaining tests land. Do not close A1 before then.
+
+**Open, and bigger than entry placement:** *should M1 exist at all?* Spec has one finisher mechanism
+(post-gate). The build has two, one gate-independent, and it fires first.
+
+---
+
 ## Part 1 — Register
 
 ### A. Confirmed look-ahead, on the live producer path
