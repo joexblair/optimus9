@@ -17,7 +17,7 @@ import bias_machine as bm
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.analysis.lr import lr_config, lr_walk
-from optimus9.analysis.lr_v2 import s_qualify, s_qualify_parts, v2_arm, gate_open, _mage_rev
+from optimus9.analysis.lr_v2 import s_qualify, s_qualify_parts, v2_arm, gate_open, _mage_rev, _rolling_any, _curl_detect
 from optimus9.compute.breaching_line import predict_breach, FENCE_HI, FENCE_LO
 from optimus9.compute.swing_detect import find_pivots, legs, swing_mask
 from sweep_eval import BASE_BIAS
@@ -53,6 +53,15 @@ class _Causal:
             raise ValueError("no r_lb for %s — pass r_lb=" % tf)
         return s_qualify(self.j.W, self.j.cfg, '%sm' % tf, '%sM' % tf, '%sr' % tf, lb)
 
+    def finisher_pair(self, box=12, tf_a='s15', tf_b='s30', r_lb_a=None, r_lb_b=None):
+        """CAUSAL co-occurrence event: at bar k, True iff BOTH s{tf_a}a and s{tf_b}a fired within the trailing box
+        [k-box, k]. box in 5s bars (default 12 = 2x30s, the finisher tolerance). Returns (hi, lo) per-bar bools.
+        This is the s30a+s15a EVENT — feed it to a consumer; don't re-bake the conjunction in a window inline."""
+        ah, al = self.finishers(tf_a, r_lb_a); bh, bl = self.finishers(tf_b, r_lb_b)
+        hi = _rolling_any(ah, box) & _rolling_any(bh, box)
+        lo = _rolling_any(al, box) & _rolling_any(bl, box)
+        return hi, lo
+
     def finisher_parts(self, tf, r_lb=None):
         """The per-bar COMPONENTS of s{tf}a (s_qualify_parts) for N-of-9: dict of per-side bools
         m_hi/lo, Moob_hi/lo (Mage OOB), Mrev_hi/lo (Mage reversed), rlb_hi/lo (r OOB within r_lb back).
@@ -81,16 +90,12 @@ class _Causal:
         v = self.line(name); mask = (self.j.ts % seam_ms) == 0
         return self.j.ts[mask], v[mask]
 
-    def curl(self, ts_c, c, direction):
+    def curl(self, ts_c, c, direction, with_val=False):
         """Causal trough(direction +1)/peak(-1) on a coarse series: fires one seam AFTER the turn, past data only.
-        Returns the set of 5s-timestamps at which a curl is confirmed."""
-        out = set()
-        for k in range(2, len(c)):
-            if direction == 1 and c[k - 1] < c[k] and c[k - 1] <= c[k - 2]:
-                out.add(int(ts_c[k]))
-            if direction == -1 and c[k - 1] > c[k] and c[k - 1] >= c[k - 2]:
-                out.add(int(ts_c[k]))
-        return out
+        Returns the set of 5s-timestamps at which a curl is confirmed. with_val=True -> {ts: turn_value} (the value at
+        the turn point c[k-1]) so the consumer can gate a curl by which side of the board it turned on.
+        Delegates to lr_v2._curl_detect — the single curl-detection impl (SRP; also used by lr_exit_v2)."""
+        return _curl_detect(np.asarray(ts_c), np.asarray(c, float), direction, with_val)
 
 
 class _Score:

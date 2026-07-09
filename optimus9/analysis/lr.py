@@ -49,6 +49,7 @@ class LRConfig:
     swing_ms: int; swing_pct: float; bias_mid: float; s30r_lb: int; s15r_lb: int
     hi: float; lo: float
     exit_rlb: int = 22; sl: float = 0.5; curl_n: int = 1
+    gate_mode: str = 'breach'; unlatch_mode: str = 'flip'; seam_gate: int = 105000; seam_unlatch: int = 40000  # exit coarse-curl (Joe 0709)
     fin_mage_wob: int = 0; fin_s30M_oob: int = 1; fin_lb: int = 42; fin_fwd: int = 12
     arm_wob: int = 2; arm_bigleg: int = 1; fin_both: int = 1; fin_dedup: int = 0
     arm_mode: str = 's5m'   # 's5m' (breach+divergence, current) | 's5Mage' (first-OOB-reversal, Joe 0705 troubleshooting)
@@ -77,7 +78,8 @@ def lr_config(db):
         "'lp_lr_target','lp_lr_swing_ms','lp_lr_swing_pct','lp_lr_bias_mid','lp_s30r_lb','lp_s15r_lb',"
         "'lp_lr_exit_rlb','lp_lr_sl','lp_lr_curl_n',"
         "'lp_fin_mage_wob','lp_fin_s30M_oob','lp_fin_lb','lp_fin_fwd',"
-        "'lp_arm_wob','lp_arm_bigleg','lp_fin_both','lp_fin_dedup','lp_arm_mode')", fetch=True)}
+        "'lp_arm_wob','lp_arm_bigleg','lp_fin_both','lp_fin_dedup','lp_arm_mode',"
+        "'lp_lr_gate_mode','lp_lr_unlatch_mode','lp_lr_seam_gate','lp_lr_seam_unlatch')", fetch=True)}
     sb = db.execute("SELECT hi_boundary, lo_boundary FROM optimus9_system LIMIT 1", fetch=True)[0]
     roles = {'arm': [], 'finisher': [], 'gate': []}
     for g in db.execute("SELECT * FROM lr_gate WHERE lrg_active=1", fetch=True):
@@ -97,6 +99,9 @@ def lr_config(db):
         arm_wob=int(k.get('lp_arm_wob', 2)), arm_bigleg=int(k.get('lp_arm_bigleg', 1)), fin_both=int(k.get('lp_fin_both', 1)),
         fin_dedup=int(k.get('lp_fin_dedup', 0)),
         arm_mode=('s5Mage' if int(k.get('lp_arm_mode', 0)) == 1 else 's5m'),   # lp_arm_mode: 0=s5m · 1=s5Mage (val is numeric)
+        gate_mode=('curl' if int(k.get('lp_lr_gate_mode', 0)) == 1 else 'breach'),        # lp_lr_gate_mode: 0=breach 1=curl
+        unlatch_mode=('curl' if int(k.get('lp_lr_unlatch_mode', 0)) == 1 else 'flip'),     # lp_lr_unlatch_mode: 0=flip 1=curl
+        seam_gate=int(k.get('lp_lr_seam_gate', 105000)), seam_unlatch=int(k.get('lp_lr_seam_unlatch', 40000)),
         hi=float(sb['hi_boundary']), lo=float(sb['lo_boundary']),
         arms=roles['arm'], finishers=roles['finisher'], gates=roles['gate'], exit_finishers=exit_fins)
 

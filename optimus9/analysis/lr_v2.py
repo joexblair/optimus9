@@ -131,6 +131,31 @@ def _slope_flip(line):
     return flip
 
 
+def _curl_detect(ts_c, c, direction, with_val=False):
+    """Causal trough(dir +1)/peak(dir -1) on a COARSE series (ts_c, c): fires one seam AFTER the turn, past data
+    only. Returns {ts:turn_value} (with_val) or a set of ts. The single curl-detection impl — jig.causal.curl
+    delegates here (SRP: one curl definition)."""
+    c = np.asarray(c, float)
+    out = {} if with_val else set()
+    for k in range(2, len(c)):
+        hit = (direction == 1 and c[k - 1] < c[k] and c[k - 1] <= c[k - 2]) or \
+              (direction == -1 and c[k - 1] > c[k] and c[k - 1] >= c[k - 2])
+        if hit:
+            if with_val:
+                out[int(ts_c[k])] = float(c[k - 1])
+            else:
+                out.add(int(ts_c[k]))
+    return out
+
+
+def coarse_curl(ts, vals, seam_ms, direction, with_val=False):
+    """Sample the EMERGING line `vals` at every `seam_ms` boundary, then detect the causal peak/trough (the jig
+    coarse-curl). ts = the full 5s grid; returns curl-confirmed 5s timestamps (one seam after the turn)."""
+    ts = np.asarray(ts, np.int64)
+    mask = (ts % seam_ms) == 0
+    return _curl_detect(ts[mask], np.asarray(vals, float)[mask], direction, with_val)
+
+
 def gate_signals(W, cfg, gate_rev='s1M'):
     """[3] PRODUCER — per-bar signals the latch verdict consumes. MECHANISM CHOICES (surfaced for review):
     reverses = slope-flip · all-IB = s2r/s3r/s4r in-band · m-reversed (setup#2) = s3m/s4m slope-flip ·
@@ -685,10 +710,17 @@ def lr_exit_v2(W, cfg, entries, predict=True, gate_fam='s7', slip=0.0, rlb=19):
     rev5 = _slope_flip(s5r)
     s30hi, s30lo = _finisher_signal(W, cfg, 's30M', 's30m', 's30r', rlb, 30)
     s15hi, s15lo = _finisher_signal(W, cfg, 's15M', 's15m', 's15r', rlb, 15)
+    # Coarse-curl variant (Joe 0709, +1.2% v2_walk): gate = s7r breach-THEN-OOB-curl, unlatch = s5r coarse-curl.
+    # DB-sourced modes (lr_config ← lp_config); default 'breach'/'flip' = the classic cascade. See docs/o9live_changelog.md.
+    gate_mode = getattr(cfg, 'gate_mode', 'breach'); unlatch_mode = getattr(cfg, 'unlatch_mode', 'flip')
+    seam_g = int(getattr(cfg, 'seam_gate', 105000)); seam_u = int(getattr(cfg, 'seam_unlatch', 40000))
+    tsa = np.asarray(ts, np.int64)
+    gcurl = {d: coarse_curl(tsa, gr, seam_g, d, with_val=True) for d in (1, -1)} if gate_mode == 'curl' else None
+    ucurl = {d: coarse_curl(tsa, s5r, seam_u, d) for d in (1, -1)} if unlatch_mode == 'curl' else None
     rows = []
     for tms, es, bd, tj in entries:
         entry_px = float(px[tj])
-        arm = gate = unlatch = xk = None
+        arm = gate = unlatch = xk = None; breached = False
         predicted = not predict                                  # predict off ⇒ gate fires on the breach alone
         ek = None; reason = 'end'
         for k in range(tj + 1, n):
@@ -704,10 +736,17 @@ def lr_exit_v2(W, cfg, entries, predict=True, gate_fam='s7', slip=0.0, rlb=19):
                 if predg[k] == bd:
                     predicted = True
                 s7b = (gr[k] <= glo) if bd == -1 else (gr[k] >= ghi)
-                if predicted and s7b:
-                    gate = k
+                if gate_mode == 'breach':
+                    if predicted and s7b:
+                        gate = k
+                else:                                            # breach THEN s7r OOB coarse-curl (fires later)
+                    if predicted and s7b:
+                        breached = True
+                    tk = int(tsa[k])
+                    if breached and tk in gcurl[es] and ((gcurl[es][tk] >= hi) if bd == 1 else (gcurl[es][tk] <= lo)):
+                        gate = k
             elif unlatch is None:
-                if rev5[k] == es:                                # s5r reverses toward es = the curl unlatch
+                if (rev5[k] == es) if unlatch_mode == 'flip' else (int(tsa[k]) in ucurl[es]):   # s5r reversal → unlatch
                     unlatch = k
                     xk = _finish(s30hi, s30lo, s15hi, s15lo, bd, arm, unlatch, n)
                     if xk is not None and k >= xk:               # both finishers already latched ⇒ exit now
