@@ -8,6 +8,7 @@ the live position, o9's ledger drives the UI + sizing. Taker rate is a ctor arg 
 from __future__ import annotations
 
 import time
+from datetime import datetime, timezone
 
 
 class O9Ledger:
@@ -46,8 +47,9 @@ class O9Ledger:
         return self.db.execute("SELECT led_id, side, qty, entry_px, opened_ms FROM o9_ledger "
                                "WHERE symbol=%s AND status='open' ORDER BY opened_ms", (self.symbol,), fetch=True)
 
-    def _close_rows(self, rows, exit_px, order_id, ts) -> float:
-        """Close the given open rows at exit_px; compute o9's realized per trade; tally the account."""
+    def _close_rows(self, rows, exit_px, order_id, ts, close_reason='exit') -> float:
+        """Close the given open rows at exit_px; compute o9's realized per trade; tally the account; and write a
+        durable copy of each closed trade to o9_trade_archive (which /api/reset does NOT touch)."""
         total = 0.0
         for t in rows:
             d = 1.0 if t["side"] == "Buy" else -1.0
@@ -59,11 +61,28 @@ class O9Ledger:
             self.db.execute("UPDATE o9_ledger SET exit_px=%s, exit_order_id=%s, gross=%s, net=%s, fee=%s, "
                             "status='closed', closed_ms=%s WHERE led_id=%s",
                             (exit_px, order_id, round(gross, 8), round(net, 8), round(fee, 8), ts, t["led_id"]))
+            self._archive(t, exit_px, ts, gross, net, fee, close_reason)
         if rows:
             self.db.execute("UPDATE o9_account SET equity=equity+%s, realized_total=realized_total+%s, "
                             "trade_count=trade_count+%s, updated_ms=%s WHERE acct_id=1",
                             (round(total, 8), round(total, 8), len(rows), self._now()))
         return total
+
+    def _archive(self, t, exit_px, ts, gross, net, fee, close_reason):
+        """Durable copy of one closed trade → o9_trade_archive with a mmdd_NN label (the pine-emit label;
+        mmdd = the trade's OPEN day, NN = 1-up within that day). This table survives /api/reset — the persistent
+        trade history for the stop-tool. See docs/o9live_changelog.md."""
+        mmdd = datetime.fromtimestamp(int(t["opened_ms"]) / 1000, timezone.utc).strftime("%m%d")
+        nn = self.db.execute("SELECT COUNT(*) c FROM o9_trade_archive WHERE label LIKE %s",
+                             (mmdd + "\\_%",), fetch=True)[0]["c"] + 1
+        label = "%s_%02d" % (mmdd, nn)
+        self.db.execute(
+            "INSERT INTO o9_trade_archive (label,symbol,side,position_idx,qty,entry_px,exit_px,entry_ms,exit_ms,"
+            "gross,net,fee,mae,open_reason,close_reason,archived_ms) VALUES "
+            "(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            (label, self.symbol, t["side"], 1 if t["side"] == "Buy" else 2, t["qty"], t["entry_px"], exit_px,
+             t["opened_ms"], ts, round(gross, 8), round(net, 8), round(fee, 8), t.get("mae"),
+             t.get("reason"), close_reason, self._now()))
 
     def record_close(self, exit_px, order_id, ts) -> float:
         """Close ALL open o9 trades (one-way net exit / shared reversal-TP)."""
@@ -88,7 +107,7 @@ class O9Ledger:
         """Close ONE leg (option B per-leg SL) — the rest of the pyramid stack stays open. Idempotent
         (selects status='open' by led_id → a second call is a no-op)."""
         rows = self.db.execute("SELECT * FROM o9_ledger WHERE led_id=%s AND status='open'", (led_id,), fetch=True)
-        return self._close_rows(rows, exit_px, order_id, ts)
+        return self._close_rows(rows, exit_px, order_id, ts, close_reason='SL')
 
     # ── decision audit (o9's own log) ──
     def log_decision(self, kline_ms, action, reason="", order_id=None):

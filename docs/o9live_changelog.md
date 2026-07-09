@@ -5,7 +5,8 @@ their spec/memory rather than restate it (SRP). Newest first.
 
 | date | tweak | status | reason | ref |
 |---|---|---|---|---|
-| 2026-07-09 | Exit **curl-cascade** — gate s7r breach-then-OOB-coarse-curl@105s + unlatch s5r coarse-curl@40s | **APPLIED** (fold to `lr_exit_v2` pending) | +1.2% v2_walk (6wk); signal-timing, robust under cost; captures more MFE on a confirmed reversal | [[project_exit_curl]], `docs/exit_brd.md`, `exit_curl_ab.py` |
+| 2026-07-09 | **o9_trade_archive** — durable closed-trade store, `mmdd_NN` labels (e.g. 0709_01), reset-immune | **APPLIED** | The ledger wipes on reset; the stop-tool needs a persistent trade history + stable pine labels | ledger `_archive`, `stop_emit.py` |
+| 2026-07-09 | Exit **curl-cascade** — gate s7r breach-then-OOB-coarse-curl@105s + unlatch s5r coarse-curl@40s | **APPLIED** (folded to `lr_exit_v2`, DB `lp_config`) | +1.2% v2_walk (6wk); signal-timing, robust under cost; captures more MFE on a confirmed reversal | [[project_exit_curl]], `docs/exit_brd.md`, `exit_curl_ab.py` |
 | 2026-07-09 | Fixed **take-profit** overlay | **DROPPED** | Catastrophic (−23%→−100%): caps fat-tail winners; give-back savings dwarfed. win% climbs while PnL→0 | [[project_exit_curl]] |
 | 2026-07-09 | **Trailing-stop** overlay (naive + armed) | **DROPPED** | Catastrophic (best −49%): crypto intra-move whip chops any price-based exit. **Rule: exits must be signal-based** | [[project_exit_curl]] |
 | 2026-07-09 | **Time-out** / max-hold exit | **DROPPED** (untested) | Superseded by the future **consolidation-detector** (forced clean optimal exit), parked post-SG | — |

@@ -282,3 +282,25 @@ CREATE TABLE o9_health (
   db_reconnects   INT NOT NULL DEFAULT 0,
   updated_ms      BIGINT NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- o9_trade_archive: durable closed-trade store (Joe 0709). NOT wiped by /api/reset — persistent trade
+-- history for the stop-tool. label = mmdd_NN (the pine-emit label). Written by O9Ledger._archive on close.
+CREATE TABLE o9_trade_archive (
+  label        VARCHAR(16) PRIMARY KEY,                  -- mmdd_NN (0709_01, ...)
+  symbol       VARCHAR(20) NOT NULL,
+  side         ENUM('Buy','Sell') NOT NULL,
+  position_idx TINYINT NOT NULL,                         -- 1=long 2=short (hedge)
+  qty          DECIMAL(20,8) NOT NULL,
+  entry_px     DECIMAL(20,8) NOT NULL,
+  exit_px      DECIMAL(20,8) NOT NULL,
+  entry_ms     BIGINT NOT NULL,
+  exit_ms      BIGINT NOT NULL,
+  gross        DECIMAL(20,8),
+  net          DECIMAL(20,8),
+  fee          DECIMAL(20,8),
+  mae          DECIMAL(20,8),                            -- TODO: loop does not yet record live MAE
+  open_reason  VARCHAR(24),
+  close_reason VARCHAR(24),                              -- exit | SL
+  archived_ms  BIGINT NOT NULL,
+  INDEX(entry_ms), INDEX(net)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
