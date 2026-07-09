@@ -357,6 +357,38 @@ src mix    live {s5m:493, s5r:128}   backtest {s5m:383, s5r:123}
 **⇒ A2 is the live↔backtest entry gap.** The overnight review is the precursor to the arm-logic attack; then the
 same recon-and-repair on the s3s4 step.
 
+### X5 · WHY the arm gap? · RUN 0709 · `arm_gap_anatomy.py`
+
+**Q2 — is it desync? NO. The gap is grace-INVARIANT.**
+```
+grace  301ms : 354 arms,  62 live-only  (17.5% unmatched)
+grace  700ms :  12 arms,   2 live-only  (16.7% unmatched)
+grace 2000ms : 259 arms,  51 live-only  (19.7% unmatched)
+```
+62 of the 115 predate the read-grace increase; 51 postdate it. If desync caused the gap, the 2000ms era would be
+cleaner. It is marginally **worse**. **Desync is eliminated as the explanation for the arm gap.**
+
+**Q1 — mechanism: `arm_delay` collapses a BURST of s5m breach arms onto one s5Mage reversal bar.**
+```
+n=115  orphans (no later matched arm) = 0
+distance to next matched arm: p50=138 bars (690s)  p90=384 (1920s)  max=704 (58.7min)
+within the 90-min cap: 100.0%
+```
+Every live-only arm has a later matched arm on the same side; none orphaned; all inside `cap`. And the first six
+live-only arms (20:40:40 / 20:51:10 / 21:22:45 / 21:23:00 / 21:23:45 / 21:28:40) **all resolve to the SAME
+backtest arm at 21:29:40.** Six live arms, one backtest arm. Live, blind to the future big leg, commits at every
+ripple; the backtest waits for the tide to turn and enters once.
+
+*Caveat on this script's own numbers:* backtest arms (957) exceed X4's (506) because it does not clip to the live
+window and same-bar arms collapse in the dict. `matched` and `live-only` are the sound figures.
+
+### X6 · Overnight arm probe · BUILT, NOT DEPLOYED
+
+`v2_walk_arm` (`lr_v2.py`) — trade fires **on the arm bar**: no s3s4 gate, no finishers, no s15a. Registered as
+`O9_PRODUCER=arm` in `ops/run_o9live.py`. `v2_walk_ad` untouched. Honours `arm_delay` exactly as the shipping
+producer does, so live's arm (clamped `cap<=T+1`) *is* the arm under test. Live's arm events and its trades
+become the same series ⇒ 1:1 reconcilable against the backtest's arms.
+
 **METHOD TRAP (cost one run).** `o9_state_log.kline_ms` is the **decision instant**, not the bar:
 `driver.py:41` → `now_ms = ts + bar + delay`. The acted bar is **one bar below the floor**. Flooring naively
 gives ~100% mismatch with every pair exactly 5s apart — reads as total divergence, is an off-by-one.

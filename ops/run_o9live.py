@@ -13,7 +13,7 @@ from sweep_eval import BASE_BIAS
 from optimus9.live.exchange import HmacSigner, BybitV5Client, BybitAdapter
 from optimus9.live.sizing import PositionSizer
 from optimus9.live.strategy import StrategyLoop
-from optimus9.analysis.lr_v2 import v2_walk_ad, v2_walk_diag
+from optimus9.analysis.lr_v2 import v2_walk_ad, v2_walk_arm, v2_walk_diag
 from optimus9.analysis.greenfield_producer import greenfield_cascade   # 0708: greenfield CAUSAL arm -> o9's s3s4 gate + o9's finisher
 from optimus9.live.ledger import O9Ledger
 from optimus9.live.app import O9LiveApp
@@ -25,8 +25,8 @@ from optimus9.live.driver import RealtimeDriver
 FAKEAPI = os.environ.get("O9_FAKEAPI_URL", "http://127.0.0.1:8098")
 SYM = os.environ.get("O9_SYMBOL", "FARTCOINUSDT")
 MODE = os.environ.get("O9_SIZE_MODE", "dynamic5x")               # ramp to the 66k-coin cap via leverage
-PRODUCER = os.environ.get("O9_PRODUCER", "ad")                   # 'ad'=v2_walk_ad (look-ahead arm-delay) · 'gf'=greenfield CAUSAL entry (0708) · 'diag'=free-fire #54 probe
-_PRODUCERS = {"ad": v2_walk_ad, "gf": greenfield_cascade, "diag": v2_walk_diag}
+PRODUCER = os.environ.get("O9_PRODUCER", "ad")                   # 'ad'=v2_walk_ad (look-ahead arm-delay) · 'gf'=greenfield CAUSAL entry (0708) · 'diag'=free-fire #54 probe · 'arm'=arm-triggered only, no gate/finishers (0709 overnight arm recon)
+_PRODUCERS = {"ad": v2_walk_ad, "gf": greenfield_cascade, "diag": v2_walk_diag, "arm": v2_walk_arm}
 
 dev = DatabaseManager(**get_db_config()); dev.connect()          # live tape (own o9_live collector = later)
 o9cfg = get_db_config(); o9cfg["database"] = "o9_live"

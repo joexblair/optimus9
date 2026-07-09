@@ -531,6 +531,32 @@ def v2_mech_events(W, cfg):
     return ev
 
 
+def v2_walk_arm(W, cfg):
+    """[ARM·PROBE] Arm-triggered entries ONLY — no gate, no finishers, no s15a (Joe 0709, overnight test).
+
+    Trade fires ON the arm bar itself. Isolates the arm from everything downstream, so o9-live's arm events and
+    its trades become the same series and can be reconciled 1:1 against the backtest's arms.
+
+    WHY: X4 (register) showed the backtest's arms are a strict SUBSET of live's — live fires 115 more (18.5%),
+    almost all s5m breach arms, and the gap is grace-INVARIANT (17.5% at 301ms vs 19.7% at 2000ms), so it is not
+    desync. Anatomy: every live-only arm has a later matched arm on the same side, 100% inside the 90-min cap;
+    six consecutive live breach arms collapse onto ONE backtest arm. arm_delay re-times a burst of s5m breaches
+    onto the s5Mage reversal; live, blind to the future big leg, commits at every ripple.
+
+    Honours arm_delay exactly as v2_walk_ad does (cfg.arm_bigleg), so live's arm is the arm under test — clamped
+    by cap<=T+1 live, unclamped in a full-history backtest. That divergence is the point of the probe.
+
+    Returns v2_walk_ad's shape: [(ts_ms, es, bd, bar)], deduped by bar. NOT a shipping producer."""
+    setups = v2_arm(W, cfg)
+    if cfg.arm_bigleg:
+        setups = arm_delay(W, cfg, setups)
+    ts = W.ts; seen, out = set(), []
+    for (i, es, bd, cap, src) in setups:
+        if i not in seen:
+            seen.add(i); out.append((int(ts[i]), es, bd, i))
+    return out
+
+
 def v2_walk_diag(W, cfg):
     """[DIAG·#54] Realtime-fidelity PROBE (Joe 0704-05) — NOT a real producer; swap in via StrategyLoop(producer=).
     Arm always UNLATCHED + s3s4/fin_gate always OPEN + fin_unlatch OFF → fire on the finisher signal so the live UI
