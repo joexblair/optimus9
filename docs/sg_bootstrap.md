@@ -3,6 +3,10 @@
 Bring the vanilla SG box to parity with WSL + connect to the Akamai Managed MySQL. Run top-to-bottom; verify each
 step. **Branch: clone `live`** (the promoted/validated set), not `main`. See docs/o9-live/o9live_changelog.md for what's live.
 
+> **Status 2026-07-09: §1–§7 COMPLETE on sg-app-01.** o9_infra = 15 tables + 1 view, 1,240,908 klines /
+> 2,428,123 ticks (71.8 days, to 2026-07-09 02:02Z). o9_live = 9 tables. §7 returns `gate_mode curl seam_gate 105000`.
+> §8 (services) not yet started. Every command below was actually run; the corrections are not theoretical.
+
 ## Topology (decided)
 - **Akamai MySQL** host `a493943-akamai-prod-5255352-default.g2a.akamaidb.net` (port + creds: Joe supplies on box).
 - **`o9_infra`** = the DEFAULT db = **tape (kline_collection, ticks) + all config** (indicator_*, lp_config, lr_gate*,
@@ -74,9 +78,23 @@ mysql -h $H -P $P -u $U -p -e "CREATE DATABASE IF NOT EXISTS o9_infra; CREATE DA
 ```
 
 ## 6. Seed data  (dumps produced on WSL, rsync'd to ~/seed/ — see Appendix)
+§5+§6 are scripted end-to-end in **`~/seed/load.sh`** (not versioned; regenerate from this section). It reads creds
+from optimus9_config.json without echoing them and prints verification counts. Steps, if doing it by hand:
+
+**The raw `config.sql` will NOT load.** mysqldump stamps `DEFINER=\`root\`@...` on the 4 `bl_lines` triggers and on
+`vw_indicator_configs_live`. Akamai's `akmadmin` has neither `SUPER` nor `SET_USER_ID`, so creating an object owned
+by another user fails: `ERROR 1227 (42000): Access denied; you need SUPER or SET_USER_ID`. Strip the DEFINERs first
+(the view must also drop to `SQL SECURITY INVOKER`, since a DEFINER view needs a definer that exists):
 ```
-# o9_infra <- config + tape (structure + data). config.sql = 13 tables + vw_indicator_configs_live.
-mysql -h $H -P $P -u $U -p o9_infra < ~/seed/config.sql
+sed -e 's|/\*!50017 DEFINER=[^*]*\*/||g' \
+    -e 's|/\*!50013 DEFINER=[^*]*SQL SECURITY DEFINER \*/|/*!50013 SQL SECURITY INVOKER */|g' \
+    -e 's|DEFINER=`[^`]*`@`[^`]*` ||g' \
+    ~/seed/config.sql > ~/seed/config.sanitized.sql
+grep -c DEFINER ~/seed/config.sanitized.sql          # must be 0
+```
+```
+# o9_infra <- config + tape (structure + data). config.sql = 13 tables + 4 triggers + vw_indicator_configs_live.
+mysql -h $H -P $P -u $U -p o9_infra < ~/seed/config.sanitized.sql
 zcat ~/seed/tape.sql.gz | mysql -h $H -P $P -u $U -p o9_infra   # ~339MB uncompressed: kline_collection + ticks
 ```
 `docs/o9_live_schema.sql` holds **22** CREATEs = 13 config tables (which belong in `o9_infra`, NOT here) + the 9
@@ -90,14 +108,22 @@ LIVE = ['fx_order','fx_fill','fx_position','o9_ledger','o9_account',
 for t in LIVE:
     m = re.search(r"CREATE TABLE (?:IF NOT EXISTS )?`?%s`?\s*\(.*?\n\)[^;]*;" % t, src, re.S|re.I)
     assert m, "NOT FOUND: " + t
-    print(m.group(0), "\n")
+    # IF NOT EXISTS, never DROP: a re-run must not destroy o9_ledger / fx_position / o9_trade_archive.
+    print(re.sub(r"^CREATE TABLE (?:IF NOT EXISTS )?", "CREATE TABLE IF NOT EXISTS ",
+                 m.group(0), count=1, flags=re.I), "\n")
 PY
-mysql -h $H -P $P -u $U -p o9_live < /tmp/o9_live_tables.sql
+mysql -h $H -P $P -u $U -p o9_live < ~/seed/o9_live_tables.sql
 .venv/bin/python migrate_hedge_mode.py o9_live    # idempotent; a NO-OP (schema already ships position_idx)
 ```
 **`o9_forecast`, `o9_state_log`, `o9_state_log_line` are NOT created here** — they self-create at first use via
 `CREATE TABLE IF NOT EXISTS` (ops/o9_forecast.py, optimus9/live/state_log.py). `o9_health` IS in the schema file
 and is created above. (The old §6 listed the three self-creating tables and omitted `o9_health` — both wrong.)
+
+**Do NOT run `ops/provision_o9live.py` on SG.** It is the WSL single-DB path: it seeds the config/reference tables
+*into* `o9_live`, which contradicts §2's topology. The code reads config from the DEFAULT db (`o9_infra`), so those
+copies would be silently ignored — until someone edited the wrong one.
+
+Expected after §6: `o9_infra` = 15 base tables + 1 view; `o9_live` = 9 tables.
 
 ## 7. Verify config loaded (curl exit + risk knobs came across)
 ```
@@ -111,8 +137,15 @@ carries `lp_lr_gate_mode=1`, so this passes. If the row were missing the assert 
 All four MUST use `.venv/bin/python`, from cwd `~/thecodes`. Bare `python3` will `ModuleNotFoundError`.
 ```
 cd ~/thecodes
-# collector (fills o9_infra.kline_collection + ticks from Bybit, near-zero latency here)
-.venv/bin/python -m optimus9.data.tick_collector   # (wire per its run(tp_pk, symbol); or the run supervisor)
+# collector (fills o9_infra.kline_collection + ticks from Bybit, near-zero latency here).
+# NOT `python -m optimus9.data.tick_collector` — that module has no __main__; it imports and exits silently.
+# run.py supervisor runs TickCollector + BarBuilder together under ProcessManager.
+nohup setsid .venv/bin/python run.py supervisor --tp_pk 1 --symbol FARTCOINUSDT >> collector.log 2>&1 & disown
+#   --lookback_days is INERT: synthetic backfill was sunset (Joe 2026-07-05, run.py:438 commented out) because
+#   1m->5s splitting manufactured phantom flat bars that drift oscillators into false reversals. Gaps are now
+#   absorbed by optimus9_system.filler_invisible=1 (verified present in the seed) + TV-CSV -> KlineSanitiser.
+#   NEVER run `run.py backfill_synthetic` against this tape — it reintroduces exactly those phantom bars.
+#   The seed tape ends at the dump time; the collector fills forward from first tick.
 # fakeAPI
 PK_DB_NAME=o9_live O9_LIVE_BOOK=FARTCOINUSDT nohup setsid .venv/bin/python -m uvicorn services.fakeapi.app:app --host 127.0.0.1 --port 8098 >> fakeapi.log 2>&1 & disown
 # loop
