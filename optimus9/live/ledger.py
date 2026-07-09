@@ -71,7 +71,7 @@ class O9Ledger:
     def _archive(self, t, exit_px, ts, gross, net, fee, close_reason):
         """Durable copy of one closed trade → o9_trade_archive with a mmdd_NN label (the pine-emit label;
         mmdd = the trade's OPEN day, NN = 1-up within that day). This table survives /api/reset — the persistent
-        trade history for the stop-tool. See docs/o9live_changelog.md."""
+        trade history for the stop-tool. See docs/o9-live/o9live_changelog.md."""
         mmdd = datetime.fromtimestamp(int(t["opened_ms"]) / 1000, timezone.utc).strftime("%m%d")
         nn = self.db.execute("SELECT COUNT(*) c FROM o9_trade_archive WHERE label LIKE %s",
                              (mmdd + "\\_%",), fetch=True)[0]["c"] + 1

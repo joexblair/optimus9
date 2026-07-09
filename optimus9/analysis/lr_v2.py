@@ -711,7 +711,7 @@ def lr_exit_v2(W, cfg, entries, predict=True, gate_fam='s7', slip=0.0, rlb=19):
     s30hi, s30lo = _finisher_signal(W, cfg, 's30M', 's30m', 's30r', rlb, 30)
     s15hi, s15lo = _finisher_signal(W, cfg, 's15M', 's15m', 's15r', rlb, 15)
     # Coarse-curl variant (Joe 0709, +1.2% v2_walk): gate = s7r breach-THEN-OOB-curl, unlatch = s5r coarse-curl.
-    # DB-sourced modes (lr_config ← lp_config); default 'breach'/'flip' = the classic cascade. See docs/o9live_changelog.md.
+    # DB-sourced modes (lr_config ← lp_config); default 'breach'/'flip' = the classic cascade. See docs/o9-live/o9live_changelog.md.
     gate_mode = getattr(cfg, 'gate_mode', 'breach'); unlatch_mode = getattr(cfg, 'unlatch_mode', 'flip')
     seam_g = int(getattr(cfg, 'seam_gate', 105000)); seam_u = int(getattr(cfg, 'seam_unlatch', 40000))
     tsa = np.asarray(ts, np.int64)

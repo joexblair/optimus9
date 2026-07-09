@@ -1,7 +1,7 @@
 # o9-sg-01 bootstrap — twin runbook
 
 Bring the vanilla SG box to parity with WSL + connect to the Akamai Managed MySQL. Run top-to-bottom; verify each
-step. **Branch: clone `live`** (the promoted/validated set), not `main`. See docs/o9live_changelog.md for what's live.
+step. **Branch: clone `live`** (the promoted/validated set), not `main`. See docs/o9-live/o9live_changelog.md for what's live.
 
 ## Topology (decided)
 - **Akamai MySQL** host `a493943-akamai-prod-5255352-default.g2a.akamaidb.net` (port + creds: Joe supplies on box).
