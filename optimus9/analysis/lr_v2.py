@@ -409,20 +409,68 @@ def bigleg_gate(W, cfg):
 
 
 def arm_delay(W, cfg, setups):
-    """[AD·VERDICT] Dynamic arm-delay (Joe 0704) — Elder's 'tide' screen. Per arm setup: if the big-leg gate
-    fires (a strong leg still running), HOLD the arm to the s5Mage reversal (wob cfg.arm_wob) toward bd — don't
-    enter the ripple before the tide turns; else keep the breach arm. Returns re-timed setups. NOTE: the spec's
-    unconditional 'base = s5m reversal' for non-big-leg is NOT here (the validated build kept the breach arm)."""
+    """[AD·VERDICT] Dynamic arm-delay — Elder's 'tide' screen, as specced (Joe 0704, causal form 0709).
+
+    **A BREACH IS NEVER AN ARM.** It creates a candidate, nothing more.
+
+    The candidate's trigger is the **s5m reversal**. When that reversal arrives:
+      - **big leg visible at that moment** -> don't fire. HOLD, and the trigger becomes the **s5Mage reversal**.
+      - **no big leg visible**             -> the arm FIRES there, at the s5m reversal.
+
+    The big-leg clause is a conditional POSTPONEMENT of the base trigger, not an alternative to it. Nothing
+    races. Nothing scans forward. The big leg is read at the reversal bar, from the past. Further breaches while
+    a candidate is pending on that side change nothing — same excursion, same candidate. An opposite-side s5m
+    breach cancels (spec §1).
+
+    This is `docs/arm_delay_research.md` verbatim: *"base (unconditional): the arm waits for the s5m reversal
+    instead of the s5m breach"*, *"big-leg (conditional): ... hold the arm to the s5Mage reversal"*. The BASE
+    CLAUSE WAS NEVER BUILT — the old docstring said so outright ("the spec's unconditional 'base = s5m reversal'
+    for non-big-leg is NOT here"). That omission is the whole defect.
+
+    What the old code did:  `kc = next((k for k in range(i+1, cap) if cond[k]), None)`
+      - It armed at the BREACH whenever no leg was found ahead.
+      - The scan started at `i+1`, so it never read the arm's own bar.
+      - Live's window ends at the arm bar => `cap == i+1` => the range is EMPTY => `kc` is always None => live
+        armed at every breach. Not foresight: blindness to the present.
+      - The full-history backtest scanned into bars that did not exist when live had to commit, and re-timed
+        arms live had already taken. Look-ahead and live over-firing: the SAME defect from two ends.
+
+    Evidence: 59.2h recon — live fired 115 arms (18.5%) the backtest never booked, backtest-only = 0, and the
+    gap was grace-INVARIANT (17.5% @301ms vs 19.7% @2000ms), so it was never desync. Six live breach arms across
+    one rising leg (0.16381 -> 0.16753); the leg itself only existed 21:28:50-21:29:30, i.e. the first breach
+    was re-timed using knowledge 48 minutes ahead. Register A2 / X4 / X5."""
     if getattr(cfg, 'arm_mode', 's5m') == 's5Mage':
         return setups                                    # Joe 0705: the s5Mage arm IS the reversal — no delay
-    ch, cl = bigleg_gate(W, cfg); rev5M = _mage_rev(W.line('s5M'), cfg.arm_wob); out = []
-    for (i, es, bd, cap, src) in setups:
-        cond = ch if es == 1 else cl
-        kc = next((k for k in range(i + 1, cap) if cond[k]), None)
-        if kc is None:
-            out.append((i, es, bd, cap, src)); continue
-        da = next((k for k in range(kc, cap) if rev5M[k] == bd), None)
-        out.append((da if da is not None else i, es, bd, cap, src))
+    ch, cl = bigleg_gate(W, cfg)
+    rev5m = _mage_rev(W.line('s5m'), cfg.arm_wob)        # the BASE trigger
+    rev5M = _mage_rev(W.line('s5M'), cfg.arm_wob)        # the HELD trigger (big leg seen)
+    n = len(rev5m)
+
+    by_bar = {}                                          # breach bar -> setups born there
+    for s in setups:
+        by_bar.setdefault(s[0], []).append(s)
+
+    pend = {}                                            # es -> [i, es, bd, cap, src, held]
+    out = []
+    for k in range(n):
+        for s in by_bar.get(k, []):                      # a breach BORNS a candidate; it is not an arm
+            if s[1] not in pend:
+                pend[s[1]] = list(s) + [False]           # further breaches, same side: same excursion, no-op
+        for es in (1, -1):
+            if -es in pend and by_bar.get(k) and any(s[1] == es for s in by_bar[k]):
+                pend.pop(-es, None)                      # opposite s5m breach cancels (spec §1)
+        for es in list(pend):
+            i, _es, bd, cap, src, held = pend[es]
+            cond = ch if es == 1 else cl
+            if not held:
+                if rev5m[k] == bd:                       # the trigger arrives
+                    if cond[k]:
+                        pend[es][5] = True               # big leg VISIBLE now -> hold to the s5Mage reversal
+                    else:
+                        out.append((k, es, bd, cap, src)); pend.pop(es)     # fire at the s5m reversal
+            elif rev5M[k] == bd:
+                out.append((k, es, bd, cap, src)); pend.pop(es)             # fire at the held trigger
+    out.sort()
     return out
 
 
