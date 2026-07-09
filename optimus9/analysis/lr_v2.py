@@ -427,13 +427,24 @@ def arm_delay(W, cfg, setups):
 
 
 def fin_unlatch(q15, q30, i, cap, fin_lb, fin_fwd):
-    """[4v2·M1] Finisher lookback on arm unlatch (Joe 0704). If s15a AND s30a were both qualified in the
-    proximal box [unlatch-fin_lb, unlatch+fin_fwd], the trade fires on the NEXT same-side s15a at/after the
-    unlatch (the unlatch bar itself isn't an optimal entry). Returns the trade bar, or None."""
+    """[4v2·M1] Finisher lookback on arm unlatch (Joe 0704). Arm-gated (the arm IS the gate): if the arm lands
+    late and both finishers already qualified in the proximal box [unlatch-fin_lb, unlatch+fin_fwd], we don't
+    want to miss the trade — it fires on the next same-side s15a (the unlatch bar itself isn't an optimal entry).
+
+    The box reaches `fin_fwd` bars PAST the unlatch. The entry therefore waits for the LATER of the arm and the
+    authorising s30a: `next q15 >= max(i, j30)`. Spec §4 — "walk FORWARD with 2×30s tolerance for a late line" —
+    and identical in spirit to `fin_gate`'s `max(j15, j30)`.
+
+    Was: `next q15 >= i`, which entered on an s15a while the s30a that authorised it was still in the future
+    (217/1897 M1 trades, p50 20s ahead). Live's `cap <= T+1` made `tk != T` for exactly those, so o9-live never
+    fired them while the backtest booked them all. Repair is causal AND worth +11.46% net over 42d — the early
+    entries were net-negative (mean -0.0253%); the same setups entered 20s later pay +0.1292% at 57.4% win.
+    Register A1 / X-log; `fin_unlatch_ab.py`. Returns the trade bar, or None."""
     w0, w1 = max(0, i - fin_lb), min(cap, i + fin_fwd + 1)
-    if q15[w0:w1].any() and q30[w0:w1].any():
-        return next((k for k in range(i, cap) if q15[k]), None)
-    return None
+    if not (q15[w0:w1].any() and q30[w0:w1].any()):
+        return None
+    j30 = int(np.flatnonzero(q30[w0:w1])[0]) + w0                 # first authorising s30a inside the box
+    return next((k for k in range(max(i, j30), cap) if q15[k]), None)
 
 
 def fin_gate(q15, q30, ok, cap):

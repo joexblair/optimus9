@@ -325,6 +325,47 @@ per-leg vs `11` under stack-close — stack-close self-caps depth because one ex
 
 **Not a live PnL:** no slippage, no order-book walk, no compounding. Stack semantics + governor only.
 
+### X4 · o9-live ⇄ backtest EVENT RECON · RUN 0709 · `recon_arm_events.py`
+
+**Thesis (before running).** `arm_delay` forward-scans `[i+1, cap)`; in the backtest `cap` reaches bars that did
+not exist when live had to commit. Live cannot suppress, so it arms at the breach. **Predicted: live fires MORE
+arms than the backtest, and the extras are `s5m` breach arms.**
+
+**Outcome — CONFIRMED, and cleanly one-directional.** (59.2h of `o9_state_log`, backtest = one full-history
+window, producer = `v2_walk_ad` with the A1 `fin_unlatch` patch already applied.)
+
+```
+ARM        live=621  backtest=506  matched=506   live-only=115   backtest-only=0
+s3s4_gate  live=555  backtest=446  matched=438   live-only=117   backtest-only=8
+trade      live=178  backtest=143  matched=132   live-only= 46   backtest-only=11
+
+src mix    live {s5m:493, s5r:128}   backtest {s5m:383, s5r:123}
+```
+
+- **`backtest-only = 0` for arms.** The backtest's arms are a *strict subset* of live's. Every arm the backtest
+  fires, live fires; live fires **115 more (18.5%)**.
+- The extras are **almost entirely `s5m`** (493 vs 383 = 110); `s5r` barely moves (128 vs 123). `s5m` breach arms
+  are exactly `arm_delay`'s target.
+- Zero backtest-only arms because live logs **both** the breach arm (when `kc` is unseen) **and** later the
+  re-timed arm, as its window grows. The full-window backtest keeps only the final verdict. Superset by
+  construction.
+- **The gap propagates:** 115 extra arms → 117 extra gates → 46 extra trades. Live trades 178 to the
+  backtest's 143.
+- The **11 backtest-only trades** run the other way (live never fires them). This run is post-A1-patch, so they
+  are *not* `fin_unlatch`. Unexplained; smaller half; next.
+
+**⇒ A2 is the live↔backtest entry gap.** The overnight review is the precursor to the arm-logic attack; then the
+same recon-and-repair on the s3s4 step.
+
+**METHOD TRAP (cost one run).** `o9_state_log.kline_ms` is the **decision instant**, not the bar:
+`driver.py:41` → `now_ms = ts + bar + delay`. The acted bar is **one bar below the floor**. Flooring naively
+gives ~100% mismatch with every pair exactly 5s apart — reads as total divergence, is an off-by-one.
+`bar = kline_ms // 5000 * 5000 - 5000` is correct for any delay < one bar.
+
+Observed offsets `{301: 28868, 2000: 18205, 700: 1261}` are a durable record of the read-grace changing
+mid-window (301ms → 2000ms desync fix). **Free control variable:** split any recon by grace and check whether
+BB-driven events (`s5m`) tighten under `2000` while `r`-driven ones (`s7r_predict`) do not.
+
 ---
 
 ## Ideas dropped, and why
