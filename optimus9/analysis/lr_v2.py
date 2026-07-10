@@ -512,16 +512,19 @@ def fin_box_qualified(q15, q30, i, box_lb, tol):
     return bool(q15[w0:w1].any() and q30[w0:w1].any())
 
 
-def fin_unlatch_nof9(parts_by_set, i, cap, side, N=6, tol=12, bind_tol=6, anchor='oob'):
+def fin_unlatch_nof9(parts_by_set, i, cap, side, N=6, bind_tol=6, anchor='oob'):
     """[4v2·M1·nof9 TRIGGER] The delay-preen trigger that fires ONCE fin_unlatch has qualified (Joe 0710) —
     a >=N-of-9 vote over 3 finisher sets x {Mage-OOB, Mage-reversed, r-in-lookback}. Mirrors the votes of
-    tide_wireframe.fin_nof9. This owns `bind_tol` (the trigger's tolerance); the QUALIFIER owns box_lb.
+    tide_wireframe.fin_nof9. This owns `bind_tol` (the trigger's tolerance); the QUALIFIER owns box_lb/tol.
 
       parts_by_set : ordered dict {set_name: s_qualify_parts(...)} — 3 sets (e.g. gcs5, s15, s30).
-      side         : +1 short (hi) / -1 long (lo).   N : votes required (6 of 9).   tol : forward scan (2x30s).
+      side         : +1 short (hi) / -1 long (lo).   N : votes required (6 of 9).
+      cap          : the arm's forward bound = the opposite-side s5m breach (the cancel). NOT a fixed
+                     deadline — the trigger scans the arm's whole life; there is no cap on how long after the
+                     arm the confluence may form (Joe: we don't use caps).
       bind_tol     : max spread (5s bars) between the voting sets' Mage events — the lines rarely reverse on
                      the SAME bar (Joe 0710: gcs5a at 23:08:25, s30Mage at 23:08:35), so the votes only bind
-                     if they cluster within `bind_tol`. 6 = 1x30s. Also extends the forward reach.
+                     if they cluster within `bind_tol`. 6 = 1x30s.
       anchor       : 'oob' = Mage OOB AND reversing (matches s15a) · 'brk' = Mage fresh-crosses OOB.
 
     Per set, per bar: qualifying scores 2 (Mage-OOB + Mage-reversed), +1 if a same-side r sits in its
@@ -533,8 +536,7 @@ def fin_unlatch_nof9(parts_by_set, i, cap, side, N=6, tol=12, bind_tol=6, anchor
         Moob = P['Moob_' + sd]; Mrev = P['Mrev_' + sd]; rlb = P['rlb_' + sd]
         q = (Moob & ~np.r_[False, Moob[:-1]]) if anchor == 'brk' else (Moob & Mrev)
         Vs.append(np.where(q, 2 + rlb.astype(np.int8), 0).astype(np.int8))
-    hi = min(cap, i + tol + bind_tol)
-    for e in range(i, hi + 1):
+    for e in range(i, min(cap, len(Vs[0]) - 1) + 1):               # arm .. cancel — no fixed deadline
         lo = max(0, e - bind_tol)
         if sum(int(v[lo:e + 1].max()) for v in Vs) >= N:           # each set's best vote in the bind window
             return e

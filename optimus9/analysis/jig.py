@@ -81,10 +81,10 @@ class _Causal:
         sets = ((set_name, r_lb_override), ...); r_lb None -> cfg.{set}r_lb.  box_lb/tol None -> cfg.fin_lb/fin_fwd."""
         blb = self.j.cfg.fin_lb if box_lb is None else box_lb
         tl = self.j.cfg.fin_fwd if tol is None else tol
-        if not fin_box_qualified(q15, q30, arm, blb, tl):
+        if not fin_box_qualified(q15, q30, arm, blb, tl):          # QUALIFIER owns box_lb/tol
             return None
         parts = {s: self.finisher_parts(s, r_lb=rlb) for (s, rlb) in sets}
-        return fin_unlatch_nof9(parts, arm, cap, side, N=N, tol=tl, bind_tol=bind_tol, anchor=anchor)
+        return fin_unlatch_nof9(parts, arm, cap, side, N=N, bind_tol=bind_tol, anchor=anchor)  # cap = the arm cancel
 
     def arms(self):
         return v2_arm(self.j.W, self.j.cfg)                                 # [(i, es, bd, cap, src)]
