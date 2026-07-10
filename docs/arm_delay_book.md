@@ -125,10 +125,12 @@ in this work, and it changes no signal.
 
 ## Open
 
-- Does `apex >= 7` hold on 20+ days?
-- `lr_exit_v2` vs the far-side-mini TP.
-- The `m_len` / `m_mult` / `tol` / `bands` sweeps (worst-day scored).
-- The stale hunt: with no cancel, a hunt from 18:45 armed at 21:00 on lines that had nothing to do with
-  it. `s5m` in-bounds for N consecutive seams is the natural bound, and it is one knob.
-- `docs/emerging_bar_open.md` — one in five OOB crossings lands on the higher-TF bar open. Every
-  round-number timestamp in this work sits on one.
+- **Post-only / maker fills.** The largest lever, and it touches no signal. Needs a fill-probability
+  model: a resting bid that never fills is a missed trade, not a free one.
+- **The stale hunt.** With no cancel, the 18:45 hunt armed at 21:00 on a TF6/TF7 pair that had nothing
+  to do with it. `s5m` in-bounds for N consecutive seams is the natural bound, and it is one knob.
+- **The emerging bar-open sawtooth** (`docs/emerging_bar_open.md`). One in five OOB crossings lands on
+  the higher-TF bar open, and those crossings persist better than any other. The rolling-window variant
+  (option 3 there) would remove the sawtooth entirely and changes every line on the board — Joe's call.
+- `s{tf}m` still needs its own sweep and a write into `indicator_configs`; `S5M_OVERRIDE` in
+  `arm_walk.py` is the only hardcoded config in this work.
