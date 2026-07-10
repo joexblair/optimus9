@@ -44,8 +44,10 @@ def build_args():
     ap.add_argument('--m-len', type=int, default=7)
     ap.add_argument('--m-mult', type=float, default=0.50)
     ap.add_argument('--tol', type=float, default=0.0)
-    ap.add_argument('--cap', type=int, default=240, help='minutes the arm stays live for the gate/finishers')
-    ap.add_argument('--producer', default='gate', choices=['gate', 'unlatch', 'arm'])
+    ap.add_argument('--producer', default='gate', choices=['gate', 'unlatch', 'arm', 'nof9'])
+    ap.add_argument('--n-of9', type=int, default=6, help='votes required for the nof9 producer')
+    ap.add_argument('--bind-tol', type=int, default=6, help='nof9: max spread (5s bars) binding the sets, 6=1x30s')
+    ap.add_argument('--nof9-lines', action='store_true', help='override gcs5M+s15M to 37|0.6|ohlc4')
     ap.add_argument('--fin-lb', type=int, default=None, help='proximal box lookback in 5s bars; None = engine cfg.fin_lb (42 = 7x30s)')
     ap.add_argument('--fin-fwd', type=int, default=None, help='late-line tolerance in 5s bars; None = engine cfg.fin_fwd (12 = 2x30s)')
     ap.add_argument('--exit', dest='exit_mode', default='tp', choices=['tp', 'lr'],
@@ -59,9 +61,17 @@ def run_day(a, quiet=False):
     TFS = [int(x) for x in a.tfs.split(',')]
     bands = AW.parse_bands(a.bands)
     t0, t1 = ms(a.day, a.t0), ms(a.day, a.t1)
-    end = t1 + (a.cap + 60) * 60_000
+    TAPE_MARGIN_MIN = 300                                           # tape loaded past the last hunt so trades resolve
+    end = t1 + (TAPE_MARGIN_MIN + 60) * 60_000
 
-    with Jig(end, hours=24, warmup=90, overrides=AW.overrides(TFS, a.m_len, a.m_mult)) as j:
+    # gcs5r/gcs5m/gcs5M and s15* are all in the DB — READ them via W.line, never hand-build the tuples
+    # (reference_line_cfg_tuple: a malformed k-tuple silently corrupts the line).  Only the A/B Major-mult
+    # change is an override.
+    ov = AW.overrides(TFS, a.m_len, a.m_mult)
+    if a.producer == 'nof9' and a.nof9_lines:                      # A/B line update (Joe 0710): Majors -> mult 0.6
+        ov['gcs5M'] = (5, ('bb', 37, 0.6, 'ohlc4'), 'emerging')
+        ov['s15M'] = (15, ('bb', 37, 0.6, 'ohlc4'), 'emerging')
+    with Jig(end, hours=24, warmup=90, overrides=ov) as j:
         W, cfg = j.W, j.cfg
         ts, px = np.asarray(j.ts, np.int64), j.px
         f = lambda k: dtm.datetime.fromtimestamp(ts[k] / 1000, timezone.utc).strftime('%m-%d %H:%M:%S')
@@ -80,7 +90,7 @@ def run_day(a, quiet=False):
         arms = {}
         for (kh, es) in hunts:
             B = AW.board(j, TFS, es, a.tol, bands)
-            ke = min(len(ts) - 1, kh + a.cap * 60 // 5)
+            ke = len(ts) - 1                                        # no cap — the walk cancels on an opposite s5m breach
             _ev, armed, _c = AW.walk(B, kh, ke, cancel_on='none', permission=False,
                                      latch=True, arm_mode='latch', allib='off')
             if armed:
@@ -91,7 +101,7 @@ def run_day(a, quiet=False):
         rows = []
         for (kA, es), v in sorted(arms.items()):
             bd = -es
-            cap = min(len(ts) - 1, kA + a.cap * 60 // 5)
+            cap = len(ts) - 1                                       # forward bound = tape end (no trading cap)
             setups = [(kA, es, bd, cap, 'arm')]
             gates = gate_open(W, cfg, setups)
             ok = gates[0][3] if gates else None
@@ -103,6 +113,9 @@ def run_day(a, quiet=False):
                 flb = a.fin_lb if a.fin_lb is not None else cfg.fin_lb   # engine default 42 = 7x30s, DB-sourced
                 ffw = a.fin_fwd if a.fin_fwd is not None else cfg.fin_fwd
                 kT = fin_unlatch(q15, q30, kA, cap, flb, ffw); how = 'unlatch'
+            elif a.producer == 'nof9':
+                kT = j.causal.fin_unlatch_6of9(kA, cap, es, q15, q30, N=a.n_of9, bind_tol=a.bind_tol)
+                how = f'nof9:{a.n_of9}'
             else:
                 kT = fin_gate(q15, q30, ok, cap) if ok is not None else None
                 how = f"gate:{gates[0][4]}" if gates else 'no-gate'
@@ -120,10 +133,10 @@ def run_day(a, quiet=False):
                     kx = None
             else:
                 kx = AW.take_profit(v['B'], kT, xt, cap)
-            # SURVIVORSHIP GUARD (0710): a trade whose exit never fires inside `cap` is marked to market at
-            # `cap`, never dropped.  Dropping it makes a short cap look like a 100%-win strategy.
-            forced = kx is None
-            if forced:
+            # No trading cap.  If the TP never fires before the tape ends, mark to market at the tape end
+            # (same boundary for every config — not a tunable cap, so no survivorship skew).
+            unresolved = kx is None
+            if unresolved:
                 kx = cap
             mae, mfe, gross = excursion(px, kT, kx, bd)
             e = px[kT]
@@ -136,13 +149,13 @@ def run_day(a, quiet=False):
             rows.append(dict(kA=kA, es=es, tf=v['tf'], ok=ok, kT=kT, kx=kx, xt=xt, n=v['n'],
                              mae=mae, mfe=mfe, gross=gross, net=gross - COST,
                              delay=(ts[kT] - ts[kA]) / 60000.0, held=(ts[kx] - ts[kT]) / 60000.0,
-                             how=how, forced=forced, **win))
+                             how=how, unresolved=unresolved, **win))
 
         traded = [r for r in rows if r.get('kx') is not None]
         if quiet:
             return traded
         print(f"\n{a.day}  {len(hunts)} hunts -> {len(arms)} arms -> {len(traded)} trades"
-              f"   producer={a.producer}  cap={a.cap}m  cost={COST}%")
+              f"   producer={a.producer}  cost={COST}%")
         print(f"{'arm':<18} {'es':>3} {'apex':>4} {'gate':<18} {'trade':<18} {'delay':>6} {'held':>6}"
               f" {'MAE':>6} {'MFE':>6} {'gross':>7} {'net':>7}")
         for r in rows:
@@ -157,8 +170,8 @@ def run_day(a, quiet=False):
         if traded:
             n = np.array([r['net'] for r in traded])
             g = np.array([r['gross'] for r in traded])
-            nf = sum(1 for r in traded if r.get('forced'))
-            print(f"  {nf}/{len(traded)} exits were forced at cap")
+            nf = sum(1 for r in traded if r.get('unresolved'))
+            print(f"  {nf}/{len(traded)} trades unresolved at tape end (marked to market)")
             print(f"\n  n={n.size}  net mean {n.mean():+.4f}%  total {n.sum():+.2f}%  win {100*(n>0).mean():.1f}%"
                   f"  |  gross mean {g.mean():+.4f}%  MAE p50 {np.median([r['mae'] for r in traded]):.2f}%"
                   f"  delay p50 {np.median([r['delay'] for r in traded]):.0f}m")

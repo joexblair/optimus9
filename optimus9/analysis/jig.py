@@ -17,7 +17,8 @@ import bias_machine as bm
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.analysis.lr import lr_config, lr_walk
-from optimus9.analysis.lr_v2 import s_qualify, s_qualify_parts, v2_arm, gate_open, _mage_rev, _rolling_any, _curl_detect
+from optimus9.analysis.lr_v2 import (s_qualify, s_qualify_parts, v2_arm, gate_open, _mage_rev, _rolling_any,
+                                     _curl_detect, fin_unlatch_nof9, fin_box_qualified)
 from optimus9.compute.breaching_line import predict_breach, FENCE_HI, FENCE_LO
 from optimus9.compute.swing_detect import find_pivots, legs, swing_mask
 from sweep_eval import BASE_BIAS
@@ -70,6 +71,20 @@ class _Causal:
         if lb is None:
             raise ValueError("no r_lb for %s — pass r_lb=" % tf)
         return s_qualify_parts(self.j.W, self.j.cfg, '%sm' % tf, '%sM' % tf, '%sr' % tf, lb)
+
+    def fin_unlatch_6of9(self, arm, cap, side, q15, q30, sets=(('gcs5', 29), ('s15', None), ('s30', None)),
+                         N=6, box_lb=None, tol=None, bind_tol=6, anchor='oob'):
+        """Two-stage arm-unlatch entry (Joe 0710):
+          QUALIFIER  fin_box_qualified — s15a AND s30a in the box [arm-box_lb, arm+tol]. Validates the trade.
+          TRIGGER    fin_unlatch_nof9 — the >=N-of-9 confluence at/after the arm, bound within bind_tol.
+        gcs5a is only in the TRIGGER (preens the entry delay), never the qualifier.  Returns the trade bar or None.
+        sets = ((set_name, r_lb_override), ...); r_lb None -> cfg.{set}r_lb.  box_lb/tol None -> cfg.fin_lb/fin_fwd."""
+        blb = self.j.cfg.fin_lb if box_lb is None else box_lb
+        tl = self.j.cfg.fin_fwd if tol is None else tol
+        if not fin_box_qualified(q15, q30, arm, blb, tl):
+            return None
+        parts = {s: self.finisher_parts(s, r_lb=rlb) for (s, rlb) in sets}
+        return fin_unlatch_nof9(parts, arm, cap, side, N=N, tol=tl, bind_tol=bind_tol, anchor=anchor)
 
     def arms(self):
         return v2_arm(self.j.W, self.j.cfg)                                 # [(i, es, bd, cap, src)]
