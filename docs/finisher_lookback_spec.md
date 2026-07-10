@@ -17,11 +17,33 @@ but the entry waits for a fresh same-side s15a.
 DB-sourced `lp_config`. A tool that passes `7`/`2` raw is reading 5s bars (35s/10s) and is WRONG — pull
 from `cfg.fin_lb`/`cfg.fin_fwd`, never hardcode.
 
-## OPEN — the s15a *definition* (separate from the requirement above)
-What counts as an s15a is `s_qualify`: `Mrev & m_OOB & (M_OOB | ¬fin_s30M_oob) & r_in_lb`. Live
-`fin_s30M_oob = 1` REQUIRES the s15 Major OOB. On the 23:07:30 example that blocks `23:08:25`
-(`Moob_hi=0`) and the next qualifying s15a is `23:25:25`. With `fin_s30M_oob = 0` (mini-only) it fires at
-`23:08:25`. **Which is intended is Joe's call — unresolved.**
+## fin_unlatch_6of9 — the two-stage nof9 variant (Joe 0710)
+The s15a-trigger is replaced by a two-stage entry for the arm-delay build. Two responsibilities, two
+functions (SRP):
+
+- **QUALIFIER `fin_box_qualified`** — did BOTH s15a AND s30a qualify in the box `[arm-box_lb, arm+tol]`?
+  Owns `box_lb` (7×30s) / `tol` (2×30s). gcs5a is NOT part of the qualifier. Validates a (near-)immediate
+  trade.
+- **TRIGGER `fin_unlatch_nof9` (anchor='breach', DEFAULT)** — once qualified, the entry is the first bar
+  at/after the arm where a `>=N-of-9` confluence binds. The 9 = **3 sets {gcs5, s15, s30} × {mini-OOB,
+  Mage-OOB, r-in-lookback}, counted INDEPENDENTLY**. NO Mage-reversed gate — the 6of9 only needs the lines
+  OOB, not the optimal price (that is the 'a' finisher's job). The r-in-lookback vote is **gated on a line
+  (r OR m OR Mage) actually breaching this bar**, so r counts only when it genuinely breaches. `bind_tol`
+  (1×30s) binds the sets when they don't breach on the same bar. The trigger scans the arm's WHOLE life to
+  the cancel — **no forward cap**.
+- **anchor='oob'** = the 'a' definition (Mage-OOB AND Mage-reversed = 2, +1 if r in lookback). The
+  Mage-reversed gate is the r-lookback anchor AND the optimal entry price; it belongs to `s_qualify` (the
+  entry finisher), not the 6of9 trigger.
+- gcs5 r_lb = **29** (5s bars). gcs5/s15 lines READ from the DB — never hand-build a k-tuple.
+- Worked example (0710): arm `07-10 13:55` SHORT. Breach-mode 6of9 hits exactly 6 at `14:01:35`
+  (gcs5 3 + s15 2 + s30 1). Matches Joe's chart read.
+
+## OPEN
+- **The s15a *definition* for `fin_unlatch`.** `s_qualify` = `Mrev & m_OOB & (M_OOB | ¬fin_s30M_oob) &
+  r_in_lb`. Live `fin_s30M_oob = 1` REQUIRES the s15 Major OOB. Which is intended is Joe's call.
+- **The arm cancel.** A single opposite-side s5m breach cancels the arm. On `07-10 13:55` that fires at
+  `14:00:00`, 95 s before the 6of9 confluence at `14:01:35`, so the arm dies before its setup completes.
+  Whether one opposite breach is a real cancel or a twitch the arm should survive — Joe's call.
 
 ---
 

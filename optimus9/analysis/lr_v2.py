@@ -297,13 +297,15 @@ def _rolling_any(mask, lb):
 def s_qualify_parts(W, cfg, mn, Mn, rn, r_lb):
     """[4v2·PRODUCER·PARTS] The per-bar COMPONENTS of s{TF}a (Joe 0707, for N-of-9). Dict of per-side bools:
       m_hi/m_lo (m OOB) · Moob_hi/Moob_lo (Mage OOB) · Mrev_hi/Mrev_lo (Mage reversed toward the side, wob
-      cfg.fin_mage_wob) · rlb_hi/rlb_lo (same-side r OOB within r_lb base-bars back). value_mode-honoured via W.line."""
+      cfg.fin_mage_wob) · rlb_hi/rlb_lo (same-side r OOB within r_lb base-bars back) · r_hi/r_lo (raw r OOB
+      at this bar, for the 6of9-breach gate). value_mode-honoured via W.line."""
     m, M, r = W.line(mn), W.line(Mn), W.line(rn)
     rlb = r_lb * (W._ls.resolve(rn)[0] // 5)          # r_lb is in the r-line's OWN TF bars → convert to base(5s) bars
     revM = _mage_rev(M, cfg.fin_mage_wob); hi, lo = cfg.hi, cfg.lo
     return dict(m_hi=(m >= hi), m_lo=(m <= lo), Moob_hi=(M >= hi), Moob_lo=(M <= lo),
                 Mrev_hi=(revM == -1), Mrev_lo=(revM == 1),
-                rlb_hi=_rolling_any(r >= hi, rlb), rlb_lo=_rolling_any(r <= lo, rlb))
+                rlb_hi=_rolling_any(r >= hi, rlb), rlb_lo=_rolling_any(r <= lo, rlb),
+                r_hi=(r >= hi), r_lo=(r <= lo))
 
 
 def s_qualify(W, cfg, mn, Mn, rn, r_lb):
@@ -522,20 +524,32 @@ def fin_unlatch_nof9(parts_by_set, i, cap, side, N=6, bind_tol=6, anchor='oob'):
       cap          : the arm's forward bound = the opposite-side s5m breach (the cancel). NOT a fixed
                      deadline — the trigger scans the arm's whole life; there is no cap on how long after the
                      arm the confluence may form (Joe: we don't use caps).
-      bind_tol     : max spread (5s bars) between the voting sets' Mage events — the lines rarely reverse on
-                     the SAME bar (Joe 0710: gcs5a at 23:08:25, s30Mage at 23:08:35), so the votes only bind
-                     if they cluster within `bind_tol`. 6 = 1x30s.
-      anchor       : 'oob' = Mage OOB AND reversing (matches s15a) · 'brk' = Mage fresh-crosses OOB.
+      bind_tol     : max spread (5s bars) between the voting sets' events — the lines rarely breach on the
+                     SAME bar (Joe 0710: gcs5 at 23:08:25, s30 at 23:08:35), so the votes only bind if they
+                     cluster within `bind_tol`. 6 = 1x30s.
+      anchor       : 'breach' (DEFAULT, the 6of9 trigger — Joe 0710): per set, {mini-OOB, Mage-OOB,
+                     r-in-lookback} counted INDEPENDENTLY. No Mage-reversed gate — fin_unlatch_6of9 only needs
+                     the lines OOB, not an optimal entry. The r-in-lookback vote is gated on a line (r OR m OR
+                     Mage) actually breaching this bar, so r counts only when it genuinely breaches alongside
+                     m/Mage/itself.
+                     'oob'  = the 'a' definition: Mage OOB AND reversed = 2, +1 if r in lookback (the entry-
+                              placement finisher — Mage-reversed is the r-lookback anchor + the optimal price).
+                     'brk'  = Mage fresh-crosses OOB.
 
-    Per set, per bar: qualifying scores 2 (Mage-OOB + Mage-reversed), +1 if a same-side r sits in its
-    lookback. Entry = the FIRST bar at/after the arm where a trailing `bind_tol` window holds >= N votes
-    across the sets (each set at its best vote in the window). Returns the trade bar, or None."""
+    Entry = the FIRST bar at/after the arm where a trailing `bind_tol` window holds >= N votes across the
+    sets (each set at its best vote in the window). Returns the trade bar, or None."""
     sd = 'hi' if side == 1 else 'lo'
     Vs = []
     for P in parts_by_set.values():
-        Moob = P['Moob_' + sd]; Mrev = P['Mrev_' + sd]; rlb = P['rlb_' + sd]
-        q = (Moob & ~np.r_[False, Moob[:-1]]) if anchor == 'brk' else (Moob & Mrev)
-        Vs.append(np.where(q, 2 + rlb.astype(np.int8), 0).astype(np.int8))
+        m = P['m_' + sd]; Moob = P['Moob_' + sd]; rlb = P['rlb_' + sd]; roob = P['r_' + sd]
+        if anchor == 'breach':
+            line = roob | m | Moob                              # a line (r/m/Mage) breaching this bar
+            v = m.astype(np.int8) + Moob.astype(np.int8) + (rlb & line).astype(np.int8)
+            Vs.append(v.astype(np.int8))
+        else:
+            Mrev = P['Mrev_' + sd]
+            q = (Moob & ~np.r_[False, Moob[:-1]]) if anchor == 'brk' else (Moob & Mrev)
+            Vs.append(np.where(q, 2 + rlb.astype(np.int8), 0).astype(np.int8))
     for e in range(i, min(cap, len(Vs[0]) - 1) + 1):               # arm .. cancel — no fixed deadline
         lo = max(0, e - bind_tol)
         if sum(int(v[lo:e + 1].max()) for v in Vs) >= N:           # each set's best vote in the bind window

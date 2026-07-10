@@ -73,7 +73,7 @@ class _Causal:
         return s_qualify_parts(self.j.W, self.j.cfg, '%sm' % tf, '%sM' % tf, '%sr' % tf, lb)
 
     def fin_unlatch_6of9(self, arm, cap, side, q15, q30, sets=(('gcs5', 29), ('s15', None), ('s30', None)),
-                         N=6, box_lb=None, tol=None, bind_tol=6, anchor='oob'):
+                         N=6, box_lb=None, tol=None, bind_tol=6, anchor='breach'):
         """Two-stage arm-unlatch entry (Joe 0710):
           QUALIFIER  fin_box_qualified — s15a AND s30a in the box [arm-box_lb, arm+tol]. Validates the trade.
           TRIGGER    fin_unlatch_nof9 — the >=N-of-9 confluence at/after the arm, bound within bind_tol.
