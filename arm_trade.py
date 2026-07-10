@@ -46,8 +46,8 @@ def build_args():
     ap.add_argument('--tol', type=float, default=0.0)
     ap.add_argument('--cap', type=int, default=240, help='minutes the arm stays live for the gate/finishers')
     ap.add_argument('--producer', default='gate', choices=['gate', 'unlatch', 'arm'])
-    ap.add_argument('--fin-lb', type=int, default=7)
-    ap.add_argument('--fin-fwd', type=int, default=2)
+    ap.add_argument('--fin-lb', type=int, default=None, help='proximal box lookback in 5s bars; None = engine cfg.fin_lb (42 = 7x30s)')
+    ap.add_argument('--fin-fwd', type=int, default=None, help='late-line tolerance in 5s bars; None = engine cfg.fin_fwd (12 = 2x30s)')
     ap.add_argument('--exit', dest='exit_mode', default='tp', choices=['tp', 'lr'],
                     help="tp = s{tpTF}m far-side reversal (Joe 0710) · lr = the shipped lr_exit_v2")
     ap.add_argument('--detail', action='store_true')
@@ -100,7 +100,9 @@ def run_day(a, quiet=False):
             if a.producer == 'arm':
                 kT, how = kA, 'arm'
             elif a.producer == 'unlatch':
-                kT = fin_unlatch(q15, q30, kA, cap, a.fin_lb, a.fin_fwd); how = 'unlatch'
+                flb = a.fin_lb if a.fin_lb is not None else cfg.fin_lb   # engine default 42 = 7x30s, DB-sourced
+                ffw = a.fin_fwd if a.fin_fwd is not None else cfg.fin_fwd
+                kT = fin_unlatch(q15, q30, kA, cap, flb, ffw); how = 'unlatch'
             else:
                 kT = fin_gate(q15, q30, ok, cap) if ok is not None else None
                 how = f"gate:{gates[0][4]}" if gates else 'no-gate'

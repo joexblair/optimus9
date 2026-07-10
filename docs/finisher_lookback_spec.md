@@ -1,5 +1,30 @@
 # Finisher lookback on arm unlatch — spec (#53, Joe 0704)
 
+**CANONICAL. This is the ONE spec for `fin_unlatch`.** Any other doc that describes its behaviour is a
+pointer here, not a second source of truth.
+
+## The s15a requirement (the load-bearing invariant, Joe 0710)
+**The trade is ALWAYS placed on the NEXT same-side s15a — never on the pre-arm co-fire.** The proximal
+box only *authorises*; the entry bar is `next q15 at/after max(arm, authorising-s30a)`. This is not
+optional and not a tolerance: the pre-arm s15a that completed the setup is evidence the setup is live,
+but the entry waits for a fresh same-side s15a.
+- Confirmed in prod: `lr_v2.py:495` — `return next((k for k in range(max(i, j30), cap) if q15[k]), None)`.
+- Worked example (0710): arm `07-09 23:07:30` SHORT. Setup complete at `23:04:25` (s15a+s30a co-fire, 3 min
+  before the arm). Entry is NOT there — it is the next same-side s15a at/after the arm.
+
+## Box units — 30s bars, not 5s
+`fin_lb = 42` five-second bars = **7×30s**; `fin_fwd = 12` = **2×30s**. Engine default `lr.py:53`,
+DB-sourced `lp_config`. A tool that passes `7`/`2` raw is reading 5s bars (35s/10s) and is WRONG — pull
+from `cfg.fin_lb`/`cfg.fin_fwd`, never hardcode.
+
+## OPEN — the s15a *definition* (separate from the requirement above)
+What counts as an s15a is `s_qualify`: `Mrev & m_OOB & (M_OOB | ¬fin_s30M_oob) & r_in_lb`. Live
+`fin_s30M_oob = 1` REQUIRES the s15 Major OOB. On the 23:07:30 example that blocks `23:08:25`
+(`Moob_hi=0`) and the next qualifying s15a is `23:25:25`. With `fin_s30M_oob = 0` (mini-only) it fires at
+`23:08:25`. **Which is intended is Joe's call — unresolved.**
+
+---
+
 Fixes the misunderstanding where the finisher check was pinned to the **s3s4 gate** instead of the
 **arm unlatch**, so late-qualifying finishers were missed (the 09:34 LONG episode never traded).
 
@@ -45,6 +70,12 @@ The trade is **always** placed on the next same-side s15a (both the proximal pat
 - Shape: a box `[gate−fin_lb, gate+fin_fwd]` requiring both finishers inside — vs the BRD's **back-lookback at
   the unlatch** + **forward chance after the gate**, firing on the next same-side s15a.
 - Trigger: a **gcs5M reversal** after Q1 — vs the BRD's **next same-side s15a**.
+
+**RESOLVED for the trigger (0710):** `fin_unlatch` (`lr_v2.py:477`) now fires on the **next same-side s15a**
+at/after `max(arm, authorising-s30a)` — the BRD trigger, the gcs5M reversal is gone. The remaining
+divergence is the ANCHOR: `fin_gate` uses the s3s4 gate (forward-only), `fin_unlatch` uses the arm bar with
+the proximal back-lookback. Both are exposed as `--producer` in `arm_trade.py`; the arm-delay book
+currently runs `gate`.
 
 Related: [[project_o9live_forward_live]] · the r_lb TF-bar fix (commit 81293a6) already lets the finishers
 qualify properly, so this episode now trades via the proximal path — re-scope during the build.

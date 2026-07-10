@@ -167,6 +167,43 @@ if barstate.islast
         open(path, "w").write(body)
         return len(labels)
 
+    def emit_bgcolor(self, streams, path, title, opacity=0):
+        """Pine bgcolor overlay from named 5s-timestamp streams (the array-bgcolor pattern — arm_gate_emit,
+        lp_cascade_emit, og_arm_emit all hand-rolled this; now it lives once here).
+
+        streams = [{'name': str, 'ts': [int-ms...], 'color': 'color.green'}, ...].
+        Order is PRIORITY: later streams paint over earlier ones on a shared bar. Each stream gets an
+        input.bool toggle. Arrays are chunked at 400 (TV op-limit) and looked up with array.binary_search
+        on `time`, so the whole thing evaluates on the last bar only.
+        Returns the total number of painted bars."""
+        arr = lambda v: ("array.from(" + ", ".join(str(int(z)) for z in v) + ")") if v else "array.new_int(0)"
+
+        def emit_arr(nm, vals):
+            vals = sorted(set(int(v) for v in vals))                 # binary_search needs sorted, unique
+            if len(vals) <= 400:
+                return "f_%s() =>\n    %s" % (nm, arr(vals)), "%s = f_%s()" % (nm, nm), len(vals)
+            chunks = [vals[i:i + 400] for i in range(0, len(vals), 400)]
+            d = "\n".join("f_%s_%d() =>\n    %s" % (nm, i, arr(c)) for i, c in enumerate(chunks))
+            d += "\nf_%s() =>\n    a = f_%s_0()\n" % (nm, nm)
+            d += "".join("    array.concat(a, f_%s_%d())\n" % (nm, i) for i in range(1, len(chunks)))
+            d += "    a"
+            return d, "%s = f_%s()" % (nm, nm), len(vals)
+
+        defs, calls, toggles, paints, total = [], [], [], [], 0
+        for s in streams:
+            label = s['name']
+            nm = 's_' + label                                        # prefix: never collide with a Pine keyword
+            d, c, cnt = emit_arr(nm, s['ts']); total += cnt
+            defs.append(d); calls.append(c)
+            toggles.append('show_%s = input.bool(true, "%s (%s)")' % (nm, label, s['color'].split('.')[-1]))
+            paints.append('if show_%s and array.binary_search(%s, time) >= 0\n'
+                          '    bg := color.new(%s, %d)' % (nm, nm, s['color'], opacity))
+        body = ('//@version=5\nindicator("%s", overlay = true)\n' % title
+                + "\n".join(toggles) + "\n" + "\n".join(defs) + "\n" + "\n".join(calls)
+                + "\nbg = color(na)\n" + "\n".join(paints) + "\nbgcolor(bg)\n")
+        open(path, "w").write(body)
+        return total
+
 
 class Jig:
     """Pinned-window test bench. Build once, reuse across a script. `overrides` = BiasWindow line_overrides for

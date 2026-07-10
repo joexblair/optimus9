@@ -38,9 +38,10 @@ backtest, not in live.
 This is the frame for the whole document. `fin_lb=42` bars = **7×30s** and `fin_fwd=12` bars = **2×30s** —
 exactly spec §4's lookback and forward tolerance. **The knobs conform. The behaviour does not.**
 
-- **Entry placement.** `fin_unlatch` enters at the *first* `s15a`, where spec §4 says to *walk forward with
-  2×30s tolerance for a late line* — i.e. wait for it. Its sibling `fin_gate` already does exactly that with
-  `max(j15, j30)`. **The two finishers disagree with each other**, and one of them disagrees with the spec.
+- **Entry placement. RESOLVED `042f486`.** `fin_unlatch` now enters at `next q15 >= max(i, j30)` — waits
+  for the s30a that authorises it, matching `fin_gate` and spec §4. Prod `lr_v2.py:495`. The s15a
+  requirement (fire on the next same-side s15a, never the pre-arm co-fire) is the invariant in
+  `docs/finisher_lookback_spec.md` (the one canonical fin_unlatch spec).
 - **Gate bypass (deeper).** Spec §4 opens *"Gate open → FINISHERS."* The gate can only open on an arm. But
   `v2_cascade` tries `fin_unlatch` **first, off the arm bar, with no gate reference at all**, and only falls
   through to the gate-dependent `fin_gate` if M1 returns `None`. So **M1 both bypasses and pre-empts the gate.**
@@ -60,7 +61,7 @@ quietly disagreeing with the spec since 0704. The 20–50s `s15a` lag is underst
 
 | # | Site | Mechanism | Live consequence | Status |
 |---|---|---|---|---|
-| A1 | `lr_v2.py:433` `fin_unlatch` | Unordered `.any()` over a box extending `fin_fwd` bars past the unlatch, then entry at the **first** `q15 >= i`. Entry can precede the s30a that authorised it. | Live `cap <= T+1` ⇒ when the late s30a lands, `next(q15)` returns an earlier bar, `tk != T`, and `strategy.py:106` **silently drops the trade**. Backtest books them all. | OPEN |
+| A1 | `lr_v2.py:495` `fin_unlatch` | Unordered `.any()` over a box extending `fin_fwd` bars past the unlatch, then entry at the **first** `q15 >= i`. Entry can precede the s30a that authorised it. | Live `cap <= T+1` ⇒ when the late s30a lands, `next(q15)` returns an earlier bar, `tk != T`, and `strategy.py:106` **silently drops the trade**. Backtest books them all. | **FIXED `042f486`** — entry now `max(i, j30)`; spec `docs/finisher_lookback_spec.md`. |
 | A2 | `lr_v2.py:421` `arm_delay` | `kc = next(k in range(i+1, cap) if cond[k])` — **suppresses** the arm at `i` using a future bar. The *placement* at `da` is causal; the *refusal to run the cascade from `i`* is not. | Live can't see `kc`, so it arms at `i` and takes trades the backtest never books. Inverse gap to A1. | OPEN |
 | A3 | `greenfield_producer.py:35` `greenfield_walk` | `ep[min(n-1, i+fin_fwd)]` = forward co-occurrence, then entry at `next q15 >= i`. Same bug as A1. | Docstring claims *"NO forward scan… window-invariant (causal)"*. It isn't. Dangerous because it is the module written to **replace** A2. | OPEN |
 | A4 | `indicator_computer.py:43,78` `resample`/`align_to_base` | `resample` stamps each bar at window-**open** while aggregating the **whole** window; `align_to_base` maps a mid-window base bar onto that still-forming bar. Up to one full TF of future (30 min on the 30-min gate masks). | Backtest-only: live reads index `-1`, where the aggregate covers `<= T`. Affects `value_mode='closed'` lines and every closed-bar gate mask. | **SEAM BUILT, OFF** — `92d0fe5` |
