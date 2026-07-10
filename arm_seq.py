@@ -56,7 +56,7 @@ def main():
 
         arms = {}
         for (kh, es) in hunts:
-            B = AW.Board(j, TFS, es, a.tol, bands)
+            B = AW.board(j, TFS, es, a.tol, bands)
             ke = min(len(ts) - 1, kh + a.tp_cap * 60 // 5)
             _ev, armed, _c = AW.walk(B, kh, ke, cancel_on='none', permission=False,
                                      latch=True, arm_mode='latch', allib=a.allib)

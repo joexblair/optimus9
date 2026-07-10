@@ -66,7 +66,7 @@ def main():
               f" {'net%':>8} {'MAE':>6} {'MFE':>6}")
         rows = []
         for (kh, es) in hunts:
-            B = AW.Board(j, TFS, es, a.tol, bands)
+            B = AW.board(j, TFS, es, a.tol, bands)
             ke = min(len(ts) - 1, kh + a.tp_cap * 60 // 5)
             ev, armed, cancel = AW.walk(B, kh, ke, a.brc_tol, a.curl_tol, a.cancel_on, a.cancel_seam, not a.no_permission, a.latch, a.arm_mode, a.allib)
             if a.detail:

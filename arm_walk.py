@@ -52,6 +52,16 @@ def overrides(tfs, m_len, m_mult):
     return o
 
 
+def board(jig, tfs, es, tol, bands, wob=1):
+    """Cached Board, stored ON the jig so it dies with the window. A Board computes ~3xTF emerging lines and
+    the walk only ever needs one per side — building one per hunt was the whole cost of a day's run."""
+    cache = jig.__dict__.setdefault('_arm_boards', {})
+    key = (tuple(tfs), es, tol, tuple(bands), wob)
+    if key not in cache:
+        cache[key] = Board(jig, tfs, es, tol, bands, wob)
+    return cache[key]
+
+
 class Board:
     """Everything the walk reads, computed once per window."""
 
