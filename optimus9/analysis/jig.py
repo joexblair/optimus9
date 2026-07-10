@@ -77,8 +77,21 @@ class _Causal:
     def gates(self, arms=None):
         return gate_open(self.j.W, self.j.cfg, arms if arms is not None else self.arms())
 
-    def predict(self, k, m, M):
-        return predict_breach(k, m, M, self.j.hi, self.j.lo, FENCE_HI, FENCE_LO)
+    def predict(self, k, m, M, tol=0.0):
+        return predict_breach(k, m, M, self.j.hi, self.j.lo, FENCE_HI, FENCE_LO, tol)
+
+    def predict_set(self, prefix, tol=0.0, maj='M'):
+        """Predicted-breach direction for a whole line SET, by name: predict_set('s3') reads s3r/s3m/s3M.
+        maj='Mage' for the sets whose Major is named s{n}Mage. `tol` is the sweepable value-point allowance
+        (0.0 = spec).  Ungated — the "test while the mini is OOB" gate is the CONSUMER's (see mini_oob);
+        lr_v2.gate_signals keeps them separate for the same reason."""
+        return self.predict(self.line(prefix + 'r'), self.line(prefix + 'm'),
+                            self.line(prefix + maj), tol)
+
+    def mini_oob(self, prefix):
+        """+1/-1/0 OOB sign of the set's mini — the gate lr_v2.gate_signals applies to a prediction
+        ('test r predict while s{n}m is OOB'). Kept separate from predict_set (SRP)."""
+        return self.sign(prefix + 'm')
 
     def reversal(self, line, wob):
         """Boundary-agnostic reversal of a line (lr_v2._mage_rev): +1 up-turn / -1 down-turn confirmed after `wob`

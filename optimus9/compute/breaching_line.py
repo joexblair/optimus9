@@ -24,7 +24,7 @@ HI, LO = BOUNDARY_HI, BOUNDARY_LO    # OOB breach detection (85/15)
 
 
 def predict_breach(k, predictor_min_bb, predictor_maj_bb, hi=HI, lo=LO,
-                   fence_hi=FENCE_HI, fence_lo=FENCE_LO):
+                   fence_hi=FENCE_HI, fence_lo=FENCE_LO, tol=0.0):
     """Per-bar predicted-breach direction {+1 hi, -1 lo, 0 none}.
 
     A K breach is predicted when the prediction_anchor overshoots the boundary by
@@ -35,6 +35,10 @@ def predict_breach(k, predictor_min_bb, predictor_maj_bb, hi=HI, lo=LO,
     Direction confirmed by Joe's examples (HI=85, K=75):
       min=56/maj=120 → anchor 120, (120-85)=35 > (85-75)=10 → True
       min=56/maj=90  → anchor 90,  (90-85)=5  > 10           → False
+
+    tol (Joe 0709, SWEEP) = value-point allowance added to the anchor's overshoot, so a
+    near-miss still predicts. tol=0.0 is the spec'd behaviour and the default; the
+    anchor must still be OOB, and K must still be inside the engage band.
     """
     k    = np.asarray(k, float)
     pmin = np.asarray(predictor_min_bb, float)
@@ -42,9 +46,9 @@ def predict_breach(k, predictor_min_bb, predictor_maj_bb, hi=HI, lo=LO,
     anchor_hi = np.maximum(pmin, pmaj)    # prediction_anchor (hi side)
     anchor_lo = np.minimum(pmin, pmaj)    # prediction_anchor (lo side)
     pred_hi = ((k >= fence_hi) & (k < hi) & (anchor_hi >= hi) &
-               ((anchor_hi - hi) > (hi - k)))
+               ((anchor_hi - hi) + tol > (hi - k)))
     pred_lo = ((k <= fence_lo) & (k > lo) & (anchor_lo <= lo) &
-               ((lo - anchor_lo) > (k - lo)))
+               ((lo - anchor_lo) + tol > (k - lo)))
     out = np.zeros(len(k), dtype=np.int8)
     out[pred_hi] =  1
     out[pred_lo] = -1
