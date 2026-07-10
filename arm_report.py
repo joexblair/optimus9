@@ -42,6 +42,12 @@ with Jig(now + 60_000, hours=max(30, cli.hours + 6), warmup=90, overrides=ov) as
     W, cfg = j.W, j.cfg
     ts, px = np.asarray(j.ts, np.int64), j.px
     f = lambda k: dtm.datetime.fromtimestamp(ts[k] / 1000, timezone.utc).strftime('%m-%d %H:%M:%S')
+    # TV omits no-trade (V=0 filler) bars — a bgcolor on a filler bar's `time` never paints. Snap each
+    # event to the last REAL (V>0) bar at/before it (the bar its emerging value was forward-filled from).
+    vol = W.base['volume'].to_numpy(dtype=float)
+    real_idx = np.where(vol > 0, np.arange(len(vol)), -1)
+    np.maximum.accumulate(real_idx, out=real_idx)
+    snap = lambda k: int(ts[real_idx[k]]) if real_idx[k] >= 0 else int(ts[k])
     s5m = j.causal.line('s5m'); seam5 = (ts % 300_000) == 0
     sd = lambda k: 1 if s5m[k] >= 85 else (-1 if s5m[k] <= 15 else 0)
     ks = [int(k) for k in np.flatnonzero(seam5)]
@@ -96,10 +102,10 @@ for r in rows:
 
 tr = [r for r in rows if r['status'] == 'TRADED']
 streams = [
-    {'name': 'arm', 'ts': [int(j.ts[r['kA']]) for r in rows], 'color': 'color.gray'},
-    {'name': 'long', 'ts': [int(j.ts[r['kT']]) for r in tr if r['bd'] == 1], 'color': 'color.green'},
-    {'name': 'short', 'ts': [int(j.ts[r['kT']]) for r in tr if r['bd'] == -1], 'color': 'color.red'},
-    {'name': 'exit', 'ts': [int(j.ts[r['kx']]) for r in tr], 'color': 'color.white'},
+    {'name': 'arm', 'ts': [snap(r['kA']) for r in rows], 'color': 'color.gray'},
+    {'name': 'long', 'ts': [snap(r['kT']) for r in tr if r['bd'] == 1], 'color': 'color.green'},
+    {'name': 'short', 'ts': [snap(r['kT']) for r in tr if r['bd'] == -1], 'color': 'color.red'},
+    {'name': 'exit', 'ts': [snap(r['kx']) for r in tr], 'color': 'color.white'},
 ]
 n = j.score.emit_bgcolor(streams, cli.pine, f"arm-delay last {cli.hours:.0f}h ({len(rows)} trades)  grey=arm green=long red=short white=exit")
 print(f"\npine -> {cli.pine}  ({n} painted bars)")
