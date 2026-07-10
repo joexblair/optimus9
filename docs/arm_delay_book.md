@@ -98,8 +98,14 @@ per-day gross:  p50 +0.1281%   min -0.4067%   max +0.4099%   days above cost: 6/
 
 ### Nothing closes the gap from the strategy side
 
-- **Knobs are flat.** `m_mult` 0.44→0.62 spans `-0.048%..-0.030%`. `bands`: best cell `+0.1738%` gross
-  against the `+0.1704%` baseline. `cap` does nothing once the survivorship guard is in.
+- **Knobs are flat.** Every knob, 9 days, `producer=gate`, scored on gross mean:
+  `m_mult` 0.44→0.62 spans `+0.152%..+0.170%` · `bands` best `+0.1738%` (baseline `+0.1704%`) ·
+  `tol` 0/2/4/6 = `+0.1704 / +0.1770 / +0.1678 / +0.1661%` · `m_len` 6/7/8 = `+0.1677 / +0.1704 / +0.1520%` ·
+  `cap` does nothing once the survivorship guard is in.
+  **The whole grid spans `+0.145%..+0.177%` gross. The cost is `0.20%`.**
+  Two spec values are contradicted, both inside the noise: `tol = 4.0` is worse than `tol = 0`
+  (`+0.1678%` vs `+0.1704%`, days-positive `3/9` vs `5/9`), and `tol = 2` is nominally best. `m_len = 7`
+  (the spec's middle) is the best of the three.
 - **Every hard stop loses.** `none +0.1154%` · `0.8% stop +0.0915%` · `0.3% stop +0.0683%`. The worst 5%
   of trades drag the mean by `-0.1487%`, but stopping them costs more than they take. Same verdict
   `project_exit_curl` reached on a different book.
