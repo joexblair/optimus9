@@ -17,7 +17,7 @@ from datetime import timezone
 import numpy as np
 
 from optimus9.analysis.jig import Jig
-from optimus9.analysis.lr_v2 import gate_open, s_qualify, fin_gate, fin_unlatch
+from optimus9.analysis.lr_v2 import gate_open, s_qualify, fin_gate, fin_unlatch, lr_exit_v2
 import arm_walk as AW
 
 COST = 0.20
@@ -48,6 +48,8 @@ def build_args():
     ap.add_argument('--producer', default='gate', choices=['gate', 'unlatch', 'arm'])
     ap.add_argument('--fin-lb', type=int, default=7)
     ap.add_argument('--fin-fwd', type=int, default=2)
+    ap.add_argument('--exit', dest='exit_mode', default='tp', choices=['tp', 'lr'],
+                    help="tp = s{tpTF}m far-side reversal (Joe 0710) · lr = the shipped lr_exit_v2")
     ap.add_argument('--detail', action='store_true')
     return ap
 
@@ -109,14 +111,30 @@ def run_day(a, quiet=False):
                 rows.append(dict(kA=kA, es=es, tf=v['tf'], ok=ok, kT=None, n=v['n']))
                 continue
             xt = AW.tp_tf(v['B'], kT, v['tf'])
-            kx = AW.take_profit(v['B'], kT, xt, cap)
-            if kx is None:
-                rows.append(dict(kA=kA, es=es, tf=v['tf'], ok=ok, kT=kT, kx=None, n=v['n']))
-                continue
+            if a.exit_mode == 'lr':
+                out = lr_exit_v2(W, cfg, [(int(ts[kT]), es, bd, kT)], predict=False)
+                kx = int(np.searchsorted(ts, int(out[0][1]))) if out else None
+                if kx is not None and (kx <= kT or kx >= len(ts)):
+                    kx = None
+            else:
+                kx = AW.take_profit(v['B'], kT, xt, cap)
+            # SURVIVORSHIP GUARD (0710): a trade whose exit never fires inside `cap` is marked to market at
+            # `cap`, never dropped.  Dropping it makes a short cap look like a 100%-win strategy.
+            forced = kx is None
+            if forced:
+                kx = cap
             mae, mfe, gross = excursion(px, kT, kx, bd)
+            e = px[kT]
+            path = bd * (px[kT:kx + 1] - e) / e * 100
+            win = {}
+            for N in (5, 10, 15):
+                w = path[:min(len(path), N * 60 // 5 + 1)]
+                win[f'mfe{N}'] = float(np.nanmax(np.maximum(w, 0.0)))
+                win[f'exit{N}'] = float(w[-1])            # gross if we bailed at minute N
             rows.append(dict(kA=kA, es=es, tf=v['tf'], ok=ok, kT=kT, kx=kx, xt=xt, n=v['n'],
                              mae=mae, mfe=mfe, gross=gross, net=gross - COST,
-                             delay=(ts[kT] - ts[kA]) / 60000.0, held=(ts[kx] - ts[kT]) / 60000.0, how=how))
+                             delay=(ts[kT] - ts[kA]) / 60000.0, held=(ts[kx] - ts[kT]) / 60000.0,
+                             how=how, forced=forced, **win))
 
         traded = [r for r in rows if r.get('kx') is not None]
         if quiet:
@@ -137,6 +155,8 @@ def run_day(a, quiet=False):
         if traded:
             n = np.array([r['net'] for r in traded])
             g = np.array([r['gross'] for r in traded])
+            nf = sum(1 for r in traded if r.get('forced'))
+            print(f"  {nf}/{len(traded)} exits were forced at cap")
             print(f"\n  n={n.size}  net mean {n.mean():+.4f}%  total {n.sum():+.2f}%  win {100*(n>0).mean():.1f}%"
                   f"  |  gross mean {g.mean():+.4f}%  MAE p50 {np.median([r['mae'] for r in traded]):.2f}%"
                   f"  delay p50 {np.median([r['delay'] for r in traded]):.0f}m")
