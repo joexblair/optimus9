@@ -16,7 +16,7 @@ from optimus9.live.strategy import StrategyLoop
 SYM = 'FARTCOINUSDT'
 START_MS = int(time.time() * 1000) - 24 * 3600 * 1000    # LAST 24 HOURS (dynamic; was date-pinned)
 # label -> code line name (Joe's Mage = s?M)
-COLS = [('s5m', 's5m'), ('s5Mage', 's5M'), ('s3m', 's3m'), ('s3Mage', 's3M'), ('s3r', 's3r'),
+COLS = [('s30Mage', 's30M'),('s30m', 's30m'),('s15Mage', 's15M'),('s15m', 's15m'),('s5m', 's5m'), ('s5Mage', 's5M'), ('s3m', 's3m'), ('s3Mage', 's3M'), ('s3r', 's3r'),
         ('s4m', 's4m'), ('s4Mage', 's4M'), ('s4r', 's4r'), ('s2Mage', 's2M')]
 
 
