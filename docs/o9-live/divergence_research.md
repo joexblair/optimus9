@@ -222,6 +222,37 @@ Off the **T4 arm** (stack-climb 10→25, s10m kickoff), two independent gates, *
 - Beats the T4 arm book alone on total (+26.9% at 125 trades) by trading more at slightly lower per-trade
   quality.
 
-**Open:** big combo sweep of the s2r/s3r/s4r line configs (5 sources × k_len × rsi) × vote knobs (L/K/floor).
-`s5r` held at DB default — it is shared with the TP exit ladder, so sweeping it would move the exit and
-confound the measurement; it needs its own pass.
+## 14. BIG SWEEP result (0711 overnight) — the book doubles
+
+Swept the **s2r/s3r/s4r line configs** (5 sources × k_len {5,6,8} × rsi {5,6} = 30) × **vote knobs**
+(L {6,12,24,36} × K {2,3} × floor {0.5,2.0} = 16) over 7 days, then validated the winners on 20 days.
+`s5r` HELD at DB default — it is shared with the TP exit ladder, so sweeping it would move the *exit* and
+confound the measurement. It needs its own pass.
+
+**Two changes carry it:**
+1. **`k_len` 5 → 8** on the LTF r-lines (live default is 5) — lifts BOTH paths.
+2. **Div vote `L=24, K=2`** (not L12/K3 — that was a local optimum on the un-swept lines).
+
+**20-day validation (the 7-day ranking held; its absolute nets were window-inflated):**
+
+| DIV path (20d) | n | net/trade | total | MAE | MFE | win |
+|---|---|---|---|---|---|---|
+| **close · k_len 8 · L24 K2 fl0.5** | **89** | **+0.360** | **+32.1** | 0.84 | 1.36 | **65%** |
+| close · k_len 8 · L24 K2 fl2.0 | 80 | +0.385 | +30.8 | 0.79 | 1.40 | 68% |
+| close · k_len 5 · L12 K3 (old) | 45 | +0.155 | +7.0 | 1.22 | 1.12 | 53% |
+
+**The combined book (T4 arm → {s3s4 ∥ divergence}, both trade, no race, real AD-TP exit):**
+
+| path | n | n/day | net/trade | total | win |
+|---|---|---|---|---|---|
+| s3s4 | 125 | 6.2 | +0.183 | +22.9 | 57% |
+| divergence | 89 | 4.5 | +0.360 | +32.1 | 65% |
+| **union** | **197** | **9.8** | **+0.299** | **+59.0%** | **62%** |
+
+Net is **after** the 0.20% cost ⇒ gross ≈ +0.50/trade, ~2.5× cost.
+
+**Progression:** T4 arm alone +26.9% (125 tr) → two paths, default lines +29.5% (170 tr) → **two paths, swept
++59.0% (197 tr)**.
+
+**Still open:** `s5r` sweep (its own pass, exit-confound); the `07-10 23:32` entry unreproduced by any config;
+one 20-day slice only — the ~18% hedge-premium haircut and maker/taker fill assumptions still apply.
