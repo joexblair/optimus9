@@ -18,8 +18,9 @@
 ## Open items
 - **Mid-band curl divisor** (8–14): optimal `TF/div` is an open sweep (task #6). This is the give-back lever —
   the base arm fires at the 150s curl seam and the exit lands past the turn. See [take_profit](./take_profit.md).
-- **Arm cancel:** one opposite `s5m` breach vs the s2Mage cancel-stay — A/B run (2 recovered, 0 lost), Joe's
-  verdict pending. See [arm_cancel](./arm_cancel.md).
+- **Arm cancel:** the s2Mage cancel-stay is now CANONICAL (baked as `arm_report --cancel stay` default; 2
+  recovered, 0 lost). Follow-up: raw wob=1 `s2Mage` is sticky enough that non-trading arms run to tape-end —
+  a coarse-curled `s2Mage` is the likely tightening. See [arm_cancel](./arm_cancel.md).
 - **Stale-hunt bound:** `s5m` IB for N consecutive seams — proposed, not adopted. See [arm_ladder](./arm_ladder.md#stale-hunt-hazard-open).
 - **s15a definition (`fin_s30M_oob`):** Major-OOB-required vs mini-only — Joe's call. See [finisher](./finisher_6of9.md#s15a-definition--open).
 - **Backstop tightening:** the IB-return exit is looser than an arm exit (14:01 held to 16:45).

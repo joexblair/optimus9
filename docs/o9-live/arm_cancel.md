@@ -13,11 +13,19 @@ vice-versa). No fixed deadline.
   while a position is open (the TP always fires first); skip/flip/close policies are byte-identical. Nothing to
   cancel. (Open idea, not adopted.)
 
-## s2Mage cancel-stay (Joe 0711, open A/B)
-If `s2Mage` reverses toward `es` in the window after an opposite-side `s5m` breach, **stay** the cancellation
-(the arm survives the twitch). `s2Mage = 60s, 37|0.72|hlcc4, emerging`, boundary-agnostic. `[measured]`
-recovers exactly 13:55 and 18:57 (2 new, 0 lost, 5 baseline unchanged). `arm_cancel_ab.py`. Whether one
-opposite breach is a real cancel or a twitch the arm should survive is Joe's verdict, pending.
+## s2Mage cancel-stay (Joe 0711, CANONICAL)
+If `s2Mage` reverses toward `es` within `stay_win` (=60 bars = 300s) after an opposite-side `s5m` breach,
+**stay** the cancellation (the arm survives the twitch) — skip that breach and test the next. `s2Mage = 60s,
+37|0.72|hlcc4, emerging`, boundary-agnostic; the stay reads `causal.reversal(s2Mage, wob=1)`. **Baked as the
+default cancel** in `arm_report.py` (`--cancel stay`, default; `--cancel base` reverts for A/B). `[measured]`
+last 24h vs baseline: 2 NEW (13:55 MFE 2.93, 18:57 MFE 1.29), 0 LOST, 5 unchanged; MAE p50 0.06→0.07. Purely
+additive — a stayed arm is a superset of the baseline's life, so it can't kill a baseline trade.
+
+**Observed stickiness (open):** raw wob=1 `s2Mage` flips often, so within 300s of almost any opposite breach it
+has a toward-`es` reversal → the stay skips most breaches and a **non-trading** arm runs to a non-stayed breach
+or tape-end (arm→cancel MAE/MFE 2–5% vs ~0.2% under `base`). Trades are unaffected (the 6of9 fires long before
+the far cancel), but this is the [stale-hunt hazard](./arm_ladder.md#stale-hunt-hazard-open) in a new place —
+a coarse-curled `s2Mage` (vs the raw slope-flip) is the likely tightening.
 
 ## Why cancel-on-breach, not the permission drop
 At `s5m = 8|0.65|ohlc4` the permission-cancel kills the hunt at seam 2 before `s5r` predicts (zero arms). The

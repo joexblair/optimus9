@@ -3,7 +3,8 @@
 Baseline cancel: the arm dies at the FIRST opposite-side s5m breach.
 Stayed cancel : an opposite s5m breach is STAYED if s2Mage reverses toward es within `win` after it
                 (the sell-off that drove the breach is reversing) — the arm survives to the next breach.
-Both feed fin_unlatch_6of9 (breach mode). Prints every arm's trade + MAE/MFE under each, and the diff.
+Both feed fin_unlatch_6of9 (breach mode) + the real AD-TP (take_profit_ad). Prints every arm's trade +
+MAE/MFE under each, and the diff.
 All reads via the jig.  python3 arm_cancel_ab.py --hours 24
 """
 import argparse, datetime as dtm
@@ -75,9 +76,11 @@ with Jig(now + 60_000, hours=max(30, cli.hours + 6), warmup=90, overrides=ov) as
         cb, cs = cancel_base(kA, es), cancel_stay(kA, es)
         kTb, kTs = trade(kA, es, cb), trade(kA, es, cs)
         r = dict(kA=kA, es=es, bd=bd, cb=cb, cs=cs, kTb=kTb, kTs=kTs)
+        es_tp = -es; B_tp = AW.board(j, TFS, es_tp, 0.0, bands); bd_tp = -es_tp   # real AD-TP (exit direction)
+        q15_tp = q15hi if bd_tp == -1 else q15lo; q30_tp = q30hi if bd_tp == -1 else q30lo
         for tag, kT, cap in (('b', kTb, cb), ('s', kTs, cs)):
             if kT is not None and kT < cap:
-                kx = AW.take_profit(AW.board(j, TFS, es, 0.0, bands), kT, AW.tp_tf(AW.board(j, TFS, es, 0.0, bands), kT, 5), cap) or cap
+                kx = AW.take_profit_ad(B_tp, kT, len(ts) - 1, q15_tp, q30_tp) or cap
                 mae, mfe = exc(kT, kx, bd)
                 r[tag] = dict(kT=kT, kx=kx, mae=mae, mfe=mfe)
             else:

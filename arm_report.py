@@ -25,6 +25,8 @@ ap.add_argument('--hours', type=float, default=24)
 ap.add_argument('--producer', default='nof9', choices=['nof9', 'gate'])
 ap.add_argument('--n-of9', type=int, default=6)
 ap.add_argument('--tp', default='ad', choices=['ad', 'interim'])   # ad = real arm-delay TP; interim = far-side mini
+ap.add_argument('--cancel', default='stay', choices=['stay', 'base'])  # stay = s2Mage cancel-stay (canonical)
+ap.add_argument('--stay-win', type=int, default=60, help='5s bars after an opposite breach to look for the s2Mage stay')
 ap.add_argument('--pine', default='transfer/arm_20260709.pine')
 cli = ap.parse_args()
 
@@ -38,6 +40,7 @@ TFS = AW.DEFAULT_TFS; bands = AW.parse_bands(AW.DEFAULT_BANDS)
 ov = AW.overrides(TFS, 7, 0.50)
 ov['gcs5M'] = (5, ('bb', 37, 0.6, 'ohlc4'), 'emerging')
 ov['s15M'] = (15, ('bb', 37, 0.6, 'ohlc4'), 'emerging')
+ov['s2Mage'] = (60, ('bb', 37, 0.72, 'hlcc4'), 'emerging')         # spec 60s line (not in DB), for the cancel-stay
 
 with Jig(now + 60_000, hours=max(30, cli.hours + 6), warmup=90, overrides=ov) as j:
     W, cfg = j.W, j.cfg
@@ -52,6 +55,7 @@ with Jig(now + 60_000, hours=max(30, cli.hours + 6), warmup=90, overrides=ov) as
     s5m = j.causal.line('s5m'); seam5 = (ts % 300_000) == 0
     sd = lambda k: 1 if s5m[k] >= 85 else (-1 if s5m[k] <= 15 else 0)
     ks = [int(k) for k in np.flatnonzero(seam5)]
+    rev2M = j.causal.reversal(j.causal.line('s2Mage'), 1)          # s2Mage turn: +1 up / -1 down (for the stay)
     hunts = [(ks[i], sd(ks[i])) for i in range(1, len(ks))
              if sd(ks[i]) and sd(ks[i]) != sd(ks[i - 1]) and t0 <= ts[ks[i]] <= now]
     q15hi, q15lo = s_qualify(W, cfg, 's15m', 's15M', 's15r', cfg.s15r_lb)
@@ -63,9 +67,15 @@ with Jig(now + 60_000, hours=max(30, cli.hours + 6), warmup=90, overrides=ov) as
                                 latch=True, arm_mode='latch', allib='off')
         if armed:
             arms.setdefault((armed[0], es), {'tf': armed[1], 'B': B})
-    def cancel_bar(kA, es):                                        # arm's natural life = next opposite s5m breach
-        nb = next((k for k in ks if k > kA and sd(k) == -es), None)
-        return nb if nb is not None else len(ts) - 1
+    def cancel_bar(kA, es):                                        # arm life = opposite s5m breach; stay skips a
+        breaches = [k for k in ks if k > kA and sd(k) == -es]      # breach that s2Mage confirms is reversing toward es
+        if cli.cancel == 'base':
+            return breaches[0] if breaches else len(ts) - 1
+        for kb in breaches:
+            w1 = min(kb + cli.stay_win, len(ts) - 1)
+            if not np.any(rev2M[kb + 1:w1 + 1] == es):             # s2Mage did NOT reverse toward es -> a real cancel
+                return kb
+        return len(ts) - 1
     rows = []
     for (kA, es), v in sorted(arms.items()):
         bd = -es
@@ -108,10 +118,12 @@ for r in rows:
 
 tr = [r for r in rows if r['status'] == 'TRADED']
 streams = [
-    {'name': 'arm', 'ts': [snap(r['kA']) for r in rows], 'color': 'color.gray'},
+    {'name': 'arm_long', 'ts': [snap(r['kA']) for r in rows if r['bd'] == 1], 'color': 'color.yellow'},
+    {'name': 'arm_short', 'ts': [snap(r['kA']) for r in rows if r['bd'] == -1], 'color': 'color.blue'},
     {'name': 'long', 'ts': [snap(r['kT']) for r in tr if r['bd'] == 1], 'color': 'color.green'},
     {'name': 'short', 'ts': [snap(r['kT']) for r in tr if r['bd'] == -1], 'color': 'color.red'},
     {'name': 'exit', 'ts': [snap(r['kx']) for r in tr], 'color': 'color.white'},
 ]
-n = j.score.emit_bgcolor(streams, cli.pine, f"arm-delay last {cli.hours:.0f}h ({len(rows)} trades)  grey=arm green=long red=short white=exit")
+n = j.score.emit_bgcolor(streams, cli.pine, f"arm-delay last {cli.hours:.0f}h ({len(rows)} arms)  "
+                         f"yellow=long-arm blue=short-arm green=long red=short white=exit")
 print(f"\npine -> {cli.pine}  ({n} painted bars)")
