@@ -50,6 +50,21 @@ That last idea lands deep, Sifu — and it reframes the whole thing. Not "a remi
   drop the "...and I'm wrong again" tail.
 - **Capture repeat-explained concepts** in `quirks_to_remember.md` the first time
   they're explained twice.
+- **Held-out window, always — never report a number from the window you tuned on.**
+  Fit/sweep on window A; the ONLY number that counts is window B, which was never
+  touched. A sample *extension* (9d→20d in the same period) is NOT a held-out test.
+  Failure (2026-07-11): swept 30 line-configs × 16 vote-knobs on 06-21..07-10, picked
+  the maxima, reported **+59.0%**. First true held-out window: **−0.180%/trade** — and
+  the whole 62-day span was **−0.016%/trade, win 51%**. No edge. The warning was already
+  in my own doc from 0710 ("every filter flips sign OOS", "nine days was a lucky slice")
+  and I swept the same window anyway. The tell I ignored: the 7d/10d sweeps read
+  +0.5%/trade where 20d read +0.18% — **when a shorter window reads richer than a longer
+  one, that IS the overfit signal, not a lucky patch.** [arm-delay, 2026-07-11]
+- **Persist the rows, never just the aggregate.** A harness that accumulates means/totals
+  and discards per-trade rows forces a full re-run for every new question (side? regime?
+  bias? path?). Write per-trade rows to a table ONCE (`arm_book`, `two_path_trades`); every
+  later slice is then a query, not a 40-minute re-run. Failure (2026-07-11): re-ran the
+  same 62-day book three times to answer three slices of the SAME data. [arm-delay]
 - **Spec-sync per volley** — when a tuning volley lands a number, knob, decision, or
   a killed idea, update the relevant `docs/o9-live/*.md` doc IN THE SAME TURN, before
   moving on. The volley is ephemeral (it scrolls off / compacts); the doc is the
