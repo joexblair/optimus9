@@ -24,6 +24,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument('--hours', type=float, default=24)
 ap.add_argument('--producer', default='nof9', choices=['nof9', 'gate'])
 ap.add_argument('--n-of9', type=int, default=6)
+ap.add_argument('--tp', default='ad', choices=['ad', 'interim'])   # ad = real arm-delay TP; interim = far-side mini
 ap.add_argument('--pine', default='transfer/arm_20260709.pine')
 cli = ap.parse_args()
 
@@ -80,7 +81,12 @@ with Jig(now + 60_000, hours=max(30, cli.hours + 6), warmup=90, overrides=ov) as
         kend = cap                                                 # arm excursion runs to the arm's cancel
         amf, ama = exc(px, kA, kend, bd)
         if traded:
-            kx = AW.take_profit(v['B'], kT, AW.tp_tf(v['B'], kT, v['tf']), cap) or cap
+            if cli.tp == 'ad':                                     # the real arm-delay TP (exit-direction 6of9)
+                es_tp = -es; B_tp = AW.board(j, TFS, es_tp, 0.0, bands); bd_tp = -es_tp
+                q15_tp = q15hi if bd_tp == -1 else q15lo; q30_tp = q30hi if bd_tp == -1 else q30lo
+                kx = AW.take_profit_ad(B_tp, kT, len(ts) - 1, q15_tp, q30_tp) or cap
+            else:
+                kx = AW.take_profit(v['B'], kT, AW.tp_tf(v['B'], kT, v['tf']), cap) or cap
             tmf, tma = exc(px, kT, kx, bd)
             status = 'TRADED'
         else:

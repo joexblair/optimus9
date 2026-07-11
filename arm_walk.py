@@ -180,3 +180,55 @@ def take_profit(B, k_arm, tf, k_max):
         if far[k] and rev[k] == es:                     # turning back toward the arm side
             return k
     return None
+
+
+def take_profit_ad(B_tp, entry, cap, q15_tp, q30_tp, trace=None):
+    """The REAL TP (Joe 0710): the arm-delay pipeline run in the EXIT direction (B_tp.es = -es_entry),
+    SEEDED on exit-side s5m breaches after the entry — NOT a single walk from the entry bar. A slow reversal
+    (10:22: s5m HI breach at 13:05) only starts hunting when its s5m breach lands; walking continuously from
+    the entry stalls the ladder at TF5 for hours.
+
+    Per exit-side s5m IB->OOB crossing, walk the ladder (arm_mode='both': a fast single-TF reversal arms at
+    the base TF5 when s6 is quiet; a slow one climbs and latches). At the arm, fin_unlatch_6of9 fires the
+    exit: the 7x30s back-lookback (fin_box_qualified, internal) authorises, the 6of9 lines-OOB confluence
+    triggers. The 6of9 anchors on the reversal as it develops (19:42: exit 20:25:30, gain +0.45%) where the
+    sparse s_qualify co-fire (fin_gate) missed forward to 20:55:40 (+0.06%).
+
+    Backstop (Joe 0710): if a base (s5m + s5r) reverses but never produces s30a+s15a, and BOTH s5m and s5r
+    return in-bounds, exit immediately at that IB-return bar — the reversal fizzled; don't hold for the next.
+
+    q15_tp/q30_tp = es_tp-side finishers (qlo for a long exit / qhi for a short exit).
+    Returns the exit bar, or None.  trace (opt) = list; appended (kind, bar, tf) per hunt for diagnostics.
+
+    Worked example: 14:01 SHORT opens · 14:05 s5r predicts · 14:15 s5r curls, s6 OOB (climb) · 14:20 s6 curls
+    (apex) · 14:33:30 s30a+s15a -> exit."""
+    es, tf0 = B_tp.es, B_tp.tfs[0]
+    seam5, side = B_tp.seam5, B_tp.side
+    oob5, pred5 = B_tp.oob[tf0], B_tp.pred[tf0]
+    ks = [k for k in range(entry + 1, cap) if seam5[k]]
+    hunts = [ks[i] for i in range(1, len(ks)) if side(ks[i]) == es and side(ks[i]) != side(ks[i - 1])]
+    for kh in hunts:
+        _ev, armed, _c = walk(B_tp, kh, cap, cancel_on='none', permission=False,
+                              latch=True, arm_mode='both', allib='off')
+        if armed:
+            # option (a): the 7x30s back-lookback (fin_box_qualified, inside fin_unlatch_6of9) authorises at
+            # the arm; the 6of9 lines-OOB confluence TRIGGERS the exit. It anchors on the reversal as it
+            # develops (19:42: 20:25:30) where the sparse s_qualify co-fire (fin_gate) missed to 20:55:40.
+            # Symmetric with the entry: ladder -> arm -> fin_box_qualified -> fin_unlatch_6of9.
+            x = B_tp.C.fin_unlatch_6of9(armed[0], cap, es, q15_tp, q30_tp, N=6)
+            if x is not None:
+                if trace is not None:
+                    trace.append(('arm', x, armed[1]))
+                return x
+        # backstop: base fizzled — s5r predicted, then both s5m & s5r return IB with no finisher between.
+        kp = next((k for k in range(kh, cap) if pred5[k] == es), None)
+        if kp is None:
+            continue
+        for k in range(kp + 1, cap):
+            if q15_tp[k] and q30_tp[k]:              # a finisher came — a later hunt's arm will place the exit
+                break
+            if side(k) != es and not oob5[k]:        # s5m off-side AND s5r back in-bounds -> fizzled
+                if trace is not None:
+                    trace.append(('backstop', k, tf0))
+                return k
+    return None
