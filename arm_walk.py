@@ -167,6 +167,70 @@ def walk(B, kh, ke, brc_tol=1.0, curl_tol=0, cancel_on='apex', cancel_seam='bar'
     return ev, None, None
 
 
+def walk_stack(B, kh, ke):
+    """[T4 — the winning arm] Joe's stack climb (0711). Kickoff when the bottom TWO rungs' r are both OOB on
+    es; then climb the OOB/predict stack — a rung joins if its r is OOB, or if it is predicted; stop when a
+    rung offers neither, and ARM at the top of the stack. Returns (bar, apex_tf) or None.
+
+    This lands the apex HIGH (avg TF16 on the 10..25 ladder) — 'bigger TF, bigger leg'. It beats the
+    curl/reversal latch decisively on the same ladder (net +0.215 vs -0.126 /trade, 20d), because the latch
+    arms on the first adjacent pair (~TF11) and never climbs.  NOTE: it arms at stack-resolution, not on a
+    curl — there is no reversal timing in this rule."""
+    es, tfs = B.es, B.tfs
+    oob, pred = B.oob, B.pred
+    if len(tfs) < 2:
+        return None
+    for k in range(kh, ke):
+        if not (oob[tfs[0]][k] and oob[tfs[1]][k]):
+            continue
+        ci = 1
+        while ci + 1 < len(tfs):
+            nx = tfs[ci + 1]
+            if oob[nx][k] or pred[nx][k] == es:
+                ci += 1
+            else:
+                break
+        return (k, tfs[ci])
+    return None
+
+
+def hunt_side(jig, hunt_tf):
+    """(ks, sd) for the hunt line s{hunt_tf}m: its seam bars, and side(k) -> +1 hi / -1 lo / 0 in-bounds.
+    ONE impl — every consumer reads this instead of re-deriving `sd` and the seam list."""
+    C = jig.causal
+    ts = np.asarray(jig.ts, np.int64)
+    hm = C.line(f's{hunt_tf}m')
+    ks = [int(k) for k in np.flatnonzero((ts % (hunt_tf * 60 * 1000)) == 0)]
+    return ks, (lambda k: 1 if hm[k] >= HI else (-1 if hm[k] <= LO else 0))
+
+
+def hunts(jig, hunt_tf, t0, t1):
+    """The hunt seeds: s{hunt_tf}m IB->OOB crossings (at that TF's seams) inside [t0, t1] -> [(bar, es)]."""
+    ts = np.asarray(jig.ts, np.int64)
+    ks, sd = hunt_side(jig, hunt_tf)
+    return [(ks[i], sd(ks[i])) for i in range(1, len(ks))
+            if sd(ks[i]) and sd(ks[i]) != sd(ks[i - 1]) and t0 <= ts[ks[i]] <= t1]
+
+
+def arm_cancel(jig, hunt_tf, kA, es, stay=True, win=60, wob=1):
+    """The arm's natural cancel (CANONICAL, Joe 0711): the next OPPOSITE-side s{hunt_tf}m breach — STAYED if
+    s2Mage reverses toward `es` within `win` bars after it (the sell-off that drove the breach is reversing,
+    so the arm survives the twitch).  Returns the cancel bar, or the tape end.  NOT a cap — this is the arm's
+    own life.  Requires s2Mage in the jig overrides (it is not a DB line)."""
+    C = jig.causal
+    ts = np.asarray(jig.ts, np.int64)
+    n = len(ts)
+    ks, sd = hunt_side(jig, hunt_tf)
+    rev2M = C.reversal(C.line('s2Mage'), wob) if stay else None
+    for kb in [k for k in ks if k > kA and sd(k) == -es]:
+        if not stay:
+            return kb
+        w1 = min(kb + win, n - 1)
+        if not np.any(rev2M[kb + 1:w1 + 1] == es):      # s2Mage did NOT reverse toward es -> a real cancel
+            return kb
+    return n - 1
+
+
 def tp_tf(B, k_arm, tf):
     """Scan UP from the arm TF until an r is not OOB on es; the last OOB TF is the TP TF (Joe 0710)."""
     es = B.es

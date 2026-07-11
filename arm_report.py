@@ -52,12 +52,7 @@ with Jig(now + 60_000, hours=max(30, cli.hours + 6), warmup=90, overrides=ov) as
     real_idx = np.where(vol > 0, np.arange(len(vol)), -1)
     np.maximum.accumulate(real_idx, out=real_idx)
     snap = lambda k: int(ts[real_idx[k]]) if real_idx[k] >= 0 else int(ts[k])
-    s5m = j.causal.line('s5m'); seam5 = (ts % 300_000) == 0
-    sd = lambda k: 1 if s5m[k] >= 85 else (-1 if s5m[k] <= 15 else 0)
-    ks = [int(k) for k in np.flatnonzero(seam5)]
-    rev2M = j.causal.reversal(j.causal.line('s2Mage'), 1)          # s2Mage turn: +1 up / -1 down (for the stay)
-    hunts = [(ks[i], sd(ks[i])) for i in range(1, len(ks))
-             if sd(ks[i]) and sd(ks[i]) != sd(ks[i - 1]) and t0 <= ts[ks[i]] <= now]
+    hunts = AW.hunts(j, 5, t0, now)                                # one hunt producer (arm_walk), not a local copy
     q15hi, q15lo = s_qualify(W, cfg, 's15m', 's15M', 's15r', cfg.s15r_lb)
     q30hi, q30lo = s_qualify(W, cfg, 's30m', 's30M', 's30r', cfg.s30r_lb)
     arms = {}
@@ -67,15 +62,8 @@ with Jig(now + 60_000, hours=max(30, cli.hours + 6), warmup=90, overrides=ov) as
                                 latch=True, arm_mode='latch', allib='off')
         if armed:
             arms.setdefault((armed[0], es), {'tf': armed[1], 'B': B})
-    def cancel_bar(kA, es):                                        # arm life = opposite s5m breach; stay skips a
-        breaches = [k for k in ks if k > kA and sd(k) == -es]      # breach that s2Mage confirms is reversing toward es
-        if cli.cancel == 'base':
-            return breaches[0] if breaches else len(ts) - 1
-        for kb in breaches:
-            w1 = min(kb + cli.stay_win, len(ts) - 1)
-            if not np.any(rev2M[kb + 1:w1 + 1] == es):             # s2Mage did NOT reverse toward es -> a real cancel
-                return kb
-        return len(ts) - 1
+    def cancel_bar(kA, es):                                        # one cancel producer (arm_walk.arm_cancel)
+        return AW.arm_cancel(j, 5, kA, es, stay=(cli.cancel == 'stay'), win=cli.stay_win)
     rows = []
     for (kA, es), v in sorted(arms.items()):
         bd = -es
