@@ -16,6 +16,14 @@
   live DB needs an exact named instruction. Never touch/change o9-live without explicit authorization.
 
 ## Open items
+- **Inter-trade delay / split timing (Joe 0711) — BLOCKS the two-path flow going live.** The two-path build
+  (arm → {s3s4 ∥ divergence}, both trade, no race) can emit **two simultaneous trades** into the trade engine.
+  That is a slippage recipe: two orders hitting the same instant sweep the book against themselves. o9-live has
+  **rudimentary splitting** already; what's missing is a mechanism to *time* the splits. The RiskGovernor needs
+  an inter-trade delay. Joe's steer (a suggestion for the design, not a decision): **live order-book sweeping**
+  is likely central to the timing call — size the split against visible depth rather than a fixed delay.
+  **Look at this AFTER the flow moves to o9-live.** Not yet measured: how often the two paths actually co-fire
+  within N bars over the 20-day book — that count sizes the exposure and should be the first number taken.
 - **Mid-band curl divisor** (8–14): optimal `TF/div` is an open sweep (task #6). This is the give-back lever —
   the base arm fires at the 150s curl seam and the exit lands past the turn. See [take_profit](./take_profit.md).
 - **Arm cancel:** the s2Mage cancel-stay is now CANONICAL (baked as `arm_report --cancel stay` default; 2
