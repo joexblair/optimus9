@@ -52,39 +52,49 @@ def overrides(tfs, m_len, m_mult):
     return o
 
 
-def board(jig, tfs, es, tol, bands, wob=1):
+def board(jig, tfs, es, tol, bands, wob=1, names=None):
     """Cached Board, stored ON the jig so it dies with the window. A Board computes ~3xTF emerging lines and
-    the walk only ever needs one per side — building one per hunt was the whole cost of a day's run."""
+    the walk only ever needs one per side — building one per hunt was the whole cost of a day's run.
+    `names` = optional {tf: series_prefix} so one ladder rung can read a PRIVATE line family (Joe 0711:
+    the exit's TF5 reads `es5`, a clone of s5, so sweeping s5 for the ENTRY cannot move the EXIT)."""
     cache = jig.__dict__.setdefault('_arm_boards', {})
-    key = (tuple(tfs), es, tol, tuple(bands), wob)
+    key = (tuple(tfs), es, tol, tuple(bands), wob, tuple(sorted((names or {}).items())))
     if key not in cache:
-        cache[key] = Board(jig, tfs, es, tol, bands, wob)
+        cache[key] = Board(jig, tfs, es, tol, bands, wob, names)
     return cache[key]
 
 
 class Board:
-    """Everything the walk reads, computed once per window."""
+    """Everything the walk reads, computed once per window. Owns line NAMING (`names`), so a consumer can
+    re-base a rung onto a private series without forking the walk."""
 
-    def __init__(self, jig, tfs, es, tol, bands, wob=1):
+    def __init__(self, jig, tfs, es, tol, bands, wob=1, names=None):
         C = jig.causal
         self.C, self.tfs, self.es, self.wob = C, tfs, es, wob
+        self.names = dict(names or {})
+        p = self.pfx                                                # tf -> series prefix ('s5' | 'es5' | ...)
         self.ts = np.asarray(jig.ts, np.int64)
         self.px = jig.px
         anchor = (int(self.ts[0]) // DAY) * DAY
-        self.s5m = C.line('s5m')
-        self.seam5 = (self.ts % 300_000) == 0
+        # the HUNT line = the ladder's bottom rung's mini (was hardcoded s5m; now follows tfs[0] and `names`)
+        self.hunt_m = C.line(p(tfs[0]) + 'm')
+        self.hunt_seam = (self.ts % (tfs[0] * 60 * 1000)) == 0
+        self.s5m, self.seam5 = self.hunt_m, self.hunt_seam          # back-compat aliases
         self.seam = {tf: tf * 60 // curl_div(tf, bands) for tf in tfs}
-        self.pred = {tf: C.predict_set(f's{tf}', tol=tol, maj='Mage') for tf in tfs}
-        self.moob = {tf: C.mini_oob(f's{tf}') for tf in tfs}
-        self.r = {tf: C.line(f's{tf}r') for tf in tfs}
-        self.m = {tf: C.line(f's{tf}m') for tf in tfs}
+        self.pred = {tf: C.predict_set(p(tf), tol=tol, maj='Mage') for tf in tfs}
+        self.moob = {tf: C.mini_oob(p(tf)) for tf in tfs}
+        self.r = {tf: C.line(p(tf) + 'r') for tf in tfs}
+        self.m = {tf: C.line(p(tf) + 'm') for tf in tfs}
         self.oob = {tf: (self.r[tf] >= HI) if es == 1 else (self.r[tf] <= LO) for tf in tfs}
         self.pseam = {tf: ((self.ts - anchor) % ((tf * 60 // 3) * 1000)) == 0 for tf in tfs}
         self.curl = {tf: {int(np.searchsorted(self.ts, t))
-                          for t in C.curl(*C.coarse(f's{tf}r', self.seam[tf] * 1000), -es)} for tf in tfs}
+                          for t in C.curl(*C.coarse(p(tf) + 'r', self.seam[tf] * 1000), -es)} for tf in tfs}
+
+    def pfx(self, tf):
+        return self.names.get(tf, f's{tf}')
 
     def side(self, k):
-        return 1 if self.s5m[k] >= HI else (-1 if self.s5m[k] <= LO else 0)
+        return 1 if self.hunt_m[k] >= HI else (-1 if self.hunt_m[k] <= LO else 0)
 
     def first_breach(self, tf, k0, k1):
         o = self.oob[tf]
@@ -203,7 +213,7 @@ def take_profit_ad(B_tp, entry, cap, q15_tp, q30_tp, trace=None):
     Worked example: 14:01 SHORT opens · 14:05 s5r predicts · 14:15 s5r curls, s6 OOB (climb) · 14:20 s6 curls
     (apex) · 14:33:30 s30a+s15a -> exit."""
     es, tf0 = B_tp.es, B_tp.tfs[0]
-    seam5, side = B_tp.seam5, B_tp.side
+    seam5, side = B_tp.hunt_seam, B_tp.side          # the bottom rung's mini (es5m when the exit is re-based)
     oob5, pred5 = B_tp.oob[tf0], B_tp.pred[tf0]
     ks = [k for k in range(entry + 1, cap) if seam5[k]]
     hunts = [ks[i] for i in range(1, len(ks)) if side(ks[i]) == es and side(ks[i]) != side(ks[i - 1])]
