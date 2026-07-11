@@ -222,7 +222,39 @@ Off the **T4 arm** (stack-climb 10→25, s10m kickoff), two independent gates, *
 - Beats the T4 arm book alone on total (+26.9% at 125 trades) by trading more at slightly lower per-trade
   quality.
 
-## 14. BIG SWEEP result (0711 overnight) — the book doubles
+## ⚠️ 15. THE +59.0% IS OVERFIT — DO NOT SHIP (0711, read this before §14)
+
+**§14 below is IN-SAMPLE ONLY and does not generalise.** The first genuinely held-out test we have ever run
+kills it. Everything in §12–§14 (the T4 stack climb, the TF10 kickoff, `k_len 8/10`, `L24/K2`, the source)
+was **selected on 06-21…07-10** and then reported on that same window.
+
+**Regime split, ship config, 62 days (05-10 → 07-10), causal, no caps:**
+
+| cohort | days | n | net/trade | total | win |
+|---|---|---|---|---|---|
+| PRE 05-10…06-05 (OOS, crash regime) | 27 | 275 | **−0.145** | −39.8 | 43% |
+| **MID 06-06…06-20 (OOS, SAME regime as in-sample)** | 15 | 164 | **−0.180** | **−29.5** | 51% |
+| IN 06-21…07-10 (in-sample) | 20 | 197 | +0.299 | +59.0 | 62% |
+| **WHOLE SPAN** | **62** | **636** | **−0.016** | **−10.2** | **51%** |
+
+- **MID is the discriminator and it is NEGATIVE.** It is post-crash, the *same regime* as the in-sample
+  window, and completely unseen — and it loses (−0.180/trade), *worse* than the crash window.
+- So the failure is **NOT** a macro/regime effect (FARTCOIN fell 50% 05-22→06-06; that was the natural
+  hypothesis, and MID disproves it).
+- **The only positive window in 62 days is the one that was tuned on.** Over the whole span there is no edge.
+
+**Method failures that produced this (both mine):**
+1. **Tuned and reported on one window.** The 7-day and 10-day sweeps were visibly window-inflated (s3s4 read
+   +0.5/trade there vs +0.183 on 20 days) — I flagged that and kept sweeping the same window anyway.
+2. **The 0710 OOS test had already warned us** (`cost_and_edge.md`): *"every filter flips sign OOS"*, *"nine
+   days was a lucky slice"*. And that test was itself only a sample **extension** (9d→20d in the same period),
+   never a held-out window.
+
+**The standing rule from here: fit on one window, validate on a window never touched. No exceptions.**
+The only result that has survived every test remains the **+0.1154% gross edge (P>0 = 99.8%) that sits BELOW
+the 0.20% cost** — see `cost_and_edge.md`. Maker fills remain the only measured lever on it.
+
+## 14. BIG SWEEP result (0711 overnight) — IN-SAMPLE ONLY, superseded by §15
 
 Swept the **s2r/s3r/s4r line configs** (5 sources × k_len {5,6,8} × rsi {5,6} = 30) × **vote knobs**
 (L {6,12,24,36} × K {2,3} × floor {0.5,2.0} = 16) over 7 days, then validated the winners on 20 days.
