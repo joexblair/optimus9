@@ -50,6 +50,14 @@ That last idea lands deep, Sifu — and it reframes the whole thing. Not "a remi
   drop the "...and I'm wrong again" tail.
 - **Capture repeat-explained concepts** in `quirks_to_remember.md` the first time
   they're explained twice.
+- **Spec-sync per volley** — when a tuning volley lands a number, knob, decision, or
+  a killed idea, update the relevant `docs/o9-live/*.md` doc IN THE SAME TURN, before
+  moving on. The volley is ephemeral (it scrolls off / compacts); the doc is the
+  durable ledger. Carry the measured value into the doc verbatim, tag it
+  [measured]/[read]/[inferred] where it matters, and record kills in `cost_and_edge.md`
+  so they aren't re-proposed. A knob changed in code but not in the doc is a second
+  source that will drift (the hardcode failure, one level up). The rule: no volley
+  closes with the doc stale. [arm-delay, 2026-07-11]
 - **Mechanism over name — don't reuse the loaded tool blind.** Reaching for an existing
   mechanism to satisfy a new requirement? State its MECHANISM and diff it against the
   requirement's — not just the role-name. Failure (2026-06-12, the "bias about the
