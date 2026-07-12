@@ -172,10 +172,23 @@ def walk_stack(B, kh, ke):
     es; then climb the OOB/predict stack — a rung joins if its r is OOB, or if it is predicted; stop when a
     rung offers neither, and ARM at the top of the stack. Returns (bar, apex_tf) or None.
 
-    This lands the apex HIGH (avg TF16 on the 10..25 ladder) — 'bigger TF, bigger leg'. It beats the
-    curl/reversal latch decisively on the same ladder (net +0.215 vs -0.126 /trade, 20d), because the latch
-    arms on the first adjacent pair (~TF11) and never climbs.  NOTE: it arms at stack-resolution, not on a
-    curl — there is no reversal timing in this rule."""
+    This lands the apex HIGH (avg TF16 on the 10..25 ladder) — 'bigger TF, bigger leg'.  It arms at
+    stack-resolution, not on a curl: there is NO reversal timing in this rule.
+
+    !! UNSUPPORTED CLAIM (flagged 0711, do not cite) !!  This docstring previously justified dropping the
+    curl with "beats the curl/reversal latch decisively (net +0.215 vs -0.126 /trade, 20d)".  That is a NET
+    figure on a SINGLE 20-day window — same overfit family as the +59% (see ci_initiatives.md, "Held-out
+    window, always").  The curl-vs-no-curl comparison has never been run on MAE/MFE, and never on the 62-day
+    book.  The claim is withdrawn; the mechanic is unchanged pending a proper A/B.
+
+    What the 62-day book (trade_book, n=158) DOES say about the apex [measured 0711]:
+        apex <=14  n=82  MAEmed 0.46  MFEmed 0.68  MFE/MAE 1.47
+        apex >=15  n=76  MAEmed 1.03  MFEmed 0.56  MFE/MAE 0.55
+        Spearman apex vs MAE rho +0.189 (t +2.40) · apex vs MFE rho -0.045 (t -0.56)
+        Holds out-of-sample (JUNE, unfitted) and separately within LONG and within SHORT.
+    Higher apex buys adverse excursion and buys NO favourable excursion.  Joe's read (0711): the apex IS a
+    larger leg — but arming at stack-resolution lands us mid-leg, far from the swing, because we never wait
+    for the curl.  Placement, not the leg, is the defect."""
     es, tfs = B.es, B.tfs
     oob, pred = B.oob, B.pred
     if len(tfs) < 2:
