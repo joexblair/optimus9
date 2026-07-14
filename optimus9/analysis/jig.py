@@ -20,8 +20,27 @@ from optimus9.analysis.lr import lr_config, lr_walk
 from optimus9.analysis.lr_v2 import (s_qualify, s_qualify_parts, v2_arm, gate_open, _mage_rev, _rolling_any,
                                      _curl_detect, fin_unlatch_nof9, fin_box_qualified)
 from optimus9.compute.breaching_line import predict_breach, FENCE_HI, FENCE_LO
+from optimus9.compute.line_config import KLine, BBLine, override as _override   # noqa: F401
 from optimus9.compute.swing_detect import find_pivots, legs, swing_mask
 from sweep_eval import BASE_BIAS
+
+
+def kline(name, tf_min, *, k_len, rsi, stc, src='close', value_mode='emerging'):
+    """A K-line override, BY NAME. The only sanctioned way to build one — you cannot transpose it.
+
+        overrides = {**kline('s45r', 45, k_len=7, rsi=5, stc=7, src='ohlc4')}
+        with Jig(end_ms, hours=24, overrides=overrides) as j: ...
+
+    Joe's notation is k_len | rsi | stc | src; the DB tuple is ('k', rsi, stc, k_len, src) — REVERSED, and
+    transposing it is SILENT (the line still computes, and is a different line: TV MAE 0.03 vs 9.33).
+    optimus9.compute.line_config is the only module that knows that. Nothing else may hand-build a tuple."""
+    return {name: _override(tf_min * 60, KLine(k_len=k_len, rsi=rsi, stc=stc, src=src), value_mode)}
+
+
+def bbline(name, tf_min, *, length, mult, src='close', value_mode='emerging'):
+    """A Bollinger-position override, BY NAME. Notation and tuple agree here (length|mult|src), but this is
+    the one door so a caller never has to know which configs are safe to hand-build and which are not."""
+    return {name: _override(tf_min * 60, BBLine(length=length, mult=mult, src=src), value_mode)}
 
 
 def _ffb(x):

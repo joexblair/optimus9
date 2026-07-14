@@ -57,34 +57,10 @@ def _sign(v):
     return np.where(v >= OOB_HI, 1, np.where(v <= OOB_LO, -1, 0))
 
 
-class LineStore:
-    """SRP: resolve a bias line `ind_name` → (tf_seconds, cfg-tuple) from vw_indicator_configs_live
-    (the ic_live_after_dt view). Building (resample/align) stays with the window — this only owns the
-    DB lookup. cfg-tuple matches BiasWindow._raw: ('bb', len, mult, src) | ('k', rsi, stc, k, src)."""
-    def __init__(self, db):
-        self._db = db; self._cache = {}
-
-    def _fetch(self, ind_name):
-        if ind_name not in self._cache:
-            r = self._db.execute(
-                '''SELECT ic_line_type lt, ic_src src, ic_bb_len, ic_bb_mult, ic_rsi_len,
-                          ic_stc_len, ic_k_len, itf_seconds, value_mode
-                   FROM vw_indicator_configs_live WHERE ind_name = %s''', (ind_name,), fetch=True)
-            if not r:
-                raise ValueError(f'no live indicator_configs for {ind_name!r}')
-            c = r[0]
-            cfg = ('bb', c['ic_bb_len'], float(c['ic_bb_mult']), c['src']) if c['lt'] == 'bb' \
-                else ('k', c['ic_rsi_len'], c['ic_stc_len'], c['ic_k_len'], c['src'])
-            self._cache[ind_name] = (int(c['itf_seconds']), cfg, c['value_mode'] or 'closed')
-        return self._cache[ind_name]
-
-    def resolve(self, ind_name):
-        return self._fetch(ind_name)[:2]                  # (tf_seconds, cfg-tuple)
-
-    def value_mode(self, ind_name):
-        """The line's DB value_mode ('emerging' | 'closed') from vw_indicator_configs_live (#42).
-        Null → 'closed' (the conservative historical default; set ic_ivm_pk to make it explicit)."""
-        return self._fetch(ind_name)[2]
+# LineStore moved out 0714 (SRP): bias_machine is the bias ENGINE — it CONSUMES line configs, it does not
+# own them. optimus9.compute.line_config is now the ONLY module that knows the DB column order or the
+# positional tuple layout. Re-exported here so every existing `from bias_machine import LineStore` works.
+from optimus9.compute.line_config import LineStore, KLine, BBLine, coerce, override   # noqa: E402,F401
 
 
 @dataclass
@@ -134,7 +110,8 @@ class BiasWindow:
         self.cfg = cfg or BiasConfig()
         self._ls = LineStore(db)
         if line_overrides:                                    # sweep hook: inject line configs in-memory
-            self._ls._cache.update(line_overrides)            # {ind_name: (tf_seconds, cfg_tuple, value_mode)}
+            self._ls.inject(line_overrides)                    # {ind_name: (tf_seconds, cfg, value_mode)};
+            #                                                    cfg may be KLine/BBLine OR a legacy tuple
         if base_cache is not None:                            # sweep hook: reuse a pre-loaded base tape (skip DB reload)
             base, ts, px = base_cache
         else:

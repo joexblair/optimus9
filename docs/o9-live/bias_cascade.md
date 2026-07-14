@@ -16,7 +16,19 @@ Verified against TV (`transfer/BYBIT_FARTCOINUSDT.P_s120.csv`, 54 bars): `s120r`
 (= `('k',7,7,5)`) matches TradingView to **mean absolute error 0.03**. Built the other way round it is off
 by **9.33**. The bb notation and tuple DO agree (`len|mult|src`).
 
-**The DB tuple order is queued for a consistency fix (Joe 0714). Until then: TRANSLATE, never assume.**
+**FIXED 0714 — the order is now UNSAYABLE.** `optimus9/compute/line_config.py` is the only module that
+knows the DB column order or the positional layout. Build every override through the jig, by name:
+
+```python
+from optimus9.analysis.jig import Jig, kline, bbline
+overrides = {**kline('s45r', 45, k_len=7, rsi=5, stc=7, src='ohlc4'),
+             **bbline('s8m',   8, length=6, mult=0.56, src='ohlc4')}
+```
+Legacy positional tuples still work (`coerce` bridges them) so no existing script broke — but **new code
+never hand-builds a tuple.** Reordering the DB columns later is now a safe, mechanical change confined to
+one file.
+
+SRP: `LineStore` moved out of `bias_machine` — the bias engine CONSUMES configs, it does not OWN them.
 
 I got this wrong for the whole first day and built the cascade on a transposed r. Joe's call after the A/B:
 **keep the transposition** — `k_len 7 | rsi 5 | stc 7` positions the trades better than the chart's `5|7|7`.
