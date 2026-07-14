@@ -125,6 +125,136 @@ class _Causal:
         Delegates to lr_v2._curl_detect — the single curl-detection impl (SRP; also used by lr_exit_v2)."""
         return _curl_detect(np.asarray(ts_c), np.asarray(c, float), direction, with_val)
 
+    def seam_prev(self, name, seam_ms):
+        """Per-5s-bar: the value of `name` at the most recent seam boundary STRICTLY BEFORE this bar.
+        Causal (never reads the current seam's own sample). The seam grid is global (ts % seam_ms == 0), so a
+        bar at the start of a coarse bar reads the last seam of the PREVIOUS coarse bar — no intra-bar gap and
+        no special case at the open (Joe 0713).
+
+        Companion to coarse(): coarse() gives the seam samples, seam_prev() holds the last one per bar so a
+        consumer can compare a LIVE value against where the line stood one seam ago."""
+        v = self.line(name); ts = self.j.ts
+        seams = np.flatnonzero((ts % seam_ms) == 0)
+        if not len(seams):
+            return np.full(len(ts), np.nan)
+        i = np.searchsorted(ts[seams], ts, side='left') - 1        # last seam with ts_seam < ts[k]
+        out = np.full(len(ts), np.nan)
+        ok = i >= 0
+        out[ok] = v[seams[i[ok]]]
+        return out
+
+    def cross(self, a, b, grid_ms):
+        """Causal line-vs-line CROSS on a grid: +1 where `a` crossed ABOVE `b`, -1 where it crossed BELOW,
+        comparing each grid boundary to the previous one. Non-grid bars are 0.
+
+        Distinct from sign() (a-vs-BOUNDARY) and reversal() (a-vs-its-own-slope) — this is a-vs-ANOTHER-LINE.
+        `grid_ms` is the evaluation cadence and is a sweepable knob: a coarser grid filters 5s chop out of the
+        cross moment (Joe 0713: "fire every 30 seconds — this improves the timing of the s1m x s1r moment").
+        a/b are line NAMES or value arrays."""
+        av = self.line(a) if isinstance(a, str) else np.asarray(a, float)
+        bv = self.line(b) if isinstance(b, str) else np.asarray(b, float)
+        ts = self.j.ts
+        g = np.flatnonzero((ts % grid_ms) == 0)
+        out = np.zeros(len(ts), int)
+        if len(g) < 2:
+            return out
+        d = av[g] - bv[g]
+        prev, cur = d[:-1], d[1:]
+        out[g[1:]] = np.where((prev <= 0) & (cur > 0), 1, np.where((prev >= 0) & (cur < 0), -1, 0))
+        return out
+
+    def seam_since(self, cond, seam_ms):
+        """Causal: at every 5s bar, True iff `cond` held at ANY bar since the CURRENT seam bucket opened
+        (inclusive of the seam bar and of now). Resets at each seam.
+
+        The running-extreme gate (Joe 0713: "test at the seams, but between the seams collect the min/max").
+        seam_hold() samples the condition AT the seam and freezes it, so a breach landing mid-bucket is
+        invisible until the next seam — up to a full seam-width late (5 min on TF20/4; it dropped the 18:42
+        and 10:22 turns). seam_since() instead asks whether the line has touched the state at any point in
+        the bucket so far, so the gate answers within one bar of the breach and still resets on the seam.
+
+        cond is any per-bar bool: pass (sign(name) == es) and this IS the running max/min test."""
+        c = np.asarray(cond, bool)
+        ts = self.j.ts
+        bucket = ts // int(seam_ms)                                  # which seam interval each bar is in
+        new = np.concatenate([[True], bucket[1:] != bucket[:-1]])    # first bar of each bucket
+        # running OR within the bucket: cumulative count of True, minus the count at the bucket's start
+        cc = np.cumsum(c)
+        base_idx = np.maximum.accumulate(np.where(new, np.arange(len(c)), 0))
+        base = cc[base_idx] - c[base_idx]                            # count strictly before the bucket start
+        return (cc - base) > 0
+
+    def reset_since(self, event, reset):
+        """Causal: True at bar k iff `reset` has occurred at or after the most recent `event` — i.e. the
+        thing has been RE-ARMED since it last fired. True before any event ever occurs.
+
+        The re-fire guard (Joe 0714): an r that has completed an OOB excursion on a side must return to
+        neutral ground before it may be counted as setting up for that SAME side again. Without it, the
+        mini's next dive re-predicts a breach the r has just finished making — s19r spent 87 min OOB-low,
+        left at 10:26, and was re-predicted low at 10:47 from 28.4, never having crossed 50.
+
+        event = the OOB-on-es state.  reset = the midline cross (or whatever neutral test the caller wants)."""
+        e = np.asarray(event, bool)
+        r = np.asarray(reset, bool)
+        n = len(e)
+        idx = np.arange(n)
+        last_e = np.maximum.accumulate(np.where(e, idx, -1))
+        last_r = np.maximum.accumulate(np.where(r, idx, -1))
+        return last_r >= last_e
+
+    def hold_at_start(self, episode, sample):
+        """Causal: while `episode` is True, carry the value `sample` held on the bar the episode BEGAN.
+        False outside the episode, and False for an episode already running at the tape head.
+
+        'Was it already true when the thing started?' (Joe 0713: "previously predicted = was predicted when
+        s20m went OOB"). Not a rolling memory — the state is sampled ONCE, at the breach, and latched for
+        that breach's life. Reads only the episode's own start bar, so it is causal from the start bar on."""
+        e = np.asarray(episode, bool)
+        s = np.asarray(sample, bool)
+        start = e & ~np.concatenate([[False], e[:-1]])          # IB->OOB transition
+        idx = np.where(start, np.arange(len(e)), -1)
+        idx = np.maximum.accumulate(idx)                        # most recent start at/before each bar
+        out = np.zeros(len(e), bool)
+        ok = e & (idx >= 0)
+        out[ok] = s[idx[ok]]
+        return out
+
+    def grid_any(self, cond, grid_ms, n):
+        """Causal: at each grid boundary, True iff `cond` held at ANY of the last `n` grid samples
+        (inclusive of this one). Non-grid bars are False.
+
+        'WAS x and now y' (Joe 0713) — a fast line can leave a state in the same step that produces the
+        event you want to catch (s1m drops out of OOB on the very sample it crosses s1r), so the state test
+        must look back a sample, not read the event bar. `n` is the sweepable memory: n=1 is 'is', n=2 is
+        'is or was one sample ago'."""
+        c = np.asarray(cond, bool)
+        ts = self.j.ts
+        g = np.flatnonzero((ts % grid_ms) == 0)
+        out = np.zeros(len(ts), bool)
+        if not len(g):
+            return out
+        cg = c[g]
+        acc = np.zeros(len(g), bool)
+        for i in range(int(n)):
+            acc |= np.concatenate([np.zeros(i, bool), cg[:len(cg) - i]]) if i else cg
+        out[g] = acc
+        return out
+
+    def seam_hold(self, cond, seam_ms):
+        """Per-5s-bar: a per-bar condition SAMPLED at each seam boundary and HELD until the next one.
+        'Tested at each intra-bar seam' (Joe 0713) — the gate has a value between seams, and that value is the
+        one the seam last saw. Causal. `cond` = any per-bar array (bool/int/float)."""
+        c = np.asarray(cond)
+        ts = self.j.ts
+        seams = np.flatnonzero((ts % seam_ms) == 0)
+        if not len(seams):
+            return np.zeros(len(ts), c.dtype)
+        i = np.searchsorted(ts[seams], ts, side='right') - 1        # last seam with ts_seam <= ts[k]
+        out = np.zeros(len(ts), c.dtype)
+        ok = i >= 0
+        out[ok] = c[seams[i[ok]]]
+        return out
+
 
 class _Score:
     """HARNESS / SCORING — NON-CAUSAL. Never call these inside a strategy."""
@@ -182,7 +312,7 @@ if barstate.islast
         open(path, "w").write(body)
         return len(labels)
 
-    def emit_bgcolor(self, streams, path, title, opacity=0):
+    def emit_bgcolor(self, streams, path, title, opacity=0, notes=None):
         """Pine bgcolor overlay from named 5s-timestamp streams (the array-bgcolor pattern — arm_gate_emit,
         lp_cascade_emit, og_arm_emit all hand-rolled this; now it lives once here).
 
@@ -213,7 +343,14 @@ if barstate.islast
             toggles.append('show_%s = input.bool(true, "%s (%s)")' % (nm, label, s['color'].split('.')[-1]))
             paints.append('if show_%s and array.binary_search(%s, time) >= 0\n'
                           '    bg := color.new(%s, %d)' % (nm, nm, s['color'], opacity))
-        body = ('//@version=5\nindicator("%s", overlay = true)\n' % title
+        # `notes` = the config the emit was BUILT from, carried into the .pine as a comment block (Joe 0713).
+        # The chart is read hours later, often beside a newer run — a pine that cannot say which knobs
+        # produced it is a human-error trap. The header travels with the artefact.
+        hdr = ''
+        if notes:
+            lines = notes.split('\n') if isinstance(notes, str) else list(notes)
+            hdr = "\n".join('// ' + ln for ln in lines) + "\n"
+        body = ('//@version=5\n' + hdr + 'indicator("%s", overlay = true)\n' % title
                 + "\n".join(toggles) + "\n" + "\n".join(defs) + "\n" + "\n".join(calls)
                 + "\nbg = color(na)\n" + "\n".join(paints) + "\nbgcolor(bg)\n")
         open(path, "w").write(body)
