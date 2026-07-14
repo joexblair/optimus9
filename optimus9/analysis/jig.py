@@ -11,6 +11,11 @@ TWO namespaces — the split is the guardrail, not tidiness:
 
 DELEGATION RULE (absolute): the jig only CALLS existing producers. If something isn't packaged yet, split the
 producer first, then expose it here — never fork the logic into the jig.
+
+LINE CONFIGS — build them BY NAME (kline/bbline below). Joe's notation is k_len|rsi|stc|src; the DB tuple is
+('k', rsi, stc, k_len, src) — a DIFFERENT order, and transposing it is SILENT (the line still computes and is a
+DIFFERENT line: TV-verified MAE 0.03 right, 9.33 transposed). optimus9.compute.line_config is the only module
+that knows the layout. If you are typing ('k', ...) you are doing it wrong.
 """
 import numpy as np
 import bias_machine as bm

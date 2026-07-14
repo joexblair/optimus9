@@ -15,10 +15,45 @@ logic forks the truth and drifts.
 
 ---
 
+## LINE CONFIGS — build them BY NAME. Never hand-write a tuple. (0714)
+
+**Joe's notation:** `k_len | rsi | stc | src`.  Current s-series r: **`s{}r = 7|5|7|ohlc4`** — i.e. `k_len 7`,
+`rsi 5`, `stc 7`.
+
+**The DB tuple is a DIFFERENT order** — `('k', rsi, stc, k_len, src)` — so `7|5|7` lands as `('k', 5, 7, 7, …)`.
+Transposing it is **silent**: the line still computes, still looks plausible, and **is a different line**.
+Verified against TV (`transfer/BYBIT_FARTCOINUSDT.P_s120.csv`, 54 bars): `s120r` built right = **MAE 0.03**;
+transposed = **9.33**. A full day of cascade tuning ran on the wrong r before it surfaced (0714).
+
+**So the order was made unsayable.** `optimus9/compute/line_config.py` is the ONLY module that knows the DB
+column order or the positional layout. Build every override through the jig:
+
+```python
+from optimus9.analysis.jig import Jig, kline, bbline
+
+overrides = {**kline('s45r', 45, k_len=7, rsi=5, stc=7, src='ohlc4'),      # Joe's 7|5|7|ohlc4
+             **bbline('s8m',   8, length=6, mult=0.56, src='ohlc4'),
+             **bbline('s8Mage', 8, length=37, mult=0.83, src='ohlc4')}
+
+with Jig(end_ms, hours=24, warmup=90, overrides=overrides) as j:
+    r = j.causal.line('s45r')
+```
+- `kline(name, tf_min, *, k_len, rsi, stc, src, value_mode='emerging')` — you must NAME each field.
+- `bbline(name, tf_min, *, length, mult, src, value_mode='emerging')` — notation and tuple agree here, but it
+  is the same door so a caller never has to know which configs are safe to hand-build and which are not.
+- Legacy positional tuples still work (`line_config.coerce` bridges them) — the ~30 that exist did not break.
+  **New code does not hand-build a tuple.** If you are typing `('k', …)` you are doing it wrong.
+- `LineStore` lives in `line_config` now (SRP): `bias_machine` is the bias ENGINE — it CONSUMES configs, it
+  does not OWN them. Re-exported from `bias_machine` so old imports still resolve.
+
+---
+
 ## Index
 
 ### Construction
 - **`Jig(end_ms, hours, warmup, overrides, dev, bias)`** — builds the pinned bench once; `.causal`/`.score` hang off it.
+- **`kline(name, tf_min, *, k_len, rsi, stc, src, value_mode)`** — a K-line override, BY NAME. The only sanctioned way.
+- **`bbline(name, tf_min, *, length, mult, src, value_mode)`** — a Bollinger-position override, BY NAME.
 - **`.ts .px .n .cfg .hi .lo .W`** — the window's 5s timestamp/price arrays, bar count, `lr_config`, boundaries, and raw `BiasWindow` (read-only).
 
 ### `jig.causal.*` — LIVE-LEGAL (delegates to the real producers)
@@ -33,11 +68,19 @@ logic forks the truth and drifts.
 - **`reversal(line, wob)`** — boundary-agnostic reversal of a line: `+1` up-turn / `−1` down-turn after `wob` confirming steps.
 - **`coarse(name, seam_ms)`** — sample an emerging line at seam boundaries (e.g. every 5 min).
 - **`curl(ts_c, c, direction)`** — causal trough(`+1`)/peak(`−1`) detector on a coarse series; fires one seam late.
+- **`seam_prev(name, seam_ms)`** — a line's value at the PREVIOUS seam. Companion to `coarse()`: compare a live value against where the line stood one seam ago.
+- **`seam_hold(cond, seam_ms)`** — sample a condition AT the seam and freeze it until the next. *A breach landing mid-bucket is invisible for up to a full seam-width.*
+- **`seam_since(cond, seam_ms)`** — has it held at ANY point since the seam opened (the running min/max). Answers within one bar of the event; still resets on the seam. **Prefer this to `seam_hold` unless staleness is what you want.**
+- **`grid_any(cond, grid_ms, n)`** — held at any of the last `n` grid samples. *"WAS x, and now y"* — a fast line can leave a state on the very sample that produces the event you want to catch.
+- **`hold_at_start(episode, sample)`** — was `sample` true when `episode` BEGAN? Latched for that episode's life. Not a rolling memory.
+- **`cross(a, b, grid_ms)`** — line-vs-line crossing on a grid. Distinct from `sign()` (vs a BOUNDARY) and `reversal()` (vs its OWN slope). `grid_ms` is a sweepable knob — a coarser grid filters chop out of the cross moment.
+- **`reset_since(event, reset)`** — has `reset` occurred since the last `event`? The re-fire guard: an r that completed an OOB excursion must return to neutral ground before it counts as setting up for that same side again.
 
 ### `jig.score.*` — HARNESS / SCORING, NON-CAUSAL (never in a strategy)
 - **`swings(price=None, pct=None)`** — 0.9%-ZigZag pivots `[(idx, 'H'/'L')]` (price ffill'd first).
 - **`legs(pivots=None, price=None)`** — consecutive pivots → `[{start, end, dir, amp_pct}]`.
 - **`entry_quality(entries)`** — per-trade MAE/MFE to the next favourable swing (exit-INDEPENDENT) + `mfe_side`.
+- **`emit_bgcolor(streams, path, title, opacity=0, notes=None)`** — Pine bgcolor overlay. **`notes` bakes the config block into the `.pine` header** — a chart read hours later beside a newer run must be able to say which knobs produced it (0714).
 - **`table(rows, headers, row_fmt)`** — print a fixed-width table.
 - **`emit_labels(labels, path, title)`** — pine label emit (entry/exit, green/red, up/down; TV op-limit safe).
 
