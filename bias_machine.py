@@ -57,10 +57,13 @@ def _sign(v):
     return np.where(v >= OOB_HI, 1, np.where(v <= OOB_LO, -1, 0))
 
 
-# LineStore moved out 0714 (SRP): bias_machine is the bias ENGINE — it CONSUMES line configs, it does not
-# own them. optimus9.compute.line_config is now the ONLY module that knows the DB column order or the
-# positional tuple layout. Re-exported here so every existing `from bias_machine import LineStore` works.
+# LineStore moved out 0714, LineReader out 0717 (SRP): bias_machine is the bias ENGINE — it CONSUMES lines,
+# it neither owns their configs (line_config.LineStore) nor builds their values (line_reader.LineReader).
+# line_config is the ONLY module that knows the DB column order / tuple layout; line_reader is the ONLY
+# place a config becomes a value series (resample/build/align, emerging/closed dispatch, anchor).
+# Re-exported here so every existing `from bias_machine import LineStore` works.
 from optimus9.compute.line_config import LineStore, KLine, BBLine, coerce, override   # noqa: E402,F401
+from optimus9.compute.line_reader import LineReader   # noqa: E402  (line production, split out 0717)
 
 
 @dataclass
@@ -143,6 +146,7 @@ class BiasWindow:
             self._evt_remap = np.clip(np.searchsorted(_ets, _fts, side='right') - 1, 0, None)   # full grid → last real bar
         else:
             self._lbase = self.base; self._evt_remap = None
+        self._lines = LineReader(self._ls, self.base, self._lbase, self._evt_remap)   # line production (SRP: BiasWindow consumes lines, does not build them)
         if not lean:                                          # bias-machine precompute — v2/lr_v2 don't use it; lean=True skips it
             c = self.cfg
             # every named line is resolved LIVE from vw_indicator_configs_live (no tuples)
@@ -165,43 +169,26 @@ class BiasWindow:
             self.xm45r_recent = {s: self._recent_oob(_sign(self._line(c.xm45_r)), s, c.xm45r_lookback) for s in (1, -1)}
             self._entry_cfg = dict(ordering=c.entry_order, variant=c.s3_variant, xm45=c.xm45)
 
-    # ── line builders ──
+    # ── line reads — DELEGATE to LineReader (line production is not the bias engine's job) ──
     def _raw(self, tf_sec, cfg):
-        fr = IC.resample(self._lbase, tf_sec, 'midnight')  # event tape (filler-invisible) → align_to_base forward-fills onto the full grid
-        if cfg[0] == 'bb':
-            v = IC.f_bb(IC.build_source(fr, cfg[3]), cfg[1], cfg[2])
-        else:
-            v = IC.f_k(IC.build_source(fr, cfg[4]), cfg[1], cfg[2], cfg[3])
-        return v, fr
+        return self._lines._raw(tf_sec, cfg)
 
     def _aligned(self, tf_sec, cfg):
-        v, fr = self._raw(tf_sec, cfg)
-        return IC.align_to_base(v, fr, self.base)
+        return self._lines._aligned(tf_sec, cfg)
 
     def _line(self, ind_name):
-        """Base-aligned line built from its LIVE DB config (vw_indicator_configs_live)."""
-        return self._aligned(*self._ls.resolve(ind_name))
+        """Base-aligned (closed) line from its LIVE DB config. Thin delegator; mechanics live in LineReader."""
+        return self._lines.closed(ind_name)
 
     def _line_emerging(self, ind_name, anchor='midnight'):
-        """Developing (emerging) line — one value per 5s bar against the forming higher-TF bar, via
-        f_*_lookahead. For the blp set (Joe 0620). anchor='midnight' (TV-aligned, the blp default;
-        non-day-divisor TFs drift on the epoch grid — TODO: source the anchor from a DB column)."""
-        tf_sec, cfg = self._ls.resolve(ind_name)
-        b = self._lbase                                    # event tape when filler-invisible
-        if cfg[0] == 'bb':
-            out = IC.f_bb_lookahead(b, tf_sec, cfg[1], cfg[2], cfg[3], anchor=anchor)
-        else:
-            out = IC.f_k_lookahead(b, tf_sec, cfg[3], cfg[1], cfg[2], cfg[4], anchor=anchor)
-        return out[self._evt_remap] if self._evt_remap is not None else out   # remap event grid → full 5s grid
+        """Developing (emerging) line — thin delegator to LineReader.emerging."""
+        return self._lines.emerging(ind_name, anchor)
 
     def line(self, ind_name):
         """THE value_mode-honoring line read (#42) — the one place every consumer should call. Dispatches
-        on the line's DB value_mode (vw_indicator_configs_live): 'emerging' → developing (f_*_lookahead),
-        'closed' → base-aligned. The closed/emerging toggle lives in the DB, never baked into the caller.
-        Validated: emerging s30m matches TV realtime to 99.85% OOB(>=85) agreement over a 24h tick replay.
-        (Anchor for emerging still defaults via _line_emerging; sourcing it from a DB column is the
-        remaining #42 sub-item — moot for day-divisor TFs like 30s where epoch==midnight.)"""
-        return self._line_emerging(ind_name) if self._ls.value_mode(ind_name) == 'emerging' else self._line(ind_name)
+        on the line's DB value_mode ('emerging' → developing, 'closed' → base-aligned) inside LineReader.
+        Validated: emerging s30m matches TV realtime to 99.85% OOB(>=85) agreement over a 24h tick replay."""
+        return self._lines.line(ind_name)
 
     # ── blp line-positioning mechanic (Joe 0620) ──────────────────────────────────────────────
     def blp14(self):

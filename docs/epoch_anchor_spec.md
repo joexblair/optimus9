@@ -62,5 +62,13 @@ midnight. Divisor-TF lines unchanged.
 2. **Make the live-BL path pass `'epoch'` explicitly** (the one consumer that needs it) before #1 lands.
 3. **Source the anchor per-line from the DB** (the `_line_emerging` TODO) — a line's grid becomes config, not a
    hardcoded literal (no-hardcode rule).
+
+   > **2026-07-18 — line production extracted (SRP).** `_raw`/`_aligned`/`_line`/`_line_emerging`/`line` left
+   > `bias_machine.BiasWindow` for `optimus9.compute.line_reader.LineReader` (companion to `line_config.LineStore`);
+   > BiasWindow now delegates, public `W.line`/`C.line` unchanged (bit-exact: 31/31 line arrays identical incl.
+   > filler-invisible remap). The `W._line = W._line_emerging` monkey-patch became `reader.force_emerging`.
+   > `LineReader` anchors **midnight** for every TF and is now the single home for the anchor — so #3 (DB column) is a
+   > one-file change, and a global default-flip (#1) still must leave the live-BL path on epoch (it does not route
+   > through the reader). `_build_s30_wobs`/`tf()`/`:380` still build inline off `self.base` — remaining leaks.
 4. **Audit every hook** in the table above; set each explicitly per its path (indicator → midnight, live-BL → epoch).
 5. **Re-validate** any grind/tuning produced on the previously-epoch non-divisor lines (s14/s22/blp/hb33).

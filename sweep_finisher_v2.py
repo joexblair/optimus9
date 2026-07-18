@@ -41,7 +41,7 @@ def worker_init():
     ovr['s2M'] = (60, ('bb', 37, 0.72, 'hlcc4'), 'emerging')
     _W = []
     for end in WIN_ENDS:
-        W = bm.BiasWindow(db, end, lookback=72, warmup=80, cfg=cfg, lean=True, line_overrides=ovr); W._line = W._line_emerging
+        W = bm.BiasWindow(db, end, lookback=72, warmup=80, cfg=cfg, lean=True, line_overrides=ovr); W._lines.force_emerging = True
         opens = L.gate_open(W, _lr, L.v2_arm(W, _lr), L.gate_signals(W, _lr))     # fixed (s5m=8) → once per window
         _W.append((W, opens))
 

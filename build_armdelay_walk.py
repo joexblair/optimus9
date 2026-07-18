@@ -18,7 +18,7 @@ def ms(s): return int(dtm.datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
 def dt(t): return dtm.datetime.fromtimestamp(t / 1000, timezone.utc)
 START, LEV, MAXLOT, RT = 500.0, 5.0, 66000, 0.20
 db = DatabaseManager(**get_db_config()); db.connect(); cfg = bm.BiasConfig(**BASE_BIAS); lr = lr_config(db)
-W = bm.BiasWindow(db, ms('2026-06-22 00:00'), lookback=240, warmup=80, cfg=cfg, lean=True); W._line = W._line_emerging
+W = bm.BiasWindow(db, ms('2026-06-22 00:00'), lookback=240, warmup=80, cfg=cfg, lean=True); W._lines.force_emerging = True
 ents = sorted(v2_walk_ad(W, lr))
 resc = sorted(strand_rescue(W, lr, ents, lr_exit_v2(W, lr, ents, predict=False)), key=lambda x: x[0])
 walk = {w[0]: w for w in lr_walk(W, ents, lr)}
