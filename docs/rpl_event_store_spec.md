@@ -28,7 +28,8 @@ NOT a bespoke per-script table. Code: `optimus9/db/rpl_event_store.py` (`RplEven
 `div_horizon_ms` (div search after flip, 1800000).
 
 **`rpl_run`** — one row per flow execution. `rr_config_pk` → the knobs it read; `rr_engine_rev` =
-flow-script md5; `rr_entry_ms` = resolved flip_div entry (NULL = none); `rr_side` bull/bear;
+flow-script md5; `rr_walk` = Joe's per-walk label `DD_NN` (e.g. `12_01`) — the analysis identifier,
+not run_pk; `rr_entry_ms` = resolved flip_div entry (NULL = none); `rr_side` bull/bear;
 `rr_window_start/end` ms.
 
 **`rpl_event`** — the teed stream. `re_run_pk` → run; `re_ts` ms; `re_utc` (store-written UTC

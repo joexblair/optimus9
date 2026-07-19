@@ -37,6 +37,7 @@ class RplEventStore:
             rr_side         VARCHAR(8) NOT NULL,          -- bull / bear
             rr_window_start BIGINT, rr_window_end BIGINT, -- ms epoch
             rr_engine_rev   VARCHAR(40),                  -- flow-script md5 — reproducibility pin
+            rr_walk         VARCHAR(8),                   -- walk label DD_NN (e.g. 12_01), Joe's per-walk id
             rr_entry_ms     BIGINT,                       -- resolved flip_div entry (NULL = none)
             rr_created_dt   DATETIME DEFAULT CURRENT_TIMESTAMP,
             rr_notes        VARCHAR(255),
@@ -56,31 +57,33 @@ class RplEventStore:
             re_note     VARCHAR(64),
             re_is_entry TINYINT DEFAULT 0,                -- 1 = this div row is the chosen entry
             INDEX (re_run_pk, re_stage), INDEX (re_ts))''')
+        # migrations BEFORE the view — the view references columns added here on pre-existing tables
+        self._migrate_re_utc()
+        self._migrate_col('rpl_event', 're_called_by', 'INT', 'AFTER re_tf')
+        self._migrate_col('rpl_run', 'rr_walk', 'VARCHAR(8)', 'AFTER rr_engine_rev')
         self._db.execute('''CREATE OR REPLACE VIEW vw_rpl_entries AS
-            SELECT r.rr_pk, r.rr_side, e.re_ts AS entry_ms, e.re_net, e.re_votes,
+            SELECT r.rr_pk, r.rr_walk, r.rr_side, e.re_ts AS entry_ms, e.re_net, e.re_votes,
                    r.rr_window_start, r.rr_window_end, c.rc_name, c.rc_knobs
             FROM rpl_event e
             JOIN rpl_run r    ON r.rr_pk = e.re_run_pk
             JOIN rpl_config c ON c.rc_pk = r.rr_config_pk
             WHERE e.re_is_entry = 1
             ORDER BY e.re_ts DESC''')
-        self._migrate_re_utc()
-        self._migrate_col('re_called_by', 'INT', 'AFTER re_tf')
 
-    def _has_col(self, col):
+    def _has_col(self, table, col):
         return bool(self._db.execute(
             '''SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE()
-               AND table_name='rpl_event' AND column_name=%s''', (col,), fetch=True))
+               AND table_name=%s AND column_name=%s''', (table, col), fetch=True))
 
-    def _migrate_col(self, col, decl, pos=''):
-        """Idempotently add a nullable column to a pre-existing rpl_event (no backfill)."""
-        if not self._has_col(col):
-            self._db.execute(f"ALTER TABLE rpl_event ADD COLUMN {col} {decl} {pos}".strip())
+    def _migrate_col(self, table, col, decl, pos=''):
+        """Idempotently add a nullable column to a pre-existing table (no backfill)."""
+        if not self._has_col(table, col):
+            self._db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl} {pos}".strip())
 
     def _migrate_re_utc(self):
         """Add re_utc to a pre-existing rpl_event and backfill it UTC-correct (TIMESTAMPADD on the
         epoch literal is tz-independent, unlike FROM_UNIXTIME). No-op once the column exists."""
-        self._migrate_col('re_utc', 'DATETIME', 'AFTER re_ts')
+        self._migrate_col('rpl_event', 're_utc', 'DATETIME', 'AFTER re_ts')
         self._db.execute(
             "UPDATE rpl_event SET re_utc = TIMESTAMPADD(SECOND, re_ts DIV 1000, '1970-01-01 00:00:00') "
             "WHERE re_utc IS NULL")
@@ -104,11 +107,11 @@ class RplEventStore:
         return {'rc_pk': r['rc_pk'], 'rc_name': r['rc_name'], **json.loads(r['rc_knobs'])}
 
     # --- run + event stream ---
-    def register_run(self, side, window_start, window_end, config_pk, engine_rev=None, notes=None) -> int:
+    def register_run(self, side, window_start, window_end, config_pk, engine_rev=None, walk=None, notes=None) -> int:
         return self._db.execute(
             '''INSERT INTO rpl_run (rr_config_pk, rr_side, rr_window_start, rr_window_end,
-               rr_engine_rev, rr_notes) VALUES (%s,%s,%s,%s,%s,%s)''',
-            (config_pk, side, window_start, window_end, engine_rev, notes))
+               rr_engine_rev, rr_walk, rr_notes) VALUES (%s,%s,%s,%s,%s,%s,%s)''',
+            (config_pk, side, window_start, window_end, engine_rev, walk, notes))
 
     def log_events(self, run_pk, events) -> int:
         """`events` = [{ts, stage, tf?, r?, x?, net?, votes?, mode?, note?, is_entry?}, ...]. Bulk."""
