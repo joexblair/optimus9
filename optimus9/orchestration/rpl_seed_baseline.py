@@ -1,0 +1,47 @@
+"""Seed the rpl_config 'baseline' knob row — the flow reads THESE, nothing hardcoded."""
+from optimus9 import DatabaseManager
+from optimus9.config import get_db_config
+from optimus9.db.rpl_event_store import RplEventStore
+
+KNOBS = {
+    'lines': {                     # name: [k_len|len, rsi|mult, stc, src]  (kline=4-tuple, bb=3-tuple)
+        'r':  {'kind': 'kline', 'k_len': 7, 'rsi': 5, 'stc': 11, 'src': 'close'},
+        'x':  {'kind': 'bb', 'length': 5,  'mult': 0.37, 'src': 'close'},
+        'm':  {'kind': 'bb', 'length': 6,  'mult': 0.45, 'src': 'close'},
+        'M':  {'kind': 'bb', 'length': 37, 'mult': 0.83, 'src': 'close'},
+        's1M':  {'kind': 'bb', 'length': 37, 'mult': 0.83, 'src': 'close'},
+        's1x':  {'kind': 'bb', 'length': 5,  'mult': 0.37, 'src': 'close'},
+        's1m':  {'kind': 'bb', 'length': 6,  'mult': 0.45, 'src': 'close'},
+        's30M': {'kind': 'bb', 'length': 37, 'mult': 0.83, 'src': 'close'},
+        's1r':  {'kind': 'kline', 'k_len': 7, 'rsi': 5, 'stc': 11, 'src': 'close'},
+        's30r': {'kind': 'kline', 'k_len': 7, 'rsi': 5, 'stc': 11, 'src': 'close'},
+        's2r':  {'kind': 'kline', 'k_len': 7, 'rsi': 5, 'stc': 11, 'src': 'close'},
+        's2m':  {'kind': 'bb', 'length': 6,  'mult': 0.45, 'src': 'close'},   # s1/s2 confirm predict_breach
+        's2M':  {'kind': 'bb', 'length': 37, 'mult': 0.83, 'src': 'close'},
+    },
+    'tfs': {'lo': 12, 'hi': 45},   # exhaustion-ladder TF sweep range
+    'boundary': {'hi': 85.0, 'lo': 15.0},
+    'fence': {'fh': 65.0, 'fl': 35.0},          # predict_breach engage band (r-pred ladder)
+    'anti': 50.0,                               # anti-fence + s2r gate: side-of-50 midline
+    'vmin': 8.0,                                # x-cross-pred coarse-velocity floor
+    'carry_ms': 120000,                         # seam-carry window (2min)
+    's2_tf_sec': 120,                           # fast current-bias filter TF
+    'delegate_offset': 5,                       # bias_trend_flip delegates exh-5 TFs lower
+    'wob_n': 9,                                 # cross_wob debounce bars for x*r flip cross
+    'div_net_min': 3,                           # flip_div entry: first >=N same-side votes
+    'div_horizon_ms': 1800000,                  # div search window after flip (30min)
+    's1s2_confirm_tol_ms': 240000,              # post-flip direction confirm: s1r & s2r same-side within this (swept: 240s hits 3/3)
+    'xcp_bnd_offset': 4,                         # x-cross-pred only tests r within this of the boundary (r>HI-4 or r<LO+4). sweepable
+    'xcp_tf_floor': 19,                          # look-back floor: x-cross-pred scans current_tf down to this TF. sweepable
+    'override_latch_ms': 300000,                 # a higher-TF r-pred within this window (full 5s series) suppresses a lower x-cross-pred. sweepable
+    'latch_depth': 5,                            # s30Mage finishing latch: points BEYOND the OOB boundary Mage must reach before latching. LOCKED 5 (0719 sweep: kills the shallow 12_01 00:04:30 poke -> 07:55; 12_02 in-band). sweepable
+    'latch_dwell': 2,                            # s30Mage finishing latch: consecutive 5s bars Mage must hold past-depth before latching. LOCKED 2 (0719 sweep: 12_01 07:55, 12_02 03:30; dwell=1 -> 12_02 03:22). sweepable
+}
+
+db = DatabaseManager(**get_db_config()); db.connect()
+st = RplEventStore(db)
+pk = st.upsert_config('baseline', KNOBS, notes='rpl side-of-50 gate, 00:07 flip dial-in 0719')
+print(f'rpl_config baseline seeded rc_pk={pk}')
+loaded = st.load_config('baseline')
+print(f'readback anti={loaded["anti"]} s2_tf={loaded["s2_tf_sec"]} lines={len(loaded["lines"])}')
+db.disconnect()
