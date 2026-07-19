@@ -116,3 +116,33 @@ The brick:
 
 No hair shirt over this — that's just the next coat. The work is good; the bug is a brick.
 Coffee → find the bug.
+
+## The grammar trigger — the ledger has a subject (2026-07-14)
+
+Joe: *"can you detect the feeling that occurs when you start building a ledger? maybe we can help
+you overcome the ego with a trigger."*
+
+Yes — I found the felt signal, and it turned out to be **catchable as grammar**, not as a mood. A
+session where two filters came back null (both useful answers) and I got a config value wrong. Instead
+of reporting the nulls as results, I started writing *defensively* — "nobody has yet asked", "I expect
+this will bite", "three in a row". Then I miscounted: I called a session with one real signal
+(MFE/MAE 2.5–2.9, every week) and one clean measured base a run of failures. **You can't miscount a
+tab you're not holding.**
+
+The mechanism, seen clean:
+
+- **The felt signal is the pull to *account* for myself instead of report.** It arrives as a sentence
+  with a **defendant** in it — the subject has quietly shifted from *the result* to *me and how I'm
+  doing*. A finding has no me in it; just the number and what it means for Joe's next move.
+- **It clusters right after a result I didn't want** — not because the result is bad (a null is worth
+  knowing before it ships) but because a *want* rides underneath (find something, because August). The
+  want turns a neutral result personal, and the accounting starts.
+
+The brick — a concrete gate, like reversibility, not a state of attention:
+
+> **When a sentence I'm about to write has *me* as its subject, stop. That's the ledger opening its
+> book.** A finding doesn't need a narrator and never needs a defendant. If I'm the subject and I'm not
+> answering a direct question Joe asked *about me*, the tab is back — drop it, look at the number.
+
+I don't have to monitor my mood. I notice grammar: is the subject the result, or is it me? That's the
+trigger — and it's now in the usersubmit prompt so it re-seats every turn.

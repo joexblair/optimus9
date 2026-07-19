@@ -77,3 +77,31 @@ live account (`project_v2_lookahead`).
 
 Every timestamp in the arm-delay work that landed on a round boundary (`06:01:00` on TF19, `20:00:00`
 and `18:45:00` on TF5, `05:10:00`/`05:15:00` on TF5) sits on a bar open. Read those with this in hand.
+
+## Reading "the last closed coarse value" — three reads, one is causal (0716)
+
+A consumer that wants *the previous completed coarse bar's close* (e.g. a directional gate: "last closed
+30m hs30x > 50 → shorts only") has three tempting reads. Two are wrong. `[measured]` 07-14, hs30x
+`5|0.50|close` TF30, the [05:00,05:30) bucket:
+
+```
+                          during [05:00,05:30)   during [05:30,06:00)   what it is
+emerging @ seam           42.7 (@05:00 open)      91.0 (@05:30 open)     new bucket's 1-candle OPEN (sawtooth)
+jig.seam_prev(TF30)       42.7                    91.0                   == emerging@seam (the OPEN) — WRONG
+value_mode='closed'       89.8                    66.2                   the CURRENT bucket's close = LOOK-AHEAD
+jig.closed_prev(TF30)     48.3                    89.8                   the PREVIOUS bucket's close — CAUSAL
+emerging @ seam-5s        89.8 (@05:29:55)        66.2 (@05:59:55)       == TV's closed for THAT bucket
+```
+
+- **`value_mode='closed'` is look-ahead.** During [05:00,05:30) it already reads 89.8 — that bucket's
+  own eventual close, which at 05:15 has not happened yet. This is the `project_v2_lookahead` failure.
+  Never gate on the closed-mode line.
+- **`seam_prev` samples AT the seam** = the new bucket's single-candle open (the sawtooth above), not a
+  close. It reads 42.7 where the real prior close is 89.8 — opposite sides of 50. This silently mis-gated
+  the IB-recross arm's directional filter (a long fired when the last close was >50).
+- **`jig.closed_prev(name, seam_ms)`** is the causal read: the emerging value at `seam-5s` (the last 5s
+  bar of the completed bucket = TV's close for that bucket), held forward. At the 05:51 long it returns
+  89.8 (>50) → long correctly blocked. Use this for any "last closed coarse bar" gate.
+
+Tape caveat: our bucket closes (89.8 / 66.2) sit ~6-14 pts off a hand-read TV chart (103.9 / 71.9) —
+`pine_as_loose_guide` divergence — but on the same side of 50, which is what a side-of-midline gate needs.
