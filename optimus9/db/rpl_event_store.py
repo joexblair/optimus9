@@ -13,6 +13,10 @@ config it read, and the teed event stream lands as rows.
 Analysis is then SQL: vw_rpl_entries = every entry row joined to the knobs that produced it.
 """
 import json
+import datetime as _dtm
+from datetime import timezone as _tz
+
+_utc = lambda ms: _dtm.datetime.fromtimestamp(int(ms) / 1000, _tz.utc).strftime('%Y-%m-%d %H:%M:%S')
 
 
 class RplEventStore:
@@ -41,6 +45,7 @@ class RplEventStore:
             re_pk       BIGINT AUTO_INCREMENT PRIMARY KEY,
             re_run_pk   BIGINT NOT NULL,                  -- → rpl_run.rr_pk
             re_ts       BIGINT NOT NULL,                  -- ms epoch of the event
+            re_utc      DATETIME,                         -- human-readable UTC of re_ts (store-written, UTC-correct)
             re_stage    VARCHAR(20) NOT NULL,             -- r-pred / x-cross-pred / bias_trend_flip / flip_div
             re_tf       INT,                              -- the TF this event belongs to (NULL for div)
             re_r        FLOAT, re_x FLOAT,                -- line values at the event
@@ -58,6 +63,19 @@ class RplEventStore:
             JOIN rpl_config c ON c.rc_pk = r.rr_config_pk
             WHERE e.re_is_entry = 1
             ORDER BY e.re_ts DESC''')
+        self._migrate_re_utc()
+
+    def _migrate_re_utc(self):
+        """Add re_utc to a pre-existing rpl_event and backfill it UTC-correct (TIMESTAMPADD on the
+        epoch literal is tz-independent, unlike FROM_UNIXTIME). No-op once the column exists."""
+        exists = self._db.execute(
+            '''SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE()
+               AND table_name='rpl_event' AND column_name='re_utc' ''', fetch=True)
+        if not exists:
+            self._db.execute("ALTER TABLE rpl_event ADD COLUMN re_utc DATETIME AFTER re_ts")
+        self._db.execute(
+            "UPDATE rpl_event SET re_utc = TIMESTAMPADD(SECOND, re_ts DIV 1000, '1970-01-01 00:00:00') "
+            "WHERE re_utc IS NULL")
 
     # --- config baseline (no hardcoded knobs) ---
     def upsert_config(self, name, knobs, notes=None) -> int:
@@ -88,13 +106,13 @@ class RplEventStore:
         """`events` = [{ts, stage, tf?, r?, x?, net?, votes?, mode?, note?, is_entry?}, ...]. Bulk."""
         if not events:
             return 0
-        rows = [(run_pk, int(e['ts']), e['stage'], e.get('tf'), e.get('r'), e.get('x'),
+        rows = [(run_pk, int(e['ts']), _utc(e['ts']), e['stage'], e.get('tf'), e.get('r'), e.get('x'),
                  e.get('net'), json.dumps(e['votes']) if e.get('votes') is not None else None,
                  e.get('mode'), e.get('note'), 1 if e.get('is_entry') else 0)
                 for e in events]
         return self._db.executemany(
-            '''INSERT INTO rpl_event (re_run_pk, re_ts, re_stage, re_tf, re_r, re_x, re_net,
-               re_votes, re_mode, re_note, re_is_entry) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
+            '''INSERT INTO rpl_event (re_run_pk, re_ts, re_utc, re_stage, re_tf, re_r, re_x, re_net,
+               re_votes, re_mode, re_note, re_is_entry) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
             rows)
 
     def set_entry(self, run_pk, entry_ms):
