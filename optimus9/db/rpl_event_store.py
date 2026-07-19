@@ -41,7 +41,8 @@ class RplEventStore:
             rr_entry_ms     BIGINT,                       -- resolved flip_div entry (NULL = none)
             rr_created_dt   DATETIME DEFAULT CURRENT_TIMESTAMP,
             rr_notes        VARCHAR(255),
-            INDEX (rr_config_pk), INDEX (rr_side))''')
+            INDEX (rr_config_pk), INDEX (rr_side),
+            CONSTRAINT fk_rpl_run_config FOREIGN KEY (rr_config_pk) REFERENCES rpl_config (rc_pk))''')
         self._db.execute('''CREATE TABLE IF NOT EXISTS rpl_event (
             re_pk       BIGINT AUTO_INCREMENT PRIMARY KEY,
             re_run_pk   BIGINT NOT NULL,                  -- → rpl_run.rr_pk
@@ -56,11 +57,16 @@ class RplEventStore:
             re_mode     VARCHAR(24),                      -- x-cross-pred: predict/backstop + s2r
             re_note     VARCHAR(64),
             re_is_entry TINYINT DEFAULT 0,                -- 1 = this div row is the chosen entry
-            INDEX (re_run_pk, re_stage), INDEX (re_ts))''')
+            INDEX (re_run_pk, re_stage), INDEX (re_ts),
+            CONSTRAINT fk_rpl_event_run FOREIGN KEY (re_run_pk) REFERENCES rpl_run (rr_pk) ON DELETE CASCADE)''')
         # migrations BEFORE the view — the view references columns added here on pre-existing tables
         self._migrate_re_utc()
         self._migrate_col('rpl_event', 're_called_by', 'INT', 'AFTER re_tf')
         self._migrate_col('rpl_run', 'rr_walk', 'VARCHAR(8)', 'AFTER rr_engine_rev')
+        self._migrate_fk('rpl_run', 'fk_rpl_run_config',
+                         'FOREIGN KEY (rr_config_pk) REFERENCES rpl_config (rc_pk)')
+        self._migrate_fk('rpl_event', 'fk_rpl_event_run',
+                         'FOREIGN KEY (re_run_pk) REFERENCES rpl_run (rr_pk) ON DELETE CASCADE')
         self._db.execute('''CREATE OR REPLACE VIEW vw_rpl_entries AS
             SELECT r.rr_pk, r.rr_walk, r.rr_side, e.re_ts AS entry_ms, e.re_net, e.re_votes,
                    r.rr_window_start, r.rr_window_end, c.rc_name, c.rc_knobs
@@ -79,6 +85,15 @@ class RplEventStore:
         """Idempotently add a nullable column to a pre-existing table (no backfill)."""
         if not self._has_col(table, col):
             self._db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl} {pos}".strip())
+
+    def _migrate_fk(self, table, name, spec):
+        """Idempotently add a named FK to a pre-existing table (fresh installs get it in CREATE)."""
+        exists = self._db.execute(
+            '''SELECT 1 FROM information_schema.table_constraints WHERE table_schema=DATABASE()
+               AND table_name=%s AND constraint_name=%s AND constraint_type='FOREIGN KEY' ''',
+            (table, name), fetch=True)
+        if not exists:
+            self._db.execute(f"ALTER TABLE {table} ADD CONSTRAINT {name} {spec}")
 
     def _migrate_re_utc(self):
         """Add re_utc to a pre-existing rpl_event and backfill it UTC-correct (TIMESTAMPADD on the

@@ -39,6 +39,9 @@ upward scan, NULL for non-r-pred events); `re_stage`
 (r-pred/x-cross-pred/bias_trend_flip/flip_div); `re_tf`; `re_r`,`re_x`; `re_net`; `re_votes` JSON
 (s1r/s1M/s30r/s30M); `re_mode` (predict/backstop + s2r); `re_note`; `re_is_entry`.
 
+**FKs** stitch the three tables: `rpl_event.re_run_pk → rpl_run.rr_pk` (`ON DELETE CASCADE` — dropping
+a run removes its events), `rpl_run.rr_config_pk → rpl_config.rc_pk`. Added idempotently via `_migrate_fk`.
+
 **`vw_rpl_entries`** — `re_is_entry=1` rows joined to run + config knobs = the discovery surface:
 "every entry and the knobs that produced it", one query.
 
