@@ -33,7 +33,8 @@ flow-script md5; `rr_entry_ms` = resolved flip_div entry (NULL = none); `rr_side
 
 **`rpl_event`** — the teed stream. `re_run_pk` → run; `re_ts` ms; `re_utc` (store-written UTC
 DATETIME of `re_ts`, for direct table reads — backfilled UTC-correct via `TIMESTAMPADD`, not the
-tz-dependent `FROM_UNIXTIME`); `re_stage`
+tz-dependent `FROM_UNIXTIME`); `re_called_by` (r-pred climb: the current_tf that initiated the
+upward scan, NULL for non-r-pred events); `re_stage`
 (r-pred/x-cross-pred/bias_trend_flip/flip_div); `re_tf`; `re_r`,`re_x`; `re_net`; `re_votes` JSON
 (s1r/s1M/s30r/s30M); `re_mode` (predict/backstop + s2r); `re_note`; `re_is_entry`.
 
