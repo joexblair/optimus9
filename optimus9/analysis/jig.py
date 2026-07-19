@@ -17,6 +17,7 @@ LINE CONFIGS — build them BY NAME (kline/bbline below). Joe's notation is k_le
 DIFFERENT line: TV-verified MAE 0.03 right, 9.33 transposed). optimus9.compute.line_config is the only module
 that knows the layout. If you are typing ('k', ...) you are doing it wrong.
 """
+import copy
 import numpy as np
 import bias_machine as bm
 from optimus9.config import get_db_config
@@ -137,6 +138,30 @@ class _Causal:
         consecutive same-direction steps (wob<=0 = first slope-flip). Causal — fires from steps <= the bar."""
         return np.asarray(_mage_rev(np.asarray(line, float), wob))
 
+    def cross_wob(self, line, level, direction, n):
+        """Wobble-debounced boundary crossover ('crossover_wob', from the CP1 hs30x arm, hand-rolled there).
+        direction=-1: `line` crossed UNDER `level`; +1: crossed OVER. The cross is CONFIRMED once the line has
+        held the crossed side for `n` consecutive 5s bars — a single bar back across resets the run (demands a
+        clean cross; not a bump-tolerance). Returns per-bar bool = confirmed-in-effect; the consumer takes the
+        RISING EDGE for the confirmation moment. Causal (reads only <= the bar). `line` = name or value array."""
+        v = self.line(line) if isinstance(line, str) else np.asarray(line, float)
+        side = (v < level) if direction < 0 else (v > level)
+        run = np.zeros(len(side), int); r = 0
+        for i in range(len(side)):
+            r = r + 1 if side[i] else 0
+            run[i] = r
+        return run >= max(1, int(n))
+
+    def pk_state(self, line_slope, price_slope, slope_floor):
+        """Slope-sign divergence state — delegates to the production seam Pk5sGateComputer._pk_state_from_slopes
+        (the PK / vote-machine core). sign(line_slope) != sign(price_slope) -> DIVERGENCE +1 (bull, line rising) /
+        -1 (bear, line falling); signs AGREE -> PM +-2 ('Price Match', trend continuation, NOT a divergence);
+        |line_slope - price_slope| <= slope_floor -> 0 (noise band). Scalars or arrays.
+        Caller supplies line_slope = osc(anchor)-osc(floater), price_slope = price(anchor)-price(floater);
+        the price SOURCE (raw close vs px_smooth) is the caller's choice (divergence_research.md §12: raw)."""
+        from optimus9.compute.pk5s_gate_computer import Pk5sGateComputer
+        return np.asarray(Pk5sGateComputer._pk_state_from_slopes(line_slope, price_slope, slope_floor), float)
+
     def coarse(self, name, seam_ms):
         """Sample an EMERGING line at every seam_ms boundary (e.g. 300000 = 5-min). -> (ts_c, vals)."""
         v = self.line(name); mask = (self.j.ts % seam_ms) == 0
@@ -148,6 +173,28 @@ class _Causal:
         the turn point c[k-1]) so the consumer can gate a curl by which side of the board it turned on.
         Delegates to lr_v2._curl_detect — the single curl-detection impl (SRP; also used by lr_exit_v2)."""
         return _curl_detect(np.asarray(ts_c), np.asarray(c, float), direction, with_val)
+
+    def coarse_reverse(self, name, seam_ms, floor=0.0):
+        """Joe's 3-point coarse reversal (boundary-agnostic, 0715). Between two consecutive seams — anchor (1st)
+        and floater (2nd) — the extreme is the max/min of the EMERGING line BETWEEN them. A PEAK reversal (-1,
+        down-turn) is confirmed at the floater when the between-max protrudes past the HIGHER endpoint by more
+        than `floor`; a TROUGH (+1, up-turn) when the between-min drops past the LOWER endpoint by more than
+        `floor`. floor=0.0 = any protrusion (a bare wiggle counts); raise it to demand a decisive turn. Causal —
+        only past data, confirmed at the floater. Per-5s-bar: nonzero only on the floater seam bar. `seam_ms` may
+        be sub-bar (intra-bar seams) for a tighter, more precise reversal window. Distinct from curl() (3
+        consecutive coarse samples, extreme AT a seam) — here the extreme is sub-seam."""
+        v = self.line(name); ts = self.j.ts
+        seams = np.flatnonzero((ts % seam_ms) == 0)
+        out = np.zeros(len(ts), int)
+        for si in range(1, len(seams)):
+            a, f = seams[si - 1], seams[si]
+            seg = v[a:f + 1]
+            mx, mn = float(seg.max()), float(seg.min())
+            if mx - max(v[a], v[f]) > floor:
+                out[f] = -1                              # peak between -> down-reversal
+            elif min(v[a], v[f]) - mn > floor:
+                out[f] = 1                               # trough between -> up-reversal
+        return out
 
     def seam_prev(self, name, seam_ms):
         """Per-5s-bar: the value of `name` at the most recent seam boundary STRICTLY BEFORE this bar.
@@ -165,6 +212,29 @@ class _Causal:
         out = np.full(len(ts), np.nan)
         ok = i >= 0
         out[ok] = v[seams[i[ok]]]
+        return out
+
+    def closed_prev(self, name, seam_ms):
+        """Causal 'last CLOSED coarse value': the EMERGING value of `name` at the last 5s bar of the most
+        recently COMPLETED bucket — the bar immediately BEFORE the most recent seam (seam-5s). Held forward
+        through the next bucket. This is the value TradingView shows as the coarse bar's CLOSE
+        (emerging_bar_open.md: emerging@(seam-5s) == TV closed), read causally.
+
+        THREE reads of 'the coarse value', do not confuse them:
+          - seam_prev(name, seam_ms)  -> emerging AT the seam = the new bucket's single-candle OPEN
+                                          (the bar-open sawtooth value; NOT a close).
+          - value_mode='closed' line  -> the CURRENT forming bucket's eventual close = LOOK-AHEAD
+                                          (the o9-live failure, project_v2_lookahead). Never gate on it.
+          - closed_prev(name, seam_ms)-> the PREVIOUS completed bucket's close, causal. Use THIS for a
+                                          'last closed coarse bar' gate."""
+        v = self.line(name); ts = self.j.ts
+        seams = np.flatnonzero((ts % seam_ms) == 0)
+        if not len(seams):
+            return np.full(len(ts), np.nan)
+        i = np.searchsorted(ts[seams], ts, side='left') - 1        # last seam strictly before this bar
+        out = np.full(len(ts), np.nan)
+        ok = (i >= 0) & (seams[np.clip(i, 0, None)] - 1 >= 0)      # need a bar before that seam
+        out[ok] = v[seams[i[ok]] - 1]                              # the bucket-close bar (seam - 5s)
         return out
 
     def cross(self, a, b, grid_ms):
@@ -293,20 +363,29 @@ class _Score:
         p = _ffb(self.j.px if price is None else price)
         return legs(p, pivots if pivots is not None else find_pivots(p, self.j.cfg.swing_pct))
 
-    def entry_quality(self, entries):
+    def entry_quality(self, entries, swing_pct=None):
         """Packaged entry-quality verdict (lr_walk): MAE/MFE from entry to the next FAVOURABLE swing (exit-INDEPENDENT)
         + mfe_side (did the trade open on the MFE side of the swing?). entries = [(trade_ms, es, bd, bar_idx)] ->
-        [(trade_ms, dt, es, bd, mae, mfe, mfe_ok, mfe_side, price)]."""
-        return lr_walk(self.j.W, entries, self.j.cfg)
+        [(trade_ms, dt, es, bd, mae, mfe, mfe_ok, mfe_side, price)].
+
+        swing_pct (0714): the SCALE the MAE/MFE is measured against — the favourable swing lr_walk walks to.
+        None = cfg.swing_pct (the DB default). Pass 4.0/3.0/2.0 to score the same entries against bigger
+        swings. Without this the scale is silently fixed and a swing sweep is a no-op."""
+        cfg = self.j.cfg
+        if swing_pct is not None and float(swing_pct) != float(cfg.swing_pct):
+            cfg = copy.copy(cfg)
+            cfg.swing_pct = float(swing_pct)
+        return lr_walk(self.j.W, entries, cfg)
 
     def table(self, rows, headers, row_fmt):
         print("  ".join(headers))
         for r in rows:
             print(row_fmt % tuple(r))
 
-    def emit_labels(self, labels, path, title):
-        """Pine emit: labels = [{ts:int-ms, y:float, text:str, green:bool, up:bool}]. green->green/red bg-tone,
-        up->style_label_up/down. Function-wrapped arrays + barstate.islast loop (TV op-limit safe)."""
+    def _labels_frag(self, labels, scheme='redgreen', transp=75):
+        """The label array-defs + barstate.islast loop as a pine fragment (no header). Shared by emit_labels
+        (standalone) and emit_overlay (labels + bgcolor in one indicator). transp = label colour transparency
+        (0 solid .. 100 invisible; default 75 so dense label sets don't hide price — Joe 0717)."""
         T = [int(l['ts']) for l in labels]; Y = [round(float(l['y']), 6) for l in labels]
         TXT = [str(l['text']) for l in labels]
         UP = ['true' if l.get('up') else 'false' for l in labels]
@@ -315,9 +394,7 @@ class _Score:
         af = lambda v: "array.from(" + ", ".join(str(z) for z in v) + ")" if v else "array.new_float(0)"
         as_ = lambda v: "array.from(" + ", ".join('"%s"' % z for z in v) + ")" if v else "array.new_string(0)"
         ab = lambda v: "array.from(" + ", ".join(v) + ")" if v else "array.new_bool(0)"
-        body = ('''//@version=5
-indicator("%s", overlay = true, max_labels_count = 500)''' % title + '''
-f_t()   => %s
+        frag = ('''f_t()   => %s
 f_y()   => %s
 f_txt() => %s
 f_up()  => %s
@@ -333,18 +410,33 @@ if barstate.islast
         stl = array.get(up, i) ? label.style_label_up : label.style_label_down
         label.new(array.get(tt, i), array.get(yy, i), array.get(tx, i), xloc = xloc.bar_time, color = col, style = stl, textcolor = color.white, size = size.normal)
 ''' % (ai(T), af(Y), as_(TXT), ab(UP), ab(GRN)))
+        if scheme == 'blueyellow':
+            frag = frag.replace("color.new(color.green, 15) : color.new(color.red, 15)",
+                                "color.new(color.yellow, 15) : color.new(color.blue, 15)")
+            frag = frag.replace("textcolor = color.white",
+                                "textcolor = (array.get(gr, i) ? color.black : color.white)")
+        frag = frag.replace(", 15)", ", %d)" % int(transp))       # apply the label transparency
+        return frag
+
+    def emit_labels(self, labels, path, title, scheme='redgreen', transp=75):
+        """Pine emit: labels = [{ts:int-ms, y:float, text:str, green:bool, up:bool}]. green->green/red bg-tone,
+        up->style_label_up/down. scheme='blueyellow' recolours green->yellow(black text)/red->blue(white text)
+        for an A/B overlay against the redgreen pine. transp = colour transparency (default 75). Function-wrapped
+        arrays + barstate.islast loop (TV op-limit safe)."""
+        body = '//@version=5\nindicator("%s", overlay = true, max_labels_count = 500)\n' % title
+        body += self._labels_frag(labels, scheme, transp)
         open(path, "w").write(body)
         return len(labels)
 
-    def emit_bgcolor(self, streams, path, title, opacity=0, notes=None):
-        """Pine bgcolor overlay from named 5s-timestamp streams (the array-bgcolor pattern — arm_gate_emit,
-        lp_cascade_emit, og_arm_emit all hand-rolled this; now it lives once here).
+    def _bgcolor_frag(self, streams, opacity=0, notes=None):
+        """Pine bgcolor fragment from named 5s-timestamp streams (the array-bgcolor pattern — arm_gate_emit,
+        lp_cascade_emit, og_arm_emit all hand-rolled this; now it lives once here). Returns (frag, hdr, total);
+        emit_bgcolor wraps it standalone, emit_overlay stacks labels on top.
 
         streams = [{'name': str, 'ts': [int-ms...], 'color': 'color.green'}, ...].
         Order is PRIORITY: later streams paint over earlier ones on a shared bar. Each stream gets an
         input.bool toggle. Arrays are chunked at 400 (TV op-limit) and looked up with array.binary_search
-        on `time`, so the whole thing evaluates on the last bar only.
-        Returns the total number of painted bars."""
+        on `time`, so the whole thing evaluates on the last bar only."""
         arr = lambda v: ("array.from(" + ", ".join(str(int(z)) for z in v) + ")") if v else "array.new_int(0)"
 
         def emit_arr(nm, vals):
@@ -367,6 +459,8 @@ if barstate.islast
             toggles.append('show_%s = input.bool(true, "%s (%s)")' % (nm, label, s['color'].split('.')[-1]))
             paints.append('if show_%s and array.binary_search(%s, time) >= 0\n'
                           '    bg := color.new(%s, %d)' % (nm, nm, s['color'], opacity))
+        frag = ("\n".join(toggles) + "\n" + "\n".join(defs) + "\n" + "\n".join(calls)
+                + "\nbg = color(na)\n" + "\n".join(paints) + "\nbgcolor(bg)\n")
         # `notes` = the config the emit was BUILT from, carried into the .pine as a comment block (Joe 0713).
         # The chart is read hours later, often beside a newer run — a pine that cannot say which knobs
         # produced it is a human-error trap. The header travels with the artefact.
@@ -374,11 +468,22 @@ if barstate.islast
         if notes:
             lines = notes.split('\n') if isinstance(notes, str) else list(notes)
             hdr = "\n".join('// ' + ln for ln in lines) + "\n"
-        body = ('//@version=5\n' + hdr + 'indicator("%s", overlay = true)\n' % title
-                + "\n".join(toggles) + "\n" + "\n".join(defs) + "\n" + "\n".join(calls)
-                + "\nbg = color(na)\n" + "\n".join(paints) + "\nbgcolor(bg)\n")
+        return frag, hdr, total
+
+    def emit_bgcolor(self, streams, path, title, opacity=0, notes=None):
+        frag, hdr, total = self._bgcolor_frag(streams, opacity, notes)
+        body = '//@version=5\n' + hdr + 'indicator("%s", overlay = true)\n' % title + frag
         open(path, "w").write(body)
         return total
+
+    def emit_overlay(self, labels, streams, path, title, opacity=60, scheme='redgreen', notes=None):
+        """ONE indicator = bgcolor streams (painted first) + trade labels on top. Use when the labels are the
+        signal and the bgcolor is an added A/B layer (e.g. OOBW-tweak spans under the entry labels)."""
+        frag, hdr, total = self._bgcolor_frag(streams, opacity, notes)
+        body = ('//@version=5\n' + hdr + 'indicator("%s", overlay = true, max_labels_count = 500)\n' % title
+                + frag + self._labels_frag(labels, scheme))
+        open(path, "w").write(body)
+        return len(labels), total
 
 
 class Jig:
