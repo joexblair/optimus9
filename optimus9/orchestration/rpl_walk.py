@@ -1,10 +1,11 @@
-"""rpl s8-cycle + s30-finishing walk, DIRECTION-PARAMETERIZED and IMPORTABLE.
-Config (DB baseline) + jig warmup are loaded ONCE at import; run_walk(walk, depth, dwell) is a pure
-function over the cached line arrays so the sweep reuses ONE code path (no fork). Emerging lines only
-(causal — what o9-live sees). See docs/rpl_flow_spec.md. Line/knob source = rpl_config 'baseline'.
+"""rpl auto-chain: walk the whole day's flip stream from ONE seed. IMPORTABLE.
+Config (DB baseline) + jig warmup are loaded ONCE at import; run_chain(seed_bias, seed_start) walks the
+cached line arrays flip-to-flip. Emerging lines only (causal — what o9-live sees). See docs/rpl_flow_spec.md.
+Line/knob source = rpl_config 'baseline'.
 
-A walk = one flip cycle: confirmed BIAS (leg climbed) -> hunt the opposite flip.
-  12_01 bear leg -> bull flip (bottom)   12_02 bull leg -> bear flip (top)   12_03 bear leg -> bull flip."""
+Each flip is first-class (own DD_NN id, rr_rollercoaster tag): an s2-cycle ROLLERCOASTER reversal (counter
+to the trend, gcs5-timed, no pyramid) or an s8-CLIMB flip (trend, s30-timed). A counter-trend leg exits when
+the trend r-preds again (option 1). DD_01 = first flip of the UTC day."""
 import numpy as np, datetime as dtm, hashlib
 from datetime import timezone
 from optimus9 import DatabaseManager
@@ -36,9 +37,9 @@ _ovr.update(_mk('gcs5r', _GCS5, LN['r'])); _ovr.update(_mk('gcs5m', _GCS5, LN['m
 
 # --- warmup (once, cached) + walk-independent arrays ---
 def build_lines(src):
-    """Read every line the flow needs from a line-source (JigCache or jig) into a dict. The sweep passes a
-    src built with swept line configs; run_walk uses whichever src it's given. Line production stays in the
-    jig/BiasWindow (SRP) — this only assembles the arrays + the derived predict_breach series."""
+    """Read every line the flow needs from a line-source (JigCache or jig) into a dict. Line production stays
+    in the jig/BiasWindow (SRP) — this only assembles the arrays + the derived predict_breach series. Loaded
+    once at import into L0; run_chain walks L0."""
     ts = np.asarray(src.ts, np.int64)
     evt = getattr(src, 'evt', None)                                   # event bars (volume>0); index-vs-event gotcha
     if evt is None:
@@ -58,13 +59,6 @@ J = cache_jig(end_ms, 40, 600, _ovr)
 L0 = build_lines(J)
 
 def _ms(h, m, s=0, day=12): return int(dtm.datetime(2026, 7, day, h, m, s, tzinfo=timezone.utc).timestamp() * 1000)
-WALKS = {  # walk -> (confirmed BIAS = leg climbed, walk start ms = the prior flip)
-    '12_01': ('bear', _ms(21, 32, 0, day=11)),
-    '12_02': ('bull', _ms(1, 2, 35)),
-    '12_03': ('bear', _ms(3, 30, 55)),   # starts at 12_02's bear flip -> hunt next bull flip (bottom)
-    '12_04': ('bull', _ms(4, 54, 40)),   # starts at 12_03's bull flip (ceiling-90) -> hunt next bear flip (top)
-    '12_05': ('bear', _ms(8, 52, 45)),   # starts at 12_04's bear flip -> hunt next bull flip (bottom)
-}
 
 def _polar(bias):
     BULL = (bias == 'bull'); FLIP = 'bear' if BULL else 'bull'
@@ -80,124 +74,135 @@ def _polar(bias):
 
 _REV = hashlib.md5(open(__file__, 'rb').read()).hexdigest()[:12]
 
-def _persist_run(walk, ev, meta):
-    """Refresh rpl_run/rpl_event for this walk: drop prior runs, register + log the fresh stream."""
+def _persist_chain(flips):
+    """Refresh rpl_run/rpl_event for every day the chain touched: drop that day's prior runs (the chain
+    renumbers), then register each flip as its own DD_NN run + log its event stream (rr_rollercoaster set)."""
+    if not flips:
+        return
     db = DatabaseManager(**get_db_config()); db.connect(); st = RplEventStore(db)
-    for r in db.execute("SELECT rr_pk FROM rpl_run WHERE rr_walk=%s", (walk,), fetch=True):
-        db.execute("DELETE FROM rpl_run WHERE rr_pk=%s", (r['rr_pk'],))
-    b = ev[-1][0] if ev else meta['conf']
-    run_pk = st.register_run(meta['flip'], meta['conf'], b, meta['rc_pk'], engine_rev=_REV, walk=walk,
-                             notes=f"{meta['bias']} climb -> {fmt(meta['flip_ts']) if meta['flip_ts'] else 'no'} flip")
-    st.log_events(run_pk, [{'ts': t, 'stage': e, 'tf': r, 'note': nt} for t, e, r, nt in ev])
-    db.disconnect(); return run_pk
+    days = {f['walk'][:2] for f in flips}
+    for r in db.execute("SELECT rr_pk, rr_walk FROM rpl_run WHERE rr_walk IS NOT NULL", fetch=True):
+        if r['rr_walk'][:2] in days:
+            db.execute("DELETE FROM rpl_run WHERE rr_pk=%s", (r['rr_pk'],))
+    for f in flips:
+        w0 = f['ev'][0][0] if f['ev'] else f['ts']
+        run_pk = st.register_run(f['dir'], w0, f['ts'], C['rc_pk'], engine_rev=_REV, walk=f['walk'],
+                                 notes=f"{'RC' if f['rc'] else 'climb'} flip -> {f['dir']}", rollercoaster=f['rc'])
+        st.log_events(run_pk, [{'ts': t, 'stage': e, 'tf': r, 'note': nt} for t, e, r, nt in f['ev']])
+    db.disconnect()
 
 
-def run_walk(walk, depth=None, dwell=None, tee=False, src=None, persist=None):
-    """Run one flip walk. depth/dwell default to the DB baseline; the sweep overrides them. src = a line
-    source (JigCache/jig) with swept configs; None => the module baseline L0. Returns (ev, meta).
-    persist: refresh rpl_event for this walk on completion; default = tee (a reported run persists, a
-    pure-compute/sweep call does not). Pass persist=False on a swept src to keep it side-effect-free."""
+
+def run_chain(seed_bias='bear', seed_start=None, depth=None, dwell=None, tee=False, persist=None):
+    """Auto-walk the whole day's flip chain from ONE seed (confirmed bias + start). Every flip is first-class:
+    an s2-cycle ROLLERCOASTER reversal (gcs5-timed, no pyramid) or an s8-CLIMB flip (s30-timed, pyramid ok).
+    Each gets its own DD_NN id (NN resets per UTC day; DD_01 = first flip of the day) + rr_rollercoaster tag,
+    and emits x-cross-pred -> flip_provisional -> flip_finisher. Emerging/causal only. Returns flip dicts.
+    persist: refresh rpl_run/rpl_event for the days walked; default = tee (a reported run persists)."""
     if depth is None: depth = LATCH_DEPTH
     if dwell is None: dwell = LATCH_DWELL
-    L = L0 if src is None else build_lines(src)
-    S = L['src']; ts = L['ts']; idxn = L['idxn']; E = L['E']; P = L['P']; s2r = L['s2r']
-    s1x = L['s1x']; s1m = L['s1m']; s30r_ = L['s30r_']; s30M_ = L['s30M_']; s30x_ = L['s30x_']; s30m_ = L['s30m_']; Ps30 = L['Ps30']
-    g5r = L['g5r']; g5m = L['g5m']; g5x = L['g5x']; ei = L['ei']
-    bias0, CONF = WALKS[walk]
-    ev = []; flip_ts = None
-    # --- STEP 2: s1/s2 direction cycle. NO timeout — watches from the flip until whichever fires FIRST:
-    #     (a) an s1/s2 exhaustion (LTF x-cross-pred AGAINST the current dir; r at boundary + x-cross) -> close +
-    #         OPEN THE OPPOSITE trade (reverse), re-watch from there; or
-    #     (b) any s8-cycle TF (s3..s8) r-pred'd in the current dir -> s8 climb takes over from there.
-    #     One is guaranteed, so no window is needed. (s1s2_confirm_tol_ms retired here.) ---
-    cur = bias0; cst = CONF; reverses = 0
-    while True:
-        pc = _polar(cur); cs = pc['CS']; cst_i = int(np.searchsorted(ts, cst))
-        exh = None  # (a) s1/s2 exhaustion against cur
+    if seed_start is None: seed_start = _ms(21, 32, 0, day=11)
+    L = L0; S = L['src']; ts = L['ts']; idxn = L['idxn']; E = L['E']; P = L['P']; s2r = L['s2r']
+    s30r_ = L['s30r_']; s30M_ = L['s30M_']; s30x_ = L['s30x_']; s30m_ = L['s30m_']
+    g5r = L['g5r']; g5m = L['g5m']; g5x = L['g5x']; ei = L['ei']; s1r = E[1]['r']
+
+    def _rc_flip(cur, io, otf):
+        """s2-cycle reversal -> RC flip: x-cross-pred(exhaustion) -> flip_provisional(delegate) -> flip_finisher(gcs5)."""
+        pc = _polar(cur); rev = 'bear' if cur == 'bull' else 'bull'
+        dTF = max(DELFLOOR, otf - DELOFF); xD = E[dTF]['x']; rD = E[dTF]['r']
+        ev = [(int(ts[io]), 'x-cross-pred', otf, f'r={E[otf]["r"][io]:.0f} x={E[otf]["x"][io]:.0f} s2r={s2r[io]:.0f} EXHAUST s{otf}')]
+        conf = S.causal.cross_wob(xD - rD, 0.0, pc['WOB_DIR'], WOBN); fe = np.flatnonzero((conf & ~np.roll(conf, 1)) & (idxn >= io))
+        rio = int(fe[0]) if len(fe) else io
+        ev.append((int(ts[rio]), 'flip_provisional', dTF, f'{rev.upper()}: exh s{otf} -> del s{dTF}'))
+        ex = g5x[ei]; em = g5m[ei]; roob = pc['oob_climb'](g5r[ei]); oob_tol = roob.copy()
+        for _w in range(1, GCS5_RTOL): oob_tol[_w:] |= roob[:-_w]
+        gate_ev = pc['fcross'](ex - em) & oob_tol & (ei > rio)
+        gc = np.flatnonzero(gate_ev); rev_i = int(ei[gc[0]]) if len(gc) else rio
+        ev.append((int(ts[rev_i]), 'flip_finisher', 1, f'RC gcs5 {cur}->{rev} s{otf}exh'))
+        return rev_i, rev, ev
+
+    def _climb_flip(bias, conf_i):
+        """s8 climb -> r-pred ladder -> x-cross-pred(exhaustion) -> flip_provisional -> flip_finisher(s30)."""
+        p = _polar(bias); BULL = p['BULL']; oob_supp = p['oob_climb_m']
+        fx = {tf: p['fcross'](E[tf]['x'] - E[tf]['r']) for tf in TFS}
+        rpred = lambda TF, i: (P[TF][i] == p['CS']) or p['oob_climb'](E[TF]['r'][i])
+        CONF = int(ts[conf_i]); cadence = ei[ts[ei] > CONF]
+        rung = 3; prev_mi = conf_i; ev = []; flip_i = None
+        for i in cadence:
+            hi = max([TF for TF in TFS if TF > rung and rpred(TF, i)], default=rung)
+            if hi > rung:
+                mode = 'breach' if p['oob_climb'](E[hi]['r'][i]) else 'predict'
+                ev.append((int(ts[i]), 'r-pred', hi, f'by s{rung} ({mode})')); rung = hi
+            w = np.arange(prev_mi + 1, i + 1); cand = []
+            for tf in range(rung, FLOOR - 1, -1):
+                if len(w):
+                    cb = w[fx[tf][w] & p['near_ib'](E[tf]['r'][w]) & p['s2r_es'](s2r[w])]
+                    for k in cb: cand.append((int(k), tf))
+            prev_mi = i
+            if cand:
+                cand.sort(); xki, etf = cand[0]; xt = int(ts[xki])
+                ev.append((xt, 'x-cross-pred', etf, f'r={E[etf]["r"][xki]:.0f} x={E[etf]["x"][xki]:.0f} s2r={s2r[xki]:.0f} EXHAUST cur=s{rung}'))
+                dTF = max(DELFLOOR, etf - DELOFF); rD = E[dTF]['r']; xD = E[dTF]['x']
+                conf = S.causal.cross_wob(xD - rD, 0.0, p['WOB_DIR'], WOBN); fe = np.flatnonzero((conf & ~np.roll(conf, 1)) & (ts >= xt))
+                if len(fe):
+                    ict = int(fe[0]); ct = int(ts[ict]); ev.append((ct, 'flip_provisional', dTF, f"{p['FLIP'].upper()}: exh s{etf} -> del s{dTF}"))
+                    xc = p['fcross'](s30x_ - s30m_); xc_l = np.maximum.accumulate((xc & (idxn >= ict)).astype(np.int8)).astype(bool)
+                    lvl = (LO - depth) if not BULL else (HI + depth); wdir = -1 if not BULL else 1
+                    held = S.causal.cross_wob(s30M_, lvl, wdir, dwell)
+                    latch = np.maximum.accumulate((held & (idxn >= ict)).astype(np.int8)).astype(bool)
+                    nb = (HI - FIN_S30R_SLIP) if BULL else (LO + FIN_S30R_SLIP)
+                    near_h = S.causal.cross_wob(s30r_, nb, 1 if BULL else -1, FIN_NEAR_DWELL)
+                    ons = (s1r > HI - FIN_S1R_SLIP) if BULL else (s1r < LO + FIN_S1R_SLIP)
+                    ff = np.flatnonzero(xc_l & oob_supp(s30m_) & latch & near_h & ons & (idxn >= ict))
+                    if len(ff):
+                        flip_i = int(ff[0])
+                        ev.append((int(ts[flip_i]), 'flip_finisher', 1, f'FIN x*m OOB{"LO" if not BULL else "HI"} s30r{s30r_[flip_i]:.0f} s1r{s1r[flip_i]:.0f} d{depth}/w{dwell}'))
+                break  # first exhaustion ends the climb (flip, or dead-end -> chain stops)
+        return flip_i, p['FLIP'], ev
+
+    cur = seed_bias; cst_i = int(np.searchsorted(ts, seed_start)); flips = []; trend = seed_bias
+    while int(ts[cst_i]) < end_ms:
+        pc = _polar(cur); cs = pc['CS']
+        counter = (cur != trend)                          # this leg is a counter-trend RC reversal
+        exh = None                                        # (a) s1/s2 exhaustion-against-cur -> RC reversal
         for tf in (1, 2):
             fxt = pc['fcross'](E[tf]['x'] - E[tf]['r'])
             hit = np.flatnonzero(fxt & pc['near_ib'](E[tf]['r']) & pc['s2r_es'](s2r) & (idxn > cst_i))
             if len(hit) and (exh is None or int(hit[0]) < exh[0]): exh = (int(hit[0]), tf)
-        rp = None   # (b) s3..s8 r-pred in cur dir (predict OR breach)
+        rp = None                                         # (b) s3..s8 r-pred-cur -> climb cur
         for tf in range(3, 9):
-            rpt = (P[tf] == cs) | pc['oob_climb'](E[tf]['r'])
-            hit = np.flatnonzero(rpt & (idxn > cst_i))
+            hit = np.flatnonzero(((P[tf] == cs) | pc['oob_climb'](E[tf]['r'])) & (idxn > cst_i))
             if len(hit) and (rp is None or int(hit[0]) < rp[0]): rp = (int(hit[0]), tf)
-        if exh is not None and (rp is None or exh[0] <= rp[0]):
-            io, otf = exh                                             # exhaustion (x-cross-pred) = step 1
-            dTF = max(DELFLOOR, otf - DELOFF)                         # delegate: TF2 -> TF1 (floor=1)
-            xD = E[dTF]['x']; rD = E[dTF]['r']                        # step 2: delegate x*r wob cross (flip dir), like the main flip
-            conf = S.causal.cross_wob(xD - rD, 0.0, pc['WOB_DIR'], WOBN); fe = np.flatnonzero((conf & ~np.roll(conf, 1)) & (idxn >= io))
-            rio = int(fe[0]) if len(fe) else io
-            # step 3: gcs5 finisher FOLLOWS the delegate cross, on EVENT bars — FIRST flip-dir gcs5x*gcs5m cross with
-            # gcs5r OOB (exhausted-leg side) within the last GCS5_RTOL event bars (r drops out as the top rolls over).
-            ex = g5x[ei]; em = g5m[ei]; roob = pc['oob_climb'](g5r[ei]); oob_tol = roob.copy()
-            for _w in range(1, GCS5_RTOL): oob_tol[_w:] |= roob[:-_w]   # r OOB within GCS5_RTOL event bars
-            gate_ev = pc['fcross'](ex - em) & oob_tol & (ei > rio)      # fcross vs previous EVENT bar
-            gc = np.flatnonzero(gate_ev); rev_i = int(ei[gc[0]]) if len(gc) else rio
-            rev = 'bear' if cur == 'bull' else 'bull'
-            ev.append((int(ts[rev_i]), 'dir_reverse', dTF, f's{otf} exh -> del s{dTF} -> gcs5 -> close {cur}, open {rev}'))
-            cur = rev; cst = int(ts[rev_i]); reverses += 1
-            if reverses <= 60: continue
-            climb_bias = cur; climb_conf = cst; break
-        elif rp is not None:
-            io, rtf = rp; ev.append((int(ts[io]), 'dir_confirm', rtf, f's{rtf} r-pred {cur} -> s8 takes over'))
-            climb_bias = cur; climb_conf = int(ts[io]); break
+        rpo = None                                        # (c) 0720 option 1: on a COUNTER-trend leg, trend r-pred = causal exit
+        if counter:
+            pt = _polar(trend); cst = pt['CS']
+            for tf in range(3, 9):
+                hit = np.flatnonzero(((P[tf] == cst) | pt['oob_climb'](E[tf]['r'])) & (idxn > cst_i))
+                if len(hit) and (rpo is None or int(hit[0]) < rpo[0]): rpo = (int(hit[0]), tf)
+        cands = [(exh[0], 'exh', exh) if exh else None, (rp[0], 'clm', rp) if rp else None, (rpo[0], 'exit', rpo) if rpo else None]
+        cands = [c for c in cands if c]
+        if not cands: break
+        cands.sort(); _, kind, sig = cands[0]
+        if kind == 'exh':
+            io, otf = sig; fi, ndir, ev = _rc_flip(cur, io, otf); rc = 1
+        elif kind == 'exit':                              # trend re-confirmed -> exit the counter-trend leg, back to trend
+            io, rtf = sig; fi = io; ndir = trend; rc = 1
+            ev = [(int(ts[io]), 'flip_finisher', rtf, f'RC exit: s{rtf} r-pred {trend} closes {cur}')]
         else:
-            climb_bias = cur; climb_conf = cst; ev.append((cst, 'dir_confirm', 1, f'{cur} (no signal to end of tape)')); break
-    # --- s8 climb, from the confirmed direction/time ---
-    bias = climb_bias; CONF = climb_conf; p = _polar(bias)
-    BULL = p['BULL']; FS = p['FS']; oob_supp = p['oob_climb_m']  # supporting lines OOB on the PROFITABLE (exhausted-leg) side
-    fx = {tf: p['fcross'](E[tf]['x'] - E[tf]['r']) for tf in TFS}
-    rpred = lambda TF, i: (P[TF][i] == p['CS']) or p['oob_climb'](E[TF]['r'][i])
-    # cadence = every EVENT bar (0720 look-ahead fix): the old s1x*s1m marker cadence had multi-min gaps, so the
-    # look-back window (prev, now] could swallow an exhaustion cross detected minutes late but stamped early (back-dated).
-    # Per-event-bar detection catches each cross at its true time — causal. (index-vs-event: use event bars, not the 5s grid.)
-    cadence = ei[ts[ei] > CONF]
-    rung = 3; prev_mi = int(np.searchsorted(ts, CONF)); flipped = False
-    if tee: print(f"  s8-cycle walk {walk}  BIAS0={bias0} -> confirmed {bias} (rev {reverses}) -> hunt {p['FLIP'].upper()} flip  start={fmt(CONF)}  depth={depth} dwell={dwell}")
-    for i in cadence:
-        if flipped: break
-        hi = max([TF for TF in TFS if TF > rung and rpred(TF, i)], default=rung)
-        if hi > rung:
-            mode = 'breach' if p['oob_climb'](E[hi]['r'][i]) else 'predict'
-            ev.append((int(ts[i]), 'r-pred', hi, f'by s{rung} ({mode})')); rung = hi
-        w = np.arange(prev_mi + 1, i + 1); cand = []
-        for tf in range(rung, FLOOR - 1, -1):
-            if len(w):
-                cb = w[fx[tf][w] & p['near_ib'](E[tf]['r'][w]) & p['s2r_es'](s2r[w])]
-                for k in cb: cand.append((int(k), tf))
-        prev_mi = i
-        if cand:
-            cand.sort(); xki, etf = cand[0]; xt = int(ts[xki])
-            ev.append((xt, 'x-cross-pred', etf, f'r={E[etf]["r"][xki]:.0f} x={E[etf]["x"][xki]:.0f} s2r={s2r[xki]:.0f} EXHAUST cur=s{rung}'))
-            dTF = max(DELFLOOR, etf - DELOFF); rD = E[dTF]['r']; xD = E[dTF]['x']
-            conf = S.causal.cross_wob(xD - rD, 0.0, p['WOB_DIR'], WOBN); fe = np.flatnonzero((conf & ~np.roll(conf, 1)) & (ts >= xt))
-            if len(fe):
-                ict = int(fe[0]); ct = int(ts[ict]); ev.append((ct, 'flip_provisional', dTF, f"{p['FLIP'].upper()}: exh s{etf} -> del s{dTF}"))
-                # finisher (0720): s30 r-pred pulled. Fire = FIRST bar from the provisional where ALL hold:
-                #   x-cross latched (s30x*s30m), s30m OOB (supp side), s30Mage held past depth,
-                #   s30r within slip of its boundary (dwell-held -> a real s30r cycle, not a blip), AND
-                #   s1r within slip of ITS OWN boundary (the leg has reached its extreme, not a premature poke).
-                xc = p['fcross'](s30x_ - s30m_); xc_l = np.maximum.accumulate((xc & (idxn >= ict)).astype(np.int8)).astype(bool)
-                lvl = (LO - depth) if not BULL else (HI + depth); wdir = -1 if not BULL else 1
-                held = S.causal.cross_wob(s30M_, lvl, wdir, dwell)
-                latch = np.maximum.accumulate((held & (idxn >= ict)).astype(np.int8)).astype(bool)
-                nb = (HI - FIN_S30R_SLIP) if BULL else (LO + FIN_S30R_SLIP)
-                near_h = S.causal.cross_wob(s30r_, nb, 1 if BULL else -1, FIN_NEAR_DWELL)
-                s1r = E[1]['r']; ons = (s1r > HI - FIN_S1R_SLIP) if BULL else (s1r < LO + FIN_S1R_SLIP)
-                ff = np.flatnonzero(xc_l & oob_supp(s30m_) & latch & near_h & ons & (idxn >= ict))
-                if len(ff):
-                    flip_ts = int(ts[ff[0]])
-                    ev.append((flip_ts, 'flip_finisher', 1, f'FIN x*m OOB{"LO" if not BULL else "HI"} s30r{s30r_[ff[0]]:.0f} s1r{s1r[ff[0]]:.0f} d{depth}/w{dwell}'))
-                flipped = True
-    ev = sorted(ev, key=lambda z: z[0])
+            io, rtf = sig; fi, ndir, ev = _climb_flip(cur, io); rc = 0
+            if fi is None: break
+            trend = ndir                                  # a climb flip sets the trend
+        flips.append(dict(i=fi, ts=int(ts[fi]), dir=ndir, rc=rc, ev=sorted(ev, key=lambda z: z[0])))
+        cur = ndir; cst_i = fi
+    daycount = {}
+    for f in flips:
+        d = dtm.datetime.fromtimestamp(f['ts'] / 1000, tz=timezone.utc).day
+        daycount[d] = daycount.get(d, 0) + 1
+        f['walk'] = f"{d:02d}_{daycount[d]:02d}"
     if tee:
-        print(f"  {'time':>8} {'event':>16} {'tf':>3}  note")
-        for t, e, r, nt in ev: print(f"  {fmt(t):>8} {e:>16} {r:>3}  {nt}")
-        if not flipped: print(f"  (no flip; current_tf s{rung})")
-    meta = dict(bias=bias, bias0=bias0, conf=WALKS[walk][1], climb_conf=CONF, flip=p['FLIP'], flip_ts=flip_ts, reverses=reverses, rc_pk=C['rc_pk'])
-    if (tee if persist is None else persist) and src is None:
-        run_pk = _persist_run(walk, ev, meta)
-        if tee: print(f"  persisted walk {walk} run_pk={run_pk} events={len(ev)}")
-    return ev, meta
+        print(f"  {'walk':>6} {'time':>8} {'dir':>4} {'kind':>5}")
+        for f in flips: print(f"  {f['walk']:>6} {fmt(f['ts']):>8} {f['dir']:>4} {'RC' if f['rc'] else 'climb':>5}")
+    if tee if persist is None else persist:
+        _persist_chain(flips)
+        if tee: print(f"  persisted {len(flips)} flips ({sum(f['rc'] for f in flips)} RC)")
+    return flips

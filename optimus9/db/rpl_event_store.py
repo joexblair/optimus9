@@ -37,7 +37,8 @@ class RplEventStore:
             rr_side         VARCHAR(8) NOT NULL,          -- bull / bear
             rr_window_start BIGINT, rr_window_end BIGINT, -- ms epoch
             rr_engine_rev   VARCHAR(40),                  -- flow-script md5 — reproducibility pin
-            rr_walk         VARCHAR(8),                   -- walk label DD_NN (e.g. 12_01), Joe's per-walk id
+            rr_walk         VARCHAR(8),                   -- walk label DD_NN (e.g. 12_01), first flip of the day = DD_01
+            rr_rollercoaster TINYINT DEFAULT 0,           -- 1 = counter-trend rollercoaster flip (NO pyramid trade); 0 = climb flip
             rr_entry_ms     BIGINT,                       -- resolved flip_div entry (NULL = none)
             rr_created_dt   DATETIME DEFAULT CURRENT_TIMESTAMP,
             rr_notes        VARCHAR(255),
@@ -63,6 +64,7 @@ class RplEventStore:
         self._migrate_re_utc()
         self._migrate_col('rpl_event', 're_called_by', 'INT', 'AFTER re_tf')
         self._migrate_col('rpl_run', 'rr_walk', 'VARCHAR(8)', 'AFTER rr_engine_rev')
+        self._migrate_col('rpl_run', 'rr_rollercoaster', 'TINYINT DEFAULT 0', 'AFTER rr_walk')
         self._migrate_fk('rpl_run', 'fk_rpl_run_config',
                          'FOREIGN KEY (rr_config_pk) REFERENCES rpl_config (rc_pk)')
         self._migrate_fk('rpl_event', 'fk_rpl_event_run',
@@ -122,11 +124,11 @@ class RplEventStore:
         return {'rc_pk': r['rc_pk'], 'rc_name': r['rc_name'], **json.loads(r['rc_knobs'])}
 
     # --- run + event stream ---
-    def register_run(self, side, window_start, window_end, config_pk, engine_rev=None, walk=None, notes=None) -> int:
+    def register_run(self, side, window_start, window_end, config_pk, engine_rev=None, walk=None, notes=None, rollercoaster=0) -> int:
         return self._db.execute(
             '''INSERT INTO rpl_run (rr_config_pk, rr_side, rr_window_start, rr_window_end,
-               rr_engine_rev, rr_walk, rr_notes) VALUES (%s,%s,%s,%s,%s,%s,%s)''',
-            (config_pk, side, window_start, window_end, engine_rev, walk, notes))
+               rr_engine_rev, rr_walk, rr_rollercoaster, rr_notes) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)''',
+            (config_pk, side, window_start, window_end, engine_rev, walk, int(rollercoaster), notes))
 
     def log_events(self, run_pk, events) -> int:
         """`events` = [{ts, stage, tf?, r?, x?, net?, votes?, mode?, note?, is_entry?}, ...]. Bulk."""

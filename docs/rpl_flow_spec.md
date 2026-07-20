@@ -1,9 +1,28 @@
 # rpl flow — spec
 
-*Causal/emerging only. A **walk** = one flip cycle, labelled `DD_NN`. Storage: `docs/rpl_event_store_spec.md`.
-Research impl: `rpl_flow.py` (pre-confirm) + `rpl_s8cycle.py` (post-confirm climb).*
+*Causal/emerging only. Storage: `docs/rpl_event_store_spec.md`. Engine: `rpl_walk.py` (`run_chain`), CLI `rpl_s8cycle.py`.*
 
-## Cycle (per walk)
+## Auto-chain (0720) — every flip is a walk
+
+The engine **walks the whole day's flip stream from ONE seed** (a confirmed bias + start; default bear @ 21:32
+day 11). `run_chain` loops flip-to-flip to end of window. **Each flip is a first-class walk** — its own `DD_NN`
+id (NN resets per UTC day, **`DD_01` = first flip of the day**), an `rr_run` row, and the full event vocabulary
+(`x-cross-pred` → `flip_provisional` → `flip_finisher`). Two kinds, both valid trades:
+
+- **climb flip** (`rr_rollercoaster=0`, pyramid ok) — the trend flip: s8-cycle climbs, s30 finisher times it.
+- **rollercoaster flip** (`rr_rollercoaster=1`, **NO pyramid**) — a counter-trend reversal inside the s2-cycle;
+  gcs5-timed. Tagged so the trade layer skips the pyramid.
+
+**Per-bar the chain watches three signals from the current leg, earliest wins:** (a) s1/s2 exhaustion-against-cur
+→ RC reversal; (b) s3–s8 r-pred-cur → climb; (c) **on a counter-trend leg only**, the **trend's** s3–s8 r-pred →
+**exit** (option 1) — closes the counter-trend leg back to the trend. (c) is scoped to counter-trend legs because
+right after any flip the opposite direction is already r-preding; watching it on a trend leg flip-flops every 5s.
+The 00:26 bear (counter to the 00:08 bull trend) exits at 00:32 when bull re-confirms — the causal exit that was
+otherwise missing until 01:48. `override_latch_ms` stays dormant (as a suppressor it would be look-ahead).
+
+The manual `WALKS` chain + `run_walk` retired; `run_walk`'s climb/finisher logic now lives once in `run_chain`.
+
+## Cycle (mechanics, per leg)
 1. **Flip** (`flip_finisher`) fires → post-flip transitional state.
 2. **s2-cycle (s1/s2 direction cycle)** — runs from the flip with **NO timeout**. Joe's rule, verbatim:
    > s2-cycle needs to run until 1) any s8-cycle TF is r-pred'd, or 2) s1 or s2 create an exhaustion event. one of these 2 scenarios is 100% gauranteed to happend, so there's no need for a timeout
