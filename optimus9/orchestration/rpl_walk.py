@@ -5,7 +5,7 @@ function over the cached line arrays so the sweep reuses ONE code path (no fork)
 
 A walk = one flip cycle: confirmed BIAS (leg climbed) -> hunt the opposite flip.
   12_01 bear leg -> bull flip (bottom)   12_02 bull leg -> bear flip (top)   12_03 bear leg -> bull flip."""
-import numpy as np, datetime as dtm
+import numpy as np, datetime as dtm, hashlib
 from datetime import timezone
 from optimus9 import DatabaseManager
 from optimus9.config import get_db_config
@@ -78,9 +78,25 @@ def _polar(bias):
         oob_climb_m=((lambda m: m > HI) if BULL else (lambda m: m < LO)),
         WOB_DIR=(-1 if BULL else 1))
 
-def run_walk(walk, depth=None, dwell=None, tee=False, src=None):
+_REV = hashlib.md5(open(__file__, 'rb').read()).hexdigest()[:12]
+
+def _persist_run(walk, ev, meta):
+    """Refresh rpl_run/rpl_event for this walk: drop prior runs, register + log the fresh stream."""
+    db = DatabaseManager(**get_db_config()); db.connect(); st = RplEventStore(db)
+    for r in db.execute("SELECT rr_pk FROM rpl_run WHERE rr_walk=%s", (walk,), fetch=True):
+        db.execute("DELETE FROM rpl_run WHERE rr_pk=%s", (r['rr_pk'],))
+    b = ev[-1][0] if ev else meta['conf']
+    run_pk = st.register_run(meta['flip'], meta['conf'], b, meta['rc_pk'], engine_rev=_REV, walk=walk,
+                             notes=f"{meta['bias']} climb -> {fmt(meta['flip_ts']) if meta['flip_ts'] else 'no'} flip")
+    st.log_events(run_pk, [{'ts': t, 'stage': e, 'tf': r, 'note': nt} for t, e, r, nt in ev])
+    db.disconnect(); return run_pk
+
+
+def run_walk(walk, depth=None, dwell=None, tee=False, src=None, persist=None):
     """Run one flip walk. depth/dwell default to the DB baseline; the sweep overrides them. src = a line
-    source (JigCache/jig) with swept configs; None => the module baseline L0. Returns (ev, meta)."""
+    source (JigCache/jig) with swept configs; None => the module baseline L0. Returns (ev, meta).
+    persist: refresh rpl_event for this walk on completion; default = tee (a reported run persists, a
+    pure-compute/sweep call does not). Pass persist=False on a swept src to keep it side-effect-free."""
     if depth is None: depth = LATCH_DEPTH
     if dwell is None: dwell = LATCH_DWELL
     L = L0 if src is None else build_lines(src)
@@ -180,4 +196,8 @@ def run_walk(walk, depth=None, dwell=None, tee=False, src=None):
         print(f"  {'time':>8} {'event':>16} {'tf':>3}  note")
         for t, e, r, nt in ev: print(f"  {fmt(t):>8} {e:>16} {r:>3}  {nt}")
         if not flipped: print(f"  (no flip; current_tf s{rung})")
-    return ev, dict(bias=bias, bias0=bias0, conf=WALKS[walk][1], climb_conf=CONF, flip=p['FLIP'], flip_ts=flip_ts, reverses=reverses, rc_pk=C['rc_pk'])
+    meta = dict(bias=bias, bias0=bias0, conf=WALKS[walk][1], climb_conf=CONF, flip=p['FLIP'], flip_ts=flip_ts, reverses=reverses, rc_pk=C['rc_pk'])
+    if (tee if persist is None else persist) and src is None:
+        run_pk = _persist_run(walk, ev, meta)
+        if tee: print(f"  persisted walk {walk} run_pk={run_pk} events={len(ev)}")
+    return ev, meta
