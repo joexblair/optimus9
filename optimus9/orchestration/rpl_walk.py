@@ -19,7 +19,7 @@ _db = DatabaseManager(**get_db_config()); _db.connect(); _st = RplEventStore(_db
 HI, LO = C['boundary']['hi'], C['boundary']['lo']; FH, FL = C['fence']['fh'], C['fence']['fl']; LN = C['lines']
 DELOFF = C['delegate_offset']; WOBN = C['wob_n']; ANTI = C['anti']; BND4 = C['xcp_bnd_offset']; FLOOR = C['xcp_tf_floor']
 LATCH_DEPTH = C['latch_depth']; LATCH_DWELL = C['latch_dwell']; DELFLOOR = C['delegate_tf_floor']
-CONFIRM_TOL = C['s1s2_confirm_tol_ms']
+CONFIRM_TOL = C['s1s2_confirm_tol_ms']; GCS5_RTOL = C['gcs5_r_tol']
 TFS = list(range(1, C['tf_ceiling'] + 1)); end_ms = int(dtm.datetime(2026, 7, 12, 12, 15, tzinfo=timezone.utc).timestamp() * 1000)
 fmt = lambda t: dtm.datetime.fromtimestamp(int(t) / 1000, timezone.utc).strftime('%H:%M:%S')
 
@@ -30,6 +30,8 @@ for _TF in TFS:
 for _nm in ('s1x', 's1m'): _ovr.update(_mk(_nm, 1.0, LN[_nm]))
 for _nm in ('s30r', 's30M'): _ovr.update(_mk(_nm, 0.5, LN[_nm]))
 _ovr.update(_mk('s30x', 0.5, LN['x'])); _ovr.update(_mk('s30m', 0.5, LN['m']))
+_GCS5 = 5.0 / 60.0                                                     # gcs5 = generic r/m/x at 5-second itf (s2-cycle reversal finisher)
+_ovr.update(_mk('gcs5r', _GCS5, LN['r'])); _ovr.update(_mk('gcs5m', _GCS5, LN['m'])); _ovr.update(_mk('gcs5x', _GCS5, LN['x']))
 
 # --- warmup (once, cached) + walk-independent arrays ---
 def build_lines(src):
@@ -37,13 +39,18 @@ def build_lines(src):
     src built with swept line configs; run_walk uses whichever src it's given. Line production stays in the
     jig/BiasWindow (SRP) — this only assembles the arrays + the derived predict_breach series."""
     ts = np.asarray(src.ts, np.int64)
+    evt = getattr(src, 'evt', None)                                   # event bars (volume>0); index-vs-event gotcha
+    if evt is None:
+        try: evt = src.W.base['volume'].to_numpy(dtype=float) > 0
+        except Exception: evt = np.ones(len(ts), bool)
     E = {TF: {k: np.asarray(src.W.line(f'{k}{TF}'), float) for k in ('r', 'x', 'm', 'M')} for TF in TFS}
     P = {TF: predict_breach(E[TF]['r'], E[TF]['m'], E[TF]['M'], HI, LO, FH, FL, 0.0) for TF in TFS}
     s30r_ = np.asarray(src.W.line('s30r'), float); s30M_ = np.asarray(src.W.line('s30M'), float)
     s30x_ = np.asarray(src.W.line('s30x'), float); s30m_ = np.asarray(src.W.line('s30m'), float)
-    return dict(src=src, ts=ts, n=len(ts), idxn=np.arange(len(ts)), E=E, P=P, s2r=E[2]['r'],
+    return dict(src=src, ts=ts, n=len(ts), idxn=np.arange(len(ts)), ei=np.flatnonzero(evt), E=E, P=P, s2r=E[2]['r'],
                 s1x=np.asarray(src.W.line('s1x'), float), s1m=np.asarray(src.W.line('s1m'), float),
                 s30r_=s30r_, s30M_=s30M_, s30x_=s30x_, s30m_=s30m_,
+                g5r=np.asarray(src.W.line('gcs5r'), float), g5m=np.asarray(src.W.line('gcs5m'), float), g5x=np.asarray(src.W.line('gcs5x'), float),
                 Ps30=predict_breach(s30r_, s30m_, s30M_, HI, LO, FH, FL, 0.0))
 
 J = cache_jig(end_ms, 40, 600, _ovr)
@@ -77,6 +84,7 @@ def run_walk(walk, depth=None, dwell=None, tee=False, src=None):
     L = L0 if src is None else build_lines(src)
     S = L['src']; ts = L['ts']; idxn = L['idxn']; E = L['E']; P = L['P']; s2r = L['s2r']
     s1x = L['s1x']; s1m = L['s1m']; s30r_ = L['s30r_']; s30M_ = L['s30M_']; s30x_ = L['s30x_']; s30m_ = L['s30m_']; Ps30 = L['Ps30']
+    g5r = L['g5r']; g5m = L['g5m']; g5x = L['g5x']; ei = L['ei']
     bias0, CONF = WALKS[walk]
     ev = []; flip_ts = None
     # --- STEP 2: s1/s2 direction cycle. NO timeout — watches from the flip until whichever fires FIRST:
@@ -100,11 +108,18 @@ def run_walk(walk, depth=None, dwell=None, tee=False, src=None):
         if exh is not None and (rp is None or exh[0] <= rp[0]):
             io, otf = exh                                             # exhaustion (x-cross-pred) = step 1
             dTF = max(DELFLOOR, otf - DELOFF)                         # delegate: TF2 -> TF1 (floor=1)
-            xD = E[dTF]['x']; rD = E[dTF]['r']                        # reversal fires at the DELEGATE x*r cross (flip dir, wob), like the main flip
+            xD = E[dTF]['x']; rD = E[dTF]['r']                        # step 2: delegate x*r wob cross (flip dir), like the main flip
             conf = S.causal.cross_wob(xD - rD, 0.0, pc['WOB_DIR'], WOBN); fe = np.flatnonzero((conf & ~np.roll(conf, 1)) & (idxn >= io))
-            rio = int(fe[0]) if len(fe) else io; rev = 'bear' if cur == 'bull' else 'bull'
-            ev.append((int(ts[rio]), 'dir_reverse', dTF, f's{otf} exh -> del s{dTF} x*r cross -> close {cur}, open {rev}'))
-            cur = rev; cst = int(ts[rio]); reverses += 1
+            rio = int(fe[0]) if len(fe) else io
+            # step 3: gcs5 finisher FOLLOWS the delegate cross, on EVENT bars — FIRST flip-dir gcs5x*gcs5m cross with
+            # gcs5r OOB (exhausted-leg side) within the last GCS5_RTOL event bars (r drops out as the top rolls over).
+            ex = g5x[ei]; em = g5m[ei]; roob = pc['oob_climb'](g5r[ei]); oob_tol = roob.copy()
+            for _w in range(1, GCS5_RTOL): oob_tol[_w:] |= roob[:-_w]   # r OOB within GCS5_RTOL event bars
+            gate_ev = pc['fcross'](ex - em) & oob_tol & (ei > rio)      # fcross vs previous EVENT bar
+            gc = np.flatnonzero(gate_ev); rev_i = int(ei[gc[0]]) if len(gc) else rio
+            rev = 'bear' if cur == 'bull' else 'bull'
+            ev.append((int(ts[rev_i]), 'dir_reverse', dTF, f's{otf} exh -> del s{dTF} -> gcs5 -> close {cur}, open {rev}'))
+            cur = rev; cst = int(ts[rev_i]); reverses += 1
             if reverses <= 60: continue
             climb_bias = cur; climb_conf = cst; break
         elif rp is not None:

@@ -25,7 +25,7 @@ class _Cau:
     def cross_wob(self, line, level, direction, n): return _Causal(None).cross_wob(line, level, direction, n)
 
 class JigCache:
-    def __init__(self, d): self.ts = d['__ts__']; self.W = _W(d); self.causal = _Cau()
+    def __init__(self, d): self.ts = d['__ts__']; self.W = _W(d); self.causal = _Cau(); self.evt = d['__evt__'] if '__evt__' in d else None
     def __enter__(self): return self
     def __exit__(self, *a): return False
 
@@ -38,5 +38,6 @@ def cache_jig(end_ms, hours, warmup, ovr, rebuild=False):
     with Jig(end_ms, hours=hours, warmup=warmup, overrides=ovr) as j:
         out = {'__ts__': np.asarray(j.ts, np.int64)}
         for name in ovr: out[name] = np.asarray(j.W.line(name), float)
+        out['__evt__'] = j.W.base['volume'].to_numpy(dtype=float) > 0   # event bars (real trades); index-vs-event gotcha
     np.savez(p, **out)
     return JigCache(out)

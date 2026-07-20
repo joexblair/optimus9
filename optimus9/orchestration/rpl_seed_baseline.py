@@ -28,6 +28,7 @@ KNOBS = {
     's2_tf_sec': 120,                           # fast current-bias filter TF
     'delegate_offset': 5,                       # flip_finisher delegates exh-5 TFs lower
     'delegate_tf_floor': 1,                      # delegate TF floor: max(floor, etf-offset). 1 (0719: TF2 exhaustion needs a real faster line, not floored at itself). sweepable
+    'gcs5_r_tol': 4,                             # gcs5 reversal finisher: gcs5r may have been OOB within this many EVENT bars of the gcs5x*gcs5m cross (r drops out as the top rolls over). sweepable
     'wob_n': 9,                                 # cross_wob debounce bars for x*r flip cross. LOCKED 9 — 0720: 9->4 pulled 12_01's main-flip finisher 00:07:55->00:04:30 (wob_n is shared with the main flip provisional). s2-cycle timing lands via gcs5, not this.
     'div_net_min': 3,                           # flip_div entry: first >=N same-side votes
     'div_horizon_ms': 1800000,                  # div search window after flip (30min)

@@ -61,3 +61,23 @@ spikes in a single window and bleeds the rest. (s30r/s30M dial-in, 2026-06-12.)
 The cascade reads LTF→HTF: shorter TF-relative indicator lengths react sooner, so LTF
 lines breach *first* and bob in/out of OOB while the slower lines catch up; the gate
 (combined state) only resolves when every line is at 3/0. (See `bl_machine_design.md`.)
+
+---
+
+## Index bars vs event bars — the reporting/analysis gotcha (0720)
+
+Lines compute on the **event tape** (real-trade bars, `volume>0`) and forward-fill onto
+the full 5s **index grid** (`filler_invisible`, default ON). So a value at a 5s index
+slot with no trade is a **carry-forward** of the last real bar, not a fresh observation.
+
+- **Symptom:** a table/probe walking the full 5s grid shows timestamps that don't exist
+  as trades (e.g. no 05:42:00 event bar — the tape jumps 05:41:55 → 05:42:10), with
+  repeated values across filler slots.
+- **When it bites:** any *ad-hoc probe or table* that indexes `ts` on a fixed 5s stride.
+  Cross detection in the flow is mostly safe (a forward-fill repeats the value, so
+  `sign()` doesn't change → no phantom cross at fillers; the cross fires at the next real
+  bar). Reporting is where it misleads.
+- **Fix:** pull the event-bar mask from the base tape volume — `evt = jig.W.base['volume']
+  > 0` — and index/pad/lead-in on `np.flatnonzero(evt)`, not the raw 5s stride. The
+  cadence between event bars is irregular (~5–20s by trade activity), not a clean 5s.
+- Related: `project_filler_invisible` (the fix), `frozen_tape_failure` (V=0 dojis).

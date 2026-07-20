@@ -14,8 +14,11 @@ Research impl: `rpl_flow.py` (pre-confirm) + `rpl_s8cycle.py` (post-confirm clim
    → TF2 delegates to **TF1**), exactly as the main flip's provisional — **close the current trade AND open the
    opposite (reverse)**, re-watch from the reversal (`dir_reverse`). On an **s8-cycle TF (s3–s8) r-pred'd in the
    current dir** → **s8 climb takes over** (`dir_confirm`). Whichever fires first. `s1s2_confirm_tol_ms` retired.
-   *(Planned refinement: a **gcs5** 5-second finisher **follows** the delegate cross — after the exhaustion,
-   walk forward; when gcs5r & gcs5m are OOB on the exhausted-leg side and gcs5x crosses gcs5m, place the reversal.)*
+   **gcs5 finisher (wired):** after the delegate cross, on **event bars only** (volume>0 — the index-vs-event
+   gotcha, `quirks_to_remember.md`), the reversal fires at the **FIRST** flip-direction gcs5x×gcs5m cross where
+   **gcs5r was OOB on the exhausted-leg side within the last `gcs5_r_tol` (4) event bars** (r drops out of OOB
+   as the top/bottom rolls over, so it's a tolerance not a same-bar gate). gcs5 = generic r/m/x at 5s. First,
+   because realtime can't wait for a better one. (12_04: reversals 05:09:35 / 05:25:00 / 05:50:45 / 06:07:35.)
 3. Confirmed → **s8 cycle** takes over rpl: the r-pred baton passes s1/s2 → **s3** and climbs. The confirm
    **gates** the same walk's climb — it does not terminate the walk.
 
