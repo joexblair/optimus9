@@ -19,6 +19,7 @@ _db = DatabaseManager(**get_db_config()); _db.connect(); _st = RplEventStore(_db
 HI, LO = C['boundary']['hi'], C['boundary']['lo']; FH, FL = C['fence']['fh'], C['fence']['fl']; LN = C['lines']
 DELOFF = C['delegate_offset']; WOBN = C['wob_n']; ANTI = C['anti']; BND4 = C['xcp_bnd_offset']; FLOOR = C['xcp_tf_floor']
 LATCH_DEPTH = C['latch_depth']; LATCH_DWELL = C['latch_dwell']; DELFLOOR = C['delegate_tf_floor']
+FIN_S30R_SLIP = C['finisher_s30r_boundary_slip']; FIN_NEAR_DWELL = C['finisher_s30r_near_dwell']; FIN_S1R_SLIP = C['finisher_s1r_boundary_slip']
 CONFIRM_TOL = C['s1s2_confirm_tol_ms']; GCS5_RTOL = C['gcs5_r_tol']
 TFS = list(range(1, C['tf_ceiling'] + 1)); end_ms = int(dtm.datetime(2026, 7, 13, 0, 0, tzinfo=timezone.utc).timestamp() * 1000)
 fmt = lambda t: dtm.datetime.fromtimestamp(int(t) / 1000, timezone.utc).strftime('%H:%M:%S')
@@ -158,17 +159,21 @@ def run_walk(walk, depth=None, dwell=None, tee=False, src=None):
             conf = S.causal.cross_wob(xD - rD, 0.0, p['WOB_DIR'], WOBN); fe = np.flatnonzero((conf & ~np.roll(conf, 1)) & (ts >= xt))
             if len(fe):
                 ict = int(fe[0]); ct = int(ts[ict]); ev.append((ct, 'flip_provisional', dTF, f"{p['FLIP'].upper()}: exh s{etf} -> del s{dTF}"))
-                rf = np.flatnonzero((Ps30 == FS) & (ts >= ct))
-                if len(rf):
-                    t0 = int(rf[0]); xc = p['fcross'](s30x_ - s30m_)
-                    # s30Mage latch = held PAST-DEPTH for DWELL bars (cross_wob), then latched from the provisional
-                    lvl = (LO - depth) if not BULL else (HI + depth); wdir = -1 if not BULL else 1
-                    held = S.causal.cross_wob(s30M_, lvl, wdir, dwell)
-                    latch = np.maximum.accumulate((held & (idxn >= ict)).astype(np.int8)).astype(bool)
-                    ff = np.flatnonzero(xc & oob_supp(s30m_) & latch & (idxn >= t0))
-                    if len(ff):
-                        flip_ts = int(ts[ff[0]])
-                        ev.append((flip_ts, 'flip_finisher', 1, f'FIN s30r {"HI" if FS>0 else "LO"}@{fmt(ts[t0])} x*m OOB{"LO" if not BULL else "HI"} d{depth}/w{dwell}'))
+                # finisher (0720): s30 r-pred pulled. Fire = FIRST bar from the provisional where ALL hold:
+                #   x-cross latched (s30x*s30m), s30m OOB (supp side), s30Mage held past depth,
+                #   s30r within slip of its boundary (dwell-held -> a real s30r cycle, not a blip), AND
+                #   s1r within slip of ITS OWN boundary (the leg has reached its extreme, not a premature poke).
+                xc = p['fcross'](s30x_ - s30m_); xc_l = np.maximum.accumulate((xc & (idxn >= ict)).astype(np.int8)).astype(bool)
+                lvl = (LO - depth) if not BULL else (HI + depth); wdir = -1 if not BULL else 1
+                held = S.causal.cross_wob(s30M_, lvl, wdir, dwell)
+                latch = np.maximum.accumulate((held & (idxn >= ict)).astype(np.int8)).astype(bool)
+                nb = (HI - FIN_S30R_SLIP) if BULL else (LO + FIN_S30R_SLIP)
+                near_h = S.causal.cross_wob(s30r_, nb, 1 if BULL else -1, FIN_NEAR_DWELL)
+                s1r = E[1]['r']; ons = (s1r > HI - FIN_S1R_SLIP) if BULL else (s1r < LO + FIN_S1R_SLIP)
+                ff = np.flatnonzero(xc_l & oob_supp(s30m_) & latch & near_h & ons & (idxn >= ict))
+                if len(ff):
+                    flip_ts = int(ts[ff[0]])
+                    ev.append((flip_ts, 'flip_finisher', 1, f'FIN x*m OOB{"LO" if not BULL else "HI"} s30r{s30r_[ff[0]]:.0f} s1r{s1r[ff[0]]:.0f} d{depth}/w{dwell}'))
                 flipped = True
     ev = sorted(ev, key=lambda z: z[0])
     if tee:

@@ -38,11 +38,14 @@ KNOBS = {
     'override_latch_ms': 300000,                 # a higher-TF r-pred within this window (full 5s series) suppresses a lower x-cross-pred. sweepable
     'latch_depth': 5,                            # s30Mage finishing latch: points BEYOND the OOB boundary Mage must reach before latching. LOCKED 5 (0719 sweep: kills the shallow 12_01 00:04:30 poke -> 07:55; 12_02 in-band). sweepable
     'latch_dwell': 2,                            # s30Mage finishing latch: consecutive 5s bars Mage must hold past-depth before latching. LOCKED 2 (0719 sweep: 12_01 07:55, 12_02 03:30; dwell=1 -> 12_02 03:22). sweepable
+    'finisher_s30r_boundary_slip': 4,            # 0720: finisher fires only when s30r sits within this of its OOB boundary (s30r>HI-4 / s30r<LO+4). Anchors the fire to a real s30r cycle. sweepable
+    'finisher_s30r_near_dwell': 2,               # 0720: consecutive event bars s30r must hold within-slip before the fire counts (kills 08:55:50-type blips). sweepable
+    'finisher_s1r_boundary_slip': 25,            # 0720: s1r must be within this of ITS OWN OOB boundary (s1r>HI-25 / s1r<LO+25) at the fire = the leg has reached its extreme. Rejects premature onside pokes (12_04 08:54 s1r=52). Sweep plateau 20-30. sweepable
 }
 
 db = DatabaseManager(**get_db_config()); db.connect()
 st = RplEventStore(db)
-pk = st.upsert_config('baseline', KNOBS, notes='rpl side-of-50 gate, 00:07 flip dial-in 0719')
+pk = st.upsert_config('baseline', KNOBS, notes='rpl finisher: r-pred pulled, s30r+s1r boundary-slip gates 0720')
 print(f'rpl_config baseline seeded rc_pk={pk}')
 loaded = st.load_config('baseline')
 print(f'readback anti={loaded["anti"]} s2_tf={loaded["s2_tf_sec"]} lines={len(loaded["lines"])}')

@@ -57,11 +57,21 @@ Research impl: `rpl_flow.py` (pre-confirm) + `rpl_s8cycle.py` (post-confirm clim
 ## Flip (provisional → s30 finishing)
 - Exhaustion → **provisional flip**: delegate `max(2, exhaustion_tf − delegate_offset)` (floor=2),
   x-cross-r wob cross on the flip side → `flip_provisional`.
-- **s30 finishing step** — the provisional is refined forward: wait for **s30r to r-pred the flip side**
-  (`predict_breach` on the flip direction = the trigger the new leg is starting), then the FINAL
-  **`flip_finisher`** fires at the next **flip-direction s30x×s30m cross while s30m is OOB (instant) and
-  s30Mage is LATCHED-OOB** on the profitable (exhausted-leg) side (see principle below). This lands the
-  flip at the true reversal, not the early exhaustion.
+- **s30 finishing step (0720 — r-pred PULLED).** The s30-level `predict_breach` gate was removed: it was
+  inert on 3 of 4 walks and only nudged 12_03 by 5 min (04:49→04:54, ~0.05%), while its Ps30 prediction
+  ran out of sync with the actual s30r OOB (leads by 3 min on one cycle, lags by 4.5 min on the next),
+  which mis-anchored the finisher. The **`flip_finisher`** now fires at the **FIRST bar from the provisional
+  where ALL hold** (no cycle-hop, no re-pred):
+  1. **s30x×s30m cross latched** (flip direction; latched from the provisional onward),
+  2. **s30m OOB** (instant) on the profitable / exhausted-leg side,
+  3. **s30Mage LATCHED-OOB** past depth for dwell bars (see below),
+  4. **s30r within `finisher_s30r_boundary_slip`=4 of its OOB boundary, held `finisher_s30r_near_dwell`=2
+     event bars** — anchors the fire to a real s30r cycle and kills single-bar proximity blips,
+  5. **s1r within `finisher_s1r_boundary_slip`=25 of its OWN OOB boundary** (top → s1r>60, bottom → s1r<40)
+     — the fast leg has reached its extreme, not a premature onside poke. This is what pushes 12_04 off the
+     08:54 poke (s1r 52) onto the true 09:01 top (s1r 94), and lands 12_02 at 03:34. Sweep plateau 20–30.
+  Lands the flip at the true reversal, not the early exhaustion. Walk chain: 12_01 00:08:40 · 12_02 03:34:00
+  · 12_03 04:49:25 · 12_04 09:01:10.
 - **s30Mage latch:** the slow Mage sits OOB only intermittently at a reversal (e.g. 12_02 top: s30Mage>85
   at 03:23 and 03:32, not continuously) — so it **latches**: once it goes OOB on the profitable side (from
   the provisional onward) it stays set, and the s30m-OOB cross after the r-pred fires the flip. s30m stays
