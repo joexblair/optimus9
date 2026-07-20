@@ -18,8 +18,9 @@ from optimus9.orchestration.rpl_cache import cache_jig
 _db = DatabaseManager(**get_db_config()); _db.connect(); _st = RplEventStore(_db); C = _st.load_config('baseline'); _db.disconnect()
 HI, LO = C['boundary']['hi'], C['boundary']['lo']; FH, FL = C['fence']['fh'], C['fence']['fl']; LN = C['lines']
 DELOFF = C['delegate_offset']; WOBN = C['wob_n']; ANTI = C['anti']; BND4 = C['xcp_bnd_offset']; FLOOR = C['xcp_tf_floor']
-LATCH_DEPTH = C['latch_depth']; LATCH_DWELL = C['latch_dwell']
-TFS = list(range(2, 46)); end_ms = int(dtm.datetime(2026, 7, 12, 7, 0, tzinfo=timezone.utc).timestamp() * 1000)
+LATCH_DEPTH = C['latch_depth']; LATCH_DWELL = C['latch_dwell']; DELFLOOR = C['delegate_tf_floor']
+CONFIRM_TOL = C['s1s2_confirm_tol_ms']
+TFS = list(range(1, C['tf_ceiling'] + 1)); end_ms = int(dtm.datetime(2026, 7, 12, 12, 15, tzinfo=timezone.utc).timestamp() * 1000)
 fmt = lambda t: dtm.datetime.fromtimestamp(int(t) / 1000, timezone.utc).strftime('%H:%M:%S')
 
 def _mk(nm, tf, t): return kline(nm, tf, k_len=t['k_len'], rsi=t['rsi'], stc=t['stc'], src=t['src']) if t['kind'] == 'kline' else bbline(nm, tf, length=t['length'], mult=t['mult'], src=t['src'])
@@ -31,21 +32,29 @@ for _nm in ('s30r', 's30M'): _ovr.update(_mk(_nm, 0.5, LN[_nm]))
 _ovr.update(_mk('s30x', 0.5, LN['x'])); _ovr.update(_mk('s30m', 0.5, LN['m']))
 
 # --- warmup (once, cached) + walk-independent arrays ---
+def build_lines(src):
+    """Read every line the flow needs from a line-source (JigCache or jig) into a dict. The sweep passes a
+    src built with swept line configs; run_walk uses whichever src it's given. Line production stays in the
+    jig/BiasWindow (SRP) — this only assembles the arrays + the derived predict_breach series."""
+    ts = np.asarray(src.ts, np.int64)
+    E = {TF: {k: np.asarray(src.W.line(f'{k}{TF}'), float) for k in ('r', 'x', 'm', 'M')} for TF in TFS}
+    P = {TF: predict_breach(E[TF]['r'], E[TF]['m'], E[TF]['M'], HI, LO, FH, FL, 0.0) for TF in TFS}
+    s30r_ = np.asarray(src.W.line('s30r'), float); s30M_ = np.asarray(src.W.line('s30M'), float)
+    s30x_ = np.asarray(src.W.line('s30x'), float); s30m_ = np.asarray(src.W.line('s30m'), float)
+    return dict(src=src, ts=ts, n=len(ts), idxn=np.arange(len(ts)), E=E, P=P, s2r=E[2]['r'],
+                s1x=np.asarray(src.W.line('s1x'), float), s1m=np.asarray(src.W.line('s1m'), float),
+                s30r_=s30r_, s30M_=s30M_, s30x_=s30x_, s30m_=s30m_,
+                Ps30=predict_breach(s30r_, s30m_, s30M_, HI, LO, FH, FL, 0.0))
+
 J = cache_jig(end_ms, 40, 600, _ovr)
-ts = np.asarray(J.ts, np.int64); n = len(ts); idxn = np.arange(n)
-E = {TF: {k: np.asarray(J.W.line(f'{k}{TF}'), float) for k in ('r', 'x', 'm', 'M')} for TF in TFS}
-P = {TF: predict_breach(E[TF]['r'], E[TF]['m'], E[TF]['M'], HI, LO, FH, FL, 0.0) for TF in TFS}
-s2r = E[2]['r']
-s1x = np.asarray(J.W.line('s1x'), float); s1m = np.asarray(J.W.line('s1m'), float)
-s30r_ = np.asarray(J.W.line('s30r'), float); s30M_ = np.asarray(J.W.line('s30M'), float)
-s30x_ = np.asarray(J.W.line('s30x'), float); s30m_ = np.asarray(J.W.line('s30m'), float)
-Ps30 = predict_breach(s30r_, s30m_, s30M_, HI, LO, FH, FL, 0.0)
+L0 = build_lines(J)
 
 def _ms(h, m, s=0, day=12): return int(dtm.datetime(2026, 7, day, h, m, s, tzinfo=timezone.utc).timestamp() * 1000)
 WALKS = {  # walk -> (confirmed BIAS = leg climbed, walk start ms = the prior flip)
     '12_01': ('bear', _ms(21, 32, 0, day=11)),
     '12_02': ('bull', _ms(1, 2, 35)),
     '12_03': ('bear', _ms(3, 30, 55)),   # starts at 12_02's bear flip -> hunt next bull flip (bottom)
+    '12_04': ('bull', _ms(4, 54, 40)),   # starts at 12_03's bull flip (ceiling-90) -> hunt next bear flip (top)
 }
 
 def _polar(bias):
@@ -60,19 +69,58 @@ def _polar(bias):
         oob_climb_m=((lambda m: m > HI) if BULL else (lambda m: m < LO)),
         WOB_DIR=(-1 if BULL else 1))
 
-def run_walk(walk, depth=None, dwell=None, tee=False):
-    """Run one flip walk. depth/dwell default to the DB baseline; the sweep overrides them.
-    Returns (ev, meta) where ev=[(ts,stage,tf,note)...] and meta={bias,conf,flip,flip_ts,rc_pk}."""
+def run_walk(walk, depth=None, dwell=None, tee=False, src=None):
+    """Run one flip walk. depth/dwell default to the DB baseline; the sweep overrides them. src = a line
+    source (JigCache/jig) with swept configs; None => the module baseline L0. Returns (ev, meta)."""
     if depth is None: depth = LATCH_DEPTH
     if dwell is None: dwell = LATCH_DWELL
-    bias, CONF = WALKS[walk]; p = _polar(bias)
+    L = L0 if src is None else build_lines(src)
+    S = L['src']; ts = L['ts']; idxn = L['idxn']; E = L['E']; P = L['P']; s2r = L['s2r']
+    s1x = L['s1x']; s1m = L['s1m']; s30r_ = L['s30r_']; s30M_ = L['s30M_']; s30x_ = L['s30x_']; s30m_ = L['s30m_']; Ps30 = L['Ps30']
+    bias0, CONF = WALKS[walk]
+    ev = []; flip_ts = None
+    # --- STEP 2: s1/s2 direction cycle. NO timeout — watches from the flip until whichever fires FIRST:
+    #     (a) an s1/s2 exhaustion (LTF x-cross-pred AGAINST the current dir; r at boundary + x-cross) -> close +
+    #         OPEN THE OPPOSITE trade (reverse), re-watch from there; or
+    #     (b) any s8-cycle TF (s3..s8) r-pred'd in the current dir -> s8 climb takes over from there.
+    #     One is guaranteed, so no window is needed. (s1s2_confirm_tol_ms retired here.) ---
+    cur = bias0; cst = CONF; reverses = 0
+    while True:
+        pc = _polar(cur); cs = pc['CS']; cst_i = int(np.searchsorted(ts, cst))
+        exh = None  # (a) s1/s2 exhaustion against cur
+        for tf in (1, 2):
+            fxt = pc['fcross'](E[tf]['x'] - E[tf]['r'])
+            hit = np.flatnonzero(fxt & pc['near_ib'](E[tf]['r']) & pc['s2r_es'](s2r) & (idxn > cst_i))
+            if len(hit) and (exh is None or int(hit[0]) < exh[0]): exh = (int(hit[0]), tf)
+        rp = None   # (b) s3..s8 r-pred in cur dir (predict OR breach)
+        for tf in range(3, 9):
+            rpt = (P[tf] == cs) | pc['oob_climb'](E[tf]['r'])
+            hit = np.flatnonzero(rpt & (idxn > cst_i))
+            if len(hit) and (rp is None or int(hit[0]) < rp[0]): rp = (int(hit[0]), tf)
+        if exh is not None and (rp is None or exh[0] <= rp[0]):
+            io, otf = exh                                             # exhaustion (x-cross-pred) = step 1
+            dTF = max(DELFLOOR, otf - DELOFF)                         # delegate: TF2 -> TF1 (floor=1)
+            xD = E[dTF]['x']; rD = E[dTF]['r']                        # reversal fires at the DELEGATE x*r cross (flip dir, wob), like the main flip
+            conf = S.causal.cross_wob(xD - rD, 0.0, pc['WOB_DIR'], WOBN); fe = np.flatnonzero((conf & ~np.roll(conf, 1)) & (idxn >= io))
+            rio = int(fe[0]) if len(fe) else io; rev = 'bear' if cur == 'bull' else 'bull'
+            ev.append((int(ts[rio]), 'dir_reverse', dTF, f's{otf} exh -> del s{dTF} x*r cross -> close {cur}, open {rev}'))
+            cur = rev; cst = int(ts[rio]); reverses += 1
+            if reverses <= 60: continue
+            climb_bias = cur; climb_conf = cst; break
+        elif rp is not None:
+            io, rtf = rp; ev.append((int(ts[io]), 'dir_confirm', rtf, f's{rtf} r-pred {cur} -> s8 takes over'))
+            climb_bias = cur; climb_conf = int(ts[io]); break
+        else:
+            climb_bias = cur; climb_conf = cst; ev.append((cst, 'dir_confirm', 1, f'{cur} (no signal to end of tape)')); break
+    # --- s8 climb, from the confirmed direction/time ---
+    bias = climb_bias; CONF = climb_conf; p = _polar(bias)
     BULL = p['BULL']; FS = p['FS']; oob_supp = p['oob_climb_m']  # supporting lines OOB on the PROFITABLE (exhausted-leg) side
     fx = {tf: p['fcross'](E[tf]['x'] - E[tf]['r']) for tf in TFS}
     rpred = lambda TF, i: (P[TF][i] == p['CS']) or p['oob_climb'](E[TF]['r'][i])
     crx = np.concatenate(([False], np.sign(s1x - s1m)[1:] != np.sign(s1x - s1m)[:-1]))
     mk_idx = np.flatnonzero(crx & p['oob_climb_m'](s1m) & (ts > CONF))
-    ev = []; flip_ts = None; rung = 3; prev_mi = int(np.searchsorted(ts, CONF)); flipped = False
-    if tee: print(f"  s8-cycle walk {walk}  BIAS={bias} -> hunt {p['FLIP'].upper()} flip  start={fmt(CONF)}  depth={depth} dwell={dwell}")
+    rung = 3; prev_mi = int(np.searchsorted(ts, CONF)); flipped = False
+    if tee: print(f"  s8-cycle walk {walk}  BIAS0={bias0} -> confirmed {bias} (rev {reverses}) -> hunt {p['FLIP'].upper()} flip  start={fmt(CONF)}  depth={depth} dwell={dwell}")
     for i in mk_idx:
         if flipped: break
         hi = max([TF for TF in TFS if TF > rung and rpred(TF, i)], default=rung)
@@ -88,8 +136,8 @@ def run_walk(walk, depth=None, dwell=None, tee=False):
         if cand:
             cand.sort(); xki, etf = cand[0]; xt = int(ts[xki])
             ev.append((xt, 'x-cross-pred', etf, f'r={E[etf]["r"][xki]:.0f} x={E[etf]["x"][xki]:.0f} s2r={s2r[xki]:.0f} EXHAUST cur=s{rung}'))
-            dTF = max(2, etf - DELOFF); rD = np.asarray(J.W.line(f'r{dTF}'), float); xD = np.asarray(J.W.line(f'x{dTF}'), float)
-            conf = J.causal.cross_wob(xD - rD, 0.0, p['WOB_DIR'], WOBN); fe = np.flatnonzero((conf & ~np.roll(conf, 1)) & (ts >= xt))
+            dTF = max(DELFLOOR, etf - DELOFF); rD = E[dTF]['r']; xD = E[dTF]['x']
+            conf = S.causal.cross_wob(xD - rD, 0.0, p['WOB_DIR'], WOBN); fe = np.flatnonzero((conf & ~np.roll(conf, 1)) & (ts >= xt))
             if len(fe):
                 ict = int(fe[0]); ct = int(ts[ict]); ev.append((ct, 'flip_provisional', dTF, f"{p['FLIP'].upper()}: exh s{etf} -> del s{dTF}"))
                 rf = np.flatnonzero((Ps30 == FS) & (ts >= ct))
@@ -97,16 +145,16 @@ def run_walk(walk, depth=None, dwell=None, tee=False):
                     t0 = int(rf[0]); xc = p['fcross'](s30x_ - s30m_)
                     # s30Mage latch = held PAST-DEPTH for DWELL bars (cross_wob), then latched from the provisional
                     lvl = (LO - depth) if not BULL else (HI + depth); wdir = -1 if not BULL else 1
-                    held = J.causal.cross_wob(s30M_, lvl, wdir, dwell)
+                    held = S.causal.cross_wob(s30M_, lvl, wdir, dwell)
                     latch = np.maximum.accumulate((held & (idxn >= ict)).astype(np.int8)).astype(bool)
                     ff = np.flatnonzero(xc & oob_supp(s30m_) & latch & (idxn >= t0))
                     if len(ff):
                         flip_ts = int(ts[ff[0]])
-                        ev.append((flip_ts, 'bias_trend_flip', 1, f'FIN s30r {"HI" if FS>0 else "LO"}@{fmt(ts[t0])} x*m OOB{"LO" if not BULL else "HI"} d{depth}/w{dwell}'))
+                        ev.append((flip_ts, 'flip_finisher', 1, f'FIN s30r {"HI" if FS>0 else "LO"}@{fmt(ts[t0])} x*m OOB{"LO" if not BULL else "HI"} d{depth}/w{dwell}'))
                 flipped = True
     ev = sorted(ev, key=lambda z: z[0])
     if tee:
         print(f"  {'time':>8} {'event':>16} {'tf':>3}  note")
         for t, e, r, nt in ev: print(f"  {fmt(t):>8} {e:>16} {r:>3}  {nt}")
         if not flipped: print(f"  (no flip; current_tf s{rung})")
-    return ev, dict(bias=bias, conf=CONF, flip=p['FLIP'], flip_ts=flip_ts, rc_pk=C['rc_pk'])
+    return ev, dict(bias=bias, bias0=bias0, conf=WALKS[walk][1], climb_conf=CONF, flip=p['FLIP'], flip_ts=flip_ts, reverses=reverses, rc_pk=C['rc_pk'])

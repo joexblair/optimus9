@@ -4,10 +4,20 @@
 Research impl: `rpl_flow.py` (pre-confirm) + `rpl_s8cycle.py` (post-confirm climb).*
 
 ## Cycle (per walk)
-1. **Flip** (`bias_trend_flip`) fires → post-flip transitional state.
-2. **s1/s2 direction confirm** — s1r AND s2r `predict_breach` the same side = flip direction within
-   `s1s2_confirm_tol_ms` (240s). Opposed side → close the flip trade. Walk **terminates** at the confirm.
-3. Confirmed → **s8 cycle**: the r-pred baton passes s1/s2 → **s3** and climbs.
+1. **Flip** (`flip_finisher`) fires → post-flip transitional state.
+2. **s2-cycle (s1/s2 direction cycle)** — runs from the flip with **NO timeout**. Joe's rule, verbatim:
+   > s2-cycle needs to run until 1) any s8-cycle TF is r-pred'd, or 2) s1 or s2 create an exhaustion event. one of these 2 scenarios is 100% gauranteed to happend, so there's no need for a timeout
+
+   Reversal trigger = an **s1/s2 exhaustion** (LTF x-cross-pred against the current dir — r at the boundary +
+   an x-cross, so it can't fire at the flip seam where r sits at the opposite extreme) = **step 1**. The
+   reversal then fires at the **delegate x×r wob cross** (`dTF = max(delegate_tf_floor, etf − delegate_offset)`
+   → TF2 delegates to **TF1**), exactly as the main flip's provisional — **close the current trade AND open the
+   opposite (reverse)**, re-watch from the reversal (`dir_reverse`). On an **s8-cycle TF (s3–s8) r-pred'd in the
+   current dir** → **s8 climb takes over** (`dir_confirm`). Whichever fires first. `s1s2_confirm_tol_ms` retired.
+   *(Planned refinement: a **gcs5** 5-second finisher **follows** the delegate cross — after the exhaustion,
+   walk forward; when gcs5r & gcs5m are OOB on the exhausted-leg side and gcs5x crosses gcs5m, place the reversal.)*
+3. Confirmed → **s8 cycle** takes over rpl: the r-pred baton passes s1/s2 → **s3** and climbs. The confirm
+   **gates** the same walk's climb — it does not terminate the walk.
 
 ## Climb — current_tf (r-pred frontier)
 - **r-pred = `predict_breach`==+1 OR r has actually breached** (r ≥ HI, bias side). A breached TF stays
@@ -42,7 +52,7 @@ Research impl: `rpl_flow.py` (pre-confirm) + `rpl_s8cycle.py` (post-confirm clim
   x-cross-r wob cross on the flip side → `flip_provisional`.
 - **s30 finishing step** — the provisional is refined forward: wait for **s30r to r-pred the flip side**
   (`predict_breach` on the flip direction = the trigger the new leg is starting), then the FINAL
-  **`bias_trend_flip`** fires at the next **flip-direction s30x×s30m cross while s30m is OOB (instant) and
+  **`flip_finisher`** fires at the next **flip-direction s30x×s30m cross while s30m is OOB (instant) and
   s30Mage is LATCHED-OOB** on the profitable (exhausted-leg) side (see principle below). This lands the
   flip at the true reversal, not the early exhaustion.
 - **s30Mage latch:** the slow Mage sits OOB only intermittently at a reversal (e.g. 12_02 top: s30Mage>85

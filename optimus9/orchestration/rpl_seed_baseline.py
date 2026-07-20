@@ -19,15 +19,16 @@ KNOBS = {
         's2m':  {'kind': 'bb', 'length': 6,  'mult': 0.45, 'src': 'close'},   # s1/s2 confirm predict_breach
         's2M':  {'kind': 'bb', 'length': 37, 'mult': 0.83, 'src': 'close'},
     },
-    'tfs': {'lo': 12, 'hi': 45},   # exhaustion-ladder TF sweep range
+    'tf_ceiling': 90,              # r-pred ladder top TF (min); frontier climbs 1..ceiling. 90 (0719: 60 clipped 12_03's s89 leg -> false late flip 06:03 vs true 04:54). sweepable
     'boundary': {'hi': 85.0, 'lo': 15.0},
     'fence': {'fh': 65.0, 'fl': 35.0},          # predict_breach engage band (r-pred ladder)
     'anti': 50.0,                               # anti-fence + s2r gate: side-of-50 midline
     'vmin': 8.0,                                # x-cross-pred coarse-velocity floor
     'carry_ms': 120000,                         # seam-carry window (2min)
     's2_tf_sec': 120,                           # fast current-bias filter TF
-    'delegate_offset': 5,                       # bias_trend_flip delegates exh-5 TFs lower
-    'wob_n': 9,                                 # cross_wob debounce bars for x*r flip cross
+    'delegate_offset': 5,                       # flip_finisher delegates exh-5 TFs lower
+    'delegate_tf_floor': 1,                      # delegate TF floor: max(floor, etf-offset). 1 (0719: TF2 exhaustion needs a real faster line, not floored at itself). sweepable
+    'wob_n': 9,                                 # cross_wob debounce bars for x*r flip cross. LOCKED 9 — 0720: 9->4 pulled 12_01's main-flip finisher 00:07:55->00:04:30 (wob_n is shared with the main flip provisional). s2-cycle timing lands via gcs5, not this.
     'div_net_min': 3,                           # flip_div entry: first >=N same-side votes
     'div_horizon_ms': 1800000,                  # div search window after flip (30min)
     's1s2_confirm_tol_ms': 240000,              # post-flip direction confirm: s1r & s2r same-side within this (swept: 240s hits 3/3)
