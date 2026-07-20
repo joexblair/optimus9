@@ -20,7 +20,7 @@ HI, LO = C['boundary']['hi'], C['boundary']['lo']; FH, FL = C['fence']['fh'], C[
 DELOFF = C['delegate_offset']; WOBN = C['wob_n']; ANTI = C['anti']; BND4 = C['xcp_bnd_offset']; FLOOR = C['xcp_tf_floor']
 LATCH_DEPTH = C['latch_depth']; LATCH_DWELL = C['latch_dwell']; DELFLOOR = C['delegate_tf_floor']
 CONFIRM_TOL = C['s1s2_confirm_tol_ms']; GCS5_RTOL = C['gcs5_r_tol']
-TFS = list(range(1, C['tf_ceiling'] + 1)); end_ms = int(dtm.datetime(2026, 7, 12, 12, 15, tzinfo=timezone.utc).timestamp() * 1000)
+TFS = list(range(1, C['tf_ceiling'] + 1)); end_ms = int(dtm.datetime(2026, 7, 13, 0, 0, tzinfo=timezone.utc).timestamp() * 1000)
 fmt = lambda t: dtm.datetime.fromtimestamp(int(t) / 1000, timezone.utc).strftime('%H:%M:%S')
 
 def _mk(nm, tf, t): return kline(nm, tf, k_len=t['k_len'], rsi=t['rsi'], stc=t['stc'], src=t['src']) if t['kind'] == 'kline' else bbline(nm, tf, length=t['length'], mult=t['mult'], src=t['src'])
@@ -62,6 +62,7 @@ WALKS = {  # walk -> (confirmed BIAS = leg climbed, walk start ms = the prior fl
     '12_02': ('bull', _ms(1, 2, 35)),
     '12_03': ('bear', _ms(3, 30, 55)),   # starts at 12_02's bear flip -> hunt next bull flip (bottom)
     '12_04': ('bull', _ms(4, 54, 40)),   # starts at 12_03's bull flip (ceiling-90) -> hunt next bear flip (top)
+    '12_05': ('bear', _ms(8, 52, 45)),   # starts at 12_04's bear flip -> hunt next bull flip (bottom)
 }
 
 def _polar(bias):
@@ -132,11 +133,13 @@ def run_walk(walk, depth=None, dwell=None, tee=False, src=None):
     BULL = p['BULL']; FS = p['FS']; oob_supp = p['oob_climb_m']  # supporting lines OOB on the PROFITABLE (exhausted-leg) side
     fx = {tf: p['fcross'](E[tf]['x'] - E[tf]['r']) for tf in TFS}
     rpred = lambda TF, i: (P[TF][i] == p['CS']) or p['oob_climb'](E[TF]['r'][i])
-    crx = np.concatenate(([False], np.sign(s1x - s1m)[1:] != np.sign(s1x - s1m)[:-1]))
-    mk_idx = np.flatnonzero(crx & p['oob_climb_m'](s1m) & (ts > CONF))
+    # cadence = every EVENT bar (0720 look-ahead fix): the old s1x*s1m marker cadence had multi-min gaps, so the
+    # look-back window (prev, now] could swallow an exhaustion cross detected minutes late but stamped early (back-dated).
+    # Per-event-bar detection catches each cross at its true time — causal. (index-vs-event: use event bars, not the 5s grid.)
+    cadence = ei[ts[ei] > CONF]
     rung = 3; prev_mi = int(np.searchsorted(ts, CONF)); flipped = False
     if tee: print(f"  s8-cycle walk {walk}  BIAS0={bias0} -> confirmed {bias} (rev {reverses}) -> hunt {p['FLIP'].upper()} flip  start={fmt(CONF)}  depth={depth} dwell={dwell}")
-    for i in mk_idx:
+    for i in cadence:
         if flipped: break
         hi = max([TF for TF in TFS if TF > rung and rpred(TF, i)], default=rung)
         if hi > rung:

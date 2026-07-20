@@ -29,8 +29,12 @@ Research impl: `rpl_flow.py` (pre-confirm) + `rpl_s8cycle.py` (post-confirm clim
 - **current_tf = the highest r-pred TF, monotonic up** — never looks back. s3–s8 is the transitional
   space; if r-pred picks a TF > s8, current_tf jumps straight there, no transition. (Subsumes the old
   "HTF handoff" — it's just the frontier climbing.)
-- **Marker cadence = s1x×s1m cross while s1m OOB on the bias side** (s1m>HI for bull-confirmed). Was
-  s2x; s1x samples densely enough to catch crosses that fell in the s2x gaps. Tests advance on ticks.
+- **Cadence = every EVENT bar** (0720 look-ahead fix). The old s1x×s1m marker cadence had multi-minute gaps
+  (e.g. 12_04 08:47:15→08:55:45); the exhaustion look-back window `(prev, now]` then swallowed a cross that
+  crossed early (08:47:40) but wasn't *detected* until the late marker (08:55:45) — and the flip was stamped
+  from the early cross = **back-dated ~16 min (look-ahead)**. Per-event-bar detection catches each cross at its
+  true time = causal. [measured vs detect/capwin fixes: perbar keeps the true cross times, the others delay
+  every exhaustion.] (index-vs-event, `quirks_to_remember.md`: iterate event bars, not the 5s grid.)
 - **Emerging lines only — seam-carry REMOVED.** It protected the (dropped) velocity calc and lagged
   every line ~2min at each bar seam, hiding real crosses AND breaches. Emerging = what TV / o9-live see.
 
