@@ -148,9 +148,9 @@ def run_chain(seed_bias='bear', seed_start=None, depth=None, dwell=None, tee=Fal
         conf = S.causal.cross_wob(xD - rD, 0.0, pc['WOB_DIR'], WOBN); fe = np.flatnonzero((conf & ~np.roll(conf, 1)) & (idxn >= io))
         rio = int(fe[0]) if len(fe) else io
         ev.append((int(ts[rio]), 'flip_provisional', dTF, f'{rev.upper()}: exh s{otf} -> del s{dTF}'))
-        ex = g5x[ei]; em = g5m[ei]; roob = pc['oob_climb'](g5r[ei]); oob_tol = roob.copy()
-        for _w in range(1, GCS5_RTOL): oob_tol[_w:] |= roob[:-_w]
-        gate_ev = pc['fcross'](ex - em) & oob_tol & (ei > rio)
+        ex = g5x[ei]; em = g5m[ei]; roob = pc['oob_climb'](g5r[ei])   # gcs5 finisher: LATCH gcs5r OOB from the provisional,
+        latch = np.maximum.accumulate((roob & (ei > rio)).astype(np.int8)).astype(bool)  # fire at the first flip-dir gcs5x*gcs5m cross while latched
+        gate_ev = pc['fcross'](ex - em) & latch & (ei > rio)
         gc = np.flatnonzero(gate_ev); rev_i = int(ei[gc[0]]) if len(gc) else rio
         ev.append((int(ts[rev_i]), 'flip_finisher', 1, f'RC gcs5 {cur}->{rev} s{otf}exh'))
         return rev_i, rev, ev
