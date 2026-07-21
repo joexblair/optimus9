@@ -42,6 +42,10 @@ KNOBS = {
     'finisher_s30r_near_dwell': 2,               # 0720: consecutive event bars s30r must hold within-slip before the fire counts (kills 08:55:50-type blips). sweepable
     'finisher_s1r_boundary_slip': 25,            # 0720: s1r must be within this of ITS OWN OOB boundary (s1r>HI-25 / s1r<LO+25) at the fire = the leg has reached its extreme. Rejects premature onside pokes (12_04 08:54 s1r=52). Sweep plateau 20-30. sweepable
     'exit_tf_floor': 4,                          # 0721: lowest TF the counter-trend EXIT (option 1) watches for a trend re-breach. Floor=4 keeps s3 in the s2-cycle: s3 blip-breaches (09:27 bear) and blurs the s2/s8 boundary, firing the exit ~20min early. sweepable
+    'retest_proximity_pct': 0.2,                 # 0721 retest: px_smooth (event-tape DEMA) must be within this % of the prior s1Mage-OOB-excursion max to count as a retest of that high/low. sweepable
+    'retest_vote_min': 3,                        # 0721 retest: min divergence votes (of s1/s2 {r,Mage} = 4) weaker at the retest than at the prior-high floater. 10:20 measured 4/4. sweepable
+    'retest_vote_tfs': [1, 2],                   # 0721 retest: TFs whose r+Mage vote on divergence (s1/s2; add 3 to widen). Each TF contributes 2 votes (r, Mage). sweepable
+    'retest_min_ib_sec': 120,                    # 0721 retest: s1Mage must be genuinely IB for >= this between OOB excursions (else adjacent micro-wiggles pair as false retests). The real 10:20 retest had ~25min IB. sweepable
 }
 
 db = DatabaseManager(**get_db_config()); db.connect()

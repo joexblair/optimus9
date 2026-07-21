@@ -16,12 +16,17 @@ from optimus9.db.rpl_event_store import RplEventStore
 from optimus9.orchestration.rpl_cache import cache_jig
 
 # --- config (once) ---
-_db = DatabaseManager(**get_db_config()); _db.connect(); _st = RplEventStore(_db); C = _st.load_config('baseline'); _db.disconnect()
+_db = DatabaseManager(**get_db_config()); _db.connect(); _st = RplEventStore(_db); C = _st.load_config('baseline')
+_sysrow = _db.execute("SELECT pxsmooth_dema_src, pxsmooth_dema_len FROM optimus9_system LIMIT 1", fetch=True)   # px_smooth params (canonical, shared with bl_detect)
+PXS_CFG = {'src': _sysrow[0]['pxsmooth_dema_src'], 'len': _sysrow[0]['pxsmooth_dema_len']} if _sysrow else {'src': 'close', 'len': 2}
+_db.disconnect()
 HI, LO = C['boundary']['hi'], C['boundary']['lo']; FH, FL = C['fence']['fh'], C['fence']['fl']; LN = C['lines']
 DELOFF = C['delegate_offset']; WOBN = C['wob_n']; ANTI = C['anti']; BND4 = C['xcp_bnd_offset']; FLOOR = C['xcp_tf_floor']
 LATCH_DEPTH = C['latch_depth']; LATCH_DWELL = C['latch_dwell']; DELFLOOR = C['delegate_tf_floor']
 FIN_S30R_SLIP = C['finisher_s30r_boundary_slip']; FIN_NEAR_DWELL = C['finisher_s30r_near_dwell']; FIN_S1R_SLIP = C['finisher_s1r_boundary_slip']
 EXIT_TF_FLOOR = C['exit_tf_floor']
+RETEST_PROX = C['retest_proximity_pct']; RETEST_VOTE_MIN = C['retest_vote_min']; RETEST_VOTE_TFS = list(C['retest_vote_tfs'])
+RETEST_MIN_IB_MS = C['retest_min_ib_sec'] * 1000
 CONFIRM_TOL = C['s1s2_confirm_tol_ms']; GCS5_RTOL = C['gcs5_r_tol']
 TFS = list(range(1, C['tf_ceiling'] + 1)); end_ms = int(dtm.datetime(2026, 7, 13, 0, 0, tzinfo=timezone.utc).timestamp() * 1000)
 fmt = lambda t: dtm.datetime.fromtimestamp(int(t) / 1000, timezone.utc).strftime('%H:%M:%S')
@@ -50,13 +55,13 @@ def build_lines(src):
     P = {TF: predict_breach(E[TF]['r'], E[TF]['m'], E[TF]['M'], HI, LO, FH, FL, 0.0) for TF in TFS}
     s30r_ = np.asarray(src.W.line('s30r'), float); s30M_ = np.asarray(src.W.line('s30M'), float)
     s30x_ = np.asarray(src.W.line('s30x'), float); s30m_ = np.asarray(src.W.line('s30m'), float)
-    return dict(src=src, ts=ts, n=len(ts), idxn=np.arange(len(ts)), ei=np.flatnonzero(evt), E=E, P=P, s2r=E[2]['r'],
+    return dict(src=src, ts=ts, n=len(ts), idxn=np.arange(len(ts)), ei=np.flatnonzero(evt), E=E, P=P, s2r=E[2]['r'], pxs=getattr(src, 'pxs', None),
                 s1x=np.asarray(src.W.line('s1x'), float), s1m=np.asarray(src.W.line('s1m'), float),
                 s30r_=s30r_, s30M_=s30M_, s30x_=s30x_, s30m_=s30m_,
                 g5r=np.asarray(src.W.line('gcs5r'), float), g5m=np.asarray(src.W.line('gcs5m'), float), g5x=np.asarray(src.W.line('gcs5x'), float),
                 Ps30=predict_breach(s30r_, s30m_, s30M_, HI, LO, FH, FL, 0.0))
 
-J = cache_jig(end_ms, 40, 600, _ovr)
+J = cache_jig(end_ms, 40, 600, _ovr, pxs_cfg=PXS_CFG)
 L0 = build_lines(J)
 
 def _ms(h, m, s=0, day=12): return int(dtm.datetime(2026, 7, day, h, m, s, tzinfo=timezone.utc).timestamp() * 1000)
@@ -74,6 +79,34 @@ def _polar(bias):
         WOB_DIR=(-1 if BULL else 1))
 
 _REV = hashlib.md5(open(__file__, 'rb').read()).hexdigest()[:12]
+
+def retest_scan(direction='bear'):
+    """Detect double-top/bottom RETESTS (causal). direction='bear' = hi-breach short (retest a prior high).
+    Trigger = s1Mage re-enters OOB (was IB). Reference = the max/min px_smooth over the PRIOR s1Mage-OOB
+    excursion. Declared at the first event bar of the current excursion where px_smooth is within
+    retest_proximity_pct of that reference AND s1/s2 {r,Mage} show >= retest_vote_min divergence votes
+    (weaker momentum at the equal extreme) vs the reference bar. Returns [(declare_ts, ref_ts, votes), ...]."""
+    L = L0; E = L['E']; ts = L['ts']; pxs = L['pxs']; ei = L['ei']
+    hi = (direction == 'bear'); s1M = E[1]['M']
+    oob = (s1M > HI) if hi else (s1M < LO)
+    eb = ei[oob[ei]]                                              # event bars that are OOB
+    if len(eb) == 0: return []
+    brk = np.flatnonzero(np.diff(ts[eb]) >= RETEST_MIN_IB_MS)     # new excursion only after a GENUINE IB dwell (merge micro-wiggles)
+    starts = np.concatenate(([eb[0]], eb[brk + 1])); ends = np.concatenate((eb[brk], [eb[-1]]))
+    out = []
+    for k in range(1, len(starts)):
+        seg = pxs[starts[k - 1]:ends[k - 1] + 1]                  # prior excursion (whole excursion)
+        ref_i = starts[k - 1] + (int(np.nanargmax(seg)) if hi else int(np.nanargmin(seg))); ref = pxs[ref_i]
+        for j in ei[(ei >= starts[k]) & (ei <= ends[k])]:        # current excursion, event bars
+            if abs(pxs[j] - ref) / ref * 100.0 > RETEST_PROX: continue
+            votes = 0
+            for tf in RETEST_VOTE_TFS:
+                for arr in (E[tf]['r'], E[tf]['M']):
+                    votes += (arr[j] < arr[ref_i]) if hi else (arr[j] > arr[ref_i])
+            if votes >= RETEST_VOTE_MIN:
+                out.append((int(ts[j]), int(ts[ref_i]), int(votes))); break
+    return out
+
 
 def _persist_chain(flips):
     """Refresh rpl_run/rpl_event for every day the chain touched: drop that day's prior runs (the chain
