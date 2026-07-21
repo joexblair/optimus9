@@ -21,6 +21,7 @@ HI, LO = C['boundary']['hi'], C['boundary']['lo']; FH, FL = C['fence']['fh'], C[
 DELOFF = C['delegate_offset']; WOBN = C['wob_n']; ANTI = C['anti']; BND4 = C['xcp_bnd_offset']; FLOOR = C['xcp_tf_floor']
 LATCH_DEPTH = C['latch_depth']; LATCH_DWELL = C['latch_dwell']; DELFLOOR = C['delegate_tf_floor']
 FIN_S30R_SLIP = C['finisher_s30r_boundary_slip']; FIN_NEAR_DWELL = C['finisher_s30r_near_dwell']; FIN_S1R_SLIP = C['finisher_s1r_boundary_slip']
+EXIT_TF_FLOOR = C['exit_tf_floor']
 CONFIRM_TOL = C['s1s2_confirm_tol_ms']; GCS5_RTOL = C['gcs5_r_tol']
 TFS = list(range(1, C['tf_ceiling'] + 1)); end_ms = int(dtm.datetime(2026, 7, 13, 0, 0, tzinfo=timezone.utc).timestamp() * 1000)
 fmt = lambda t: dtm.datetime.fromtimestamp(int(t) / 1000, timezone.utc).strftime('%H:%M:%S')
@@ -173,11 +174,11 @@ def run_chain(seed_bias='bear', seed_start=None, depth=None, dwell=None, tee=Fal
         for tf in range(3, 9):
             hit = np.flatnonzero(((P[tf] == cs) | pc['oob_climb'](E[tf]['r'])) & (idxn > cst_i))
             if len(hit) and (rp is None or int(hit[0]) < rp[0]): rp = (int(hit[0]), tf)
-        rpo = None                                        # (c) 0720 option 1: on a COUNTER-trend leg, trend r-pred = causal exit
-        if counter:
-            pt = _polar(trend); cst = pt['CS']
-            for tf in range(3, 9):
-                hit = np.flatnonzero(((P[tf] == cst) | pt['oob_climb'](E[tf]['r'])) & (idxn > cst_i))
+        rpo = None                                        # (c) 0720 option 1: on a COUNTER-trend leg, trend re-BREACH = causal exit
+        if counter:                                       # breach-only (not predict): a velocity-predict spike whipsaws a good
+            pt = _polar(trend)                            # counter-trend trade out. exit_tf_floor=4 keeps s3 in the s2-cycle: s3
+            for tf in range(EXIT_TF_FLOOR, 9):            # is fast enough to blip-breach (09:27) and blur the s2/s8 boundary.
+                hit = np.flatnonzero(pt['oob_climb'](E[tf]['r']) & (idxn > cst_i))
                 if len(hit) and (rpo is None or int(hit[0]) < rpo[0]): rpo = (int(hit[0]), tf)
         cands = [(exh[0], 'exh', exh) if exh else None, (rp[0], 'clm', rp) if rp else None, (rpo[0], 'exit', rpo) if rpo else None]
         cands = [c for c in cands if c]

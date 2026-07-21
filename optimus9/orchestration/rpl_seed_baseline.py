@@ -41,6 +41,7 @@ KNOBS = {
     'finisher_s30r_boundary_slip': 4,            # 0720: finisher fires only when s30r sits within this of its OOB boundary (s30r>HI-4 / s30r<LO+4). Anchors the fire to a real s30r cycle. sweepable
     'finisher_s30r_near_dwell': 2,               # 0720: consecutive event bars s30r must hold within-slip before the fire counts (kills 08:55:50-type blips). sweepable
     'finisher_s1r_boundary_slip': 25,            # 0720: s1r must be within this of ITS OWN OOB boundary (s1r>HI-25 / s1r<LO+25) at the fire = the leg has reached its extreme. Rejects premature onside pokes (12_04 08:54 s1r=52). Sweep plateau 20-30. sweepable
+    'exit_tf_floor': 4,                          # 0721: lowest TF the counter-trend EXIT (option 1) watches for a trend re-breach. Floor=4 keeps s3 in the s2-cycle: s3 blip-breaches (09:27 bear) and blurs the s2/s8 boundary, firing the exit ~20min early. sweepable
 }
 
 db = DatabaseManager(**get_db_config()); db.connect()

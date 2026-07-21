@@ -14,11 +14,13 @@ id (NN resets per UTC day, **`DD_01` = first flip of the day**), an `rr_run` row
   gcs5-timed. Tagged so the trade layer skips the pyramid.
 
 **Per-bar the chain watches three signals from the current leg, earliest wins:** (a) s1/s2 exhaustion-against-cur
-→ RC reversal; (b) s3–s8 r-pred-cur → climb; (c) **on a counter-trend leg only**, the **trend's** s3–s8 r-pred →
-**exit** (option 1) — closes the counter-trend leg back to the trend. (c) is scoped to counter-trend legs because
-right after any flip the opposite direction is already r-preding; watching it on a trend leg flip-flops every 5s.
-The 00:26 bear (counter to the 00:08 bull trend) exits at 00:32 when bull re-confirms — the causal exit that was
-otherwise missing until 01:48. `override_latch_ms` stays dormant (as a suppressor it would be look-ahead).
+→ RC reversal; (b) s3–s8 r-pred-cur → climb; (c) **on a counter-trend leg only**, the **trend's** re-**breach**
+on TFs `[exit_tf_floor..8]` → **exit** (option 1) — closes the counter-trend leg back to the trend. (c) is scoped
+to counter-trend legs because right after any flip the opposite direction is already r-preding; watching it on a
+trend leg flip-flops every 5s. Two guards: **breach-only** (not predict) — a velocity-predict spike whipsaws a
+good trade out (09:22 s3x-spike); and **`exit_tf_floor`=4** — s3 is fast enough to blip-breach (09:27 bear,
+~20min early) and blur the s2/s8 boundary, so the exit starts at s4. The 00:26 bear (counter to the 00:08 bull
+trend) exits at 00:32 when bull re-breaches. `override_latch_ms` stays dormant (as a suppressor it'd be look-ahead).
 
 The manual `WALKS` chain + `run_walk` retired; `run_walk`'s climb/finisher logic now lives once in `run_chain`.
 
