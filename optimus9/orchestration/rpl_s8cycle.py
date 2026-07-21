@@ -11,3 +11,11 @@ if len(sys.argv) > 2:  # "HH:MM" or "HH:MM:DD" (day defaults to 12)
     parts = sys.argv[2].split(':'); h, m = int(parts[0]), int(parts[1]); day = int(parts[2]) if len(parts) > 2 else 12
     seed_start = R._ms(h, m, 0, day=day)
 R.run_chain(seed_bias, seed_start, tee=True)
+
+# --- retest report (after the standard walk): when the divergence signalled + when the gcs5 finisher fired ---
+lo = seed_start if seed_start is not None else R._ms(21, 32, 0, day=11)
+rt = sorted([x for x in (R.retest_scan('bear') + R.retest_scan('bull')) if x['declare'] >= lo], key=lambda z: z['declare'])
+print(f"\n  RETESTS ({len(rt)})  {'declare':>10} {'gcs5 finisher':>14} {'dir':>5} {'votes':>5}  ref-extreme")
+for x in rt:
+    print(f"  {'':>10} {R.fmt(x['declare']):>10} {(R.fmt(x['finisher']) if x['finisher'] else '-'):>14} "
+          f"{('short' if x['dir'] == 'bear' else 'long'):>5} {x['votes']:>4}/4  {R.fmt(x['ref'])}")

@@ -81,14 +81,17 @@ def _polar(bias):
 _REV = hashlib.md5(open(__file__, 'rb').read()).hexdigest()[:12]
 
 def retest_scan(direction='bear'):
-    """Detect double-top/bottom RETESTS (causal). direction='bear' = hi-breach short (retest a prior high).
-    Trigger = s1Mage re-enters OOB (was IB). Reference = the max/min px_smooth over the PRIOR s1Mage-OOB
-    excursion. Declared at the first event bar of the current excursion where px_smooth is within
-    retest_proximity_pct of that reference AND s1/s2 {r,Mage} show >= retest_vote_min divergence votes
-    (weaker momentum at the equal extreme) vs the reference bar. Returns [(declare_ts, ref_ts, votes), ...]."""
-    L = L0; E = L['E']; ts = L['ts']; pxs = L['pxs']; ei = L['ei']
+    """Detect double-top/bottom RETESTS (causal), gcs5 finisher bolted on. direction='bear' = hi-breach short
+    (retest a prior high). Trigger = s1Mage re-enters OOB (was IB). Reference = max/min px_smooth over the PRIOR
+    s1Mage-OOB excursion. DECLARED at the first event bar of the current excursion where px_smooth is within
+    retest_proximity_pct of that reference AND s1/s2 {r,Mage} show >= retest_vote_min divergence votes (weaker
+    momentum at the equal extreme) vs the reference bar. The gcs5 latch finisher (times the entry) follows the
+    declare. Returns [{dir, declare, finisher, ref, votes}, ...]."""
+    L = L0; E = L['E']; ts = L['ts']; pxs = L['pxs']; ei = L['ei']; g5r = L['g5r']; g5m = L['g5m']; g5x = L['g5x']
     hi = (direction == 'bear'); s1M = E[1]['M']
     oob = (s1M > HI) if hi else (s1M < LO)
+    pc = _polar('bull' if hi else 'bear')                        # bear retest reverses a bull leg (and vice-versa)
+    ex = g5x[ei]; em = g5m[ei]; roob = pc['oob_climb'](g5r[ei]); cross = pc['fcross'](ex - em)
     eb = ei[oob[ei]]                                              # event bars that are OOB
     if len(eb) == 0: return []
     brk = np.flatnonzero(np.diff(ts[eb]) >= RETEST_MIN_IB_MS)     # new excursion only after a GENUINE IB dwell (merge micro-wiggles)
@@ -104,7 +107,11 @@ def retest_scan(direction='bear'):
                 for arr in (E[tf]['r'], E[tf]['M']):
                     votes += (arr[j] < arr[ref_i]) if hi else (arr[j] > arr[ref_i])
             if votes >= RETEST_VOTE_MIN:
-                out.append((int(ts[j]), int(ts[ref_i]), int(votes))); break
+                latch = np.maximum.accumulate((roob & (ei > j)).astype(np.int8)).astype(bool)
+                gf = ei[np.flatnonzero(cross & latch & (ei > j))]
+                fin = int(ts[gf[0]]) if len(gf) else None        # gcs5 latch finisher (entry), bolted onto the declare
+                out.append(dict(dir=direction, declare=int(ts[j]), finisher=fin, ref=int(ts[ref_i]), votes=int(votes)))
+                break
     return out
 
 
