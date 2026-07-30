@@ -34,7 +34,8 @@ KNOBS = {
     'div_horizon_ms': 1800000,                  # div search window after flip (30min)
     's1s2_confirm_tol_ms': 240000,              # post-flip direction confirm: s1r & s2r same-side within this (swept: 240s hits 3/3)
     'xcp_bnd_offset': 4,                         # x-cross-pred only tests r within this of the boundary (r>HI-4 or r<LO+4). sweepable
-    'xcp_tf_floor': 19,                          # look-back floor: x-cross-pred scans current_tf down to this TF. sweepable
+    'xcp_tf_floor': 12,                          # look-back floor: x-cross-pred scans current_tf down to this TF. sweepable
+                                                 # (0721 pooled sweep: 19->12, sole mover; minimax -0.810% -> -0.498% over 20x1.5d windows)
     'override_latch_ms': 300000,                 # a higher-TF r-pred within this window (full 5s series) suppresses a lower x-cross-pred. sweepable
     'latch_depth': 5,                            # s30Mage finishing latch: points BEYOND the OOB boundary Mage must reach before latching. LOCKED 5 (0719 sweep: kills the shallow 12_01 00:04:30 poke -> 07:55; 12_02 in-band). sweepable
     'latch_dwell': 2,                            # s30Mage finishing latch: consecutive 5s bars Mage must hold past-depth before latching. LOCKED 2 (0719 sweep: 12_01 07:55, 12_02 03:30; dwell=1 -> 12_02 03:22). sweepable

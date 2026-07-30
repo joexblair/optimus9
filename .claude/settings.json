@@ -1,0 +1,19 @@
+{
+  "worktree": {
+    "bgIsolation": "none"
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import json;print(json.dumps({'hookSpecificOutput':{'hookEventName':'UserPromptSubmit','additionalContext':open('/home/joe/thecodes/.claude/joes-convo-style.md').read()}}))\"",
+            "timeout": 10,
+            "statusMessage": "Joe's convo style"
+          }
+        ]
+      }
+    ]
+  }
+}

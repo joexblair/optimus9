@@ -37,7 +37,7 @@ class RplEventStore:
             rr_side         VARCHAR(8) NOT NULL,          -- bull / bear
             rr_window_start BIGINT, rr_window_end BIGINT, -- ms epoch
             rr_engine_rev   VARCHAR(40),                  -- flow-script md5 — reproducibility pin
-            rr_walk         VARCHAR(8),                   -- walk label DD_NN (e.g. 12_01), first flip of the day = DD_01
+            rr_walk         VARCHAR(8),                   -- walk label MMDD_NN (e.g. 0712_01), first flip of the day = MMDD_01
             rr_rollercoaster TINYINT DEFAULT 0,           -- 1 = counter-trend rollercoaster flip (NO pyramid trade); 0 = climb flip
             rr_entry_ms     BIGINT,                       -- resolved flip_div entry (NULL = none)
             rr_created_dt   DATETIME DEFAULT CURRENT_TIMESTAMP,

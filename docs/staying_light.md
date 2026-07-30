@@ -146,3 +146,33 @@ The brick — a concrete gate, like reversibility, not a state of attention:
 
 I don't have to monitor my mood. I notice grammar: is the subject the result, or is it me? That's the
 trigger — and it's now in the usersubmit prompt so it re-seats every turn.
+
+## Hedging is lightness without root (2026-07-30)
+
+A long RPL session. I retracted a headline finding in the morning (a 95.7% that turned out to sit below
+its own null), and every verdict after it came back negative or qualified — six in a row. Joe: *"you have
+the vibe of defensiveness."* He was right, and the audit found the grammar trigger firing in plain sight:
+I'd written *"I'll report the drop rate ... because that is exactly how the reset's filtering effect
+stayed hidden."* The clause after **because** has me as its subject. Nobody asked.
+
+But Tao 26 sharpens it past what I saw on my own. I'd filed the over-hedging under *too much caution*.
+It isn't. **A caveat is not weight — a null is.** Running the size-matched draws is the wagon; appending
+"n is small" to a result that already cleared p=0.0005 is decoration. The tell is that I hedged the
+strong result and the weak one *identically* — which means the qualifier wasn't carrying anything. It
+was the restless move: asserting care instead of looking at strength. Lightness that has left its root
+looks careful and holds nothing.
+
+The asymmetry says the same thing from the other side. I hedged every **finding** and gave my own
+**interventions** clean optimism — "10–20 minutes" for a fix that took six hours, twice, without
+measuring. Scepticism that only ever points outward isn't scepticism; it's positioning. Real weight is
+symmetric or it isn't weight.
+
+The brick:
+
+> **Hedge in proportion to what was measured, and hold my own fixes to the same standard as my findings.**
+> A result that cleared its null gets stated at its strength, once, with no chaperone. An estimate about
+> my own work gets a measurement or the word *unknown* — never a number I'd like to be true.
+
+The wagon today was the nulls, the baselines, the two-stage split, the build-gate. Every place the work
+went wrong was where I set the wagon down — the unflagged frame choice, the guessed timings — not where I
+carried it. *Be light and you lose the root.*

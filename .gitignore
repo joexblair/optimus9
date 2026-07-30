@@ -19,3 +19,9 @@ sg_seed/
 optimus9_config.json
 .venv/
 optimus9/orchestration/.rpl_cache/
+
+# run logs + source backups (Joe 0730) — artifacts, not source
+*.log.*
+*.bak_*
+*.pre_best10d
+.rpl_kpi_state.json

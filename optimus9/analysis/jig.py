@@ -111,6 +111,79 @@ class _Causal:
         parts = {s: self.finisher_parts(s, r_lb=rlb) for (s, rlb) in sets}
         return fin_unlatch_nof9(parts, arm, cap, side, N=N, bind_tol=bind_tol, anchor=anchor)  # cap = the arm cancel
 
+    def rpl_fin_6of9(self, arm, cap, side, sets=(('s1', 19), ('s2', 19), ('s15', 19)),
+                     N=6, bind_tol=6, anchor='breach'):
+        """[RPL·0726] The >=N-of-9 finisher the s3s4 gate hands off to (replaces the s30 latch finisher in the lab
+        chain). PURE fin_unlatch_nof9 TRIGGER — NO box qualifier: the s3s4 gate IS the qualifier, so `arm` is the
+        gate-open bar (no q15/q30 box). sets = the s1a/s2a/s15a bundles, each -> finisher_parts (= s_qualify_parts:
+        {m OOB, Mage OOB, r-in-lookback}). r_lb None -> cfg.{set}r_lb; s1/s2 have NO cfg lookback -> the sets tuple
+        must carry an explicit own-TF-bar count (as gcs5 carries 29 in fin_unlatch_6of9). cap = the arm cancel;
+        the trigger scans arm..cap. side +1 hi / -1 lo. Returns the trade bar or None."""
+        parts = {s: self.finisher_parts(s, r_lb=rlb) for (s, rlb) in sets}
+        return fin_unlatch_nof9(parts, arm, cap, side, N=N, bind_tol=bind_tol, anchor=anchor)
+
+    def s_qualify_reset(self, side, bundle='s3a'):
+        """[RPL·0729] Joe: "reset if all s3 lines are IB, or if any line is in the opposite OOB".
+        Per-bar bool = the s{bundle} qualify latch must DROP at this bar. Its own producer, not an
+        expression inside s3a_cross (SRP; same lift as delegate_tf out of _climb_to_prov).
+          side  : the qualify's side, +1 hi / -1 lo. OPPOSITE OOB is therefore lo for +1, hi for -1.
+          IB    : strictly inside the boundary, lo < v < hi — the "all quiet" reset.
+        Reads the bundle's own three lines (m / M / r). Causal: per-bar values only, no lookahead."""
+        hi, lo = self.j.cfg.hi, self.j.cfg.lo
+        L = [self.line(bundle + c) for c in ('m', 'M', 'r')]
+        all_ib = np.logical_and.reduce([(v > lo) & (v < hi) for v in L])
+        opp = np.logical_or.reduce([(v <= lo) for v in L] if side > 0 else [(v >= hi) for v in L])
+        return all_ib | opp
+
+    def s3a_cross(self, side, r_lb, wob, bundle='s3a', x='s3x', reset=False, s4r_support=None,
+                  unlatch=None):
+        """[RPL·0727] The s3a PRE-FINISHER event (Joe): the standard s{bundle} qualify — Mage-reversal + m OOB +
+        M OOB + r-in-lookback, via s_qualify — followed by a wob-debounced cross of line `x` through the bundle's
+        m toward the TRADE direction. Delegates both halves (s_qualify, cross_wob); nothing re-implemented here.
+          side  : the exhaustion side, +1 hi / -1 lo. Trade dir = -side, so a lo exhaustion (LONG) wants x to
+                  cross OVER m, a hi exhaustion (SHORT) wants x to cross UNDER m.
+          r_lb  : the qualify's r-lookback, in the r-line's OWN TF bars (s2a/s3a carry it explicitly, e.g. 19).
+          wob   : cross debounce in EMERGING 5s bars (Joe: wobs are 5s, tolerances/lookbacks are TF-relative).
+        Returns a per-bar bool: a cross CONFIRMED at this bar with a qualify already latched at/before it.
+        Causal. Which cross to act on is the CALLER's orchestration — this only defines the event.
+
+        OPT-IN (Joe 0729; both default OFF so the live chain is byte-identical to before):
+          reset        : True -> the qualify latch DROPS on s_qualify_reset (all bundle lines IB, or any in
+                         the OPPOSITE OOB). Without it the latch is a cummax over the whole tape and never
+                         resets — measured 0729: first latch 37.6 days before the test window, 100% of raw
+                         cross edges fire, 492 events/day, while the qualify itself is true on 1.7% of bars.
+          s4r_support  : line name (e.g. 's4r') whose SAME-SIDE OOB, over the SAME r_lb window, also
+                         satisfies the qualify's r term. Joe: "s3a to rely on s4r when it can't see s3r
+                         inside of its r-lookback" — for a leg that coasts into the pivot, leaving the
+                         bundle's own r waving mid-board. r_lb stays in the BUNDLE r's TF bars (Joe: "for
+                         this specific event, use s3r's lookback range").
+          unlatch      : per-bar bool; True DROPS the latch at that bar. Joe: "s3a+x-cross as a latch that
+                         unlatches when fin_6of9 fires" — the caller owns what fires, this owns the latch."""
+        qhi, qlo = self.finishers(bundle, r_lb=r_lb)
+        q = (qhi if side > 0 else qlo).copy()
+        if s4r_support:                       # ONLY the r term is relaxed; the other three are untouched
+            p = self.finisher_parts(bundle, r_lb=r_lb)
+            ns = not bool(self.j.cfg.fin_s30M_oob)
+            hi, lo = self.j.cfg.hi, self.j.cfg.lo
+            if side > 0:
+                base, own = p['Mrev_hi'] & p['m_hi'] & (p['Moob_hi'] | ns), p['rlb_hi']
+            else:
+                base, own = p['Mrev_lo'] & p['m_lo'] & (p['Moob_lo'] | ns), p['rlb_lo']
+            sup = self.line(s4r_support)
+            rlb = r_lb * (self.j.W._ls.resolve(bundle + 'r')[0] // 5)      # bundle r's own TF bars -> base bars
+            sup_ok = _rolling_any(sup >= hi if side > 0 else sup <= lo, rlb)
+            q = base & (own | sup_ok)
+        drop = np.zeros(len(q), bool)
+        if reset:
+            drop |= self.s_qualify_reset(side, bundle)
+        if unlatch is not None:
+            drop |= np.asarray(unlatch, bool)
+        latched = _latch_with_reset(q, drop) if drop.any() else (np.maximum.accumulate(q.astype(np.int8)) > 0)
+        d = -1 if side > 0 else 1                                          # trade dir = reversal of the exhaustion
+        conf = self.cross_wob(self.line(x) - self.line(bundle + 'm'), 0.0, d, wob)
+        edge = conf & ~np.r_[False, conf[:-1]]                             # rising edge = the confirmation bar
+        return edge & latched
+
     def arms(self):
         return v2_arm(self.j.W, self.j.cfg)                                 # [(i, es, bd, cap, src)]
 
@@ -146,10 +219,9 @@ class _Causal:
         RISING EDGE for the confirmation moment. Causal (reads only <= the bar). `line` = name or value array."""
         v = self.line(line) if isinstance(line, str) else np.asarray(line, float)
         side = (v < level) if direction < 0 else (v > level)
-        run = np.zeros(len(side), int); r = 0
-        for i in range(len(side)):
-            r = r + 1 if side[i] else 0
-            run[i] = r
+        idx = np.arange(len(side))                        # vectorised run-length (was a per-bar Python loop, ~13x):
+        reset = np.where(side, 0, idx + 1)                # consecutive-True count ending at i = (i+1) minus the
+        run = (idx + 1) - np.maximum.accumulate(reset)    # last False position. Bit-identical incl NaN (NaN cmp -> False).
         return run >= max(1, int(n))
 
     def pk_state(self, line_slope, price_slope, slope_floor):
@@ -484,6 +556,17 @@ if barstate.islast
                 + frag + self._labels_frag(labels, scheme))
         open(path, "w").write(body)
         return len(labels), total
+
+
+def _latch_with_reset(q, drop):
+    """[RPL·0729] Causal set/reset latch. ON from the bar `q` fires, OFF from the bar `drop` fires.
+    Vectorised as "most recent set is at or after the most recent reset" — no Python loop, no lookahead.
+    A bar that is both set and reset resolves to SET (>=), which cannot occur in practice: the reset is
+    all-lines-IB or opposite-OOB, and the qualify requires same-side m/M OOB."""
+    idx = np.arange(len(q))
+    last_q = np.maximum.accumulate(np.where(q, idx, -1))
+    last_d = np.maximum.accumulate(np.where(drop, idx, -1))
+    return (last_q >= 0) & (last_q >= last_d)
 
 
 class Jig:

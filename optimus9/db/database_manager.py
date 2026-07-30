@@ -64,7 +64,10 @@ class DatabaseManager:
                 self._conn.close()
             except Exception:
                 pass
-        self._conn = mysql.connector.connect(**self._cfg, autocommit=True)
+        # connection_timeout (Joe 0728) = 10s TCP connect ceiling. Without it an UNREACHABLE (black-holed) host
+        # hangs until the driver's own TCP timeout — which blocks `import optimus9`, since constants.py reads
+        # optimus9_system at import. A refused/absent host already fails fast; this bounds the silent case.
+        self._conn = mysql.connector.connect(**self._cfg, autocommit=True, connection_timeout=10)
         self._log.info('MySQL connected' if first else 'MySQL reconnected')
 
     def _reconnect(self, attempts: int = 6, base_delay: float = 1.0) -> None:

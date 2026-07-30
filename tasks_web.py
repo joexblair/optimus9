@@ -7,11 +7,11 @@ project's sessions. Shows two blocks:
   • Done    — every completed task across the project's sessions, newest close first
 Auto-refreshing HTML. Run:  python3 tasks_web.py [port]   →  http://localhost:8765
 """
-import sys, os, json, html, glob, datetime
+import sys, os, re, json, html, glob, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 TASKS_ROOT = '/home/joe/.claude/tasks'
-PROJECT = '/home/joe/.claude/projects/-home-joe-optimus9-docs-handover'
+PROJECT = '/home/joe/.claude/projects/-home-joe-thecodes'   # 0729: was -home-joe-optimus9-docs-handover (stale)
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
 BADGE = {'completed': ('#2ea043', '✓ done'), 'in_progress': ('#bb8009', '▶ in progress'),
          'pending': ('#6e7681', '○ pending')}
@@ -76,15 +76,70 @@ def task_row(t, rank, show_close=False):
     </tr>'''
 
 
+RUNS_DIR = os.environ.get('TASKS_WEB_RUNS', '/home/joe/.claude/jobs/eeb608d6/tmp')
+
+
+def live_procs():
+    """{run_name: pid} for runs with a process actually alive. 0730: liveness was inferred from the
+    output file's mtime, so a job that works silently for 20 minutes displayed as idle. Read /proc
+    instead — a run is live if some process's command line mentions its name."""
+    procs = []
+    for d in os.listdir('/proc'):
+        if not d.isdigit():
+            continue
+        try:
+            cmd = open(f'/proc/{d}/cmdline', 'rb').read().replace(b'\0', b' ').decode(errors='replace')
+        except Exception:
+            continue
+        if cmd.strip():
+            procs.append((int(d), cmd))
+    return procs
+
+
+def runs():
+    """Background-run outputs (*.out), newest first, each tagged with whether its process is alive."""
+    procs = live_procs()
+    me = os.getpid()
+    out = []
+    for f in sorted(glob.glob(f'{RUNS_DIR}/*.out'), key=os.path.getmtime, reverse=True):
+        try:
+            body = open(f, errors='replace').read()
+        except Exception:
+            continue
+        body = '\n'.join(l for l in body.splitlines() if ' INFO ' not in l and ' WARN ' not in l)
+        name = os.path.basename(f)[:-4]
+        age = datetime.datetime.now().timestamp() - os.path.getmtime(f)
+        # Match the run name as a SCRIPT FILENAME, not a bare substring: a 2-char name like "ab"
+        # otherwise matches "daemon"/"label" in any command line. Requires /<name>...*.py.
+        pat = re.compile(r'[/\s]' + re.escape(name) + r'\w*\.py')
+        pid = next((p for p, c in procs
+                    if p != me and pat.search(c) and 'tasks_web' not in c), None)
+        out.append(dict(name=name, body=body, mtime=os.path.getmtime(f), age=age,
+                        live=pid is not None, pid=pid, growing=age < 30))
+    # live runs first, then most recently written
+    out.sort(key=lambda r: (not r['live'], -r['mtime']))
+    return out
+
+
+def run_block(r):
+    dot = '#2ea043' if r['live'] else '#6e7681'
+    lab = 'running' if r['live'] else f"idle {int(r['age'] // 60)}m"
+    return f'''<details{" open" if r["live"] else ""}>
+      <summary><span class="dot" style="background:{dot}"></span>{html.escape(r["name"])}
+        <span class="dim">· {lab} · {datetime.datetime.fromtimestamp(r["mtime"]):%H:%M:%S}</span></summary>
+      <pre>{html.escape(r["body"])}</pre></details>'''
+
+
 def render():
     active, done = load()
     arows = '\n'.join(task_row(t, i) for i, t in enumerate(active, 1)) or \
         '<tr><td colspan="4" class="empty">no active tasks</td></tr>'
     drows = '\n'.join(task_row(t, i, show_close=True) for i, t in enumerate(done, 1))
+    rl = runs(); rblock = '\n'.join(run_block(r) for r in rl) or '<div class="empty">no runs</div>'
     done_block = f'''<h2>Completed · {len(done)} <span class="dim">(newest first)</span></h2>
       <table>{drows}</table>''' if done else ''
     return f'''<!doctype html><html><head><meta charset="utf-8">
-<meta http-equiv="refresh" content="5"><title>Optimus9 — tasks</title>
+<title>Optimus9 — tasks</title>
 <style>
   body{{font:16px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;background:#0d1117;color:#f0f6fc;margin:0;padding:26px}}
   h1{{font-size:21px;margin:0 0 2px;color:#fff}} h2{{font-size:16px;margin:30px 0 6px;color:#f0f6fc}}
@@ -100,18 +155,82 @@ def render():
   .closed{{color:#8b949e;font-size:13px;margin-top:5px}}
   .badge{{color:#fff;border-radius:999px;padding:4px 11px;font-size:13px;white-space:nowrap}}
   .empty{{color:#8b949e;text-align:center;padding:26px}}
+  details{{border:1px solid #21262d;border-radius:7px;margin:7px 0;max-width:1040px;background:#0b0f14}}
+  summary{{cursor:pointer;padding:9px 12px;font-size:14px;color:#f0f6fc;user-select:none}}
+  .dot{{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px}}
+  details pre{{margin:0;padding:10px 14px;border-top:1px solid #21262d;overflow-x:auto;
+    max-height:460px;overflow-y:auto;font:13px/1.5 ui-monospace,Menlo,monospace;color:#c9d1d9}}
 </style></head><body>
 <h1>Optimus9 — task list</h1>
-<div class="sub">{len(active)} active · {len(done)} done · auto-refresh 5s</div>
+<div class="sub" id="sub">{len(active)} active · {len(done)} done · live</div>
 <table>{arows}</table>
+<h2>Runs · <span id="nruns">{len(rl)}</span> <span class="dim">(background output, newest first)</span></h2>
+<div id="runs">{rblock}</div>
 {done_block}
+<script>
+// 0730: was a document-level auto-refresh, which reloaded the whole page every 5s and threw away
+// every expanded panel and its scroll position. Now we poll JSON and patch in place: the details
+// elements are never recreated, so their open state survives, and a log already scrolled to the
+// bottom stays pinned to the bottom.
+const RUNS = document.getElementById('runs');
+function esc(s){{const d=document.createElement('div');d.textContent=s;return d.innerHTML;}}
+async function tick(){{
+  let d; try {{ d = await (await fetch('/data', {{cache:'no-store'}})).json(); }} catch(e) {{ return; }}
+  document.getElementById('nruns').textContent = d.runs.length;
+  document.getElementById('sub').textContent = d.active + ' active · ' + d.done + ' done · live';
+  const seen = new Set();
+  d.runs.forEach((r, i) => {{
+    seen.add(r.name);
+    let el = RUNS.querySelector('details[data-run="' + CSS.escape(r.name) + '"]');
+    if (!el) {{                                   // new run: create, default collapsed unless live
+      el = document.createElement('details');
+      el.dataset.run = r.name;
+      el.innerHTML = '<summary><span class="dot"></span><b></b> <span class="dim"></span></summary><pre></pre>';
+      if (r.live) el.open = true;
+      RUNS.appendChild(el);
+    }}
+    el.querySelector('.dot').style.background = r.live ? '#2ea043' : '#6e7681';
+    el.querySelector('b').textContent = r.name;
+    el.querySelector('.dim').textContent = '· ' + r.label + ' · ' + r.clock;
+    const pre = el.querySelector('pre');
+    if (pre.textContent !== r.body) {{           // only touch the DOM when the log actually changed
+      const atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;
+      pre.textContent = r.body;
+      if (atBottom) pre.scrollTop = pre.scrollHeight;   // keep a tailing log tailing
+    }}
+    if (RUNS.children[i] !== el) RUNS.insertBefore(el, RUNS.children[i] || null);
+  }});
+  [...RUNS.querySelectorAll('details')].forEach(el => {{
+    if (!seen.has(el.dataset.run)) el.remove();
+  }});
+}}
+setInterval(tick, 5000); tick();
+</script>
 </body></html>'''
+
+
+def data():
+    """JSON for the in-place poll. Same source as render(); no HTML, so the client can patch
+    without recreating the <details> elements (which is what lost the open state)."""
+    active, done = load()
+    return json.dumps(dict(
+        active=len(active), done=len(done),
+        runs=[dict(name=r['name'], body=r['body'], live=r['live'],
+                   label=('RUNNING pid %d%s' % (r['pid'], '' if r['growing']
+                          else ' · silent %dm' % (r['age'] // 60))) if r['live']
+                         else 'finished %dm ago' % (r['age'] // 60),
+                   clock=datetime.datetime.fromtimestamp(r['mtime']).strftime('%H:%M:%S'))
+              for r in runs()]))
 
 
 class H(BaseHTTPRequestHandler):
     def do_GET(self):
-        out = render().encode()
-        self.send_response(200); self.send_header('Content-Type', 'text/html; charset=utf-8')
+        if self.path.startswith('/data'):
+            out = data().encode(); ctype = 'application/json'
+        else:
+            out = render().encode(); ctype = 'text/html; charset=utf-8'
+        self.send_response(200); self.send_header('Content-Type', ctype)
+        self.send_header('Cache-Control', 'no-store')
         self.send_header('Content-Length', str(len(out))); self.end_headers()
         self.wfile.write(out)
 

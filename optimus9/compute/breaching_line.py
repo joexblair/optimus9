@@ -18,7 +18,7 @@ import numpy as np
 
 from ..constants import BOUNDARY_HI, BOUNDARY_LO, FENCE_HI, FENCE_LO
 
-HI, LO = BOUNDARY_HI, BOUNDARY_LO    # OOB breach detection (85/15)
+HI, LO = BOUNDARY_HI, BOUNDARY_LO    # OOB breach detection — from optimus9_system.hi_boundary/.lo_boundary
 # FENCE_HI/FENCE_LO (30:70) are the no-engagement base, imported from constants —
 # its own tuning concern, NOT the RSI rescale. bl_detect pads it via --fence_pad.
 
@@ -40,19 +40,20 @@ def predict_breach(k, predictor_min_bb, predictor_maj_bb, hi=HI, lo=LO,
     near-miss still predicts. tol=0.0 is the spec'd behaviour and the default; the
     anchor must still be OOB, and K must still be inside the engage band.
     """
-    k    = np.asarray(k, float)
-    pmin = np.asarray(predictor_min_bb, float)
-    pmaj = np.asarray(predictor_maj_bb, float)
+    def _f(a):  # coerce to float WITHOUT forcing numpy: a cupy array keeps its module (GPU-batch path), lists -> numpy
+        return a.astype(float, copy=False) if hasattr(a, 'astype') else np.asarray(a, float)
+    k    = _f(k)
+    pmin = _f(predictor_min_bb)
+    pmaj = _f(predictor_maj_bb)
     anchor_hi = np.maximum(pmin, pmaj)    # prediction_anchor (hi side)
     anchor_lo = np.minimum(pmin, pmaj)    # prediction_anchor (lo side)
     pred_hi = ((k >= fence_hi) & (k < hi) & (anchor_hi >= hi) &
                ((anchor_hi - hi) + tol > (hi - k)))
     pred_lo = ((k <= fence_lo) & (k > lo) & (anchor_lo <= lo) &
                ((lo - anchor_lo) + tol > (k - lo)))
-    out = np.zeros(len(k), dtype=np.int8)
-    out[pred_hi] =  1
-    out[pred_lo] = -1
-    return out
+    # Elementwise so it batches over a (T, N) TF-stack and runs xp-agnostic (numpy or cupy). pred_hi/pred_lo are
+    # mutually exclusive (fence_hi > fence_lo => k can't be both), so hi - lo reproduces the {+1,-1,0} indexed form.
+    return pred_hi.astype(np.int8) - pred_lo.astype(np.int8)
 
 
 class BreachingLine:

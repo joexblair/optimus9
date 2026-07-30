@@ -17,6 +17,45 @@ def cache_key(end_ms, hours, warmup, ovr, pxs_cfg=None):
     for name in sorted(ovr): h.update(f'{name}={ovr[name]!r}'.encode())
     return h.hexdigest()[:16]
 
+# --- per-line cache (A, 0721): each line keyed on its OWN resolved spec (incl. TF), so a config change rebuilds
+# only the lines that changed and reuses the rest. Full 360-line builds OOM; build missing lines in memory-safe
+# batches (each Jig context ~23s fixed cost). Enables the cycle-group line sweep + coin dial-in. ---
+LINE_DIR = os.path.join(CACHE_DIR, 'lines')
+TAPE_DIR = os.path.join(CACHE_DIR, 'tape')
+BATCH_MAX = 24                                     # lines per Jig build (memory-safe; full 360 OOMs on 18GB)
+
+def _line_key(end_ms, hours, warmup, spec):
+    return hashlib.md5(f'{end_ms}|{hours}|{warmup}|{spec!r}'.encode()).hexdigest()[:20]
+
+def _tape_key(end_ms, hours, warmup, pxs_cfg):
+    return hashlib.md5(f'{end_ms}|{hours}|{warmup}|pxs={pxs_cfg!r}'.encode()).hexdigest()[:20]
+
+def cache_jig_perline(end_ms, hours, warmup, ovr, pxs_cfg=None, rebuild=False):
+    """Per-line cached build. Same JigCache surface as cache_jig, but each line is cached by its own spec so
+    a partial config change only rebuilds the changed lines. ts/evt/pxs cached once at tape level."""
+    os.makedirs(LINE_DIR, exist_ok=True); os.makedirs(TAPE_DIR, exist_ok=True)
+    lp = {n: os.path.join(LINE_DIR, _line_key(end_ms, hours, warmup, ovr[n]) + '.npy') for n in ovr}
+    tp = os.path.join(TAPE_DIR, _tape_key(end_ms, hours, warmup, pxs_cfg) + '.npz')
+    missing = [n for n in ovr if rebuild or not os.path.exists(lp[n])]
+    need_tape = rebuild or not os.path.exists(tp)
+    if missing or need_tape:
+        batches = [missing[i:i + BATCH_MAX] for i in range(0, len(missing), BATCH_MAX)] or [[]]
+        for bi, batch in enumerate(batches):
+            if not batch and not (need_tape and bi == 0): continue
+            with Jig(end_ms, hours=hours, warmup=warmup, overrides={n: ovr[n] for n in batch}) as j:
+                for n in batch:                                    # atomic write (temp+rename) so parallel workers can't tear a file
+                    tmp = lp[n] + f'.{os.getpid()}.tmp'; np.save(tmp, np.asarray(j.W.line(n), float))
+                    os.replace(tmp + ('.npy' if not tmp.endswith('.npy') else ''), lp[n])
+                if need_tape and bi == 0:
+                    evt = j.W.base['volume'].to_numpy(dtype=float) > 0
+                    td = {'__ts__': np.asarray(j.ts, np.int64), '__evt__': evt}
+                    if pxs_cfg: td['__pxs__'] = _px_smooth_evt(j.W.base, evt, pxs_cfg['src'], int(pxs_cfg['len']))
+                    np.savez(tp, **td); need_tape = False
+    d = {n: np.load(lp[n]) for n in ovr}
+    td = np.load(tp); d['__ts__'] = td['__ts__']; d['__evt__'] = td['__evt__']
+    if '__pxs__' in td.files: d['__pxs__'] = td['__pxs__']
+    return JigCache(d)
+
 def _px_smooth_evt(base, evt, src, length):
     """Event-tape px_smooth: DEMA of the price src over EVENT bars only, forward-filled onto the full 5s grid
     (same filler-invisible discipline as the jig's lines). Index px_smooth (bl_detect) folds no-trade filler
