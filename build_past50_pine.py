@@ -52,7 +52,7 @@ for i = 0 to array.size(short_t) - 1
     if t >= time - w and t < time_close
         is_short := true
 bgcolor(is_long  ? color.new(color.green, 0) : na, title = "past50_long")
-bgcolor(is_short ? color.new(color.red,   0) : na, title = "past50_short")
+bgcolor(is_short ? color.new(color.red, 47) : na, title = "past50_short")
 '''
 tag = days[0].strftime('%m%d') + ('_' + days[-1].strftime('%m%d') if len(days) > 1 else '')
 path = f'/home/joe/thecodes/past50_raw_{tag}.pine'

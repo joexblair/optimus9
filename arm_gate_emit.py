@@ -86,7 +86,7 @@ if showArm and array.binary_search(armA, time) >= 0
 if showGate and array.binary_search(gateL, time) >= 0
     bg := color.new(color.green, 0)       // gate long — priority over arm
 if showGate and array.binary_search(gateS, time) >= 0
-    bg := color.new(color.red, 0)         // gate short
+    bg := color.new(color.red, 47)         // gate short
 bgcolor(bg)
 '''
     path = "/home/joe/thecodes/arm_gate.pine"

@@ -73,8 +73,11 @@ class _W:
     def line(self, name): return self._d[name]
 
 class _Cau:
-    """Delegates cross_wob to the real jig._Causal (array input => no jig state touched)."""
+    """Delegates the ARRAY-ONLY producers to the real jig._Causal (array input => no jig state touched).
+    Methods that read self.j are deliberately NOT exposed - they would fail at call time on _Causal(None).
+    Any new array-only producer in _Causal needs a line here, or the cached path raises AttributeError."""
     def cross_wob(self, line, level, direction, n): return _Causal(None).cross_wob(line, level, direction, n)
+    def clean_dirty(self, *a, **k): return _Causal(None).clean_dirty(*a, **k)
 
 class JigCache:
     def __init__(self, d):

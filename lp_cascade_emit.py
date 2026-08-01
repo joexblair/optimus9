@@ -127,7 +127,7 @@ if showTrades
     idx = array.binary_search(tct, time)
     if idx >= 0
         ci = array.get(tci, idx)
-        bg := ci == 0 ? color.new(color.green, 0) : ci == 1 ? color.new(color.red, 0) : ci == 2 ? color.new(color.yellow, 0) : color.new(color.blue, 0)
+        bg := ci == 0 ? color.new(color.green, 0) : ci == 1 ? color.new(color.red, 47) : ci == 2 ? color.new(color.yellow, 0) : color.new(color.blue, 0)
 bgcolor(bg)
 // ── MODULE 2: cascade events (plotchar — uncapped) ──
 {pc('armL', '▲', 'belowbar', 'lime', ttl='arm long')}

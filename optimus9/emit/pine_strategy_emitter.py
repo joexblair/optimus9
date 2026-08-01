@@ -576,11 +576,11 @@ dbg_line_short = (not na(state_gca5m_c) and state_gca5m_c == -1.0) or (not na(st
 s5_pk_final_effective = use_passthrough ? pk_raw : s5_pk_final
 
 bgcolor(show_dbg_line_state and dbg_line_long  ? color.new(color.green, 0) : na, title='dbg_line_long')
-bgcolor(show_dbg_line_state and dbg_line_short ? color.new(color.red,   0) : na, title='dbg_line_short')
+bgcolor(show_dbg_line_state and dbg_line_short ? color.new(color.red, 47) : na, title='dbg_line_short')
 bgcolor(show_dbg_pk_raw     and pk_raw ==  1   ? color.new(color.lime,  0) : na, title='dbg_pk_raw_long')
-bgcolor(show_dbg_pk_raw     and pk_raw == -1   ? color.new(color.red,   0) : na, title='dbg_pk_raw_short')
+bgcolor(show_dbg_pk_raw     and pk_raw == -1   ? color.new(color.red, 47) : na, title='dbg_pk_raw_short')
 bgcolor(show_dbg_s5_final   and s5_pk_final_effective ==  1 ? color.new(color.lime, 0) : na, title='dbg_s5_final_long')
-bgcolor(show_dbg_s5_final   and s5_pk_final_effective == -1 ? color.new(color.red,  0) : na, title='dbg_s5_final_short')
+bgcolor(show_dbg_s5_final   and s5_pk_final_effective == -1 ? color.new(color.red,47) : na, title='dbg_s5_final_short')
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STRATEGY ENTRIES + BRACKET EXITS

@@ -211,6 +211,45 @@ class _Causal:
         consecutive same-direction steps (wob<=0 = first slope-flip). Causal — fires from steps <= the bar."""
         return np.asarray(_mage_rev(np.asarray(line, float), wob))
 
+    def clean_dirty(self, r, x, side, hi, lo, fh, fl, wob, mode='exhv2', spend_bars=None):
+        """[PRODUCER · Joe 0731] The clean/dirty flag on one r line. Causal, no lookahead.
+
+        A line is DIRTY when its move is spent and has not re-formed. It exists to stop an r-pred firing
+        on a line retreating from OOB back down through the FH..HI band - the same band a genuine
+        pre-breach prediction occupies.
+
+          dirty <- the line has LEFT ITS FENCE and a spend fires
+          clean <- EITHER of two scenarios, both first-class (verbatim for RPL and exhv2):
+                     1. x crosses BACK through r. A higher TF spent the line early; price swung back and
+                        x travelled back out to OOB to collect the swing.
+                     2. r returns to the FH/FL fence.
+          lines start DIRTY - at bar 0 a line already outside its fence cannot be told from a retreat.
+
+        mode selects the SPEND only; everything else is shared.
+          'rpl'    spend_bars = bar indices of applied exhaustions (GLOBAL - any TF, matching bias).
+          'exhv2'  spend = THIS line's own x crossing r or the boundary. Line-local, no exhaustion.
+                   Joe 0731: "'exhaustion' only applies to RPL. The definition needs to state 'an x
+                   crossing boundary or r'."
+
+        side: +1 bull (fence FH, boundary HI, spends DOWNWARD) / -1 bear (FL, LO, spends UPWARD).
+        Every crossing is cross_wob-debounced at `wob` - raw r>=FH flickers exactly as predict_breach does.
+        Returns the boolean dirty[] over the full tape."""
+        r = np.asarray(r, float); x = np.asarray(x, float)
+        d = -1 if side > 0 else 1                       # bull spends downward through r / the boundary
+        out = self.cross_wob(r - (fh if side > 0 else fl), 0.0, 1 if side > 0 else -1, wob)
+        edge = lambda delta, k: (lambda c: c & ~np.r_[False, c[:-1]])(self.cross_wob(delta, 0.0, k, wob))
+        if mode == 'rpl':
+            spend = np.zeros(len(r), bool)
+            if spend_bars is not None and len(spend_bars):
+                spend[np.asarray(spend_bars, int)] = True
+        elif mode == 'exhv2':
+            spend = edge(x - r, d) | edge(x - (hi if side > 0 else lo), d)
+        else:
+            raise ValueError('clean_dirty mode must be rpl or exhv2, got %r' % mode)
+        back = ~out & np.r_[False, out[:-1]]            # r re-entered the fence
+        recov = edge(x - r, -d) | back                  # x back through r, OR fence re-entry
+        return ~_latch_with_reset(recov, spend & out)   # starts dirty; set-wins-on-ties via the latch
+
     def cross_wob(self, line, level, direction, n):
         """Wobble-debounced boundary crossover ('crossover_wob', from the CP1 hs30x arm, hand-rolled there).
         direction=-1: `line` crossed UNDER `level`; +1: crossed OVER. The cross is CONFIRMED once the line has
@@ -500,8 +539,32 @@ if barstate.islast
         open(path, "w").write(body)
         return len(labels)
 
-    def _bgcolor_frag(self, streams, opacity=0, notes=None):
-        """Pine bgcolor fragment from named 5s-timestamp streams (the array-bgcolor pattern — arm_gate_emit,
+    def _bgcolor_frag(self, streams, opacity=None, notes=None):
+        """### FORMAT IS LOCKED - DO NOT CHANGE IT WITHOUT JOE'S AUTHORISATION (Joe 0731). ###
+        The emitted shape is: header note -> indicator() -> one input.bool per stream -> one f_<name>()
+        array function per stream -> the array calls -> `bg = color(na)` -> one `if` per stream assigning
+        `bg :=` with a LITERAL transparency -> a SINGLE bgcolor(bg). Joe 0731 pasted the target block:
+
+            bg = color(na)
+            if show_s_walk_hi and array.binary_search(s_walk_hi, time) >= 0
+                bg := color.new(color.blue, 0)
+            if show_s_walk_lo and array.binary_search(s_walk_lo, time) >= 0
+                bg := color.new(color.yellow, 0)
+            if show_s_sig_short and array.binary_search(s_sig_short, time) >= 0
+                bg := color.new(color.red, 47)
+            if show_s_sig_long and array.binary_search(s_sig_long, time) >= 0
+                bg := color.new(color.green, 0)
+            bgcolor(bg)
+
+        I have broken this TWICE in one session - once by "improving" it to per-stream bgcolor() calls,
+        once by replacing the literals with an `opac` input slider. Both were reverted. Colours, stream
+        order, toggle labels, the literal transparencies, the single bgcolor(bg) - none of it changes on
+        my judgement.
+        KNOWN AND ACCEPTED: a single `bg` var means the LAST matching `if` wins, so on a shared bar the
+        later stream hides the earlier one. Order is priority. That is a property of the format, not a
+        bug to fix unilaterally.
+
+        Pine bgcolor fragment from named 5s-timestamp streams (the array-bgcolor pattern — arm_gate_emit,
         lp_cascade_emit, og_arm_emit all hand-rolled this; now it lives once here). Returns (frag, hdr, total);
         emit_bgcolor wraps it standalone, emit_overlay stacks labels on top.
 
@@ -529,8 +592,15 @@ if barstate.islast
             d, c, cnt = emit_arr(nm, s['ts']); total += cnt
             defs.append(d); calls.append(c)
             toggles.append('show_%s = input.bool(true, "%s (%s)")' % (nm, label, s['color'].split('.')[-1]))
+            # PER-STREAM LITERAL transparency. Joe 0731 pasted the target block verbatim:
+            #   blue 0 | yellow 0 | red 47 | green 0
+            # RED_BG_TRANSP = 47 applies to color.red ONLY (a solid red bgcolor masks the bearish candle
+            # body); every other stream keeps the caller's `opacity`. NO `opac` input - I added one and
+            # Joe rejected it. A stream may still override with an explicit per-stream 'opacity' key.
+            op = int(s['opacity']) if s.get('opacity') is not None else (
+                RED_BG_TRANSP if s['color'] == 'color.red' else (opacity or 0))
             paints.append('if show_%s and array.binary_search(%s, time) >= 0\n'
-                          '    bg := color.new(%s, %d)' % (nm, nm, s['color'], opacity))
+                          '    bg := color.new(%s, %d)' % (nm, nm, s['color'], op))
         frag = ("\n".join(toggles) + "\n" + "\n".join(defs) + "\n" + "\n".join(calls)
                 + "\nbg = color(na)\n" + "\n".join(paints) + "\nbgcolor(bg)\n")
         # `notes` = the config the emit was BUILT from, carried into the .pine as a comment block (Joe 0713).
@@ -542,7 +612,7 @@ if barstate.islast
             hdr = "\n".join('// ' + ln for ln in lines) + "\n"
         return frag, hdr, total
 
-    def emit_bgcolor(self, streams, path, title, opacity=0, notes=None):
+    def emit_bgcolor(self, streams, path, title, opacity=None, notes=None):
         frag, hdr, total = self._bgcolor_frag(streams, opacity, notes)
         body = '//@version=5\n' + hdr + 'indicator("%s", overlay = true)\n' % title + frag
         open(path, "w").write(body)
@@ -556,6 +626,10 @@ if barstate.islast
                 + frag + self._labels_frag(labels, scheme))
         open(path, "w").write(body)
         return len(labels), total
+
+
+RED_BG_TRANSP = 47      # bgcolor red transparency (0 solid .. 100 invisible) - Joe 0731, red was hiding
+                        # the bearish candle bodies. Applies to color.red bgcolor streams only.
 
 
 def _latch_with_reset(q, drop):

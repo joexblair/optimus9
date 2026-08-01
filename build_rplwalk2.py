@@ -92,10 +92,14 @@ def line_state(tf, dr, exh_ms):
 
     dirty <- an exhaustion prints ANYWHERE (matching bias) while this line is outside its fence.
              The spend signal is system-wide: 5069 of 5238 suppressions are cross-TF.
-    clean <- x crosses back through r on THIS line. The recovery signal is line-local, so a line that
-             re-armed on its own terms is not held to another timeframe's event.
+    clean <- EITHER of two line-local scenarios (Joe 0731, verbatim for RPL and exhv2):
+             1. x crosses back through r. A higher TF spent the line early; price swung back and x
+                travelled back out to OOB to collect the swing.
+             2. r returns to the FH/FL fence.
+             The recovery signal is line-local, so a line that re-armed on its own terms is not held to
+             another timeframe's event.
     Lines start DIRTY: at bar 0 a line already outside the fence cannot be told from a retreat. The first
-    recovery of either kind (x back through r, or r re-entering the fence) resolves it.
+    recovery of either kind resolves it.
     Fence crossings are cross_wob-debounced at WOBN, like every other cross in the chain - raw r>=FH
     flickers exactly as predict_breach does.
     2nd x r-pred (Joe 0730): the label belongs ONLY where a HIGHER TF created the exhaustion and this
@@ -112,10 +116,16 @@ def line_state(tf, dr, exh_ms):
     xo = (E['x'] >= R.HI) if dr > 0 else (E['x'] <= R.LO)               # x out of bounds
     ev = sorted([(int(np.searchsorted(ts, m)), 'X', int(etf)) for m, etf in exh_ms]
                 + [(int(i), 'C', 0) for i in np.flatnonzero(rearm | back)])
-    clean = np.zeros(n, bool); dby = np.zeros(n, np.int16); pend = np.zeros(n, bool)
+    # THE FLAG comes from the jig producer (Joe 0731: "this should be a producer in the jig, not a method
+    # in RPL"). mode='rpl' -> the spend is the GLOBAL applied-exhaustion set. The loop below no longer
+    # computes the flag; it derives only the RPL-specific labels dby (which TF spent it) and pend (the
+    # 2nd-x arming), which the producer has no business knowing about.
+    clean = ~S.causal.clean_dirty(E['r'], E['x'], dr, R.HI, R.LO, R.FH, R.FL, R.WOBN, mode='rpl',
+                                  spend_bars=[int(np.searchsorted(ts, m)) for m, _ in exh_ms])
+    dby = np.zeros(n, np.int16); pend = np.zeros(n, bool)
     cur, src, pending, last = False, 0, False, 0
     for i, kind, etf in ev:
-        clean[last:i] = cur; dby[last:i] = src; pend[last:i] = pending; last = i
+        dby[last:i] = src; pend[last:i] = pending; last = i
         if kind == 'X':
             if out[i] and cur:
                 cur = False; src = etf; pending = False   # re-spent; src keeps WHICH TF spent it
@@ -123,7 +133,7 @@ def line_state(tf, dr, exh_ms):
             if not cur and src > tf:     # ONLY a HIGHER-TF exhaustion earns the 2nd x label (Joe 0730)
                 pending = True
             cur = True
-    clean[last:] = cur; dby[last:] = src; pend[last:] = pending
+    dby[last:] = src; pend[last:] = pending
     return clean, dby, pend, xo
 
 

@@ -107,10 +107,16 @@ pre-breach prediction occupies — and re-triggers `predict_breach`.
 | event | condition | scope |
 |---|---|---|
 | **dirty** | an exhaustion prints **AND** this line is outside its fence | **global** — any exhaustion, any TF, matching bias |
-| **clean** | x crosses back through r on **this** line | **line-local** |
+| **clean** | **either** x crosses back through r **or** r returns to the FH/FL fence | **line-local** |
 
-- bull: outside the fence = `r ≥ FH`; clean = x crosses **over** r (`fx_bear[tf]`)
-- bear: outside the fence = `r ≤ FL`; clean = x crosses **under** r (`fx_bull[tf]`)
+- bull: outside the fence = `r ≥ FH`; clean = x crosses **over** r (`fx_bear[tf]`), **or** r falls back below FH
+- bear: outside the fence = `r ≤ FL`; clean = x crosses **under** r (`fx_bull[tf]`), **or** r rises back above FL
+- **two clean scenarios, both first-class** (Joe 0731, verbatim for RPL and exhv2):
+  1. **x crosses back through r** — a higher TF spent the line early; price swung back and x travelled
+     back out to OOB to collect the swing
+  2. **r returns to the FH/FL fence**
+- both are live in `line_state` (`rearm | back`). Earlier drafts of this doc listed only the first and
+  presented fence re-entry as a warm-start special case — that was a documentation defect, not a code one
 - the asymmetry is deliberate — the exhaustion is a **system-wide spend signal**, the x/r cross is a
   **per-line recovery signal**. A line that re-armed on its own terms is not held to another timeframe's
   event
@@ -127,8 +133,12 @@ r      2              2               85.1    86.5    87.9
 **65 of 208** applied exhaustions fire with r **inside** the 30/70 fence; only 7 with r OOB. 205 of 208 are
 leg b, which is **x** crossing the boundary and says nothing about r.
 
-**Why the clean event is the x/r cross, not r re-entering the fence.** Measured over 18,334 r-pred episodes
-from 05-18:
+**Why fence re-entry alone is not enough.** The live rule ORs both scenarios (`rearm | back`), so dirty
+clears on whichever comes first. The measurement below compared the two **in isolation** — neither arm is
+what the code runs. It is kept because it shows what each contributes: the fence-only arm suppresses 29% of
+episodes and 97% of that is cross-line, so the x/r scenario is what makes the flag usable. **Live
+suppression is at most the 3% of the x/r arm, and in practice lower**, because the union clears sooner than
+either alone. Measured over 18,334 r-pred episodes from 05-18:
 
 ```
 clean = r re-enters the fence   -> suppressed  5238 (29%)

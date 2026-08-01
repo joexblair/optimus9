@@ -10,7 +10,7 @@ import numpy as np, datetime as dtm, hashlib
 from datetime import timezone
 from optimus9 import DatabaseManager
 from optimus9.config import get_db_config
-from optimus9.analysis.jig import kline, bbline
+from optimus9.analysis.jig import kline, bbline, _latch_with_reset
 from optimus9.compute.breaching_line import predict_breach
 from optimus9.db.rpl_event_store import RplEventStore
 from optimus9.orchestration.rpl_cache import cache_jig
@@ -285,7 +285,20 @@ def _climb_to_prov(bias, conf_i, xpred_thresh=None, xpred_band=None):
     L = L0; S = L['src']; ts = L['ts']; E = L['E']; P = L['P']; s2r = L['s2r']; ei = L['ei']
     fxB = L['fx_bull']; fxb = L['fx_bear']
     p = _polar(bias); fx = fxB if p['BULL'] else fxb
-    rpred = lambda TF, i: (P[TF][i] == p['CS']) or p['oob_climb'](E[TF]['r'][i])
+    # Joe 0731: the x/r cancel, propagated from build_rplwalk2.rp_matrix into the LIVE climb. A
+    # predict_breach state survives its own invalidation - x can cross back through r while P still reads
+    # CS - which kept a spent TF participating (s69: an 8.2-min r-pred at 0518 20:42 still counted at the
+    # 0520 10:26 exhaustion, 37.75 h later). The run is now a latch: set on the predict rising edge, reset
+    # by the polarity-matched cross already in `fx`. oob_climb is NOT cancelled - r out of bounds is a
+    # fact, not a prediction. Cached on L0 so a rebuild invalidates it.
+    # NOT propagated: the clean/dirty gate. It needs the applied-exhaustion bars, which this function has
+    # no causal access to in batch - see rpred_spec.md §6 and task #25.
+    _lv = L.setdefault('_rpred_live', {})
+    if bias not in _lv:
+        _lv[bias] = {TF: _latch_with_reset((lambda q: q & ~np.r_[False, q[:-1]])(P[TF] == p['CS']),
+                                           np.asarray(fx[TF], bool)) for TF in TFS}
+    live = _lv[bias]
+    rpred = lambda TF, i: bool(live[TF][i]) or p['oob_climb'](E[TF]['r'][i])
     CONF = int(ts[conf_i]); cadence = ei[ts[ei] > CONF]
     rung = 3; prev_mi = conf_i; ev = []
     for i in cadence:

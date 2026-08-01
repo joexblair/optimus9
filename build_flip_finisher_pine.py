@@ -65,7 +65,7 @@ for i = 0 to array.size(short_t) - 1
     if t >= time - w and t < time_close
         is_short := true
 bgcolor(is_long  ? color.new(color.green, 0) : na, title = "flip_finisher_long")
-bgcolor(is_short ? color.new(color.red,   0) : na, title = "flip_finisher_short")
+bgcolor(is_short ? color.new(color.red, 47) : na, title = "flip_finisher_short")
 '''
 tag = days[0].replace('-', '')[4:] + ('_' + days[-1].replace('-', '')[4:] if len(days) > 1 else '')
 path = f'/home/joe/thecodes/flip_finisher_{tag}.pine'

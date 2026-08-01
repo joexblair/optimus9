@@ -38,7 +38,7 @@ for i = 0 to array.size(t_arr) - 1
     tt = array.get(t_arr, i)
     if tt >= time and tt < time + dur
         cidx = array.get(ci_arr, i)
-        bg := cidx == 0 ? color.new(color.green, 0) : cidx == 1 ? color.new(color.red, 0) : cidx == 2 ? color.new(color.yellow, 0) : color.new(color.blue, 0)
+        bg := cidx == 0 ? color.new(color.green, 0) : cidx == 1 ? color.new(color.red, 47) : cidx == 2 ? color.new(color.yellow, 0) : color.new(color.blue, 0)
         break
 bgcolor(bg)
 var int bias = 0

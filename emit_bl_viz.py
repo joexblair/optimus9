@@ -130,7 +130,7 @@ plotshape(showPk and array.includes(pu, ms), style=shape.triangleup,   location=
 plotshape(showPk and array.includes(pd, ms), style=shape.triangledown, location=location.abovebar, color=color.new(color.fuchsia, 0), size=size.tiny, title="pk short")
 bgcolor(showGate and gc ? color.new(color.white, 0) : na, title="bny30 closed")
 bgcolor(showTrades and array.includes(tL, ms) ? color.new(color.green, 0) : na, title="trade long")
-bgcolor(showTrades and array.includes(tS, ms) ? color.new(color.red, 0)   : na, title="trade short")
+bgcolor(showTrades and array.includes(tS, ms) ? color.new(color.red, 47)   : na, title="trade short")
 '''
     open(OUT, 'w').write(pine)
     nlab = sum(len(trans(sm[n])) for n in LINES)
