@@ -288,19 +288,37 @@ def main(argv):
         if not len(oob):
             continue
         cand = (oob + i + 1).tolist()                  # every held s4Mage OOB crossing after the r-pred
+
+        def _derive(b):
+            """side / MFE-side / eff-bias dir / momentum, all read AT bar b."""
+            sd = 'hi' if M4[b] >= R.HI else 'lo'
+            wt = 'hi' if dr > 0 else 'lo'
+            mf = int(sd != wt)
+            ed = -dr if mf else dr                     # MFE side -> bias reverses
+            return sd, mf, ed, {tf: momo(E[tf]['r'], ed, b) for tf in (15, 22)}
+
         k = hops = 0
         w = cand[0]
         while True:
-            side = 'hi' if M4[w] >= R.HI else 'lo'
-            want = 'hi' if dr > 0 else 'lo'
-            mfe = int(side != want)
-            edr = -dr if mfe else dr                   # MFE side -> bias reverses
-            st = {tf: momo(E[tf]['r'], edr, w) for tf in (15, 22)}
+            side, mfe, edr, st = _derive(w)
             if not REWALK or st[22][0] != 'momo' or k + 1 >= len(cand):
                 break
             if REWALK == 1 and hops >= 1:              # one hop only
                 break
             k += 1; hops += 1; w = cand[k]
+        # REWALK 3 (Joe 0801): the loop above settles on the first bar s22 is NO LONGER momo, which is the
+        # moment momentum ends. Take ONE more s4Mage cycle past it, unconditionally, so the walk lands on a
+        # bar that has been quiet for a full cycle. 38 of 87 settle on `sideways`/`curl` rather than `none`,
+        # i.e. the line has flattened or turned rather than died. One cycle only - it does not re-enter the
+        # loop, and it is skipped when there is no next crossing to walk to.
+        # REWALK 4 = the CONDITIONAL overshoot: one extra cycle only on rows that actually hopped, i.e.
+        # only where momentum was genuinely running and then stopped. REWALK 3's unconditional version
+        # moved 85 of 87 rows and scored WORSE than no re-walk at all (MAE median 0.56 vs 0.49, p90 2.33
+        # vs 1.52, median|err| vs Joe's 14 targets 93.5 vs 38.4) because it pushed the 58 rows REWALK 2
+        # had correctly left alone.
+        if REWALK in (3, 4) and k + 1 < len(cand) and (REWALK == 3 or hops > 0):
+            k += 1; hops += 1; w = cand[k]
+            side, mfe, edr, st = _derive(w)
         REWALK_HOPS[r_['es_conf_utc']] = hops
         rp = {tf: bool(RP[(tf, edr)][w]) for tf in TFS}
         dy = {tf: bool(DIRTY[(tf, edr)][w]) for tf in TFS}
