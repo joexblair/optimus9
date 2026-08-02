@@ -1,6 +1,9 @@
 # Handover — 2026-08-02
 
-Branch `causal/lookahead`. Last commit `554156f` *bp50: exhv2 + the s4M-cycle re-walk, driven by the r-pred alone*.
+Branch `causal/lookahead`. Last commit `ff67d7d` *bp50: dominoes filter + the 0802 handover*.
+
+**If you read nothing else: go to §0 step 4. It is your first job, Joe has already approved it, and it is
+written out in full — the broken state, the fix, and the code. Nothing about it needs asking.**
 
 ---
 
@@ -9,6 +12,10 @@ Branch `causal/lookahead`. Last commit `554156f` *bp50: exhv2 + the s4M-cycle re
 **Step 1.** Read the §1 REQUIRED list. Nothing else first.
 
 **Step 2.** Recreate the task list from §7, using Joe's numbering in the subject line.
+
+> The §7 rows are **subjects only**. They are not the instructions. Every task's body lives elsewhere in
+> this doc — for **#31, the first job, the body is §0 step 4 below and it is complete**: what is broken,
+> what the fix is, and the code to write. Do not open #31 expecting a spec somewhere else.
 
 **Step 3.** Verify the tree runs: `python3 build_exhv2.py` → expect `exhv2: 142 of 142 rows produced a walk`, ~45 s.
 
@@ -75,9 +82,16 @@ sb = int(nx[0])                                       # THE SIGNAL
 | `docs/260729_rpl_handover.md` §1 + §5 | RPL's shape and its knobs |
 | `docs/260731_handover.md` | the previous handover; §4 knob table is still current for RPL |
 
-**Read when touched**
+**Read when touched** — all verified to exist 0802
 
-`docs/rpl_flow_spec.md` · `docs/linelab_spec.md` · `docs/divergence_research.md` (§12: price source is raw) · `docs/bl_detect.md` · `docs/pine_format.md` · `docs/kline_sanitise.md` · `docs/o9_live.md`
+`docs/rpl_flow_spec.md` · `docs/linelab_spec.md` · `docs/bp50.md` · `docs/causal_lookahead_register.md` · `docs/rpl_sweep_spec.md` · `docs/rpl_event_store_spec.md` · `docs/o9_live_design.md` · `docs/quirks_to_remember.md` · `docs/task_register.md` · `docs/measure_before_verdict.md`
+
+- there is **no** `divergence_research.md` in the repo. The divergence contract lives in the code:
+  `jig.py:266` `pk_state()` docstring and `pk5s_gate_computer.py:285` `_pk_state_from_slopes`.
+  The "price source is raw" convention is stated in the `pk_state` docstring
+- there is **no** `bl_detect.md`, `pine_format.md`, `kline_sanitise.md` or `o9_live.md`. The pine
+  format lock lives in the `jig._bgcolor_frag` docstring; the sanitiser contract in
+  `optimus9/data/kline_sanitiser.py`
 
 ---
 
@@ -239,7 +253,7 @@ sb = int(nx[0])                                       # THE SIGNAL
 | 28 | s4M-cycle re-walk while s22 has momentum — **REWALK 2 is the approved default** | pending |
 | 29 | map and package RPL + bp50 as-is for o9-live to prove the causal flow | pending |
 | 30 | s33r curl detection — **CLOSED, not tenable live** (confirmation lag ~7 min per r-unit) | pending |
-| **31** | **rebuild dominoes on REWALK 2 + gcs15 confirm** — §0 step 4 | **NEW, do first** |
+| **31** | **rebuild dominoes on REWALK 2 + gcs15 confirm.** Three artefacts are on the wrong signal (`A ungated`, the raw s15x × s15m cross) and two are banked for both REWALK modes. (a) `build_dominoes_db.py` — `:137` `for mode in (0, 2)` → `(2,)`; `:147` `ro[I['sig']]` is the ANCHOR, advance to the first gcs15x × gcs15m cross at/after it; add `dm_s15x_ms`/`dm_s15x_utc`; count and print rows with no gcs15 cross. (b) re-run it — it DROPs and recreates `rpl_dominoes` / `rpl_walkcand`. (c) same change in `emit_dominoes_pine.py`, re-emit. (d) re-derive every §9 number. **Full body + the code: §0 step 4.** Joe has approved this; no discussion needed | **NEW, do first** |
 | **32** | **the exit lookahead** — `held` needs 240 s of future; see §9(4) | **NEW** |
 | **33** | `build_exh_stat.py:130` DELETEs unconditionally, not only under `--fresh` | **NEW** |
 | **34** | `end_ms` single source of truth — 3 hardcoded values, no override | **NEW** |
