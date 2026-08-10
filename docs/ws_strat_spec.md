@@ -26,9 +26,12 @@ reflects the code at 0810. mechanic: `optimus9/analysis/ws_strat.py`. io: `optim
 ## signal logic
 
 -walk forward on pxs, 5s bars, from 08-04 12:00 to cache end
--open the dwell on a gcws30b oob breach
+-IF gcws30b has been oob for > {OOBW:16} * 5s bars
+--> 16 means >= 17 bars = 85s
+--open the dwell on a gcws30b oob breach
 --gcws30b oob = >= 85 (hi) or <= 15 (lo)
 --the dwell counts consecutive 5s bars on ONE side
+--the dwell is read at the LAST oob bar before the cross. that is the value tested against OOBW
 --the dwell resets on a side flip, on a confirmed cross, and on NaN
 --if an ib cross wob is incomplete, the dwell is not affected
 ---incomplete = fewer than {XWOB:2} consecutive ib bars
@@ -37,16 +40,18 @@ reflects the code at 0810. mechanic: `optimus9/analysis/ws_strat.py`. io: `optim
 ---gcws30b goes oob-lo @ 08-04 16:07:45, dwell = 1
 ---gcws30b prints 15.35 @ 08-04 16:10:10, ib for 1 bar only, dwell holds at 29
 ---gcws30b prints 14.87 @ 08-04 16:10:15, back oob-lo, dwell = 30
+---dwell 30 > 16, so this one qualifies. a dwell of 16 or less is discarded
 
 -create a gcws30 signal on the ib cross
 --the cross is the first ib bar. ib = 15 < v < 85, strictly
 --the cross is confirmed when {XWOB:2} consecutive 5s bars have printed ib
 --the confirmation bar = cross + XWOB - 1. every line value is read at the confirmation bar
---discard the signal unless the dwell was > {OOBW:16} 5s bars at the last oob bar
+--discard the cross unless the dwell passed OOBW
 --example:
----cross @ 08-04 16:10:20, gcws30b = 15.35, dwell = 30
----confirmed @ 08-04 16:10:25, ib_run = 2
+---cross @ 08-04 16:10:20, gcws30b = 15.35
+---dwell at the last oob bar 08-04 16:10:15 = 30
 ---30 > 16, so the signal stands
+---confirmed @ 08-04 16:10:25, ib_run = 2
 
 ---
 
