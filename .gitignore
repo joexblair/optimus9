@@ -26,3 +26,7 @@ optimus9/orchestration/.rpl_cache/
 *.pre_best10d
 .rpl_kpi_state.json
 .jig_trigger
+
+# derived numpy archives (Joe 0810) — tape_board.npz alone is 310 MB
+*.npz
+*.npy
