@@ -14,6 +14,18 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/joe/thecodes/.claude/hooks/keep-working.sh",
+            "timeout": 10,
+            "statusMessage": "autonomous mode"
+          }
+        ]
+      }
     ]
   }
 }

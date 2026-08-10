@@ -80,6 +80,36 @@ REWALK = 2                  # Joe 0801: "walk to the next s4M cycle when s22 has
 #                             MFE-side, eff_bias, momentum, branch, act and signal at that bar.
 REWALK_HOPS = {}            # es_conf_utc -> hops taken, for the report
 
+def oob_qualified(M, hi, lo, dwell=None):
+    """THE 240-SECOND TEST, per Joe's spec wording: "IF s4Mage has been OOB for 240s" — tested ON EACH BAR.
+
+    Returns a bool array, True at the RISING EDGE of "M has been continuously OOB for WALK_DWELL_BARS".
+    That bar is `z + WALK_DWELL_BARS - 1` for a clean run starting at z, i.e. the first bar at which the
+    condition is knowable. THE SAME RUNS QUALIFY as before — only the stamp moves, by 47 bars = 235 s.
+
+    THE DEFECT THIS REPLACES (Joe 0802). The old form found a crossing z, walked FORWARD to the run's end,
+    and stamped held[z]=True at the CROSSING. That verdict needs 240 s of future, so it is a forward peek:
+    17 of 147 signals fired BEFORE their own walk bar was confirmable, the tightest at 1.25 min. §9(4)
+    recorded the walk-bar use as harmless; it was not. Reading the spec as written removes the peek at the
+    walk AND at the exit in one change, which collapses the dm_ret / dm_cret pair into one causal column.
+
+    SINGLE PRODUCER (SRP). This test previously existed as three hand-copied forward loops — here,
+    build_dominoes_db and emit_dominoes_pine. That is how the defect survived. Precedent: momo() below,
+    lifted to module level for the same reason.
+
+    dwell=None uses the module global so a --dwell CLI override still reaches callers.
+    """
+    d = WALK_DWELL_BARS if dwell is None else int(dwell)
+    o = (M >= hi) | (M <= lo)
+    if d <= 1:
+        return o & ~np.r_[False, o[:-1]]
+    idx = np.arange(len(o))
+    rst = np.where(o, 0, idx + 1)
+    run = (idx + 1) - np.maximum.accumulate(rst)       # consecutive OOB bars ending AT i — backward, causal
+    q = run >= d
+    return q & ~np.r_[False, q[:-1]]
+
+
 def momo(r, dr, w):
     """(state, slope, r2, r_at_bar) for r line array `r`, bias dir `dr`, at bar `w`.
     state = momo | sideways | curl | none.
@@ -181,7 +211,7 @@ def main(argv):
         for _k, (_kind, _sp) in LINE_SPEC.items():
             ovr.update(bbline('exhv2%s%d' % (_k, _tf), _tf, **_sp))
         ovr.update(kline('exhv2r%d' % _tf, _tf, **R_SPEC[_tf]))
-    _J = cache_jig_perline(R.end_ms, 40, 600, ovr, pxs_cfg=R.PXS_CFG)
+    _J = cache_jig_perline(R.end_ms, R.HOURS, R.WARMUP, ovr, pxs_cfg=R.PXS_CFG)
     EX = {_tf: {_k: np.asarray(_J.W.line('exhv2%s%d' % (_k, _tf)), float)
                 for _k in ('x', 'm', 'M', 'r')} for _tf in TFS}
     MG = {_tf: EX[_tf]['M'] for _tf in TFS}
@@ -267,27 +297,10 @@ def main(argv):
         # 12:40 and crosses back out at 12:48 - "12:48 - first s4M hi". The level test stopped at 11:54.
         # 8 of 14 marked rows had a zero-length walk, which is the signature of this repeating.
         M4 = MG[4]
-        o = (M4 >= R.HI) | (M4 <= R.LO)
-        rise = o & ~np.r_[False, o[:-1]]
-        if WALK_DWELL_BARS > 1:
-            # s4Mage chatters across HI: 6 crossings in the 27 min after the 0522 11:54 r-pred, with OOB
-            # runs of 0.2-19.2 min and inside gaps of 0.1-0.6 min. Require the OOB run to HOLD before the
-            # crossing counts, so a poke does not set the walk bar. SWEEP KNOB.
-            idx = np.arange(len(o))
-            rst = np.where(o, 0, idx + 1)
-            runlen = (idx + 1) - np.maximum.accumulate(rst)          # consecutive OOB bars ending at i
-            held = np.zeros(len(o), bool)
-            for z in np.flatnonzero(rise):
-                k = z
-                while k < len(o) and o[k]:
-                    k += 1
-                if k - z >= WALK_DWELL_BARS:
-                    held[z] = True
-            rise = held
-        oob = np.flatnonzero(rise[i + 1:])
+        oob = np.flatnonzero(oob_qualified(M4, R.HI, R.LO)[i + 1:])
         if not len(oob):
             continue
-        cand = (oob + i + 1).tolist()                  # every held s4Mage OOB crossing after the r-pred
+        cand = (oob + i + 1).tolist()                  # every QUALIFIED bar after the r-pred
 
         def _derive(b):
             """side / MFE-side / eff-bias dir / momentum, all read AT bar b."""

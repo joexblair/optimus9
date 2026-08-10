@@ -135,8 +135,17 @@ def main(argv):
      es_rpred_ms,es_rpred_utc,es_rpred_end_ms,es_rpred_bars,es_rpred_label)
      VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''', OUT)
     n = d.execute('SELECT COUNT(*) c, SUM(es_in_pine) p, COUNT(es_rpred_ms) r FROM rpl_exh_stat', fetch=True)[0]
-    print('rpl_exh_stat: %d rows, %d es_in_pine, es_rpred_ms set on %d' % (n['c'], n['p'], n['r']))
+    # SUM() over an empty table is NULL, not 0, so this print raised TypeError ("%d ... not NoneType") and
+    # the real fault — an exhaustion window that matched nothing — was never named. Coalesce, then abort
+    # LOUDLY: a downstream chain must not run on an empty rpl_exh_stat and report it as a measurement.
+    # Precedent for raising rather than falling back silently: rpl_walk.py's unknown-RPL_TAPE check.
+    c, p, r = int(n['c'] or 0), int(n['p'] or 0), int(n['r'] or 0)
+    print('rpl_exh_stat: %d rows, %d es_in_pine, es_rpred_ms set on %d' % (c, p, r))
     d.disconnect()
+    if c == 0:
+        raise SystemExit('build_exh_stat: 0 exhaustions in the window. rpl_exh_applied holds %d rows; '
+                         'check that rpl_exhaust was rebuilt on THIS tape (build_exhaust.py --persist).'
+                         % len(rows))
 
 
 if __name__ == '__main__':

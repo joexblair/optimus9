@@ -100,7 +100,7 @@ def main(argv):
         for k, sp in LINE_SPEC.items():
             ovr.update(bbline('exhv2%s%d' % (k, tf), tf, **sp))
         ovr.update(kline('exhv2r%d' % tf, tf, **R_SPEC[tf]))
-    J = cache_jig_perline(R.end_ms, 40, 600, ovr, pxs_cfg=R.PXS_CFG)
+    J = cache_jig_perline(R.end_ms, R.HOURS, R.WARMUP, ovr, pxs_cfg=R.PXS_CFG)
     EX = {tf: {k: np.asarray(J.W.line('exhv2%s%d' % (k, tf)), float) for k in ('x', 'm', 'M', 'r')}
           for tf in TFS}
     u = lambda ms: dt.datetime.fromtimestamp(ms / 1000, dt.timezone.utc).strftime('%m%d %H:%M')

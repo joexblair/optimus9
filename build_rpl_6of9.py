@@ -28,7 +28,8 @@ HI, LO = R.HI, R.LO                 # boundary <- optimus9_system via rpl_walk (
 TF5_FLOOR = 5                       # xpred_thresh/xpred_band now come from rpl_config via rpl_walk (0727, no hardcoding)
 FIN6 = (('s1a', 19), ('s2a', 19), ('s15a', 19))
 ms = lambda M, D, h=0, m=0: int(dt.datetime(2026, M, D, h, m, tzinfo=dt.timezone.utc).timestamp() * 1000)
-JUNE_END = ms(6, 14)
+# JUNE_END = ms(6, 14) removed 0802 — the tape is rpl_walk.END_MS now, and it had two consumers here:
+# the R.end_ms reassignment (gone) and J3 (now on R.END_MS/R.HOURS/R.WARMUP).
 
 
 # PINNED r-per-band (0727): the climb-centroid re_round-14 snapshot. Re-pin ONLY on explicit instruction.
@@ -38,7 +39,9 @@ MINI = {'s2.r.stc': 8, 's8.r.rsi': 6, 'htf.r.k_len': 10, 'htf.r.stc': 12}
 S2T, S8T = 2, 8                                                                               # s2_top/s8_top base in the pin
 
 # --- engine on the JUNE window under the centroid r + the config fence (sweep's own builder; new cache key) ---
-R.end_ms = JUNE_END
+# TAPE: rpl_walk.END_MS is the single source of truth (Joe 0802). This line used to be
+# `R.end_ms = JUNE_END` (06-14) and reassigned the tape at import, so anything importing this module —
+# exhv2, build_exhaust — silently ran on a different tape from anything that did not. Removed.
 SW._apply_knobs(MINI)
 R.L0 = SW._build_line_L0(MINI)                                                                 # per-band r on June
 lr_v2.FENCE_HI, lr_v2.FENCE_LO = R.FH, R.FL                    # gate_signals fence <- rpl_config (FL=30 / FH=70)
@@ -66,7 +69,7 @@ ov.update(bbline('s3x', 3, length=R.S3A_X_LEN, mult=R.S3A_X_MULT, src='close')) 
 ov.update(bbline('s3m', 3, length=5, mult=0.45)); ov.update(bbline('s3M', 3, length=37, mult=0.83))
 ov.update(bbline('s4m', 4, length=5, mult=0.45)); ov.update(bbline('s4M', 4, length=37, mult=0.83))
 ov.update(bbline('s1M', 1, length=37, mult=0.83)); ov.update(bbline('hs60x', 60, length=4, mult=0.37))
-J3 = Jig(JUNE_END, hours=40, warmup=600, overrides=ov)
+J3 = Jig(R.END_MS, hours=R.HOURS, warmup=R.WARMUP, overrides=ov)   # MUST match R.L0's tape — gts is R.L0's
 gts = np.asarray(R.L0['ts'], np.int64); gN = len(gts); gidx = np.arange(gN)
 assert np.array_equal(np.asarray(J3.ts, np.int64), gts), "J3 grid must match the climb-engine grid"
 hs60x = np.asarray(J3.W.line('hs60x'), float)

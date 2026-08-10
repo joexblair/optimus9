@@ -46,7 +46,54 @@ import os as _os
 # ceiling 120 pays for a full ceiling-90 build at import (14.7 s) and then rebuilds at 120 (9.9 s), and
 # reaching rebuild_cache costs a build_exhaust import (37.7 s). Unset = rpl_config.tf_ceiling, unchanged.
 TFS = list(range(1, int(_os.environ.get('RPL_TF_CEILING', C['tf_ceiling'])) + 1))
-end_ms = int(dtm.datetime(2026, 7, 13, 0, 0, tzinfo=timezone.utc).timestamp() * 1000)
+# THE TAPE — ONE SOURCE OF TRUTH (Joe 0802: "there should be a single line cache that spans 05-18 to 08-01").
+# Home is here because this module already owns end_ms and the RPL_TF_CEILING override above, and every
+# consumer already imports it as R. Three literals used to disagree: this file (07-13), build_rpl_6of9
+# (JUNE_END 06-14) and linelab (06-14) — and build_rpl_6of9 reassigned R.end_ms at import, so the tape you
+# got depended on your import order. That silently folded every pre-tape row onto bar index 0 in any script
+# that imported rpl_walk without build_exhv2 (np.searchsorted returns 0, no error).
+#   span    = HOURS + 2*WARMUP = 2536 h, floored by the kline_collection start at 2026-04-28 06:34
+#   ts      = 04-28 06:34:00 -> 07-31 23:59:55, 1,636,872 bars
+#   W0      = END_MS - (HOURS + WARMUP) h = 06-08 08:00 (bias_machine only; never reaches the line cache)
+# 40/1248 is kept because the tape .npz for this key already exists on disk (the OOS build).
+# THE REGISTRY. Keyed by the tape's own end date — no coined name, so the key cannot drift from the thing.
+# Selected by RPL_TAPE; unset = the default below. An unknown key raises rather than falling back silently.
+# (end_ms, hours, warmup) travel together because the cache key hashes all three — changing one alone
+# produces a different file holding identical data. One env var, one tuple: SRP.
+#
+#   '06-14'  the DIAL-IN tape. 04-28 06:34:00 -> 06-13 23:59:55, 807,432 bars, 46.7 days.
+#            Already built on disk. Every artefact banked on 0802 is on this key, so it is also the
+#            controlled baseline: same bars, only the code differs.
+#   '08-01'  the FULL tape. 04-28 06:34:00 -> 07-31 23:59:55, 1,636,872 bars, 95.7 days.
+#            Joe 0802: "a single line cache that spans 05-18 to 08-01". Its tape .npz already exists
+#            (the OOS build); its line .npy files do not. 13,095,104 bytes per line, 2.03x the dial-in tape.
+#            Joe 0802: dial the code in on smaller IS windows BEFORE consuming this.
+#   '08-02'  the LAST-7-DAYS tape (Joe 0802: "re-build exhv2 for the last 7 days"). End is the last clean
+#            hour before the live kline head (08-02 21:32:15), so the final signal still has bars to exit
+#            into. HOURS 168 = the 7 days. WARMUP 600 is the '06-14' value, NOT a new number: 600 h = 25 d,
+#            far past the slowest line (bb 37 @ TF120 = 74 h).
+#            span = HOURS + 2*WARMUP = 1368 h = 57 d -> ts 06-06 21:00 -> 08-02 21:00, ~984,960 bars.
+#            The kline floor is 05-07 00:00 (the pre-05-07 synthetics were deleted 0802), so this tape is
+#            built entirely from real 5 s data — no ANALYSIS_START clipping is doing any work on it.
+#            The 7-day ANALYSIS scope is applied downstream by build_exh_stat/build_rpred --window 7-26 8-2,
+#            which is the flag that already owns "scope the exhaustions" (Joe 0730). Warmup and analysis
+#            window are separate concerns and stay separate knobs.
+TAPES = {
+    '06-14': (dtm.datetime(2026, 6, 14, 0, 0, tzinfo=timezone.utc), 40, 600),
+    '08-01': (dtm.datetime(2026, 8,  1, 0, 0, tzinfo=timezone.utc), 40, 1012),
+    '08-02': (dtm.datetime(2026, 8,  2, 21, 0, tzinfo=timezone.utc), 168, 600),
+}
+# DEFAULT '08-01' (Joe 0802). Measured before flipping: built through Jig directly, both tapes give
+# bit-identical close, volume and bb 37|0.7|close @ TF4 over the identical 807,432 overlapping bars.
+# The tape width changes nothing. The 06-14 line FILES are stale — they were written before the
+# pre-05-18 synthetic klines were replaced with real 5 s data on the morning of 0802 — so the 08-01 key
+# is also the only one whose lines are guaranteed to be built from the corrected data. See task #42.
+TAPE = _os.environ.get('RPL_TAPE', '08-01')
+if TAPE not in TAPES:
+    raise SystemExit('RPL_TAPE=%r is not a known tape. Known: %s' % (TAPE, ', '.join(sorted(TAPES))))
+_tape_end, HOURS, WARMUP = TAPES[TAPE]
+END_MS = int(_tape_end.timestamp() * 1000)
+end_ms = END_MS                      # lowercase alias: every existing call site reads R.end_ms
 RPRED_VETO = True    # ⚠ TODO REMOVE (Joe 0725): DEAD NO-OP — cannot fire. For an `exh` to win the earliest-wins sort it must
 #                      beat `rp`, so no s3-8 TF r-preds cur at that bar; the veto check below is therefore always False.
 #                      Added by mistake — blurs RPL/RC-sweep work with the linelab spec. Left in place for now; strip later.
@@ -192,7 +239,7 @@ def build_lines(src):
                 g5r=np.asarray(src.W.line('gcs5r'), float), g5m=np.asarray(src.W.line('gcs5m'), float), g5x=np.asarray(src.W.line('gcs5x'), float),
                 Ps30=predict_breach(s30r_, s30m_, s30M_, HI, LO, FH, FL, 0.0))
 
-J = cache_jig(end_ms, 40, 600, _ovr, pxs_cfg=PXS_CFG)
+J = cache_jig(end_ms, HOURS, WARMUP, _ovr, pxs_cfg=PXS_CFG)
 L0 = build_lines(J)
 
 def _ms(h, m, s=0, day=12): return int(dtm.datetime(2026, 7, day, h, m, s, tzinfo=timezone.utc).timestamp() * 1000)

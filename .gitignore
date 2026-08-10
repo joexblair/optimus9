@@ -25,3 +25,4 @@ optimus9/orchestration/.rpl_cache/
 *.bak_*
 *.pre_best10d
 .rpl_kpi_state.json
+.jig_trigger

@@ -14,12 +14,17 @@ WHAT IS DRAWN
 THE FILTER   strict dominoes, read AT the signal bar, causal (all three crossings are at/before it):
   the three LTF Mages entered IB fastest-first —  gcs15M < s30M < s1M  by OOB->IB crossing bar.
   lines: bb 37|0.83|close at TF 0.25 / 0.5 / 1.0 min (rpl_config baseline flavour).
-  measured lift over the MFE-side base rate: 1.41x ALL / 1.44x OLD / 1.55x FRESH (REWALK 2).
+
+THE SIGNAL   REWALK 2 + gcs15 confirm — the one approved configuration (Joe 0801 "we can't be using both").
+  the s15x X s15m cross is the ANCHOR. The SIGNAL is the first gcs15x X gcs15m cross at/after it.
+  gcs15x = bb 5|0.37|close, gcs15m = bb 6|0.45|close @ TF 0.25 min = 15 s (the gcs/RPL flavour).
+  NOT exhv2's x bb 4|0.37, and NOT gcs15M (the 37|0.83 LTF Mage above — different line, similar name).
+  rows with no gcs15 cross after the anchor are counted and printed, never dropped silently.
 
 THE TRADE    Joe 0801: "place an immediate trade and close it when [s4M crosses] into OOB".
-  ENTRY  the signal bar (v2_sig_ms)
-  EXIT   the next HELD s4Mage OOB crossing strictly after entry
-         held = the OOB run lasts >= WALK_DWELL_BARS (48 bars = 240 s), build_exhv2.py:272-286
+  ENTRY  the confirmed signal bar
+  EXIT   the next bar at which s4Mage HAS BEEN OOB for 240 s (48 bars), strictly after entry.
+         Tested on each bar, backward — causal. Was the CROSSING bar, which needed 240 s of future.
          s4Mage = exhv2's own M line, bb 37|0.7|close @ TF4 (build_exhv2.LINE_SPEC['M'])
   DIR    the s4Mage OOB side at the walk bar — NOT the bias, so there is no cycle (Joe 0801)
 
@@ -50,26 +55,27 @@ def main(argv):
 
     # s4Mage, built exactly as build_exhv2.py:179-187 does
     _kind, _msp = B.LINE_SPEC['M']
-    J4 = cache_jig_perline(R.end_ms, 40, 600, bbline('exhv2M4', 4, **_msp), pxs_cfg=R.PXS_CFG)
+    J4 = cache_jig_perline(R.end_ms, R.HOURS, R.WARMUP, bbline('exhv2M4', 4, **_msp), pxs_cfg=R.PXS_CFG)
     M4 = np.asarray(J4.W.line('exhv2M4'), float)
 
-    # held s4Mage OOB crossings — build_exhv2.py:269-286, replicated
-    o = (M4 >= HI) | (M4 <= LO)
-    rise = o & ~np.r_[False, o[:-1]]
-    held = np.zeros(n, bool)
-    for z in np.flatnonzero(rise):
-        k = z
-        while k < n and o[k]:
-            k += 1
-        if k - z >= B.WALK_DWELL_BARS:
-            held[z] = True
-    XB = np.flatnonzero(held)
+    # the 240 s test, ON EACH BAR (Joe 0802). B.oob_qualified is the single producer — this file used to
+    # carry a hand-copied forward loop, which is how the lookahead survived in three places at once.
+    XB = np.flatnonzero(B.oob_qualified(M4, HI, LO))
 
     ovr = {}
     for nm, tf in MAGES:
         ovr.update(bbline(nm, tf, length=37, mult=0.83, src='close'))
-    JM = cache_jig_perline(R.end_ms, 40, 600, ovr, pxs_cfg=R.PXS_CFG)
+    ovr.update(bbline('gcs15x', 15.0 / 60.0, length=5, mult=0.37, src='close'))   # bbline tf is MINUTES
+    ovr.update(bbline('gcs15m', 15.0 / 60.0, length=6, mult=0.45, src='close'))
+    JM = cache_jig_perline(R.end_ms, R.HOURS, R.WARMUP, ovr, pxs_cfg=R.PXS_CFG)
     LNM = {nm: np.asarray(JM.W.line(nm), float) for nm, _ in MAGES}
+
+    # gcs15 confirm — rising edges both directions, hoisted out of the row loop (side is the only input)
+    GX = np.asarray(JM.W.line('gcs15x'), float); GM = np.asarray(JM.W.line('gcs15m'), float)
+    GXC = {}
+    for xdr in (-1, 1):                                      # hi walk -> SHORT -> xdr -1
+        _c = R.L0['src'].causal.cross_wob(GX - GM, 0.0, xdr, R.WOBN)     # wob_n = 9 bars = 45 s
+        GXC[xdr] = np.flatnonzero(_c & ~np.r_[False, _c[:-1]])
 
     # THE R-PRED — the walk's origin. build_exhv2 reads es_rpred_ms at :262 but does not emit it, so it is
     # re-read here and joined on es_conf_ms = v2_conf_ms. A label needing a field is not a reason to change
@@ -83,11 +89,21 @@ def main(argv):
 
     labels, fire_sp, none_sp = [], [], []
     nf = nl = 0
+    nsig = lost = 0
     for ro in OUT:
         if ro[I['sig']] is None:
             continue
+        nsig += 1
         side = ro[I['side']]                       # 'hi' -> SHORT, 'lo' -> LONG
-        sb = int(np.searchsorted(ts, ro[I['sig']]))
+
+        # THE CONFIRM. ro[I['sig']] is the ANCHOR; the SIGNAL is the first gcs15 cross at/after it.
+        anchor = int(np.searchsorted(ts, ro[I['sig']]))
+        _nc = GXC[-1 if side == 'hi' else 1]
+        _nc = _nc[_nc >= anchor]
+        if not len(_nc):
+            lost += 1
+            continue
+        sb = int(_nc[0])
 
         j = []                                     # OOB->IB crossing bar per Mage, at/before the signal
         for nm, _ in MAGES:
@@ -114,13 +130,10 @@ def main(argv):
 
         long_ = (side == 'lo')
         nl += long_; nf += dom
-        # TWO LINES (Joe 0801). '\\n' emits the two characters \ n into the pine string literal, which Pine
-        # reads as a newline escape; a real newline char would be a raw newline inside "..." and not parse.
-        # Line 2 carries the SIGNAL TIMESTAMP to seconds: the TF4 bucket is 240 s wide, so a label read off
-        # the chart at minute precision cannot be matched back to its row.
+        # THREE LINES, one fact each. Line 3 carries the SIGNAL TIMESTAMP to seconds: the TF4 bucket is
+        # 240 s wide, so a label read off the chart at minute precision cannot be matched back to its row.
         hms = lambda m: dt.datetime.fromtimestamp(int(m) / 1000, dt.timezone.utc).strftime('%H:%M:%S')
         rp = RP.get(int(ro[0]))
-        l0 = 'rpred %s' % (hms(rp) if rp else '-')
         l1 = '%s %s' % ('LONG' if long_ else 'SHORT', 'FIRE' if dom else '-')
         l2 = ''
         if ret is not None:
@@ -129,52 +142,43 @@ def main(argv):
         l2 += dt.datetime.fromtimestamp(int(ts[sb]) / 1000, dt.timezone.utc).strftime('%m-%d %H:%M:%S')
         if ro[I['mfeside']]:
             l2 += ' MFE'
-        labels.append(dict(ts=int(ts[sb]), y=float(px[sb]), text=l0 + '\\n' + l1 + '\\n' + l2,
-                           green=bool(long_), up=bool(long_)))
+        labels.append(dict(ts=int(ts[sb]), y=float(px[sb]), long=bool(long_),
+                           lines=['rpred %s' % (hms(rp) if rp else '-'), l1, l2]))
 
-    streams = [{'name': 'no_fire', 'ts': sorted(set(none_sp)), 'color': 'color.yellow'},
-               {'name': 'dominoes_fire', 'ts': sorted(set(fire_sp)), 'color': 'color.blue'}]
-    # LEGEND FIRST. jig.py:611 splits `notes` on newlines and prefixes each with '// ', so the header is a
-    # comment BLOCK, not one long line. Joe 0801: the colour definitions were ~230 chars into a single
-    # 700-char line and unreadable in the pine editor without horizontal scrolling.
-    notes = '\n'.join([
-        'dominoes filter  —  LEGEND',
+    streams = [{'name': 'no_fire', 'ts': none_sp, 'color': 'color.yellow',
+                'meaning': 'strict dominoes detector did NOT fire'},
+               {'name': 'dominoes_fire', 'ts': fire_sp, 'color': 'color.blue',
+                'meaning': 'strict dominoes detector FIRED'}]
+    mech = [
+        'EVERY LABEL IS A CONFIRMED SIGNAL.  %d s15 anchors -> %d gcs15-confirmed signals.' % (nsig, len(labels)),
+        '%d anchors had no gcs15 cross after them and are NOT drawn.' % lost,
+        'The bgcolor is the DETECTOR. It is NOT the MFE-side flag — that is the "MFE" suffix on line 3.',
         '',
-        '  EVERY LABEL IS A SIGNAL. All %d rows produced one. The bgcolor says whether the strict-dominoes' % len(labels),
-        '  DETECTOR fired on that row — it does NOT say whether a signal exists, and it is NOT the MFE-side flag.',
-        '',
-        '  BGCOLOR = the DETECTOR, painted over the trade window (signal bar -> exit bar)',
-        '    BLUE    strict dominoes detector FIRED       (%d rows, %d TF4 buckets)' % (nf, len(set(fire_sp))),
-        '    YELLOW  strict dominoes detector did NOT fire (%d rows, %d TF4 buckets)' % (len(labels) - nf, len(set(none_sp))),
-        '    MFE-side is NOT a colour — it is the "MFE" suffix on text line 3.',
-        '',
-        '  LABELS = DIRECTION, set AT the walk bar = the s4Mage crossing into OOB (NOT the bias, NOT the signal)',
-        '    GREEN + arrow up    LONG    (s4Mage crossed OOB on the LO side)   %d rows' % nl,
-        '    RED   + arrow down  SHORT   (s4Mage crossed OOB on the HI side)   %d rows' % (len(labels) - nl),
-        '    ORDER OF EVENTS:  r-pred  ->  walk to s4Mage-cross-OOB (direction set here)  ->  SIGNAL  ->',
-        '                      exit at the NEXT s4Mage-cross-OOB',
-        '    text line 1:  rpred HH:MM:SS  (the walk origin)',
-        '    text line 2:  LONG/SHORT  FIRE|-  ret %',
-        '    text line 3:  mae %  SIGNAL TIMESTAMP (to seconds)  MFE(=row was truly on the MFE side)',
-        '',
-        'MECHANICS',
-        '  strict dominoes  gcs15M < s30M < s1M by OOB->IB crossing bar, all at/before the signal bar',
-        '                   lines bb 37|0.83|close at TF 15s / 30s / 60s',
-        '  ENTRY  the signal bar',
-        '  EXIT   the next HELD s4Mage OOB crossing after entry',
-        '         s4Mage = bb 37|0.7|close @TF4;  held = OOB run >= %d bars = %d s' % (
+        'ORDER OF EVENTS  r-pred -> walk to s4Mage-cross-OOB (DIRECTION SET HERE) -> s15 ANCHOR ->',
+        '                 gcs15 CONFIRM = the SIGNAL -> exit at the NEXT s4Mage-cross-OOB',
+        'strict dominoes  gcs15M < s30M < s1M by OOB->IB crossing bar, all at/before the signal bar',
+        '                 lines bb 37|0.83|close at TF 15s / 30s / 60s',
+        'gcs15 confirm    gcs15x bb 5|0.37|close, gcs15m bb 6|0.45|close @ TF 15s',
+        'EXIT             s4Mage = bb 37|0.7|close @TF4;  held = OOB run >= %d bars = %d s' % (
             B.WALK_DWELL_BARS, B.WALK_DWELL_BARS * 5),
-        '  REWALK %d   |   bgcolor bucket TF4 = 240 s   |   %d rows, 05-18..06-14' % (mode, len(labels)),
-    ])
-
-    nlab, nbg = _Score(None).emit_overlay(labels, streams, out, 'dominoes filter (REWALK %d)' % mode,
-                                          notes=notes)
+        # span DERIVED from the labels, not a literal. It read '05-18..06-14' — the dial-in tape's range —
+        # so any rebuild on a different tape emitted a legend that named the wrong dates.
+        'REWALK %d   |   %d rows, %s..%s   |   tape %s' % (
+            mode, len(labels),
+            dt.datetime.fromtimestamp(min(z['ts'] for z in labels) / 1000, dt.timezone.utc).strftime('%m-%d'),
+            dt.datetime.fromtimestamp(max(z['ts'] for z in labels) / 1000, dt.timezone.utc).strftime('%m-%d'),
+            R.TAPE) if labels else 'REWALK %d   |   0 rows' % mode,
+    ]
+    nlab, nbg = _Score(None).emit_direction_overlay(
+        labels, streams, out, 'dominoes filter (REWALK %d)' % mode, mechanics=mech, bucket_ms=TF4)
     print('')
     print('%s  ->  %d labels, %d painted TF4 bars' % (out, nlab, nbg))
+    print('  anchors         %d   no gcs15 cross after anchor: %d (DROPPED)' % (nsig, lost))
     print('  rows            %d   LONG %d / SHORT %d' % (len(labels), nl, len(labels) - nl))
     print('  dominoes FIRED  %d (%.1f%%)' % (nf, 100.0 * nf / len(labels)))
-    print('  blue  buckets   %d' % len(streams[1]['ts']))
-    print('  yellow buckets  %d' % len(streams[0]['ts']))
+    # streams carry RAW 5s stamps; emit_direction_overlay buckets a copy. Bucket here too, for the count.
+    print('  blue  buckets   %d' % len(_Score.bucket_spans(streams[1]['ts'], TF4)))
+    print('  yellow buckets  %d' % len(_Score.bucket_spans(streams[0]['ts'], TF4)))
     return labels, streams
 
 

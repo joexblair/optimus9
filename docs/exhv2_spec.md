@@ -74,6 +74,52 @@ unless there is not an es_rpred_utc signal
 - **MFE-side detection**: if the first s4Mage OOB is on the side opposite to the bias, the signal was on the
   MFE side and **bias reverses**
 
+### 4a. BIAS IS SET ON TWO THINGS — Joe 0802, verbatim
+
+> at face value you're right, but in real-terms: if we know that r-pred has fired on MFE side, we can take an
+> immediate trade without waiting for the walk to S4M-crossing-into-oob.  this is the MFE improvement that we
+> get to capture
+>
+> --context: bias is set on 1) s4M-cross-oob, 2) MFE side detection
+
+And, on why the leg cannot simply be traded — Joe 0802, verbatim:
+
+> "is the trade" only if MFE detection == true, otherwise it is discarded
+>
+> --it's discarded because we don't know if the first pivot is MAE or MFE when r-pred fires - that is why we
+> wait on s4M. the side s4M breaches on is the gauranteed bias direction
+
+- recorded because it was **not** in this spec. The two setters were written separately (the walk destination
+  above, and the MFE-side reversal bullet above it) and never stated as one rule
+
+**What the code already does — `build_exhv2._derive(b)`, read at the walk bar**
+
+| line | meaning |
+|---|---|
+| `sd = 'hi' if M4[b] >= R.HI else 'lo'` | the side s4Mage breached |
+| `wt = 'hi' if dr > 0 else 'lo'` | the side the original bias expected |
+| `mf = int(sd != wt)` | MFE-side detection |
+| `ed = -dr if mf else dr` | effective direction — **flips when detection fires, kept when it does not** |
+
+- `ed` always resolves to **the direction of the move into the s4Mage breach**, in all four bias/side
+  combinations. The MFE flag is the bookkeeping that records whether reaching it required flipping the
+  original bias. That is Joe's "the side s4M breaches on is the guaranteed bias direction", already in code
+- when detection does **not** fire, nothing is reversed: the original bias already pointed at the breach side
+
+**Measured 0802, all 142 rows** — enter at the r-pred bar, close at the walk bar (the s4Mage crossing into
+OOB), direction taken as `ed`, the direction of the move into the breach:
+
+| MFE-side detection | rows | return median | return total | win rate | worst excursion median | hold median |
+|---|---|---|---|---|---|---|
+| **fired** | 62 | **+0.905%** | **+75.90** | **96.8%** | 0.414 | 98.0 min |
+| did not fire | 80 | +0.151% | +12.05 | 68.8% | 0.512 | 47.4 min |
+| all rows | 142 | — | **+87.95** | — | — | 68.7 min |
+
+- both groups are **positive** in the `ed` direction. Detection-fired rows pay 6.3× the total on 78% of the rows
+- **the leg is not tradeable as it stands.** `ed` is only resolved at the s4Mage breach, which is the whole
+  reason the walk exists — at the r-pred the first pivot could be either side
+- what would make it tradeable is a call on the MFE side readable **at the r-pred bar**. That is the open work
+
 ---
 
 ## 5. Momentum
@@ -392,19 +438,105 @@ Four of the five differ from the live `rpl_config` baseline, and s4r differs fro
 
 Nothing in exhv2 reads `R.L0['E']` any more except the timestamp grid.
 
-## 14. Knobs
+## 14. Knobs — THE SWEEP REGISTER
 
-| knob | value | role |
+Every value in exhv2 that was **chosen** rather than derived. Compiled 0802 by walking the whole build.
+
+`swept?` — has it actually been varied and scored, or was it set once and never tested.
+**No ranges are proposed here.** A range is a value decision and it is Joe's. The `swept` column records
+what was tried; the empty ones are the ask.
+
+### 14a. The walk
+
+| knob | value | units / role | swept? |
+|---|---|---|---|
+| `WALK_DWELL_BARS` | **48** | bars = **240 s**. At bar `i`, has s4Mage been continuously OOB for the last 48 bars. Backward, per-bar, causal — `oob_qualified()`. **48 counts the crossing bar**, so it first reads true at `z+47` | **no** — marked SWEEP KNOB in code since 0731 |
+| `REWALK` | **2** | hops the walk to the next qualified s4Mage OOB bar while s22 reads `momo`; repeats until it doesn't | **yes** — 0/1/2/3/4. 2 adopted; 3 (unconditional overshoot) and 4 (conditional) both lost |
+| `TFS` | (4, 15, 22) | the TF triple the whole mechanic runs on | **no** |
+| boundary `HI`/`LO` | 85 / 15 | OOB thresholds. Home is `optimus9_system`, not `rpl_config` | **no** |
+
+### 14b. Momentum classification — `momo()`
+
+| knob | value | units / role | swept? |
+|---|---|---|---|
+| `MOMO_WINDOW_MIN` | **60** | momentum sample window, minutes. Was 45 | **no** — marked SWEEP KNOB |
+| `MOMO_STEP_MIN` | 5 | sample spacing, minutes = 60 bars. Sets `MOMO_SAMPLES` = 12 | **no** |
+| `MOMO_SLOPE_MIN` | 1.0 | slope floor, r-units per 5-min sample. Joe's refs: momo 2.858 / sideways 0.217 | **no** |
+| `MOMO_R2_MIN` | 0.50 | straightness floor. Joe's refs: momo 0.921 / sideways 0.024 | **no** |
+| `CURL_ARC_MIN` | 4.0 | quadratic arc height above which a sideways verdict becomes a curl | **no** — marked SWEEP KNOB |
+| `CURL_VTX_LO` / `HI` | 0.05 / 0.95 | vertex must sit inside the window, not on its edge | **no** |
+| `LEVEL_SLACK` | **13.9** | level gate slackens by `LEVEL_SLACK × T`, `T = R² × min(1, \|slope\|/slope_min)` clipped to [0,1] | **no** — **coin-tossed**, drawn uniform 0-15 on OS entropy at Joe's instruction. At 13.9 the mechanic over-fires momentum on `0520 07:03` and `0521 02:05` |
+
+### 14c. The signal and the last mile
+
+| knob | value | units / role | swept? |
+|---|---|---|---|
+| last-mile **set** | **gcs15** | which fast set confirms the s15 anchor: gcs15 (15 s) / gcs5 (5 s) / s30 (30 s) | **yes** — all three |
+| last-mile **mode** | **confirm** | `confirm` = s15 cross first, then the next fast cross. `replace` = the fast cross IS the signal | **yes** — both, on all three sets |
+| `momo_ride_oob_slip` | **2.0** | r-units of gap to the 15/85 boundary permitted at the cross bar | **yes** — last value before MAE max jumps 2.25 → 4.38 |
+| `wob_n` (`WOBN`) | 9 | bars = **45 s**. Cross confirmation dwell. Comes from `rpl_config`, not exhv2 | **no** |
+| race-vs-A **per branch** | A ungated | the branch race is still computed and stored (`v2_race_*`); it decides `action` (rev vs EXIT) | **no** — marked SWEEP KNOB at `build_exhv2.py:391` |
+| over/under `Moob` | value test | strict reading = s4Mage must STILL be OOB at the cross bar. It cost three days of signals, so it was reverted **pending Joe's ruling**. Vacuous when s4Mage has crossed to the far side — `0520 07:42` fires SHORT where s4Mage is −3.71 and `x > −3.71` passes for almost any x | **open, not a sweep** |
+
+### 14d. The LTF-Mage "falling dominoes" filter
+
+| knob | value | units / role | swept? |
+|---|---|---|---|
+| LTF Mage **TF set** | 15 s / 30 s / 60 s | `gcs15M` / `s30M` / `s1M`, fastest first — the domino order | **no** — taken from Joe's "s1, s30, gcs15" |
+| LTF Mage **mult** | **0.83** | vs exhv2's own `M` at **0.7**. Two Mage flavours are live in one mechanic | **no** — see 14f |
+| dominoes **strictness** | strict | `strict` = `gcs15M < s30M < s1M`, `loose` = `<=`, `reverse` = slowest first | **yes** — all three. strict beats base in 6/6 slices; loose fails once; reverse is an anti-signal |
+| `L_DIV` | 24 | bars = **120 s**. Divergence anchor/floater gap. From `trade_book.py:39` | **no** |
+| `slope_floor` | 0.5 | divergence noise band. From `trade_book.py:39` | **no** |
+
+### 14e. Line set — every scalar is a knob
+
+None of these has been swept. See §13 for how each differs from the live baseline.
+
+| line | spec | scalars |
 |---|---|---|
-| `MOMO_WINDOW_MIN` | 60 | momentum sample window, minutes |
-| `MOMO_STEP_MIN` | 5 | sample spacing → 12 point-samples |
-| `MOMO_SLOPE_MIN` | 1.0 | slope floor, r-units per 5-min sample |
-| `MOMO_R2_MIN` | 0.50 | straightness floor |
-| `CURL_ARC_MIN` | 4.0 | quadratic arc height above which a sideways verdict is a curl |
-| `CURL_VTX_LO/HI` | 0.05 / 0.95 | vertex must sit inside the window |
-| `WALK_DWELL_BARS` | 48 | 240 s. OOB run must hold CONTIGUOUSLY for the crossing to set the walk |
-| `LEVEL_SLACK` | 13.9 | level gate slackens by `LEVEL_SLACK × T`, `T = R² × min(1, \|slope\|/slope_min)` |
+| `x` s4/s15/s22 | bb **4**\|0.37\|close | length, mult, src |
+| `m` s4/s15/s22 | bb 6\|0.45\|close | length, mult, src |
+| `M` s4/s15/s22 | bb 37\|**0.7**\|close | length, mult, src |
+| `r` **s4** | kline 7\|**6**\|11\|close | k_len, rsi, stc, src |
+| `r` **s15 / s22** | kline **10\|4**\|11\|close | k_len, rsi, stc, src |
+| `gcs15x` | bb 5\|0.37\|close @ 15 s | length, mult, src |
+| `gcs15m` | bb 6\|0.45\|close @ 15 s | length, mult, src |
+| LTF Mages | bb 37\|0.83\|close @ 15/30/60 s | length, mult, src |
 
-`LEVEL_SLACK` was drawn uniform 0-15 on OS entropy at Joe's instruction — *"coin-toss it… your random
-choice might uncover other quirks"*. It did: at 13.9 the mechanic **over-fires** momentum on `0520 07:03`
-and `0521 02:05`, the first over-fires seen. A tighter value trades those back against the rows it fixes.
+- **~26 scalars across 8 line specs.** Sweeping them jointly is the evo sweep, not a grid
+
+### 14f. The convergence question — Joe 0801, still open
+
+Three Mage flavours are live at once:
+
+| where | mult |
+|---|---|
+| exhv2's own `M` (s4/s15/s22) | **0.7** |
+| `rpl_config` baseline `M`, and the LTF Mages this session added | **0.83** |
+| RPL's `s1M` / `s30M` | **0.83** |
+
+Joe 0801: *"I thought RPL was already on the exhv2 configs — changing RPL lines now will change the r-pred
+delegation to exhv2. **we'll converge the configs when we run the evo sweep**."*
+
+Converging them is a sweep input, not a tidy-up: it changes which r-preds RPL hands to bp50.
+
+### 14g. Count
+
+| group | knobs | swept |
+|---|---|---|
+| 14a walk | 4 | 1 |
+| 14b momentum | 7 | 0 |
+| 14c signal / last mile | 6 | 3 |
+| 14d dominoes | 5 | 1 |
+| 14e lines | 8 specs / ~26 scalars | 0 |
+| **total** | **30 named + ~26 line scalars** | **5** |
+
+- **25 of 30 named knobs have never been varied.** Four carry a `SWEEP KNOB` marker in the code and have
+  sat unswept since 0731: `WALK_DWELL_BARS`, `MOMO_WINDOW_MIN`, `CURL_ARC_MIN`, `LEVEL_SLACK`
+- `LEVEL_SLACK` = 13.9 is the one **known to be arbitrary** — it was coin-tossed, and it is known to
+  over-fire on two rows
+
+### 14h. For Joe — the ranges are yours
+
+I have not proposed a range for any knob. To sweep, each needs a min, max and step, and for the
+categorical ones the candidate list. The four code-marked ones are the obvious first pass.

@@ -21,12 +21,11 @@ from optimus9.orchestration.rpl_cache import cache_jig_perline
 from optimus9.analysis.jig import kline, bbline
 from optimus9.compute.swing_detect import find_pivots
 
-END = int(datetime(2026, 6, 14, tzinfo=timezone.utc).timestamp() * 1000)   # tape end — build_rpl_6of9's JUNE_END / the R.L0 key
-HOURS, WARMUP = 40, 600     # Joe 0727: the SAME cache key as J3/L0, so the whole chain (bp50 setup/trigger AND the RPL
-#                             climb/delegate/finisher) runs on ONE tape. Span = hours + 2*warmup = 1240h, truncated by the
-#                             kline_collection floor at 2026-04-28 06:34 -> 06-13 gets 45.96d warmup, the max the data allows.
-#                             (52d is unreachable: 06-13 minus 52d = 04-22, five days before any data exists.)
-#                             Was 07-13 / 1152|24 (Joe 0725, 48d matching sweep POOL_DAYS) — that gave 06-13 only 20.23d.
+# TAPE: rpl_walk is the single source of truth (Joe 0802). Was a local 06-14 / 40|600 triple here, which
+# had to be kept in sync by hand with build_rpl_6of9's JUNE_END and rpl_walk's own 07-13 — it wasn't.
+# Joe 0727's requirement still holds and is now structural: the SAME cache key as J3/L0, so the whole chain
+# (bp50 setup/trigger AND the RPL climb/delegate/finisher) runs on ONE tape.
+END, HOURS, WARMUP = R.END_MS, R.HOURS, R.WARMUP
 REG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'linelab_lines.json')
 
 _DEFAULT = {

@@ -18,17 +18,20 @@ TWO TABLES, TWO GRAINS
                  HELD and poke alike, with s15/s22 momentum read at that bar and a flag for the one the
                  walk landed on. This is the table that answers "why did the walk land at X and not Y".
 
-BANKED FOR BOTH REWALK 0 AND REWALK 2 (dm_rewalk / wc_rewalk). Nothing is chosen here.
+ONE MODE ONLY. dm_rewalk / wc_rewalk are kept as columns but every row carries 2. REWALK 0 is not banked.
 
-THE EXIT LOOKAHEAD (Joe 0801, measured)
-  held[z] requires the OOB run starting at z to last WALK_DWELL_BARS = 48 bars = 240 s. That verdict is
-  only knowable at z+48, so taking the exit price at z uses 240 s of future. Both are banked:
-    dm_exit_*  / dm_ret  / dm_mae   exit AT the crossing bar        (uses +240 s of future)
-    dm_cexit_* / dm_cret / dm_cmae  exit at crossing + 48 bars      (confirmable live)
+THE 240 s TEST IS NOW CAUSAL (Joe 0802). His spec wording: "IF s4Mage has been OOB for 240s" — tested ON
+EACH BAR, backward. The old form stamped the verdict at the CROSSING, which needed 240 s of future: 17 of
+147 signals fired before their own walk bar was confirmable, the tightest at 1.25 min.
+  B.oob_qualified() is the single producer. Same runs qualify; the stamp moves +47 bars = +235 s.
+  ONE exit column set now — dm_exit_* / dm_ret / dm_mae / dm_mfe. The dm_c* lookahead pair is GONE.
 
 LINES
   s4Mage    build_exhv2.LINE_SPEC['M'] = bb 37|0.7|close @ TF4      the walk/exit producer
   LTF Mages gcs15M / s30M / s1M = bb 37|0.83|close @ TF 0.25/0.5/1.0 min   (rpl_config baseline flavour)
+  CONFIRM   gcs15x = bb 5|0.37|close, gcs15m = bb 6|0.45|close @ TF 0.25 min = 15 s.
+            The gcs/RPL flavour gcs5 and s30 already use; gcs15 was cloned from s30.
+            NOT exhv2's x bb 4|0.37. NOT gcs15M (that is the 37|0.83 LTF Mage, a different line).
   s15r/s22r build_exhv2.R_SPEC                                       momentum, via build_exhv2.momo()
   DIVERGENCE  jig.pk_state core, L_DIV = 24 bars = 120 s, slope_floor = 0.5 (trade_book.py:39)
 
@@ -61,15 +64,14 @@ DDL_D = '''CREATE TABLE IF NOT EXISTS rpl_dominoes (
     dm_walk_s4m  DOUBLE,  dm_hops INT,                 -- s4Mage at the walk bar; REWALK hops taken
     dm_mfe_side  TINYINT,                              -- s4Mage OOB side != the side the r-pred predicted
     dm_branch    VARCHAR(16), dm_action VARCHAR(4), dm_cross_tf INT,
-    dm_sig_ms    BIGINT, dm_sig_utc VARCHAR(20), dm_sig_px DOUBLE,
+    dm_s15x_ms   BIGINT, dm_s15x_utc VARCHAR(20),      -- the s15x X s15m cross: the ANCHOR, not the signal
+    dm_sig_ms    BIGINT, dm_sig_utc VARCHAR(20), dm_sig_px DOUBLE,   -- first gcs15 cross at/after the anchor
     dm_walk_lead_min DOUBLE,                           -- signal minus walk bar
     dm_gcs15m_x_ms BIGINT, dm_s30m_x_ms BIGINT, dm_s1m_x_ms BIGINT,   -- OOB->IB crossing bar per LTF Mage
     dm_dom_strict TINYINT, dm_dom_loose TINYINT, dm_dom_reverse TINYINT,
     dm_div_gcs15m DOUBLE, dm_div_s30m DOUBLE, dm_div_s1m DOUBLE,      -- side-normalised pk_state
-    dm_exit_ms  BIGINT, dm_exit_utc VARCHAR(20), dm_exit_px DOUBLE,
+    dm_exit_ms  BIGINT, dm_exit_utc VARCHAR(20), dm_exit_px DOUBLE,   -- the next QUALIFIED bar. Causal
     dm_ret  DOUBLE, dm_mae  DOUBLE, dm_mfe  DOUBLE, dm_hold_min  DOUBLE,
-    dm_cexit_ms BIGINT, dm_cexit_utc VARCHAR(20), dm_cexit_px DOUBLE,
-    dm_cret DOUBLE, dm_cmae DOUBLE, dm_cmfe DOUBLE, dm_chold_min DOUBLE,
     KEY (dm_rewalk), KEY (dm_sig_ms), KEY (dm_dom_strict), KEY (dm_mfe_side), KEY (dm_conf_ms))'''
 
 DDL_W = '''CREATE TABLE IF NOT EXISTS rpl_walkcand (
@@ -102,24 +104,35 @@ def main(argv):
         ovr.update(kline('exhv2r%d' % tf, tf, **B.R_SPEC[tf]))
     for nm, tf in MAGES:
         ovr.update(bbline(nm, tf, length=37, mult=0.83, src='close'))
-    J = cache_jig_perline(R.end_ms, 40, 600, ovr, pxs_cfg=R.PXS_CFG)
+    ovr.update(bbline('gcs15x', 15.0 / 60.0, length=5, mult=0.37, src='close'))   # bbline tf is MINUTES
+    ovr.update(bbline('gcs15m', 15.0 / 60.0, length=6, mult=0.45, src='close'))
+    J = cache_jig_perline(R.end_ms, R.HOURS, R.WARMUP, ovr, pxs_cfg=R.PXS_CFG)
     M4 = np.asarray(J.W.line('exhv2M4'), float)
     RL = {tf: np.asarray(J.W.line('exhv2r%d' % tf), float) for tf in (15, 22)}
     LNM = {nm: np.asarray(J.W.line(nm), float) for nm, _ in MAGES}
 
-    # --- every s4Mage crossing into OOB, with its run length --------------------------------------
+    # --- gcs15 confirm: the rising edges of gcs15x crossing gcs15m, both directions -------------------
+    # Hoisted out of the row loop: the array depends only on side, so it is two computations, not one
+    # per row. Same values as computing it inside the loop.
+    GX = np.asarray(J.W.line('gcs15x'), float); GM = np.asarray(J.W.line('gcs15m'), float)
+    GXC = {}
+    for xdr in (-1, 1):                                # hi walk -> SHORT -> xdr -1
+        _c = R.L0['src'].causal.cross_wob(GX - GM, 0.0, xdr, R.WOBN)   # wob_n = 9 bars = 45 s
+        GXC[xdr] = np.flatnonzero(_c & ~np.r_[False, _c[:-1]])
+
+    # --- the 240 s test, ON EACH BAR (Joe 0802) — B.oob_qualified is the single producer ------------
+    # XB now holds the bar at which "s4Mage has been OOB for 240 s" first becomes TRUE, not the crossing.
+    # Same runs qualify; the stamp moves +47 bars = +235 s, to the bar where it is knowable. Causal.
     o = (M4 >= HI) | (M4 <= LO)
     rise = o & ~np.r_[False, o[:-1]]
-    RUN, held = {}, np.zeros(n, bool)
+    XB = np.flatnonzero(B.oob_qualified(M4, HI, LO))
+    ALLX = np.flatnonzero(rise)                        # every crossing, held or poke — rpl_walkcand's grain
+    RUN = {}                                           # run length per crossing, for wc_run_bars/wc_held
     for z in np.flatnonzero(rise):
         q = z
         while q < n and o[q]:
             q += 1
         RUN[int(z)] = q - z
-        if q - z >= D:
-            held[z] = True
-    XB = np.flatnonzero(held)
-    ALLX = np.flatnonzero(rise)
 
     # --- divergence, side-agnostic; normalised per row later ---------------------------------------
     ps = np.zeros(n); ps[L_DIV:] = px[L_DIV:] - px[:-L_DIV]
@@ -134,17 +147,29 @@ def main(argv):
           for z in d.execute('SELECT es_conf_ms, es_rpred_ms FROM rpl_exh_stat', fetch=True)}
 
     ROWS_D, ROWS_W = [], []
-    for mode in (0, 2):
+    nsig = lost = 0
+    for mode in (2,):
         B.REWALK_HOPS = {}
         OUT = B.main(['--rewalk', str(mode)])
         HOPS = dict(B.REWALK_HOPS)
         for ro in OUT:
             if ro[I['sig']] is None:
                 continue
+            nsig += 1
             side = ro[I['side']]
             hi_side = (side == 'hi')
             sgn = -1.0 if hi_side else 1.0                 # hi -> SHORT
-            sb = int(np.searchsorted(ts, ro[I['sig']]))
+
+            # THE CONFIRM. ro[I['sig']] is the s15x X s15m cross — the ANCHOR. The SIGNAL is the first
+            # gcs15 cross at/after it. Rows with no such cross are counted and reported, never dropped
+            # silently.
+            anchor = int(np.searchsorted(ts, ro[I['sig']]))
+            _nc = GXC[-1 if hi_side else 1]
+            _nc = _nc[_nc >= anchor]
+            if not len(_nc):
+                lost += 1
+                continue
+            sb = int(_nc[0])
             wb = int(np.searchsorted(ts, ro[I['walk']]))
             rp = RP.get(int(ro[I['conf']]))
 
@@ -162,36 +187,34 @@ def main(argv):
             dsg = -1.0 if hi_side else 1.0
             dv = [float(DIV[nm][sb]) * dsg for nm, _ in MAGES]
 
-            # trade, under both exit rules
+            # THE TRADE — ONE exit, and it is causal. XB is now the bar at which the 240 s test first
+            # reads TRUE, so the exit needs no +D offset: the dm_ret/dm_cret pair collapses to one column.
             nx = XB[XB > sb]
-            cells = {}
-            for tag, off in (('', 0), ('c', D)):
-                if not len(nx):
-                    cells[tag] = (None, None, None, None, None, None, None)
-                    continue
-                eb = min(int(nx[0]) + off, n - 1)
+            if not len(nx):
+                e = (None, None, None, None, None, None, None)
+            else:
+                eb = int(nx[0])
                 seg = px[sb:eb + 1]
                 up = (np.nanmax(seg) - px[sb]) / px[sb] * 100.0
                 dn = (px[sb] - np.nanmin(seg)) / px[sb] * 100.0
-                cells[tag] = (int(ts[eb]), u(ts[eb]), float(px[eb]),
-                              float(sgn * (px[eb] - px[sb]) / px[sb] * 100.0),
-                              float(up if hi_side else dn), float(dn if hi_side else up),
-                              (int(ts[eb]) - int(ts[sb])) / 60000.0)
-            e, c = cells[''], cells['c']
+                e = (int(ts[eb]), u(ts[eb]), float(px[eb]),
+                     float(sgn * (px[eb] - px[sb]) / px[sb] * 100.0),
+                     float(up if hi_side else dn), float(dn if hi_side else up),
+                     (int(ts[eb]) - int(ts[sb])) / 60000.0)
 
             ROWS_D.append((mode, int(ro[I['conf']]), ro[I['confu']], ro[I['tf']], ro[I['bias']],
                            rp, u(rp) if rp else None,
                            int(ro[I['walk']]), u(ro[I['walk']]), side, 'SHORT' if hi_side else 'LONG',
                            float(M4[wb]), int(HOPS.get(ro[I['confu']], 0)), int(ro[I['mfeside']]),
                            ro[I['branch']], ro[I['act']], ro[I['xtf']],
-                           int(ro[I['sig']]), u(ro[I['sig']]), float(px[sb]),
+                           int(ro[I['sig']]), u(ro[I['sig']]),
+                           int(ts[sb]), u(ts[sb]), float(px[sb]),
                            (int(ts[sb]) - int(ts[wb])) / 60000.0,
                            (int(ts[j[0]]) if j[0] is not None else None),
                            (int(ts[j[1]]) if j[1] is not None else None),
                            (int(ts[j[2]]) if j[2] is not None else None),
                            int(strict), int(loose), int(rev), dv[0], dv[1], dv[2],
-                           e[0], e[1], e[2], e[3], e[4], e[5], e[6],
-                           c[0], c[1], c[2], c[3], c[4], c[5], c[6]))
+                           e[0], e[1], e[2], e[3], e[4], e[5], e[6]))
 
             # --- candidate chain: every crossing in the row's lifetime (r-pred bar -> exit bar) -----
             if rp is None:
@@ -207,7 +230,10 @@ def main(argv):
                 s15 = B.momo(RL[15], ed, z); s22 = B.momo(RL[22], ed, z)
                 ROWS_W.append((mode, int(ro[I['conf']]), ro[I['confu']], int(rp), q,
                                int(ts[z]), u(ts[z]), float(M4[z]), sd,
-                               int(RUN[z]), RUN[z] * 5 / 60.0, int(bool(held[z])), int(z == wb),
+                               int(RUN[z]), RUN[z] * 5 / 60.0, int(RUN[z] >= D),
+                               # wb is now the QUALIFIED bar (z + D - 1), not the crossing. Match the
+                               # crossing whose own qualifying bar IS the walk bar.
+                               int(RUN[z] >= D and z + D - 1 == wb),
                                s15[0], float(s15[1]), float(s15[2]), float(s15[3]),
                                s22[0], float(s22[1]), float(s22[2]), float(s22[3])))
 
@@ -215,23 +241,28 @@ def main(argv):
     d.execute('DROP TABLE IF EXISTS rpl_walkcand'); d.execute(DDL_W)
     d.executemany('INSERT INTO rpl_dominoes (dm_rewalk,dm_conf_ms,dm_conf_utc,dm_cur_tf,dm_bias,'
                   'dm_rpred_ms,dm_rpred_utc,dm_walk_ms,dm_walk_utc,dm_walk_side,dm_dir,dm_walk_s4m,'
-                  'dm_hops,dm_mfe_side,dm_branch,dm_action,dm_cross_tf,dm_sig_ms,dm_sig_utc,dm_sig_px,'
+                  'dm_hops,dm_mfe_side,dm_branch,dm_action,dm_cross_tf,dm_s15x_ms,dm_s15x_utc,'
+                  'dm_sig_ms,dm_sig_utc,dm_sig_px,'
                   'dm_walk_lead_min,dm_gcs15m_x_ms,dm_s30m_x_ms,dm_s1m_x_ms,dm_dom_strict,dm_dom_loose,'
                   'dm_dom_reverse,dm_div_gcs15m,dm_div_s30m,dm_div_s1m,dm_exit_ms,dm_exit_utc,dm_exit_px,'
-                  'dm_ret,dm_mae,dm_mfe,dm_hold_min,dm_cexit_ms,dm_cexit_utc,dm_cexit_px,dm_cret,dm_cmae,'
-                  'dm_cmfe,dm_chold_min) VALUES (' + ','.join(['%s'] * 44) + ')', ROWS_D)
+                  'dm_ret,dm_mae,dm_mfe,dm_hold_min) VALUES (' + ','.join(['%s'] * 39) + ')', ROWS_D)
     d.executemany('INSERT INTO rpl_walkcand (wc_rewalk,wc_conf_ms,wc_conf_utc,wc_rpred_ms,wc_idx,wc_ms,'
                   'wc_utc,wc_s4m,wc_side,wc_run_bars,wc_run_min,wc_held,wc_chosen,wc_s15_state,'
                   'wc_s15_slope,wc_s15_r2,wc_s15_r,wc_s22_state,wc_s22_slope,wc_s22_r2,wc_s22_r)'
                   ' VALUES (' + ','.join(['%s'] * 21) + ')', ROWS_W)
     print('')
-    print('rpl_dominoes  %d rows  (REWALK 0 and 2, %d each)' % (len(ROWS_D), len(ROWS_D) // 2))
+    print('CONFIG  REWALK 2 + gcs15 confirm.  One mode banked.')
+    print('anchors (s15x X s15m)     %d' % nsig)
+    print('  no gcs15 cross after    %d  -- DROPPED, not silently' % lost)
+    print('  confirmed signals       %d' % (nsig - lost))
+    print('rpl_dominoes  %d rows' % len(ROWS_D))
     print('rpl_walkcand  %d rows  (every s4Mage crossing into OOB in each row lifetime)' % len(ROWS_W))
-    for m in (0, 2):
+    for m in (2,):
         q = d.execute('SELECT COUNT(*) n, SUM(dm_dom_strict) s, SUM(dm_mfe_side) f, '
-                      'SUM(dm_dir="SHORT") sh FROM rpl_dominoes WHERE dm_rewalk=%s', (m,), fetch=True)[0]
-        print('  REWALK %d: %d signals, %d strict-dominoes, %d MFE-side, %d SHORT'
-              % (m, q['n'], q['s'], q['f'], q['sh']))
+                      'SUM(dm_dir="SHORT") sh, AVG((dm_sig_ms-dm_s15x_ms)/60000.0) lagmin '
+                      'FROM rpl_dominoes WHERE dm_rewalk=%s', (m,), fetch=True)[0]
+        print('  REWALK %d: %d signals, %d strict-dominoes, %d MFE-side, %d SHORT, confirm lag mean %.2f min'
+              % (m, q['n'], q['s'], q['f'], q['sh'], float(q['lagmin'] or 0.0)))
     d.disconnect()
     return ROWS_D, ROWS_W
 

@@ -41,7 +41,7 @@ from optimus9.analysis.jig import kline, _Score
 from optimus9.db.database_manager import DatabaseManager
 from optimus9.config import get_db_config
 
-END_MS, HOURS, WARMUP = int(dt.datetime(2026, 8, 1, tzinfo=dt.timezone.utc).timestamp() * 1000), 40, 1248
+END_MS, HOURS, WARMUP = R.END_MS, R.HOURS, R.WARMUP   # single source of truth (Joe 0802); was a local 08-01/40/1248
 S33R = kline('s33r', 33, k_len=10, rsi=5, stc=12, src='close')
 TF4 = 240_000
 OUT = 's33curl_tf4.pine'

@@ -45,7 +45,7 @@ def group_ovr(cfg, s2_top, s8_top):
 def score_cfg(cfg, s2_top, s8_top, windows=None):
     """Build L0 for this per-group config (per-line cache), swap it into R.L0, score with the pooled metric, restore."""
     ovr = group_ovr(cfg, s2_top, s8_top)
-    jc = cache_jig_perline(R.end_ms, 40, 600, ovr, pxs_cfg=R.PXS_CFG)
+    jc = cache_jig_perline(R.end_ms, R.HOURS, R.WARMUP, ovr, pxs_cfg=R.PXS_CFG)
     L0_old = R.L0
     R.L0 = R.build_lines(jc)
     try:

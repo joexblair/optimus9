@@ -228,7 +228,7 @@ def _build_line_L0(cfg):
     ovr.update(R._mk('s30x', 0.5, R.LN['x'])); ovr.update(R._mk('s30m', 0.5, R.LN['m']))
     g5 = 5.0 / 60.0
     ovr.update(R._mk('gcs5r', g5, R.LN['r'])); ovr.update(R._mk('gcs5m', g5, R.LN['m'])); ovr.update(R._mk('gcs5x', g5, R.LN['x']))
-    return R.build_lines(cache_jig_perline(R.end_ms, 40, 600, ovr, pxs_cfg=R.PXS_CFG))
+    return R.build_lines(cache_jig_perline(R.end_ms, R.HOURS, R.WARMUP, ovr, pxs_cfg=R.PXS_CFG))
 
 def _has_lines(cfg):
     return any(('.' in k) or k in ('s2_top', 's8_top') for k in cfg)

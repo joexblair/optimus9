@@ -202,6 +202,20 @@ sb = int(nx[0])                                       # THE SIGNAL
 
 **THE TWO-CACHE TRAP (task #13).** `build_rpl_6of9.py:41` does `R.end_ms = JUNE_END` (06-14). Anything importing it — exhv2, build_exhaust — runs on the **06-14** tape, while `rpl_walk.py:49` says **07-13**. Three hardcoded `end_ms` values exist (`rpl_walk.py:49`, `build_rpl_6of9.py:31`, `linelab.py:24`) and there is no `RPL_END_MS` override. Always print which tape you are on before trusting a number.
 
+**IT BITES AD-HOC SCRIPTS TOO.** Measured 0802:
+
+| import order | tape L0 carries |
+|---|---|
+| `import optimus9.orchestration.rpl_walk` alone | 05-22 08:00:00 → 07-12 23:59:55, 892,800 bars |
+| `import build_exhv2` first, then `rpl_walk` | **04-28 06:34:00 → 06-13 23:59:55, 807,432 bars** |
+
+- any script querying `rpl_dominoes` / `rpl_exhv2` and indexing into `R.L0['ts']` **must import `build_exhv2`
+  first**, or every row before 05-22 08:00 silently maps to bar index 0
+- that is 29 of the 142 `rpl_dominoes` rows. `np.searchsorted` returns 0 without error, so the failure is
+  silent and looks like real data
+- `build_dominoes_db.py`, `emit_dominoes_pine.py` and `report_dominoes.py` are all safe — the first two import
+  `build_exhv2` at module level, the third never touches `L0`
+
 `RPL_TF_CEILING` env var lets a caller build L0 **once** at the ceiling it needs. Set it to `120` before importing `rpl_walk` or you pay for a ceiling-90 build then a rebuild.
 
 ---
@@ -253,7 +267,7 @@ sb = int(nx[0])                                       # THE SIGNAL
 | 28 | s4M-cycle re-walk while s22 has momentum — **REWALK 2 is the approved default** | pending |
 | 29 | map and package RPL + bp50 as-is for o9-live to prove the causal flow | pending |
 | 30 | s33r curl detection — **CLOSED, not tenable live** (confirmation lag ~7 min per r-unit) | pending |
-| **31** | **rebuild dominoes on REWALK 2 + gcs15 confirm.** Three artefacts are on the wrong signal (`A ungated`, the raw s15x × s15m cross) and two are banked for both REWALK modes. (a) `build_dominoes_db.py` — `:137` `for mode in (0, 2)` → `(2,)`; `:147` `ro[I['sig']]` is the ANCHOR, advance to the first gcs15x × gcs15m cross at/after it; add `dm_s15x_ms`/`dm_s15x_utc`; count and print rows with no gcs15 cross. (b) re-run it — it DROPs and recreates `rpl_dominoes` / `rpl_walkcand`. (c) same change in `emit_dominoes_pine.py`, re-emit. (d) re-derive every §9 number. **Full body + the code: §0 step 4.** Joe has approved this; no discussion needed | **NEW, do first** |
+| **31** | **COMPLETED 0802.** 142 anchors → 142 confirmed signals, 0 dropped; confirm lag med 2.38 min. `rpl_dominoes` 142 rows, `rpl_walkcand` 3,029, one mode. §9 re-derived by `report_dominoes.py` — the strict-dominoes lift falls 1.41× → **1.21×** ALL and **0.93×** FRESH. Original body: **rebuild dominoes on REWALK 2 + gcs15 confirm.** Three artefacts are on the wrong signal (`A ungated`, the raw s15x × s15m cross) and two are banked for both REWALK modes. (a) `build_dominoes_db.py` — `:137` `for mode in (0, 2)` → `(2,)`; `:147` `ro[I['sig']]` is the ANCHOR, advance to the first gcs15x × gcs15m cross at/after it; add `dm_s15x_ms`/`dm_s15x_utc`; count and print rows with no gcs15 cross. (b) re-run it — it DROPs and recreates `rpl_dominoes` / `rpl_walkcand`. (c) same change in `emit_dominoes_pine.py`, re-emit. (d) re-derive every §9 number. **Full body + the code: §0 step 4.** Joe has approved this; no discussion needed | **COMPLETED** |
 | **32** | **the exit lookahead** — `held` needs 240 s of future; see §9(4) | **NEW** |
 | **33** | `build_exh_stat.py:130` DELETEs unconditionally, not only under `--fresh` | **NEW** |
 | **34** | `end_ms` single source of truth — 3 hardcoded values, no override | **NEW** |
@@ -266,10 +280,11 @@ sb = int(nx[0])                                       # THE SIGNAL
 
 | file | state |
 |---|---|
-| `build_dominoes_db.py` | **HALF-EDITED — finish it first** |
-| `emit_dominoes_pine.py` | works; wrong signal definition |
+| `build_dominoes_db.py` | **DONE 0802.** One mode (2); anchor→gcs15-confirm advance; `dm_s15x_ms`/`dm_s15x_utc`; drop count printed |
+| `emit_dominoes_pine.py` | **DONE 0802.** Same confirm advance, same drop count, legend rewritten |
+| `report_dominoes.py` | **NEW 0802.** DB-only. Re-derives §9: confirm lag, detector lift on 3 slices, the exit-lookahead table, the reframe |
 | `build_s33curl.py` | complete; task #30 closed, method kept |
-| `dominoes.pine` | emitted on the wrong signal |
+| `dominoes.pine` | re-emitted 0802 on the confirmed signal |
 
 **Modified, uncommitted**
 
@@ -284,30 +299,44 @@ sb = int(nx[0])                                       # THE SIGNAL
 | `rpl_exh_stat` | **142** | rebuilt 0801 with no `--window`, 05-18 01:35 → 06-13 06:32 |
 | `rpl_exh_stat_bak0801` | 87 | the prior windowed set. **Do not drop** |
 | `rpl_exhv2` | 87 | **STALE** — still the old 87-row population |
-| `rpl_dominoes` | 284 | **WRONG CONFIG** — both REWALK modes, `A ungated` |
-| `rpl_walkcand` | 5,212 | **WRONG CONFIG** — same |
+| `rpl_dominoes` | **142** | rebuilt 0802 — REWALK 2 + gcs15 confirm, one mode. `dm_rewalk` is 2 on every row |
+| `rpl_walkcand` | **3,029** | rebuilt 0802 — same config |
 
-19 files were uncommitted at `554156f`; 4 are now. Joe has not asked for a commit since.
+- the prior 284 / 5,212 `A ungated` rows were **not** snapshotted before the DROP. Their headline figures survive in §9 as struck-through values
 
 ---
 
 ## §9 — OPEN FLAGS
 
-**(1) Every dominoes number is on the wrong signal.** The reframe below was measured on `A ungated`. Re-derive it under gcs15 confirm before repeating any of it to Joe.
+**(1) RESOLVED 0802 — every number below is now on REWALK 2 + gcs15 confirm.** Re-derived by `report_dominoes.py` off the rebuilt `rpl_dominoes` (142 rows, one mode). The `A ungated` figures are struck through where they moved.
 
-**(2) The falling-dominoes finding — Joe's idea, and it held.** Strict ordering `gcs15M < s30M < s1M` by OOB→IB crossing bar, read at the signal, all crossings at/before it (causal):
+**(1a) The confirm costs 0 signals.** 142 anchors → 142 confirmed signals, **0 rows dropped** for want of a gcs15 cross. §9(8) is answered.
 
-| rewalk | slice | precision | base | lift |
-|---|---|---|---|---|
-| 2 | ALL 05-18..06-14 | 61.8% | 43.7% | 1.41× |
-| 2 | OLD 05-18..06-04 | 57.1% | 39.6% | 1.44× |
-| 2 | FRESH 06-04..06-14 | 83.3% | 53.7% | 1.55× |
-| 0 | ALL / OLD / FRESH | — | — | 1.56× / 1.59× / 1.46× |
+- confirm lag `dm_sig_ms − dm_s15x_ms`: **med 2.38 min, mean 2.76 min, min 0.00, max 10.92**
+- **10 of 142 rows have zero lag** — the gcs15 cross lands on the same bar as the s15 anchor
 
-- beats base rate in **6 of 6** slices. Non-strict fails once (0.80×) — ties are noise, require strict
-- **reverse order is an anti-signal**: 0.38× / 0.00× / 0.93×
-- **the divergence half is dead** — 0.58× to 1.67×, no stable edge. Reason: dominoes rows are overwhelmingly **PM** (signs agreeing), so divergence and dominoes are near mutually exclusive; their intersection fires on 1-3 rows
-- **the reframe**: on `A ungated` the non-MFE-side fires traded *better* than the MFE-side ones (win 76.9% vs 57.1%, MAE med 0.04 vs 0.21), so it looks like an **entry-quality** filter that correlates with MFE-side rather than an MFE-side detector. **Unverified under gcs15 confirm.**
+**(2) The falling-dominoes finding — it does NOT hold up under the confirm.** Strict ordering `gcs15M < s30M < s1M` by OOB→IB crossing bar, read at the signal, all crossings at/before it (causal). REWALK 2 + gcs15 confirm:
+
+| slice | n | base | strict n | precision | lift | ~~was (A ungated)~~ |
+|---|---|---|---|---|---|---|
+| ALL 05-18..06-14 | 142 | 43.7% | 34 | 52.9% | **1.21×** | ~~1.41×~~ |
+| OLD 05-18..06-04 | 101 | 39.6% | 24 | 54.2% | **1.37×** | ~~1.44×~~ |
+| FRESH 06-04..06-14 | 41 | 53.7% | 10 | 50.0% | **0.93×** | ~~1.55×~~ |
+
+- **FRESH is now BELOW base rate** (0.93×). The `A ungated` reading had FRESH as the strongest slice at 1.55×. That inversion is the headline
+- loose (`<=`) is now indistinguishable from strict: 1.22× / 1.33× / **1.00×** on n = 49 / 36 / 13. The "ties are noise, require strict" rule no longer separates anything
+- **reverse order is still a clean anti-signal**: **0.00× on all three slices**, n = 4 / 2 / 2. Precision 0.0% every time
+- base rate is unchanged at 43.7% by construction — `dm_mfe_side` is set at the walk bar, which the confirm does not move. That is the consistency check that the rebuild landed
+- **the divergence half is dead** — 0.58× to 1.67× on `A ungated`, no stable edge. Not re-derived; the reason still stands (dominoes rows are overwhelmingly **PM**, signs agreeing, so the intersection fires on 1-3 rows)
+- **the reframe is REVERSED.** On `A ungated` the non-MFE-side fires traded better (win 76.9% vs 57.1%). Under gcs15 confirm the MFE-side fires are the better ones:
+
+| strict fires | n | win% | ret med | MAE med | live-exit win% | live ret med | live MAE med |
+|---|---|---|---|---|---|---|---|
+| MFE-side | 18 | 66.7 | +0.129 | 0.193 | **55.6** | +0.010 | 0.291 |
+| non-MFE-side | 16 | 62.5 | +0.102 | 0.074 | **43.8** | −0.080 | 0.242 |
+
+- on the live-confirmable exit the non-MFE-side fires **lose** (43.8% win, ret med −0.080). The entry-quality reading does not survive the confirm
+- non-MFE-side still carries the lower MAE median (0.074 vs 0.193) — lower excursion, worse return
 
 **(3) `v2_mfe_side` is a misleading name.** It means *"s4Mage crossed OOB on the opposite boundary to the side the r-pred predicted"* — `mfe = int(sd != wt)`. It does **not** mean "price has already moved favourably". Joe read 05-25 18:31:25 as obviously MFE-side; the column says 0, and both are right about different things. Worth renaming.
 
@@ -315,22 +344,28 @@ sb = int(nx[0])                                       # THE SIGNAL
 
 `held[z]` requires the OOB run starting at `z` to last `WALK_DWELL_BARS` = 48 bars = 240 s. That verdict is only knowable at `z + 48`. Taking the exit price at `z` uses 240 s of future.
 
+Re-derived 0802 under REWALK 2 + gcs15 confirm:
+
 | exit rule | n | ret med | ret mean | ret sum | win% | MAE med |
 |---|---|---|---|---|---|---|
-| at the crossing bar (**what I reported**) | 142 | +0.079 | +0.239 | +33.97 | 54.2 | 0.265 |
-| at crossing + 48 bars (**confirmable live**) | 142 | +0.016 | +0.182 | +25.80 | **50.7** | 0.372 |
+| at the crossing bar (**lookahead**) | 142 | +0.149 | +0.268 | +37.99 | 62.7 | 0.235 |
+| at crossing + 48 bars (**confirmable live**) | 142 | **−0.026** | +0.223 | +31.60 | **49.3** | 0.332 |
 
-- ret sum −24%, win rate to a coin flip, MAE median +40%
+- ret sum −17%, win rate **below** a coin flip, MAE median +41%, **ret median goes negative**
+- the confirm improved both columns against `A ungated` (lookahead ret sum +33.97 → +37.99, live +25.80 → +31.60; MAE med 0.265 → 0.235 and 0.372 → 0.332) but did **not** close the gap between them
+- ~~on `A ungated`: 54.2% / 50.7% win, ret sum +33.97 / +25.80, MAE med 0.265 / 0.372~~
 - the same gate sets the walk bar, where it costs nothing (the signal comes later anyway). At the exit it is a genuine forward peek
 - `build_dominoes_db.py` already banks **both** (`dm_ret`/`dm_mae` vs `dm_cret`/`dm_cmae`). Keep that
 
-**(5) REWALK 2 may be changing the branch more than the entry.** On 05-25 r-pred 15:34:45: REWALK 0 walks to 17:06:20 (branch momo/tf22), REWALK 2 hops twice to 18:00:35 (branch s4/tf4) — **identical signal bar 18:31:25 and identical exit**. If that is common, part of REWALK 2's measured gain is branch reassignment, not entry improvement. One query against `rpl_dominoes` once it is rebuilt.
+**(5) REWALK 2 may be changing the branch more than the entry. STILL OPEN, and now harder.** On 05-25 r-pred 15:34:45: REWALK 0 walks to 17:06:20 (branch momo/tf22), REWALK 2 hops twice to 18:00:35 (branch s4/tf4) — **identical signal bar 18:31:25 and identical exit**. If that is common, part of REWALK 2's measured gain is branch reassignment, not entry improvement.
+
+- the rebuild banks **one mode only**, so `rpl_dominoes` can no longer answer this with a query. It needs its own REWALK 0 run into a separate table, or it stays on the 05-25 hand-trace
 
 **(6) The mechanic degrades out of sample.** Best config: median MAE 0.31 → 0.56, median ratio 4.10 → 1.81, development stretch vs the 11 days after it. FRESH is only 11 days because `rpl_exh_applied` stops 06-13; the OOS cache runs to 07-31, so extending means running RPL forward on the new tape.
 
 **(7) `over/under Moob` is still open.** `build_exhv2.py:356-362` — the strict reading (s4Mage must STILL be OOB at the cross bar) killed three days of signals, so it was reverted to a value test pending Joe's ruling. Known weakness: when s4Mage has crossed to the far side by the cross bar the test is vacuous.
 
-**(8) `A ungated` costs signals.** 0 of 142 rows fail to produce one, but gcs15 confirm may drop rows where no gcs15 cross follows the anchor. **Count and report them.**
+**(8) CLOSED 0802 — gcs15 confirm costs no signals.** 142 anchors → 142 confirmed signals, 0 dropped. `build_dominoes_db.py` and `emit_dominoes_pine.py` both count and print the drop figure; it is currently 0. See §9(1a) for the lag it does cost.
 
 ---
 
