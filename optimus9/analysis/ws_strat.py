@@ -155,8 +155,9 @@ def walk(b, hi, lo, oobw, xwob, i0=0, i1=None):
 # the lookback to do 119 of 131 opens — jig._mage_rev fires on the ONE bar the run-length hits +-wob,
 # so as a same-bar condition it almost never coincided.
 #
-# THE INDENTATION IS LAYOUT, NOT LOGIC. ws1Mage and ws1b are alternatives (Joe 0810: "a ws1Mage or
-# ws1b signal"). Do not read AND/OR out of the - / -- / --- levels.
+# THE INDENTATION IS LOGICAL. Joe 0810: "the layout is typically logical when I spec — I just had an
+# error in my writing this time." A deeper level is nested INSIDE the one above it, so `--` under `-`
+# reads as AND. Read the levels; when they disagree with the prose, ask which is the error.
 #
 # NOT SIDE-MATCHED. "is OOB" means OOB, either side. Joe 0805 accepted that reading.
 #
