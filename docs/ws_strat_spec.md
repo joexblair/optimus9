@@ -63,20 +63,29 @@ reflects the code at 0810. mechanic: `optimus9/analysis/ws_strat.py`. io: `optim
     ---a gcws30 signal is gated
 
 -gated is the resting state. the lines cannot block, only release
--released = ws1Mage oob AND ws1b outside the fence, both read at the confirmation bar
---ws1Mage oob = >= 85 or <= 15
---ws1b outside the fence = > 78 or < 22
---not side-matched. oob means oob, either side
+-released = ws1Mage oob AND ws1b outside the fence
+--BOTH must qualify. one on its own releases nothing
+--both are read at the confirmation bar, not the cross bar
+-IF ws1Mage is oob
+--ws1Mage oob = >= 85 (hi) or <= 15 (lo)
+--not side-matched. oob means oob, either side — a +1 signal is released by a lo-side ws1Mage
+-AND IF ws1b is outside of a 100-{fence:22} fence
+--100 - 22 = 78, so the fence is [22,78]
+--outside the fence = > 78 (hi) or < 22 (lo)
+--at 22 the fence [22,78] sits INSIDE the 15/85 boundary, so outside-the-fence is the LOOSER test:
+  everything oob is also outside the fence
+--a fence BELOW 15 inverts that — [10,90] is wider than the boundary, so a ws1b that IS oob sits
+  inside the fence and the clause goes silent. see benched
 -example, released:
 ---cross @ 08-04 12:38:50, confirmed @ 12:38:55, side +1
----ws1Mage = 93.93, oob
----ws1b = 94.23, outside the fence
----released
+---ws1Mage = 93.93 @ the confirmation bar, >= 85, oob
+---ws1b = 94.23 @ the confirmation bar, > 78, outside the fence
+---both qualify, so released
 -example, gated:
----cross @ 08-04 16:31:25, side -1
----ws1Mage = 23.85, not oob
----ws1b = 21.83, outside the fence
----the unless is not qualified, so it stays gated
+---cross @ 08-04 16:31:25, confirmed @ 16:31:30, side -1
+---ws1Mage = 23.85, NOT <= 15, so not oob
+---ws1b = 21.83, < 22, outside the fence
+---ws1b qualifies but ws1Mage does not. the AND fails, so it stays gated
 
 ---
 
@@ -84,7 +93,9 @@ reflects the code at 0810. mechanic: `optimus9/analysis/ws_strat.py`. io: `optim
 
 -if ws1b is outside of the fence and has not reached oob when gcws30 signals, then a flag is set to show that ws1b was weaker than s1Mage
 --set when ws1Mage is oob AND ws1b is outside the fence AND ws1b is not oob
---so ws1b sits in 78..85 or 15..22
+--all three read at the confirmation bar
+--ws1b outside the fence but not oob puts it in 78..85 (hi) or 15..22 (lo) — the band between the
+  fence and the boundary
 --both sides of the comparison must hold. without the ws1Mage term the flag fires where ws1b cleared the fence and ws1Mage cleared nothing, and the words are then false
 -column `wsw_ws1b_weaker_than_ws1Mage`
 -example:
@@ -98,8 +109,9 @@ reflects the code at 0810. mechanic: `optimus9/analysis/ws_strat.py`. io: `optim
 ## ws1b lookback — SEPARATE MECHANIC, held still
 
 -IF gcws30 has created a signal and ws1b is not oob THEN a {LB:19}-bar lookback is employed to capture a ws1b oob. IF the lookback captures ws1b oob THEN 1) mark the gcws30 signal as `ws1-exhausted`, 2) leave the gcws30 signal ungated
---reads ws1b only
---the window ends AT the confirmation bar. causal
+--19 bars = 95s at the 5s grid
+--reads ws1b only. ws1b oob in the window = >= 85 or <= 15, the boundary, not the fence
+--the window is [conf - 18, conf] inclusive. it ends AT the confirmation bar, so it is causal
 --it sits OUTSIDE the gate's AND — it releases on its own
 -Joe 0810: until I feel some stability, we'll be working on one mechanism at a time. leave the lookback code as it is
 
