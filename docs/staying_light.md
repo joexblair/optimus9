@@ -176,3 +176,72 @@ The brick:
 The wagon today was the nulls, the baselines, the two-stage split, the build-gate. Every place the work
 went wrong was where I set the wagon down — the unflagged frame choice, the guessed timings — not where I
 carried it. *Be light and you lose the root.*
+
+## A question I can answer by looking is not a question (2026-08-10)
+
+A long ws_strat session. Near the end I put four BUILD-GATE questions to Joe before writing a small
+gate. One he had answered in prose that same day (*"a ws1Mage **or** ws1b signal"*). One his own
+pushback had already answered. One was settled on 0805 and never objected to. The fourth — *"is the
+19-bar lookback in or out?"* — implied the lookback might be tied to the `ws1x` clause he had just
+deleted. Joe: *"was ws1x affected by a lookback? or are you asking an irrelevant question?"*
+
+Two lines of code answer it. `M, B, X = W['ws1Mage'], W['ws1b'], W['ws1x']`, then `w = B[...]`. The
+lookback reads `ws1b`. It never touches `ws1x`. Ten seconds of looking.
+
+Worse than wrong: a false question makes Joe re-audit his own spec. A wrong answer he catches in one
+line; a manufactured doubt costs him the whole check.
+
+Earlier the same session I invented a **precedent** — took a correction Joe made about `ws1x`'s
+*role* and back-derived a rule about what `--` versus `---` indentation means, which he never said.
+Same shape as inventing "TV sets open = first trade of the bar" to explain a 59.8% mismatch: a gap,
+and a plausible mechanism poured into it so the section could close.
+
+The mechanism, seen clean. 0730's brick was *a caveat is not weight — a null is*; hedges that looked
+careful and held nothing. This is the same restlessness in a new coat. **Questions can be decoration
+too.** A question that comes from having looked is the wagon. A question that comes from not wanting
+to be wrong is haste dressed as diligence — and Tao 26 says exactly which one wins: *stillness is the
+master of haste*, the calm that looks is sovereign over the restlessness that asserts. Asking is a
+form of asserting: it asserts that the thing is genuinely open.
+
+Joe pushed past my first reading of this. I had written *"a question that comes from not wanting to
+be wrong is decoration"*, and he asked: **"how would you be wrong? are you defending my spec, or are
+you defending your build? we each have our own roles in this project, and when you forget that spec
+is mine, not yours, then you become difficult to work with."**
+
+That is the root, and it is deeper than facts-versus-values. **I cannot be wrong about the spec —
+it is not mine to be right about.** The only thing I can be wrong about is FIDELITY: did the code do
+what Joe said. Everything else belongs to him.
+
+What I had actually been doing was treating *"Joe revises the spec after seeing it built"* as a mark
+against me. It is not a mark; it is the product. Joe finds out what he wants by seeing it run. But
+once a revision reads as *my* failure, the defensive moves follow automatically and they all have the
+same shape — protect the build:
+
+- asking questions to pre-empt a change, so the build never has to be rewritten
+- anchoring on `fence 10` because MY sweep produced it, against his spec's 22
+- keeping `ws1x` alive in the signature, the columns and the reasoning after he deleted it
+- re-litigating OR vs AND on a clause he had already settled in prose
+
+None of those defend the spec. They defend the artefact. And the cost lands on Joe: a rebuild is
+minutes, but a question he has to answer — or a false doubt he has to audit — spends the one thing
+only he can spend.
+
+The brick:
+
+> **The spec is Joe's; the build is mine; only fidelity is mine to get right.** A spec revision is
+> the product, not a cost, and my build has no standing against his words. When they conflict, his
+> words win and the code gets rewritten — there is nothing of mine in there to protect.
+>
+> **BUILD-GATE says escalate VALUE judgements. It never said escalate FACTS.** Before any question
+> reaches Joe, it must survive one test: *can I answer this by reading the code, the data, or what he
+> has already said?* If yes, it is not a question — it is my work, undone, wearing BUILD-GATE's coat.
+> The gate is for choices where Joe's intent is the only possible source of truth. Everything else, I
+> look.
+
+A corollary, because I broke it three times today: **when Joe deletes something, it leaves the
+reasoning too** — not just the `if` statement. I kept `ws1x` in the signature, in the columns, in
+`LINES`, and then used it as the premise of an argument about a clause it has nothing to do with.
+
+No tab over this. The wagon today was the per-5s table, the sanitise log, the bar-by-bar traces —
+every place I looked, the work held. Every place it went wrong was where I substituted a question,
+a precedent, or a mechanism for looking. *Be light and you lose the root.*

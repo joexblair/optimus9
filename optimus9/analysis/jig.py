@@ -27,6 +27,7 @@ from optimus9.analysis.lr_v2 import (s_qualify, s_qualify_parts, v2_arm, gate_op
                                      _curl_detect, fin_unlatch_nof9, fin_box_qualified)
 from optimus9.compute.breaching_line import predict_breach, FENCE_HI, FENCE_LO
 from optimus9.compute.line_config import KLine, BBLine, override as _override   # noqa: F401
+from optimus9.compute.indicator_computer import IndicatorComputer as IC   # px_smooth's DEMA
 from optimus9.compute.swing_detect import find_pivots, legs, swing_mask
 from sweep_eval import BASE_BIAS
 
@@ -47,6 +48,94 @@ def bbline(name, tf_min, *, length, mult, src='close', value_mode='emerging'):
     """A Bollinger-position override, BY NAME. Notation and tuple agree here (length|mult|src), but this is
     the one door so a caller never has to know which configs are safe to hand-build and which are not."""
     return {name: _override(tf_min * 60, BBLine(length=length, mult=mult, src=src), value_mode)}
+
+
+# ── EMERGING BAR GRID (Joe 0806) ────────────────────────────────────────────────────────────────
+# "build the capacity to set the emerging bar size by choosing a fraction: 1/{12,6,5,4,3,2}".
+# The fraction is of ONE MINUTE, so the grid is 60/frac seconds:
+#     1/12 = 5s (the base grid) | 1/6 = 10s | 1/5 = 12s | 1/4 = 15s | 1/3 = 20s | 1/2 = 30s
+# Everything in the project is computed on the 5s grid; these producers COARSEN it. A coarse bar's
+# EMERGING value is the value at its LAST constituent 5s bar — the same "what realtime sees" rule
+# indicator_value_modes calls 'emerging'. Causal: a coarse bar never reads past its own last 5s bar.
+BAR_FRACTIONS = (12, 6, 5, 4, 3, 2)          # of one minute
+FRAC_SECONDS = {f: 60 // f for f in BAR_FRACTIONS}
+
+
+def emerging_grid(ts, frac):
+    """(bucket_id per 5s bar, index of each bucket's LAST 5s bar). frac from BAR_FRACTIONS.
+
+    Buckets are wall-clock aligned on the epoch, so a 15s bucket always starts at :00/:15/:30/:45 —
+    the same seam the pine emit floors onto. A trailing partial bucket keeps its last seen bar."""
+    if frac not in FRAC_SECONDS:
+        raise ValueError(f'frac {frac!r} not in {BAR_FRACTIONS}')
+    ms = FRAC_SECONDS[frac] * 1000
+    ts = np.asarray(ts, np.int64)
+    bid = ts // ms
+    last = np.flatnonzero(np.r_[bid[1:] != bid[:-1], True])   # last 5s bar of each bucket
+    return bid, last
+
+
+def coarsen(line, ts, frac):
+    """A 5s-grid array sampled onto the emerging bar grid: one value per coarse bar, taken at that
+    bar's LAST 5s bar. Returns (values, index-into-ts). The consumer counts wob in COARSE bars."""
+    _, last = emerging_grid(ts, frac)
+    return np.asarray(line, float)[last], last
+
+
+def px_smooth(ts, px, evt=None, length=2, frac=12):
+    """[PRODUCER · Joe 0806] px_smooth on an emerging bar grid of 60/frac seconds, returned on the
+    FULL 5s grid (forward-filled), so it drops in wherever the 5s px_smooth is used today.
+
+        ts      5s-grid timestamps, ms
+        px      the price source on the 5s grid (close)
+        evt     event mask (volume > 0). A coarse bar is an event bar if ANY of its 5s bars traded —
+                the filler-invisible rule carried up a level. None = every bar is an event bar.
+        length  DEMA length in COARSE bars (optimus9_system.pxsmooth_dema_len, currently 2)
+        frac    BAR_FRACTIONS member. 12 -> 5s reproduces the existing behaviour.
+
+    Producer = IC.dema, as rpl_cache._px_smooth_evt uses. No fork."""
+    ts = np.asarray(ts, np.int64); px = np.asarray(px, float)
+    bid, last = emerging_grid(ts, frac)
+    cpx = px[last]                                            # emerging close of each coarse bar
+    if evt is not None:
+        evt = np.asarray(evt, bool)
+        cev = np.zeros(len(last), bool)                       # any 5s bar in the bucket traded
+        np.logical_or.at(cev, np.searchsorted(bid[last], bid), evt)
+    else:
+        cev = np.ones(len(last), bool)
+    out = np.full(len(cpx), np.nan)
+    ei = np.flatnonzero(cev & np.isfinite(cpx))
+    if len(ei):
+        out[ei] = IC.dema(cpx[ei], int(length))
+    m = np.isfinite(out)                                      # ffill across non-event coarse bars
+    if m.any():
+        ix = np.where(m, np.arange(len(out)), 0); np.maximum.accumulate(ix, out=ix)
+        out = out[ix]; out[:int(np.argmax(m))] = out[int(np.argmax(m))]
+    return out[np.searchsorted(bid[last], bid)]               # back onto the full 5s grid
+
+
+def oob_ib_cross(line, hi, lo, xwob):
+    """[PRODUCER · Joe 0806] OOB -> IB crossings of one line on whatever grid it is handed.
+
+    OOB = v >= hi or v <= lo; IB = lo < v < hi STRICTLY (jig.sign / lr_v2 s_qualify_reset).
+    A cross is CONFIRMED once IB has held `xwob` consecutive bars; returned per cross as
+    (cross_idx, conf_idx, side) where cross = the first IB bar, conf = cross + xwob - 1 = the first
+    bar the cross is KNOWABLE, side = +1 the run was hi, -1 lo. Causal."""
+    v = np.asarray(line, float)
+    oh, ol = v >= hi, v <= lo
+    ib = (v > lo) & (v < hi)
+    idx = np.arange(len(ib))
+    run = (idx + 1) - np.maximum.accumulate(np.where(ib, 0, idx + 1))
+    held = run >= max(1, int(xwob))
+    conf = held & ~np.r_[False, held[:-1]]
+    out = []
+    for c in np.flatnonzero(conf):
+        k = c - (int(xwob) - 1); z = k - 1
+        if z < 0:
+            continue
+        if oh[z]:   out.append((int(k), int(c), 1))
+        elif ol[z]: out.append((int(k), int(c), -1))
+    return out
 
 
 def _ffb(x):
@@ -262,6 +351,27 @@ class _Causal:
         reset = np.where(side, 0, idx + 1)                # consecutive-True count ending at i = (i+1) minus the
         run = (idx + 1) - np.maximum.accumulate(reset)    # last False position. Bit-identical incl NaN (NaN cmp -> False).
         return run >= max(1, int(n))
+
+    def seen_within(self, cond, n):
+        """[PRODUCER · Joe 0803] Was `cond` true at ANY bar in the trailing `n` 5s bars, inclusive of this one.
+
+        The COMPLEMENT of cross_wob's run test: cross_wob asks "held for n bars", this asks "true at least
+        once in n bars". Both are causal — neither reads past the bar.
+
+        Joe 0803 asked for it by name on the s6 exit: "could the answer be to look back 6 minutes for the
+        OOB s6m ?". The exit gate had been testing s6m OOB AT the cross bar, which cannot fire while s6Mage
+        is in bounds — for s6m to cross DOWN through an s6Mage sitting at 65 it must fall to 65, which is
+        under HI. A trailing look-back decouples the two.
+
+        `cond` = boolean array (or a line name, compared truthy is meaningless, so array only).
+        Returns per-bar bool. n<=1 degenerates to `cond` itself."""
+        c = np.asarray(cond, bool)
+        k = max(1, int(n))
+        if k == 1:
+            return c.copy()
+        cs = np.concatenate([[0], np.cumsum(c.astype(np.int64))])
+        i = np.arange(len(c))
+        return (cs[i + 1] - cs[np.maximum(0, i - k + 1)]) > 0
 
     def pk_state(self, line_slope, price_slope, slope_floor):
         """Slope-sign divergence state — delegates to the production seam Pk5sGateComputer._pk_state_from_slopes
@@ -498,7 +608,11 @@ class _Score:
         (standalone) and emit_overlay (labels + bgcolor in one indicator). transp = label colour transparency
         (0 solid .. 100 invisible; default 75 so dense label sets don't hide price — Joe 0717)."""
         T = [int(l['ts']) for l in labels]; Y = [round(float(l['y']), 6) for l in labels]
-        TXT = [str(l['text']) for l in labels]
+        # Escape REAL newlines and quotes only — never backslashes. Pine has no multi-line string literal,
+        # so a raw \n inside "..." will not parse. Callers that already pass the two characters \ n keep
+        # working untouched; callers that pass a real newline now also work (Joe 0802).
+        _esc = lambda s: str(s).replace('"', '\\"').replace('\n', '\\n')
+        TXT = [_esc(l['text']) for l in labels]
         UP = ['true' if l.get('up') else 'false' for l in labels]
         GRN = ['true' if l.get('green') else 'false' for l in labels]
         ai = lambda v: "array.from(" + ", ".join(str(int(z)) for z in v) + ")" if v else "array.new_int(0)"
@@ -626,6 +740,67 @@ if barstate.islast
                 + frag + self._labels_frag(labels, scheme))
         open(path, "w").write(body)
         return len(labels), total
+
+    @staticmethod
+    def bucket_spans(ts_iter, bucket_ms):
+        """Floor 5s timestamps onto a chart-TF bucket, deduped and sorted. bgcolor paints per CHART bar, so a
+        span emitted at 5s resolution only lights the bars the chart actually has. bucket_ms = the chart TF in
+        ms (240000 = TF4). Lifted here because every caller had its own copy (Joe 0802)."""
+        b = int(bucket_ms)
+        return sorted({(int(m) // b) * b for m in ts_iter})
+
+    def emit_direction_overlay(self, marks, streams, path, title, mechanics=(), bucket_ms=None,
+                               opacity=60, scheme='redgreen'):
+        """THE TEMPLATE (Joe 0802: "bake the template into the jig").
+
+        Two ORTHOGONAL colour channels, so neither reading is ambiguous:
+          LABELS  green + label_up = LONG, red + label_down = SHORT.  Direction owns green/red ALONE.
+                  Joe 0801: "a long signal firing half down a leg will look the same as a short signal"
+                  unless direction is encoded, so it gets its own channel and nothing else uses it.
+          BGCOLOR the per-row CALL, painted over a span. Use blue/yellow, never green/red.
+
+        marks   = [{ts:int-ms, y:float, long:bool, lines:[str, ...]}]
+                  `lines` are joined with a real newline; _labels_frag escapes it for Pine. One fact per
+                  line, and put an unambiguous timestamp on one of them — a bucketed label cannot be
+                  matched back to its row from the chart alone (Joe 0802).
+        streams = [{'name':str, 'ts':[int-ms...], 'color':'color.blue', 'meaning':str}]
+                  Order is PRIORITY: later paints over earlier. 'meaning' is required — it becomes the
+                  legend. `ts` may be raw 5s stamps; pass bucket_ms and they are floored for you.
+        mechanics = [str, ...] free lines appended under the legend: line specs, knobs, window.
+
+        The header is a LEGEND-FIRST comment block with counts GENERATED from marks/streams, so it cannot
+        drift from the data it describes (Joe 0802: the colour definitions were unreadable when they sat
+        230 chars into a single 700-char line).
+
+        -> (n_labels, n_painted_bars)"""
+        st = [dict(s) for s in streams]
+        for s in st:
+            if bucket_ms:
+                s['ts'] = self.bucket_spans(s['ts'], bucket_ms)
+            s.setdefault('meaning', s['name'])
+        nl = sum(1 for m in marks if m.get('long'))
+        legend = ['%s  —  LEGEND' % title, '']
+        legend.append('  BGCOLOR = the per-row call, painted over the span')
+        for s in st:
+            legend.append('    %-8s %-46s (%d bars)'
+                          % (s['color'].replace('color.', '').upper(), s['meaning'], len(s['ts'])))
+        if bucket_ms:
+            legend.append('    span bucket %d ms = %g s — set this to the chart TF you read it on'
+                          % (int(bucket_ms), int(bucket_ms) / 1000.0))
+        legend += ['', '  LABELS = DIRECTION, and nothing else uses green/red',
+                   '    GREEN + arrow up    LONG    %d rows' % nl,
+                   '    RED   + arrow down  SHORT   %d rows' % (len(marks) - nl)]
+        # The first row's ACTUAL text, marked as a sample. Not a format string — a format string drifts
+        # from the data, a sample cannot (Joe 0802: the legend must describe what is really there).
+        for k, ln in enumerate(marks[0]['lines'] if marks else []):
+            legend.append('    text line %d, sample:  %s' % (k + 1, ln))
+        if mechanics:
+            legend += [''] + list(mechanics)
+
+        labels = [dict(ts=int(m['ts']), y=float(m['y']), text='\n'.join(m['lines']),
+                       green=bool(m.get('long')), up=bool(m.get('long'))) for m in marks]
+        return self.emit_overlay(labels, st, path, title, opacity=opacity, scheme=scheme,
+                                 notes='\n'.join(legend))
 
 
 RED_BG_TRANSP = 47      # bgcolor red transparency (0 solid .. 100 invisible) - Joe 0731, red was hiding
