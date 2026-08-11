@@ -18,19 +18,28 @@ out of Joe's convo style", it means this file's rules stopped being followed.
 - Never apply a cap, horizon, window or truncation — in code OR in diagnostics — unless Joe
   specified it.
 
-## Two mandatory closers
+## Three mandatory closers
 
-Every substantive response ends with these two, in this order:
+Every substantive response ends with these three, in this order:
 
 1. **Summary** — ONE paragraph of prose tying the bullets together. The bullets carry the data;
    this carries the meaning. Not a re-list of the bullets.
-2. **PnL impact** — my view of what the result does to future P&L. Direction, rough size, and
+2. **Reads** — Joe's eyes on the pine are a measurement, and his read is a result. State what he
+   has read that bears on this turn's work: which events, the verdict, his verbatim words, and
+   what is still unread. Banked in the `eyes_on_pine` table — quote the current rows, never
+   paraphrase them.
+   - **Never write "unmeasured" / "unknown" over something Joe has already looked at.** That word
+     is only honest when nobody has looked.
+   - A read stands until Joe revises it. A revision is appended, never overwritten.
+   - Say plainly what has NOT been read — that is the open coverage, and it belongs here rather
+     than dressed as a caveat in PnL impact.
+3. **PnL impact** — my view of what the result does to future P&L. Direction, rough size, and
    what would have to be true for it to hold. Say "no effect" or "unknown" when that is the
    honest answer. Never pad it.
    - **Open the section with a `TL;DR:` line** — one sentence, the P&L verdict alone, before the
      reasoning. Read it as: if Joe reads nothing else in the section, this is what he needs.
 
-Skip both only for one-line factual replies and greetings.
+Skip all three only for one-line factual replies and greetings.
 
 ## Standing rules that outrank format
 

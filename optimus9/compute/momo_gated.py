@@ -33,6 +33,8 @@ and applies the two gates on top, reusing momo()'s own constants so nothing fork
 """
 import os
 import sys
+from contextlib import contextmanager
+
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -90,3 +92,37 @@ def states(r, dr, lo, hi):
     for k, i in enumerate(range(lo, hi + 1)):
         s[k] = STATE.get(momo_g(r, dr, i)[0], 0)
     return s
+
+
+@contextmanager
+def momo_window(window_min):
+    """[PRODUCER · Joe 0810] Run momo() over a window of `window_min` minutes instead of the module
+    default of 60.
+
+    WHY A CONTEXT MANAGER AND NOT AN ARGUMENT. momo() derives its sample grid from two MODULE
+    globals read at call time:
+
+        MOMO_STEP_BARS = MOMO_STEP_MIN * 12          # 60 bars = 5 min
+        MOMO_SAMPLES   = MOMO_WINDOW_MIN // MOMO_STEP_MIN
+        idx = [w - k * MOMO_STEP_BARS for k in range(MOMO_SAMPLES - 1, -1, -1)]
+
+    MOMO_SAMPLES is computed ONCE at import, so a per-TF window means changing it between calls.
+    The three alternatives all cost more:
+      - adding a `window_min=` arg MODIFIES momo(), which this file exists to avoid, and would put
+        predict_board.py:52 (a verbatim copy), vmomo.py and predict_walk.py out of sync;
+      - a new implementation here FORKS the formula into a fourth copy.
+    Joe 0810 confirmed this route. The mutation is contained and restored in a finally, so momo()
+    stays the single implementation and no caller outside this block sees a changed global.
+
+    NOT THREAD-SAFE, by construction — it mutates module state. Serial callers only.
+
+    Joe 0810 on the window itself: "it should be dynamic. use this value: {knob:4} x {TF width}".
+    MOMO_STEP_MIN stays 5 and does NOT scale, so the sample count varies with the window: 6 at a
+    32-min window (TF8 x 4), 26 at 132 min (TF33 x 4). Queued for A/B — see task #1."""
+    prev_w, prev_s = X.MOMO_WINDOW_MIN, X.MOMO_SAMPLES
+    X.MOMO_WINDOW_MIN = int(window_min)
+    X.MOMO_SAMPLES = max(2, int(window_min) // X.MOMO_STEP_MIN)
+    try:
+        yield X.MOMO_SAMPLES
+    finally:
+        X.MOMO_WINDOW_MIN, X.MOMO_SAMPLES = prev_w, prev_s

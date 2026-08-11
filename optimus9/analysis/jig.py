@@ -138,6 +138,80 @@ def oob_ib_cross(line, hi, lo, xwob):
     return out
 
 
+def momo_landed(R, tagged, hi, lo, fence, xwob, i0=0, i1=None):
+    """[PRODUCER · Joe 0810] Walk the ws1 markers and emit a `momo_landed` event when a
+    momentum-tagged r line crosses out of the fence and holds.
+
+    Joe's spec:
+        -without using lookahead, walk the ws1 markers
+        --at each marker, tag the TF{8 to 33}r lines that qualify for `momentum` (momo or curl)
+        --keep walking the markers (causal)
+        --IF a momentum tagged line has xwob {knob:4} crossed out of the fence_momo_landed fence
+        ---create a timestamped 'momo_landed' event
+
+    Joe 0810, the four rules that were not in the written spec:
+        dr          the ws1 MARKER's own side. oob-lo -> dr = bear = -1, oob-hi -> +1. Every marker
+                    has a side by construction, so there is no undirected case. (gcws30b was the
+                    first answer; it has no side at 78.5% of markers, so Joe moved it to ws1.)
+        xwob        5 s pxs bars
+        tag life    ALL tags are cleared when a momo_landed event is printed
+        direction   the line must exit on the side the momentum points
+
+    ARGS
+        R       {tf_minutes: r array on the 5 s grid}
+        tagged  {marker_bar: {tf: dr}} — the lines that qualified for momentum at that marker.
+                Computed by the CALLER, because the momentum verdict needs momo_gated, which
+                imports build_exhv2. Keeping that out of here is SRP and keeps the jig light; the
+                verdicts are also independent of the walk, so precomputing them is still causal.
+        fence   the knob. 20 -> fence_momo_landed = [20, 80]
+        xwob    consecutive 5 s bars the line must hold outside the fence
+
+    "CROSSED OUT" NEEDS A CROSSING. MY READING, not stated by Joe: the outside-run must START at or
+    after the tag — the line has to be INSIDE the fence on the bar before it goes out. A line already
+    outside when it is tagged does not land on that standing position; it waits for a return inside
+    and a fresh exit. The looser reading (hold xwob outside, crossing or not) is one condition away.
+
+    Returns a list of dicts, one per event:
+        bar     the bar the hold completes — the first bar the event is KNOWABLE
+        cross   the bar the line went outside the fence
+        tf      the line
+        dr      the direction it was tagged with
+        marker  the marker bar that tagged it
+        val     the r value at `bar`
+    Causal: every read is at or before its own bar."""
+    lo_f, hi_f = float(fence), 100.0 - float(fence)
+    n = len(next(iter(R.values())))
+    i1 = n if i1 is None else int(i1)
+    xw = max(1, int(xwob))
+    live = {}                       # tf -> {'dr':, 'marker':, 'run':, 'cross':, 'was_inside':}
+    out = []
+    for i in range(i0, i1):
+        for tf, dr in tagged.get(i, {}).items():
+            live[tf] = {'dr': int(dr), 'marker': i, 'run': 0, 'cross': None, 'was_inside': False}
+        if not live:
+            continue
+        fired = None
+        for tf, t in live.items():
+            v = R[tf][i]
+            if not np.isfinite(v):
+                t['run'] = 0; t['cross'] = None; continue
+            outside = (v > hi_f) if t['dr'] > 0 else (v < lo_f)
+            if not outside:
+                t['was_inside'] = True; t['run'] = 0; t['cross'] = None; continue
+            if not t['was_inside']:
+                continue            # standing outside since the tag — no crossing yet
+            if t['run'] == 0:
+                t['cross'] = i
+            t['run'] += 1
+            if t['run'] >= xw and fired is None:
+                fired = {'bar': i, 'cross': t['cross'], 'tf': tf, 'dr': t['dr'],
+                         'marker': t['marker'], 'val': float(v)}
+        if fired is not None:
+            out.append(fired)
+            live.clear()            # Joe: all tags are cleared when a momo_landed event is printed
+    return out
+
+
 def _ffb(x):
     """Forward-then-back fill NaN (find_pivots stalls on the DEMA-warmup NaN; every caller cleans first)."""
     x = np.asarray(x, float).copy(); m = np.isfinite(x)
