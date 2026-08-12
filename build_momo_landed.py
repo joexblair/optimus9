@@ -31,6 +31,11 @@ from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 from optimus9.analysis.jig import oob_ib_cross, momo_landed
 from optimus9.compute.momo_gated import momo_g, momo_window
 
+# Joe 0810: "disable the current clear mechanism: instead of clearing on 'first momentum line
+# exiting fence', now it will be 'highest TF momentum line curling against bias'".
+# The old rule stays reachable as 'landed' so the banked 117 rows remain reproducible; it is off.
+CLEAR_ON = 'hi_tf_counter_curl'
+
 TFS = list(range(8, 34))          # Joe 0810: "decrease the range: TF8 to TF33"
 R_SPEC = dict(k_len=7, rsi=5, stc=8, src='close')
 # THE ws1 MARKERS. Joe 0810: "that's 160 gcws30b crossings, released by a test on ws1 — this is my
@@ -55,6 +60,7 @@ EV_DDL = '''CREATE TABLE IF NOT EXISTS momo_landed (
     ml_fence     SMALLINT NOT NULL,        -- KNOB: fence_momo_landed = [fence, 100-fence]
     ml_xwob      SMALLINT NOT NULL,        -- KNOB: 5 s bars held outside the fence
     ml_kwindow   SMALLINT NOT NULL,        -- KNOB: momo window = kwindow * TF minutes
+    ml_clear     VARCHAR(20) NOT NULL,     -- KNOB: landed | hi_tf_counter_curl
     ml_tf        SMALLINT NOT NULL,        -- the ws{TF}r line that landed
     ml_dr        TINYINT NOT NULL,         -- +1 / -1, the ws1 marker's side it was tagged with
     ml_ms        BIGINT NOT NULL, ml_utc VARCHAR(19),   -- hold completes; first KNOWABLE bar
@@ -65,12 +71,13 @@ EV_DDL = '''CREATE TABLE IF NOT EXISTS momo_landed (
     ml_pxs       DOUBLE,
     ml_momo_state VARCHAR(8),              -- 'momo' | 'curl' at the tagging marker
     ml_momo_slope DOUBLE, ml_momo_r2 DOUBLE, ml_momo_r DOUBLE,
-    UNIQUE KEY uq_ml (ml_fence, ml_xwob, ml_kwindow, ml_tf, ml_ms),
+    UNIQUE KEY uq_ml (ml_fence, ml_xwob, ml_kwindow, ml_clear, ml_tf, ml_ms),
     KEY (ml_ms), KEY (ml_tf), KEY (ml_dr))'''
 
 BAR_DDL = '''CREATE TABLE IF NOT EXISTS momo_landed_bar (
     mlb_pk       BIGINT AUTO_INCREMENT PRIMARY KEY,
     mlb_fence    SMALLINT NOT NULL, mlb_xwob SMALLINT NOT NULL, mlb_kwindow SMALLINT NOT NULL,
+    mlb_clear    VARCHAR(20) NOT NULL,
     mlb_ms       BIGINT NOT NULL, mlb_utc VARCHAR(19),
     mlb_evt      TINYINT NOT NULL,         -- a pxs event bar (volume > 0)
     mlb_pxs      DOUBLE,
@@ -81,9 +88,13 @@ BAR_DDL = '''CREATE TABLE IF NOT EXISTS momo_landed_bar (
     mlb_tag_tfs  VARCHAR(255),             -- which ones, and momo|curl
     mlb_landed   TINYINT NOT NULL,         -- 1 = a momo_landed event completes here
     mlb_landed_tf SMALLINT,
+    mlb_live     SMALLINT NOT NULL,        -- tags LIVE on this bar, not just at markers
+    mlb_live_tfs VARCHAR(255),
+    mlb_cleared  TINYINT NOT NULL,         -- 1 = the clear fired here
+    mlb_clear_tf SMALLINT,                 -- the highest-TF line that curled against its dr
     mlb_ws1Mage  DOUBLE, mlb_ws1b DOUBLE,
     ''' + ',\n    '.join(f'{c:<10} DOUBLE' for c in RCOLS) + ''',
-    UNIQUE KEY uq_mlb (mlb_fence, mlb_xwob, mlb_kwindow, mlb_ms),
+    UNIQUE KEY uq_mlb (mlb_fence, mlb_xwob, mlb_kwindow, mlb_clear, mlb_ms),
     KEY (mlb_ms), KEY (mlb_marker), KEY (mlb_landed))'''
 
 
@@ -131,44 +142,60 @@ def main(rebuild=False):
     ntag = sum(len(v) for v in tagged.values())
     print(f'{ntag:,} (marker x TF) tags on {len(tagged):,} of {len(mk):,} markers', flush=True)
 
-    ev = momo_landed(R, tagged, HI, LO, FENCE, XWOB, i0=i0)
-    print(f'{len(ev):,} momo_landed events', flush=True)
+    # THE CLEAR. Joe: "highest TF momentum line curling against bias". MY READING: the same gated
+    # curl test Joe defined on 0805 (momo_gated.momo_g), run with the OPPOSITE dr. Lives here, not
+    # in the jig, for the same SRP reason `tagged` does: momo_g imports build_exhv2.
+    def counter_curl(tf, dr, bar):
+        with momo_window(K_WINDOW * tf):
+            st, _sl, _r2, _rw = momo_g(R[tf], -int(dr), bar)
+        return st == 'curl'
+
+    ev, clears, live_log = momo_landed(R, tagged, HI, LO, FENCE, XWOB, i0=i0,
+                                       clear_on=CLEAR_ON, counter_curl=counter_curl)
+    print(f'{len(ev):,} momo_landed events   {len(clears):,} clears   '
+          f'clear_on={CLEAR_ON}', flush=True)
 
     rows = []
     for e in ev:
         st, sl, r2, rw = detail[(e['marker'], e['tf'])]
-        rows.append((FENCE, XWOB, K_WINDOW, e['tf'], e['dr'],
+        rows.append((FENCE, XWOB, K_WINDOW, CLEAR_ON, e['tf'], e['dr'],
                      int(ts[e['bar']]), u(ts[e['bar']]), int(ts[e['cross']]), u(ts[e['cross']]),
                      int(ts[e['marker']]), u(ts[e['marker']]),
                      (int(ts[e['bar']]) - int(ts[e['marker']])) / 60000.0,
                      e['val'], float(pxs[e['bar']]), st, sl, r2, rw))
     db.execute(EV_DDL)
-    db.execute('DELETE FROM momo_landed WHERE ml_fence=%s AND ml_xwob=%s AND ml_kwindow=%s',
-               (FENCE, XWOB, K_WINDOW))
+    db.execute('DELETE FROM momo_landed WHERE ml_fence=%s AND ml_xwob=%s AND ml_kwindow=%s '
+               'AND ml_clear=%s', (FENCE, XWOB, K_WINDOW, CLEAR_ON))
     if rows:
-        cols = ('ml_fence,ml_xwob,ml_kwindow,ml_tf,ml_dr,ml_ms,ml_utc,ml_cross_ms,ml_cross_utc,'
+        cols = ('ml_fence,ml_xwob,ml_kwindow,ml_clear,ml_tf,ml_dr,ml_ms,ml_utc,ml_cross_ms,ml_cross_utc,'
                 'ml_marker_ms,ml_marker_utc,ml_lag_min,ml_r,ml_pxs,ml_momo_state,ml_momo_slope,'
                 'ml_momo_r2,ml_momo_r')
         db.executemany(f'INSERT INTO momo_landed ({cols}) VALUES '
                        f'({",".join(["%s"] * len(cols.split(",")))})', rows)
 
     land = {e['bar']: e['tf'] for e in ev}
+    CLR = {c['bar']: c for c in clears}
     brows = []
     for i in range(i0, len(ts)):
         tg = tagged.get(i, {})
         tgs = ','.join(f"{tf}:{detail[(i, tf)][0][0]}" for tf in sorted(tg)) if tg else None
-        brows.append([FENCE, XWOB, K_WINDOW, int(ts[i]), u(ts[i]), int(evt[i]),
+        lv = live_log.get(i, {})
+        brows.append([FENCE, XWOB, K_WINDOW, CLEAR_ON, int(ts[i]), u(ts[i]), int(evt[i]),
                       None if not np.isfinite(pxs[i]) else float(pxs[i]),
                       1 if i in MK else 0, MK.get(i), '+'.join(SRC[i]) if i in SRC else None,
                       len(tg), (tgs[:255] if tgs else None),
                       1 if i in land else 0, land.get(i),
+                      len(lv), (','.join(str(t) for t in sorted(lv))[:255] or None),
+                      1 if i in CLR else 0, CLR[i]['tf'] if i in CLR else None,
                       float(V['ws1Mage'][i]), float(V['ws1b'][i])]
                      + [None if not np.isfinite(R[t][i]) else float(R[t][i]) for t in TFS])
     db.execute(BAR_DDL)
-    db.execute('DELETE FROM momo_landed_bar WHERE mlb_fence=%s AND mlb_xwob=%s AND mlb_kwindow=%s',
-               (FENCE, XWOB, K_WINDOW))
-    bc = ('mlb_fence,mlb_xwob,mlb_kwindow,mlb_ms,mlb_utc,mlb_evt,mlb_pxs,mlb_marker,'
+    db.execute('DELETE FROM momo_landed_bar WHERE mlb_fence=%s AND mlb_xwob=%s AND mlb_kwindow=%s '
+               'AND mlb_clear=%s',
+               (FENCE, XWOB, K_WINDOW, CLEAR_ON))
+    bc = ('mlb_fence,mlb_xwob,mlb_kwindow,mlb_clear,mlb_ms,mlb_utc,mlb_evt,mlb_pxs,mlb_marker,'
           'mlb_marker_side,mlb_marker_src,mlb_tagged,mlb_tag_tfs,mlb_landed,mlb_landed_tf,'
+          'mlb_live,mlb_live_tfs,mlb_cleared,mlb_clear_tf,'
           'mlb_ws1Mage,mlb_ws1b,' + ','.join(RCOLS))
     db.executemany(f'INSERT INTO momo_landed_bar ({bc}) VALUES '
                    f'({",".join(["%s"] * len(bc.split(",")))})', brows)

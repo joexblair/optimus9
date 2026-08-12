@@ -138,7 +138,8 @@ def oob_ib_cross(line, hi, lo, xwob):
     return out
 
 
-def momo_landed(R, tagged, hi, lo, fence, xwob, i0=0, i1=None):
+def momo_landed(R, tagged, hi, lo, fence, xwob, i0=0, i1=None,
+                clear_on='hi_tf_counter_curl', counter_curl=None, reset_at=None):
     """[PRODUCER · Joe 0810] Walk the ws1 markers and emit a `momo_landed` event when a
     momentum-tagged r line crosses out of the fence and holds.
 
@@ -154,8 +155,30 @@ def momo_landed(R, tagged, hi, lo, fence, xwob, i0=0, i1=None):
                     has a side by construction, so there is no undirected case. (gcws30b was the
                     first answer; it has no side at 78.5% of markers, so Joe moved it to ws1.)
         xwob        5 s pxs bars
-        tag life    ALL tags are cleared when a momo_landed event is printed
+        tag life    ALL tags are cleared when a momo_landed event is printed   <-- DISABLED 0810
         direction   the line must exit on the side the momentum points
+
+    THE CLEAR, Joe 0810: "disable the current 'clear' mechanism: instead of clearing on 'first
+    momentum line exiting fence', now it will be 'highest TF momentum line curling against bias'".
+
+        clear_on='landed'              the original. a momo_landed event clears every tag.
+        clear_on='hi_tf_counter_curl'  the replacement, and the default. On every bar, the HIGHEST
+                                       TF among the live tags is tested for a curl against its own
+                                       `dr`; when it curls, every tag clears.
+
+    MY READINGS on the replacement, not stated by Joe:
+        WHAT CURLS      `counter_curl(tf, dr, bar) -> bool`, supplied by the caller (same SRP as
+                        `tagged`: the verdict needs momo_gated, which imports build_exhv2). The
+                        caller runs momo_g with the OPPOSITE dr and asks for 'curl' — the same
+                        gated test Joe defined on 0805, pointed the other way.
+        WHICH LINE      the highest TF among the CURRENTLY LIVE tags, recomputed each bar as the
+                        set changes. Not a fixed TF33.
+        WHEN            EVERY bar, not only at markers. The old clear fired at landings, which land
+                        on any bar; keeping the cadence means only the trigger changes.
+        THE EFFECT      unchanged — ALL tags clear. Joe replaced the trigger, not the effect.
+
+    CONSEQUENCE, flagged: a landing no longer ends the marker's tag set, so one marker can now
+    produce several landings, and a line that re-enters the fence and exits again can land twice.
 
     ARGS
         R       {tf_minutes: r array on the 5 s grid}
@@ -183,15 +206,26 @@ def momo_landed(R, tagged, hi, lo, fence, xwob, i0=0, i1=None):
     n = len(next(iter(R.values())))
     i1 = n if i1 is None else int(i1)
     xw = max(1, int(xwob))
+    if clear_on not in ('landed', 'hi_tf_counter_curl'):
+        raise ValueError('clear_on must be landed | hi_tf_counter_curl, got %r' % clear_on)
+    if clear_on == 'hi_tf_counter_curl' and counter_curl is None:
+        raise ValueError('clear_on=hi_tf_counter_curl needs a counter_curl(tf, dr, bar) callable')
     live = {}                       # tf -> {'dr':, 'marker':, 'run':, 'cross':, 'was_inside':}
-    out = []
+    out, clears, live_log = [], [], {}
+    reset_at = set() if reset_at is None else set(reset_at)
     for i in range(i0, i1):
+        # A domTF-climb ACTIVATION is a fresh start, not an addition. Joe 0812: "the domTF climb
+        # BEGINS with the highest TF which has a (dr aligned) curl or momo state" — a prior tag set
+        # surviving the activation would keep dominance and the named line would never lead.
+        if i in reset_at:
+            live.clear()
         for tf, dr in tagged.get(i, {}).items():
             live[tf] = {'dr': int(dr), 'marker': i, 'run': 0, 'cross': None, 'was_inside': False}
         if not live:
             continue
+        live_log[i] = {tf: t['dr'] for tf, t in live.items()}
         fired = None
-        for tf, t in live.items():
+        for tf, t in list(live.items()):
             v = R[tf][i]
             if not np.isfinite(v):
                 t['run'] = 0; t['cross'] = None; continue
@@ -203,13 +237,26 @@ def momo_landed(R, tagged, hi, lo, fence, xwob, i0=0, i1=None):
             if t['run'] == 0:
                 t['cross'] = i
             t['run'] += 1
-            if t['run'] >= xw and fired is None:
+            if t['run'] >= xw and not (clear_on == 'landed' and fired is not None):
                 fired = {'bar': i, 'cross': t['cross'], 'tf': tf, 'dr': t['dr'],
                          'marker': t['marker'], 'val': float(v)}
-        if fired is not None:
-            out.append(fired)
-            live.clear()            # Joe: all tags are cleared when a momo_landed event is printed
-    return out
+                out.append(fired)
+                # RE-ARM. Under 'landed' the clear made this unreachable. Under the replacement the
+                # tag survives its own landing, so without a reset the line would re-fire on every
+                # following bar. was_inside=False keeps the "crossed out needs a crossing" rule:
+                # it has to return inside the fence and exit again. MY READING, not stated by Joe.
+                t['run'] = 0; t['cross'] = None; t['was_inside'] = False
+        if clear_on == 'landed':
+            if fired is not None:
+                live.clear()        # the original: a momo_landed event clears every tag
+            continue
+        # the replacement: the HIGHEST TF among the live tags, curling against its own dr
+        htf = max(live)
+        if counter_curl(htf, live[htf]['dr'], i):
+            clears.append({'bar': i, 'tf': htf, 'dr': live[htf]['dr'],
+                           'n_cleared': len(live), 'tfs': sorted(live)})
+            live.clear()
+    return out, clears, live_log
 
 
 def _ffb(x):
@@ -920,3 +967,128 @@ class Jig:
 
     def __exit__(self, *a):
         self.close()
+
+
+def handoff(R, landings, live_log, fence, xwob, near, i0=0, i1=None, stall=None):
+    """[PRODUCER · Joe 0810] Defer a momo_landed to a higher timeframe before delegating.
+
+    Joe's spec, verbatim:
+        --if ANY momentum tagged line exits the fence, we call it a handoff and delegate it to the
+          finishers
+        ---there is a huge problem with this - creating a race condition blocks the momentum of
+           higher lines. you can see it in the large bull leg, between 08-04 16:50 and 19:50
+        ---0804 17:46:15
+        ----fired too early, the bull leg is still developing
+        ----if ws26r's signals here, then the spec is ignoring a larger momentum TF (eg 33)
+        ----if ws26r submitted to ws33r and allowed itself to be gated by ws33r, then the
+            "delegation to finishers" would be gated until ws33r crosses out of the fence
+        -----process: ws26r crosses out of the fence -> test for a higher TF -> IF a higher TF is
+             same-side xwob:{4} "near {fence-2:knob}" the fence THEN wait for that TF to exit the
+             fence -> walk forward, loop until there are no waiting HTFs -> delegate to the finishers
+
+    ARGS
+        landings  the momo_landed events, in bar order — each {'bar','cross','tf','dr','marker'}
+        live_log  {bar: {tf: dr}} the live tag set per bar, from momo_landed
+        near      the knob. 2 -> "near the fence" = [78,80) for dr +1, (20,22] for dr -1
+        xwob      consecutive 5 s bars the HTF must hold in the near band to count as WAITING
+
+    MY READINGS, not stated by Joe:
+        WHICH HTFs   live tags with TF strictly greater than the deferring line's, same `dr`.
+        NEAR         INSIDE the fence and within `near` of its edge. A line already outside has
+                     exited, so it cannot be waited for.
+        WAITING      `xwob` CONSECUTIVE bars in the near band, ending at the bar under test.
+        EXIT         the same exit momo_landed uses — the line's own landing. Not re-derived.
+        RELEASE      re-evaluated every bar. A waiting HTF that leaves the near band WITHOUT
+                     exiting stops blocking. Joe's "walk forward, loop until there are no waiting
+                     HTFs" implies the set is re-read as the walk proceeds; without a release a
+                     retreating HTF would block the handoff for ever.
+        CREDIT       the handoff carries BOTH the line that first crossed and the line whose exit
+                     released it.
+
+    THE STALL, Joe 0810: "the stall event will only be acknowledged by the dominant ws{tf}r line,
+    ie the line that has been identified to delay and carry the signal further."
+        `stall(tf, dr, bar) -> bool`, supplied by the caller (SRP, same as counter_curl). It is
+        asked ONLY about the currently awaited HTF — the dominant line — and only while a wait is
+        pending. A stall on any other line is not acknowledged.
+        MY READING: an acknowledged stall RELEASES the wait and delegates. Joe did not say what the
+        acknowledgement does; the dominant line having stopped advancing is the signal that it will
+        not carry the move further, which is the condition the wait exists to detect.
+
+    -> (handoffs, blocked) — handoffs are the delegations; blocked are the landings that were
+       suppressed, each with the HTFs it deferred to."""
+    lo_f, hi_f = float(fence), 100.0 - float(fence)
+    lo_n, hi_n = lo_f + float(near), hi_f - float(near)
+    n = len(next(iter(R.values())))
+    i1 = n if i1 is None else int(i1)
+    xw = max(1, int(xwob))
+
+    def in_near(tf, dr, i):
+        v = R[tf][i]
+        if not np.isfinite(v):
+            return False
+        return (hi_n <= v < hi_f) if dr > 0 else (lo_f < v <= lo_n)
+
+    def waiting(tf, dr, i):
+        """xwob consecutive bars in the near band, ending at i."""
+        return all(in_near(tf, dr, k) for k in range(max(0, i - xw + 1), i + 1))
+
+    land_at = {}
+    for e in landings:
+        land_at.setdefault(int(e['bar']), []).append(e)
+
+    handoffs, blocked = [], []
+    pending = {}                    # dr -> {'origin': event, 'chain': [tf...], 'awaiting': tf}
+    for i in range(i0, i1):
+        lv = live_log.get(i, {})
+        for e in land_at.get(i, []):
+            dr = int(e['dr'])
+            p = pending.get(dr)
+            if p is not None and int(e['tf']) != p['awaiting']:
+                continue            # a lower/other line landing while we wait — still suppressed
+            htfs = [tf for tf, d in lv.items()
+                    if int(d) == dr and tf > int(e['tf']) and waiting(tf, dr, i)]
+            if htfs:
+                top = max(htfs)
+                if p is None:
+                    p = {'origin': dict(e), 'chain': [], 'awaiting': None}
+                p['chain'].append({'bar': i, 'tf': int(e['tf']), 'defer_to': top,
+                                   'htfs': sorted(htfs)})
+                p['awaiting'] = top
+                pending[dr] = p
+                blocked.append({'bar': i, 'tf': int(e['tf']), 'dr': dr, 'defer_to': top,
+                                'htfs': sorted(htfs)})
+                continue
+            # nothing higher is waiting -> delegate
+            o = p['origin'] if p is not None else dict(e)
+            handoffs.append({'bar': i, 'tf': int(e['tf']), 'dr': dr,
+                             'origin_bar': int(o['bar']), 'origin_tf': int(o['tf']),
+                             'marker': int(e['marker']), 'val': float(R[e['tf']][i]),
+                             'chain': (p['chain'] if p is not None else []),
+                             'deferred_s': (int(i) - int(o['bar'])) * 5})
+            pending.pop(dr, None)
+        # RELEASE 1 — the STALL on the dominant line. Joe 0810.
+        for dr in list(pending):
+            p = pending[dr]
+            tf = p['awaiting']
+            if stall is not None and tf in lv and stall(tf, dr, i):
+                o = p['origin']
+                handoffs.append({'bar': i, 'tf': tf, 'dr': dr,
+                                 'origin_bar': int(o['bar']), 'origin_tf': int(o['tf']),
+                                 'marker': int(o['marker']), 'val': float(R[tf][i]),
+                                 'chain': p['chain'], 'deferred_s': (int(i) - int(o['bar'])) * 5,
+                                 'released': 'stall'})
+                pending.pop(dr)
+        # RELEASE 2: the awaited HTF is no longer waiting and has not landed -> stop blocking
+        for dr in list(pending):
+            p = pending[dr]
+            tf = p['awaiting']
+            if tf not in lv or not (in_near(tf, dr, i) or
+                                    ((R[tf][i] > hi_f) if dr > 0 else (R[tf][i] < lo_f))):
+                o = p['origin']
+                handoffs.append({'bar': i, 'tf': tf, 'dr': dr,
+                                 'origin_bar': int(o['bar']), 'origin_tf': int(o['tf']),
+                                 'marker': int(o['marker']), 'val': float(R[tf][i]),
+                                 'chain': p['chain'], 'deferred_s': (int(i) - int(o['bar'])) * 5,
+                                 'released': 'htf_left_the_near_band'})
+                pending.pop(dr)
+    return handoffs, blocked

@@ -30,8 +30,11 @@ MY READINGS — not stated by Joe, flagged so they can be overruled:
 
   ROW UNIT = one row per (cross bar x qualifying tagged line), same unit as momo_landed.
 
-TAG STATE is reconstructed exactly as the momo_landed walk holds it: tags are created at a ws1
-marker and ALL tags clear when a momo_landed event prints.
+TAG STATE follows the walk's CURRENT clear rule. 0810 first run: tags cleared on every
+momo_landed. 0810 second run: Joe replaced that with "highest TF momentum line curling against
+bias" (clear_on='hi_tf_counter_curl'), so the clear bars are read from momo_landed_bar.mlb_cleared
+and the membership is checked against the banked mlb_live_tfs. `dr` still comes from the most
+recent marker that tagged each line.
 
     python3 build_big_bar_detection.py
 """
@@ -47,13 +50,15 @@ from optimus9.orchestration.rpl_cache import cache_jig_perline
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 import build_momo_landed as B
 
+CLEAR_ON = B.CLEAR_ON             # which momo_landed clear rule the tag state follows
+
 MOVE_PCT = 1.0                    # KNOB: "price moves more than 1%"
 MOVE_SEC = 180                    # KNOB {180}: the window the move must complete inside
 EDGE_SLACK = 2                    # KNOB "fence edge minus 2 (eg 78/22)"
 FENCE = B.FENCE                   # 20 -> fence [20, 80]
 XLINE, BLINE = 'ws1x', 'ws1b'     # the cross pair
 W_LO = dt.datetime(2026, 8, 4, 12, 0, tzinfo=timezone.utc)
-W_HI = dt.datetime(2026, 8, 4, 22, 0, tzinfo=timezone.utc)
+W_HI = dt.datetime(2026, 8, 9, 12, 0, tzinfo=timezone.utc)   # full 120 h, Joe 0810
 
 HI_EDGE, LO_EDGE = 100 - FENCE, FENCE                  # 80 / 20
 HI_BAND, LO_BAND = HI_EDGE - EDGE_SLACK, LO_EDGE + EDGE_SLACK   # 78 / 22
@@ -115,17 +120,26 @@ def main():
                         {int(p.split(':')[0]) for p in x['t'].split(',')} if x['t'] else set())
           for x in mk}
     LD = {int(x['m']) for x in db.execute(
-        'SELECT ml_ms m FROM momo_landed WHERE ml_fence=%s AND ml_xwob=%s AND ml_kwindow=%s',
-        (B.FENCE, B.XWOB, B.K_WINDOW), fetch=True)}
+        'SELECT mlb_ms m FROM momo_landed_bar WHERE mlb_fence=%s AND mlb_xwob=%s AND mlb_kwindow=%s '
+        'AND mlb_clear=%s AND mlb_cleared=1',
+        (B.FENCE, B.XWOB, B.K_WINDOW, CLEAR_ON), fetch=True)}
+    # cross-check the reconstruction against the banked per-bar live set
+    BANK = {int(x['mlb_ms']): (x['mlb_live_tfs'] or '') for x in db.execute(
+        'SELECT mlb_ms, mlb_live_tfs FROM momo_landed_bar WHERE mlb_fence=%s AND mlb_xwob=%s '
+        'AND mlb_kwindow=%s AND mlb_clear=%s', (B.FENCE, B.XWOB, B.K_WINDOW, CLEAR_ON), fetch=True)}
+    mismatch = 0
 
     live = {}                       # tf -> (dr, marker_ms)
     rows, per_bar = [], {}
+    n_c1a = n_c1b = n_c1 = n_live = n_c2 = 0
     for i in range(i0, i1):
         t = int(ts[i])
         if t in MK:
             dr, tfs = MK[t]
             for tf in tfs:
                 live[tf] = (dr, t)
+        if t in BANK and ','.join(str(x) for x in sorted(live)) != BANK[t]:
+            mismatch += 1
         # --- condition 1a: the 1% move, extremum-to-current inside the trailing 180 s
         w = pxs[max(0, i - nb + 1):i + 1]
         w = w[np.isfinite(w)]
@@ -142,6 +156,13 @@ def main():
         else:
             x_under = x_over = False
 
+        if up > MOVE_PCT or dn > MOVE_PCT: n_c1a += 1
+        if x_under or x_over: n_c1b += 1
+        if (up > MOVE_PCT and x_under) or (dn > MOVE_PCT and x_over): n_c1 += 1
+        if live: n_live += 1
+        if any(np.isfinite(R[tf][i]) and ((d > 0 and HI_BAND <= R[tf][i] < HI_EDGE)
+                                          or (d < 0 and LO_EDGE < R[tf][i] <= LO_BAND))
+               for tf, (d, _m) in live.items()): n_c2 += 1
         for tf, (dr, mms) in sorted(live.items()):
             moved = up if dr > 0 else dn
             if moved <= MOVE_PCT:
@@ -183,6 +204,14 @@ def main():
     if rows:
         db.executemany(f'INSERT INTO big_bar_detection ({COLS}) VALUES '
                        f'({",".join(["%s"] * len(COLS.split(",")))})', rows)
+    print(f'tag state: clear_on={CLEAR_ON}, {len(LD)} clear bars in the tape; '
+          f'reconstruction mismatches vs mlb_live_tfs: {mismatch}', flush=True)
+    nn = i1 - i0
+    print(f'C1a 1% in {MOVE_SEC}s        {n_c1a:>7,} bars  {100*n_c1a/nn:5.2f}%')
+    print(f'C1b ws1x x ws1b        {n_c1b:>7,} bars  {100*n_c1b/nn:5.2f}%')
+    print(f'C1a AND C1b            {n_c1:>7,} bars  {100*n_c1/nn:5.2f}%')
+    print(f'    any live tag       {n_live:>7,} bars  {100*n_live/nn:5.2f}%')
+    print(f'C2  a live tag in band {n_c2:>7,} bars  {100*n_c2/nn:5.2f}%')
     print(f'big_bar_detection : {len(rows)} rows on {len(per_bar)} distinct signal bars', flush=True)
     for t in sorted(per_bar):
         print(f'   {u(t)}  ws{"r, ws".join(str(x) for x in sorted(per_bar[t]))}r')
