@@ -1173,6 +1173,17 @@ def ws_fin_9of12(W, hi, lo, n=WSF_N, handicap=WSF_HANDICAP, vote_hold=WSF_VOTE_H
     needed for this event - we're using gcws15's granularity in place of Mrev".
 
     PER SIDE (Joe D4=a). hi and lo are counted separately; a mixed-side set is not a confluence.
+    hn and ln are independent sums and no line can vote both ways (v >= 78 and v <= 22 cannot both
+    hold), so hn + ln <= 12 and a single bar can never fire both sides.
+
+    THIS PRODUCER EMITS NO TRADE DIRECTION. hi_fire / lo_fire are boundary counts: nine or more of
+    the twelve lines past the high boundary, or past the low one. Joe 0812: "its 100% obvious that a
+    LONG trade will launch from a lo oob, and inverse for SHORT. if you want to rely on +1 and -1,
+    you'll find it in `dr`."
+        lo_fire (9+ lines OOB-LOW)  -> LONG
+        hi_fire (9+ lines OOB-HIGH) -> SHORT
+    Do not label hi_fire as +1 here. The signed direction is `dr`, which already exists on the
+    markers and tags; this producer is a position count and nothing else.
     RISING EDGE (Joe D6=a). The event is the bar the count first reaches n, not every bar it holds.
 
     THE VOTE HOLD (Joe 0812: "I want to make sure that the IB dwell and XWOB settings are honoured

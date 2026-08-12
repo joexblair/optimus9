@@ -126,6 +126,19 @@ Companion to the domTF-climb state machine. Joe 0811-0812.
 -UNSPECIFIED: what the attribution changes downstream. Joe called it "an immediate fire", which I
  read as: the handoff belongs to that signal's trade, not as a new decision point.
 
+### M7 — direction comes from the OOB side, and lives in `dr`
+
+-Joe 0812: "its 100% obvious that a LONG trade will launch from a lo oob, and inverse for SHORT.
+ if you want to rely on +1 and -1, you'll find it in `dr`."
+
+    9+ of 12 lines OOB-LOW   -> LONG
+    9+ of 12 lines OOB-HIGH  -> SHORT
+
+-ws_fin_9of12 emits hi_fire / lo_fire, which are boundary counts. It carries no direction.
+-`dr` is the signed field already on the markers (wsw_side) and the momentum tags (ml_dr).
+-I had labelled hi_fire as +1 and treated +1 as LONG in the 08-04 ledger. That is inverted against
+ this rule: every ledger figure produced before 0812 under "+1 = LONG" has the wrong sign.
+
 ### M6 — position flow
 
 -observed in Joe's two notes: the finishers are always in a position while active. A decision
