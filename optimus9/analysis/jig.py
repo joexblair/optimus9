@@ -1092,3 +1092,122 @@ def handoff(R, landings, live_log, fence, xwob, near, i0=0, i1=None, stall=None)
                                  'released': 'htf_left_the_near_band'})
                 pending.pop(dr)
     return handoffs, blocked
+
+
+# ws_fin_9of12 knobs. BANKED 0812 from the IS sweep on 07-30 -> 08-09 12:00, scored against
+# swing_detect(1.11%); confirmed once on OOS 07-01 -> 07-22 with no OOS tuning.
+#   baseline  handicap 7, no hold   IS 3,182 fires 108/109 pivots 12.63/hr | OOS 7,001 440/448 13.89/hr
+#   BANKED                          IS 1,448 fires 107/109 pivots  5.75/hr | OOS 2,888 435/448  5.73/hr
+# The fire rate is 5.75/hr IS and 5.73/hr OOS across windows whose pivot density differs 2.1x
+# (0.43/hr vs 0.89/hr), so the reduction is a property of the mechanic, not of the tuning period.
+# vote_sticky carries it: 2,880 -> 1,542 on its own, a 46% cut for one pivot.
+WSF_N            = 9    # of 12
+WSF_HANDICAP     = 3    # gcws b/m/Mage vote at hi-3 / lo+3. was 7; 7 cost 9% more fires for no pivots
+WSF_VOTE_HOLD    = 12   # 5 s bars = 60 s past the threshold before a line may vote
+WSF_VOTE_STICKY  = 12   # 5 s bars of grace a voting line keeps across a return
+
+
+def _sticky(mask, grace):
+    """Hold a True across a gap of FEWER than `grace` bars. The per-line analogue of Joe's step-8
+    oob dwell carrying across a sub-min_ib_dwell poke.
+
+    CAUSAL. Walks forward carrying an off-counter: while a line that HAS been voting has been off
+    for fewer than `grace` bars, the vote is held. Nothing is written backwards. An earlier draft
+    filled the gap retrospectively once it ended — that reads the future and is not usable here."""
+    m = np.asarray(mask, bool)
+    out = np.zeros(len(m), bool)
+    seen = False; off = 0
+    for i in range(len(m)):
+        if m[i]:
+            seen = True; off = 0; out[i] = True
+        elif seen:
+            off += 1
+            out[i] = off < int(grace)
+            if not out[i]:
+                seen = False
+    return out
+
+
+def _runlen(mask):
+    """Consecutive-True count ending at each bar. Local copy — jig does not import ws_strat."""
+    m = np.asarray(mask, bool).astype(np.int64)
+    out = np.zeros(len(m), np.int64); c = 0
+    for i in range(len(m)):
+        c = c + 1 if m[i] else 0
+        out[i] = c
+    return out
+
+
+def ws_fin_9of12(W, hi, lo, n=WSF_N, handicap=WSF_HANDICAP, vote_hold=WSF_VOTE_HOLD,
+                 vote_sticky=WSF_VOTE_STICKY):
+    """[PRODUCER · Joe 0812] ws_fin_9of12 — the finisher confluence event.
+
+    Joe's spec:
+        we'll build a ws15301_9(or10)of12 event on the jig. when the event fires, the trade signal
+        will print (if domTF state is FREE)
+        -use these 12 lines: gcws[15,30][b,m,Mage,r] and ws1[b,m,Mage,r]
+        -the gcws lines are allowed a handicap:
+        --gcws[15,30][b,m,Mage] qualify for 9/10of12 if they have crossed (oob - {knob:7}) ie 22 and 78
+        -r-lookback will be disabled in this mechanism
+
+    ONE LINE, ONE VOTE (Joe D1=a). Each of the 12 lines contributes a single per-side bool: is it
+    OOB on that side at THIS bar. Not the 3-conditions-per-bundle shape of s_qualify_parts.
+
+    THE HANDICAP (Joe D2=a) applies to SIX lines only — gcws15b/m/Mage and gcws30b/m/Mage — which
+    vote at hi-handicap / lo+handicap = 78 / 22. The two gcws r lines and all four ws1 lines vote at
+    the full boundary, 85 / 15. Joe named the six explicitly; the r lines are not in that list.
+
+    NO r-LOOKBACK (Joe D3=a). s_qualify_parts offers rlb_hi/lo (r OOB within r_lb back) and r_hi/lo
+    (r OOB at the bar). This producer uses the at-the-bar test only — there is no lookback path.
+
+    NO Mrev. The existing N-of-9 counts a Mage reversal; this set does not. Joe 0812: "its not
+    needed for this event - we're using gcws15's granularity in place of Mrev".
+
+    PER SIDE (Joe D4=a). hi and lo are counted separately; a mixed-side set is not a confluence.
+    RISING EDGE (Joe D6=a). The event is the bar the count first reaches n, not every bar it holds.
+
+    THE VOTE HOLD (Joe 0812: "I want to make sure that the IB dwell and XWOB settings are honoured
+    so that we can rely on ws1Mage oob and ws1b fence to contain the signals"). XWOB and
+    MIN_IB_DWELL cannot reach this producer — they gate a gcws30b CROSSING, and there is no crossing
+    here. Measured 08-04 00:00-12:00 at handicap 0 / 88-12 / N9: 58.5% of fires had ws1Mage past its
+    threshold for less than MIN_IB_DWELL and 28% for less than XWOB; the 25th percentile was ONE bar.
+    So the hold is applied to the VOTE itself:
+        vote_hold    a line votes only after `vote_hold` CONSECUTIVE bars past its threshold
+        vote_sticky  once voting, a line keeps its vote across a gap shorter than `vote_sticky`
+                     bars — the per-line analogue of Joe's step-8 oob dwell rule
+    Both default to 0 = off, which reproduces the raw position test exactly.
+
+    ARGS
+        W          the value_mode-honoured line reader (jig W)
+        hi/lo      the boundaries, 85 / 15
+        n          the threshold. Joe: 9 or 10 of 12
+        handicap   KNOB 7. gcws b/m/Mage vote at hi-7 / lo+7
+        vote_hold  KNOB. consecutive bars past the threshold before the line may vote
+        vote_sticky KNOB. bars of grace a voting line keeps across a return
+
+    -> dict:
+        hi_n / lo_n      per-bar vote count, 0..12
+        hi_fire / lo_fire  per-bar bool, the RISING EDGE of count >= n
+        votes            {line_name: (hi_bool_array, lo_bool_array)} for the audit trail
+    Causal: every read is at its own bar."""
+    HANDI = [f'{g}{s}' for g in ('gcws15', 'gcws30') for s in ('b', 'm', 'Mage')]
+    LINES = ([f'{g}{s}' for g in ('gcws15', 'gcws30') for s in ('b', 'm', 'Mage', 'r')]
+             + [f'ws1{s}' for s in ('b', 'm', 'Mage', 'r')])
+    votes, H, L = {}, [], []
+    for nm in LINES:
+        v = np.asarray(W.line(nm), float)
+        h_, l_ = (hi - handicap, lo + handicap) if nm in HANDI else (hi, lo)
+        vh, vl = (v >= h_), (v <= l_)
+        if int(vote_sticky) > 0:
+            vh, vl = _sticky(vh, int(vote_sticky)), _sticky(vl, int(vote_sticky))
+        if int(vote_hold) > 0:
+            vh = _runlen(vh) >= int(vote_hold)
+            vl = _runlen(vl) >= int(vote_hold)
+        votes[nm] = (vh, vl); H.append(vh); L.append(vl)
+    hn = np.sum(H, axis=0).astype(np.int16)
+    ln = np.sum(L, axis=0).astype(np.int16)
+    okh, okl = hn >= int(n), ln >= int(n)
+    return {'hi_n': hn, 'lo_n': ln,
+            'hi_fire': okh & ~np.r_[False, okh[:-1]],
+            'lo_fire': okl & ~np.r_[False, okl[:-1]],
+            'votes': votes, 'lines': LINES, 'handicapped': HANDI}
