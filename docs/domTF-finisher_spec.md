@@ -87,13 +87,24 @@ Companion to the domTF-climb state machine. Joe 0811-0812.
 -the finisher lines are gcws30, ws1, ws2, ws3, ws4, ws5, ws6 — ascending TF
 -the same weakness/momentum read is applied at each, in TF order
 
-### M4 — a finisher line's momentum is CANCELLED by its own x/m/b crossing it
+### M4 — a finisher line's momentum is CANCELLED by its own x/m/b crossing BACK TOWARDS 50
 
 -Joe 0812: "10:57 - ws3r crossed under by ws3x/m/b. this cancels ws3r's momentum and generates a
  trade signal"
--so the cancel is a per-line event: the line's own faster bands crossing its r
+-Joe 0812, the final blow: "**ws3x/m/b crossing back towards 50**"
+-so the cancel is NOT merely x/m/b sitting below r. It is the bands REVERSING toward the midline.
+ Direction is the test; relative position to r is not sufficient on its own
 -this is the finisher-side analogue of the domTF stall
--UNSPECIFIED: whether all three of x/m/b must cross, or any one
+-the 10:58:00 bar is consistent on all three lines, one 1-min step:
+
+    ws3x  102.79 -> 79.80    -22.99
+    ws3m   96.42 -> 84.08    -12.34
+    ws3b   86.31 -> 82.99     -3.32
+    ws3r   76.27 -> 88.77    +12.50   (r rising while all three bands fall towards 50)
+
+-ONE BAR OF EVIDENCE. Not measured as a rule. The "towards 50" test needs a lookback and a
+ threshold, neither of which is specified
+-UNSPECIFIED: whether all three of x/m/b must turn, or any one
 
 ### M5 — every finisher decision is gated to a gcws30 signal
 
@@ -101,6 +112,19 @@ Companion to the domTF-climb state machine. Joe 0811-0812.
 -so the finisher clock is the gcws30 signal series, not the 5 s bar
 -a condition that becomes true between signals waits for the next signal
 -this is why Joe's timestamps land on signals and his action timestamps land 5 s later
+
+### M6b — handoff tolerance after a finisher trade signal
+
+-Joe 0812: "a {knob:17 x 1min bars} tolerance must be given to a handoff which lands just after a
+ finisher trade signal"
+-`handoff_tolerance` = 17 x 1 min = **17 min** = 204 bars at the 5 s grid
+-worked case, Joe 0812: "11:05:30 is an immediate fire - the finishers created a signal at ~10:53,
+ when ws1 and gcws30 both signalled with a weak r while ws2r was stalled"
+--gcws30 signal conf 10:53:35 -> handoff 11:05:30 = 11.9 min. Inside 17, so the handoff is
+  attributed to that signal rather than treated as a separate event
+-MY READING, not stated: the tolerance is ONE-SIDED — the handoff must land AFTER the signal.
+-UNSPECIFIED: what the attribution changes downstream. Joe called it "an immediate fire", which I
+ read as: the handoff belongs to that signal's trade, not as a new decision point.
 
 ### M6 — position flow
 
@@ -120,6 +144,8 @@ Companion to the domTF-climb state machine. Joe 0811-0812.
 | 2 | whether M4 needs all of x/m/b or any one | Joe |
 | 3 | how the finishers reach a decision from the r-line positions — the confluence rule itself | Joe, "currently in architecture phase" |
 | 4 | what "weak" means numerically for gcws30r / ws1r at 10:53 | Joe |
+| 5 | what the M6b attribution changes downstream — Joe called 11:05:30 "an immediate fire" | Joe |
+| 6 | whether the near-band dominance walk or the domTF-climb state machine is authoritative for FREE. They disagree at 10:57 | Joe |
 
 ---
 

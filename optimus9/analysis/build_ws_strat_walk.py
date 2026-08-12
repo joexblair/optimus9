@@ -25,15 +25,17 @@ import numpy as np
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.analysis.jig import _Score
-from optimus9.analysis.ws_strat import (walk, candidates, states, gate, LINES,
+from optimus9.analysis.ws_strat import (walk, candidates, states, gate, LINES, MIN_IB_DWELL,
                                         GATE_FENCE, GATE_LB)
 from optimus9.compute.line_config import LineStore
 from optimus9.orchestration.rpl_cache import cache_jig_perline
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 
-START = dt.datetime(2026, 8, 4, 12, 0, tzinfo=timezone.utc)   # Joe 0805: "starting at 08-04 12:00"
+START = dt.datetime(2026, 8, 4, 0, 30, tzinfo=timezone.utc)   # Joe 0812: "starting at 00:30"
 START_MS = int(START.timestamp() * 1000)
 OOBW, XWOB = 16, 2               # Joe's two knobs. oobw in 5 s bars (>16 => >=17 = 85 s); xwob in 5 s bars.
+MIN_IB = MIN_IB_DWELL            # KNOB, Joe 0812. 5 s bars = 60 s. The IB run that RESETS the OOB
+#                                  dwell. SEPARATE from xwob, which only marks the cross.
 #                                  0805: oobw 18 -> 8, from Joe's
 #                                  8 estimated bgcolor times. 5 of the 8 sat on candidates of dwell 9..18;
 #                                  two more (19:44:30, 05:27:30) need the dwell to survive a short IB poke.
@@ -55,6 +57,7 @@ DDL = '''CREATE TABLE IF NOT EXISTS ws_strat_walk (
     wsw_pk        BIGINT AUTO_INCREMENT PRIMARY KEY,
     wsw_oobw      SMALLINT NOT NULL,          -- KNOB: OOB dwell floor, 5s bars, tested STRICTLY >
     wsw_xwob      SMALLINT NOT NULL,          -- KNOB: bars gcws30b must hold IB to confirm the cross
+    wsw_min_ib    SMALLINT NOT NULL,          -- KNOB: IB bars that RESET the OOB dwell. Joe 0812
     wsw_cross_ms  BIGINT NOT NULL,            -- the FIRST IB bar = Joe's crossover timestamp
     wsw_cross_utc VARCHAR(19),
     wsw_conf_ms   BIGINT NOT NULL,            -- cross + (xwob-1): the first bar the event is KNOWABLE
@@ -81,7 +84,7 @@ DDL = '''CREATE TABLE IF NOT EXISTS ws_strat_walk (
     --                                           not OOB. Both sides of the comparison must hold.
     wsw_pxs       DOUBLE,                     -- px_smooth (DEMA close 2, event tape) at the conf bar
     ''' + ',\n    '.join(f'{c:<16} DOUBLE' for c in COLS) + ''',
-    UNIQUE KEY uq_wsw (wsw_oobw, wsw_xwob, wsw_fence, wsw_lb, wsw_blen, wsw_bmult,
+    UNIQUE KEY uq_wsw (wsw_oobw, wsw_xwob, wsw_min_ib, wsw_fence, wsw_lb, wsw_blen, wsw_bmult,
                        wsw_mlen, wsw_mmult, wsw_cross_ms),
     KEY (wsw_cross_ms), KEY (wsw_side), KEY (wsw_gated), KEY (wsw_ws1_exhausted))'''
 
@@ -97,6 +100,7 @@ BAR_DDL = '''CREATE TABLE IF NOT EXISTS ws_strat_bar (
     wsb_pk        BIGINT AUTO_INCREMENT PRIMARY KEY,
     wsb_oobw      SMALLINT NOT NULL,          -- KNOB, as ws_strat_walk
     wsb_xwob      SMALLINT NOT NULL,
+    wsb_min_ib    SMALLINT NOT NULL,          -- KNOB: IB bars that RESET the OOB dwell. Joe 0812
     wsb_blen      SMALLINT NOT NULL, wsb_bmult DECIMAL(8,4) NOT NULL,
     wsb_mlen      SMALLINT NOT NULL, wsb_mmult DECIMAL(8,4) NOT NULL,
     wsb_ms        BIGINT NOT NULL, wsb_utc VARCHAR(19),
@@ -122,7 +126,7 @@ BAR_DDL = '''CREATE TABLE IF NOT EXISTS ws_strat_bar (
     wsb_lb_oob    TINYINT, wsb_lb_fence TINYINT,
     wsb_ws1b_weaker_than_ws1Mage TINYINT,     -- Joe 0810, signal bars only
     ''' + ',\n    '.join(f'{c:<16} DOUBLE' for c in BCOLS) + ''',
-    UNIQUE KEY uq_wsb (wsb_oobw, wsb_xwob, wsb_blen, wsb_bmult, wsb_mlen, wsb_mmult, wsb_ms),
+    UNIQUE KEY uq_wsb (wsb_oobw, wsb_xwob, wsb_min_ib, wsb_blen, wsb_bmult, wsb_mlen, wsb_mmult, wsb_ms),
     KEY (wsb_ms), KEY (wsb_evt), KEY (wsb_state), KEY (wsb_cand), KEY (wsb_gate_ok))'''
 
 u = lambda t: dt.datetime.fromtimestamp(int(t) / 1000, timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
@@ -163,7 +167,7 @@ def _migrate(db):
 def write_bars(db, ts, V, pxs, evt, i0, i1, HI, LO, oobw, xwob, ev=(), spec=(48, 0.98, 37, 0.90)):
     """ws_strat_bar: one row per 5 s bar of the walk window. States come from ws_strat.states() —
     the SAME arrays walk() runs on, so the table cannot drift from the events."""
-    S = states(V['gcws30b'], HI, LO, xwob)
+    S = states(V['gcws30b'], HI, LO, xwob, min_ib=MIN_IB)
     cand = {e['cross']: e for e in candidates(V['gcws30b'], HI, LO, xwob, S)}
     conf_at = {e['conf'] for e in cand.values()}
     G = {e['cross']: e for e in ev}                    # the GATED verdict, by cross bar
@@ -182,7 +186,7 @@ def write_bars(db, ts, V, pxs, evt, i0, i1, HI, LO, oobw, xwob, ev=(), spec=(48,
     for i in range(i0, i1):
         st = 1 if S['oob_hi'][i] else (-1 if S['oob_lo'][i] else (0 if S['ib'][i] else None))
         e = cand.get(i)
-        out.append([oobw, xwob, *spec, int(ts[i]), u(ts[i]), int(evt[i]),
+        out.append([oobw, xwob, MIN_IB, *spec, int(ts[i]), u(ts[i]), int(evt[i]),
                     None if not np.isfinite(px[i]) else float(px[i]),
                     None if pxs is None or not np.isfinite(pxs[i]) else float(pxs[i]),
                     st, int(S['hi_run'][i]), int(S['lo_run'][i]), int(S['ib_run'][i]),
@@ -197,8 +201,9 @@ def write_bars(db, ts, V, pxs, evt, i0, i1, HI, LO, oobw, xwob, ev=(), spec=(48,
 
     _migrate(db)
     db.execute(BAR_DDL)
-    db.execute('DELETE FROM ws_strat_bar WHERE wsb_oobw=%s AND wsb_xwob=%s', (oobw, xwob))
-    cols = ('wsb_oobw,wsb_xwob,wsb_blen,wsb_bmult,wsb_mlen,wsb_mmult,wsb_ms,wsb_utc,wsb_evt,wsb_px,wsb_pxs,wsb_state,wsb_hi_run,'
+    db.execute('DELETE FROM ws_strat_bar WHERE wsb_oobw=%s AND wsb_xwob=%s AND wsb_min_ib=%s',
+               (oobw, xwob, MIN_IB))
+    cols = ('wsb_oobw,wsb_xwob,wsb_min_ib,wsb_blen,wsb_bmult,wsb_mlen,wsb_mmult,wsb_ms,wsb_utc,wsb_evt,wsb_px,wsb_pxs,wsb_state,wsb_hi_run,'
             'wsb_lo_run,wsb_ib_run,wsb_dwell,wsb_dwell_side,wsb_cand,wsb_gate_ok,wsb_conf,wsb_side,'
             'wsb_oob_bars,wsb_gated,wsb_gate_by,wsb_ws1_exhausted,wsb_lb_oob,wsb_lb_fence,'
             'wsb_ws1b_weaker_than_ws1Mage,'
@@ -234,7 +239,7 @@ def main(oobw=OOBW, xwob=XWOB, pine=True, bars=True):
     print(f'tape {u(ts[0])} -> {u(ts[-1])}, {len(ts):,} bars')
     print(f'walk {u(ts[i0])} -> {u(ts[-1])}, bars {i0:,}..{len(ts) - 1:,} = {len(ts) - i0:,}')
 
-    ev = walk(V['gcws30b'], HI, LO, oobw, xwob, i0=i0)
+    ev = walk(V['gcws30b'], HI, LO, oobw, xwob, i0=i0, min_ib=MIN_IB)
     gate(ev, V, HI, LO, FENCE, LB)
     print(f'\n{len(ev)} crossovers  (hi {sum(1 for e in ev if e["side"] > 0)} / '
           f'lo {sum(1 for e in ev if e["side"] < 0)})')
@@ -242,7 +247,7 @@ def main(oobw=OOBW, xwob=XWOB, pine=True, bars=True):
     rows = []
     for e in ev:
         c, k = e['conf'], e['cross']
-        rows.append([oobw, xwob, int(ts[k]), u(ts[k]), int(ts[c]), u(ts[c]),
+        rows.append([oobw, xwob, MIN_IB, int(ts[k]), u(ts[k]), int(ts[c]), u(ts[c]),
                      (int(ts[k]) // BUCKET_MS) * BUCKET_MS, FENCE, LB,
                      BLEN, BMULT, MLEN, MMULT, e['side'], e['oob'],
                      e['gated'], e['by'], e['exhausted'], e['lb_oob'], e['lb_fence'],
@@ -252,18 +257,20 @@ def main(oobw=OOBW, xwob=XWOB, pine=True, bars=True):
 
     _migrate(db)
     db.execute(DDL)
-    db.execute('DELETE FROM ws_strat_walk WHERE wsw_oobw=%s AND wsw_xwob=%s', (oobw, xwob))
+    db.execute('DELETE FROM ws_strat_walk WHERE wsw_oobw=%s AND wsw_xwob=%s AND wsw_min_ib=%s',
+               (oobw, xwob, MIN_IB))
     if rows:
-        cols = ('wsw_oobw,wsw_xwob,wsw_cross_ms,wsw_cross_utc,wsw_conf_ms,wsw_conf_utc,'
+        cols = ('wsw_oobw,wsw_xwob,wsw_min_ib,wsw_cross_ms,wsw_cross_utc,wsw_conf_ms,wsw_conf_utc,'
                 'wsw_bucket_ms,wsw_fence,wsw_lb,wsw_blen,wsw_bmult,wsw_mlen,wsw_mmult,'
                 'wsw_side,wsw_oob_bars,wsw_gated,'
                 'wsw_gate_by,wsw_ws1_exhausted,wsw_lb_oob,wsw_lb_fence,'
                 'wsw_ws1b_weaker_than_ws1Mage,wsw_pxs,' + ','.join(COLS))
         npw = len(cols.split(','))
         db.executemany(f'INSERT INTO ws_strat_walk ({cols}) VALUES ({",".join(["%s"] * npw)})', rows)
-    n = db.execute('SELECT COUNT(*) n FROM ws_strat_walk WHERE wsw_oobw=%s AND wsw_xwob=%s',
-                   (oobw, xwob), fetch=True)[0]['n']
-    print(f'ws_strat_walk: {len(rows)} rows offered, {n} in table at oobw {oobw} / xwob {xwob}')
+    n = db.execute('SELECT COUNT(*) n FROM ws_strat_walk WHERE wsw_oobw=%s AND wsw_xwob=%s '
+                   'AND wsw_min_ib=%s', (oobw, xwob, MIN_IB), fetch=True)[0]['n']
+    print(f'ws_strat_walk: {len(rows)} rows offered, {n} in table at oobw {oobw} / xwob {xwob} / '
+          f'min_ib {MIN_IB}')
     ung = [e for e in ev if not e['gated']]
     from collections import Counter
     print(f'GATE fence {FENCE} (outside [{FENCE},{100-FENCE}]) | lb {LB} bars = {LB*5}s')

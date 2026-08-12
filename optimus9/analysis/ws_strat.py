@@ -42,16 +42,23 @@ def run_len(mask):
     return (idx + 1) - np.maximum.accumulate(reset)
 
 
-def states(b, hi, lo, xwob):
+def states(b, hi, lo, xwob, min_ib=None):
     """The PER-BAR state of the walk. ONE definition, consumed by both walk() (the events) and
     build_ws_strat_walk.write_bars() (the per-bar debug table) — so the table and the events can
     never disagree about what a dwell or a confirmation bar is.
 
-    THE DWELL (Joe 0805: "if a IB cross wob is incomplete, the OOB dwell is not affected").
-    `dwell` counts OOB bars on ONE side. An IB excursion SHORTER than xwob does NOT touch it — the
-    counter is carried across the excursion and keeps accumulating when the line goes back OOB.
-    It resets on a CONFIRMED cross (ib_run reaching xwob), on a side flip, and on NaN. The dwell a
-    candidate is gated on is the value at its LAST OOB BAR.
+    THE DWELL. `dwell` counts OOB bars on ONE side. It resets on a side flip, on NaN, and on an IB
+    run reaching MIN_IB_DWELL. An IB excursion SHORTER than that does NOT touch it — the counter is
+    carried across and keeps accumulating when the line goes back OOB. The dwell a candidate is
+    gated on is the value at its LAST OOB BAR.
+
+    MIN_IB_DWELL IS SEPARATE FROM xwob (Joe 0812: "separate them - use this: min_ib_dwell").
+    xwob MARKS the cross (step 10 of Joe's chain); min_ib_dwell decides whether the IB return was
+    real enough to RESET the count (step 8: "past one level without touching the other").
+    UNTIL 0812 one number did both, at xwob 2. Joe 0812: "2-bars is inadequate. the point of the IB
+    dwell is to separate genuine signals (eg the IB incursion between 10:31 to 10:36)."
+    Measured on 08-03 12:00 -> 08-09 12:00: 1,607 candidates either way; signals 434 -> 754; ws1
+    markers 198 -> 330.
 
     Returns arrays, all the same length as `b`, all backward-looking:
         oob_hi/oob_lo/ib       per-bar membership. NaN is False in all three.
@@ -70,6 +77,7 @@ def states(b, hi, lo, xwob):
 
     dwell = np.zeros(n, np.int64); dside = np.zeros(n, np.int8)
     D = 0; side = 0; xw = max(1, int(xwob))
+    mib = max(1, int(MIN_IB_DWELL if min_ib is None else min_ib))
     for i in range(n):
         if oob_hi[i] or oob_lo[i]:
             s = 1 if oob_hi[i] else -1
@@ -77,9 +85,9 @@ def states(b, hi, lo, xwob):
                 D = 0; side = s                    # side flip starts a new counter
             D += 1
         elif ib[i]:
-            if ib_run[i] >= xw:
-                D = 0; side = 0                    # a CONFIRMED cross closes the session
-            #                                        an IB run SHORTER than xwob leaves D untouched
+            if ib_run[i] >= mib:
+                D = 0; side = 0                    # a REAL IB dwell closes the session
+            #                                        an IB run shorter than min_ib_dwell leaves D alone
         else:
             D = 0; side = 0                        # NaN
         dwell[i] = D; dside[i] = side
@@ -88,13 +96,13 @@ def states(b, hi, lo, xwob):
             'dwell': dwell, 'dwell_side': dside, 'conf': conf}
 
 
-def candidates(b, hi, lo, xwob, S=None):
+def candidates(b, hi, lo, xwob, S=None, min_ib=None):
     """EVERY OOB->IB crossover the xwob hold confirms, BEFORE the oobw dwell gate is applied.
     The rejected ones are the whole point of the debug table (Joe 0805 asked why 23:30:30 produced
     no emit; the answer was a 16-bar dwell failing >18, which only a pre-gate list can show).
 
     Per candidate: cross / conf / side / oob — same fields walk() returns."""
-    S = S if S is not None else states(b, hi, lo, xwob)
+    S = S if S is not None else states(b, hi, lo, xwob, min_ib)
     out = []
     for c in np.flatnonzero(S['conf']):
         cross = c - (int(xwob) - 1)                # the first IB bar of this run
@@ -111,7 +119,7 @@ def candidates(b, hi, lo, xwob, S=None):
     return out
 
 
-def walk(b, hi, lo, oobw, xwob, i0=0, i1=None):
+def walk(b, hi, lo, oobw, xwob, i0=0, i1=None, min_ib=None):
     """Joe's walk on ONE line (gcws30b). Returns a list of dicts, one per OOB->IB crossover.
 
         b     the line, on the 5 s grid
@@ -128,7 +136,7 @@ def walk(b, hi, lo, oobw, xwob, i0=0, i1=None):
         oob    the dwell in 5 s bars, measured at the last OOB bar
     """
     i1 = len(b) if i1 is None else int(i1)
-    return [e for e in candidates(b, hi, lo, xwob)
+    return [e for e in candidates(b, hi, lo, xwob, min_ib=min_ib)
             if e['oob'] > int(oobw)                # Joe's ">" — strictly longer than the knob
             and i0 <= e['cross'] < i1]
 
@@ -168,6 +176,11 @@ def walk(b, hi, lo, oobw, xwob, i0=0, i1=None):
 # 30sec - AB MAE and MFE". Needs new indicator_configs rows at the higher mults, a cache build per
 # mult, and an exit rule or horizon for MAE/MFE — none of which exist yet.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+MIN_IB_DWELL = 12    # KNOB, Joe 0812. 5 s bars = 60 s. The IB run that RESETS the OOB dwell.
+#                      Separate from xwob, which only MARKS the cross. Joe named the separator:
+#                      "the IB incursion between 10:31 to 10:36". At 12 the two genuine returns in
+#                      that stretch (13 and 12 bars) reset, and the six pokes after 10:35
+#                      (8, 3, 2, 1 bars) all carry.
 GATE_FENCE = 22      # KNOB, JOE'S SPEC VALUE. ws1b must sit outside [fence, 100-fence] = [22, 78].
 #                      The 0806 sweep took this to 10 on event count alone. At 10 the fence [10,90] is
 #                      WIDER than the OOB band [15,85], which INVERTS the clause: a ws1b that is
