@@ -1094,17 +1094,26 @@ def handoff(R, landings, live_log, fence, xwob, near, i0=0, i1=None, stall=None)
     return handoffs, blocked
 
 
-# ws_fin_9of12 knobs. BANKED 0812 from the IS sweep on 07-30 -> 08-09 12:00, scored against
-# swing_detect(1.11%); confirmed once on OOS 07-01 -> 07-22 with no OOS tuning.
-#   baseline  handicap 7, no hold   IS 3,182 fires 108/109 pivots 12.63/hr | OOS 7,001 440/448 13.89/hr
-#   BANKED                          IS 1,448 fires 107/109 pivots  5.75/hr | OOS 2,888 435/448  5.73/hr
-# The fire rate is 5.75/hr IS and 5.73/hr OOS across windows whose pivot density differs 2.1x
-# (0.43/hr vs 0.89/hr), so the reduction is a property of the mechanic, not of the tuning period.
-# vote_sticky carries it: 2,880 -> 1,542 on its own, a 46% cut for one pivot.
+# ws_fin_9of12 knobs. REVERTED to baseline 0812. Joe: "hitting the pivots is more important than
+# noise - I can always build another mechanism to reduce the noise, but I can't create a mechanism
+# that increases pivot hits" and "15 minutes is not 'a few minutes' - it's ~0.4% of lost profit
+# potential".
+#
+# The noise-reduced setting (handicap 3, vote_hold 12, vote_sticky 12) was ranked on a +/-15 min
+# pivot-coverage window that I chose. Re-scored at tighter tolerances it loses pivots faster than
+# baseline does:
+#                    IS coverage                      OOS coverage
+#   tol   +/-15   +/-5   +/-2  decay      +/-15   +/-5   +/-2  decay     fires IS / OOS
+#   held  107/109 98    79     -26%       435/448 384    327   -25%      1,448 / 2,888
+#   base  108/109 101   95     -12%       440/448 398    371   -16%      3,182 / 7,001
+# At +/-2 the held setting gives up 16 IS and 44 OOS pivots. vote_hold / vote_sticky DISPLACE fires
+# away from the pivot bar rather than only removing fires that were never near one.
+#
+# The hold knobs remain in the producer, defaulted OFF. Noise reduction goes in a separate mechanic.
 WSF_N            = 9    # of 12
-WSF_HANDICAP     = 3    # gcws b/m/Mage vote at hi-3 / lo+3. was 7; 7 cost 9% more fires for no pivots
-WSF_VOTE_HOLD    = 12   # 5 s bars = 60 s past the threshold before a line may vote
-WSF_VOTE_STICKY  = 12   # 5 s bars of grace a voting line keeps across a return
+WSF_HANDICAP     = 7    # gcws b/m/Mage vote at hi-7 / lo+7, ie 78 / 22. Joe's value
+WSF_VOTE_HOLD    = 0    # OFF
+WSF_VOTE_STICKY  = 0    # OFF
 
 
 def _sticky(mask, grace):
