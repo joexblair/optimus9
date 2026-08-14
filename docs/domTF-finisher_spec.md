@@ -113,6 +113,39 @@ Companion to the domTF-climb state machine. Joe 0811-0812.
 -a condition that becomes true between signals waits for the next signal
 -this is why Joe's timestamps land on signals and his action timestamps land 5 s later
 
+**LOCKED 0813 — the g30_marker.**
+
+-Joe 0813, the definition, verbatim: "g30 marker signal - confirmed b crossing from oob to ib,
+ with an xwob"
+-Joe 0813 named it: **`g30_marker`**
+-so: a gcws30b OOB->IB crossing held IB for XWOB 2 bars. **NO OOBW dwell filter. NO ws1 gate.**
+-Joe 0813 on what it is for: "for right now, it provides a clock for g15 and g30 activities. it is
+ not a replacement for ws1 or any other mech"
+-Joe 0813: "unless there is a g30 marker signal, ws_fin_9of12 cannot fire"
+-Joe 0813 on why no expiry knob is needed: "this is the reason for the mandatory g30b vote. it
+ organically gaurantees a g30 marker signal". gcws30b votes ONLY while OOB and unlatch#2 is its
+ return to IB, so the latch waits on the mandatory voter's own return and cannot hang. The side
+ matches for free: candidates() stamps the side from the last OOB bar, which is the side g30b
+ voted on. A gcws15b requirement would guarantee a g15b return, NOT a g30_marker.
+-Joe 0813, a second qualification before the crossing: option a — the NEWEST replaces the armed
+ one; `wsf_absorbed` counts how many folded in.
+-in ws_strat terms this is `candidates()` output, before `walk()`'s oobw gate and before `gate()`.
+ 08-04 00:00 -> 12:22: 166 of these, against 68 that clear OOBW 16 and 41 the ws1 gate releases.
+
+**THE DUAL LATCH — Joe 0813, verbatim**
+
+    treat the 2 signals as a dual latch.
+    unlatch#1: 9 of 12 lines
+    unlatch#2: same-side g30b crossing to ib
+
+-**9of12 must always carry a g30b vote** (Joe 0813: "for this to work reliably, 9of12 must always
+ carry a g30b vote"). A bar with 9 voters that does NOT include gcws30b is not a qualification.
+-**same-side**: the crossing's side must equal the qualification's side.
+-THE ORDER IS SELF-ENFORCING. gcws30b can only vote while it is OOB, and the crossing is the move
+ to IB, so the two can never share a bar and unlatch#1 always precedes unlatch#2. This is why the
+ g30b vote requirement is what makes the mechanic reliable.
+-the event's timestamp is the crossing's confirmation bar — the first bar both latches are open.
+
 ### M6b — handoff tolerance after a finisher trade signal
 
 -Joe 0812: "a {knob:17 x 1min bars} tolerance must be given to a handoff which lands just after a
@@ -138,6 +171,180 @@ Companion to the domTF-climb state machine. Joe 0811-0812.
 -`dr` is the signed field already on the markers (wsw_side) and the momentum tags (ml_dr).
 -I had labelled hi_fire as +1 and treated +1 as LONG in the 08-04 ledger. That is inverted against
  this rule: every ledger figure produced before 0812 under "+1 = LONG" has the wrong sign.
+
+
+### M8 — the bar counters count GRID bars, not trade bars. SETTLED, leave as is
+
+-Joe 0813: "it tells me that we might not be using event bars" -> measured, then Joe 0813:
+ "the honest answer: we leave it as is. if we count only the event bars, then we extend the delay -
+ the cost is high"
+
+-THE LINES ARE ALREADY EVENT-DRIVEN. 08-04, 17,281 bars on the 5 s grid, 11,150 with a trade and
+ 6,131 without. ws14r, ws14x and ws27r each changed value on a no-trade bar ZERO times all day.
+-THE COUNTERS ARE NOT. Every one counts positions on the 5 s grid:
+     4 bars   the fast-partner hold in the domTF handover
+     4 bars   WSF_WS1_XWOB, on ws1Mage and ws1b
+     2 bars   XWOB, marking the gcws30b crossing back inside
+    12 bars   MIN_IB_DWELL, the IB run that resets the oob dwell
+    16 bars   OOBW, the oob dwell a gcws30 crossing must clear
+-CONSEQUENCE, accepted: a hold can be satisfied by one reading plus copies of itself. One ws14r
+ value survives 4 bars or longer 710 times in the day, and once for 288 bars (24 minutes). At the
+ 17:58:15 handover the 4-bar hold contained 2 readings, at 17:58:00 and 17:58:15.
+-WHY IT STANDS: counting trade bars only would push every confirmation later. Joe's call, on cost.
+
+
+### M9 — the handoff is often NOT the seam for a trade signal
+
+-Joe 0814, verbatim: "the handoffs between domTF and finisher are often not the seam for a trade
+ signal. ie, if domTF hands off to the finisher, and the finisher can see same-side momentum inside
+ of its own universe, then the trade signal will be delayed until that finisher momentum has played
+ out"
+
+-so a handoff time is NOT a trade time. The finisher takes over and then runs its own momentum test
+ across its own lines before it will signal.
+-CONSEQUENCE for measurement: scoring a handoff against price from the handoff bar measures the
+ wrong instant. Joe 0814 gave this as the reason not to run the 0.9% leg measure over the 105
+ signals yet.
+-the finisher's own momentum test is not built. Its window, step and slope floor are unset — see
+ task #6, second half.
+
+
+### M10 — the momentum fit uses a FIXED SAMPLE COUNT, not a fixed gap. Banked 0814
+
+-Joe 0810 made the momentum window dynamic: "it should be dynamic. use this value: {knob:4} x
+ {TF width}". The gap between sample points stayed at RPL's 5 minutes, so the SAMPLE COUNT grew with
+ the timeframe: 10 points on ws13r, 21 on ws27r.
+-Joe 0814: "why are the samples increasing with the TF? this skews the sampling results between the
+ lines" -> then "should it be 21 samples per line?" -> then "bank the spec and code".
+
+**WHY IT WAS A BIAS, measured 08-04, domTF range 13..27**
+
+how fast each line actually moves, r units per minute, median over 5-minute steps:
+
+    ws13r 0.430  ws14r 0.421  ws15r 0.380  ws16r 0.366  ws17r 0.363
+    ws18r 0.288  ws19r 0.280  ws20r 0.253  ws21r 0.241  ws22r 0.261
+    ws23r 0.255  ws24r 0.230  ws25r 0.221  ws26r 0.161  ws27r 0.159
+
+-the shortest line runs 2.71x the longest, and the decline is smooth apart from two steps:
+ ws17r -> ws18r drops 21%, ws25r -> ws26r drops 27%. See task #10.
+-MOMO_SLOPE_MIN 1.0 is denominated PER SAMPLE. With one fixed 5-minute gap it demands the same
+ 0.200 r per minute of every line — 2.15x what ws13r normally does, 0.80x what ws27r does.
+-fixing the count instead makes the gap scale with the window, so the demand tracks the line. The
+ spread of demand-over-normal-speed falls from 0.80-2.15 to 0.84-1.23.
+-redundancy does not rise on the short lines: at 21 samples repeats run 17% to 28% with no trend by
+ timeframe, and the LONGEST lines carry the most.
+
+**WHAT IT COSTS, all 105 domTF signals on 08-04**
+
+    domTF frees the finishers   52 -> 54
+    domTF holds them            53 -> 51
+    verdicts changed             4 of 105
+    median hold               21.8 -> 19.2 minutes
+
+-the 4 that change are 09:19:05, 13:02:20 and 14:44:30 held -> free, and 21:49:25 free -> held. In
+ each, exactly ONE line crosses or falls below the momentum floor.
+-11 more rows keep their verdict but change which line is the longest one carrying the move.
+-IT DOES NOT MOVE JOE'S THREE LABELLED BARS. 07:21:50, 11:53:00 and 17:14:35 are all still free.
+
+**WHERE IT LIVES**
+
+    momo_gated.MOMO_FIXED_SAMPLES = 0     DEFAULT OFF. 0 keeps the old behaviour everywhere.
+    build_ws_fin sets it to 21            the domTF walk only.
+
+-DEFAULT IS OFF BY MY DECISION, not Joe's: momo_window is shared with build_momo_landed,
+ build_handoff, build_ws_momo, s46_momo, build_s46_event, sweep_s46_momo and jig. Only the domTF
+ walk has been measured. Say the word to make it global.
+-STILL UNTUNED: the straight-line fit floor 0.50 and the curved fit floor 0.40 were set against a
+ 12-point fit and are now applied to a 21-point one. Task #1.
+
+### M11 — the HTF-curl restriction is a BOLT-ON to the domTF handover. Banked 0814
+
+Joe 0814: *"IF a domTF HTF has recently {knob:2 TF bars} curled towards dr, then the handoff
+(cross OR stall) needs to be created by the HTFs[22:27] -- if we let the smaller domTFs create the
+exit, it will be premature - the HTF curl says renewed high-level momentum."*
+
+Joe 0814: *"this mech isn't a replacement to the existing (and mostly functional) domTF mechanic -
+it's a bolt on."*
+
+THE HANDOVER RACE. The candidates are the BLOCKING lines — the lines whose momentum verdict at the
+signal bar is `momo` or `curl` in the signal's direction. A line that is not blocking has nothing
+to hand over. First past the post wins, on either test:
+
+- **cross** — the fast partner has crossed to the far side of the r line and held `HANDOVER_XWOB`
+  4 grid bars = 20 s, AND the r line is back between the boundaries (15 and 85).
+- **stall** — `STALL_N` 6 consecutive lattice samples with no new extreme in the signal's
+  direction. No boundary condition; a stalled line has stopped moving wherever it sits.
+
+THE STALL EXISTS TO CATCH WHAT THE CROSS MISSES. Joe 0814: *"your logic is sound, and for the most
+part the two will ~coincide. the reason for having stall, is to catch the moments that a x cross
+misses, eg TF25, 08-01 ~12:55."* The two tests are not redundant and the stall is not a backup —
+it covers the turns where the fast partner never crosses.
+
+WHEN THE RESTRICTION ENGAGES. A line between 22 and 27 must have bent into the signal's direction
+within `CURL_RECENCY_TF_BARS` 2 bars of that line's own timeframe (44 min on ws22r, 54 on ws27r),
+AND at least one BLOCKING line must sit between 22 and 27. Then the race is cut to the blocking
+lines in 22-27 only.
+
+WHEN IT DOES NOT ENGAGE. No blocking line between 22 and 27 means the restriction has no runners
+and DOES NOT QUALIFY. The plain race runs on all the blocking lines. Joe 0814: *"you weren't
+'falling back'; you were simply not engaging the new spec because it didn't qualify (ie no HTF
+lines)."* This is not a fallback, a default, or a degraded path — the bolt-on is simply absent.
+
+MEASURED 08-04, full day, 105 signals, 51 blocked. The HTF-curl restriction, at `STALL_N` 3:
+
+| | |
+|---|---|
+| restriction offered (a 22-27 line bent in) | 31 of 51 |
+| restriction engaged and moved the handover later | 14 of 31 |
+| offered but did not qualify — no blocking line in 22-27 | rows 75, 76, 77 |
+
+THE `STALL_N` 3 -> 6 A/B. Both walks are banked in `ws_fin_9of12`, told apart by `wsf_stall_n`:
+
+| `STALL_N` | signals | blocked | handover | won by cross | won by stall | median wait | mean | max | inside 3 grid bars |
+|---|---|---|---|---|---|---|---|---|---|
+| 3 | 105 | 51 | 51 | 3 | 48 | 0.33 min | 2.72 | 18.7 | 25 |
+| 6 | 105 | 51 | 51 | 40 | 11 | 19.25 min | 23.61 | 77.9 | 4 |
+
+The two tests swapped places. At 6 the stall is the minority test, which is what Joe's reason for
+having it requires.
+
+JOE'S READ ON THE FOUR REMAINING NEXT-BAR STALLS. At `STALL_N` 6, four rows still hand over on the
+next bar: 06:48:00, 06:50:25, 06:52:10 (all ws14r) and 18:57:35 (ws15r). Joe 0814 read all four on
+the chart — *"these are exactly correct - price went semi sideways for a few minutes after a solid
+sell-off"*, and on 18:57:35 *"also correct, for a similar reason"*. Verdict `pass`, banked in
+`eyes_on_pine` sequence 8, rows 361-364. These were the only evidence that `STALL_N` 6 is still
+loose; the read removes it.
+
+THE FOUR LONGEST HOLDS, all won by cross, all unread on the chart:
+
+| row | g30_marker | handover | wait |
+|---|---|---|---|
+| 17 | 05:01:50 | 06:19:45 ws23r cross | 77.9 min |
+| 18 | 05:04:35 | 06:18:35 ws22r cross | 74.0 min |
+| 98 | 22:10:10 | 23:13:30 ws25r cross | 63.3 min |
+| 97 | 22:06:10 | 23:06:15 ws18r cross | 60.1 min |
+
+THE TABLE'S IDENTITY. `ws_fin_9of12`'s unique key gained `wsf_stall_n`, `wsf_ho_xwob`,
+`wsf_curl_tfbars` and `wsf_htf_band` on 0814, so two walks at different handover knobs sit side by
+side instead of overwriting each other. Any query that counts rows MUST filter on them — without
+that filter the counts sum every walk in the table.
+
+`STALL_N` 3 -> 6, Joe 0814. At 3 the stall was looser than the cross on every one of the 15
+lines and won 48 of 51 handovers:
+
+| test | base rate, 08-04 full day |
+|---|---|
+| stall, `STALL_N` 3 | 49.4% - 57.5% of bars |
+| stall, `STALL_N` 6 | 33.7% - 46.5% of bars |
+| cross, `HANDOVER_XWOB` 4 grid bars = 20 s | 33.6% - 47.8% of bars |
+
+At 6 the two are level, so the race turns on which fires first rather than on which is looser.
+The wait grows from 7.8-16.2 min to 15.5-32.5 min, depending on the line.
+
+THE BASE RATE CURVE HAS NO KNEE. Measured n = 1 to 19 on all 15 lines in both directions: a smooth
+slide from ~65% to ~6%. No value of n is picked out by the shape of the data, which is why the
+cross's availability was used as the anchor. n = 20 is unreachable by construction — it would need
+the oldest of the 21 samples to be the extreme of the whole window.
 
 ### M6 — position flow
 

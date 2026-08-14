@@ -27,19 +27,35 @@ from optimus9.orchestration.rpl_cache import cache_jig_perline
 from optimus9.db.database_manager import DatabaseManager
 from optimus9.config import get_db_config
 
-MOMO_R2_MIN = 0.50          # the "fuzzy straight line". Joe's refs: momo 0.921 / sideways 0.024
-MOMO_SLOPE_MIN = 1.0        # the floor knob, r-units per 5-min sample. Joe's refs: 2.858 / 0.217
-MOMO_WINDOW_MIN = 60        # Joe 0731: was 45. SWEEP KNOB.
-CURL_ARC_MIN = 4.0          # Joe 0731: a CURL is not sideways. SWEEP KNOB - see the curl block in momo().
-CURL_VTX_LO, CURL_VTX_HI = 0.05, 0.95      # vertex must sit inside the window, not on its edge
+# THE MOMENTUM VERDICT MOVED OUT 0813. momo() and its MOMO_*/CURL_*/LEVEL_SLACK constants now live
+# in optimus9/compute/momo_core.py, so consumers of the verdict no longer import this file and,
+# through it, build_exhaust / build_rplwalk2 / rpl_walk. Joe 0813: "RPL is in sunset, so we need to
+# salvage". SAME 50 lines, relocated, not copied.
+#
+# The module __getattr__ below re-exports them LIVE. `import build_exhv2 as B; B.MOMO_R2_MIN` still
+# works and still sees a rebind — by momo_gated.momo_window() or by main()'s argv flags — because
+# the lookup falls through to momo_core each time. A plain `from ... import MOMO_R2_MIN` would have
+# snapshotted the value here and gone stale inside a momo_window() block.
+from optimus9.compute import momo_core as _MC
+from optimus9.compute.momo_core import momo                       # noqa: F401  re-export
+
+_MC_NAMES = ('MOMO_R2_MIN', 'MOMO_SLOPE_MIN', 'MOMO_WINDOW_MIN', 'MOMO_SAMPLES', 'MOMO_STEP_MIN',
+             'MOMO_STEP_BARS', 'CURL_ARC_MIN', 'CURL_VTX_LO', 'CURL_VTX_HI', 'LEVEL_SLACK')
+
+
+def __getattr__(name):
+    """PEP 562 fallthrough to momo_core for the relocated constants. Reached only when `name` is not
+    a global of this module, so nothing here may assign to those names."""
+    if name in _MC_NAMES:
+        return getattr(_MC, name)
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
+
+
 WALK_DWELL_BARS = 48        # Joe 0731: "if s4M has crossed to oob AND STAYED CONSISTENTLY OOB FOR 240
 #                             SECONDS". 240 s = 48 bars at the 5 s grid. CONTIGUOUS - a single dip inside
 #                             the 240 s disqualifies that crossing and the walk moves to the next one that
 #                             holds. s4Mage chatters across HI: 6 crossings in the 27 min after the
 #                             0522 11:54 r-pred, runs of 0.2-19.2 min. SWEEP KNOB.
-MOMO_STEP_MIN = 5           # sample spacing. 5 min = 60 bars at the 5 s grid
-MOMO_STEP_BARS = MOMO_STEP_MIN * 12
-MOMO_SAMPLES = MOMO_WINDOW_MIN // MOMO_STEP_MIN     # 60/5 = 12 samples (was 9 at 45 min)
 TFS = (4, 15, 22)
 # Joe 0731: "4,15,22 Mage configs 37|0.7|close". The live rpl_config baseline has M at mult 0.83, so every
 # Mage reading in exhv2 was on the wrong line. On 0522 the first s4Mage OOB crossing after the 11:54 r-pred
@@ -60,7 +76,7 @@ LINE_SPEC = {
 R_SPEC = {4: dict(k_len=7, rsi=6, stc=11, src='close'),
           15: dict(k_len=10, rsi=4, stc=11, src='close'),
           22: dict(k_len=10, rsi=4, stc=11, src='close')}
-LEVEL_SLACK = 13.9          # Joe 0731 "coin-toss it". Drawn uniform 0-15 on os.urandom entropy.
+# LEVEL_SLACK 13.9 moved to momo_core 0813. Joe 0731 "coin-toss it"; drawn uniform 0-15 on urandom.
 #                             The level gate slackens by LEVEL_SLACK * T, where the tracking score
 #                             T = R2 * min(1, |slope|/momo_slope_min) clipped to [0,1]. A perfectly
 #                             tracking line earns the full slack; a flat one (T~0) earns none. Rescues
@@ -110,56 +126,9 @@ def oob_qualified(M, hi, lo, dwell=None):
     return q & ~np.r_[False, q[:-1]]
 
 
-def momo(r, dr, w):
-    """(state, slope, r2, r_at_bar) for r line array `r`, bias dir `dr`, at bar `w`.
-    state = momo | sideways | curl | none.
-
-    MODULE-LEVEL (Joe 0801) so it can be re-read at any bar, not only the walk bar. It was a closure
-    inside main(); the stash-and-test needs it per candidate cross, and a second copy in a measurement
-    script would fork the logic. Body unchanged - the MOMO_*/CURL_*/LEVEL_SLACK globals main() rebinds
-    from argv are module globals, so a CLI override still reaches here.
-    """
-    idx = np.array([w - k * MOMO_STEP_BARS for k in range(MOMO_SAMPLES - 1, -1, -1)])
-    if idx[0] < 0:
-        return 'none', 0.0, 0.0, float('nan')
-    y = r[idx]
-    if not np.isfinite(y).all():
-        return 'none', 0.0, 0.0, float('nan')
-    x = np.arange(len(y), dtype=float)
-    sl, ic = np.polyfit(x, y, 1)
-    res = ((y - (sl * x + ic)) ** 2).sum(); tot = ((y - y.mean()) ** 2).sum()
-    r2 = 1 - res / tot if tot > 1e-12 else 0.0
-    rw = float(r[w])
-    # TRACKING-WEIGHTED LEVEL GATE (Joe 0731). A hard gate at 50 rejects a line that is 0.63 away and
-    # tracking cleanly (0520 06:26 s15: r 50.63, slope -1.891, R2 0.818). T scores how well the line
-    # tracks; the gate slackens in proportion. A flat line earns T~0 and no slack.
-    trk = max(0.0, min(1.0, float(r2) * min(1.0, abs(sl) / max(1e-9, MOMO_SLOPE_MIN))))
-    slack = LEVEL_SLACK * trk
-    level = (rw >= 50 - slack) if dr > 0 else (rw <= 50 + slack)
-    if abs(sl) < MOMO_SLOPE_MIN:
-        if not level:
-            return 'none', float(sl), float(r2), rw
-        # CURL (Joe 0731): "s22 is a curl: it goes up, and then points down at the walk." A straight
-        # line fitted to an arc flattens to a low net slope and reads sideways. Fit a quadratic over
-        # the FULL 5s window - not the 12 point-samples, which hallucinate turns (18:49 s15 reads
-        # arc 1.27 at 12 pts and 0.19 at 720) - and disqualify the sideways verdict when the vertex
-        # falls inside the window with an arc of CURL_ARC_MIN or more. Joe's reference sideways
-        # series has a vertex inside too, at arc 2.06, so the arc height is what separates them.
-        nb = MOMO_WINDOW_MIN * 12                      # 5-min = 60 bars, so window_min * 12 bars
-        if w - nb + 1 >= 0:
-            yy = r[w - nb + 1:w + 1]
-            if np.isfinite(yy).all():
-                xx = np.linspace(0.0, 1.0, len(yy))
-                qa, qb, _ = np.polyfit(xx, yy, 2)
-                if abs(qa) > 1e-12:
-                    vtx = -qb / (2 * qa); arc = abs(qa) * 0.25
-                    if CURL_VTX_LO < vtx < CURL_VTX_HI and arc >= CURL_ARC_MIN:
-                        return 'curl', float(sl), float(r2), rw
-        return 'sideways', float(sl), float(r2), rw
-    aligned = (sl > 0) if dr > 0 else (sl < 0)
-    if level and aligned and r2 >= MOMO_R2_MIN:
-        return 'momo', float(sl), float(r2), rw
-    return 'none', float(sl), float(r2), rw
+# momo() moved to optimus9/compute/momo_core.py 0813 and is re-exported by the import above.
+# predict_board.py:170 unpacks its 4-tuple; vmomo.py and build_trades2.py:93 are vectorised mirrors
+# that must match it. One implementation, new address.
 
 
 DDL = '''CREATE TABLE IF NOT EXISTS rpl_exhv2 (
@@ -186,20 +155,23 @@ DDL = '''CREATE TABLE IF NOT EXISTS rpl_exhv2 (
 
 
 def main(argv):
-    global MOMO_R2_MIN, MOMO_SLOPE_MIN, MOMO_WINDOW_MIN, MOMO_SAMPLES, CURL_ARC_MIN, WALK_DWELL_BARS, LEVEL_SLACK, REWALK
+    # THE FLAGS WRITE TO momo_core. momo() reads its constants at call time from ITS OWN module, so
+    # rebinding a copy here would leave --r2 / --slope / --window / --arc / --slack ineffective.
+    global WALK_DWELL_BARS, REWALK
     for i, a in enumerate(argv):
         if a == '--r2' and i + 1 < len(argv):
-            MOMO_R2_MIN = float(argv[i + 1])
+            _MC.MOMO_R2_MIN = float(argv[i + 1])
         if a == '--slope' and i + 1 < len(argv):
-            MOMO_SLOPE_MIN = float(argv[i + 1])
+            _MC.MOMO_SLOPE_MIN = float(argv[i + 1])
         if a == '--window' and i + 1 < len(argv):
-            MOMO_WINDOW_MIN = int(argv[i + 1]); MOMO_SAMPLES = MOMO_WINDOW_MIN // MOMO_STEP_MIN
+            _MC.MOMO_WINDOW_MIN = int(argv[i + 1])
+            _MC.MOMO_SAMPLES = _MC.MOMO_WINDOW_MIN // _MC.MOMO_STEP_MIN
         if a == '--arc' and i + 1 < len(argv):
-            CURL_ARC_MIN = float(argv[i + 1])
+            _MC.CURL_ARC_MIN = float(argv[i + 1])
         if a == '--dwell' and i + 1 < len(argv):
             WALK_DWELL_BARS = int(argv[i + 1])
         if a == '--slack' and i + 1 < len(argv):
-            LEVEL_SLACK = float(argv[i + 1])
+            _MC.LEVEL_SLACK = float(argv[i + 1])
         if a == '--rewalk' and i + 1 < len(argv):
             REWALK = int(argv[i + 1])
     X.rebuild_cache(120)
@@ -413,7 +385,7 @@ def main(argv):
                     (sig - c) / 60000 if sig else None, tgt_utc, err,
                     race_ms, u(race_ms) if race_ms else None))
     print('exhv2: %d of %d rows produced a walk  |  momo_r2_min %.2f  momo_slope_min %.2f'
-          % (len(OUT), len(rows), MOMO_R2_MIN, MOMO_SLOPE_MIN))
+          % (len(OUT), len(rows), _MC.MOMO_R2_MIN, _MC.MOMO_SLOPE_MIN))
     print('  reached s4 WITH an r-pred on s15/s22 (the old "no rp" gate would have blocked these): %d'
           % len(blocked_by_rp))
     if '--persist' in argv:

@@ -31,14 +31,15 @@ and applies the two gates on top, reusing momo()'s own constants so nothing fork
 
 `momo` and `sideways` and `none` pass through unchanged. Only `curl` is gated.
 """
-import os
-import sys
 from contextlib import contextmanager
 
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-import build_exhv2 as X            # repo root — momo() and its MOMO_*/CURL_* constants live there
+from optimus9.compute import momo_core as X   # momo() and its MOMO_*/CURL_* constants live here.
+#                                               Was `import build_exhv2` (repo root) until 0813,
+#                                               which dragged in build_exhaust / build_rplwalk2 /
+#                                               rpl_walk and cost minutes per process.
+#                                               Joe 0813: "RPL is in sunset, so we need to salvage".
 
 
 def momo_g(r, dr, w):
@@ -94,6 +95,26 @@ def states(r, dr, lo, hi):
     return s
 
 
+MOMO_FIXED_SAMPLES = 0
+# KNOB, Joe 0814. 0 = today's behaviour, the gap between samples stays at MOMO_STEP_MIN and the
+# sample count is whatever the window divided by that gives. A positive value fixes the SAMPLE COUNT
+# and scales the gap to the window instead.
+#
+# WHY. The window is K_WINDOW x the line's timeframe (Joe 0810: "it should be dynamic. use this
+# value: {knob:4} x {TF width}") while the gap stayed at RPL's 5 minutes, so the sample count grew
+# with the timeframe: 10 on a 13-minute line, 21 on a 27-minute one.
+# MEASURED 08-04, how fast each line actually moves in r units per minute, median over 5-minute
+# steps: ws13r 0.430, ws17r 0.363, ws21r 0.241, ws25r 0.221, ws27r 0.159 — the shortest line runs
+# 2.71x the longest. With one fixed gap, MOMO_SLOPE_MIN 1.0 demands the SAME 0.200 r/min of every
+# line, which is 2.15x what ws13r normally does and 0.80x what ws27r does. Fixing the count instead
+# makes the demand track the line: the spread of demand-over-typical-rate falls from 0.80-2.15 to
+# 0.84-1.23.
+# COST, measured across 105 domTF signals on 08-04 at 21 samples: 4 verdicts change, 3 from held to
+# free and 1 the other way, each one a single line crossing the momentum floor. Median hold 21.8 ->
+# 19.2 minutes. It does NOT move Joe's three labelled bars.
+# DEFAULT IS OFF because momo_window is shared with the s46 path, which has not been measured.
+
+
 @contextmanager
 def momo_window(window_min):
     """[PRODUCER · Joe 0810] Run momo() over a window of `window_min` minutes instead of the module
@@ -119,10 +140,15 @@ def momo_window(window_min):
     Joe 0810 on the window itself: "it should be dynamic. use this value: {knob:4} x {TF width}".
     MOMO_STEP_MIN stays 5 and does NOT scale, so the sample count varies with the window: 6 at a
     32-min window (TF8 x 4), 26 at 132 min (TF33 x 4). Queued for A/B — see task #1."""
-    prev_w, prev_s = X.MOMO_WINDOW_MIN, X.MOMO_SAMPLES
+    prev_w, prev_s, prev_b = X.MOMO_WINDOW_MIN, X.MOMO_SAMPLES, X.MOMO_STEP_BARS
     X.MOMO_WINDOW_MIN = int(window_min)
-    X.MOMO_SAMPLES = max(2, int(window_min) // X.MOMO_STEP_MIN)
+    if MOMO_FIXED_SAMPLES > 0:
+        n = max(2, int(MOMO_FIXED_SAMPLES))
+        X.MOMO_SAMPLES = n
+        X.MOMO_STEP_BARS = max(1, int(round((int(window_min) * 12) / (n - 1))))
+    else:
+        X.MOMO_SAMPLES = max(2, int(window_min) // X.MOMO_STEP_MIN)
     try:
         yield X.MOMO_SAMPLES
     finally:
-        X.MOMO_WINDOW_MIN, X.MOMO_SAMPLES = prev_w, prev_s
+        X.MOMO_WINDOW_MIN, X.MOMO_SAMPLES, X.MOMO_STEP_BARS = prev_w, prev_s, prev_b

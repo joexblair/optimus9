@@ -1111,7 +1111,9 @@ def handoff(R, landings, live_log, fence, xwob, near, i0=0, i1=None, stall=None)
 #
 # The hold knobs remain in the producer, defaulted OFF. Noise reduction goes in a separate mechanic.
 WSF_N            = 9    # of 12
-WSF_HANDICAP     = 7    # gcws b/m/Mage vote at hi-7 / lo+7, ie 78 / 22. Joe's value
+WSF_HANDICAP     = 0    # Joe 0813: "the handicap for g15 and g30 needs to change. make it 15/85".
+                        # gcws b/m/Mage now vote at hi / lo, the same 85 / 15 as the other six lines.
+                        # WAS 7 (78 / 22) until 0813.
 WSF_VOTE_HOLD    = 0    # OFF
 WSF_VOTE_STICKY  = 0    # OFF
 
@@ -1147,9 +1149,39 @@ def _runlen(mask):
     return out
 
 
-def ws_fin_9of12(W, hi, lo, n=WSF_N, handicap=WSF_HANDICAP, vote_hold=WSF_VOTE_HOLD,
-                 vote_sticky=WSF_VOTE_STICKY):
-    """[PRODUCER · Joe 0812] ws_fin_9of12 — the finisher confluence event.
+WSF_LINE_HANDICAP = {}
+# KNOB, per line. {line_name: points}. A line with a handicap votes at hi-points / lo+points instead
+# of at the full boundary. Overrides WSF_HANDICAP for that line. Empty = every line at 85 / 15.
+
+WSF_WS1_XWOB  = 4    # KNOB, Joe 0813. 5 s bars = 20 s. Consecutive bars ws1Mage / ws1b must hold
+                     # past their boundary before they may vote.
+WSF_LINE_XWOB = {'ws1Mage': WSF_WS1_XWOB, 'ws1b': WSF_WS1_XWOB}
+# Joe 0813: "add this to the 9of12 mechanic: use a xwob 4 on ws1Mage and ws1b".
+# These two lines may vote only after 4 CONSECUTIVE bars past their boundary (20 s at the 5 s grid).
+# The other ten lines are unchanged. Distinct from `vote_hold`, which applies the same hold to all
+# twelve. Found by Joe on the 08-04 02:24:35 event: at the counting bar 02:24:15 ws1Mage read 86.57
+# having been 19.58 one bar earlier, and it held above 85 for 3 bars (15 s) before falling back; ws1b
+# peaked at 108.42 for 2 bars AFTER the count. Nine votes rested on a 15-second spike.
+
+WSF_REQUIRE = ('gcws30b',)   # Joe 0813: "for this to work reliably, 9of12 must always carry a g30b
+                             # vote". A bar with n voters that excludes gcws30b is NOT a
+                             # qualification. This is also what makes the dual latch self-ordering:
+                             # gcws30b votes only while OOB, and unlatch#2 is its move to IB, so the
+                             # two can never share a bar.
+
+
+def wsf_qualify(W, hi, lo, n=WSF_N, handicap=WSF_HANDICAP, vote_hold=WSF_VOTE_HOLD,
+                vote_sticky=WSF_VOTE_STICKY, require=WSF_REQUIRE, line_xwob=WSF_LINE_XWOB,
+                line_handicap=None):
+    """[PRODUCER · Joe 0812] STAGE 1 of ws_fin_9of12 — "9 of 12 lines qualify".
+
+    THIS IS NOT THE SIGNAL. Joe 0813: "9of12 event will fire on these chronological conditions:
+    1st) 9 of 12 lines qualify, 2nd) g30 creates a marker signal -- these are not separate events -
+    these 2 requirements combine to create the ws_fin_9of12 signal". The signal is ws_fin_9of12()
+    below; this function only produces the qualification it latches on.
+
+    Named for Joe's word, "qualify". Was called ws_fin_9of12 until 0813, when the g30 condition was
+    added and the name moved to the combined producer.
 
     Joe's spec:
         we'll build a ws15301_9(or10)of12 event on the jig. when the event fires, the trade signal
@@ -1216,18 +1248,210 @@ def ws_fin_9of12(W, hi, lo, n=WSF_N, handicap=WSF_HANDICAP, vote_hold=WSF_VOTE_H
     votes, H, L = {}, [], []
     for nm in LINES:
         v = np.asarray(W.line(nm), float)
-        h_, l_ = (hi - handicap, lo + handicap) if nm in HANDI else (hi, lo)
+        hp = (line_handicap or {}).get(nm)
+        if hp is None:
+            h_, l_ = (hi - handicap, lo + handicap) if nm in HANDI else (hi, lo)
+        else:
+            h_, l_ = hi - hp, lo + hp
         vh, vl = (v >= h_), (v <= l_)
         if int(vote_sticky) > 0:
             vh, vl = _sticky(vh, int(vote_sticky)), _sticky(vl, int(vote_sticky))
         if int(vote_hold) > 0:
             vh = _runlen(vh) >= int(vote_hold)
             vl = _runlen(vl) >= int(vote_hold)
+        xw = int((line_xwob or {}).get(nm, 0))      # Joe 0813 — per-line hold, ws1Mage / ws1b
+        if xw > 0:
+            vh = _runlen(vh) >= xw
+            vl = _runlen(vl) >= xw
         votes[nm] = (vh, vl); H.append(vh); L.append(vl)
     hn = np.sum(H, axis=0).astype(np.int16)
     ln = np.sum(L, axis=0).astype(np.int16)
     okh, okl = hn >= int(n), ln >= int(n)
+    for nm in (require or ()):                     # Joe 0813 — the mandatory voters
+        okh &= votes[nm][0]
+        okl &= votes[nm][1]
     return {'hi_n': hn, 'lo_n': ln,
             'hi_fire': okh & ~np.r_[False, okh[:-1]],
             'lo_fire': okl & ~np.r_[False, okl[:-1]],
-            'votes': votes, 'lines': LINES, 'handicapped': HANDI}
+            'votes': votes, 'lines': LINES, 'handicapped': HANDI,
+            'required': list(require or ())}
+
+
+def ws_fin_9of12(W, hi, lo, g30, n=WSF_N, handicap=WSF_HANDICAP, vote_hold=WSF_VOTE_HOLD,
+                 vote_sticky=WSF_VOTE_STICKY, require=WSF_REQUIRE, line_xwob=WSF_LINE_XWOB,
+                 line_handicap=None, i0=0, i1=None):
+    """[PRODUCER · Joe 0813] ws_fin_9of12 — THE SIGNAL. A DUAL LATCH.
+
+    Joe 0813, verbatim:
+        treat the 2 signals as a dual latch.
+        unlatch#1: 9 of 12 lines
+        unlatch#2: same-side g30b crossing to ib
+
+        -unless there is a g30 marker signal, ws_fin_9of12 cannot fire
+        -for this to work reliably, 9of12 must always carry a g30b vote
+        -these are not separate events - these 2 requirements combine to create the ws_fin_9of12
+         signal
+
+    THE g30 MARKER SIGNAL. Joe 0813, verbatim: "confirmed b crossing from oob to ib, with an xwob".
+    XWOB only. NO OOBW dwell filter, NO ws1 gate. In ws_strat terms that is candidates() output.
+    Joe 0813 on its role: "for right now, it provides a clock for g15 and g30 activities. it is not
+    a replacement for ws1 or any other mech".
+
+    SAME SIDE. unlatch#2 must match unlatch#1's side. A hi-side qualification is released only by a
+    crossing whose dwell was on the hi side.
+
+    THE ORDER IS SELF-ENFORCING, and that is what `require` buys. gcws30b can only vote while it is
+    OOB; unlatch#2 is its move to IB. The two can never be true on one bar, so unlatch#1 always
+    precedes unlatch#2 without an explicit ordering rule.
+
+    THE EVENT TIMESTAMP is the crossing's confirmation bar — the first bar both latches are open.
+
+    ARGS
+        W        the value_mode-honoured line reader (jig W)
+        hi/lo    the boundaries, 85 / 15
+        g30      sequence of (bar, side) for the g30 marker signals. side +1 = the dwell before the
+                 crossing was on the hi side, -1 lo
+        n / handicap / vote_hold / vote_sticky / require   passed to wsf_qualify
+        i0 / i1  the window, as bar indices. i1 inclusive; None = to the end
+
+    -> (events, q). events, each:
+        bar        the g30 marker signal bar. THE EVENT TIMESTAMP
+        qual_bar   the qualification bar that opened unlatch#1
+        wait       bars from qual_bar to bar
+        side       +1 / -1, shared by both latches
+        hi_n/lo_n  the counts AT qual_bar
+        absorbed   qualifications replaced before this one fired
+
+    OPEN, MINE, NOT STATED BY JOE
+      - a further same-side qualification before the crossing REPLACES the armed one; `absorbed`
+        counts how many folded in. The payload is the state closest to the firing bar.
+      - NO EXPIRY. An armed latch waits indefinitely.
+      - an opposite-side qualification also replaces the armed one, since only one latch is held.
+    Causal: every read is at its own bar; nothing after `bar` is consulted."""
+    q = wsf_qualify(W, hi, lo, n=n, handicap=handicap, vote_hold=vote_hold,
+                    vote_sticky=vote_sticky, require=require, line_xwob=line_xwob,
+                    line_handicap=line_handicap)
+    hf, lf = q['hi_fire'], q['lo_fire']
+    i1 = (len(hf) - 1) if i1 is None else int(i1)
+    gmap = {int(b): int(s) for b, s in g30}
+    out, armed, absorbed = [], None, 0
+    for i in range(int(i0), int(i1) + 1):
+        if hf[i] or lf[i]:                              # unlatch#1
+            if armed is not None:
+                absorbed += 1
+            armed = {'qual_bar': i, 'side': 1 if hf[i] else -1,
+                     'hi_n': int(q['hi_n'][i]), 'lo_n': int(q['lo_n'][i])}
+        if armed is not None and gmap.get(i) == armed['side']:   # unlatch#2, SAME SIDE
+            out.append({'bar': i, 'wait': i - armed['qual_bar'], 'absorbed': absorbed, **armed})
+            armed, absorbed = None, 0
+    return out, q
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# domTF HANDOVER — the bar the domTF turn ends and the finishers take over.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+def stall_on_samples(y, dr, n):
+    """[PRODUCER · Joe 0810, confirmed 0814] A STALL: the line has stopped making new extremes.
+
+    Joe 0814: "my understand is STALL_N 3 means 3 samples that have not exceeded the maxim".
+
+        y   the line's momentum SAMPLE points, oldest first, ending at the bar being tested.
+            The caller builds the lattice — this producer never touches momo's constants.
+        dr  the move's direction. +1 tests for no new HIGH, -1 for no new LOW.
+        n   STALL_N. Consecutive samples with no new extreme.
+
+    -> (stalled, samples_since_the_last_new_extreme). Not stalled if no sample ever made one.
+
+    ITS DURATION IS NOT FIXED. n counts SAMPLES, and since 0814 the gap between samples scales with
+    the line (2.58 min on ws13r to 5.42 min on ws27r — see M10), so n=3 is 7.7 min on the shortest
+    line and 16.3 on the longest. Joe 0814: "accept it as built. if needed, we can adjust after we
+    see the first results."
+
+    NOT RESTRICTED TO A DOMINANT LINE. Joe 0810's "the stall event will only be acknowledged by the
+    dominant ws{tf}r line" belongs to the handoff producer, not here. Joe 0814: "that is a
+    restriction placed in a different machine. for domTF, we will wait for stall or cross from the
+    line that we derive."
+    """
+    y = np.asarray(y, float)
+    if y.ndim != 1 or len(y) < 2 or not np.isfinite(y).all():
+        return False, None
+    st, since = _stall_rows(y[None, :], dr, n)
+    return bool(st[0]), (None if since[0] < 0 else int(since[0]))
+
+
+def _stall_rows(S, dr, n):
+    """The stall rule on a stack of lattices. S is (rows, samples), oldest sample first.
+    -> (stalled, since). since is -1 where no sample ever made a new extreme, or the row is unusable.
+    ONE implementation of the rule: stall_on_samples and stall_mask both land here."""
+    S = np.asarray(S, float)
+    run = (np.maximum.accumulate(S, axis=1) if dr > 0 else np.minimum.accumulate(S, axis=1))
+    fresh = (S[:, 1:] > run[:, :-1]) if dr > 0 else (S[:, 1:] < run[:, :-1])
+    last = np.where(fresh.any(axis=1), (S.shape[1] - 1) - np.argmax(fresh[:, ::-1], axis=1), -1)
+    since = np.where(last < 0, -1, (S.shape[1] - 1) - last)
+    ok = np.isfinite(S).all(axis=1) & (last >= 0)
+    return ok & (since >= int(n)), np.where(ok, since, -1)
+
+
+def stall_mask(y, dr, n, step, samples):
+    """[PRODUCER · Joe 0814] stall_on_samples asked at EVERY bar of a line, in one pass.
+
+        y        the whole line, one value per grid bar.
+        step     bars between lattice samples.  samples  points in the lattice.
+
+    -> bool array, one per bar. Bars before the lattice fits are False.
+    """
+    y = np.asarray(y, float)
+    step, samples = max(1, int(step)), max(2, int(samples))
+    span = (samples - 1) * step
+    out = np.zeros(len(y), bool)
+    if len(y) <= span:
+        return out
+    idx = np.arange(span, len(y))[:, None] - (np.arange(samples - 1, -1, -1) * step)[None, :]
+    out[span:], _ = _stall_rows(y[idx], dr, n)
+    return out
+
+
+def domtf_handover(blocking, htf_curled, htf_band, cross_ok, inside, stall, w, i1):
+    """[PRODUCER · Joe 0814] The bar the domTF turn ends. A race, first past the post.
+
+    Joe 0813: "first past the post".
+    Joe 0814: "IF a domTF HTF has recently {knob:2 TF bars} curled towards dr, then the handoff
+    (cross OR stall) needs to be created by the HTFs[22:27] -- if we let the smaller domTFs create
+    the exit, it will be premature - the HTF curl says renewed high-level momentum."
+
+    A BOLT-ON, NOT A REPLACEMENT. Joe 0814: "this mech isn't a replacement to the existing (and
+    mostly functional) domTF mechanic - it's a bolt on." When no BLOCKING line sits inside
+    htf_band the restriction DOES NOT QUALIFY and the plain race runs. Joe 0814: "you weren't
+    'falling back'; you were simply not engaging the new spec because it didn't qualify (ie no
+    HTF lines)." Not a fallback, not a default, not a degraded path.
+
+        blocking    the lines whose momentum verdict at the signal bar is momo or curl in the
+                    signal's direction. These are the race candidates. Joe's word, 0814 — the
+                    earlier "carrying the move" was my coinage and is retired.
+        htf_curled  lines INSIDE htf_band that have bent into the signal's direction within the
+                    recency window. Non-empty means the restriction is offered.
+        htf_band    (22, 27). Joe 0814: "from 22-27 (semi arbitrary)" and "let's keep it static".
+        cross_ok    {tf: bool array} the fast partner has crossed to the far side and held.
+        inside      {tf: bool array} the r line is back inside the boundaries.
+        stall       stall(tf, bar) -> bool, supplied by the caller (SRP, it owns the sampling).
+        w           the signal bar. The race starts at w+1.
+        i1          the last bar to search.
+
+    -> (bar, tf, how) or (None, 0, None). `how` is 'cross' or 'stall'.
+
+    EITHER TEST ENDS THE TURN. Joe's "(cross OR stall)". The cross also requires the line to be
+    back inside the boundaries; the stall does not, because a stalled line has stopped moving
+    wherever it happens to sit.
+    """
+    lo, hi = int(htf_band[0]), int(htf_band[1])
+    band = [tf for tf in blocking if lo <= tf <= hi]
+    pool = band if (htf_curled and band) else list(blocking)   # empty band -> does not qualify
+    if not pool:
+        return None, 0, None
+    for i in range(int(w) + 1, int(i1) + 1):
+        for tf in pool:
+            if inside[tf][i] and cross_ok[tf][i]:
+                return i, tf, 'cross'
+            if stall(tf, i):
+                return i, tf, 'stall'
+    return None, 0, None
