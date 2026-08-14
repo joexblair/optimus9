@@ -164,6 +164,44 @@ DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_9of12 (
                        wsf_stall_n, wsf_ho_xwob, wsf_curl_tfbars, wsf_htf_band, wsf_ms),
     KEY (wsf_ms), KEY (wsf_side), KEY (wsf_domtf))'''
 
+WALK_DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_walk (
+    wfw_pk BIGINT AUTO_INCREMENT PRIMARY KEY,
+    -- THE REPORT, one row per printed line, columns as printed. A render of ws_fin_9of12 written
+    -- in the same pass, so it cannot drift from the walk it renders.
+    -- the knob identity. Same rule as ws_fin_9of12: every knob that changes the rows is in the key.
+    wfw_n_lines     SMALLINT NOT NULL,      -- WSF_N, lines that must qualify. 9 of 12
+    wfw_handicap    SMALLINT NOT NULL,      -- WSF_HANDICAP, points off the boundary. 0
+    wfw_hold        SMALLINT NOT NULL,      -- WSF_VOTE_HOLD. 0 = off
+    wfw_sticky      SMALLINT NOT NULL,      -- WSF_VOTE_STICKY. 0 = off
+    wfw_g30_level   VARCHAR(20) NOT NULL,   -- G30_LEVEL. g30_marker
+    wfw_stall_n     SMALLINT NOT NULL,      -- STALL_N, lattice samples with no new extreme. 6
+    wfw_ho_xwob     SMALLINT NOT NULL,      -- HANDOVER_XWOB, grid bars the fast partner holds. 4
+    wfw_curl_tfbars SMALLINT NOT NULL,      -- CURL_RECENCY_TF_BARS, bars of the line's own TF. 2
+    wfw_htf_band    VARCHAR(8) NOT NULL,    -- DOMTF_HTF_BAND. 22-27
+    wfw_win_from    VARCHAR(19) NOT NULL, wfw_win_to VARCHAR(19) NOT NULL,
+    -- the printed columns, left to right
+    wfw_row         SMALLINT NOT NULL,      -- #, position in the chronological walk
+    wfw_g30_marker  VARCHAR(19) NOT NULL,   -- g30_marker, the signal bar
+    wfw_qual        VARCHAR(19) NOT NULL,   -- qual, the 9of12 qualification bar
+    wfw_wait_s      INT NOT NULL,           -- wait, qual to signal, seconds
+    wfw_side        VARCHAR(5) NOT NULL,    -- side, LONG or SHORT
+    wfw_n           SMALLINT NOT NULL,      -- n, lines qualifying on the signal's side
+    wfw_abs         SMALLINT NOT NULL,      -- abs, earlier qualifications replaced before this one
+    wfw_domtf       VARCHAR(8) NOT NULL,    -- domTF, FREE or BLOCKED
+    wfw_max_tf      SMALLINT NOT NULL,      -- max TF, longest blocking line. 0 when FREE
+    wfw_hands_over  VARCHAR(24) NOT NULL,   -- domTF hands over, as printed. empty when FREE
+    wfw_min         DOUBLE,                 -- +min, signal to handover, minutes. NULL when FREE
+    UNIQUE KEY uq_wfw (wfw_n_lines, wfw_handicap, wfw_hold, wfw_sticky, wfw_g30_level,
+                       wfw_stall_n, wfw_ho_xwob, wfw_curl_tfbars, wfw_htf_band, wfw_row),
+    KEY (wfw_g30_marker), KEY (wfw_domtf))'''
+
+WALK_COLS = ['wfw_n_lines', 'wfw_handicap', 'wfw_hold', 'wfw_sticky', 'wfw_g30_level',
+             'wfw_stall_n', 'wfw_ho_xwob', 'wfw_curl_tfbars', 'wfw_htf_band',
+             'wfw_win_from', 'wfw_win_to', 'wfw_row', 'wfw_g30_marker', 'wfw_qual', 'wfw_wait_s',
+             'wfw_side', 'wfw_n', 'wfw_abs', 'wfw_domtf', 'wfw_max_tf', 'wfw_hands_over',
+             'wfw_min']
+
+
 VCOLS = [COL[n] for n in LINES]
 FCOLS = ['wsf_v_' + COL[n][4:] for n in LINES]
 COLS = (['wsf_n', 'wsf_handicap', 'wsf_hold', 'wsf_sticky', 'wsf_hi', 'wsf_lo',
@@ -256,7 +294,7 @@ def main():
     print(f'knobs: WSF_N {WSF_N} | WSF_HANDICAP {WSF_HANDICAP} | VOTE_HOLD {WSF_VOTE_HOLD} | '
           f'VOTE_STICKY {WSF_VOTE_STICKY} | hi {HI:.0f} / lo {LO:.0f}', flush=True)
 
-    rows, ab = [], []
+    rows, ab, rep = [], [], {}
     for e in ev:
         w, qb, sd = e['bar'], e['qual_bar'], e['side']
         vals, flags, voted, absent = [], [], [], []
@@ -306,6 +344,8 @@ def main():
                                               lambda tf, i: bool(STALL[sd][tf][i]), w, i1)
             ab.append((len(rows) + 1, u(ts[w])[11:], curled, pool, f_i, f_tf, f_how,
                        ho_i, ho_tf, ho_how))
+
+        rep[w] = {'blk': list(blk), 'ho_i': ho_i, 'ho_tf': ho_tf, 'ho_how': ho_how}
 
         g = G[w]
         rows.append(tuple([WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD, WSF_VOTE_STICKY, HI, LO,
@@ -390,6 +430,34 @@ def main():
         db.executemany(f'INSERT INTO ws_fin_9of12 ({",".join(COLS)}) VALUES '
                        f'({",".join(["%s"] * len(COLS))})', rows)
     print(f'ws_fin_9of12 : {len(rows):,} rows, {len(COLS)} stamped columns', flush=True)
+
+    # THE REPORT AS A TABLE. Same pass, same values, so it cannot drift from the walk above.
+    # EVERY row of the walk, FREE and BLOCKED. Cutting to the blocked rows would be a truncation
+    # nobody asked for, and the blocked rows are one WHERE clause away.
+    band = f'{DOMTF_HTF_BAND[0]}-{DOMTF_HTF_BAND[1]}'
+    ident = [WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD, WSF_VOTE_STICKY, G30_LEVEL,
+             STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS, band]
+    wrows = []
+    for k, e in enumerate(ev, 1):
+        w, qb, sd = e['bar'], e['qual_bar'], e['side']
+        blk_s = rep[w]['blk']
+        mx = max(blk_s) if blk_s else 0
+        ho = (f"{u(ts[rep[w]['ho_i']])[11:]} ws{rep[w]['ho_tf']}r {rep[w]['ho_how']}"
+              if rep[w]['ho_i'] else '')
+        wrows.append(tuple(ident + [
+            u(ts[i0]), u(ts[i1]), k, u(ts[w]), u(ts[qb]),
+            int((int(ts[w]) - int(ts[qb])) / 1000),
+            'SHORT' if sd > 0 else 'LONG',
+            e['hi_n'] if sd > 0 else e['lo_n'], e['absorbed'],
+            'BLOCKED' if blk_s else 'FREE', mx, ho,
+            (int(ts[rep[w]['ho_i']]) - int(ts[w])) / 60000.0 if rep[w]['ho_i'] else None]))
+    db.execute(WALK_DDL)
+    db.execute('DELETE FROM ws_fin_walk WHERE wfw_n_lines=%s AND wfw_handicap=%s AND wfw_hold=%s '
+               'AND wfw_sticky=%s AND wfw_g30_level=%s AND wfw_stall_n=%s AND wfw_ho_xwob=%s '
+               'AND wfw_curl_tfbars=%s AND wfw_htf_band=%s', tuple(ident))
+    db.executemany(f'INSERT INTO ws_fin_walk ({",".join(WALK_COLS)}) VALUES '
+                   f'({",".join(["%s"] * len(WALK_COLS))})', wrows)
+    print(f'ws_fin_walk  : {len(wrows):,} rows, {len(WALK_COLS)} stamped columns', flush=True)
 
     # keyed on THIS run's knobs. Without them the count sums every walk in the table.
     r = db.execute('SELECT wsf_domtf d, COUNT(*) n, SUM(wsf_side=1) hi, SUM(wsf_side=-1) lo '
