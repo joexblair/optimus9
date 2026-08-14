@@ -201,12 +201,15 @@ WALK_DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_walk (
     wfw_win_from    VARCHAR(19) NOT NULL, wfw_win_to VARCHAR(19) NOT NULL,
     -- the printed columns, left to right
     wfw_row         SMALLINT NOT NULL,      -- #, position in the chronological walk
-    wfw_g30_marker  VARCHAR(19) NOT NULL,   -- g30_marker, the signal bar
-    wfw_qual        VARCHAR(19) NOT NULL,   -- qual, the 9of12 qualification bar
+    wfw_g30_marker  DATETIME NOT NULL,      -- g30_marker, the signal bar. Full datetime
+    wfw_qual        DATETIME NOT NULL,      -- qual, the 9of12 qualification bar. Full datetime
     wfw_wait_s      INT NOT NULL,           -- wait, qual to signal, seconds
-    wfw_side        VARCHAR(5) NOT NULL,    -- side, LONG or SHORT
-    wfw_n           SMALLINT NOT NULL,      -- n, lines qualifying on the signal's side
-    wfw_abs         SMALLINT NOT NULL,      -- abs, earlier qualifications replaced before this one
+    wfw_side        TINYINT NOT NULL,       -- side, the BIAS. Joe 0814: "+1 = hi oob, short
+    --                                         position". -1 = lo oob, long position
+    wfw_n           SMALLINT NOT NULL,      -- lines_of_12: how many of the 12 lines qualified on
+    --                                         the signal's side at the qualification bar
+    wfw_abs         SMALLINT NOT NULL,      -- absorbed_quals: earlier qualifications replaced by
+    --                                         this one before it fired
     wfw_domtf       VARCHAR(8) NOT NULL,    -- domTF, FREE or BLOCKED
     wfw_max_tf      SMALLINT NOT NULL,      -- max TF, longest blocking line. 0 when FREE
     wfw_hands_over  VARCHAR(24) NOT NULL,   -- domTF hands over, as printed. empty when FREE
@@ -466,7 +469,7 @@ def main():
         for bi, btf in leaves:
             shrink.append((HANDOVER_RULE, STALL_N, u(ts[w]), u(ts[bi]),
                            (int(ts[bi]) - int(ts[w])) / 60000.0, btf,
-                           'SHORT' if sd > 0 else 'LONG',
+                           int(sd),
                            ','.join(str(t) for t in sorted(set(blk) | {t for _, t in joins
                                                                        if _ <= bi}))[:96]))
 
@@ -579,7 +582,7 @@ def main():
         wrows.append(tuple(ident + [
             u(ts[i1]), k, u(ts[w]), u(ts[qb]),
             int((int(ts[w]) - int(ts[qb])) / 1000),
-            'SHORT' if sd > 0 else 'LONG',
+            int(sd),
             e['hi_n'] if sd > 0 else e['lo_n'], e['absorbed'],
             'BLOCKED' if blk_s else 'FREE', mx, ho,
             (int(ts[rep[w]['ho_i']]) - int(ts[w])) / 60000.0 if rep[w]['ho_i'] else None,
@@ -605,12 +608,12 @@ def main():
     # shows what was last built without anyone editing a filter.
     db.execute('''CREATE OR REPLACE VIEW v_ws_fin_walk AS
         SELECT w.wfw_row                                                     AS `#`,
-               SUBSTRING(w.wfw_g30_marker, 12)                               AS g30_marker,
-               SUBSTRING(w.wfw_qual, 12)                                     AS qual,
+               w.wfw_g30_marker                                              AS g30_marker,
+               w.wfw_qual                                                    AS qual,
                CONCAT(FORMAT(w.wfw_wait_s / 60, 1), 'm')                     AS wait,
                w.wfw_side                                                    AS side,
-               w.wfw_n                                                       AS n,
-               w.wfw_abs                                                     AS abs,
+               w.wfw_n                                                       AS lines_of_12,
+               w.wfw_abs                                                     AS absorbed_quals,
                w.wfw_domtf                                                   AS domTF,
                IF(w.wfw_max_tf = 0, '-', CONCAT('ws', w.wfw_max_tf, 'r'))    AS max_TF,
                COALESCE(w.wfw_hands_over, '-')                               AS hands_over,
