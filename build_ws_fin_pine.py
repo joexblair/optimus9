@@ -28,18 +28,6 @@ STALL_N = 6                 # the walks to draw. Both rules are read at this STA
 BUCKET_MS = 60000           # TF1 pane. The 5 s signal bar is floored to its minute.
 
 
-def wrap(tag, tfs, per=4):
-    """A list of timeframes as narrow rows. Joe 0814: "keep the label tall and skinny" — a 15-line
-    group on one row is 40 characters wide, so it is broken into rows of `per`."""
-    if not tfs:
-        return [f'{tag} none']
-    t = [str(x) for x in tfs]
-    out = [f'{tag} ' + ','.join(t[:per])]
-    for k in range(per, len(t), per):
-        out.append(' ' * (len(tag) + 1) + ','.join(t[k:k + per]))
-    return out
-
-
 def u(ms):
     return dt.datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc).strftime('%H:%M:%S')
 
@@ -69,20 +57,15 @@ def main():
         if x['wsf_domtf'] != 'BLOCKED':
             continue
         y = M[ms]
-        seed = [int(t) for t in (x['wsf_domtf_tfs'] or '').split(',') if t]
-        grew = [int(t) for t in (y['wsf_ho_pool'] or '').split(',') if t]
-        joined = sorted(set(grew) - set(seed))
-        left = sorted(LV.get(x['wsf_utc'], set()))
-        # two short rows each, not one wide one
-        f_txt = ([x['wsf_ho_utc'][11:], f"ws{x['wsf_ho_tf']}r {x['wsf_ho_how']} "
-                                        f"+{x['wsf_ho_min']:.0f}m"]
-                 if x['wsf_ho_utc'] else ['never fires'])
-        m_txt = ([y['wsf_ho_utc'][11:], f"ws{y['wsf_ho_tf']}r {y['wsf_ho_how']} "
-                                        f"+{y['wsf_ho_min']:.0f}m"]
-                 if y['wsf_ho_utc'] else ['never fires'])
-        txt = '\n'.join([x['wsf_utc'][11:], 'SHORT' if x['wsf_side'] > 0 else 'LONG', '']
-                        + wrap('group', seed) + wrap('joins', joined) + wrap('left ', left)
-                        + ['', 'first'] + f_txt + ['', 'median'] + m_txt)
+        # Joe 0814: "less lines, wider x1.7, delete the group data, keep the TF that created the
+        # handoff". One row per rule: the bar, the line that created it, which test, the wait.
+        def row(tag, r):
+            if not r['wsf_ho_utc']:
+                return f'{tag} never fires'
+            return (f"{tag} {r['wsf_ho_utc'][11:]} ws{r['wsf_ho_tf']}r "
+                    f"{r['wsf_ho_how']} +{r['wsf_ho_min']:.0f}m")
+        txt = '\n'.join([f"{x['wsf_utc'][11:]}  {'SHORT' if x['wsf_side'] > 0 else 'LONG'}",
+                         row('first ', x), row('median', y)])
         labels.append((b, x['wsf_side'], txt))
 
     # 105 signals land on 104 chart minutes: 10:22:35 and 10:22:55 share one. Both are SHORT and
@@ -117,13 +100,11 @@ def main():
     L.append('//   signal. A FREE signal has no group and gets no label.')
     L.append('//')
     L.append('//   label lines, top to bottom')
-    L.append('//     the signal time, then its side')
-    L.append('//     group   the lines tagged momo or curl at the signal bar. The seed')
-    L.append('//     joins   lines that became tagged later and joined. Grow-only')
-    L.append('//     left    lines that stopped reading momo or curl. RECORDED, NOT ACTED ON')
+    L.append('//     the signal time and its side')
     L.append('//     first   task 8. the race, first past the post, 22-27 restriction live')
     L.append('//     median  task 9. the median of the group, re-derived every bar, whole group')
-    L.append('//     each handover reads  time  line  cross|stall  +minutes from the signal')
+    L.append('//     each rule reads  the handover bar / the line that created it /')
+    L.append('//                      cross or stall / minutes waited since the signal')
     L.append('//')
     L.append(f'//   KNOBS   STALL_N {STALL_N}   HANDOVER_XWOB 4   CURL_RECENCY_TF_BARS 2')
     L.append('//           DOMTF 13-27   DOMTF_HTF_BAND 22-27   9 of 12 lines   hi 85 / lo 15')
