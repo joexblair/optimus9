@@ -1411,6 +1411,63 @@ def stall_mask(y, dr, n, step, samples):
     return out
 
 
+def domtf_median(tagged):
+    """[PRODUCER · Joe 0814] The line the group nominates.
+
+    Joe 0814: "the median of the tagged domTF lines". Even count: "take the higher of the 2 TFs".
+
+        tagged  the timeframes currently in the group.
+
+    -> the timeframe to watch, or 0 when the group is empty.
+    """
+    t = sorted(int(x) for x in tagged)
+    if not t:
+        return 0
+    return t[len(t) // 2]          # odd -> the middle. even -> the higher of the two middles.
+
+
+def domtf_handover_median(tag, seed, cross_ok, inside, stall, w, i1):
+    """[PRODUCER · Joe 0814] The bar the domTF turn ends, when the GROUP nominates the line.
+
+    Task 9. One line is watched at a time — the median of the tagged group — instead of a race
+    between all of them. The group is re-derived every bar and grows, so the nomination moves.
+
+    Joe 0814 on a nominated line that never fires: "it must fire; this is why I introduced stall."
+    Joe 0814 on the 22-27 restriction: "for this mech, we include all lines that land in the
+    group" — the whole tagged group, uncut.
+
+        tag       {tf: bool array} momo or curl in the signal's direction at that bar.
+        seed      the group at the signal bar.
+        cross_ok  {tf: bool array} the fast partner has crossed and held.
+        inside    {tf: bool array} the r line is back between the boundaries.
+        stall     stall(tf, bar) -> bool.
+        w         the signal bar. The walk starts at w+1.  i1  the last bar.
+
+    -> (bar, tf, how, joins, leaves). `how` is 'cross' or 'stall'. (None, 0, None, ...) if the
+       window ends first.
+    """
+    grp = set(int(t) for t in seed)
+    present = {int(t): True for t in grp}
+    joins, leaves = [], []
+    for i in range(int(w) + 1, int(i1) + 1):
+        for tf, m in tag.items():
+            on = bool(m[i]); was = present.get(int(tf), False)
+            if on and not was:
+                present[int(tf)] = True
+                if int(tf) not in grp:
+                    grp.add(int(tf)); joins.append((i, int(tf)))
+            elif not on and was:
+                present[int(tf)] = False; leaves.append((i, int(tf)))
+        tf = domtf_median(grp)
+        if not tf:
+            continue
+        if inside[tf][i] and cross_ok[tf][i]:
+            return i, tf, 'cross', joins, leaves
+        if stall(tf, i):
+            return i, tf, 'stall', joins, leaves
+    return None, 0, None, joins, leaves
+
+
 def domtf_handover(blocking, htf_curled, htf_band, cross_ok, inside, stall, w, i1):
     """[PRODUCER · Joe 0814] The bar the domTF turn ends. A race, first past the post.
 

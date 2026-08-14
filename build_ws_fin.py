@@ -17,6 +17,8 @@ build_rplwalk2 / rpl_walk, and that import alone costs minutes. Task #6 removes 
 
     python3 build_ws_fin.py
 """
+import multiprocessing as mp
+import os
 import sys
 import datetime as dt
 from datetime import timezone
@@ -31,7 +33,7 @@ from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 from optimus9.analysis import ws_strat as WS
 from optimus9.analysis.jig import (ws_fin_9of12, WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD,
                                    WSF_VOTE_STICKY, WSF_REQUIRE, WSF_LINE_XWOB,
-                                   stall_mask, domtf_handover)
+                                   stall_mask, domtf_handover, domtf_handover_median)
 from optimus9.compute import momo_gated as MG
 from optimus9.compute.momo_gated import momo_g, momo_window
 
@@ -66,6 +68,11 @@ DOMTF_HTF_BAND = (22, 27)   # KNOB, Joe 0814: "from 22-27 (semi arbitrary)" / "u
 #                             domTF turn.
 CURL_RECENCY_TF_BARS = 2    # KNOB, Joe 0814 "{knob:2 TF bars}", confirmed as two bars of that
 #                             line's OWN timeframe: 44 min on ws22r, 54 min on ws27r.
+HANDOVER_RULE = 'median'    # KNOB. 'first' = task 8, the race, first past the post, the 22-27
+#                             restriction live. 'median' = task 9, one watched line, the median of
+#                             the tagged group, re-derived every bar, whole group uncut.
+#                             Joe 0814: "for this mech, we include all lines that land in the group.
+#                             this is, in part, our AB between task8 and task9".
 STALL_N = 6                 # KNOB. Joe 0810: "3 samples that have not exceeded the maxim".
 #                             Joe 0814 raised it to 6 — at 3 the stall is looser than the cross on
 #                             every line (49.4-57.5% of bars against 33.6-47.8%) and won 48 of 51
@@ -141,6 +148,7 @@ DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_9of12 (
     wsf_domtf_tfs VARCHAR(255),          -- the TFs in momo|curl, empty when FREE
     -- the handover knobs. IN THE UNIQUE KEY: changing one produces a different walk, and both
     -- walks must be able to sit in the table at once for an A/B.
+    wsf_ho_rule     VARCHAR(6) NOT NULL DEFAULT '',-- HANDOVER_RULE. first = task 8, median = task 9
     wsf_stall_n     SMALLINT NOT NULL DEFAULT 0,   -- STALL_N, lattice samples with no new extreme
     wsf_ho_xwob     SMALLINT NOT NULL DEFAULT 0,   -- HANDOVER_XWOB, grid bars the fast partner holds
     wsf_curl_tfbars SMALLINT NOT NULL DEFAULT 0,   -- CURL_RECENCY_TF_BARS, bars of the line's own TF
@@ -161,7 +169,7 @@ DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_9of12 (
     wsf_v_g30b    TINYINT, wsf_v_g30m TINYINT, wsf_v_g30Mage TINYINT, wsf_v_g30r TINYINT,
     wsf_v_ws1b    TINYINT, wsf_v_ws1m TINYINT, wsf_v_ws1Mage TINYINT, wsf_v_ws1r TINYINT,
     UNIQUE KEY uq_wsf (wsf_n, wsf_handicap, wsf_hold, wsf_sticky, wsf_g30_level,
-                       wsf_stall_n, wsf_ho_xwob, wsf_curl_tfbars, wsf_htf_band, wsf_ms),
+                       wsf_ho_rule, wsf_stall_n, wsf_ho_xwob, wsf_curl_tfbars, wsf_htf_band, wsf_ms),
     KEY (wsf_ms), KEY (wsf_side), KEY (wsf_domtf))'''
 
 WALK_DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_walk (
@@ -174,6 +182,7 @@ WALK_DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_walk (
     wfw_hold        SMALLINT NOT NULL,      -- WSF_VOTE_HOLD. 0 = off
     wfw_sticky      SMALLINT NOT NULL,      -- WSF_VOTE_STICKY. 0 = off
     wfw_g30_level   VARCHAR(20) NOT NULL,   -- G30_LEVEL. g30_marker
+    wfw_ho_rule     VARCHAR(6) NOT NULL,    -- HANDOVER_RULE. first = task 8, median = task 9
     wfw_stall_n     SMALLINT NOT NULL,      -- STALL_N, lattice samples with no new extreme. 6
     wfw_ho_xwob     SMALLINT NOT NULL,      -- HANDOVER_XWOB, grid bars the fast partner holds. 4
     wfw_curl_tfbars SMALLINT NOT NULL,      -- CURL_RECENCY_TF_BARS, bars of the line's own TF. 2
@@ -192,11 +201,30 @@ WALK_DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_walk (
     wfw_hands_over  VARCHAR(24) NOT NULL,   -- domTF hands over, as printed. empty when FREE
     wfw_min         DOUBLE,                 -- +min, signal to handover, minutes. NULL when FREE
     UNIQUE KEY uq_wfw (wfw_n_lines, wfw_handicap, wfw_hold, wfw_sticky, wfw_g30_level,
-                       wfw_stall_n, wfw_ho_xwob, wfw_curl_tfbars, wfw_htf_band, wfw_row),
+                       wfw_ho_rule, wfw_stall_n, wfw_ho_xwob, wfw_curl_tfbars, wfw_htf_band, wfw_row),
     KEY (wfw_g30_marker), KEY (wfw_domtf))'''
 
+SHRINK_DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_tagshrink (
+    wfs_pk BIGINT AUTO_INCREMENT PRIMARY KEY,
+    -- THE STUB. Joe 0814: "a shrinking group might infer weakness. create a stub, let it tell us
+    -- when it happen". A tagged domTF line stopped reading momo or curl in the signal's direction
+    -- while the signal was still waiting for its handover. RECORDED, NEVER ACTED ON — the line
+    -- stays in the group and the median does not move.
+    wfs_ho_rule  VARCHAR(6) NOT NULL,     -- HANDOVER_RULE the walk ran under
+    wfs_stall_n  SMALLINT NOT NULL,       -- STALL_N the walk ran under
+    wfs_signal   VARCHAR(19) NOT NULL,    -- the g30_marker bar this happened during
+    wfs_utc      VARCHAR(19) NOT NULL,    -- the bar the line left
+    wfs_min      DOUBLE NOT NULL,         -- signal to departure, minutes
+    wfs_tf       SMALLINT NOT NULL,       -- the line that left
+    wfs_side     VARCHAR(5) NOT NULL,     -- LONG or SHORT
+    wfs_group    VARCHAR(96) NOT NULL,    -- the group at that bar, the departing line included
+    KEY (wfs_signal), KEY (wfs_tf))'''
+
+SHRINK_COLS = ['wfs_ho_rule', 'wfs_stall_n', 'wfs_signal', 'wfs_utc', 'wfs_min', 'wfs_tf',
+               'wfs_side', 'wfs_group']
+
 WALK_COLS = ['wfw_n_lines', 'wfw_handicap', 'wfw_hold', 'wfw_sticky', 'wfw_g30_level',
-             'wfw_stall_n', 'wfw_ho_xwob', 'wfw_curl_tfbars', 'wfw_htf_band',
+             'wfw_ho_rule', 'wfw_stall_n', 'wfw_ho_xwob', 'wfw_curl_tfbars', 'wfw_htf_band',
              'wfw_win_from', 'wfw_win_to', 'wfw_row', 'wfw_g30_marker', 'wfw_qual', 'wfw_wait_s',
              'wfw_side', 'wfw_n', 'wfw_abs', 'wfw_domtf', 'wfw_max_tf', 'wfw_hands_over',
              'wfw_min']
@@ -210,12 +238,23 @@ COLS = (['wsf_n', 'wsf_handicap', 'wsf_hold', 'wsf_sticky', 'wsf_hi', 'wsf_lo',
          'wsf_qual_ms', 'wsf_qual_utc', 'wsf_wait_s', 'wsf_absorbed', 'wsf_side',
          'wsf_hi_n', 'wsf_lo_n', 'wsf_n_side', 'wsf_g30_side', 'wsf_g30_dwell',
          'wsf_voters', 'wsf_abstain', 'wsf_domtf', 'wsf_domtf_tfs',
-         'wsf_stall_n', 'wsf_ho_xwob', 'wsf_curl_tfbars', 'wsf_htf_band',
+         'wsf_ho_rule', 'wsf_stall_n', 'wsf_ho_xwob', 'wsf_curl_tfbars', 'wsf_htf_band',
          'wsf_ho_utc', 'wsf_ho_min', 'wsf_ho_tf', 'wsf_ho_how',
          'wsf_htf_curl', 'wsf_ho_pool'] + VCOLS + FCOLS)
 
 
 AB = '--ab' in sys.argv     # print the restricted vs unrestricted race, write nothing
+
+
+def _tag_one(tf, dr, path, r, i0, i1, window_min, fixed_samples):
+    """One line, one direction: momo or curl at every bar of the walked window. Written to `path`.
+    Module level and taking plain arrays so it can run in a worker process."""
+    MG.MOMO_FIXED_SAMPLES = fixed_samples
+    m = np.zeros(int(i1) + 1, bool)
+    with momo_window(window_min):
+        for i in range(int(i0), int(i1) + 1):
+            m[i] = momo_g(r, dr, i)[0] in ('momo', 'curl')
+    np.save(path, m)
 
 
 def main():
@@ -257,6 +296,32 @@ def main():
             LAT[tf] = (int(MC.MOMO_STEP_BARS), int(MC.MOMO_SAMPLES))
     STALL = {dr: {tf: stall_mask(R[tf], dr, STALL_N, *LAT[tf]) for tf in DOMTF_TFS}
              for dr in (+1, -1)}
+
+    # THE TAGGED MASKS. A line is tagged when its momentum verdict in the signal's direction reads
+    # momo or curl AT THAT BAR. The median rule re-derives the group from these every bar, so they
+    # are needed for every line and every bar, not just at the signal. ~10 min to build, cached.
+    TAGDIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                          'optimus9', 'orchestration', '.ws_cache', 'tagged')
+    os.makedirs(TAGDIR, exist_ok=True)
+    # ONLY THE WALKED WINDOW. The race runs from a signal bar to i1 and every signal sits at or
+    # after i0, so no bar outside [i0, i1] is ever read. Bars outside stay False.
+    # 30 line-direction passes, each ~9 min serially. Run them in a process pool.
+    jobs = [(tf, dr, os.path.join(TAGDIR, f'tag_{tf}_{"u" if dr > 0 else "d"}_{B.K_WINDOW}_'
+                                          f'{MG.MOMO_FIXED_SAMPLES}_{i0}_{i1}.npy'))
+            for tf in DOMTF_TFS for dr in (+1, -1)]
+    todo = [j for j in jobs if not os.path.exists(j[2])]
+    if todo:
+        print(f'  tagged masks: {len(todo)} of {len(jobs)} to build, {os.cpu_count()} cores',
+              flush=True)
+        with mp.Pool(min(len(todo), max(1, (os.cpu_count() or 2) - 1))) as pool:
+            pool.starmap(_tag_one, [(tf, dr, f, R[tf], i0, i1, B.K_WINDOW * tf,
+                                     MG.MOMO_FIXED_SAMPLES) for tf, dr, f in todo])
+    TAG = {+1: {}, -1: {}}
+    for tf, dr, f in jobs:
+        TAG[dr][tf] = np.load(f)
+    print('  tagged  ' + '  '.join(
+        f'{tf}:{TAG[1][tf][i0:i1 + 1].mean() * 100:.0f}/{TAG[-1][tf][i0:i1 + 1].mean() * 100:.0f}%'
+        for tf in DOMTF_TFS), flush=True)
     print('  lattice  ' + '  '.join(f'{tf}:{LAT[tf][0]}x{LAT[tf][1]}' for tf in DOMTF_TFS), flush=True)
 
     # the curl, asked at every bar of the HTF band only. Joe 0814: "IF a domTF HTF has recently
@@ -294,7 +359,7 @@ def main():
     print(f'knobs: WSF_N {WSF_N} | WSF_HANDICAP {WSF_HANDICAP} | VOTE_HOLD {WSF_VOTE_HOLD} | '
           f'VOTE_STICKY {WSF_VOTE_STICKY} | hi {HI:.0f} / lo {LO:.0f}', flush=True)
 
-    rows, ab, rep = [], [], {}
+    rows, ab, rep, shrink = [], [], {}, []
     for e in ev:
         w, qb, sd = e['bar'], e['qual_bar'], e['side']
         vals, flags, voted, absent = [], [], [], []
@@ -330,14 +395,20 @@ def main():
                 sum(1 for o in opp if o < max(blk)) >= NESTED_OPPOSITION_MIN:
             blk = []                            # a nested shorter line has taken the other side
         # THE HANDOVER. Only a blocked signal has a turn to wait out.
-        ho_i = ho_tf = 0; ho_how = None; curled = []; pool = []
+        ho_i = ho_tf = 0; ho_how = None; curled = []; pool = []; joins = []; leaves = []
         if blk:
-            curled = [tf for tf in HTFS if CURLED[sd][tf][w]]
-            ho_i, ho_tf, ho_how = domtf_handover(
-                blk, curled, DOMTF_HTF_BAND, CROSS[sd], INSIDE,
-                lambda tf, i: bool(STALL[sd][tf][i]), w, i1)
-            band = [tf for tf in blk if DOMTF_HTF_BAND[0] <= tf <= DOMTF_HTF_BAND[1]]
-            pool = band if (curled and band) else list(blk)
+            if HANDOVER_RULE == 'median':
+                ho_i, ho_tf, ho_how, joins, leaves = domtf_handover_median(
+                    TAG[sd], blk, CROSS[sd], INSIDE,
+                    lambda tf, i: bool(STALL[sd][tf][i]), w, i1)
+                pool = sorted(set(blk) | {t for _, t in joins})
+            else:
+                curled = [tf for tf in HTFS if CURLED[sd][tf][w]]
+                ho_i, ho_tf, ho_how = domtf_handover(
+                    blk, curled, DOMTF_HTF_BAND, CROSS[sd], INSIDE,
+                    lambda tf, i: bool(STALL[sd][tf][i]), w, i1)
+                band = [tf for tf in blk if DOMTF_HTF_BAND[0] <= tf <= DOMTF_HTF_BAND[1]]
+                pool = band if (curled and band) else list(blk)
 
         if AB and blk:      # diagnostic only, never stored: the race WITHOUT the HTF restriction
             f_i, f_tf, f_how = domtf_handover(blk, [], DOMTF_HTF_BAND, CROSS[sd], INSIDE,
@@ -346,6 +417,14 @@ def main():
                        ho_i, ho_tf, ho_how))
 
         rep[w] = {'blk': list(blk), 'ho_i': ho_i, 'ho_tf': ho_tf, 'ho_how': ho_how}
+        # THE SHRINK STUB. Joe 0814: "a shrinking group might infer weakness. create a stub, let it
+        # tell us when it happen". Recorded, never acted on — a line that leaves stays in the group.
+        for bi, btf in leaves:
+            shrink.append((HANDOVER_RULE, STALL_N, u(ts[w]), u(ts[bi]),
+                           (int(ts[bi]) - int(ts[w])) / 60000.0, btf,
+                           'SHORT' if sd > 0 else 'LONG',
+                           ','.join(str(t) for t in sorted(set(blk) | {t for _, t in joins
+                                                                       if _ <= bi}))[:96]))
 
         g = G[w]
         rows.append(tuple([WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD, WSF_VOTE_STICKY, HI, LO,
@@ -358,7 +437,7 @@ def main():
                            ','.join(voted)[:255], ','.join(absent)[:255],
                            'BLOCKED' if blk else 'FREE',
                            ','.join(str(t) for t in blk)[:255],
-                           STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS,
+                           HANDOVER_RULE, STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS,
                            f'{DOMTF_HTF_BAND[0]}-{DOMTF_HTF_BAND[1]}',
                            u(ts[ho_i]) if ho_i else None,
                            (int(ts[ho_i]) - int(ts[w])) / 60000.0 if ho_i else None,
@@ -399,6 +478,7 @@ def main():
            ('wsf_g30_dwell', 'INT NOT NULL DEFAULT 0'),
            ('wsf_domtf', "VARCHAR(8) NOT NULL DEFAULT ''"),
            ('wsf_domtf_tfs', 'VARCHAR(255)'),
+           ('wsf_ho_rule', "VARCHAR(6) NOT NULL DEFAULT ''"),
            ('wsf_stall_n', 'SMALLINT NOT NULL DEFAULT 0'),
            ('wsf_ho_xwob', 'SMALLINT NOT NULL DEFAULT 0'),
            ('wsf_curl_tfbars', 'SMALLINT NOT NULL DEFAULT 0'),
@@ -421,10 +501,10 @@ def main():
     # keyed on the knobs, not the window — the unique key is not the window. Every knob in the
     # key is here, so a run at a different STALL_N lands alongside instead of on top.
     db.execute('DELETE FROM ws_fin_9of12 WHERE wsf_n=%s AND wsf_handicap=%s AND wsf_hold=%s '
-               'AND wsf_sticky=%s AND wsf_g30_level=%s AND wsf_stall_n=%s AND wsf_ho_xwob=%s '
-               'AND wsf_curl_tfbars=%s AND wsf_htf_band=%s',
+               'AND wsf_sticky=%s AND wsf_g30_level=%s AND wsf_ho_rule=%s AND wsf_stall_n=%s '
+               'AND wsf_ho_xwob=%s AND wsf_curl_tfbars=%s AND wsf_htf_band=%s',
                (WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD, WSF_VOTE_STICKY, G30_LEVEL,
-                STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS,
+                HANDOVER_RULE, STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS,
                 f'{DOMTF_HTF_BAND[0]}-{DOMTF_HTF_BAND[1]}'))
     if rows:
         db.executemany(f'INSERT INTO ws_fin_9of12 ({",".join(COLS)}) VALUES '
@@ -436,7 +516,7 @@ def main():
     # nobody asked for, and the blocked rows are one WHERE clause away.
     band = f'{DOMTF_HTF_BAND[0]}-{DOMTF_HTF_BAND[1]}'
     ident = [WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD, WSF_VOTE_STICKY, G30_LEVEL,
-             STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS, band]
+             HANDOVER_RULE, STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS, band]
     wrows = []
     for k, e in enumerate(ev, 1):
         w, qb, sd = e['bar'], e['qual_bar'], e['side']
@@ -453,17 +533,26 @@ def main():
             (int(ts[rep[w]['ho_i']]) - int(ts[w])) / 60000.0 if rep[w]['ho_i'] else None]))
     db.execute(WALK_DDL)
     db.execute('DELETE FROM ws_fin_walk WHERE wfw_n_lines=%s AND wfw_handicap=%s AND wfw_hold=%s '
-               'AND wfw_sticky=%s AND wfw_g30_level=%s AND wfw_stall_n=%s AND wfw_ho_xwob=%s '
-               'AND wfw_curl_tfbars=%s AND wfw_htf_band=%s', tuple(ident))
+               'AND wfw_sticky=%s AND wfw_g30_level=%s AND wfw_ho_rule=%s AND wfw_stall_n=%s '
+               'AND wfw_ho_xwob=%s AND wfw_curl_tfbars=%s AND wfw_htf_band=%s', tuple(ident))
     db.executemany(f'INSERT INTO ws_fin_walk ({",".join(WALK_COLS)}) VALUES '
                    f'({",".join(["%s"] * len(WALK_COLS))})', wrows)
     print(f'ws_fin_walk  : {len(wrows):,} rows, {len(WALK_COLS)} stamped columns', flush=True)
 
+    db.execute(SHRINK_DDL)
+    db.execute('DELETE FROM ws_fin_tagshrink WHERE wfs_ho_rule=%s AND wfs_stall_n=%s',
+               (HANDOVER_RULE, STALL_N))
+    if shrink:
+        db.executemany(f'INSERT INTO ws_fin_tagshrink ({",".join(SHRINK_COLS)}) VALUES '
+                       f'({",".join(["%s"] * len(SHRINK_COLS))})', shrink)
+    print(f'ws_fin_tagshrink : {len(shrink):,} rows  '
+          f'({len({r[2] for r in shrink})} signals saw a line leave)', flush=True)
+
     # keyed on THIS run's knobs. Without them the count sums every walk in the table.
     r = db.execute('SELECT wsf_domtf d, COUNT(*) n, SUM(wsf_side=1) hi, SUM(wsf_side=-1) lo '
-                   'FROM ws_fin_9of12 WHERE wsf_g30_level=%s AND wsf_stall_n=%s AND wsf_ho_xwob=%s '
-                   'AND wsf_curl_tfbars=%s AND wsf_htf_band=%s GROUP BY 1',
-                   (G30_LEVEL, STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS,
+                   'FROM ws_fin_9of12 WHERE wsf_g30_level=%s AND wsf_ho_rule=%s AND wsf_stall_n=%s '
+                   'AND wsf_ho_xwob=%s AND wsf_curl_tfbars=%s AND wsf_htf_band=%s GROUP BY 1',
+                   (G30_LEVEL, HANDOVER_RULE, STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS,
                     f'{DOMTF_HTF_BAND[0]}-{DOMTF_HTF_BAND[1]}'), fetch=True)
     print('\nby domTF verdict:')
     for x in r:
