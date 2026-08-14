@@ -68,6 +68,10 @@ DOMTF_HTF_BAND = (22, 27)   # KNOB, Joe 0814: "from 22-27 (semi arbitrary)" / "u
 #                             domTF turn.
 CURL_RECENCY_TF_BARS = 2    # KNOB, Joe 0814 "{knob:2 TF bars}", confirmed as two bars of that
 #                             line's OWN timeframe: 44 min on ws22r, 54 min on ws27r.
+FENCE_OVERRIDE = None       # KNOB. None = use optimus9_system's hi_boundary / lo_boundary, 85/15.
+#                             (hi, lo) runs THIS WALK at a different fence and writes nothing back
+#                             to optimus9_system. The fence is in both tables' unique keys, so a
+#                             walk at a different fence lands alongside instead of overwriting.
 HANDOVER_RULE = 'median'    # KNOB. 'first' = task 8, the race, first past the post, the 22-27
 #                             restriction live. 'median' = task 9, one watched line, the median of
 #                             the tagged group, re-derived every bar, whole group uncut.
@@ -168,7 +172,7 @@ DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_9of12 (
     wsf_v_g15b    TINYINT, wsf_v_g15m TINYINT, wsf_v_g15Mage TINYINT, wsf_v_g15r TINYINT,
     wsf_v_g30b    TINYINT, wsf_v_g30m TINYINT, wsf_v_g30Mage TINYINT, wsf_v_g30r TINYINT,
     wsf_v_ws1b    TINYINT, wsf_v_ws1m TINYINT, wsf_v_ws1Mage TINYINT, wsf_v_ws1r TINYINT,
-    UNIQUE KEY uq_wsf (wsf_n, wsf_handicap, wsf_hold, wsf_sticky, wsf_g30_level,
+    UNIQUE KEY uq_wsf (wsf_n, wsf_handicap, wsf_hold, wsf_sticky, wsf_hi, wsf_lo, wsf_g30_level,
                        wsf_ho_rule, wsf_stall_n, wsf_ho_xwob, wsf_curl_tfbars, wsf_htf_band, wsf_ms),
     KEY (wsf_ms), KEY (wsf_side), KEY (wsf_domtf))'''
 
@@ -182,6 +186,8 @@ WALK_DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_walk (
     wfw_hold        SMALLINT NOT NULL,      -- WSF_VOTE_HOLD. 0 = off
     wfw_sticky      SMALLINT NOT NULL,      -- WSF_VOTE_STICKY. 0 = off
     wfw_g30_level   VARCHAR(20) NOT NULL,   -- G30_LEVEL. g30_marker
+    wfw_hi          DOUBLE NOT NULL,        -- the high fence this walk ran at. 85 unless overridden
+    wfw_lo          DOUBLE NOT NULL,        -- the low fence. 15 unless overridden
     wfw_ho_rule     VARCHAR(6) NOT NULL,    -- HANDOVER_RULE. first = task 8, median = task 9
     wfw_stall_n     SMALLINT NOT NULL,      -- STALL_N, lattice samples with no new extreme. 6
     wfw_ho_xwob     SMALLINT NOT NULL,      -- HANDOVER_XWOB, grid bars the fast partner holds. 4
@@ -200,8 +206,8 @@ WALK_DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_walk (
     wfw_max_tf      SMALLINT NOT NULL,      -- max TF, longest blocking line. 0 when FREE
     wfw_hands_over  VARCHAR(24) NOT NULL,   -- domTF hands over, as printed. empty when FREE
     wfw_min         DOUBLE,                 -- +min, signal to handover, minutes. NULL when FREE
-    UNIQUE KEY uq_wfw (wfw_n_lines, wfw_handicap, wfw_hold, wfw_sticky, wfw_g30_level,
-                       wfw_ho_rule, wfw_stall_n, wfw_ho_xwob, wfw_curl_tfbars, wfw_htf_band, wfw_row),
+    UNIQUE KEY uq_wfw (wfw_n_lines, wfw_handicap, wfw_hold, wfw_sticky, wfw_hi, wfw_lo,
+                       wfw_g30_level, wfw_ho_rule, wfw_stall_n, wfw_ho_xwob, wfw_curl_tfbars, wfw_htf_band, wfw_row),
     KEY (wfw_g30_marker), KEY (wfw_domtf))'''
 
 SHRINK_DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_tagshrink (
@@ -223,7 +229,8 @@ SHRINK_DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_tagshrink (
 SHRINK_COLS = ['wfs_ho_rule', 'wfs_stall_n', 'wfs_signal', 'wfs_utc', 'wfs_min', 'wfs_tf',
                'wfs_side', 'wfs_group']
 
-WALK_COLS = ['wfw_n_lines', 'wfw_handicap', 'wfw_hold', 'wfw_sticky', 'wfw_g30_level',
+WALK_COLS = ['wfw_n_lines', 'wfw_handicap', 'wfw_hold', 'wfw_sticky', 'wfw_hi', 'wfw_lo',
+             'wfw_g30_level',
              'wfw_ho_rule', 'wfw_stall_n', 'wfw_ho_xwob', 'wfw_curl_tfbars', 'wfw_htf_band',
              'wfw_win_from', 'wfw_win_to', 'wfw_row', 'wfw_g30_marker', 'wfw_qual', 'wfw_wait_s',
              'wfw_side', 'wfw_n', 'wfw_abs', 'wfw_domtf', 'wfw_max_tf', 'wfw_hands_over',
@@ -263,6 +270,11 @@ def main():
     sysr = db.execute('SELECT pxsmooth_dema_src s, pxsmooth_dema_len l, hi_boundary h, '
                       'lo_boundary lo FROM optimus9_system WHERE sys_pk=1', fetch=True)[0]
     HI, LO = float(sysr['h']), float(sysr['lo'])
+    if FENCE_OVERRIDE is not None:              # this walk only. optimus9_system is NOT touched.
+        HI, LO = float(FENCE_OVERRIDE[0]), float(FENCE_OVERRIDE[1])
+        print(f'  FENCE OVERRIDE {HI:.0f} / {LO:.0f}   '
+              f"(optimus9_system still says {float(sysr['h']):.0f} / {float(sysr['lo']):.0f})",
+              flush=True)
     ls = LineStore(db)
     ovr = {n: (*ls.resolve(n), ls.value_mode(n)) for n in set(LINES + list(WS.LINES))}
     for tf in DOMTF_TFS:
@@ -501,9 +513,10 @@ def main():
     # keyed on the knobs, not the window — the unique key is not the window. Every knob in the
     # key is here, so a run at a different STALL_N lands alongside instead of on top.
     db.execute('DELETE FROM ws_fin_9of12 WHERE wsf_n=%s AND wsf_handicap=%s AND wsf_hold=%s '
-               'AND wsf_sticky=%s AND wsf_g30_level=%s AND wsf_ho_rule=%s AND wsf_stall_n=%s '
+               'AND wsf_sticky=%s AND wsf_hi=%s AND wsf_lo=%s AND wsf_g30_level=%s '
+               'AND wsf_ho_rule=%s AND wsf_stall_n=%s '
                'AND wsf_ho_xwob=%s AND wsf_curl_tfbars=%s AND wsf_htf_band=%s',
-               (WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD, WSF_VOTE_STICKY, G30_LEVEL,
+               (WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD, WSF_VOTE_STICKY, HI, LO, G30_LEVEL,
                 HANDOVER_RULE, STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS,
                 f'{DOMTF_HTF_BAND[0]}-{DOMTF_HTF_BAND[1]}'))
     if rows:
@@ -515,7 +528,7 @@ def main():
     # EVERY row of the walk, FREE and BLOCKED. Cutting to the blocked rows would be a truncation
     # nobody asked for, and the blocked rows are one WHERE clause away.
     band = f'{DOMTF_HTF_BAND[0]}-{DOMTF_HTF_BAND[1]}'
-    ident = [WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD, WSF_VOTE_STICKY, G30_LEVEL,
+    ident = [WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD, WSF_VOTE_STICKY, HI, LO, G30_LEVEL,
              HANDOVER_RULE, STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS, band]
     wrows = []
     for k, e in enumerate(ev, 1):
@@ -533,7 +546,8 @@ def main():
             (int(ts[rep[w]['ho_i']]) - int(ts[w])) / 60000.0 if rep[w]['ho_i'] else None]))
     db.execute(WALK_DDL)
     db.execute('DELETE FROM ws_fin_walk WHERE wfw_n_lines=%s AND wfw_handicap=%s AND wfw_hold=%s '
-               'AND wfw_sticky=%s AND wfw_g30_level=%s AND wfw_ho_rule=%s AND wfw_stall_n=%s '
+               'AND wfw_sticky=%s AND wfw_hi=%s AND wfw_lo=%s AND wfw_g30_level=%s '
+               'AND wfw_ho_rule=%s AND wfw_stall_n=%s '
                'AND wfw_ho_xwob=%s AND wfw_curl_tfbars=%s AND wfw_htf_band=%s', tuple(ident))
     db.executemany(f'INSERT INTO ws_fin_walk ({",".join(WALK_COLS)}) VALUES '
                    f'({",".join(["%s"] * len(WALK_COLS))})', wrows)
@@ -550,9 +564,10 @@ def main():
 
     # keyed on THIS run's knobs. Without them the count sums every walk in the table.
     r = db.execute('SELECT wsf_domtf d, COUNT(*) n, SUM(wsf_side=1) hi, SUM(wsf_side=-1) lo '
-                   'FROM ws_fin_9of12 WHERE wsf_g30_level=%s AND wsf_ho_rule=%s AND wsf_stall_n=%s '
+                   'FROM ws_fin_9of12 WHERE wsf_hi=%s AND wsf_lo=%s AND wsf_g30_level=%s '
+                   'AND wsf_ho_rule=%s AND wsf_stall_n=%s '
                    'AND wsf_ho_xwob=%s AND wsf_curl_tfbars=%s AND wsf_htf_band=%s GROUP BY 1',
-                   (G30_LEVEL, HANDOVER_RULE, STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS,
+                   (HI, LO, G30_LEVEL, HANDOVER_RULE, STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS,
                     f'{DOMTF_HTF_BAND[0]}-{DOMTF_HTF_BAND[1]}'), fetch=True)
     print('\nby domTF verdict:')
     for x in r:
