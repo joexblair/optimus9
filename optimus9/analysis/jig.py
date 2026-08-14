@@ -1111,9 +1111,12 @@ def handoff(R, landings, live_log, fence, xwob, near, i0=0, i1=None, stall=None)
 #
 # The hold knobs remain in the producer, defaulted OFF. Noise reduction goes in a separate mechanic.
 WSF_N            = 9    # of 12
-WSF_HANDICAP     = 0    # Joe 0813: "the handicap for g15 and g30 needs to change. make it 15/85".
-                        # gcws b/m/Mage now vote at hi / lo, the same 85 / 15 as the other six lines.
-                        # WAS 7 (78 / 22) until 0813.
+WSF_HANDICAP     = 9    # Joe 0814: "apply this" — WSF_HANDICAP 9 plus WSF_LINE_HANDICAP ws1b 16,
+                        # to put a ws_fin_9of12 signal at his ESTIMATED 08-04 08:59:30. gcws b/m/Mage
+                        # vote at 76 / 24. It is what lets gcws30b — the mandatory vote, WSF_REQUIRE
+                        # — be available at all in the ten minutes before that target: 1 bar of 118
+                        # at handicap 0, 6 of 118 at 9.
+                        # WAS 7 (78 / 22) until 0813, then 0 (85 / 15) on Joe 0813 "make it 15/85".
 WSF_VOTE_HOLD    = 0    # OFF
 WSF_VOTE_STICKY  = 0    # OFF
 
@@ -1149,9 +1152,12 @@ def _runlen(mask):
     return out
 
 
-WSF_LINE_HANDICAP = {}
+WSF_LINE_HANDICAP = {'ws1b': 16}
 # KNOB, per line. {line_name: points}. A line with a handicap votes at hi-points / lo+points instead
 # of at the full boundary. Overrides WSF_HANDICAP for that line. Empty = every line at 85 / 15.
+# Joe 0814: ws1b 16 points, so it votes at 69 / 31. His read named it — "my eyes see that gcws15b
+# and ws1b fall short of their qualifying tartgets" — and it is the one line WSF_HANDICAP cannot
+# reach, since that knob only covers the six gcws b/m/Mage lines.
 
 WSF_WS1_XWOB  = 4    # KNOB, Joe 0813. 5 s bars = 20 s. Consecutive bars ws1Mage / ws1b must hold
                      # past their boundary before they may vote.
@@ -1172,7 +1178,7 @@ WSF_REQUIRE = ('gcws30b',)   # Joe 0813: "for this to work reliably, 9of12 must 
 
 def wsf_qualify(W, hi, lo, n=WSF_N, handicap=WSF_HANDICAP, vote_hold=WSF_VOTE_HOLD,
                 vote_sticky=WSF_VOTE_STICKY, require=WSF_REQUIRE, line_xwob=WSF_LINE_XWOB,
-                line_handicap=None):
+                line_handicap=WSF_LINE_HANDICAP):
     """[PRODUCER · Joe 0812] STAGE 1 of ws_fin_9of12 — "9 of 12 lines qualify".
 
     THIS IS NOT THE SIGNAL. Joe 0813: "9of12 event will fire on these chronological conditions:
@@ -1279,7 +1285,7 @@ def wsf_qualify(W, hi, lo, n=WSF_N, handicap=WSF_HANDICAP, vote_hold=WSF_VOTE_HO
 
 def ws_fin_9of12(W, hi, lo, g30, n=WSF_N, handicap=WSF_HANDICAP, vote_hold=WSF_VOTE_HOLD,
                  vote_sticky=WSF_VOTE_STICKY, require=WSF_REQUIRE, line_xwob=WSF_LINE_XWOB,
-                 line_handicap=None, i0=0, i1=None):
+                 line_handicap=WSF_LINE_HANDICAP, i0=0, i1=None):
     """[PRODUCER · Joe 0813] ws_fin_9of12 — THE SIGNAL. A DUAL LATCH.
 
     Joe 0813, verbatim:

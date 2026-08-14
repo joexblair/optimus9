@@ -31,7 +31,8 @@ from optimus9.compute.line_config import LineStore, KLine, BBLine, override
 from optimus9.orchestration.rpl_cache import cache_jig_perline
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 from optimus9.analysis import ws_strat as WS
-from optimus9.analysis.jig import (ws_fin_9of12, WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD,
+from optimus9.analysis.jig import (ws_fin_9of12, WSF_N, WSF_HANDICAP, WSF_LINE_HANDICAP,
+                                   WSF_VOTE_HOLD,
                                    WSF_VOTE_STICKY, WSF_REQUIRE, WSF_LINE_XWOB,
                                    stall_mask, domtf_handover, domtf_handover_median)
 from optimus9.compute import momo_gated as MG
@@ -119,8 +120,8 @@ G30_LEVEL = 'g30_marker'          # Joe 0813 named it
 XWOB = 2
 
 # THE WINDOW. Joe named 08-04 00:00:00 -> 12:22:00 for the report. Both ends stamped on every row.
-START = dt.datetime(2026, 8, 4, 0, 0, 0, tzinfo=timezone.utc)
-END = dt.datetime(2026, 8, 5, 0, 0, 0, tzinfo=timezone.utc)   # Joe 0813: extend to 08-05 00:00
+START = dt.datetime(2026, 8, 4, 0, 0, tzinfo=timezone.utc)   # Joe 0814: the 08-04 window
+END = dt.datetime(2026, 8, 5, 0, 0, tzinfo=timezone.utc)
 
 u = lambda t: dt.datetime.fromtimestamp(int(t) / 1000, timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
@@ -136,6 +137,7 @@ DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_9of12 (
     wsf_g30_level VARCHAR(20) NOT NULL,  -- Joe 0813: g30_marker = confirmed b oob->ib + xwob
     wsf_require   VARCHAR(64) NOT NULL,  -- lines that MUST vote. Joe 0813: gcws30b
     wsf_line_xwob VARCHAR(64) NOT NULL,  -- per-line hold. Joe 0813: ws1Mage:4, ws1b:4 (4 bars = 20 s)
+    wsf_line_hcap VARCHAR(64) NOT NULL DEFAULT '',  -- WSF_LINE_HANDICAP. Joe 0814: ws1b:16
     wsf_ms        BIGINT NOT NULL,       -- THE SIGNAL BAR = the g30 bar
     wsf_utc       VARCHAR(19) NOT NULL,
     wsf_qual_ms   BIGINT NOT NULL,       -- the 9of12 qualification bar that armed it
@@ -172,7 +174,8 @@ DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_9of12 (
     wsf_v_g15b    TINYINT, wsf_v_g15m TINYINT, wsf_v_g15Mage TINYINT, wsf_v_g15r TINYINT,
     wsf_v_g30b    TINYINT, wsf_v_g30m TINYINT, wsf_v_g30Mage TINYINT, wsf_v_g30r TINYINT,
     wsf_v_ws1b    TINYINT, wsf_v_ws1m TINYINT, wsf_v_ws1Mage TINYINT, wsf_v_ws1r TINYINT,
-    UNIQUE KEY uq_wsf (wsf_n, wsf_handicap, wsf_hold, wsf_sticky, wsf_hi, wsf_lo, wsf_g30_level,
+    UNIQUE KEY uq_wsf (wsf_win_from, wsf_n, wsf_handicap, wsf_line_hcap, wsf_hold, wsf_sticky,
+                       wsf_hi, wsf_lo, wsf_g30_level,
                        wsf_ho_rule, wsf_stall_n, wsf_ho_xwob, wsf_curl_tfbars, wsf_htf_band, wsf_ms),
     KEY (wsf_ms), KEY (wsf_side), KEY (wsf_domtf))'''
 
@@ -206,8 +209,8 @@ WALK_DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_walk (
     wfw_max_tf      SMALLINT NOT NULL,      -- max TF, longest blocking line. 0 when FREE
     wfw_hands_over  VARCHAR(24) NOT NULL,   -- domTF hands over, as printed. empty when FREE
     wfw_min         DOUBLE,                 -- +min, signal to handover, minutes. NULL when FREE
-    UNIQUE KEY uq_wfw (wfw_n_lines, wfw_handicap, wfw_hold, wfw_sticky, wfw_hi, wfw_lo,
-                       wfw_g30_level, wfw_ho_rule, wfw_stall_n, wfw_ho_xwob, wfw_curl_tfbars, wfw_htf_band, wfw_row),
+    UNIQUE KEY uq_wfw (wfw_win_from, wfw_n_lines, wfw_handicap, wfw_hold, wfw_sticky, wfw_hi,
+                       wfw_lo, wfw_g30_level, wfw_ho_rule, wfw_stall_n, wfw_ho_xwob, wfw_curl_tfbars, wfw_htf_band, wfw_row),
     KEY (wfw_g30_marker), KEY (wfw_domtf))'''
 
 SHRINK_DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_tagshrink (
@@ -229,10 +232,10 @@ SHRINK_DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_tagshrink (
 SHRINK_COLS = ['wfs_ho_rule', 'wfs_stall_n', 'wfs_signal', 'wfs_utc', 'wfs_min', 'wfs_tf',
                'wfs_side', 'wfs_group']
 
-WALK_COLS = ['wfw_n_lines', 'wfw_handicap', 'wfw_hold', 'wfw_sticky', 'wfw_hi', 'wfw_lo',
-             'wfw_g30_level',
+WALK_COLS = ['wfw_win_from', 'wfw_n_lines', 'wfw_handicap', 'wfw_hold', 'wfw_sticky', 'wfw_hi',
+             'wfw_lo', 'wfw_g30_level',
              'wfw_ho_rule', 'wfw_stall_n', 'wfw_ho_xwob', 'wfw_curl_tfbars', 'wfw_htf_band',
-             'wfw_win_from', 'wfw_win_to', 'wfw_row', 'wfw_g30_marker', 'wfw_qual', 'wfw_wait_s',
+             'wfw_win_to', 'wfw_row', 'wfw_g30_marker', 'wfw_qual', 'wfw_wait_s',
              'wfw_side', 'wfw_n', 'wfw_abs', 'wfw_domtf', 'wfw_max_tf', 'wfw_hands_over',
              'wfw_min']
 
@@ -245,6 +248,7 @@ COLS = (['wsf_n', 'wsf_handicap', 'wsf_hold', 'wsf_sticky', 'wsf_hi', 'wsf_lo',
          'wsf_qual_ms', 'wsf_qual_utc', 'wsf_wait_s', 'wsf_absorbed', 'wsf_side',
          'wsf_hi_n', 'wsf_lo_n', 'wsf_n_side', 'wsf_g30_side', 'wsf_g30_dwell',
          'wsf_voters', 'wsf_abstain', 'wsf_domtf', 'wsf_domtf_tfs',
+         'wsf_line_hcap',
          'wsf_ho_rule', 'wsf_stall_n', 'wsf_ho_xwob', 'wsf_curl_tfbars', 'wsf_htf_band',
          'wsf_ho_utc', 'wsf_ho_min', 'wsf_ho_tf', 'wsf_ho_how',
          'wsf_htf_curl', 'wsf_ho_pool'] + VCOLS + FCOLS)
@@ -364,11 +368,18 @@ def main():
     print(f'g30 marker signals: {len(g30_pairs):,} on the tape, '
           f'{sum(1 for b, _ in g30_pairs if i0 <= b <= i1):,} in the window', flush=True)
 
-    ev, q = ws_fin_9of12(W, HI, LO, g30_pairs, i0=i0, i1=i1)
+    # PASS THE KNOBS, DO NOT LEAN ON THE DEFAULTS. The producer's defaults bind at import time,
+    # so a caller that rebinds jig.WSF_HANDICAP afterwards silently gets the old value while
+    # stamping the new one. That happened 0814 and mislabelled two walks.
+    ev, q = ws_fin_9of12(W, HI, LO, g30_pairs, n=WSF_N, handicap=WSF_HANDICAP,
+                         vote_hold=WSF_VOTE_HOLD, vote_sticky=WSF_VOTE_STICKY,
+                         require=WSF_REQUIRE, line_xwob=WSF_LINE_XWOB,
+                         line_handicap=WSF_LINE_HANDICAP, i0=i0, i1=i1)
     print(f'{len(ev):,} ws_fin_9of12 signals   '
           f'hi {sum(1 for e in ev if e["side"] > 0)}  lo {sum(1 for e in ev if e["side"] < 0)}',
           flush=True)
-    print(f'knobs: WSF_N {WSF_N} | WSF_HANDICAP {WSF_HANDICAP} | VOTE_HOLD {WSF_VOTE_HOLD} | '
+    print(f'knobs: WSF_N {WSF_N} | WSF_HANDICAP {WSF_HANDICAP} | '
+          f'LINE_HANDICAP {WSF_LINE_HANDICAP or "none"} | VOTE_HOLD {WSF_VOTE_HOLD} | '
           f'VOTE_STICKY {WSF_VOTE_STICKY} | hi {HI:.0f} / lo {LO:.0f}', flush=True)
 
     rows, ab, rep, shrink = [], [], {}, []
@@ -377,7 +388,11 @@ def main():
         vals, flags, voted, absent = [], [], [], []
         for n in LINES:
             v = float(V[n][qb])
-            h_, l_ = (HI - WSF_HANDICAP, LO + WSF_HANDICAP) if n in HANDI else (HI, LO)
+            hp = WSF_LINE_HANDICAP.get(n)          # a per-line handicap overrides WSF_HANDICAP
+            if hp is not None:
+                h_, l_ = HI - hp, LO + hp
+            else:
+                h_, l_ = (HI - WSF_HANDICAP, LO + WSF_HANDICAP) if n in HANDI else (HI, LO)
             ok = (v >= h_) if sd > 0 else (v <= l_)
             vals.append(v)
             flags.append(int(ok))
@@ -449,6 +464,7 @@ def main():
                            ','.join(voted)[:255], ','.join(absent)[:255],
                            'BLOCKED' if blk else 'FREE',
                            ','.join(str(t) for t in blk)[:255],
+                           ','.join(f'{k}:{v}' for k, v in sorted(WSF_LINE_HANDICAP.items())),
                            HANDOVER_RULE, STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS,
                            f'{DOMTF_HTF_BAND[0]}-{DOMTF_HTF_BAND[1]}',
                            u(ts[ho_i]) if ho_i else None,
@@ -490,6 +506,7 @@ def main():
            ('wsf_g30_dwell', 'INT NOT NULL DEFAULT 0'),
            ('wsf_domtf', "VARCHAR(8) NOT NULL DEFAULT ''"),
            ('wsf_domtf_tfs', 'VARCHAR(255)'),
+           ('wsf_line_hcap', "VARCHAR(64) NOT NULL DEFAULT ''"),
            ('wsf_ho_rule', "VARCHAR(6) NOT NULL DEFAULT ''"),
            ('wsf_stall_n', 'SMALLINT NOT NULL DEFAULT 0'),
            ('wsf_ho_xwob', 'SMALLINT NOT NULL DEFAULT 0'),
@@ -512,12 +529,14 @@ def main():
     # supersedes the earlier rows rather than sitting alongside them.
     # keyed on the knobs, not the window — the unique key is not the window. Every knob in the
     # key is here, so a run at a different STALL_N lands alongside instead of on top.
-    db.execute('DELETE FROM ws_fin_9of12 WHERE wsf_n=%s AND wsf_handicap=%s AND wsf_hold=%s '
-               'AND wsf_sticky=%s AND wsf_hi=%s AND wsf_lo=%s AND wsf_g30_level=%s '
-               'AND wsf_ho_rule=%s AND wsf_stall_n=%s '
+    db.execute('DELETE FROM ws_fin_9of12 WHERE wsf_win_from=%s AND wsf_n=%s AND wsf_handicap=%s '
+               'AND wsf_hold=%s '
+               'AND wsf_line_hcap=%s AND wsf_sticky=%s AND wsf_hi=%s AND wsf_lo=%s '
+               'AND wsf_g30_level=%s AND wsf_ho_rule=%s AND wsf_stall_n=%s '
                'AND wsf_ho_xwob=%s AND wsf_curl_tfbars=%s AND wsf_htf_band=%s',
-               (WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD, WSF_VOTE_STICKY, HI, LO, G30_LEVEL,
-                HANDOVER_RULE, STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS,
+               (u(ts[i0]), WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD,
+                ','.join(f'{k}:{v}' for k, v in sorted(WSF_LINE_HANDICAP.items())),
+                WSF_VOTE_STICKY, HI, LO, G30_LEVEL, HANDOVER_RULE, STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS,
                 f'{DOMTF_HTF_BAND[0]}-{DOMTF_HTF_BAND[1]}'))
     if rows:
         db.executemany(f'INSERT INTO ws_fin_9of12 ({",".join(COLS)}) VALUES '
@@ -528,7 +547,7 @@ def main():
     # EVERY row of the walk, FREE and BLOCKED. Cutting to the blocked rows would be a truncation
     # nobody asked for, and the blocked rows are one WHERE clause away.
     band = f'{DOMTF_HTF_BAND[0]}-{DOMTF_HTF_BAND[1]}'
-    ident = [WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD, WSF_VOTE_STICKY, HI, LO, G30_LEVEL,
+    ident = [u(ts[i0]), WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD, WSF_VOTE_STICKY, HI, LO, G30_LEVEL,
              HANDOVER_RULE, STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS, band]
     wrows = []
     for k, e in enumerate(ev, 1):
@@ -538,14 +557,15 @@ def main():
         ho = (f"{u(ts[rep[w]['ho_i']])[11:]} ws{rep[w]['ho_tf']}r {rep[w]['ho_how']}"
               if rep[w]['ho_i'] else '')
         wrows.append(tuple(ident + [
-            u(ts[i0]), u(ts[i1]), k, u(ts[w]), u(ts[qb]),
+            u(ts[i1]), k, u(ts[w]), u(ts[qb]),
             int((int(ts[w]) - int(ts[qb])) / 1000),
             'SHORT' if sd > 0 else 'LONG',
             e['hi_n'] if sd > 0 else e['lo_n'], e['absorbed'],
             'BLOCKED' if blk_s else 'FREE', mx, ho,
             (int(ts[rep[w]['ho_i']]) - int(ts[w])) / 60000.0 if rep[w]['ho_i'] else None]))
     db.execute(WALK_DDL)
-    db.execute('DELETE FROM ws_fin_walk WHERE wfw_n_lines=%s AND wfw_handicap=%s AND wfw_hold=%s '
+    db.execute('DELETE FROM ws_fin_walk WHERE wfw_win_from=%s AND wfw_n_lines=%s '
+               'AND wfw_handicap=%s AND wfw_hold=%s '
                'AND wfw_sticky=%s AND wfw_hi=%s AND wfw_lo=%s AND wfw_g30_level=%s '
                'AND wfw_ho_rule=%s AND wfw_stall_n=%s '
                'AND wfw_ho_xwob=%s AND wfw_curl_tfbars=%s AND wfw_htf_band=%s', tuple(ident))
@@ -554,8 +574,9 @@ def main():
     print(f'ws_fin_walk  : {len(wrows):,} rows, {len(WALK_COLS)} stamped columns', flush=True)
 
     db.execute(SHRINK_DDL)
-    db.execute('DELETE FROM ws_fin_tagshrink WHERE wfs_ho_rule=%s AND wfs_stall_n=%s',
-               (HANDOVER_RULE, STALL_N))
+    db.execute('DELETE FROM ws_fin_tagshrink WHERE wfs_ho_rule=%s AND wfs_stall_n=%s '
+               'AND wfs_signal >= %s AND wfs_signal < %s',
+               (HANDOVER_RULE, STALL_N, u(ts[i0]), u(ts[i1])))
     if shrink:
         db.executemany(f'INSERT INTO ws_fin_tagshrink ({",".join(SHRINK_COLS)}) VALUES '
                        f'({",".join(["%s"] * len(SHRINK_COLS))})', shrink)
