@@ -191,6 +191,8 @@ WALK_DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_walk (
     wfw_g30_level   VARCHAR(20) NOT NULL,   -- G30_LEVEL. g30_marker
     wfw_hi          DOUBLE NOT NULL,        -- the high fence this walk ran at. 85 unless overridden
     wfw_lo          DOUBLE NOT NULL,        -- the low fence. 15 unless overridden
+    wfw_line_hcap   VARCHAR(64) NOT NULL DEFAULT '',  -- WSF_LINE_HANDICAP. Joe 0814: ws1b:16
+    wfw_line_xwob   VARCHAR(64) NOT NULL DEFAULT '',  -- WSF_LINE_XWOB, bars ws1Mage / ws1b hold
     wfw_ho_rule     VARCHAR(6) NOT NULL,    -- HANDOVER_RULE. first = task 8, median = task 9
     wfw_stall_n     SMALLINT NOT NULL,      -- STALL_N, lattice samples with no new extreme. 6
     wfw_ho_xwob     SMALLINT NOT NULL,      -- HANDOVER_XWOB, grid bars the fast partner holds. 4
@@ -209,7 +211,17 @@ WALK_DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_walk (
     wfw_max_tf      SMALLINT NOT NULL,      -- max TF, longest blocking line. 0 when FREE
     wfw_hands_over  VARCHAR(24) NOT NULL,   -- domTF hands over, as printed. empty when FREE
     wfw_min         DOUBLE,                 -- +min, signal to handover, minutes. NULL when FREE
-    UNIQUE KEY uq_wfw (wfw_win_from, wfw_n_lines, wfw_handicap, wfw_hold, wfw_sticky, wfw_hi,
+    -- added since the original report format. Task 8 and task 9.
+    wfw_ho_tf       SMALLINT NOT NULL DEFAULT 0,      -- the line that ended the turn. 0 when FREE
+    wfw_ho_how      VARCHAR(6),             -- cross | stall. how that line ended it
+    wfw_htf_curl    VARCHAR(64),            -- lines in 22-27 that bent into the move recently.
+    --                                         Non-empty means the task-8 restriction was offered
+    wfw_group       VARCHAR(96),            -- the tagged group at the signal bar. The seed
+    wfw_joins       VARCHAR(96),            -- lines that became tagged during the wait and joined
+    wfw_left        VARCHAR(96),            -- lines that stopped reading momo or curl. The shrink
+    --                                         stub: recorded, never acted on
+    UNIQUE KEY uq_wfw (wfw_win_from, wfw_n_lines, wfw_handicap, wfw_line_hcap, wfw_line_xwob,
+                       wfw_hold, wfw_sticky, wfw_hi,
                        wfw_lo, wfw_g30_level, wfw_ho_rule, wfw_stall_n, wfw_ho_xwob, wfw_curl_tfbars, wfw_htf_band, wfw_row),
     KEY (wfw_g30_marker), KEY (wfw_domtf))'''
 
@@ -234,10 +246,12 @@ SHRINK_COLS = ['wfs_ho_rule', 'wfs_stall_n', 'wfs_signal', 'wfs_utc', 'wfs_min',
 
 WALK_COLS = ['wfw_win_from', 'wfw_n_lines', 'wfw_handicap', 'wfw_hold', 'wfw_sticky', 'wfw_hi',
              'wfw_lo', 'wfw_g30_level',
+             'wfw_line_hcap', 'wfw_line_xwob',
              'wfw_ho_rule', 'wfw_stall_n', 'wfw_ho_xwob', 'wfw_curl_tfbars', 'wfw_htf_band',
              'wfw_win_to', 'wfw_row', 'wfw_g30_marker', 'wfw_qual', 'wfw_wait_s',
              'wfw_side', 'wfw_n', 'wfw_abs', 'wfw_domtf', 'wfw_max_tf', 'wfw_hands_over',
-             'wfw_min']
+             'wfw_min', 'wfw_ho_tf', 'wfw_ho_how', 'wfw_htf_curl', 'wfw_group', 'wfw_joins',
+             'wfw_left']
 
 
 VCOLS = [COL[n] for n in LINES]
@@ -443,7 +457,10 @@ def main():
             ab.append((len(rows) + 1, u(ts[w])[11:], curled, pool, f_i, f_tf, f_how,
                        ho_i, ho_tf, ho_how))
 
-        rep[w] = {'blk': list(blk), 'ho_i': ho_i, 'ho_tf': ho_tf, 'ho_how': ho_how}
+        rep[w] = {'blk': list(blk), 'ho_i': ho_i, 'ho_tf': ho_tf, 'ho_how': ho_how,
+                  'curled': list(curled),
+                  'joins': sorted({t for _, t in joins}),
+                  'leaves': sorted({t for _, t in leaves})}
         # THE SHRINK STUB. Joe 0814: "a shrinking group might infer weakness. create a stub, let it
         # tell us when it happen". Recorded, never acted on — a line that leaves stays in the group.
         for bi, btf in leaves:
@@ -549,6 +566,8 @@ def main():
     # nobody asked for, and the blocked rows are one WHERE clause away.
     band = f'{DOMTF_HTF_BAND[0]}-{DOMTF_HTF_BAND[1]}'
     ident = [u(ts[i0]), WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD, WSF_VOTE_STICKY, HI, LO, G30_LEVEL,
+             ','.join(f'{k}:{v}' for k, v in sorted(WSF_LINE_HANDICAP.items())),
+             ','.join(f'{k}:{v}' for k, v in sorted(WSF_LINE_XWOB.items())),
              HANDOVER_RULE, STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS, band]
     wrows = []
     for k, e in enumerate(ev, 1):
@@ -563,16 +582,53 @@ def main():
             'SHORT' if sd > 0 else 'LONG',
             e['hi_n'] if sd > 0 else e['lo_n'], e['absorbed'],
             'BLOCKED' if blk_s else 'FREE', mx, ho,
-            (int(ts[rep[w]['ho_i']]) - int(ts[w])) / 60000.0 if rep[w]['ho_i'] else None]))
+            (int(ts[rep[w]['ho_i']]) - int(ts[w])) / 60000.0 if rep[w]['ho_i'] else None,
+            int(rep[w]['ho_tf']), rep[w]['ho_how'],
+            ','.join(str(t) for t in rep[w]['curled'])[:64],
+            ','.join(str(t) for t in blk_s)[:96],
+            ','.join(str(t) for t in rep[w]['joins'])[:96],
+            ','.join(str(t) for t in rep[w]['leaves'])[:96]]))
     db.execute(WALK_DDL)
     db.execute('DELETE FROM ws_fin_walk WHERE wfw_win_from=%s AND wfw_n_lines=%s '
                'AND wfw_handicap=%s AND wfw_hold=%s '
                'AND wfw_sticky=%s AND wfw_hi=%s AND wfw_lo=%s AND wfw_g30_level=%s '
-               'AND wfw_ho_rule=%s AND wfw_stall_n=%s '
+               'AND wfw_line_hcap=%s AND wfw_line_xwob=%s AND wfw_ho_rule=%s AND wfw_stall_n=%s '
                'AND wfw_ho_xwob=%s AND wfw_curl_tfbars=%s AND wfw_htf_band=%s', tuple(ident))
     db.executemany(f'INSERT INTO ws_fin_walk ({",".join(WALK_COLS)}) VALUES '
                    f'({",".join(["%s"] * len(WALK_COLS))})', wrows)
     print(f'ws_fin_walk  : {len(wrows):,} rows, {len(WALK_COLS)} stamped columns', flush=True)
+
+    # THE TIGHT REPORT. One walk, one row per event, already rendered. Joe 0814: "I want a tight
+    # report that is easy to ready - 700 rows for 121 events is useless to me". ws_fin_walk stacks
+    # every walk ever run, so the raw table is the sum of them; this view is the LATEST run only,
+    # picked by the highest wfw_pk. MY CHOICE, stated: it is self-maintaining, so the view always
+    # shows what was last built without anyone editing a filter.
+    db.execute('''CREATE OR REPLACE VIEW v_ws_fin_walk AS
+        SELECT w.wfw_row                                                     AS `#`,
+               SUBSTRING(w.wfw_g30_marker, 12)                               AS g30_marker,
+               SUBSTRING(w.wfw_qual, 12)                                     AS qual,
+               CONCAT(FORMAT(w.wfw_wait_s / 60, 1), 'm')                     AS wait,
+               w.wfw_side                                                    AS side,
+               w.wfw_n                                                       AS n,
+               w.wfw_abs                                                     AS abs,
+               w.wfw_domtf                                                   AS domTF,
+               IF(w.wfw_max_tf = 0, '-', CONCAT('ws', w.wfw_max_tf, 'r'))    AS max_TF,
+               COALESCE(w.wfw_hands_over, '-')                               AS hands_over,
+               IF(w.wfw_min IS NULL, '-', CONCAT(FORMAT(w.wfw_min, 1), 'm')) AS plus_min,
+               COALESCE(w.wfw_group, '-')                                    AS grp,
+               COALESCE(NULLIF(w.wfw_joins, ''), '-')                        AS joins,
+               COALESCE(NULLIF(w.wfw_left, ''), '-')                         AS `left`,
+               COALESCE(NULLIF(w.wfw_htf_curl, ''), '-')                     AS htf_curl
+        FROM ws_fin_walk w
+        JOIN (SELECT wfw_win_from f, wfw_n_lines n, wfw_handicap h, wfw_line_hcap lh,
+                     wfw_line_xwob lx, wfw_hi hi, wfw_lo lo, wfw_stall_n sn, wfw_ho_rule ru
+              FROM ws_fin_walk ORDER BY wfw_pk DESC LIMIT 1) k
+          ON w.wfw_win_from = k.f AND w.wfw_n_lines = k.n AND w.wfw_handicap = k.h
+         AND w.wfw_line_hcap = k.lh AND w.wfw_line_xwob = k.lx
+         AND w.wfw_hi = k.hi AND w.wfw_lo = k.lo AND w.wfw_stall_n = k.sn
+         AND w.wfw_ho_rule = k.ru
+        ORDER BY w.wfw_row''')
+    print('v_ws_fin_walk : the latest walk, one row per event, rendered', flush=True)
 
     db.execute(SHRINK_DDL)
     db.execute('DELETE FROM ws_fin_tagshrink WHERE wfs_ho_rule=%s AND wfs_stall_n=%s '
