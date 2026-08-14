@@ -53,7 +53,10 @@ def main():
     hi_ms, lo_ms, labels = [], [], []
     for ms, x in F.items():
         b = (int(ms) // BUCKET_MS) * BUCKET_MS
-        (lo_ms if x['wsf_side'] > 0 else hi_ms).append(b)     # side +1 = OOB-HIGH = SHORT
+        # side +1 = 9+ of 12 lines OOB-HIGH = SHORT -> hi_ms -> RED.  side -1 -> lo_ms -> GREEN.
+        # BUG FIXED 0814: this line had the two arrays the wrong way round, so the chart painted
+        # SHORT green and LONG red while the header and the toggles said the opposite.
+        (hi_ms if x['wsf_side'] > 0 else lo_ms).append(b)
         if x['wsf_domtf'] != 'BLOCKED':
             continue
         y = M[ms]
