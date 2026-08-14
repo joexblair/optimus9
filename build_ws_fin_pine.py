@@ -23,8 +23,16 @@ from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 
 OUT = 'ws_fin_walk.pine'
+# THE WALK TO DRAW, by its full identity. Anything left out here silently unions several walks —
+# ws_fin_9of12 now holds six of them.
+WIN_FROM  = '2026-08-04 00:00:00'
 G30_LEVEL = 'g30_marker'
-STALL_N = 6                 # the walks to draw. Both rules are read at this STALL_N.
+WSF_N     = 9               # votes needed, of 12
+HANDICAP  = 0               # WSF_HANDICAP, points off the boundary for the six gcws b/m/Mage lines
+LINE_HCAP = 'ws1b:1'        # WSF_LINE_HANDICAP, per line. ws1b votes at 84 / 16
+LINE_XWOB = 'ws1Mage:1,ws1b:1'   # WSF_LINE_XWOB, bars ws1Mage / ws1b hold before voting
+HI, LO    = 85, 15          # the fence
+STALL_N   = 6               # lattice samples with no new extreme
 BUCKET_MS = 60000           # TF1 pane. The 5 s signal bar is floored to its minute.
 
 
@@ -36,16 +44,18 @@ def main():
     db = DatabaseManager(**get_db_config()); db.connect()
     q = ("SELECT wsf_ms,wsf_utc,wsf_side,wsf_domtf,wsf_domtf_tfs,wsf_ho_utc,wsf_ho_min,"
          "wsf_ho_tf,wsf_ho_how,wsf_ho_pool,wsf_win_from,wsf_win_to "
-         "FROM ws_fin_9of12 WHERE wsf_g30_level=%s AND wsf_stall_n=%s AND wsf_ho_rule=%s "
-         "ORDER BY wsf_ms")
-    F = {r['wsf_ms']: r for r in db.execute(q, (G30_LEVEL, STALL_N, 'first'), fetch=True)}
-    M = {r['wsf_ms']: r for r in db.execute(q, (G30_LEVEL, STALL_N, 'median'), fetch=True)}
+         "FROM ws_fin_9of12 WHERE wsf_win_from=%s AND wsf_g30_level=%s AND wsf_n=%s "
+         "AND wsf_handicap=%s AND wsf_line_hcap=%s AND wsf_line_xwob=%s AND wsf_hi=%s "
+         "AND wsf_lo=%s AND wsf_stall_n=%s AND wsf_ho_rule=%s ORDER BY wsf_ms")
+    ident = (WIN_FROM, G30_LEVEL, WSF_N, HANDICAP, LINE_HCAP, LINE_XWOB, HI, LO, STALL_N)
+    F = {r['wsf_ms']: r for r in db.execute(q, ident + ('first',), fetch=True)}
+    M = {r['wsf_ms']: r for r in db.execute(q, ident + ('median',), fetch=True)}
     if not F or not M:
         print('both walks must exist. run build_ws_fin.py at each HANDOVER_RULE first.')
         return 1
     LV = {}
     for r in db.execute("SELECT wfs_signal,wfs_tf FROM ws_fin_tagshrink WHERE wfs_ho_rule='median' "
-                        "AND wfs_stall_n=%s", (STALL_N,), fetch=True):
+                        "AND wfs_stall_n=%s AND wfs_signal >= %s", (STALL_N, WIN_FROM), fetch=True):
         LV.setdefault(r['wfs_signal'], set()).add(int(r['wfs_tf']))
     a = list(F.values())[0]; win = (a['wsf_win_from'], a['wsf_win_to'])
     db.disconnect()
@@ -110,7 +120,9 @@ def main():
     L.append('//                      cross or stall / minutes waited since the signal')
     L.append('//')
     L.append(f'//   KNOBS   STALL_N {STALL_N}   HANDOVER_XWOB 4   CURL_RECENCY_TF_BARS 2')
-    L.append('//           DOMTF 13-27   DOMTF_HTF_BAND 22-27   9 of 12 lines   hi 85 / lo 15')
+    L.append(f'//           DOMTF 13-27   DOMTF_HTF_BAND 22-27   {WSF_N} of 12 lines   '
+             f'hi {HI} / lo {LO}   WSF_HANDICAP {HANDICAP}')
+    L.append(f'//           WSF_LINE_HANDICAP {LINE_HCAP}      WSF_LINE_XWOB {LINE_XWOB}')
     L.append(f'//   window  {win[0]} -> {win[1]}      pxs grid 5s      BUCKET_MS {BUCKET_MS}')
     L.append('//   source  ws_fin_9of12 / ws_fin_tagshrink, wsf_g30_level=g30_marker')
     L.append('')

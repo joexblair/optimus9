@@ -1111,12 +1111,12 @@ def handoff(R, landings, live_log, fence, xwob, near, i0=0, i1=None, stall=None)
 #
 # The hold knobs remain in the producer, defaulted OFF. Noise reduction goes in a separate mechanic.
 WSF_N            = 9    # of 12
-WSF_HANDICAP     = 9    # Joe 0814: "apply this" — WSF_HANDICAP 9 plus WSF_LINE_HANDICAP ws1b 16,
-                        # to put a ws_fin_9of12 signal at his ESTIMATED 08-04 08:59:30. gcws b/m/Mage
-                        # vote at 76 / 24. It is what lets gcws30b — the mandatory vote, WSF_REQUIRE
-                        # — be available at all in the ten minutes before that target: 1 bar of 118
-                        # at handicap 0, 6 of 118 at 9.
-                        # WAS 7 (78 / 22) until 0813, then 0 (85 / 15) on Joe 0813 "make it 15/85".
+WSF_HANDICAP     = 0    # gcws b/m/Mage vote at hi / lo, the same 85 / 15 as the other six lines.
+                        # WAS 7 (78 / 22) until 0813, then 0 on Joe 0813 "make it 15/85".
+                        # Briefly 9 on 0814 to reach Joe's 08:59:30 target, then back to 0 — that
+                        # was a shotgun. Joe 0814: "did you apply the change to g30, or did you use
+                        # a shotgun?" It loosened six lines to fix two, and gcws30b, the line it was
+                        # aimed at, was already voting at 91.08 on the bar that mattered.
 WSF_VOTE_HOLD    = 0    # OFF
 WSF_VOTE_STICKY  = 0    # OFF
 
@@ -1152,15 +1152,22 @@ def _runlen(mask):
     return out
 
 
-WSF_LINE_HANDICAP = {'ws1b': 16}
+WSF_LINE_HANDICAP = {'ws1b': 1}
 # KNOB, per line. {line_name: points}. A line with a handicap votes at hi-points / lo+points instead
 # of at the full boundary. Overrides WSF_HANDICAP for that line. Empty = every line at 85 / 15.
-# Joe 0814: ws1b 16 points, so it votes at 69 / 31. His read named it — "my eyes see that gcws15b
-# and ws1b fall short of their qualifying tartgets" — and it is the one line WSF_HANDICAP cannot
-# reach, since that knob only covers the six gcws b/m/Mage lines.
+# Joe 0814: ws1b 1 point, so it votes at 84 / 16. His read named it — "my eyes see that gcws15b and
+# ws1b fall short of their qualifying tartgets" — and it is the one line WSF_HANDICAP cannot reach,
+# since that knob only covers the six gcws b/m/Mage lines. At 08-04 08:59:55 ws1b reads 84.83, so
+# one point is the whole gap. Paired with WSF_WS1_XWOB 1 below: together they cost +16 signals on
+# 08-04, where the six-line WSF_HANDICAP 9 cost +54 for the same target bar.
 
-WSF_WS1_XWOB  = 4    # KNOB, Joe 0813. 5 s bars = 20 s. Consecutive bars ws1Mage / ws1b must hold
-                     # past their boundary before they may vote.
+WSF_WS1_XWOB  = 1    # KNOB. 5 s bars. Consecutive bars ws1Mage / ws1b must hold past their
+                     # boundary before they may vote. 1 = no hold, a single bar votes.
+                     # WAS 4 (20 s) on Joe 0813 "use a xwob 4 on ws1Mage and ws1b". Joe 0814 took
+                     # it to 1 to reach the 08-04 08:59:30 target: ws1Mage crosses to 87.18 at
+                     # 08:59:55 with only one bar of the four, so its vote was held and the count
+                     # stopped at 8 of 12. Joe's caveat, noted by him: this is the filter that
+                     # rejected one-bar spikes, and 08:59:55 IS a one-bar spike on both lines.
 WSF_LINE_XWOB = {'ws1Mage': WSF_WS1_XWOB, 'ws1b': WSF_WS1_XWOB}
 # Joe 0813: "add this to the 9of12 mechanic: use a xwob 4 on ws1Mage and ws1b".
 # These two lines may vote only after 4 CONSECUTIVE bars past their boundary (20 s at the 5 s grid).

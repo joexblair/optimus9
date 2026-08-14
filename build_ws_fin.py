@@ -174,8 +174,8 @@ DDL = '''CREATE TABLE IF NOT EXISTS ws_fin_9of12 (
     wsf_v_g15b    TINYINT, wsf_v_g15m TINYINT, wsf_v_g15Mage TINYINT, wsf_v_g15r TINYINT,
     wsf_v_g30b    TINYINT, wsf_v_g30m TINYINT, wsf_v_g30Mage TINYINT, wsf_v_g30r TINYINT,
     wsf_v_ws1b    TINYINT, wsf_v_ws1m TINYINT, wsf_v_ws1Mage TINYINT, wsf_v_ws1r TINYINT,
-    UNIQUE KEY uq_wsf (wsf_win_from, wsf_n, wsf_handicap, wsf_line_hcap, wsf_hold, wsf_sticky,
-                       wsf_hi, wsf_lo, wsf_g30_level,
+    UNIQUE KEY uq_wsf (wsf_win_from, wsf_n, wsf_handicap, wsf_line_hcap, wsf_line_xwob,
+                       wsf_hold, wsf_sticky, wsf_hi, wsf_lo, wsf_g30_level,
                        wsf_ho_rule, wsf_stall_n, wsf_ho_xwob, wsf_curl_tfbars, wsf_htf_band, wsf_ms),
     KEY (wsf_ms), KEY (wsf_side), KEY (wsf_domtf))'''
 
@@ -531,11 +531,12 @@ def main():
     # key is here, so a run at a different STALL_N lands alongside instead of on top.
     db.execute('DELETE FROM ws_fin_9of12 WHERE wsf_win_from=%s AND wsf_n=%s AND wsf_handicap=%s '
                'AND wsf_hold=%s '
-               'AND wsf_line_hcap=%s AND wsf_sticky=%s AND wsf_hi=%s AND wsf_lo=%s '
-               'AND wsf_g30_level=%s AND wsf_ho_rule=%s AND wsf_stall_n=%s '
+               'AND wsf_line_hcap=%s AND wsf_line_xwob=%s AND wsf_sticky=%s AND wsf_hi=%s '
+               'AND wsf_lo=%s AND wsf_g30_level=%s AND wsf_ho_rule=%s AND wsf_stall_n=%s '
                'AND wsf_ho_xwob=%s AND wsf_curl_tfbars=%s AND wsf_htf_band=%s',
                (u(ts[i0]), WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD,
                 ','.join(f'{k}:{v}' for k, v in sorted(WSF_LINE_HANDICAP.items())),
+                ','.join(f'{k}:{v}' for k, v in sorted(WSF_LINE_XWOB.items())),
                 WSF_VOTE_STICKY, HI, LO, G30_LEVEL, HANDOVER_RULE, STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS,
                 f'{DOMTF_HTF_BAND[0]}-{DOMTF_HTF_BAND[1]}'))
     if rows:
