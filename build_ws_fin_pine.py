@@ -48,11 +48,12 @@ def main():
          "AND wsf_handicap=%s AND wsf_line_hcap=%s AND wsf_line_xwob=%s AND wsf_hi=%s "
          "AND wsf_lo=%s AND wsf_stall_n=%s AND wsf_ho_rule=%s ORDER BY wsf_ms")
     ident = (WIN_FROM, G30_LEVEL, WSF_N, HANDICAP, LINE_HCAP, LINE_XWOB, HI, LO, STALL_N)
-    F = {r['wsf_ms']: r for r in db.execute(q, ident + ('first',), fetch=True)}
+    # the median rule only. Joe 0814: "drop the 'first' line, keep the median line."
     M = {r['wsf_ms']: r for r in db.execute(q, ident + ('median',), fetch=True)}
-    if not F or not M:
-        print('both walks must exist. run build_ws_fin.py at each HANDOVER_RULE first.')
+    if not M:
+        print('no median walk at that identity. run build_ws_fin.py first.')
         return 1
+    F = M
     LV = {}
     for r in db.execute("SELECT wfs_signal,wfs_tf FROM ws_fin_tagshrink WHERE wfs_ho_rule='median' "
                         "AND wfs_stall_n=%s AND wfs_signal >= %s", (STALL_N, WIN_FROM), fetch=True):
@@ -70,15 +71,14 @@ def main():
         if x['wsf_domtf'] != 'BLOCKED':
             continue
         y = M[ms]
-        # Joe 0814: "less lines, wider x1.7, delete the group data, keep the TF that created the
-        # handoff". One row per rule: the bar, the line that created it, which test, the wait.
-        def row(tag, r):
-            if not r['wsf_ho_utc']:
-                return f'{tag} never fires'
-            return (f"{tag} {r['wsf_ho_utc'][11:]} ws{r['wsf_ho_tf']}r "
-                    f"{r['wsf_ho_how']} +{r['wsf_ho_min']:.0f}m")
-        txt = '\n'.join([f"{x['wsf_utc'][11:]}  {'SHORT' if x['wsf_side'] > 0 else 'LONG'}",
-                         row('first ', x), row('median', y)])
+        # Joe 0814, the layout verbatim:
+        #     {time}  bias:{dr}
+        #     held until: {median time}
+        #     {handoff reason}
+        held = y['wsf_ho_utc'][11:] if y['wsf_ho_utc'] else 'never'
+        why = (f"ws{y['wsf_ho_tf']}r {y['wsf_ho_how']}" if y['wsf_ho_utc'] else 'no handover')
+        txt = '\n'.join([f"{x['wsf_utc'][11:]}  bias:{int(x['wsf_side']):+d}",
+                         f"held until: {held}", why])
         labels.append((b, x['wsf_side'], txt))
 
     # 105 signals land on 104 chart minutes: 10:22:35 and 10:22:55 share one. Both are SHORT and
@@ -113,11 +113,11 @@ def main():
     L.append('//   signal. A FREE signal has no group and gets no label.')
     L.append('//')
     L.append('//   label lines, top to bottom')
-    L.append('//     the signal time and its side')
-    L.append('//     first   task 8. the race, first past the post, 22-27 restriction live')
-    L.append('//     median  task 9. the median of the group, re-derived every bar, whole group')
-    L.append('//     each rule reads  the handover bar / the line that created it /')
-    L.append('//                      cross or stall / minutes waited since the signal')
+    L.append('//     the signal time, then bias:+1 = hi out of bounds, bias:-1 = lo out of bounds')
+    L.append('//     held until   the bar the domTF turn ended and the finishers took over')
+    L.append('//     the reason   the line that ended it, and whether by cross or by stall')
+    L.append('//   the handover rule is the MEDIAN of the tagged group, re-derived every bar,')
+    L.append('//   whole group uncut. Task 9.')
     L.append('//')
     L.append(f'//   KNOBS   STALL_N {STALL_N}   HANDOVER_XWOB 4   CURL_RECENCY_TF_BARS 2')
     L.append(f'//           DOMTF 13-27   DOMTF_HTF_BAND 22-27   {WSF_N} of 12 lines   '
@@ -131,7 +131,8 @@ def main():
     L.append('show_hi = input.bool(true, "g30_marker SHORT (red)")')
     L.append('show_lo = input.bool(true, "g30_marker LONG (green)")')
     L.append('show_lb = input.bool(true, "tagged group labels (blue/yellow)")')
-    L.append('lb_size = input.string("small", "label size", options = ["tiny","small","normal"])')
+    L.append('lb_size = input.string("normal", "label size", '
+             'options = ["tiny","small","normal","large"])')
     L.append('')
     L.append(f'f_hi() =>\n    array.from({", ".join(str(v) for v in hi_ms)})')
     L.append(f'f_lo() =>\n    array.from({", ".join(str(v) for v in lo_ms)})')
@@ -155,7 +156,8 @@ def main():
     L.append('    bg := color.new(color.green, 0)')
     L.append('bgcolor(bg)')
     L.append('')
-    L.append('sz = lb_size == "tiny" ? size.tiny : lb_size == "normal" ? size.normal : size.small')
+    L.append('sz = lb_size == "tiny" ? size.tiny : lb_size == "small" ? size.small : '
+             'lb_size == "large" ? size.large : size.normal')
     L.append('i = array.binary_search(lb_t, time)')
     L.append('if show_lb and i >= 0')
     L.append('    sd = array.get(lb_s, i)')
