@@ -1394,14 +1394,27 @@ def stall_on_samples(y, dr, n):
 
 def _stall_rows(S, dr, n):
     """The stall rule on a stack of lattices. S is (rows, samples), oldest sample first.
-    -> (stalled, since). since is -1 where no sample ever made a new extreme, or the row is unusable.
-    ONE implementation of the rule: stall_on_samples and stall_mask both land here."""
+    -> (stalled, since). since is -1 only where the row is unusable (a NaN in the window).
+    ONE implementation of the rule: stall_on_samples and stall_mask both land here.
+
+    THE FIRST SAMPLE IS THE EXTREME WHEN NOTHING BEATS IT. Fixed 0815. `fresh` marks a sample that
+    is beyond everything before it, so sample 1 can never be marked — it is the baseline the others
+    are measured against. The old code read "nothing marked" as "no stall" and returned not-stalled.
+    That is backwards: nothing marked means no sample got past where the window started, which is
+    the LONGEST stall the window can express. Joe 0814 found it from the times alone — "02:09:25 is
+    far better than 02:07:45" — 02:09:25 is gcws30r frozen at 26.63 with its low ageing out, and the
+    producer was calling that the END of a stall. Measured on gcws30r 08-04 00:00-03:00 before the
+    fix: 15 of 22 moments ended in this branch, and stretching the window made it worse, not better
+    (the line ended 28% of stalls at a 100 s window, 0% at a 3600 s one).
+
+    `since` now saturates at samples-1 rather than dropping to -1."""
     S = np.asarray(S, float)
     run = (np.maximum.accumulate(S, axis=1) if dr > 0 else np.minimum.accumulate(S, axis=1))
     fresh = (S[:, 1:] > run[:, :-1]) if dr > 0 else (S[:, 1:] < run[:, :-1])
-    last = np.where(fresh.any(axis=1), (S.shape[1] - 1) - np.argmax(fresh[:, ::-1], axis=1), -1)
-    since = np.where(last < 0, -1, (S.shape[1] - 1) - last)
-    ok = np.isfinite(S).all(axis=1) & (last >= 0)
+    #                                  nothing marked -> the extreme IS sample 1, index 0
+    last = np.where(fresh.any(axis=1), (S.shape[1] - 1) - np.argmax(fresh[:, ::-1], axis=1), 0)
+    since = (S.shape[1] - 1) - last
+    ok = np.isfinite(S).all(axis=1)
     return ok & (since >= int(n)), np.where(ok, since, -1)
 
 
