@@ -18,6 +18,17 @@ out of Joe's convo style", it means this file's rules stopped being followed.
 - Never apply a cap, horizon, window or truncation — in code OR in diagnostics — unless Joe
   specified it.
 
+## ONE COLUMN, TOP TO BOTTOM
+
+Joe 0815: *"I need a report that I scan from the top to the bottom, without having to look at a
+2nd page that is bolted onto the table"* / *"00:57:20 does not belong on the same row as 00:54.
+00:57:20 lives underneath 00:55:35"* / *"don't format the report to look like a open book"*.
+
+- ONE record per row. Never split a series into side-by-side column groups to save vertical space.
+- Never wrap a long list into a second block placed to the right of the first.
+- Long is fine. A 61-row list is 61 rows.
+- The only columns are the record's own fields — time, value, change. Not more of the same series.
+
 ## Three mandatory closers
 
 Every substantive response ends with these three, in this order:

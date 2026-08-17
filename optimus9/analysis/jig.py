@@ -1363,6 +1363,19 @@ def ws_fin_9of12(W, hi, lo, g30, n=WSF_N, handicap=WSF_HANDICAP, vote_hold=WSF_V
 # domTF HANDOVER — the bar the domTF turn ends and the finishers take over.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 
+MOMO_CHECK_TFS = list(range(2, 11))
+# THE LINES THE MOMENTUM CHECK COVERS. ws{TF}r, TF in minutes, 2 to 10.
+#
+# Joe 0816: "permanently include ws[2,3,4,5]r in the momo check". ws2r..ws6r resolve to
+# k(rsi 5, stc 8, k_len 7, close) on emerging, which is exactly build_momo_landed.R_SPEC, so
+# extending the range down to 2 uses the same line the check already uses at 6 and above.
+#
+# Joe 0816: "reduce coverage: ws2 to w10". WAS 2..27, and 6..27 before that.
+#
+# THIS IS NOT THE domTF RANGE. build_ws_fin.DOMTF_TFS stays 13..27 on Joe 0813 "make the domTF
+# range 13 to 27". The two are separate mechanics and this constant does not touch the handover.
+
+
 def stall_on_samples(y, dr, n):
     """[PRODUCER · Joe 0810, confirmed 0814] A STALL: the line has stopped making new extremes.
 
