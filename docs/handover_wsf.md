@@ -13,10 +13,33 @@ Nothing from domTF is in this spec. The ONLY thing crossing the wall is the `dom
 read as given from `v_ws_fin_walk`. Joe 0817: *"don't spend time validating my domTF claims: I'm
 manually validating against the raw data from the v_ws_fin_walk view."*
 
+## the window every number below is measured on
+
+| | |
+|---|---|
+| from | **2026-08-04 00:00:00 UTC** |
+| to | **2026-08-05 00:00:00 UTC**, inclusive |
+| grid | one bar every **5 seconds** |
+| bars | **17,281** |
+
+Nothing here has been run on any other window.
+
+## the knob values every number below was produced at
+
+| knob | value | what it does |
+|---|---|---|
+| `WMT_LOOKBACK_S` | **120 seconds** = 25 bars at the 5-second grid, the signal bar included | how far back a Mage line may have been out of bounds and still count as out |
+| `WMT_TFS` | **timeframes 1 to 8**, scanned in that order | which Mage lines the scan walks |
+| `WMT_SAME_SIDE` | **True** | a line's out-of-bounds readings only count on the side the bias points at |
+| the boundaries | **85 and 15** | read from `optimus9_system`. Above 85 or below 15 is out of bounds |
+
+All four live in `optimus9/analysis/jig.py`. Change any one and every number below changes.
+
 ## what is built
 
 | | |
 |---|---|
+| `build_ws_fin.py` | **the upstream walk.** It is what writes `ws_fin_walk` and creates `v_ws_fin_walk`. Nothing in this spec runs until it has |
 | `jig.weak_mage_tf(mage, hi, lo, bar, lookback_bars, dr, tfs, same_side)` | the producer. Returns `(weak_tf, detail)` |
 | `build_ws_finisher.py` | runs it at every signal in `v_ws_fin_walk`, applies rule C, writes the table |
 | `ws_fin_weak_mage` | **121 rows**, one per signal. The knobs are in the unique key |
@@ -24,7 +47,7 @@ manually validating against the raw data from the v_ws_fin_walk view."*
 The producer reads `dr` and tests its sign. It holds no LONG/SHORT logic, per Joe 0817: *"adding
 new LONG/SHORT logic isn't SRP - dr gives us all that we need."*
 
-## the numbers as they stand, 08-04
+## the numbers as they stand, on the window and knobs above
 
 | weak-mage-tf | signals |
 |---|---|

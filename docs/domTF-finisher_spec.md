@@ -461,9 +461,16 @@ walk writes.
 | `CURL_VTX_LO` / `CURL_VTX_HI` | **0.05 / 0.95** | where the bend's turning point must sit inside the window |
 | `CURL_R2_MIN` | **0.40** | the bend's own fit floor |
 
-**Open, and it is task #1:** `MOMO_R2_MIN`, `MOMO_SLOPE_MIN`, `CURL_ARC_MIN` and `LEVEL_SLACK` were
-all set against a 12-point fit. The domTF walk now runs them against a 21-point fit. They have not
-been re-derived. Joe delayed this once already.
+**Open, and it is task #1:** `MOMO_R2_MIN`, `MOMO_SLOPE_MIN` and `LEVEL_SLACK` were set against a
+12-point fit. The domTF walk now runs them against a 21-point fit. They have not been re-derived.
+Joe delayed this once already.
+
+`CURL_ARC_MIN` and `CURL_R2_MIN` are NOT part of that task. The bend they gate is fitted on every
+5-second bar in the window against an x-axis stretched 0 to 1, so the point count does not reach
+it. Measured on ws1r at 08-04 11:33:30, 4-minute window, read downward: at 2, 12 and 21 points the
+bend is 17.6460, the arc 4.4115 and the bend's own fit 0.6216 — identical — while the slope moves
+-15.6117 to -1.1627 to -0.6146. The axis those two move on is WINDOW LENGTH, `K_WINDOW` (4) times
+the timeframe.
 
 ### read but not set by this walk
 

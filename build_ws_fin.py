@@ -272,6 +272,49 @@ COLS = (['wsf_n', 'wsf_handicap', 'wsf_hold', 'wsf_sticky', 'wsf_hi', 'wsf_lo',
 
 
 
+# The 15 knob columns of ws_fin_walk's unique key, in key order. wfw_row is the 16th and is the
+# event index, not a knob. The view below builds its join from THIS list - it used to name 9 of the
+# 15 by hand, so it returned one walk only while the other 6 held a single value each. The first
+# second value would have put two walks in one report with no warning.
+WFW_KEY_COLS = ('wfw_win_from', 'wfw_n_lines', 'wfw_handicap', 'wfw_line_hcap', 'wfw_line_xwob',
+                'wfw_hold', 'wfw_sticky', 'wfw_hi', 'wfw_lo', 'wfw_g30_level', 'wfw_ho_rule',
+                'wfw_stall_n', 'wfw_ho_xwob', 'wfw_curl_tfbars', 'wfw_htf_band')
+
+
+def create_view(db):
+    """THE TIGHT REPORT. One walk, one row per event, already rendered. Joe 0814: "I want a tight
+    report that is easy to ready - 700 rows for 121 events is useless to me".
+
+    ws_fin_walk stacks every walk ever run, so the raw table is the sum of them; this view is the
+    LATEST run only, picked by the highest wfw_pk. MY CHOICE, stated: it is self-maintaining, so the
+    view always shows what was last built without anyone editing a filter.
+
+    The join is built from WFW_KEY_COLS, all 15 of them. Naming a subset here is what let the view
+    look correct while six knobs happened to hold one value each."""
+    sub = ', '.join(f'{c} k{n}' for n, c in enumerate(WFW_KEY_COLS))
+    on = ' AND '.join(f'w.{c} = k.k{n}' for n, c in enumerate(WFW_KEY_COLS))
+    db.execute(f'''CREATE OR REPLACE VIEW v_ws_fin_walk AS
+        SELECT w.wfw_row                                                     AS `#`,
+               w.wfw_g30_marker                                              AS g30_marker,
+               w.wfw_qual                                                    AS qual,
+               CONCAT(FORMAT(w.wfw_wait_s / 60, 1), 'm')                     AS wait,
+               w.wfw_side                                                    AS side,
+               w.wfw_n                                                       AS lines_of_12,
+               w.wfw_abs                                                     AS absorbed_quals,
+               w.wfw_domtf                                                   AS domTF,
+               IF(w.wfw_max_tf = 0, '-', CONCAT('ws', w.wfw_max_tf, 'r'))    AS max_TF,
+               COALESCE(w.wfw_hands_over, '-')                               AS hands_over,
+               IF(w.wfw_min IS NULL, '-', CONCAT(FORMAT(w.wfw_min, 1), 'm')) AS plus_min,
+               COALESCE(w.wfw_group, '-')                                    AS grp,
+               COALESCE(NULLIF(w.wfw_joins, ''), '-')                        AS joins,
+               COALESCE(NULLIF(w.wfw_left, ''), '-')                         AS `left`,
+               COALESCE(NULLIF(w.wfw_htf_curl, ''), '-')                     AS htf_curl
+        FROM ws_fin_walk w
+        JOIN (SELECT {sub} FROM ws_fin_walk ORDER BY wfw_pk DESC LIMIT 1) k
+          ON {on}
+        ORDER BY w.wfw_row''')
+
+
 def _wsf_key(win_from, hi, lo):
     """The unique key of ws_fin_9of12, as a WHERE and its params. ONE definition.
 
@@ -612,36 +655,7 @@ def main():
                    f'({",".join(["%s"] * len(WALK_COLS))})', wrows)
     print(f'ws_fin_walk  : {len(wrows):,} rows, {len(WALK_COLS)} stamped columns', flush=True)
 
-    # THE TIGHT REPORT. One walk, one row per event, already rendered. Joe 0814: "I want a tight
-    # report that is easy to ready - 700 rows for 121 events is useless to me". ws_fin_walk stacks
-    # every walk ever run, so the raw table is the sum of them; this view is the LATEST run only,
-    # picked by the highest wfw_pk. MY CHOICE, stated: it is self-maintaining, so the view always
-    # shows what was last built without anyone editing a filter.
-    db.execute('''CREATE OR REPLACE VIEW v_ws_fin_walk AS
-        SELECT w.wfw_row                                                     AS `#`,
-               w.wfw_g30_marker                                              AS g30_marker,
-               w.wfw_qual                                                    AS qual,
-               CONCAT(FORMAT(w.wfw_wait_s / 60, 1), 'm')                     AS wait,
-               w.wfw_side                                                    AS side,
-               w.wfw_n                                                       AS lines_of_12,
-               w.wfw_abs                                                     AS absorbed_quals,
-               w.wfw_domtf                                                   AS domTF,
-               IF(w.wfw_max_tf = 0, '-', CONCAT('ws', w.wfw_max_tf, 'r'))    AS max_TF,
-               COALESCE(w.wfw_hands_over, '-')                               AS hands_over,
-               IF(w.wfw_min IS NULL, '-', CONCAT(FORMAT(w.wfw_min, 1), 'm')) AS plus_min,
-               COALESCE(w.wfw_group, '-')                                    AS grp,
-               COALESCE(NULLIF(w.wfw_joins, ''), '-')                        AS joins,
-               COALESCE(NULLIF(w.wfw_left, ''), '-')                         AS `left`,
-               COALESCE(NULLIF(w.wfw_htf_curl, ''), '-')                     AS htf_curl
-        FROM ws_fin_walk w
-        JOIN (SELECT wfw_win_from f, wfw_n_lines n, wfw_handicap h, wfw_line_hcap lh,
-                     wfw_line_xwob lx, wfw_hi hi, wfw_lo lo, wfw_stall_n sn, wfw_ho_rule ru
-              FROM ws_fin_walk ORDER BY wfw_pk DESC LIMIT 1) k
-          ON w.wfw_win_from = k.f AND w.wfw_n_lines = k.n AND w.wfw_handicap = k.h
-         AND w.wfw_line_hcap = k.lh AND w.wfw_line_xwob = k.lx
-         AND w.wfw_hi = k.hi AND w.wfw_lo = k.lo AND w.wfw_stall_n = k.sn
-         AND w.wfw_ho_rule = k.ru
-        ORDER BY w.wfw_row''')
+    create_view(db)
     print('v_ws_fin_walk : the latest walk, one row per event, rendered', flush=True)
 
     db.execute(SHRINK_DDL)

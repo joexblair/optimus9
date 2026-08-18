@@ -72,27 +72,47 @@ the constants back and rebinds them from argv, so they must stay module globals 
 
 **The check:** `v_ws_fin_walk` must be unchanged.
 
+### run it
+
+    python3 verify_momo_refactor.py
+
+Exit 0 means all three checks passed. The script reads the pre-refactor code straight out of git at
+`BASE_COMMIT = 5a9c604`, the last commit before the refactor, so there is no frozen second copy of
+the formula anywhere.
+
+### check 1 and check 2 — the old code against the new code
+
+Three r lines off the 08-04 tape (ws1r, ws2r, ws10r), 17,281 bars each, read both upward and
+downward:
+
+| check | what it walks | calls compared | mismatches |
+|---|---|---|---|
+| 1 | `momo()` and `momo_g()` at the default 60-minute window, every 7th bar | 29,628 | **0** |
+| 2 | `momo_g()` inside `momo_window(4 x TF)` at 21 fixed points, timeframes 13 / 21 / 27, every 23rd bar | 13,536 | **0** |
+
+All four verdicts appear in check 1's sample — 1,763 momo, 1,652 ungated curl (168 surviving the
+gates), 278 sideways, 11,121 none.
+
+### check 3 — v_ws_fin_walk
+
 | | before the refactor | after |
 |---|---|---|
 | rows | 121 | 121 |
-| sha256 over all 15 columns | `98c5db7d…881b2966` | `98c5db7d…881b2966` |
+| sha256 | `98c5db7dd5d3356e2d072b06a75a0d875704168bfa6de3f1224d2f16881b2966` | same |
 
-**BIT MATCH**, confirmed by rebuilding with `build_ws_fin.py` and hashing the view the same way.
+**BIT MATCH.** The recipe, so anyone can redo it by hand:
 
-Second check, before the rebuild — the old code and the new code run side by side on the 08-04
-tape, ws1r / ws2r / ws10r, both directions:
+1. `SELECT * FROM v_ws_fin_walk` — the view carries its own `ORDER BY wfw_row`, so no ordering is
+   added.
+2. every column of every row cast to text, the 15 columns of a row joined with `|`.
+3. the rows joined with a newline, in the order the view returned them.
+4. sha256 of those bytes, utf-8.
 
-| test | calls compared | mismatches |
-|---|---|---|
-| `momo()` and `momo_g()` at the default 60-minute window | 29,628 | **0** |
-| `momo_g()` inside `momo_window(4 x TF)` at 21 fixed samples, TF 13 / 21 / 27 | 13,536 | **0** |
+### check 4 — nothing else broke
 
-All four states appear in that sample — 1,763 momo, 1,652 ungated curl (168 surviving the gates),
-278 sideways, 11,121 none.
-
-Third check: every module that reads the verdict still imports — `build_exhv2`,
-`build_momo_landed`, `build_handoff`, `build_ws_momo`, `s46_momo`, `build_s46_event`,
-`sweep_s46_momo`, `curl_pred`.
+Every module that reads the verdict still imports: `build_exhv2`, `build_momo_landed`,
+`build_handoff`, `build_ws_momo`, `s46_momo`, `build_s46_event`, `sweep_s46_momo`, `curl_pred`.
+This one is not in the script — it is eight import statements.
 
 ## what it now gives the reversal producer
 
@@ -113,9 +133,25 @@ caller can see.
 
 ## what this refactor is NOT
 
-It does not tune anything. `MOMO_R2_MIN`, `MOMO_SLOPE_MIN`, `CURL_ARC_MIN` and `LEVEL_SLACK` were
-all set against a 12-point fit and the domTF walk now runs them at 21 points. Re-deriving them is
-task #1 and is Joe's call, not part of this.
+It does not tune anything.
+
+`MOMO_R2_MIN` (the straight-line fit floor, 0.50), `MOMO_SLOPE_MIN` (the slope floor, 1.0) and
+`LEVEL_SLACK` (13.9, whose slack is scaled by both of those) were set against a 12-point fit and
+the domTF walk now runs them at 21 points. Re-deriving those three is task #1 and is Joe's call,
+not part of this.
+
+`CURL_ARC_MIN` (the arc floor, 4.0) and `CURL_R2_MIN` (the bend's own fit floor, 0.40) are NOT on
+that list. The bend is fitted on every 5-second bar in the window against an x-axis stretched 0 to
+1, so the point count cannot move it. Measured on ws1r at 11:33:30, 4-minute window, read downward:
+
+| points in the straight-line fit | slope | straight-line fit | bend | arc | bend fit |
+|---|---|---|---|---|---|
+| 2 | -15.6117 | 1.0000 | 17.6460 | 4.4115 | 0.6216 |
+| 12 | -1.1627 | 0.6230 | 17.6460 | 4.4115 | 0.6216 |
+| 21 | -0.6146 | 0.5199 | 17.6460 | 4.4115 | 0.6216 |
+
+The axis those two move on is WINDOW LENGTH, which is `K_WINDOW` (4) times the timeframe. A
+re-derive aimed at the point count would not move them at all.
 
 
 ## one more thing the rebuild found
@@ -127,3 +163,10 @@ result.
 
 Fixed by giving the key ONE definition, `_wsf_key(win_from, hi, lo)`, used by both. The print now
 reads BLOCKED 62 / FREE 59, which totals 121 and agrees with `ws_fin_weak_mage`.
+
+`v_ws_fin_walk` had the same fault and was NOT covered by that fix. Its join named 9 of the 15 knob
+columns in `ws_fin_walk`'s unique key. It returned one walk only because the six it omitted
+— `wfw_hold`, `wfw_sticky`, `wfw_g30_level`, `wfw_ho_xwob`, `wfw_curl_tfbars`, `wfw_htf_band` —
+each held a single value across the whole table. The first second value would have put two walks in
+one report with no warning. The view is now built by `create_view(db)` from `WFW_KEY_COLS`, all 15.
+Rebuilt and re-checked: 121 rows, same hash.
