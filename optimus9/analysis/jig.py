@@ -1363,6 +1363,75 @@ def ws_fin_9of12(W, hi, lo, g30, n=WSF_N, handicap=WSF_HANDICAP, vote_hold=WSF_V
 # domTF HANDOVER — the bar the domTF turn ends and the finishers take over.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# ws-FINISHER — the weak-mage-tf. Joe 0817. NOTHING FROM domTF BELONGS HERE.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+WMT_TFS        = list(range(1, 9))   # scan ws1Mage up to ws8Mage. Joe 0817 "confirmed: TF1 to TF8"
+WMT_LOOKBACK_S = 120                 # KNOB, seconds. Joe 0817 "add a lookback tolerance to capture
+#                                      Mage values that were recently oob. knob:120sec"
+WMT_SAME_SIDE  = True                # KNOB. Joe 0817 "unsure. create a knob for it. default to
+#                                      same-side". MY DEFINITION, stated 0817: with it ON a line's
+#                                      out-of-bounds readings only count on the side dr points at —
+#                                      the high boundary when dr is positive, the low boundary when
+#                                      dr is negative. With it OFF either side counts.
+
+
+def weak_mage_tf(mage, hi, lo, bar, lookback_bars, dr, tfs=WMT_TFS, same_side=WMT_SAME_SIDE):
+    """[PRODUCER · Joe 0817] The first Mage that has NOT been out of bounds recently.
+
+    Joe 0817, the preamble:
+        "Mage's purpose is to travel from source oob to target oob, in an endless loop, matching
+        the ebb and flow of pxs" / "when Mage is oob, it's strength will wane. this waning is the
+        moment of weakness" / "to find weakness, the code will scan the Mage values, upwards from
+        TF1 to TF8, to find the first mage that is not OOB" / "the first Mage that prints an IB
+        value, is the weak-mage-tf".
+
+    THE LOOKBACK. A line that was out of bounds at any bar inside the window still counts as out.
+    Joe 0817 settled the rule against four bars he read himself: 10:53:35 -> TF8, 11:34:00 -> TF2,
+    08:02:50 -> TF4, 04:49:15 -> None.
+
+    NO WEAK-MAGE-TF IS A RESULT, NOT A FAILURE. When every line from TF1 to TF8 was out of bounds
+    inside the window the answer is None. Joe 0817: "no signals are created, but a stub needs to
+    capture and report this when it happens", then "I agree with your 04:49 view - weak-mage-tf =
+    None" and rule C: "if weak-mage-tf == None and domTF state is FREE, fire a trade signal".
+
+        mage           {tf: array} the Mage line per timeframe, one value per grid bar
+        hi / lo        the boundaries, 85 and 15
+        bar            the bar to answer at. The ws_fin_9of12 signal bar
+        lookback_bars  bars in the window, the bar itself included
+        dr             the bias. Only read when same_side is True. Joe 0817: "dr gives us all
+                       that we need for postitioning and trade direction" — this producer holds no
+                       LONG/SHORT logic of its own, it reads the sign and nothing else
+        tfs            the timeframes to scan, in order
+
+    -> (weak_tf, detail). weak_tf is a timeframe or None. detail is {tf: (value_now, out_now,
+       bars_since_last_out or None, the side of that last reading or None)}.
+    """
+    a = max(0, int(bar) - int(lookback_bars) + 1)
+    detail, weak = {}, None
+    for tf in tfs:
+        y = np.asarray(mage[tf], float)[a:int(bar) + 1]
+        if len(y) == 0 or not np.isfinite(y).all():
+            detail[tf] = (float('nan'), False, None, None)
+            continue
+        up, dn = y >= hi, y <= lo
+        if same_side:
+            out = up if dr > 0 else dn
+        else:
+            out = up | dn
+        v = float(y[-1])
+        k = np.flatnonzero(out)
+        if len(k):
+            j = int(k[-1])
+            detail[tf] = (v, bool(out[-1]), (len(y) - 1) - j, 'high' if up[j] else 'low')
+        else:
+            detail[tf] = (v, False, None, None)
+            if weak is None:
+                weak = tf
+    return weak, detail
+
+
 MOMO_CHECK_TFS = list(range(2, 11))
 # THE LINES THE MOMENTUM CHECK COVERS. ws{TF}r, TF in minutes, 2 to 10.
 #

@@ -383,3 +383,72 @@ the oldest of the 21 samples to be the extreme of the whole window.
 
 -worked case: activate 08:02:50 dr +1, D=ws20r -> ws22r 08:15:00 -> ws25r 08:25:00 -> ws31r
  09:00:00 -> FREE 09:00:05. 57.2 min, 3 ratchet steps, every step triggered by the stall
+
+---
+
+## KNOBS — every value the domTF walk reads
+
+Banked 0818 on Joe's ask: *"depply scan the transcript for knobs. ensure all knobs are in the spec
+docs"*. Grouped by the file the value lives in. A knob listed here is one that changes the rows the
+walk writes.
+
+### the wsf9of12 gate — `optimus9/analysis/jig.py`
+
+| knob | value | what it does |
+|---|---|---|
+| `WSF_N` | **9** | votes needed, of the 12 lines |
+| `WSF_HANDICAP` | **0** | points the six gcws b/m/Mage lines get off the boundary. 0 = they vote at 85 / 15 like everything else. Was 7, then 9 for one run — that run was a shotgun and was reverted |
+| `WSF_LINE_HANDICAP` | **{'ws1b': 1}** | per-line override of the above. ws1b votes at 84 / 16. It is the one line `WSF_HANDICAP` cannot reach |
+| `WSF_WS1_XWOB` | **1** | consecutive bars ws1Mage / ws1b must hold past their boundary before voting. 1 = a single bar votes. Was 4 (20 s) |
+| `WSF_LINE_XWOB` | **{'ws1Mage': 1, 'ws1b': 1}** | the two lines the hold above applies to. The other ten have no hold |
+| `WSF_VOTE_HOLD` | **0 (off)** | would hold every line's vote for N bars |
+| `WSF_VOTE_STICKY` | **0 (off)** | would carry a vote across a gap shorter than N bars |
+| `WSF_REQUIRE` | **('gcws30b',)** | a bar that reaches 9 votes without gcws30b among them is not a qualification |
+
+### the domTF walk — `build_ws_fin.py`
+
+| knob | value | what it does |
+|---|---|---|
+| `START` / `END` | **08-04 00:00 → 08-05 00:00 UTC** | the window. It is the first column of both unique keys, so two windows never overwrite each other |
+| `G30_LEVEL` | **'g30_marker'** | which gcws30 event list arms the walk. XWOB only — no dwell gate, no ws1 gate |
+| `XWOB` | **2** | consecutive bars gcws30b must hold past the boundary for a marker to count |
+| `FENCE_OVERRIDE` | **None** | None = use `optimus9_system`'s 85 / 15. A number here replaces both sides. 80 / 20 was measured once: 279 → 300 markers, 133 signals |
+| `DOMTF_MIN` / `DOMTF_MAX` | **13 / 27** | the timeframe ladder the walk may climb. Was 8 at the low end |
+| `HANDOVER_RULE` | **'median'** | 'median' = the tagged group's middle line takes the handover. 'first' = first past the post, the older race |
+| `STALL_N` | **6** | samples with no new extreme before a stall fires. Anchored to the cross test's base rate, not to a knee |
+| `HANDOVER_XWOB` | **4** | bars the fast partner must hold on the far side of its r line for the cross to count |
+| `DOMTF_HTF_BAND` | **(22, 27)** | the high band that may take a handover when the high timeframe is curled |
+| `CURL_RECENCY_TF_BARS` | **2** | how recent that curl must be, counted in bars of the line's own timeframe |
+| `RESCUE_REJECTED_CURL` | **True** | a curl the gate rejected is still allowed back into the pool |
+| `NESTED_OPPOSITION` | **True** | on |
+| `NESTED_OPPOSITION_MIN` | **3** | how many nested lines must oppose before the opposition counts |
+| `K_WINDOW` | **4** | each line's momentum window = 4 × its own timeframe, in minutes. From `build_momo_landed.py` |
+| `TFS` | **8 to 33** | the full ladder the r lines are built on. `DOMTF_TFS` is the 13-27 slice of it |
+| `R_SPEC` | **k_len 7, rsi 5, stc 8, close** | how every ws{tf}r line is built |
+
+### the momentum verdict — `optimus9/compute/momo_core.py` and `momo_gated.py`
+
+| knob | value | what it does |
+|---|---|---|
+| `MOMO_FIXED_SAMPLES` | **21** | set by `build_ws_fin.py` at import; the module default is 0. Every line's fit uses 21 points across its own window, so the gap between points scales with the timeframe |
+| `MOMO_WINDOW_MIN` | **60** | the window, minutes. Was 45 |
+| `MOMO_STEP_MIN` | **5** | gap between points when `MOMO_FIXED_SAMPLES` is 0 |
+| `MOMO_SAMPLES` | **12** | 60 / 5, the point count that follows from the two above |
+| `MOMO_R2_MIN` | **0.50** | how straight the line must be to read as a straight line |
+| `MOMO_SLOPE_MIN` | **1.0** | slope floor, r-units per 5-minute point |
+| `LEVEL_SLACK` | **13.9** | how far past the boundary the level gate slackens, scaled by the fit |
+| `CURL_ARC_MIN` | **4.0** | how much bend a curl needs |
+| `CURL_VTX_LO` / `CURL_VTX_HI` | **0.05 / 0.95** | where the bend's turning point must sit inside the window |
+| `CURL_R2_MIN` | **0.40** | the bend's own fit floor |
+
+**Open, and it is task #1:** `MOMO_R2_MIN`, `MOMO_SLOPE_MIN`, `CURL_ARC_MIN` and `LEVEL_SLACK` were
+all set against a 12-point fit. The domTF walk now runs them against a 21-point fit. They have not
+been re-derived. Joe delayed this once already.
+
+### read but not set by this walk
+
+| value | where | note |
+|---|---|---|
+| boundaries **85 / 15** | `optimus9_system` | every line's out-of-bounds test |
+| `MIN_IB_DWELL` **12** | `ws_strat.py` | the in-bounds run that resets the dwell. NOT read at `G30_LEVEL='g30_marker'` |
+| `OOBW` **16** | `build_ws_strat_walk.py` | the ws_strat walk's dwell gate. NOT read at `G30_LEVEL='g30_marker'` |
