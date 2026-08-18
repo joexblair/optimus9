@@ -30,6 +30,12 @@ build_trades2.py:93 are vectorised mirrors that must match it. This CALLS momo()
 and applies the two gates on top, reusing momo()'s own constants so nothing forks.
 
 `momo` and `sideways` and `none` pass through unchanged. Only `curl` is gated.
+
+REFACTORED 0818. The gates now read momo_core.momo_fit() instead of calling momo() and then
+re-fitting the same quadratic over the same slice - one fit per call, not two. Each rejection
+carries a plain-words reason through momo_g_why(), because `none` meant six different things
+in this file and four more in momo_core, and the one that matters - the bend pointing against
+dr, which IS a reversal - looked exactly like no data.
 """
 from contextlib import contextmanager
 
@@ -43,39 +49,38 @@ from optimus9.compute import momo_core as X   # momo() and its MOMO_*/CURL_* con
 
 
 def momo_g(r, dr, w):
-    """(state, slope, r2, r_at_bar) — momo() with Joe's 0805 curl gates applied.
+    """(state, slope, r2, r_at_bar) - momo() with Joe's 0805 curl gates applied.
 
-    Returns 'none' where momo() would have returned an ungated 'curl'."""
-    st, sl, r2, rw = X.momo(r, dr, w)
+    Returns 'none' where momo() would have returned an ungated 'curl'. Use momo_g_why() when you
+    need to know WHICH gate rejected it - that is the difference between "no data" and "the line
+    reversed", and the two used to print the same word."""
+    st, _why, f = momo_g_why(r, dr, w)
+    return st, f['slope'], f['r2'], f['r_at_bar']
+
+
+def momo_g_why(r, dr, w, quad='auto'):
+    """(state, reason, fit) - the gated verdict, its reason, and every number behind it.
+
+    REFACTORED 0818. This used to call momo() for the verdict and then re-fit the SAME quadratic
+    over the SAME slice to run gates 2 and 3. It now reads one fit. Gate 2's number - the sign and
+    size of the bend - is on the returned dict as `qa`, so a caller can see the reversal instead of
+    only being told 'none'."""
+    f = X.momo_fit(r, dr, w, quad=quad)
+    st, why = X.verdict(f)
     if st != 'curl':
-        return st, sl, r2, rw
-    # gate 1 — same alignment test momo() applies to its own branch (build_exhv2.py:159)
-    if not ((sl > 0) if dr > 0 else (sl < 0)):
-        return 'none', sl, r2, rw
-    # gate 2 — arc must be CURL BEGINNING. Same window momo()'s curl block uses (build_exhv2.py:148).
-    nb = X.MOMO_WINDOW_MIN * 12
-    if w - nb + 1 < 0:
-        return 'none', sl, r2, rw
-    yy = r[w - nb + 1:w + 1]
-    if not np.isfinite(yy).all():
-        return 'none', sl, r2, rw
-    xx = np.linspace(0.0, 1.0, len(yy))
-    co = np.polyfit(xx, yy, 2)
-    qa = co[0]
-    if abs(qa) < 1e-12:
-        return 'none', sl, r2, rw
-    if not ((qa < 0.0) if dr < 0 else (qa > 0.0)):
-        return 'none', sl, r2, rw
-    # gate 3 — the QUADRATIC must actually describe the window
-    if CURL_R2_MIN > 0.0 and quad_r2(yy, xx, co) < CURL_R2_MIN:
-        return 'none', sl, r2, rw
-    return 'curl', sl, r2, rw
-
-
-def quad_r2(yy, xx, co):
-    pred = co[0] * xx ** 2 + co[1] * xx + co[2]
-    tot = ((yy - yy.mean()) ** 2).sum()
-    return 1.0 - ((yy - pred) ** 2).sum() / tot if tot > 1e-12 else 0.0
+        return st, why, f
+    # gate 1 - the same alignment test momo() applies to its own branch
+    if not f['aligned']:
+        return 'none', 'curl, but the slope points against dr', f
+    # gate 2 - the bend must be a curl BEGINNING, not one that has already ended
+    if not f['quad'] or f.get('quad_aligned') is None:
+        return 'none', 'curl, but ' + (f.get('quad_why') or 'the bend could not be measured'), f
+    if not f['quad_aligned']:
+        return 'none', 'curl, but the bend points against dr', f
+    # gate 3 - the bend must actually describe the window
+    if CURL_R2_MIN > 0.0 and f['quad_r2'] < CURL_R2_MIN:
+        return 'none', 'curl, but the bend does not describe the window', f
+    return 'curl', 'curl', f
 
 
 # Gate 3 floor, chosen from the data per Joe 0805 "use whatever value clears the errant 09:19 curl":

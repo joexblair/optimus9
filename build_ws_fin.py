@@ -271,6 +271,25 @@ COLS = (['wsf_n', 'wsf_handicap', 'wsf_hold', 'wsf_sticky', 'wsf_hi', 'wsf_lo',
          'wsf_htf_curl', 'wsf_ho_pool'] + VCOLS + FCOLS)
 
 
+
+def _wsf_key(win_from, hi, lo):
+    """The unique key of ws_fin_9of12, as a WHERE and its params. ONE definition.
+
+    The DELETE that precedes a rebuild and every summary that reads the table must use the SAME
+    key. They did not: the DELETE carried all 15 knobs and the run's own "by domTF verdict" print
+    carried 8, so it summed every window and every vote setting in the table and reported 542 rows
+    from 121 signals. Two copies of a key is how that happens, so there is now one."""
+    cols = ('wsf_win_from', 'wsf_n', 'wsf_handicap', 'wsf_line_hcap', 'wsf_line_xwob',
+            'wsf_hold', 'wsf_sticky', 'wsf_hi', 'wsf_lo', 'wsf_g30_level', 'wsf_ho_rule',
+            'wsf_stall_n', 'wsf_ho_xwob', 'wsf_curl_tfbars', 'wsf_htf_band')
+    vals = (win_from, WSF_N, WSF_HANDICAP,
+            ','.join(f'{k}:{v}' for k, v in sorted(WSF_LINE_HANDICAP.items())),
+            ','.join(f'{k}:{v}' for k, v in sorted(WSF_LINE_XWOB.items())),
+            WSF_VOTE_HOLD, WSF_VOTE_STICKY, hi, lo, G30_LEVEL, HANDOVER_RULE, STALL_N,
+            HANDOVER_XWOB, CURL_RECENCY_TF_BARS, f'{DOMTF_HTF_BAND[0]}-{DOMTF_HTF_BAND[1]}')
+    return ' AND '.join(f'{c}=%s' for c in cols), vals
+
+
 AB = '--ab' in sys.argv     # print the restricted vs unrestricted race, write nothing
 
 
@@ -549,16 +568,8 @@ def main():
     # supersedes the earlier rows rather than sitting alongside them.
     # keyed on the knobs, not the window — the unique key is not the window. Every knob in the
     # key is here, so a run at a different STALL_N lands alongside instead of on top.
-    db.execute('DELETE FROM ws_fin_9of12 WHERE wsf_win_from=%s AND wsf_n=%s AND wsf_handicap=%s '
-               'AND wsf_hold=%s '
-               'AND wsf_line_hcap=%s AND wsf_line_xwob=%s AND wsf_sticky=%s AND wsf_hi=%s '
-               'AND wsf_lo=%s AND wsf_g30_level=%s AND wsf_ho_rule=%s AND wsf_stall_n=%s '
-               'AND wsf_ho_xwob=%s AND wsf_curl_tfbars=%s AND wsf_htf_band=%s',
-               (u(ts[i0]), WSF_N, WSF_HANDICAP, WSF_VOTE_HOLD,
-                ','.join(f'{k}:{v}' for k, v in sorted(WSF_LINE_HANDICAP.items())),
-                ','.join(f'{k}:{v}' for k, v in sorted(WSF_LINE_XWOB.items())),
-                WSF_VOTE_STICKY, HI, LO, G30_LEVEL, HANDOVER_RULE, STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS,
-                f'{DOMTF_HTF_BAND[0]}-{DOMTF_HTF_BAND[1]}'))
+    where, kv = _wsf_key(u(ts[i0]), HI, LO)
+    db.execute('DELETE FROM ws_fin_9of12 WHERE ' + where, kv)
     if rows:
         db.executemany(f'INSERT INTO ws_fin_9of12 ({",".join(COLS)}) VALUES '
                        f'({",".join(["%s"] * len(COLS))})', rows)
@@ -644,12 +655,9 @@ def main():
           f'({len({r[2] for r in shrink})} signals saw a line leave)', flush=True)
 
     # keyed on THIS run's knobs. Without them the count sums every walk in the table.
+    where, kv = _wsf_key(u(ts[i0]), HI, LO)
     r = db.execute('SELECT wsf_domtf d, COUNT(*) n, SUM(wsf_side=1) hi, SUM(wsf_side=-1) lo '
-                   'FROM ws_fin_9of12 WHERE wsf_hi=%s AND wsf_lo=%s AND wsf_g30_level=%s '
-                   'AND wsf_ho_rule=%s AND wsf_stall_n=%s '
-                   'AND wsf_ho_xwob=%s AND wsf_curl_tfbars=%s AND wsf_htf_band=%s GROUP BY 1',
-                   (HI, LO, G30_LEVEL, HANDOVER_RULE, STALL_N, HANDOVER_XWOB, CURL_RECENCY_TF_BARS,
-                    f'{DOMTF_HTF_BAND[0]}-{DOMTF_HTF_BAND[1]}'), fetch=True)
+                   'FROM ws_fin_9of12 WHERE ' + where + ' GROUP BY 1', kv, fetch=True)
     print('\nby domTF verdict:')
     for x in r:
         print(f"  {x['d']:<8} {x['n']:>4}   hi {int(x['hi'])}  lo {int(x['lo'])}")

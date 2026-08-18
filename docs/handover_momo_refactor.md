@@ -40,7 +40,7 @@ A caller cannot tell "no data" from "the line reversed". Both print `none`.
 yy, 2)`. Same slice `r[w-nb+1 : w+1]`, same x, same degree, both across `MOMO_WINDOW_MIN * 12`
 bars. Every gated curl pays for it twice.
 
-## the plan
+## the plan, as built
 
 **Split measurement from verdict, and leave the verdict identical.**
 
@@ -70,18 +70,60 @@ regardless of branch.
 being touched: `predict_board.py:170`, `vmomo.py`, `build_trades2.py:93`. `build_exhv2.py` imports
 the constants back and rebinds them from argv, so they must stay module globals read at call time.
 
-**The check:** `v_ws_fin_walk` must be unchanged. Baseline taken 0818 before any edit:
+**The check:** `v_ws_fin_walk` must be unchanged.
 
-| | |
-|---|---|
-| rows | **121** |
-| sha256 over all 15 columns | `98c5db7dd5d3356e2d072b06a75a0d875704168bfa6de3f1224d2f16881b2966` |
+| | before the refactor | after |
+|---|---|---|
+| rows | 121 | 121 |
+| sha256 over all 15 columns | `98c5db7d…881b2966` | `98c5db7d…881b2966` |
 
-Rebuild with `build_ws_fin.py` and hash the view the same way. Anything but an exact match means
-the refactor changed the verdict, and it must be reverted rather than explained.
+**BIT MATCH**, confirmed by rebuilding with `build_ws_fin.py` and hashing the view the same way.
+
+Second check, before the rebuild — the old code and the new code run side by side on the 08-04
+tape, ws1r / ws2r / ws10r, both directions:
+
+| test | calls compared | mismatches |
+|---|---|---|
+| `momo()` and `momo_g()` at the default 60-minute window | 29,628 | **0** |
+| `momo_g()` inside `momo_window(4 x TF)` at 21 fixed samples, TF 13 / 21 / 27 | 13,536 | **0** |
+
+All four states appear in that sample — 1,763 momo, 1,652 ungated curl (168 surviving the gates),
+278 sideways, 11,121 none.
+
+Third check: every module that reads the verdict still imports — `build_exhv2`,
+`build_momo_landed`, `build_handoff`, `build_ws_momo`, `s46_momo`, `build_s46_event`,
+`sweep_s46_momo`, `curl_pred`.
+
+## what it now gives the reversal producer
+
+`momo_g_why(r, dr, w, quad=True)` returns `(state, reason, fit)`. On ws1r read downward, 4-minute
+window, 21 points — the bars Joe pointed at:
+
+| bar | ws1r | slope | fit | bend | turning point | gated | reason |
+|---|---|---|---|---|---|---|---|
+| 11:33:20 | 16.86 | -0.773 | 0.606 | 10.40 | 1.159 | sideways | sideways |
+| 11:33:25 | 16.86 | -0.563 | 0.494 | 14.05 | 0.985 | sideways | sideways |
+| 11:33:30 | 16.86 | -0.615 | 0.520 | 17.65 | 0.883 | none | curl, but the bend points against dr |
+| 11:33:35 | 16.86 | -0.489 | 0.420 | 21.15 | 0.816 | none | curl, but the bend points against dr |
+| 11:34:00 | 21.51 | -0.054 | 0.029 | 37.90 | 0.622 | none | curl, but the bend points against dr |
+
+The bend climbs 10.40 to 37.90 while the read is downward. Before the refactor every one of those
+bars printed `none` and the number was gone. Nothing about the verdict changed — only what a
+caller can see.
 
 ## what this refactor is NOT
 
 It does not tune anything. `MOMO_R2_MIN`, `MOMO_SLOPE_MIN`, `CURL_ARC_MIN` and `LEVEL_SLACK` were
 all set against a 12-point fit and the domTF walk now runs them at 21 points. Re-deriving them is
 task #1 and is Joe's call, not part of this.
+
+
+## one more thing the rebuild found
+
+The run's own "by domTF verdict" print reported **542** rows from 121 signals. The DELETE that
+precedes a rebuild filtered on all 15 knobs in the unique key; that summary filtered on 8, so it
+summed the 08-04 and 08-05 windows and every vote setting in the table and called the mixture a
+result.
+
+Fixed by giving the key ONE definition, `_wsf_key(win_from, hi, lo)`, used by both. The print now
+reads BLOCKED 62 / FREE 59, which totals 121 and agrees with `ws_fin_weak_mage`.
