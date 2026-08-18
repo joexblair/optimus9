@@ -386,6 +386,26 @@ the oldest of the 21 samples to be the extreme of the whole window.
 
 ---
 
+## what is banked
+
+| | |
+|---|---|
+| `build_ws_fin.py` | the walk. Writes all three tables and creates the view |
+| `ws_fin_9of12` | one row per signal, 63 stamped columns. Every line's value and its vote |
+| `ws_fin_walk` | one row per event. Multiple walks stack here, separated by the 15-column unique key |
+| `ws_fin_tagshrink` | one row per line that left a tagged group |
+| `v_ws_fin_walk` | **the report.** The latest walk only, picked by `wfw_pk`, one row per event, rendered — wait in minutes, `max_TF` as `ws{TF}r`, `-` on the FREE rows. This is what Joe reads |
+| `build_ws_fin_pine.py` → `ws_fin_walk.pine` | the chart. 121 bars, 62 labels, three lines each: the signal bar with its bias, what it held until, and the cross that ended it |
+| `eyes_on_pine` | Joe's chart reads. Appended, never overwritten |
+
+The 08-04 window as it stands: **121 signals**, 57 high side and 64 low, **BLOCKED 62 / FREE 59**.
+
+Every knob that changes a row is BOTH a column and part of the unique key, and `_wsf_key()` is the
+single definition of that key — the DELETE before a rebuild and every summary read the same one.
+Two copies is how a summary came to report 542 rows from 121 signals.
+
+---
+
 ## KNOBS — every value the domTF walk reads
 
 Banked 0818 on Joe's ask: *"depply scan the transcript for knobs. ensure all knobs are in the spec
