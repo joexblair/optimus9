@@ -74,6 +74,9 @@ DDL_BOARD = '''CREATE TABLE IF NOT EXISTS wsf_setup_board (
     wsb_mage DOUBLE, wsb_mage_oob TINYINT, wsb_weak_mage TINYINT,
     wsb_stoch_now DOUBLE, wsb_stoch_out DOUBLE, wsb_sat_bars SMALLINT, wsb_sat_left SMALLINT,
     wsb_rsi DOUBLE, wsb_rsi_lo DOUBLE, wsb_rsi_hi DOUBLE,
+    -- SECTION 3.17, added 0824. r is the SEVEN-BAR MEAN of stoch, so the change r takes at this
+    -- line's next bar close is fixed already: (stoch now - stoch out) / 7, in r units per bar.
+    wsb_r_move DOUBLE,
     UNIQUE KEY uq_wsb (wsb_utc, wsb_dr, wsb_tf))'''
 
 DDL_SETUP = '''CREATE TABLE IF NOT EXISTS wsf_setup (
@@ -98,6 +101,11 @@ DDL_SETUP = '''CREATE TABLE IF NOT EXISTS wsf_setup (
     wss_ltf_away_n SMALLINT, wss_htf_toward_n SMALLINT, wss_away_dwell_max INT,
     -- the state, from the wsf-model-report footer
     wss_state VARCHAR(16),
+    -- SECTION 3.17, added 0824. Joe: "does anything in the stoch/sat/rsi columns confluence your
+    -- decision?" These two are EXACT, not thresholded - stoch out is literally 0.00 or 100.00.
+    -- stoch out is the reading leaving the seven-bar window at this line's next close.
+    wss_only_rise_n SMALLINT,   -- lines where stoch out = 0: nothing can pull r down, r can only rise
+    wss_only_fall_n SMALLINT,   -- lines where stoch out = 100: nothing can lift r, r can only fall
     UNIQUE KEY uq_wss (wss_utc, wss_dr))'''
 
 Q = """SELECT b.wbt_tf tf, b.wbt_r r, b.wbt_mage mg, b.wbt_mage_oob_tol mt, b.wbt_weak_mage_tf wmt,
@@ -123,6 +131,14 @@ def heading(out_fence, slope):
 def main():
     db = DatabaseManager(**get_db_config()); db.connect()
     db.execute(DDL_BOARD); db.execute(DDL_SETUP)
+    # CREATE TABLE IF NOT EXISTS will not add a column to a table that already exists, so the
+    # columns added on 0824 are added here for anyone whose tables predate them.
+    for tbl, col, typ in (('wsf_setup_board', 'wsb_r_move', 'DOUBLE'),
+                          ('wsf_setup', 'wss_only_rise_n', 'SMALLINT'),
+                          ('wsf_setup', 'wss_only_fall_n', 'SMALLINT')):
+        if not db.execute(f"SHOW COLUMNS FROM {tbl} LIKE '{col}'", fetch=True):
+            db.execute(f'ALTER TABLE {tbl} ADD COLUMN {col} {typ}')
+            print(f'  added {tbl}.{col}', flush=True)
     for utc, dr, verdict, strength, notes in SETUPS:
         rows = db.execute(Q, (WIN_FROM, utc, dr, KNOBS, WMT_TF_LO), fetch=True)
         if not rows:
@@ -140,14 +156,26 @@ def main():
             board.append((utc, dr, tf, rv, h, int(LO < rv < HI), x['u'], int(x['sl']), gate,
                           0 if int(x['lv']) else 1, x['lv2'], int(x['vdw']), float(x['mg']),
                           int(x['mt']), 0, x['sn'], x['so'], x['sb'], x['sl2'],
-                          x['rsi'], x['rlo'], x['rhi']))
+                          x['rsi'], x['rlo'], x['rhi'],
+                          None if (x['sn'] is None or x['so'] is None)
+                          else (float(x['sn']) - float(x['so'])) / 7.0))
         wmt = rows[0]['wmt']
         board = [b[:14] + (1 if (wmt and int(b[2]) == int(wmt)) else 0,) + b[15:] for b in board]
         db.executemany(
             'INSERT INTO wsf_setup_board (wsb_utc,wsb_dr,wsb_tf,wsb_r,wsb_heading,wsb_r_ib,'
             'wsb_verdict,wsb_stalled,wsb_gate50,wsb_blocked50,wsb_last_verdict,wsb_dwell,wsb_mage,'
             'wsb_mage_oob,wsb_weak_mage,wsb_stoch_now,wsb_stoch_out,wsb_sat_bars,wsb_sat_left,'
-            'wsb_rsi,wsb_rsi_lo,wsb_rsi_hi) VALUES (' + ','.join(['%s'] * 22) + ')', board)
+            'wsb_rsi,wsb_rsi_lo,wsb_rsi_hi,wsb_r_move) VALUES ('
+            + ','.join(['%s'] * 23) + ')', board)
+        # ROUNDED TO 6 PLACES, AND THAT IS NOT A KNOB. stoch is (RSI - RSI lo) / (RSI hi - RSI lo)
+        # x 100, so it is EXACTLY 0 when the outgoing RSI was the window's low and EXACTLY 100 when
+        # it was the window's high. The division leaves float residue: 08-04 00:52:30 ws5 stored
+        # 1.4168726029049243e-14 instead of 0, and 08:02:50 ws6 stored 99.99999999999999 instead of
+        # 100. Raw equality missed both. The nearest genuine values in the same boards are 42.41 and
+        # 50.00, so six places is seven orders clear of any real reading and seven orders above the
+        # residue. It recovers the intended number; it does not choose a level.
+        only_rise = sum(1 for x in rows if x['so'] is not None and round(float(x['so']), 6) == 0.0)
+        only_fall = sum(1 for x in rows if x['so'] is not None and round(float(x['so']), 6) == 100.0)
 
         away = sorted(t for t in H if H[t]['h'] == 'away')
         tow = sorted(t for t in H if H[t]['h'] == 'toward')
@@ -167,7 +195,8 @@ def main():
             'wss_ws8_heading,wss_ws8_verdict,wss_ws8_last,wss_ws8_dwell,wss_ws8_past_fence,'
             'wss_away_n,wss_away_tfs,wss_rib_n,wss_rib_tfs,wss_weak_mage_tf,wss_all_mage_oob,'
             'wss_toward_n,wss_toward_tfs,wss_away_max_tf,wss_toward_min_tf,wss_ltf_away_n,'
-            'wss_htf_toward_n,wss_away_dwell_max,wss_state) VALUES (' + ','.join(['%s'] * 24) + ')',
+            'wss_htf_toward_n,wss_away_dwell_max,wss_state,wss_only_rise_n,wss_only_fall_n)'
+            ' VALUES (' + ','.join(['%s'] * 26) + ')',
             (utc, dr, verdict, strength, notes[:500],
              w8.get('h'), w8.get('u'), w8.get('lv2'), w8.get('dwell'), past,
              len(away), ','.join(map(str, away)), len(rib), ','.join(map(str, rib)),
@@ -175,18 +204,20 @@ def main():
              len(tow), ','.join(map(str, tow)),
              max(away) if away else None, min(tow) if tow else None,
              sum(1 for t in away if t in LTF), sum(1 for t in tow if t in HTF),
-             max((H[t]['dwell'] for t in away), default=None), state))
+             max((H[t]['dwell'] for t in away), default=None), state,
+             only_rise, only_fall))
         print(f'  {utc[11:]} dr {dr:+d}  {verdict:<5} : 8 board rows, 1 setup row', flush=True)
 
     print(f"\n  {'setup':<10}{'dr':>4}{'verdict':>15}{'away':>6}{'away tfs':>14}{'r IB':>6}"
           f"{'rIB tfs':>16}{'toward':>8}{'ltf away':>10}{'htf toward':>12}"
-          f"{'weak-mage':>11}{'all oob':>9}{'state':>13}", flush=True)
+          f"{'weak-mage':>11}{'all oob':>9}{'state':>13}{'only rise':>11}{'only fall':>11}", flush=True)
     for r in db.execute('SELECT * FROM wsf_setup ORDER BY wss_utc', fetch=True):
         print(f"  {str(r['wss_utc'])[11:]:<10}{r['wss_dr']:>+4}{r['wss_verdict']:>15}"
               f"{r['wss_away_n']:>6}{r['wss_away_tfs']:>14}{r['wss_rib_n']:>6}"
               f"{r['wss_rib_tfs']:>16}{r['wss_toward_n']:>8}{r['wss_ltf_away_n']:>10}"
               f"{r['wss_htf_toward_n']:>12}{str(r['wss_weak_mage_tf'] or 'NONE'):>11}"
-              f"{('yes' if r['wss_all_mage_oob'] else ''):>9}{r['wss_state']:>13}", flush=True)
+              f"{('yes' if r['wss_all_mage_oob'] else ''):>9}{r['wss_state']:>13}"
+              f"{r['wss_only_rise_n']:>11}{r['wss_only_fall_n']:>11}", flush=True)
     db.disconnect()
     return 0
 

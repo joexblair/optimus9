@@ -1159,3 +1159,92 @@ the ones that have finished.
 - **dormant, on Joe's word**: task #3 the ws1Mage re-entry gate, task #4 the ELIF "last mile"
   mechanic, task #5 the RESCUE_REJECTED_CURL question for dtf modelling, and the
   `build_dtf_delegation.py` opposition count that omits RESCUE_REJECTED_CURL.
+
+## 3.17  MODELLING LESSON — what the stoch, sat and RSI columns actually say
+
+Joe 0824: *"your understanding of the stochrsi calculations will help you understand the r lines,
+and to make decisions. this is why you added the stoch, sat, and rsi columns"* and *"does anything
+in the stoch/sat/rsi columns confluence your decision?"*
+
+### 3.17.1  the correction that started it
+
+Joe 0824: *"the LTFs (1,2,3) will often tangent away from pxs, when in an ongoing leg - this is why
+you are seeing high values for the LTF r lines"*.
+
+My 3.16 reading said ws1, ws2 and ws3 at 77.38 / 73.28 / 47.26 had "no travel behind them" because
+their last verdicts were `sideways`, `sideways`, `curl`. **That is wrong and is withdrawn.** A high
+LTF r during an ongoing leg is the low timeframe tangenting away from price, not an absence of
+travel. The lesson in 3.16 stands on the HTF lines alone; the LTF contrast I drew does not.
+
+### 3.17.2  r is a seven-bar mean, so its next step is already fixed
+
+    r          = the mean of the last SEVEN closed stoch readings
+    stoch now  = the DEVELOPING stoch, updated every 5 s
+    stoch out  = the OLDEST closed stoch still in the seven, the one that leaves at the next close
+    r at next close = r + (stoch now - stoch out) / 7
+
+That last term is banked per line as `wsb_r_move`, in r units per bar of THAT line's timeframe.
+
+Two readings of it are exact, not thresholded, because stoch is
+`(RSI - RSI lo) / (RSI hi - RSI lo) x 100`:
+
+- **stoch out = 0** — the reading leaving the window is already at the bottom. Whatever arrives is
+  at least as big, so **r cannot fall**. Banked as `wss_only_rise_n`.
+- **stoch out = 100** — the reading leaving is at the top. Whatever arrives is no bigger, so **r
+  cannot rise**. Banked as `wss_only_fall_n`.
+
+**This is the mechanical form of Joe's 3.16 lesson.** "r has dropped to the ~floor and has nowhere
+to go" is `stoch out = 0` — the floor is already inside the window and about to leave.
+
+### 3.17.3  what confluences, across all four labelled setups
+
+| setup | dr | verdict | only rise | only fall | state |
+|---|---|---|---|---|---|
+| 00:13:00 | +1 | SHORT | 0 | 3 | wsf-exhaust |
+| 00:14:50 | +1 | SHORT | 1 | 4 | wsf-momoc |
+| 08:02:50 | +1 | SHORT | 2 | 3 | wsf-momo-none |
+| 00:52:30 | -1 | hold and walk | **6** | **1** | wsf-exhaust |
+
+**All three trade calls have more only-fall lines than only-rise lines. The one hold has the sign
+reversed, six to one.** At dr -1 the trade needs r to travel down to the 15 fence; six of the eight
+lines are mechanically unable to fall. That is direct confluence with `hold and walk`.
+
+**n = 4.** One hold against three trades, all on 08-04, three of the four on dr +1. This is a
+candidate marker, not a rule, and it will not be reported as a result until 08-05 runs cold.
+
+### 3.17.4  the two SHORT shapes are opposite in the stoch columns
+
+- **08:02:50** — six of eight lines at `sat clock` 0 and `sat left` 7: each just SET a fresh 8-bar
+  RSI high on the developing bar. stoch now 100 on those six. r is pinned at the ceiling or still
+  climbing. The peak is being made at this bar.
+- **00:13:00 and 00:14:50** — `sat clock` 1 to 7, `sat left` 0 to 6: the high was set several bars
+  ago and is rolling out. stoch now 0.00 on six of eight lines, so `wsb_r_move` is -12 to -14.3 r
+  units per bar on those lines. The peak has passed and r is collapsing.
+
+Both are SHORT. The stoch columns say WHERE IN THE MOVE the bar sits, which the r value alone does
+not. Joe rated 08:02:50 **strong**; it is also the board with the highest mean `sat left`, 6.5
+against 4.63, 4.38 and 3.63.
+
+### 3.17.5  measured: which of these columns are direction-specific
+
+Checked at 08-04 00:52:30 on both directions of the same bar:
+
+| column | same for dr +1 and dr -1? |
+|---|---|
+| r | **same** |
+| stoch now | **same** |
+| stoch out | **same** |
+| RSI, RSI lo, RSI hi | **same** |
+| sat clock | **NO** - ws1 reads 0 at dr +1 and 7 at dr -1 |
+| sat left | **NO** - ws1 reads 7 at dr +1 and 0 at dr -1 |
+
+`sat clock` counts bars since the RSI last set its 8-bar extreme **on the side being read** - the
+high at dr +1, the low at dr -1. Everything else on the board is one number read two ways.
+
+### 3.17.6  a float-residue defect found and fixed
+
+`stoch out` is exactly 0 or exactly 100 when the outgoing RSI was the window's low or high, but the
+division leaves residue: 00:52:30 ws5 stored `1.4168726029049243e-14` and 08:02:50 ws6 stored
+`99.99999999999999`. Raw equality missed both, undercounting `only_rise` by one and `only_fall` by
+one. The test now rounds to six places. **That is not a knob** - the nearest genuine readings on the
+same boards are 42.41 and 50.00, seven orders away.
