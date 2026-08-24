@@ -1205,12 +1205,29 @@ to go" is `stoch out = 0` — the floor is already inside the window and about t
 | 08:02:50 | +1 | SHORT | 2 | 3 | wsf-momo-none |
 | 00:52:30 | -1 | hold and walk | **6** | **1** | wsf-exhaust |
 
-**All three trade calls have more only-fall lines than only-rise lines. The one hold has the sign
-reversed, six to one.** At dr -1 the trade needs r to travel down to the 15 fence; six of the eight
-lines are mechanically unable to fall. That is direct confluence with `hold and walk`.
+**CORRECTED 0824, and the first reading was inverted.** I wrote that the marker separated the trades
+from the hold. It does not. It tracks the SIDE of the trade, and it aligns with the trade at every
+one of the four setups.
 
-**n = 4.** One hold against three trades, all on 08-04, three of the four on dr +1. This is a
-candidate marker, not a rule, and it will not be reported as a result until 08-05 runs cold.
+The direction, from Joe 0812 M7: *"its 100% obvious that a LONG trade will launch from a lo oob, and
+inverse for SHORT"*. The trade launches FROM the exhaustion and faces the other way, so:
+
+    dr +1 = SHORT, launched from lines high  ->  the trade wants r to FALL  ->  wants `only fall`
+    dr -1 = LONG,  launched from lines low   ->  the trade wants r to RISE  ->  wants `only rise`
+
+| setup | dr | side | the trade needs r to | lines that can ONLY go that way |
+|---|---|---|---|---|
+| 00:13:00 | +1 | SHORT | fall | 3 |
+| 00:14:50 | +1 | SHORT | fall | 4 |
+| 08:02:50 | +1 | SHORT | fall | 3 |
+| 00:52:30 | -1 | LONG | **rise** | **6** |
+
+**00:52:30 carries the strongest support of the four**, not the weakest. The marker never separated
+a hold from a trade; it says how much of the board is mechanically committed to the trade's own
+direction.
+
+**n = 4.** All on 08-04, three of the four on dr +1. This is a candidate marker, not a rule, and it
+will not be reported as a result until 08-05 runs cold.
 
 ### 3.17.4  the two SHORT shapes are opposite in the stoch columns
 
@@ -1248,3 +1265,144 @@ division leaves residue: 00:52:30 ws5 stored `1.4168726029049243e-14` and 08:02:
 `99.99999999999999`. Raw equality missed both, undercounting `only_rise` by one and `only_fall` by
 one. The test now rounds to six places. **That is not a knob** - the nearest genuine readings on the
 same boards are 42.41 and 50.00, seven orders away.
+
+## 3.18  UNPACKING 00:52:30 — "hold and walk" does not survive it
+
+Joe 0824: *"I agreed with wsf-exhaust at 0:52 because ws8r exited the fence, but then I saw your
+hold and walk verdict ... if you believe it's hold and walk, then lets unpack it"*.
+
+### 3.18.1  Joe's reason for wsf-exhaust is confirmed in the data
+
+ws8r, dr -1. momo-fence-r low = 17. The 85/15 boundary low = 15.
+
+| time | ws8r | past 17 | held 4 bars | run | raw fit | verdict | last-verdict | dwell |
+|---|---|---|---|---|---|---|---|---|
+| 00:44:00 | 29.20 | no | no | 0 | momo | momo | none | 1105 s |
+| 00:48:00 | 14.29 | yes | no | 1 | momo | momo | none | 1345 s |
+| 00:48:50 | 15.29 | yes | **yes** | 11 | momo | **none** | momo | 35 s |
+| 00:52:30 | 15.82 | yes | yes | 55 | momo | none | momo | 255 s |
+
+- ws8r left momo-fence-r 17 and the exit CONFIRMED at 00:48:35 (four bars held).
+- **the raw momentum fit still says `momo` at 00:52:30.** It is Joe's momentum-kill - a
+  momentum-true line that leaves momo-fence-r reads none - that turns ws8r off.
+- 24 bars in the 00:44-00:53 window sit below the 15 boundary. At 00:52:30 ws8r is 15.82, back
+  just inside it.
+- ws8r being the last line to turn off is what leaves no line carrying momentum, which is the
+  `wsf-exhaust` footer. **Joe's reason holds exactly.**
+
+### 3.18.2  the board is Joe's own template, mirrored to the low side
+
+| marker | 08:02:50, Joe's template, rated **strong** | 00:52:30 |
+|---|---|---|
+| ws8 heading | away | away |
+| ws8 verdict | none | none |
+| ws8 last-verdict | momo | momo |
+| ws8 dwell | 155 s | 255 s |
+| ws8 past its fence by | 1.50 | 1.18 |
+| `away` count | 5 | 5 |
+| `r IB` count | 5 | 5 |
+| weak-mage | ws4 | ws2 |
+
+Joe's words on the template, spec 1.6: *"ws8r reversing, many aways, many ltf `r IB`s"*. **Every
+marker matches.** The only difference is the side: 08:02:50 reads dr +1 and 00:52:30 reads dr -1.
+
+### 3.18.3  the stoch columns back the trade, not the hold
+
+Six of eight lines have `stoch out` = 0, so r cannot fall on them. At dr -1 the trade faces UP, so
+those six are mechanically committed to the trade's own direction. **That is the strongest support
+in the whole labelled set** - see the corrected 3.17.3.
+
+### 3.18.4  so what was `hold and walk` resting on?
+
+One thing only: **the stub.** Joe 0824 set wsf's facing from three lines - *"wsf's dr will be set by
+the positioning of gcws30Mage, ws1Mage and ws2Mage - if they are all > {100 - knob:20 fence} then
+dr = +1"* - and at 00:52:30 they read 58.95, 36.56 and 30.23, so none of the three answers.
+
+**But that argument fails on its own terms**, because ALL THREE of the delegation setups are stubs:
+
+| setup | gcws30Mage | ws1Mage | ws2Mage | stub | dtf dr | verdict I gave | Joe |
+|---|---|---|---|---|---|---|---|
+| 00:13:00 | 36.14 | 59.30 | 74.50 | yes | +1 | SHORT | agreed |
+| 00:14:50 | 39.84 | 62.38 | 76.00 | yes | +1 | SHORT | agreed |
+| 00:52:30 | 58.95 | 36.56 | 30.23 | yes | -1 | hold and walk | questioned |
+
+At 00:13:00 and 00:14:50 I took the direction from dtf's dr and called the trade, and Joe agreed
+both. At 00:52:30 I used the same stub to refuse one. **The stub cannot be a blocker on one bar and
+not on the other two.**
+
+08:02:50 is not a delegation moment at all - it is Joe's template bar, and it has no stub to consider.
+
+### 3.18.5  the corrected verdict
+
+**LONG, dr -1.** The board is the template mirrored, the state is wsf-exhaust which is the state
+that lets a trade fire, and six of eight lines cannot travel against it.
+
+**NOT CHANGED IN THE TABLE.** `wss_verdict` is Joe's label column and the row still reads
+`hold and walk`. Joe's word changes it, not mine.
+
+## 3.19  Joe's TF1:10 test — the 00:52:30 exhaust does not survive it
+
+Joe 0824: *"I'm diving into your decision becuse I can see that if we extended wsf from TF1:8 to
+TF1:10, then your hold and walk verdict would be correct -- you can see this for yourself: ws10r
+creates an ib X oob at ~01:00"*.
+
+### 3.19.1  Joe's read, measured
+
+| line | drops to/below momo-fence-r 17 | value before | value after | crosses the 15 boundary |
+|---|---|---|---|---|
+| ws9r | 00:54:00 | 29.09 | 14.81 | 00:54:00 |
+| ws10r | **01:00:00** | 29.55 | 15.27 | 01:10:00 |
+
+**Joe said ~01:00 and it is 01:00:00 exactly.**
+
+### 3.19.2  what the two extra lines do to the board at 00:52:30
+
+| line | r at 00:52:30 | raw momentum fit | past momo-fence-r 17 | verdict |
+|---|---|---|---|---|
+| ws9r | 29.77 | **momo** | no | **momo** |
+| ws10r | 30.80 | **momo** | no | **momo** |
+
+**Both carry momentum.** With TF1:10 the footer at 00:52:30 is `wsf-momoc`, not `wsf-exhaust`, and
+no trade can fire. **Joe's `hold and walk` is correct under TF1:10.**
+
+Walking the momentum-kill forward - momo-fence-r 17, four bars held:
+
+| time | ws9r | ws9 verdict | ws10r | ws10 verdict |
+|---|---|---|---|---|
+| 00:52:00 | 29.44 | momo | 30.50 | momo |
+| 00:54:15 | 14.81 | **none** | 29.55 | momo |
+| 01:00:00 | 14.81 | none | 15.27 | momo |
+| 01:00:15 | 14.81 | none | 15.27 | **none** |
+
+**First bar where neither ws9r nor ws10r carries momentum: 01:00:15.** Under TF1:10 the wsf-exhaust
+lands there, not at 00:52:30.
+
+### 3.19.3  Joe's flipside question - the ensuing x-cross
+
+The x-cross method watches `ws{weak-mage-tf}x`. At 00:52:30 the weak-mage line is **ws2**.
+
+| | time | target won |
+|---|---|---|
+| raw first touch | 00:53:55 | Mage |
+| **confirmed, XCROSS_XWOB 5 held** | **01:00:15** | b |
+
+The 00:53:55 touch lasted ONE bar - ws2x fell from 25.54 to -21.80 at the next bar and the race
+went back to no winner. The cross that held is 01:00:15.
+
+### 3.19.4  the convergence
+
+    ws10r's momentum turns off      01:00:15
+    the ensuing x-cross confirms    01:00:15
+
+**Two independent mechanics land on the same bar.** ws10r is not in wsf today and played no part in
+the x-cross calculation.
+
+### 3.19.5  where this leaves the verdict
+
+- **under wsf as it is built today, TF1 to TF8**: the board at 00:52:30 is `wsf-exhaust`, matches
+  Joe's 08:02:50 template on every marker, and six of eight lines cannot travel against a LONG. The
+  corrected verdict in 3.18.5 stands.
+- **under TF1:10**: two more lines carry momentum at 00:52:30, the state is `wsf-momoc`, and
+  `hold and walk` is right - with the trade arriving at 01:00:15.
+
+**Whether wsf extends to TF10 is Joe's call and has not been made.** Nothing in the code changed.
