@@ -49,6 +49,20 @@ SETUPS = [
  ('2026-08-04 00:13:00', +1, 'SHORT', 'unrated',
   "the 2nd dtf-free delegation. Joe 0824: 'your decision is correct: dr +1 = SHORT trade signal'. "
   "ws8r reads sideways with a blank last-verdict - the template's reversal marker is absent"),
+ ('2026-08-04 00:14:50', +1, 'SHORT', 'unrated',
+  "the 3rd dtf-free delegation. Joe 0824 agreed the verdict: 'I agree'. THE STATE IS wsf-momoc, "
+  "settled by Joe: 'I overrode the wsf-exhaust state for 00:14:50, and I printed wsf-momoc'. The "
+  "derived wss_state agrees with him. ws7r is the only line the report calls curl, and gate 2 "
+  "rejects it: its bend points against dr - which is why Joe's note reads 'wsf-momoc on the "
+  "non-existant #2 gate'. All eight bends on the board end downward. ws8r reads sideways with a "
+  "blank last-verdict, 890 s dwell - the template's reversal marker is absent, same as 00:13:00"),
+ ('2026-08-04 00:52:30', -1, 'hold and walk', 'unrated',
+  "the 4th dtf-free delegation, and the FIRST on dr -1. Joe 0824 confirmed the state: 'your verdict "
+  "is correct - good work' on wsf-exhaust. Verdict is 'hold and walk' because wsf has no direction "
+  "of its own here - the stub: gcws30Mage 58.95, ws1Mage 36.56, ws2Mage 30.23, none outside the "
+  "80/20 fence. THE LESSON, Joe verbatim: 'the HTF r lines are all low on the board while verdict "
+  "is none, after verdict being momo -- this equates to r has dropped to the ~floor (momo), and has "
+  "nowhere to go (none)'. ws5 8.10, ws6 3.30, ws7 8.55, ws8 15.82, all last-verdict momo"),
 ]
 
 DDL_BOARD = '''CREATE TABLE IF NOT EXISTS wsf_setup_board (
@@ -164,11 +178,11 @@ def main():
              max((H[t]['dwell'] for t in away), default=None), state))
         print(f'  {utc[11:]} dr {dr:+d}  {verdict:<5} : 8 board rows, 1 setup row', flush=True)
 
-    print(f"\n  {'setup':<10}{'dr':>4}{'verdict':>9}{'away':>6}{'away tfs':>14}{'r IB':>6}"
+    print(f"\n  {'setup':<10}{'dr':>4}{'verdict':>15}{'away':>6}{'away tfs':>14}{'r IB':>6}"
           f"{'rIB tfs':>16}{'toward':>8}{'ltf away':>10}{'htf toward':>12}"
           f"{'weak-mage':>11}{'all oob':>9}{'state':>13}", flush=True)
     for r in db.execute('SELECT * FROM wsf_setup ORDER BY wss_utc', fetch=True):
-        print(f"  {str(r['wss_utc'])[11:]:<10}{r['wss_dr']:>+4}{r['wss_verdict']:>9}"
+        print(f"  {str(r['wss_utc'])[11:]:<10}{r['wss_dr']:>+4}{r['wss_verdict']:>15}"
               f"{r['wss_away_n']:>6}{r['wss_away_tfs']:>14}{r['wss_rib_n']:>6}"
               f"{r['wss_rib_tfs']:>16}{r['wss_toward_n']:>8}{r['wss_ltf_away_n']:>10}"
               f"{r['wss_htf_toward_n']:>12}{str(r['wss_weak_mage_tf'] or 'NONE'):>11}"

@@ -8,6 +8,20 @@ column list verbatim:
 
 Columns are not added, removed or reordered without Joe saying so.
 
+ADDED 0824 on Joe's word, in this order after `verdict`:
+    curl_dr         which way the line points AFTER the turn. Joe 0824: "if r was 80 and heading
+                    upwards, then the following curl will be curl_dr -1". Prints only where
+                    verdict = curl, Joe 0824.
+    wsf-curl-mode   the curl verdict with GATE 2 EXCLUDED - the gate that discards a curl whose
+                    bend points against dr. Joe 0824 named it and set its scope: "gate 2 only",
+                    momentum-kill still applies, curl_dr rule unchanged. Prints only where the
+                    producer's raw fit said curl.
+
+THE HEADER IS TWO LINES, Joe 0824: "print the column names on 2 lines so that the report fits in my
+screen". Each name splits at its own hyphen or space, never mid-word, so nothing is renamed. Column
+widths are then computed from the data and the two header halves, which is what narrows the table:
+257 characters before, 196 after.
+
 EXTENDED 0821, Joe: "if the six new columns pass the test, add them to the formal wsf-model-report".
 They passed - 84 truncation checks, 0 mismatches. Seven columns were stored, not six; the extra one
 is the developing stoch reading that Joe's own question about emerging lines produced.
@@ -80,6 +94,7 @@ open questions and nothing here invents it.
 import sys
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
+from optimus9.compute.momo_gated import curl_gates
 
 WIN_FROM = '2026-08-04 00:00:00'
 DAY      = '2026-08-04'
@@ -137,7 +152,8 @@ def main():
         return 1
 
     rows = db.execute("""SELECT b.wbt_tf tf, b.wbt_r r, b.wbt_mage mg, b.wbt_mage_oob_tol mt,
-              b.wbt_weak_mage_tf wmt, l.wflb_verdict u, l.wflb_stalled sl, l.wflb_slope sp,
+              b.wbt_weak_mage_tf wmt, l.wflb_verdict u, l.wflb_curl_ends ce, l.wflb_stalled sl, l.wflb_slope sp,
+              l.wflb_ungated ung, l.wflb_aligned al, l.wflb_bend_align ba, l.wflb_bendfit bf,
               l.wflb_mfr_out ob, l.wflb_fit fi, l.wflb_level lv, l.wflb_verdict_dwell vdw, l.wflb_last_verdict lv2,
               b.wbt_stoch_now sn, b.wbt_stoch_out so, b.wbt_sat_bars sb, b.wbt_sat_left sl2,
               b.wbt_rsi rsi, b.wbt_rsi_lo rlo, b.wbt_rsi_hi rhi
@@ -158,9 +174,18 @@ def main():
                          if dr > 0 else 'downward, so the fence each line can reach is 15'))
     wmt = rows[0]['wmt']
     print()
-    print('    line | r value | heading | r IB | verdict  | stalled | 50 gate | blocked by 50 |'
-          ' last-verdict | last-verdict-dwell | Mage value | lb-mage-oob | weak-mage |'
-          ' stoch now | stoch out | sat clock | sat left |   RSI  | RSI lo | RSI hi')
+    # THE HEADER IS TWO LINES, Joe 0824: "print the column names on 2 lines so that the report
+    # fits in my screen". Each name is split at its own hyphen or space, never mid-word, so no
+    # column is renamed. Every column is then as narrow as the widest of its two header halves and
+    # its own data, which is what pulls the table in.
+    COLS = (('line', '', '<'), ('r', 'value', '>'), ('heading', '', '<'), ('r', 'IB', '<'),
+            ('verdict', '', '<'), ('curl', 'dr', '>'), ('wsf-curl', 'mode', '<'),
+            ('stalled', '', '<'), ('50', 'gate', '>'), ('blocked', 'by 50', '<'),
+            ('last', 'verdict', '<'), ('last-verdict', 'dwell', '>'), ('Mage', 'value', '>'),
+            ('lb-mage', 'oob', '<'), ('weak', 'mage', '<'), ('stoch', 'now', '>'),
+            ('stoch', 'out', '>'), ('sat', 'clock', '>'), ('sat', 'left', '>'),
+            ('RSI', '', '>'), ('RSI', 'lo', '>'), ('RSI', 'hi', '>'))
+    cells = []
     for x in rows:
         tf = int(x['tf']); rv = float(x['r'])
         h = heading(bool(x['ob']), float(x['sp']))
@@ -169,13 +194,42 @@ def main():
         trk = max(0.0, min(1.0, float(x['fi']) * min(1.0, abs(float(x['sp'])) / SLOPE_MIN)))
         gate = (50 - LEVEL_SLACK * trk) if dr > 0 else (50 + LEVEL_SLACK * trk)
         blocked = '' if int(x['lv']) else 'yes'
-        print(f"    ws{tf}  | {rv:>7.2f} | {h:<7} | {rib:<4} | {x['u']:<8} |"
-              f"  {'yes' if x['sl'] else '':<5}  |  {gate:>6.2f} |      {blocked:<4}     |"
-              f"  {(x['lv2'] or ''):<8}    |       {int(x['vdw']):>5} s      |"
-              f"   {float(x['mg']):>6.2f}   |"
-              f"    {'yes' if x['mt'] else '':<4}     |   {'yes' if wmt == tf else '':<3}     |"
-              f"  {_n(x['sn']):>7} |  {_n(x['so']):>7} |    {_i(x['sb']):>3}    |   {_i(x['sl2']):>3}    |"
-              f" {_n(x['rsi']):>6} | {_n(x['rlo']):>6} | {_n(x['rhi']):>6}")
+        # curl_dr, Joe 0824: "the curl_dr will represent the end of the curl - ie if r was 80 and
+        # heading upwards, then the following curl will be curl_dr -1 (the curl has reversed the
+        # line's upward travel)". wflb_curl_ends holds 'up'/'down' from the sign of the bend.
+        # Joe 0824: "curl_dr prints only on rows where verdict = curl".
+        cdr = ('' if x['u'] != 'curl' else
+               '+1' if x['ce'] == 'up' else '-1' if x['ce'] == 'down' else '')
+        # wsf-curl-mode, named by Joe 0824: "a curl-detection mode that excludes gate 2, so that
+        # the curl and its dr can contribute to your modelling". Gate 2 is the one that throws a
+        # curl away for bending against dr. Gates 1 and 3 and Joe's momentum-kill all still apply,
+        # Joe 0824: "momentum flipping from true to false is part of the line's lifecycle".
+        # It prints only where the producer's raw fit said curl - the rows the gates act on.
+        # THE GATES ARE NOT RE-IMPLEMENTED HERE. curl_gates() is momo_gated's own, fed the five
+        # measurements banked per bar. Proven against all 276,496 banked rows at gate2=True:
+        # 0 mismatches with wflb_gated.
+        if x['ung'] != 'curl':
+            cm = ''
+        elif x['u'] != 'curl':
+            cm = 'none'            # Joe's momentum-kill already turned it off, before any gate
+        else:
+            cm = 'curl' if curl_gates(
+                {'aligned': bool(x['al']), 'quad': x['ba'] is not None,
+                 'quad_aligned': None if x['ba'] is None else bool(x['ba']),
+                 'quad_r2': x['bf'], 'quad_why': None}, gate2=False)[0] else 'none'
+        cells.append([f'ws{tf}', f'{rv:.2f}', h, rib, x['u'], cdr, cm,
+                      'yes' if x['sl'] else '', f'{gate:.2f}', blocked,
+                      (x['lv2'] or ''), f"{int(x['vdw'])} s", f"{float(x['mg']):.2f}",
+                      'yes' if x['mt'] else '', 'yes' if wmt == tf else '',
+                      _n(x['sn']), _n(x['so']), _i(x['sb']), _i(x['sl2']),
+                      _n(x['rsi']), _n(x['rlo']), _n(x['rhi'])])
+
+    W = [max(len(t), len(b), *(len(c[j]) for c in cells))
+         for j, (t, b, _a) in enumerate(COLS)]
+    for line in (0, 1):
+        print('    ' + ' | '.join(f'{h[line]:{a}{w}}' for (*h, a), w in zip(COLS, W)).rstrip())
+    for c in cells:
+        print('    ' + ' | '.join(f'{v:{a}{w}}' for v, (_t, _b, a), w in zip(c, COLS, W)))
 
     mom = {int(x['tf']) for x in rows if x['u'] in ('momo', 'curl')}
     hi_grp = sorted(t for t in mom if t >= 4)

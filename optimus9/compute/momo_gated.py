@@ -58,29 +58,54 @@ def momo_g(r, dr, w):
     return st, f['slope'], f['r2'], f['r_at_bar']
 
 
-def momo_g_why(r, dr, w, quad='auto'):
+def momo_g_why(r, dr, w, quad='auto', gate2=True):
     """(state, reason, fit) - the gated verdict, its reason, and every number behind it.
 
     REFACTORED 0818. This used to call momo() for the verdict and then re-fit the SAME quadratic
     over the SAME slice to run gates 2 and 3. It now reads one fit. Gate 2's number - the sign and
     size of the bend - is on the returned dict as `qa`, so a caller can see the reversal instead of
-    only being told 'none'."""
+    only being told 'none'.
+
+    gate2=False is WSF-CURL-MODE, named by Joe 0824: "a curl-detection mode that excludes gate 2,
+    so that the curl and its dr can contribute to your modelling". Gates 1 and 3 still run. The
+    DEFAULT IS True, so every existing caller - build_ws_fin, build_wsf_line_bar, jig, the s46 path
+    - is untouched."""
     f = X.momo_fit(r, dr, w, quad=quad)
     st, why = X.verdict(f)
     if st != 'curl':
         return st, why, f
+    ok, why = curl_gates(f, gate2=gate2)
+    return ('curl' if ok else 'none'), why, f
+
+
+def curl_gates(f, gate2=True):
+    """(ok, reason) - Joe's three 0805 curl gates run against ONE fit.
+
+    LIFTED OUT OF momo_g_why 0824 so that a caller holding the MEASUREMENTS but not the series -
+    report_wsf_bar reads them back from wsf_line_bar - runs the same gates instead of a copy. The
+    fork that this prevents already happened once, in report_domtf_walk.py.
+
+    `f` needs five fields, and they are exactly the five banked per bar:
+        aligned       the slope points with dr           wflb_aligned
+        quad          a bend was measurable              wflb_bend_align IS NOT NULL
+        quad_aligned  the bend points with dr            wflb_bend_align
+        quad_r2       the bend's own r-squared           wflb_bendfit
+        quad_why      why no bend, when quad is False    not banked, optional
+
+    gate2=False drops the SECOND gate only. Gate 1 and gate 3 are unchanged, and so is the
+    quad-missing check, because gate 3 needs the same measurement gate 2 does."""
     # gate 1 - the same alignment test momo() applies to its own branch
     if not f['aligned']:
-        return 'none', 'curl, but the slope points against dr', f
-    # gate 2 - the bend must be a curl BEGINNING, not one that has already ended
+        return False, 'curl, but the slope points against dr'
     if not f['quad'] or f.get('quad_aligned') is None:
-        return 'none', 'curl, but ' + (f.get('quad_why') or 'the bend could not be measured'), f
-    if not f['quad_aligned']:
-        return 'none', 'curl, but the bend points against dr', f
+        return False, 'curl, but ' + (f.get('quad_why') or 'the bend could not be measured')
+    # gate 2 - the bend must be a curl BEGINNING, not one that has already ended
+    if gate2 and not f['quad_aligned']:
+        return False, 'curl, but the bend points against dr'
     # gate 3 - the bend must actually describe the window
     if CURL_R2_MIN > 0.0 and f['quad_r2'] < CURL_R2_MIN:
-        return 'none', 'curl, but the bend does not describe the window', f
-    return 'curl', 'curl', f
+        return False, 'curl, but the bend does not describe the window'
+    return True, 'curl'
 
 
 # Gate 3 floor, chosen from the data per Joe 0805 "use whatever value clears the errant 09:19 curl":

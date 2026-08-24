@@ -623,3 +623,16 @@ The rescue can only ADD opposing lines -> empty more blocking lists -> make MORE
 list can only be LONGER, never shorter, and no moment in it is wrong.
 
 Full pretext for the rescue: `docs/dtf_htf_curl_question.md`, task #5.
+
+### 0824 — the two reports have diverged, on Joe's word
+
+Joe 0824: *"leave dtf for now, we'll add the curl_dr/no-gate-2 logic when we need to. wsf is the
+primary focus for now"*. Three changes now live in the **wsf-model-report only**:
+
+- `curl_dr` — which way the line points after the turn. Prints where verdict = curl.
+- `wsf-curl-mode` — the curl verdict with gate 2 excluded. Prints where the raw fit said curl.
+- a **two-line header**, which narrowed the table from 257 characters to 196.
+
+The dtf-model-report keeps the twenty-column format above until Joe says otherwise. Note also that
+there is still no dtf-model-report SCRIPT and no per-bar momentum table for ws13 to ws27 — the
+01:21:05 report was produced by ad-hoc query.

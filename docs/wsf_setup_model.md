@@ -940,3 +940,222 @@ verdict, strength, notes. Add the row, run it, and both tables refresh.
 
 Three labelled rows after tomorrow, against 82 unlabelled delegation moments. **The honest test is
 08-05 run cold.** In-sample agreement is not a result, and will not be reported as one.
+
+## 3.15  0824 close — the 00:14:50 state row, and a mode Joe has asked for but not named
+
+**Joe's correction to the 00:14:50 verdict block**, verbatim:
+
+    │ state                       │ wsf-momo-none             │ wsf-momoc on the non-existant #2 gate │
+
+**THE STATE FOR THIS BAR IS `wsf-momoc`.** Joe settled it and then had to say so twice. His own
+words, 0824: *"I overrode the wsf-exhaust state for 00:14:50, and I printed wsf-momoc"*. My verdict
+block had printed `wsf-exhaust`; that is what he struck out. The middle cell, `wsf-momo-none`, is
+the reading you get IF gate 2 applies. The right-hand cell is the state that stands, and it stands
+because gate 2 does not exist in the report path.
+
+The verdict itself is unchanged and Joe agreed it: **SHORT, dr +1**.
+
+**Joe's second call**, verbatim:
+
+> "this is a happy accident - it shows me that the wsf-report would benefit from a curl-detection
+> mode that excludes gate 2, so that the curl and its dr can contribute to your modelling"
+
+NOTHING BUILT. Held at BUILD-GATE, task #6. The mode has no name yet — Joe names his mechanics.
+
+**Correction banked here so it is not repeated.** On 0824 I called `wflb_verdict` being fed the
+UNGATED verdict a defect and offered a one-line fix. It is not a defect. `build_wsf_line_bar.py`
+line 18 records Joe 0818: *"wsf states are a continuous flow, to be queried when wsf9of12 fires.
+for this reason, curl cannot be gated"*. The ungated feed is Joe's instruction. The fix is
+withdrawn.
+
+**The gate-by-gate reading at 00:14:50, dr +1** — the evidence behind Joe's state row:
+
+| line | r | raw fit | gate 1 slope | gate 2 bend | gate 3 fit | bend | ends | killed | if gate 2 gone |
+|---|---|---|---|---|---|---|---|---|---|
+| ws1 | 13.61 | none | | | | −6.07 | | yes | — |
+| ws2 | 46.17 | none | | | | −13.98 | | yes | — |
+| ws3 | 73.02 | none | | | | −53.34 | | yes | — |
+| ws4 | 77.55 | curl | REJECT | REJECT | pass | −55.77 | down | yes | none |
+| ws5 | 80.51 | curl | pass | REJECT | pass | −41.03 | down | yes | curl |
+| ws6 | 83.61 | curl | pass | REJECT | pass | −27.66 | down | yes | curl |
+| ws7 | 71.31 | curl | pass | REJECT | pass | −27.31 | down | no | curl |
+| ws8 | 86.48 | sideways | | | | −2.98 | | no | — |
+
+Gate 2 asks, at dr +1, for a bend that ends UP. Every bend on this board ends DOWN, so gate 2
+rejects all four curls. Gate 1 additionally rejects ws4 on its slope, so removing gate 2 alone
+still leaves ws4 at none.
+
+Every column needed to run the mode is already banked on all 276,496 rows — `wflb_aligned`,
+`wflb_bend`, `wflb_bend_align`, `wflb_bendfit`, `wflb_curl_ends`. No rebuild.
+
+### 3.15.1  wsf-curl-mode — Joe's six answers, and the measurement that stopped the build
+
+**Joe 0824 named it: `wsf-curl-mode`.** His answers to the six concretions, verbatim:
+
+| # | question | Joe |
+|---|---|---|
+| 1 | the name | **wsf-curl-mode** |
+| 2 | gate 2 only, or gate 1 as well | "gate 2 only" |
+| 3 | does momentum-kill apply | "yes. momentum flipping from true to false (your 'momentum-kill') is part of the line's lifecycle" |
+| 4 | dtf-model-report too | "yes" |
+| 5 | does curl_dr print on its rows | "no change to my 0824 rule" |
+| 6 | does it feed the state footer | "indirectly, yes. the state footer is derived by you, based on your interpretation of all fields in the wsf-model-report" |
+
+**BUILD HALTED AGAIN. Nothing written.** The reason is arithmetic, not preference.
+
+    the report's `verdict` column = raw fit + momentum-kill.  NO gates at all.
+    wsf-curl-mode as specified  = raw fit + gate 1 + gate 3 + momentum-kill.
+
+wsf-curl-mode is therefore a **strict subset** of the column already in the report. It can only turn
+a curl into a none. It can never surface a curl the report is currently hiding.
+
+**Measured over all 276,496 banked rows, 08-04, both directions, ws1 to ws8:**
+
+| population | bars | unbroken runs |
+|---|---|---|
+| raw fit says curl | 42,765 | |
+| `verdict` prints curl (kill did not fire) | 10,181 | |
+| wsf-curl-mode keeps the curl | 8,532 | |
+| — of those, gate 2 alone rejects it (the bend points against dr) | 2,424 | 505 |
+| wsf-curl-mode turns the curl to none | 1,649 | 348 |
+| — gate 1, the slope points against dr | 770 | |
+| — gate 3, the bend does not describe the window | 1,105 | |
+
+The 2,424 bars in 505 runs are the population Joe's sentence points at — *"so that the curl and its
+dr can contribute to your modelling"*. **They already print `curl` in the report today, and nothing
+marks them.** wsf-curl-mode as specified does not mark them either; it removes 1,649 other bars.
+
+Put to Joe, not decided: whether wsf-curl-mode is the narrowing filter he specified, or a marker on
+the gate-2-rejected curl.
+
+**Two facts found while scoping, both stated to Joe:**
+
+1. `report_wsf_bar.py` lines 186-197 PRINT a footer line `STATE AT THIS BAR:` derived mechanically
+   from the verdict column. It read `wsf-momoc` at 00:14:50, and `wsf-momoc` is the state Joe
+   settled. The printed line and Joe's state AGREE at this bar. (This paragraph said the opposite
+   until 0824 and was one of the three places the inverted reading survived.)
+2. **There is no dtf-model-report script and no per-bar momentum table for ws13 to ws27.** The
+   01:21:05 dtf-model-report was produced by ad-hoc query. Answer #4 lands in the format spec; it
+   cannot land in code until that report exists.
+
+### 3.15.2  corrections and scope, 0824 close
+
+- **CORRECTION.** My 00:14:50 verdict block printed the state as **wsf-exhaust**. Joe overrode
+  that, and the word he printed is **wsf-momoc**. My later sentence — "that printed line read
+  wsf-momoc ... your correction to wsf-momo-none overrode it" — is backwards and is withdrawn.
+- **SCOPE, Joe 0824**: *"leave dtf for now, we'll add the curl_dr/no-gate-2 logic when we need to.
+  wsf is the primary focus for now"*. The dtf half of answer #4 is parked, not cancelled.
+- **CONFIRMED, Joe 0824**: curl_dr is already derived from the momentum mechanism. It reads
+  `wflb_curl_ends`, which is the sign of `wflb_bend` — the leading coefficient of the quadratic
+  that `momo_core.momo_fit()` fits over the line's own window. It is banked on every row where the
+  raw fit said curl, gates or no gates, which is all four lines at 00:14:50 including the three
+  that print blank.
+
+### 3.15.3  wsf-curl-mode — BUILT 0824
+
+Joe 0824: *"why wouldn't you add the modes (no gate 2, curl_dr produced) to the momentum mech, and
+call that mode into the wsf-model-report?"* then *"go for it"*. The halt in 3.15.1 is lifted; the
+subset arithmetic there still stands and Joe has seen it.
+
+**Where it lives.** `optimus9/compute/momo_gated.py` — the file that already holds Joe's 0805 gates.
+
+    momo_g_why(r, dr, w, quad='auto', gate2=True)     gate2=False is wsf-curl-mode
+    curl_gates(f, gate2=True)                          the three gates, lifted out, ONE home
+
+`curl_gates` was lifted out of `momo_g_why` so a caller holding the MEASUREMENTS but not the series
+runs the same gates instead of a copy. `report_wsf_bar.py` is that caller — it reads the five
+banked fields back out of `wsf_line_bar` and hands them to the same function:
+
+    aligned       the slope points with dr        wflb_aligned
+    quad          a bend was measurable           wflb_bend_align IS NOT NULL
+    quad_aligned  the bend points with dr         wflb_bend_align
+    quad_r2       the bend's own r-squared        wflb_bendfit
+    quad_why      why no bend                     not banked, optional
+
+The fork this prevents already happened once, in `report_domtf_walk.py`.
+
+**The default is `gate2=True`, so every existing caller is untouched** — build_ws_fin,
+build_wsf_line_bar, jig, the s46 path.
+
+**PROVEN, twice, over the whole banked set:**
+
+| check | readings | mismatches |
+|---|---|---|
+| `curl_gates(gate2=True)` from banked fields vs banked `wflb_gated` | 276,496 | **0** |
+| `momo_g_why()` re-run end to end vs banked `wflb_gated` and `wflb_ungated` | 276,496 | **0** |
+
+**The report column.** `wsf-curl-mode`, placed immediately after `curl_dr`. It prints only on rows
+where the producer's raw fit said curl — the rows the gates act on. Joe's momentum-kill is applied
+first, per his 0824 call *"momentum flipping from true to false ... is part of the line's
+lifecycle"*, so a killed curl reads `none` before any gate runs. Joe's 0824 curl_dr rule is
+unchanged: curl_dr still prints only where `verdict` = curl.
+
+**NOT banked to the database.** No column was added to `wsf_line_bar` and no rebuild was run. The
+five inputs are already there, so the mode is a query-time reading.
+
+**At 00:14:50, dr +1, the new column reads IDENTICALLY to `verdict`** — ws7 `curl`, ws4/ws5/ws6
+`none`, the rest blank. That is the subset arithmetic in 3.15.1 showing up in the output: the
+column can only ever turn a curl into a none, and at this bar the momentum-kill had already done it.
+
+The printed footer line reads `wsf-momoc - momentum on ws7r`, and that is the state Joe settled
+for this bar. See 3.15.
+
+### 3.15.4  the wsf-model-report header is two lines, 0824
+
+Joe 0824: *"print the column names on 2 lines so that the report fits in my screen"*.
+
+- **No column is renamed.** Each name splits at its own hyphen or space, never mid-word:
+  `r value` -> `r` / `value`, `curl_dr` -> `curl` / `dr`, `wsf-curl-mode` -> `wsf-curl` / `mode`,
+  `blocked by 50` -> `blocked` / `by 50`, `last-verdict-dwell` -> `last-verdict` / `dwell`,
+  `lb-mage-oob` -> `lb-mage` / `oob`, `RSI lo` -> `RSI` / `lo`, and so on. `heading`, `verdict`,
+  `stalled` and `line` have no break point and stay on the top line.
+- **Widths are now computed from the data**, not hardcoded padding. Each column is as wide as the
+  widest of its two header halves and its own values.
+- **257 characters wide before, 196 after** — 61 narrower, and one row per line is preserved.
+
+## 3.16  MODELLING LESSON — r at the floor: momo behind it, none now
+
+Joe 0824, verbatim, given at 08-04 00:52:30 on dr -1:
+
+> "the HTF r lines are all low on the board while verdict is none, after verdict being momo.
+> --this equates to 'r has dropped to the ~floor' (momo), and has nowhere to go (none)"
+
+**The reading.** A high-timeframe r line sitting near the floor with `momo` as its LAST verdict and
+`none` as its verdict now is not a line that failed to move. It is a line that already made the
+move — `momo` is the travel, and `none` is the arrival. There is no board left in front of it.
+
+**The board that produced the lesson**, 00:52:30, dr -1, fence 15:
+
+| line | r value | verdict | last-verdict | last-verdict dwell |
+|---|---|---|---|---|
+| ws5 | 8.10 | none | momo | 1035 s |
+| ws6 | 3.30 | none | momo | 520 s |
+| ws7 | 8.55 | none | momo | 195 s |
+| ws8 | 15.82 | none | momo | 255 s |
+
+ws4 also carries `momo` behind a `none`, at r 33.73 with a 1215 s dwell — further from the floor
+and the longest dwell on the board.
+
+**Joe confirmed the state**: *"your verdict is correct - good work"* on `wsf-exhaust - no r line
+from ws1 to ws8 carries momentum`.
+
+**Why this is not the same as the ws1-ws3 group reading `none`.** ws1 77.38, ws2 73.28, ws3 47.26
+also read `none`, but their last verdicts are `sideways`, `sideways` and `curl` - no travel behind
+them. The lesson is the PAIR: floor position AND `momo` as the previous verdict. Either alone says
+something different.
+
+**Banked as setup row 4**, the first on dr -1. Verdict `hold and walk` - wsf has no direction of its
+own at this bar because the delegation is a stub: gcws30Mage 58.95, ws1Mage 36.56, ws2Mage 30.23,
+none of the three outside Joe's 80/20 fence.
+
+Relates to 3.12, the matryoshka order - there the LOW timeframes lead. Here the HIGH timeframes are
+the ones that have finished.
+
+### 3.16.1  thread status, 0824 close
+
+- **the pine read is closed.** Joe 0824: *"pine is outdated now - that read can be closed"*. The
+  `eyes_on_pine` table was NOT edited - no row was named, and it is Joe's table. The open-coverage
+  note about it stops being reported.
+- **dormant, on Joe's word**: task #3 the ws1Mage re-entry gate, task #4 the ELIF "last mile"
+  mechanic, task #5 the RESCUE_REJECTED_CURL question for dtf modelling, and the
+  `build_dtf_delegation.py` opposition count that omits RESCUE_REJECTED_CURL.
