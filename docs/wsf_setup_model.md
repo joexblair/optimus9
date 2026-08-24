@@ -1340,6 +1340,11 @@ that lets a trade fire, and six of eight lines cannot travel against it.
 **NOT CHANGED IN THE TABLE.** `wss_verdict` is Joe's label column and the row still reads
 `hold and walk`. Joe's word changes it, not mine.
 
+**WITHDRAWN 0824 - see 3.20.** The argument above rests on my claim that the three delegation
+setups are the same case and that I answered the same blank two different ways. They are NOT the
+same case. The 3-minute Mage lookback answers dr +1 at both 00:13:00 and 00:14:50 and answers
+NOTHING at 00:52:30. `hold and walk` is right and the LONG verdict is withdrawn.
+
 ## 3.19  Joe's TF1:10 test — the 00:52:30 exhaust does not survive it
 
 Joe 0824: *"I'm diving into your decision becuse I can see that if we extended wsf from TF1:8 to
@@ -1401,8 +1406,74 @@ the x-cross calculation.
 
 - **under wsf as it is built today, TF1 to TF8**: the board at 00:52:30 is `wsf-exhaust`, matches
   Joe's 08:02:50 template on every marker, and six of eight lines cannot travel against a LONG. The
-  corrected verdict in 3.18.5 stands.
+  LONG verdict in 3.18.5 is WITHDRAWN on separate grounds - see 3.20 - but this board reading stands.
 - **under TF1:10**: two more lines carry momentum at 00:52:30, the state is `wsf-momoc`, and
   `hold and walk` is right - with the trade arriving at 01:00:15.
 
 **Whether wsf extends to TF10 is Joe's call and has not been made.** Nothing in the code changed.
+
+## 3.20  the Mage lookback — built, banked, and consumed by nothing
+
+Joe 0824: *"the stub should have been replaced with a mech that allows for those Mages to lookback
+and discover the direction -- ie, every timestamp I'm passing to you now was orginally validated by
+the now-missing mech"*.
+
+### 3.20.1  it is not missing from the table. It is missing from the decision.
+
+`build_dtf_delegation.py` line 68 carries the knob and Joe's own words:
+
+    DDS_LOOKBACK_S = 180   # KNOB, Joe 0823: "restrict the lookback to 3 minutes"
+
+and `dtf_delegation` holds three populated columns for it:
+
+    dds_last_out_utc   the most recent bar where all three Mages were on ONE side of the 80/20 fence
+    dds_last_out_dr    +1 if all three were above 80 at that bar, -1 if all three were below 20
+    dds_lag_s          how long ago, in seconds
+
+**What is missing is that nothing reads them.** `dds_wsf_dr` is still computed from the delegation
+bar alone, so it is 0 on 84 of the 85 moments and `dds_stub` is still 1 on the same 84.
+
+### 3.20.2  what the lookback would answer, across all 85 delegation moments
+
+| | moments |
+|---|---|
+| all three Mages outside the fence AT the delegation bar | 1 |
+| an all-three-out bar within the 180 s lookback | **22** |
+| — of those, dr +1 (all three above 80) | 16, lags 0 s to 180 s |
+| — of those, dr -1 (all three below 20) | 6, lags 50 s to 165 s |
+| nothing within 180 s | 63 |
+
+**23 of 85 get a facing once the lookback is consumed, against 1 today.**
+
+### 3.20.3  the three modelling timestamps, checked against it
+
+| setup | gcws30Mage | ws1Mage | ws2Mage | last all-3-out | its dr | lag | facing |
+|---|---|---|---|---|---|---|---|
+| 00:13:00 | 36.14 | 59.30 | 74.50 | 00:12:10 | **+1** | 0m50s | **SHORT** |
+| 00:14:50 | 39.84 | 62.38 | 76.00 | 00:12:10 | **+1** | 2m40s | **SHORT** |
+| 00:52:30 | 58.95 | 36.56 | 30.23 | **none** | — | — | **no facing** |
+
+**Joe's read is confirmed.** Both SHORT calls he agreed are exactly what the lookback gives, and it
+gives nothing at 00:52:30.
+
+### 3.20.4  what this does to my 00:52:30 argument
+
+My case for LONG in 3.18.4 was that the three setups are the same case and I answered the same
+blank two different ways. **That claim is wrong and is withdrawn.** They are not the same case:
+
+- at 00:13:00 and 00:14:50 the direction does not come from dtf's dr. It comes from the Mage
+  lookback, which answers +1 at both.
+- at 00:52:30 the lookback answers nothing. There is no facing to take.
+
+**`hold and walk` at 00:52:30 is correct**, and for the reason Joe gave rather than the reason I
+gave. It is now confirmed twice over - once by the TF1:10 test in 3.19, once by the lookback here.
+
+### 3.20.5  what has NOT been built
+
+Nothing changed in the code this turn. The concretions, for Joe:
+
+1. does `dds_wsf_dr` take `dds_last_out_dr` when the lookback finds a bar?
+2. does `dds_stub` go to 0 when the lookback answers, or stay 1 with the lookback recorded
+   alongside? Joe 0823: *"the stub will capture only the dtf-free delegation moments"*.
+3. does the 180 s knob stay at 180 s?
+4. do the 63 moments with no answer stay stubs, or become something else?

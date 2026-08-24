@@ -1550,6 +1550,37 @@ def wsf_facing_dr(mages, hi, lo):
     return np.where(up, 1, np.where(dn, -1, 0)).astype(np.int8)
 
 
+def wsf_facing_dr_held(dr, xwob):
+    """[PRODUCER · Joe 0824] wsf_facing_dr() with a hold on it.
+
+    Joe 0824, verbatim: "for each signal without lookback validation, we hold and walk until
+    (xwob:4) gcws30Mge + ws1Mage + ws2Mage are oob. we set dr at that moment, then run the wsf
+    model".
+
+        dr      the per-bar output of wsf_facing_dr - +1, -1 or 0
+        xwob    bars the same non-zero direction must hold. Joe 0824: 4 = 20 s at the 5 s grid
+
+    -> int array. The direction on every bar where it has held xwob bars in a row, 0 elsewhere.
+       The consumer takes the RISING EDGE for the confirmation moment.
+
+    THE HOLD IS SEPARATE FROM JOE'S 0823 NO-HOLD RULING, and both stand. 0823 was about reading
+    the facing AT a delegation moment: "no holds - the lines are either all outside the fence, or
+    not at all". This is the forward WAIT for that condition to appear afterwards, which is a
+    different moment and is the one Joe put an xwob on.
+
+    Causal: bar i reads bars i-xwob+1 to i and nothing later.
+    """
+    dr = np.asarray(dr, np.int8)
+    idx = np.arange(len(dr))
+    out = np.zeros(len(dr), np.int8)
+    for sign in (-1, 1):
+        side = dr == sign
+        reset = np.where(side, 0, idx + 1)
+        run = (idx + 1) - np.maximum.accumulate(reset)
+        out[run >= max(1, int(xwob))] = sign
+    return out
+
+
 def domtf_median(tagged):
     """[PRODUCER · Joe 0814] The line the group nominates.
 
