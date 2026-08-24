@@ -143,3 +143,16 @@ The wsf setup model has its first two labelled rows.
   concrete case. Joe's no-hold reason argues against it; the lookback is his and unmeasured.
 - **#67 the setup model has 2 labelled rows against 83 unlabelled delegation moments.** The honest
   test is 08-05 run cold. In-sample agreement is not a result.
+- **#68 "do we need to add this to dtf modelling?"** — the RESCUE_REJECTED_CURL pretext, verbatim, in
+  `docs/dtf_htf_curl_question.md`. Joe 0824: *"the modelling plan for dtf that we've agreed on in
+  principle (earlier today) might use this dtf HTF curl data, but not in the way that I originally
+  considered"*. Carries two sub-items: Joe's unbuilt sideways-vote idea (ws13/14/15 rated above
+  ws22+, band edge unset — *"the tuning process will expose it"*), and the fact that
+  `build_dtf_delegation.py` omits the rescue.
+
+**SETTLED 0824:**
+- **the 85 dtf-free events are VALIDATED.** Joe: *"the 85 dtf-free events are validated"*.
+  `dtf_delegation` is the ROOT TABLE — every `wsf_setup` row traces to a `dds_seq`.
+- **next session starts at 00:14:50**, delegation row 3. See `docs/wsf_setup_model.md` section 3.14,
+  which carries the exact command, what the root table already says about that bar, and the four
+  things misread at 00:13:00 so they are not repeated.

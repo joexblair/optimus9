@@ -881,3 +881,62 @@ condition, the ws8r reversal, is absent.
 Two labelled rows against 83 unlabelled delegation moments on 08-04 alone. Any rule fits two points.
 The guard is the shape: six count-based features, every one Joe's, and **the honest test is 08-05
 run cold**. In-sample agreement will not be reported as a result.
+
+---
+
+## 3.14 START HERE TOMORROW — 0825
+
+Joe 0824: *"the 85 dtf-free events are validated, so we'll continue our wsf modelling on the next
+timestamp (00:14:50) tomorrow"* and *"make sure you have good notes in the spec docs so that you can
+hit the ground running and test what you've learnt"*.
+
+### THE NEXT TIMESTAMP IS 00:14:50
+
+That is `dtf_delegation` row 3. What the root table already says about it:
+
+| field | value |
+|---|---|
+| delegated | 00:14:50 |
+| the free run holds | **1,455 s = 24.3 min** |
+| dtf dr carried in | **+1** |
+| gcws30Mage / ws1Mage / ws2Mage | 39.84 / 62.38 / 76.00 |
+| wsf facing at the bar | **none** — no line clears 80, none is below 20. A STUB row |
+| last all-3-out bar | 00:12:10 at **dr +1**, lag **2m40s** |
+
+### THE EXACT NEXT STEP
+
+    python3 report_wsf_bar.py 00:14:50 up
+
+Then read the board against section 3.4 and 3.12 BEFORE asking Joe anything. Joe 0824 on why:
+he let the 00:13:00 call be wrong first, and *"you reviewed what you know about line positioning,
+direction, and recent verdict changes and compared against the model ... and made a good call"*.
+
+### WHAT I GOT WRONG AT 00:13:00, SO IT IS NOT REPEATED
+
+- I read many `away` prints as the board turning against the trade. **They are Joe's CONFIRMING
+  signature** — section 3.4, *"ws4,5,6 are all printing away, confirming the other line states"*, and
+  the `away` count is condition 2 of the domTF-override.
+- I read many `r IB` prints as nothing to lean on. **They are the weak r's the template counts as
+  strength.**
+- I read weak-mage NONE as a gap. **Joe rates all-Mages-out as SUPERIOR** to his own 13:48 setup.
+- **dr +1 is SHORT.** Not LONG. The plus sign reads like "up" and that is the trap.
+
+### THE THREE QUESTIONS wsf ANSWERS AT A DELEGATION, Joe 0823
+
+    1) am I in trade? if in trade, does the model say exit or hold      <- NO TRADE STATE EXISTS YET
+    2) which way am I facing?  the three Mage lines at 80/20, no hold   <- in dtf_delegation
+    3) what state am I in?  wsf-momoc / wsf-momo-none / wsf-exhaust     <- the report's footer
+
+Only 2 and 3 are answerable today. Question 1 has nothing built behind it.
+
+### AFTER THE READ
+
+`build_wsf_setup_model.py` holds the labelled setups in a `SETUPS` list at the top - utc, dr,
+verdict, strength, notes. Add the row, run it, and both tables refresh.
+
+### THE GUARD, and it is Joe's own
+
+> *"no two `setup`s will be exactly the same so you must learn in ranges, not in the specifics"*
+
+Three labelled rows after tomorrow, against 82 unlabelled delegation moments. **The honest test is
+08-05 run cold.** In-sample agreement is not a result, and will not be reported as one.

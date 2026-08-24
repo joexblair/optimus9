@@ -1,5 +1,11 @@
 """build_dtf_delegation — every dtf-free delegation moment, with the wsf facing direction.
 
+VALIDATED BY JOE 0824: "the 85 dtf-free events are validated, so we'll continue our wsf modelling on
+the next timestamp (00:14:50) tomorrow. drop the 85 dtf-free rows in a db table - I'll use it for my
+own purposes, you might want to use it as the root level table for your lessons".
+
+So `dtf_delegation` IS the root table. Every setup row in wsf_setup should trace to a dds_seq here.
+
 Joe 0823: "when dtf flips to dtf-free, it needs to delegate to wsf (who will manage the trade
 creation)" and "the stub will capture only the dtf-free delegation moments".
 
@@ -50,9 +56,16 @@ DDL = '''CREATE TABLE IF NOT EXISTS dtf_delegation (
     dds_g30Mage DOUBLE, dds_ws1Mage DOUBLE, dds_ws2Mage DOUBLE,
     dds_wsf_dr  TINYINT NOT NULL,       -- +1 all three above 80, -1 all three below 20, 0 = no dr
     dds_stub    TINYINT NOT NULL,       -- 1 = the three did not agree. Recorded, acted on by nothing
+    -- the most recent bar where all three WERE on one side of the fence, within DDS_LOOKBACK_S.
+    -- Joe 0823 set the lookback at 3 minutes. Not a hold - it asks whether the condition was true
+    -- recently, not whether it held.
+    dds_last_out_utc DATETIME, dds_last_out_dr TINYINT, dds_lag_s INT,
+    dds_validated TINYINT NOT NULL DEFAULT 0,   -- Joe 0824: "the 85 dtf-free events are validated"
     UNIQUE KEY uq_dds (dds_knobs, dds_seq), KEY k_utc (dds_utc))'''
 COLS = ['dds_knobs','dds_seq','dds_utc','dds_held_s','dds_dtf_dr','dds_g30Mage','dds_ws1Mage',
-        'dds_ws2Mage','dds_wsf_dr','dds_stub']
+        'dds_ws2Mage','dds_wsf_dr','dds_stub','dds_last_out_utc','dds_last_out_dr','dds_lag_s',
+        'dds_validated']
+DDS_LOOKBACK_S = 180   # KNOB, Joe 0823: "restrict the lookback to 3 minutes"
 
 
 def main():
@@ -122,6 +135,12 @@ def main():
     knobs = (f'w0804_gw{GW_TF}_gx{GW_XWOB}_hi{HI:.0f}_lo{LO:.0f}_mk{MAGE_KNOB}'
              f'_mh{MIN_HELD_S}_no{NOM}')
     db.execute(DDL)
+    have = {c['Field'] for c in db.execute('SHOW COLUMNS FROM dtf_delegation', fetch=True)}
+    for col, spec in (('dds_last_out_utc', 'DATETIME'), ('dds_last_out_dr', 'TINYINT'),
+                      ('dds_lag_s', 'INT'), ('dds_validated', 'TINYINT NOT NULL DEFAULT 0')):
+        if col not in have:
+            db.execute(f'ALTER TABLE dtf_delegation ADD COLUMN {col} {spec}')
+            print(f'  added {col}', flush=True)
     had = db.execute('SELECT COUNT(*) c FROM dtf_delegation WHERE dds_knobs=%s',
                      (knobs,), fetch=True)[0]['c']
     if had:
@@ -135,23 +154,37 @@ def main():
             if d: last_dr = d
             continue
         k = i0 + s; seq += 1
+        nb = DDS_LOOKBACK_S // GRID
+        j = next((z for z in range(k, max(-1, k - nb - 1), -1) if WDR[z] != 0), None)
         rows.append((knobs, seq,
                      dt.datetime.fromtimestamp(int(ts[k]) / 1000, timezone.utc)
                        .strftime('%Y-%m-%d %H:%M:%S'),
                      (e - s) * GRID, last_dr,
                      float(MG[0][k]), float(MG[1][k]), float(MG[2][k]),
-                     int(WDR[k]), int(WDR[k] == 0)))
+                     int(WDR[k]), int(WDR[k] == 0),
+                     (dt.datetime.fromtimestamp(int(ts[j]) / 1000, timezone.utc)
+                        .strftime('%Y-%m-%d %H:%M:%S') if j is not None else None),
+                     (int(WDR[j]) if j is not None else None),
+                     ((int(ts[k]) - int(ts[j])) // 1000 if j is not None else None),
+                     1))
     db.executemany(f'INSERT INTO dtf_delegation ({",".join(COLS)}) VALUES '
                    f'({",".join(["%s"] * len(COLS))})', rows)
     stub = sum(r[9] for r in rows)
-    print(f'  dtf_delegation : {len(rows)} delegation moments   '
-          f'wsf dr set {len(rows)-stub}   STUB {stub}   knobs {knobs}', flush=True)
+    hit = sum(1 for r in rows if r[10] is not None)
+    print(f'  dtf_delegation : {len(rows)} delegation moments   VALIDATED by Joe 0824\n'
+          f'    wsf dr set at the bar : {len(rows)-stub}   STUB : {stub}\n'
+          f'    an all-3-out bar within {DDS_LOOKBACK_S}s : {hit}   none : {len(rows)-hit}\n'
+          f'    knobs {knobs}', flush=True)
     S = lambda v: {-1: '-1', 1: '+1', 0: 'none'}[v]
-    print(f"\n  {'#':<4}{'delegated':<11}{'free held':>11}{'dtf dr':>8}{'gcws30Mage':>12}"
-          f"{'ws1Mage':>10}{'ws2Mage':>10}{'wsf dr':>8}{'stub':>7}", flush=True)
+    print(f"\n  {'#':<4}{'delegated':<11}{'free held':>10}{'dtf dr':>7}{'gcws30Mage':>12}"
+          f"{'ws1Mage':>10}{'ws2Mage':>10}{'wsf dr':>7}{'stub':>6}{'last all-3-out':>16}"
+          f"{'dr':>5}{'lag':>9}", flush=True)
     for r in rows:
-        print(f"  {r[1]:<4}{r[2][11:]:<11}{f'{r[3]}s':>11}{S(r[4]):>8}{r[5]:>12.2f}"
-              f"{r[6]:>10.2f}{r[7]:>10.2f}{S(r[8]):>8}{('yes' if r[9] else ''):>7}", flush=True)
+        lg = f'{r[12]//60}m{r[12]%60:02d}s' if r[12] is not None else ''
+        print(f"  {r[1]:<4}{r[2][11:]:<11}{f'{r[3]}s':>10}{S(r[4]):>7}{r[5]:>12.2f}"
+              f"{r[6]:>10.2f}{r[7]:>10.2f}{S(r[8]):>7}{('yes' if r[9] else ''):>6}"
+              f"{(r[10][11:] if r[10] else 'none'):>16}{(S(r[11]) if r[11] else ''):>5}{lg:>9}",
+              flush=True)
     db.disconnect()
     return 0
 

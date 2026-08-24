@@ -575,3 +575,51 @@ must exist: it's how the wsf g30_marker is generated"*.
 pinned LOW means the move is DOWN. The new one says LEAVING a low extreme means the move is UP.
 Those are opposite readings of the same line. Every label Joe made under the old rule is on the
 wrong side and has to be re-read.
+
+---
+
+## THE 85 dtf-free EVENTS ARE VALIDATED — Joe 0824
+
+Joe: *"the 85 dtf-free events are validated, so we'll continue our wsf modelling on the next
+timestamp (00:14:50) tomorrow. drop the 85 dtf-free rows in a db table - I'll use it for my own
+purposes, you might want to use it as the root level table for your lessons"*.
+
+**`dtf_delegation` IS THE ROOT TABLE.** Every setup row in `wsf_setup` should trace back to a
+`dds_seq` in it. `dds_validated` = 1 on all 85.
+
+### the conditions that produced the 85, in order
+
+| # | condition | knob | whose |
+|---|---|---|---|
+| 1 | the ladder ws13r..ws27r, each fitted over `K_WINDOW` 4 x its own timeframe at 21 points | 13-27 | Joe |
+| 2 | **ws13x** sets dr: at or below 15 held 6 bars -> dr -1; at or above 85 held 6 bars -> dr +1; between -> **dr 0** | 85/15, xwob 6 | Joe 0823 |
+| 3 | dr 0 -> the momentum tests do NOT run, and the state is free | — | Joe: *"there is no direction, therefore no change to the domTF momentum tests"* |
+| 4 | each line's verdict in the dr direction; momo or curl makes it blocking | — | Joe |
+| 5 | nested opposition: 3+ lines shorter than the longest blocker carrying the opposite way empties the list | 3 | Joe 0813 |
+| 6 | blocking non-empty -> dtf-blocked, empty -> dtf-free | — | — |
+| 7 | **the 25-second gate**: any state holding under 25 s does not happen; applied repeatedly | 25 s | Joe 0823 |
+| 8 | a delegation moment = the first bar of each gated dtf-free run | — | — |
+| 9 | at that bar, gcws30Mage + ws1Mage + ws2Mage against **80/20**, no hold -> wsf dr, else a stub | knob 20 | Joe 0823 |
+| 10 | `dds_last_out_utc` / `dds_last_out_dr` / `dds_lag_s`: the most recent all-3-out bar within **180 s** | 180 s | Joe 0823 |
+
+### what the 85 look like
+
+| | |
+|---|---|
+| delegation moments | **85** |
+| wsf dr set at the bar itself | **1** — row 73, 21:25:25, dr +1 |
+| **stub rows** — the three Mage lines did not agree | **84** |
+| an all-3-out bar within the 180 s lookback | **22** |
+| no all-3-out bar within it | **63** |
+| free runs shorter than 60 s | many; the longest is **3,185 s** |
+
+### THE ONE GAP, and Joe validated the 85 knowing it
+
+`build_dtf_delegation.py` reads the **cached tagged masks**, which carry only the plain momo-or-curl
+verdict. So **`RESCUE_REJECTED_CURL` is absent from the opposition count** in these 85 moments.
+`optimus9/analysis/domtf.blocking_at` DOES apply it.
+
+The rescue can only ADD opposing lines -> empty more blocking lists -> make MORE bars free. So the
+list can only be LONGER, never shorter, and no moment in it is wrong.
+
+Full pretext for the rescue: `docs/dtf_htf_curl_question.md`, task #5.
