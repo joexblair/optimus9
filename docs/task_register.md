@@ -10,6 +10,42 @@ re-seed into the harness via TaskCreate if you want live tracking. Statuses as o
 - **#9** [pending] Exit rule: take-the-money-and-run (>1% in 15s) — grind params. *Related to the exit work.*
 - **#48** [pending] Daily o9↔Bybit reconciliation (o9_account tally vs exchange balance).
 
+**Pending — ws-finisher / domTF (see `handover_wsf.md`, `handover_momo_refactor.md`, `ws-finisher_spec.md`):**
+- **#60** [pending — Joe holds the start] The sampling width for the wsf stall, timeframes 1 to 8.
+  Joe 0817: *"domTF and wsf stall logic are the same. the only difference would be in the sampling
+  interval - less width for smaller TFs"* and *"we'll need to tune it based on the results. I don't
+  know what results I'm looking for yet"*. Joe 0818: *"it is too early for 5 to be considered. I'll
+  let you know when we need to adjust sampling"*. **Do not start until Joe says so.**
+  - the measurement that opens it: at the module default `MOMO_FIXED_SAMPLES` = 0 (0 = the gap
+    between lattice points stays at `MOMO_STEP_MIN` = 5 minutes and the point count is whatever the
+    window divided by that gives), timeframes 1, 2 and 3 all get the same lattice — 2 points, 300
+    seconds apart. "Less width for smaller TFs" has nothing to act on below timeframe 4. At
+    timeframe 1 that 2-point lattice spans 5.0 minutes against a 4-minute window.
+  - at `MOMO_FIXED_SAMPLES` = 21 the floor is gone: gap 10 s at timeframe 1, 25 s at 2, 35 s at 3.
+    `build_ws_fin.py` sets 21 at import; the module default in `momo_gated.py` stays 0, so any
+    ws-finisher script that does not set it inherits the floored version.
+  - the stall's lattice IS the momentum lattice — `build_ws_fin.py:345-349` reads `MOMO_STEP_BARS`
+    and `MOMO_SAMPLES` out of `momo_window(K_WINDOW 4 x TF)` and hands them straight to
+    `jig.stall_mask(y, dr, n, step, samples)`.
+  - two ways it can go, both Joe's call: set `MOMO_FIXED_SAMPLES` to 21 everywhere so the floor
+    never applies, or leave the default and accept that timeframes 1 to 3 share one lattice.
+
+- **#61** [pending] Sweep the ws{weak-mage-tf}x cross target — the line the fast partner has to
+  cross before a trade signal is created. Joe 0818: *"I'm not sure if we x-cross m, or x-cross
+  [Mage,boundary,b]"* and *"use ' x X [MAge,b,boundary]' for now"* and *"add a sweep task for all
+  3"*.
+  - the three targets to sweep:
+    - `x X r` — the fast partner crosses ws{weak-mage-tf}r. This is what the first draft said
+    - `x X m` — the fast partner crosses ws{weak-mage-tf}m
+    - `x X [Mage, b, boundary]` — CURRENT SETTING per Joe 0818
+  - open inside the third target: whether the cross must be of ALL of Mage, b and the boundary, or
+    ANY one of them. Not asked yet.
+  - the cross direction, Joe 0818 verbatim: *"x crosses over if dr==-1, and x crosses under if
+    dr==1"*. Read as: bias down -> the trade fires when the fast partner crosses UP over the
+    target; bias up -> it fires when it crosses DOWN under the target. NOT YET CONFIRMED by Joe.
+  - blocked on: nothing measures ws{tf}x at all. The lines are cached for timeframes 1 to 8 but
+    `wsf_line_bar` holds only the r lines.
+
 **Completed (0706 or earlier):**
 - #8 cbls3 lookback back-only vs ±window · #12 s30r/s30M swing-line dial-in grind · #24 BL re-engage revive BB-twitch-faked exit · #25 re-cast BL re-engage on 5s via wobble_slayer · #29 hb9M src hl2 vs close · #32 bias machine on s22r bls3 · #33 per-bl_line emerging-vs-closed flag · #45 re-clone s5 @ multi 0.65 vs s7 exits · #49 integration tests must not write live o9_live DB.
 
@@ -59,3 +95,51 @@ re-seed into the harness via TaskCreate if you want live tracking. Statuses as o
 - #47 gcs5/gcs1 finishers → replace s30Mage-wob (first post-infra job)
 
 **New (fell out of 0706, not yet formal tasks):** state-log double-logging bug (arm written 2–10×/bar) · ~9% arm over-fire · sunset the orphaned st5 + s1m/s1r seeds · o9-live pyramid/hedge sizing to match backtest.
+
+---
+
+## 0824 — the domTF repair and the setup model
+
+**Where the work stands.** The domTF mechanic was lifted out of `build_ws_fin.py` into
+`optimus9/analysis/domtf.py` and its direction, state and delegation were re-specified by Joe.
+The wsf setup model has its first two labelled rows.
+
+**Live and settled:**
+- `optimus9/analysis/domtf.py` — the domTF mechanic, one home. `blocking_at` is the verdict lifted
+  verbatim from `build_ws_fin.py` (0 mismatches at all 121 signal bars, and 0 against the banked
+  rows). `build_ws_fin.py` imports it.
+- the guide-wire is **ws13x**, 85/15, 6-bar hold, `guide_wire_dr`. dr -1 while low out of bounds,
+  +1 while high, 0 between. It does NOT latch — Joe 0823 reverted the latch experiment.
+- **dtf-blocked / dtf-free replaces the handoff as an event.** Joe 0823: *"we're dropping the
+  handoff mech. wsf will now query the state whenever it makes a trade decision"*.
+- **minimum held 25 s.** A state under that does not happen; neighbours merge through it.
+  50 runs → 35 before 04:00 on 08-04.
+- **a dtf-free row carries the dr of the blocked state it ended.**
+- **the wsf facing direction**, `jig.wsf_facing_dr`: gcws30Mage, ws1Mage and ws2Mage all above 80 →
+  dr +1, all below 20 → dr -1, otherwise no dr and a stub row. No hold.
+- **dr +1 = SHORT, dr -1 = LONG.** Joe 0824, confirming a call at 00:13:00.
+
+**Tables built 0823-0824:**
+
+| table | what it holds |
+|---|---|
+| `domtf_wsf_report` | the chronological domTF flips + validated wsf-exhaust events |
+| `domtf_x_excursion` | one row per x-line excursion, ws27x / ws20x / ws14x, 272 rows |
+| `dtf_state_flip` | Joe's labelled dtf state flips |
+| `dtf_delegation` | 85 delegation moments on 08-04 with the wsf facing reading. **84 are stub rows** |
+| `wsf_setup_board` | one row per setup x line, the 20 wsf-model-report columns |
+| `wsf_setup` | one row per setup, the derived features and Joe's verdict |
+
+**OPEN, and they are Joe's:**
+- **#62 the nested-opposition rule vs modelling.** It fires on 28 of 121 signals and provably missed
+  the lines Joe named on the bar it was written for (03:53:00: he named ws15r-ws18r, the machinery
+  reads all four as none in both directions). Replacing it needs labels.
+- **#63 the domTF state has no minimum hold beyond the 25 s gate**, and the momentum still flickers —
+  six state changes in the 13 minutes from 03:50:10.
+- **#64 `x-cross_forced_wsf-exhaust` has no meaning on a dtf row.** The column exists and is blank.
+- **#65 three wsf-exhaust rows lost to the rising-edge fix** — 07:21, 09:19, 22:24, all ELIF rows.
+  They depend on task #4, the ELIF mechanic, which Joe deferred.
+- **#66 the 3-minute facing lookback lets a facing survive its own reversal.** 00:13:00 is the first
+  concrete case. Joe's no-hold reason argues against it; the lookback is his and unmeasured.
+- **#67 the setup model has 2 labelled rows against 83 unlabelled delegation moments.** The honest
+  test is 08-05 run cold. In-sample agreement is not a result.

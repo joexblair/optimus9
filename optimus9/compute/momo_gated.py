@@ -100,10 +100,17 @@ def states(r, dr, lo, hi):
     return s
 
 
-MOMO_FIXED_SAMPLES = 0
-# KNOB, Joe 0814. 0 = today's behaviour, the gap between samples stays at MOMO_STEP_MIN and the
-# sample count is whatever the window divided by that gives. A positive value fixes the SAMPLE COUNT
-# and scales the gap to the window instead.
+MOMO_FIXED_SAMPLES = 21
+# KNOB, Joe 0814, MADE GLOBAL BY JOE 0820: "set it to 21 (both in your caller, and the code's
+# default)". 0 = the gap between samples stays at MOMO_STEP_MIN and the sample count is whatever the
+# window divided by that gives. A positive value fixes the SAMPLE COUNT and scales the gap instead.
+#
+# WAS 0 UNTIL 0820, and that default was mine, never Joe's - this file's own note used to read
+# "DEFAULT IS OFF because momo_window is shared with the s46 path, which has not been measured",
+# and docs/domTF-finisher_spec.md M10 recorded "Say the word to make it global." Joe said it.
+# The consumers that inherit 21 from here and have NOT been re-measured at it: build_momo_landed,
+# build_handoff, build_ws_momo, s46_momo, build_s46_event, sweep_s46_momo and jig. build_ws_fin.py
+# assigns 21 itself so it is unchanged.
 #
 # WHY. The window is K_WINDOW x the line's timeframe (Joe 0810: "it should be dynamic. use this
 # value: {knob:4} x {TF width}") while the gap stayed at RPL's 5 minutes, so the sample count grew
@@ -117,7 +124,11 @@ MOMO_FIXED_SAMPLES = 0
 # COST, measured across 105 domTF signals on 08-04 at 21 samples: 4 verdicts change, 3 from held to
 # free and 1 the other way, each one a single line crossing the momentum floor. Median hold 21.8 ->
 # 19.2 minutes. It does NOT move Joe's three labelled bars.
-# DEFAULT IS OFF because momo_window is shared with the s46 path, which has not been measured.
+# THE FLOOR THIS REMOVES, docs/task_register.md #60: at 0 the timeframes 1, 2 and 3 lines all get
+# the same lattice - 2 points, 300 seconds apart - so "less width for smaller TFs" has nothing to
+# act on below timeframe 4. At 21 the gap is 10 s at timeframe 1, 25 s at 2, 35 s at 3.
+# STILL UNTUNED, task #1: the straight-line fit floor 0.50 and the curved fit floor 0.40 were set
+# against a 12-point fit and are now applied to a 21-point one everywhere.
 
 
 @contextmanager

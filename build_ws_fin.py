@@ -42,6 +42,7 @@ MG.MOMO_FIXED_SAMPLES = 21   # KNOB, Joe 0814. Every domTF line's momentum fit u
 #                              points across its own 4 x timeframe window, so the gap scales with
 #                              the line (2.6 min on ws13r, 5.4 min on ws27r) instead of the count.
 from optimus9.compute import momo_core as MC
+from optimus9.analysis import domtf as DT   # THE domTF MECHANIC. Joe 0822: import, don't duplicate
 import build_momo_landed as B          # domTF constants only: TFS, R_SPEC, K_WINDOW 4
 
 DOMTF_MIN = 13      # KNOB, Joe 0813: "8 has proven that it is too low to be of value when we're in
@@ -476,30 +477,11 @@ def main():
             vals.append(v)
             flags.append(int(ok))
             (voted if ok else absent).append(n)
-        blk, opp = [], []
-        for tf in DOMTF_TFS:                    # domTF, at the SIGNAL bar, dr = the event side
-            with momo_window(B.K_WINDOW * tf):
-                st, _s, _r2, _r = momo_g(R[tf], sd, w)
-                op, _s2, _r22, _r3 = momo_g(R[tf], -sd, w)
-            if st in ('momo', 'curl'):
-                blk.append(tf)
-            if op in ('momo', 'curl'):
-                opp.append(tf)
-            elif RESCUE_REJECTED_CURL:
-                with momo_window(B.K_WINDOW * tf):        # a bend found FOR the move, then rejected
-                    raw, rsl, _r2, _rw = MC.momo(R[tf], sd, w)
-                    if raw == 'curl' and st == 'none':
-                        nb = MC.MOMO_WINDOW_MIN * 12
-                        yy = R[tf][w - nb + 1:w + 1] if w - nb + 1 >= 0 else None
-                        if yy is not None and np.isfinite(yy).all():
-                            qa = np.polyfit(np.linspace(0.0, 1.0, len(yy)), yy, 2)[0]
-                            aligned = (rsl > 0) if sd > 0 else (rsl < 0)
-                            curved = (qa > 0) if sd > 0 else (qa < 0)
-                            if not aligned or not curved:   # the bend points the OTHER way
-                                opp.append(tf)
-        if NESTED_OPPOSITION and blk and \
-                sum(1 for o in opp if o < max(blk)) >= NESTED_OPPOSITION_MIN:
-            blk = []                            # a nested shorter line has taken the other side
+        # domTF, at the SIGNAL bar, dr = the event side. THE MECHANIC LIVES IN optimus9.analysis
+        # .domtf - Joe 0822: "import, don't duplicate/split/fork". These 23 lines used to sit here,
+        # which is why report_domtf_walk.py had to copy them and the copy drifted.
+        blk, opp = DT.blocking_at(R, DOMTF_TFS, sd, w, B.K_WINDOW,
+                                  NESTED_OPPOSITION, NESTED_OPPOSITION_MIN, RESCUE_REJECTED_CURL)
         # THE HANDOVER. Only a blocked signal has a turn to wait out.
         ho_i = ho_tf = 0; ho_how = None; curled = []; pool = []; joins = []; leaves = []
         if blk:

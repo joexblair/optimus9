@@ -1519,6 +1519,37 @@ def stall_mask(y, dr, n, step, samples):
     return out
 
 
+def wsf_facing_dr(mages, hi, lo):
+    """[PRODUCER · Joe 0823] "which way am I facing?" - the wsf direction at a delegation moment.
+
+    Joe 0823, verbatim: "wsf's dr will be set by the positioing of gcws30Mage, ws1Mage and ws2Mage -
+    if they are all > {100 - knob:20 fence} then dr = +1", and on the mirror: "I've described a
+    fence: {100 - knob:20 fence}, therefore below 20 must be logical".
+
+        mages   sequence of the three Mage arrays, on the 5 s grid
+        hi/lo   the fence, 80 / 20 at knob 20
+
+    -> int array, one per bar:
+        +1  ALL three are above hi
+        -1  ALL three are below lo
+         0  they do not all agree. Joe 0823: "if the Mages don't agree then capture the moment in a
+            stub and we can investigate"
+
+    NO HOLD. Every other wsf crossing carries an xwob; this one does not, and the reason is Joe's,
+    0823: "when Mages reverse, profit begins to dwindle, and a hold just increases that loss of
+    profit. no holds - the lines are either all outside the fence, or not at all".
+
+    IT DOES NOT REPLACE THE wsf9of12 SIDE. Joe 0823: "this is standalone reaction created when dtf
+    delegates to wsf. wsf9of12 is a marker used by wsf to time wsf-level decisions".
+
+    Causal: every read is at its own bar and nothing else.
+    """
+    M = [np.asarray(m, float) for m in mages]
+    up = np.logical_and.reduce([m > float(hi) for m in M])
+    dn = np.logical_and.reduce([m < float(lo) for m in M])
+    return np.where(up, 1, np.where(dn, -1, 0)).astype(np.int8)
+
+
 def domtf_median(tagged):
     """[PRODUCER · Joe 0814] The line the group nominates.
 

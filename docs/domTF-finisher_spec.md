@@ -479,3 +479,99 @@ the timeframe.
 | boundaries **85 / 15** | `optimus9_system` | every line's out-of-bounds test |
 | `MIN_IB_DWELL` **12** | `ws_strat.py` | the in-bounds run that resets the dwell. NOT read at `G30_LEVEL='g30_marker'` |
 | `OOBW` **16** | `build_ws_strat_walk.py` | the ws_strat walk's dwell gate. NOT read at `G30_LEVEL='g30_marker'` |
+
+---
+
+## THE dtf-model-report — the banked format, 0823
+
+Named 0823 on Joe's ask: *"name both model reports (dtf and wsf), and add the format specs to
+documentation"*. Joe's own word for the state is **dtf** — *"we use domTF to create a
+dtf-free/dtf-blocked state"* — so the report is the **dtf-model-report**, and its sibling keeps the
+name Joe gave it 0820, the **wsf-model-report**.
+
+The two reports share ONE format. Joe 0823: *"this report will be based on the existing wsf model
+report"*. Twenty columns, same order, same rules:
+
+    line | r value | heading | r IB | verdict | stalled | 50 gate | blocked by 50 | last-verdict |
+    last-verdict-dwell | Mage value | lb-mage-oob | weak-mage | stoch now | stoch out | sat clock |
+    sat left | RSI | RSI lo | RSI hi
+
+Columns are not added, removed or reordered without Joe saying so.
+
+### what differs between the two reports
+
+| | wsf-model-report | dtf-model-report |
+|---|---|---|
+| lines | ws1 to ws8 | **ws13 to ws27** |
+| dr | the wsf9of12 signal's own side | **the guide-wire.** Joe 0823: "set dr based on the ws27x excursion (low oob ws27x = dr -1)", 85/15, held 6 bars |
+| the footer | wsf-momoc / wsf-exhaust / wsf-momo-none | **dtf-blocked / dtf-free.** Blocked when any line ws13r..ws27r carries the move; free when none does |
+
+### the two values carried over from wsf, and NOT ruled on for domTF
+
+- **heading** uses the **85/15 system fence** for the "already past its fence" test. In wsf that
+  test runs against momo-fence-r, Joe's 83/17. He has not shrunk a fence for domTF, so the report
+  uses the unshrunken one. FLAGGED, not chosen.
+- **the Mage tolerance is 120 seconds** and **the weak-mage scan starts at the lowest line, ws13**.
+  Both are wsf numbers. Joe moved the wsf scan floor from TF1 to TF2 on 0821 and has said nothing
+  about a domTF floor.
+
+### Joe's read on which columns earn their place, 0823
+
+> "my memory thinks that you didn't find a use from the stoch column, but the rsi data was useful.
+> we'll understand the data further as we uncover the flip moments and analyse the dtf report"
+
+That read stands. Neither report's decisions currently touch any of the seven — they are printed
+and nothing reads them.
+
+### the handoff was DROPPED as an event, 0823
+
+Joe: *"agreed - we're dropping the handoff mech. wsf will now query the state whenever it makes a
+trade decision"*. The mechanic that ends a turn remains; publishing the moment does not. The number
+behind the decision: on 08-04 publishing handoffs produced **3,506 events, 98.6% of them within 10
+seconds of the previous one**, against **94** changes of the state itself.
+
+---
+
+## THE GUIDE-WIRE DIRECTION — REPLACED 0823
+
+Joe 0823 replaced the rule he had given the day before. The first rule set the direction from WHERE
+ws27x sat; the replacement sets it from the moment ws27x CROSSES BACK IN, and latches it.
+
+**The rule that was replaced**, Joe 0823 (earlier): *"for now, set dr based on the ws27x excursion
+(low oob ws27x = dr -1)"* with 85/15 and a 6-bar hold.
+
+**Why it was replaced.** The direction VANISHED every time ws27x poked back between the fences for a
+few seconds, and with no direction the momentum tests do not run, so the state read dtf-free.
+Measured on 08-04: **9 state flips between 00:00 and 00:53 where Joe's own read has 1**, and every
+one of those free states was "no direction" rather than the momentum ending. Joe: *"you're right.
+this means we need to flip dr, instead of letting it meander between oobs."*
+
+**The rule now in force**, Joe 0823, verbatim:
+
+> "update the spec: dr will be set with the oob X ib event. ie, hi oob crossing under 85, dr = -1.
+> inverse for lo oob"
+
+    ws27x was HIGH out of bounds and crosses back under 85   -> dr -1
+    ws27x was LOW  out of bounds and crosses back over 15    -> dr +1
+    it LATCHES - the direction holds until the next confirmed crossing, on either side
+    before the first crossing of the tape there is no direction
+
+The crossing is stamped at its CONFIRMATION bar, xwob-1 bars after the line first came back inside.
+xwob stays at 6 bars = 30 s, Joe's guide-wire number carried from the rule it replaces.
+
+`optimus9.analysis.domtf.guide_wire_dr(x, hi, lo, xwob)`. It delegates the crossing to
+`jig.oob_ib_cross`, which is the same producer the wsf g30_marker is built on - Joe 0823: *"ib x oob
+must exist: it's how the wsf g30_marker is generated"*.
+
+### WHAT THE REPLACEMENT COSTS, measured on 08-04
+
+| | old rule | new rule |
+|---|---|---|
+| direction flips on the day | 184 | **21** |
+| dtf state changes on the day | 94 | **61** |
+| bars with no direction | 27.1% of the day | only before the first crossing |
+
+**THE DIRECTION IS INVERTED ON EVERY BAR JOE HAD ALREADY READ.** The old rule said a guide-wire
+pinned LOW means the move is DOWN. The new one says LEAVING a low extreme means the move is UP.
+Those are opposite readings of the same line. Every label Joe made under the old rule is on the
+wrong side and has to be re-read.

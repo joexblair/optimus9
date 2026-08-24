@@ -96,22 +96,90 @@ weak-mage-tf = None"*.
 
 ---
 
-## the next layer, Joe 0817 verbatim — wsf-momoc and wsf-exhaust
+## THE r LINE'S MOMENTUM DIES WHEN IT LEAVES momo-fence-r OR STALLS. Joe 0820
 
-> now we'll integrate wsf-momoc (ws strategy->finisher mech->momo or curl) and wsf-exhaust (stall
-> OR reverse OR (cross into oob))
->
-> -both events apply only to ws{tf}r
->
-> -when wsf-momoc is true for the lines (at wsf9of12), no trade activity can happen
->
-> -when wsf-exhaust is true for the lines (at wsf9of12), the weak-mage-tf will create a trade
-> signal when ws{weak-mage-tf}x crosses r
->
-> -wsf-momoc and esf-exhaust are exclusive - only one is active at any given time
->
-> -"wsf-momoc is true for the lines" and "wsf-exhaust is true for the lines" are the 2 lessons that
-> we need to learn. these 2 states are the output of the modelling
+> IF a momentum-true r line leaves momo-fence-r or stalls THEN its momentum = false (or none).
+
+The first form of this rule, given earlier the same day, tested the global 85/15 boundary. Joe 0820
+replaced it: *"we need to shrink the fence: ws8 needs to be printing `OOB` at 08:02:50 so that it's
+momentum is none, but I don't want it to be global. create a new fence: momo-fence-r 100-{knob:17}"*.
+
+**THE 0817 WORDING IS DELETED.** It read *"wsf-momoc (ws strategy->finisher mech->momo or curl) and
+wsf-exhaust (stall OR reverse OR (cross into oob))"*. Joe 0820: *"I've conflated terms. the first
+statement was meant to target r lines, but I've referred to it as if it were machine states - delete
+the 0817 note"*. The rule above replaces it and applies to a LINE, not to a machine state.
+
+### what it is
+
+| | |
+|---|---|
+| the lines | `ws{tf}r` only, TF1 to TF8 |
+| momentum-true | the producer's verdict is `momo` or `curl` — Joe 0817: *"(curl or momo) create wsf-momoc"* |
+| left momo-fence-r | at or past **83** on an upward read, at or below **17** on a downward read — the side the line is read |
+| stalled | `STALL_N` 6 lattice samples in a row with no new extreme |
+| the result | the verdict reads `none` |
+
+### momo-fence-r
+
+Joe 0820 writes it as `100-{knob:17}`, so the band is 100 − 17 = **83** at the top and **17** at the
+bottom.
+
+| | |
+|---|---|
+| the knob | `MOMO_FENCE_R` = **17**, in `build_wsf_line_bar.py`, in the unique key |
+| the band | 83 / 17 |
+| the column | `wflb_mfr_out` — 1 when the line has left the band on the side it is read |
+| what else reads it | the `heading` column in `report_wsf_bar.py` |
+
+### last-verdict-dwell
+
+Joe 0820: *"add a `last-verdict-dwell` column. report the seconds that have past since the verdict
+changed"*. Stored as `wflb_verdict_dwell` on `wsf_line_bar`, in seconds, 0 on the bar the verdict
+changed. It counts from the start of the window, so the first bars of 08-04 undercount.
+
+**IT IS NOT GLOBAL.** The 85/15 boundary in `optimus9_system` is untouched, and `wflb_oob` still
+reports against it. Two fences now sit side by side on the row: `wflb_oob` against 85/15, and
+`wflb_mfr_out` against 83/17. Only the second one feeds this rule.
+
+MOVED ONTO momo-fence-r, Joe 0820 *"apply the fence to this mech"*: the `heading` column's
+"already past its fence" test in `report_wsf_bar.py`. It now reads `wflb_mfr_out`.
+
+STILL ON 85/15, because Joe has not moved it: the `r IB` column's "inside the fence" test. That
+leaves a band between 83 and 85 where a line reads `away` (it has left momo-fence-r) and still
+counts as inside the fence, so `r IB` prints yes there.
+
+### where it lives, and where it does NOT
+
+- it lives in `build_wsf_line_bar.wsf_verdict()`, and its answer is stored as `wflb_verdict`.
+- **`momo_core.verdict()` is untouched.** That producer is shared with domTF, the s46 path and RPL,
+  none of which Joe has asked to change. Putting the rule there would move domTF's verdicts silently.
+- **`wflb_ungated` is untouched.** It keeps the producer's own answer, so the raw measurement and
+  the rule applied to it both sit on the row and either can be read back.
+
+### the reading, and the knob
+
+`MOMO_KILL` in `build_wsf_line_bar.py`, in the unique key so another reading lands alongside.
+
+| reading | what turns the verdict to none | rows affected on 08-04 |
+|---|---|---|
+| **`state`** — the current setting | the line **is** out of bounds, or **is** stalled | **52,359** |
+| `moment` | only the bar it crossed, or the bar the stall began | 2,138 |
+| `off` | nothing; the producer's own verdict stands | 0 |
+
+`state` is the setting because Joe wrote *"it's momentum = false"* — the line's condition, not a
+one-bar event. Under `moment` the verdict would print `none` for a single bar and return to `momo`
+on the next, which is a blip rather than momentum being false. THE 25x GAP BETWEEN THE TWO READINGS
+IS WHY THIS IS A KNOB.
+
+### what is still unbuilt
+
+The three-state flow — wsf-momoc, wsf-exhaust, wsf-momo-none. Joe 0820: *"flow = wsf-momoc ->
+wsf-exhaust -> none -> wsf-momoc. 'none' occurs when a trade fires, or when domTF blocks (overrides
+excluded). wsf-momoc needs to be re-aquired after a none state"*, and *"let's rename 'none' to
+`wsf-momo-none`"*. Five questions on it are open: what acquiring wsf-momoc means, whether the
+all-in-bounds reset fires wsf-momo-none, whether a domTF block is a moment or a stretch, the
+starting state, and whether one bar can hold two changes. `report_wsf_bar.py` prints a footer that
+reads ONE BAR under the IF/ELIF and carries no history.
 
 **NOT BUILT.** Nothing in the code produces either state. What is settled:
 
@@ -182,6 +250,7 @@ That is the reversal Joe saw at 11:32, and the gate throws away the number that 
 | `WMT_TFS` | **1 to 8** | the timeframes the scan walks, in order. Joe 0817: *"confirmed: TF1 to TF8"* |
 | `WMT_SAME_SIDE` | **True** | with it on, a line's out-of-bounds readings only count on the side `dr` points at. With it off either side counts. Joe 0817: *"unsure. create a knob for it. default to same-side"*. The definition of what same-side means is mine and is untested |
 | the boundaries | **85 / 15** | read from `optimus9_system`. Joe 0817: *"85/15 is good for now, BUT the final spec will have fuzzy logic applied to boundaries. the final spec will be model based"* |
+| `STALL_N` | **6** | consecutive lattice samples with no new extreme in the direction the line is read. Joe 0819: *"add this to the knobs"*. No boundary condition — the domTF spec, 0814: *"a stalled line has stopped moving wherever it sits"*. Inherited from `build_ws_fin.py`; the wsf sampling width around it is Joe's held task #60 |
 
 ### knobs this spec does not own
 

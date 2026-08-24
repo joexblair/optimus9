@@ -33,8 +33,9 @@ Joe 0815: *"I need a report that I scan from the top to the bottom, without havi
 
 Every substantive response ends with these three, in this order:
 
-1. **Summary** — ONE paragraph of prose tying the bullets together. The bullets carry the data;
-   this carries the meaning. Not a re-list of the bullets.
+1. **Summary** — BULLET POINTS, not a conversational paragraph. Joe 0818: "Sumamry section will
+   use bullet points in place of a conversational style paragraph". The bullets carry the data;
+   these carry the meaning. Not a re-list of the body's bullets.
 2. **Reads** — Joe's eyes on the pine are a measurement, and his read is a result. State what he
    has read that bears on this turn's work: which events, the verdict, his verbatim words, and
    what is still unread. Banked in the `eyes_on_pine` table — quote the current rows, never
@@ -101,8 +102,11 @@ Surprise means I decided something.
 Joe 0813: "when you finish your task, report in simple terms. don't expect Joe to
 understand your shorthand."
 
-- no shorthand Joe has not used himself. Not `dr -1`, not `x above r`, not `+1/-1`
-  as a stand-in for a direction — say what the lines are doing, in words.
+- no shorthand Joe has not used himself. Not `x above r` — say what the lines are doing,
+  in words.
+- **EXCEPTION, Joe 0823: `dr +1` / `dr -1` IS the wording he wants.** Verbatim: "use dr +1 or
+  -1, not 'reading xyz'". Do not write "reading upward" / "reading downward" / "read upward".
+  This overrides the no-shorthand rule for direction only.
 - a variable name is not an explanation. If a column is named, say what it holds
   and in what units.
 - if a sentence needs the reader to remember an earlier definition, restate it.

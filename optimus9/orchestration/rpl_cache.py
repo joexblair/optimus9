@@ -78,6 +78,7 @@ class _Cau:
     Any new array-only producer in _Causal needs a line here, or the cached path raises AttributeError."""
     def cross_wob(self, line, level, direction, n): return _Causal(None).cross_wob(line, level, direction, n)
     def clean_dirty(self, *a, **k): return _Causal(None).clean_dirty(*a, **k)
+    def reversal(self, line, wob): return _Causal(None).reversal(line, wob)
 
 class JigCache:
     def __init__(self, d):

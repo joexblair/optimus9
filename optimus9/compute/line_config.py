@@ -129,3 +129,66 @@ class LineStore:
         """'emerging' | 'closed' from vw_indicator_configs_live (#42). Null -> 'closed' (the conservative
         historical default; set ic_ivm_pk to make it explicit)."""
         return self._fetch(ind_name)[2]
+
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# THE DYNAMIC MECHANIC CONFIG (0819)
+#
+# Joe 0819: "the line configs are defined once, and the code spreads the config across the mech's
+# TFs." Before this, ws{tf}r was written out 12 times in `indicator_configs` carrying one identical
+# config, and the timeframes domTF needs (13-27) were not in the table at all - `build_ws_fin.py`
+# hardcoded them as `override(tf * 60, KLine(**B.R_SPEC), 'emerging')`.
+#
+# One row now says "this mechanic, this role, this band of timeframes, this config" and the
+# expansion below spreads it.
+#
+# NAMING IS NOT DONE HERE. The two consumers disagree - the database calls it `ws13r`, and
+# build_ws_fin.py calls the same line `r13`. This returns the timeframe and the role and lets the
+# caller name it.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+def from_mech_row(c) -> tuple:
+    """One `mech_line_config` row -> the positional config tuple. The only place its columns are read."""
+    if c['mlc_line_type'] == 'bb':
+        return BBLine(length=c['mlc_bb_len'], mult=float(c['mlc_bb_mult']),
+                      src=c['mlc_src']).as_tuple()
+    return KLine(k_len=c['mlc_k_len'], rsi=c['mlc_rsi_len'], stc=c['mlc_stc_len'],
+                 src=c['mlc_src']).as_tuple()
+
+
+def mech_lines(db, mech, version=None):
+    """[PRODUCER · Joe 0819] Every line one mechanic needs, spread across its timeframe band.
+
+        db       a DatabaseManager.
+        mech     'wsf' or 'domtf'.
+        version  None reads the LIVE view - what the running system uses.
+                 An integer reads that exact version - what a SWEEP must use.
+
+    A SWEEP MUST PASS A VERSION. Reading the live view during a sweep means a live config change
+    mid-run silently alters the run, and nothing on the rows says so.
+
+    -> a list of dicts, one per line:
+         role          'r' | 'x' | 'm' | 'b' | 'Mage'
+         tf_seconds    that line's timeframe, in seconds
+         override      (tf_seconds, cfg_tuple, value_mode) - the shape Jig(overrides=) expects
+         hi lo         the boundaries for this line, already offset
+    """
+    if version is None:
+        rows = db.execute('SELECT * FROM vw_mech_line_config_live WHERE mlc_mech = %s '
+                          'ORDER BY mlc_role, mlc_tf_lo', (mech,), fetch=True)
+    else:
+        rows = db.execute('SELECT * FROM mech_line_config WHERE mlc_mech = %s AND mlc_version = %s '
+                          'ORDER BY mlc_role, mlc_tf_lo', (mech, int(version)), fetch=True)
+    if not rows:
+        raise ValueError(f'no mech_line_config rows for mech={mech!r} version={version!r}')
+    out = []
+    for c in rows:
+        cfg = from_mech_row(c)
+        lo, hi, step = int(c['mlc_tf_lo']), int(c['mlc_tf_hi']), int(c['mlc_tf_step'])
+        off = float(c['mlc_boundary_offset'])
+        for tfs in range(lo, hi + 1, step):
+            out.append({'role': c['mlc_role'], 'tf_seconds': tfs,
+                        'override': override(tfs, cfg, c['mlc_value_mode']),
+                        'hi': float(c['mlc_hi_boundary']) - off,
+                        'lo': float(c['mlc_lo_boundary']) + off})
+    return out
