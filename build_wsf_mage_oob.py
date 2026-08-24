@@ -14,7 +14,17 @@ them.
 THE PRODUCERS ARE IMPORTED, NOT COPIED. jig.wsf_facing_dr is Joe's 80/20 three-Mage test and
 jig.wsf_facing_dr_held puts his xwob 4 on it. Nothing about the direction rule is restated here.
 
-THE MOMENT IS THE CONFIRMED BAR - the bar where the hold completes, four bars after the condition
+THE "3 Mages oob" COLUMN IS MULTI-FUNCTIONAL, Joe 0824: "it will show the lookback time if lb is
+validated, or it will show the next oob time". One column, one resolved moment per row:
+
+    the 3-minute BACKWARD lookback answered   ->  that bar, and it is EARLIER than the delegation
+    it did not                                ->  the forward CONFIRMED all-3-out bar, LATER
+
+The two are told apart by the timestamp itself - a lookback answer sits before the delegation
+moment and a forward wait sits after it - so no source column is needed. It is banked as
+wmo_face_* and the signed lag is wmo_face_lag_s: negative looking back, positive waiting forward.
+
+THE FORWARD MOMENT IS THE CONFIRMED BAR - the bar where the hold completes, four bars after the condition
 first reads true. That follows the precedent already in wsf: wflb_mfr_xwob marks the CONFIRMED
 fence exit, not the first bar past the fence.
 
@@ -53,11 +63,17 @@ DDL = '''CREATE TABLE IF NOT EXISTS wsf_mage_oob (
     -- the forward wait: the CONFIRMED bar where all three have been out of bounds for MAGE_XWOB
     wmo_oob_utc DATETIME, wmo_oob_dr TINYINT, wmo_wait_s INT,
     wmo_g30Mage_oob DOUBLE, wmo_ws1Mage_oob DOUBLE, wmo_ws2Mage_oob DOUBLE,
+    -- THE RESOLVED FACING MOMENT, Joe 0824. The backward lookback bar when it answered, else the
+    -- forward one above. wmo_face_lag_s is signed: negative back, positive forward, 0 at the bar.
+    wmo_face_utc DATETIME, wmo_face_dr TINYINT, wmo_face_lag_s INT,
+    wmo_g30Mage_face DOUBLE, wmo_ws1Mage_face DOUBLE, wmo_ws2Mage_face DOUBLE,
     UNIQUE KEY uq_wmo (wmo_knobs, wmo_utc))'''
 
 COLS = ['wmo_knobs', 'wmo_seq', 'wmo_utc', 'wmo_g30Mage_at', 'wmo_ws1Mage_at', 'wmo_ws2Mage_at',
         'wmo_dr_at', 'wmo_had_lookback', 'wmo_oob_utc', 'wmo_oob_dr', 'wmo_wait_s',
-        'wmo_g30Mage_oob', 'wmo_ws1Mage_oob', 'wmo_ws2Mage_oob']
+        'wmo_g30Mage_oob', 'wmo_ws1Mage_oob', 'wmo_ws2Mage_oob',
+        'wmo_face_utc', 'wmo_face_dr', 'wmo_face_lag_s',
+        'wmo_g30Mage_face', 'wmo_ws1Mage_face', 'wmo_ws2Mage_face']
 
 
 def main():
@@ -85,8 +101,19 @@ def main():
         print('  dtf_delegation is empty. Run build_dtf_delegation.py first.', flush=True)
         db.disconnect(); return 1
 
-    knobs = f'mk{MAGE_KNOB}_mx{MAGE_XWOB}'
+    # THE BACKWARD LOOKBACK IS NOW A KNOB ON THESE ROWS TOO - it decides which moment the face
+    # column resolves to - so it belongs in the key. build_dtf_delegation owns its value.
+    knobs = f'mk{MAGE_KNOB}_mx{MAGE_XWOB}_lb{D.DDS_LOOKBACK_S}'
     db.execute(DDL)
+    # CREATE TABLE IF NOT EXISTS adds nothing to a table that already exists, so the columns added
+    # after the first run are added here.
+    have = {c['Field'] for c in db.execute('SHOW COLUMNS FROM wsf_mage_oob', fetch=True)}
+    for col, spec in (('wmo_face_utc', 'DATETIME'), ('wmo_face_dr', 'TINYINT'),
+                      ('wmo_face_lag_s', 'INT'), ('wmo_g30Mage_face', 'DOUBLE'),
+                      ('wmo_ws1Mage_face', 'DOUBLE'), ('wmo_ws2Mage_face', 'DOUBLE')):
+        if col not in have:
+            db.execute(f'ALTER TABLE wsf_mage_oob ADD COLUMN {col} {spec}')
+            print(f'  added {col}', flush=True)
     had = db.execute('SELECT COUNT(*) c FROM wsf_mage_oob WHERE wmo_knobs=%s',
                      (knobs,), fetch=True)[0]['c']
     if had:
@@ -101,16 +128,22 @@ def main():
         # the first CONFIRMED bar at or after the delegation. No cap - Joe named no horizon.
         j = next((z for z in range(k, len(DRh)) if DRh[z] != 0), None)
         if j is None:
-            rows.append((knobs, x['q'], str(x['t']), x['a'], x['b'], x['c'],
-                         int(DRr[k]), int(x['lo'] is not None), None, None, None,
-                         None, None, None))
-            continue
-        u = dt.datetime.fromtimestamp(int(ts[j]) / 1000, timezone.utc)
+            fwd = (None, None, None, None, None, None)
+        else:
+            u = dt.datetime.fromtimestamp(int(ts[j]) / 1000, timezone.utc)
+            fwd = (u.strftime('%Y-%m-%d %H:%M:%S'), int(DRh[j]),
+                   (int(ts[j]) - int(ts[k])) // 1000,
+                   float(MG[0][j]), float(MG[1][j]), float(MG[2][j]))
+        # the face moment: the backward lookback bar when it answered, else the forward one
+        if x['lo'] is not None:
+            b = int(np.searchsorted(ts, int(dt.datetime.strptime(str(x['lo']), '%Y-%m-%d %H:%M:%S')
+                                            .replace(tzinfo=timezone.utc).timestamp() * 1000)))
+            face = (str(x['lo']), int(DRr[b]), (int(ts[b]) - int(ts[k])) // 1000,
+                    float(MG[0][b]), float(MG[1][b]), float(MG[2][b]))
+        else:
+            face = fwd
         rows.append((knobs, x['q'], str(x['t']), x['a'], x['b'], x['c'],
-                     int(DRr[k]), int(x['lo'] is not None),
-                     u.strftime('%Y-%m-%d %H:%M:%S'), int(DRh[j]),
-                     (int(ts[j]) - int(ts[k])) // 1000,
-                     float(MG[0][j]), float(MG[1][j]), float(MG[2][j])))
+                     int(DRr[k]), int(x['lo'] is not None)) + fwd + face)
     db.executemany(f'INSERT INTO wsf_mage_oob ({",".join(COLS)}) VALUES '
                    f'({",".join(["%s"] * len(COLS))})', rows)
 
@@ -118,13 +151,16 @@ def main():
     print(f'\n  wsf_mage_oob : {len(rows)} delegation moments   knobs {knobs}\n'
           f'    a confirmed all-3-out bar at or after the delegation : {found}'
           f'   none to the end of the tape : {len(rows) - found}\n', flush=True)
+    back = sum(1 for r in rows if r[7])
+    print(f'    the "3 Mages oob" column resolves BACKWARD on {back} rows and FORWARD on '
+          f'{len(rows) - back}\n', flush=True)
     print(f"  {'dtf-free':<11}{'ws1Mage':>10}{'ws2Mage':>10}{'3 Mages oob':>14}"
           f"{'ws1Mage':>10}{'ws2Mage':>10}", flush=True)
     for r in rows:
         print(f"  {r[2][11:]:<11}{r[4]:>10.2f}{r[5]:>10.2f}"
-              f"{(r[8][11:] if r[8] else 'none'):>14}"
-              f"{(f'{r[12]:.2f}' if r[12] is not None else ''):>10}"
-              f"{(f'{r[13]:.2f}' if r[13] is not None else ''):>10}", flush=True)
+              f"{(r[14][11:] if r[14] else 'none'):>14}"
+              f"{(f'{r[18]:.2f}' if r[18] is not None else ''):>10}"
+              f"{(f'{r[19]:.2f}' if r[19] is not None else ''):>10}", flush=True)
     db.disconnect()
     return 0
 
