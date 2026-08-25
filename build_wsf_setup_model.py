@@ -28,6 +28,7 @@ nothing.
 """
 import sys
 
+from optimus9.analysis.jig import stoch_out_extreme
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 
@@ -167,15 +168,10 @@ def main():
             'wsb_mage_oob,wsb_weak_mage,wsb_stoch_now,wsb_stoch_out,wsb_sat_bars,wsb_sat_left,'
             'wsb_rsi,wsb_rsi_lo,wsb_rsi_hi,wsb_r_move) VALUES ('
             + ','.join(['%s'] * 23) + ')', board)
-        # ROUNDED TO 6 PLACES, AND THAT IS NOT A KNOB. stoch is (RSI - RSI lo) / (RSI hi - RSI lo)
-        # x 100, so it is EXACTLY 0 when the outgoing RSI was the window's low and EXACTLY 100 when
-        # it was the window's high. The division leaves float residue: 08-04 00:52:30 ws5 stored
-        # 1.4168726029049243e-14 instead of 0, and 08:02:50 ws6 stored 99.99999999999999 instead of
-        # 100. Raw equality missed both. The nearest genuine values in the same boards are 42.41 and
-        # 50.00, so six places is seven orders clear of any real reading and seven orders above the
-        # residue. It recovers the intended number; it does not choose a level.
-        only_rise = sum(1 for x in rows if x['so'] is not None and round(float(x['so']), 6) == 0.0)
-        only_fall = sum(1 for x in rows if x['so'] is not None and round(float(x['so']), 6) == 100.0)
+        # THE TEST IS jig.stoch_out_extreme AND IS NOT RESTATED HERE. It carries the float-residue
+        # note and the reason six places is not a knob. report_wsf_bar calls the same function.
+        only_rise = sum(1 for x in rows if stoch_out_extreme(x['so']) > 0)
+        only_fall = sum(1 for x in rows if stoch_out_extreme(x['so']) < 0)
 
         away = sorted(t for t in H if H[t]['h'] == 'away')
         tow = sorted(t for t in H if H[t]['h'] == 'toward')

@@ -17,6 +17,28 @@ ADDED 0824 on Joe's word, in this order after `verdict`:
                     momentum-kill still applies, curl_dr rule unchanged. Prints only where the
                     producer's raw fit said curl.
 
+THE FOOTNOTES, Joe 0824: "add any pertinent data to the report. it seems that most of them are
+footnotes. only add data columns if you need to". Every one is a reading of the WHOLE board, so
+none of them became a column. No producer is restated here - each is imported.
+
+    facing     gcws30Mage, ws1Mage and ws2Mage against the 80/20 fence, and the dr they give.
+               jig.wsf_facing_dr. Joe 0823: "wsf's dr will be set by the positioing of gcws30Mage,
+               ws1Mage and ws2Mage - if they are all > {100 - knob:20 fence} then dr = +1". The
+               three lines are read from ws_line_bar, PROVEN identical to build_dtf_delegation's
+               own values across all 85 delegation bars, 0 mismatches. It also says plainly when
+               the board's dr is not the one the three lines give.
+    template   Joe's spec 3.5 markers - the away count, the toward count, the r IB count, the LTF
+               and HTF splits, how far ws8r is from its fence and what its verdict did, the
+               weak-mage and how many Mage lines are out. LTF and HTF are imported from
+               build_wsf_setup_model so the setup model and this report cannot drift apart.
+    stoch      jig.stoch_out_extreme - the reading LEAVING the seven-bar window, at 0 or at 100,
+               fixes which way r can still move. Then how many lines are committed to the
+               direction the bar is read at.
+
+THE dtf STATE IS STILL NOT QUERIED HERE. The footer's "domTF is blocking" rule reads wsf_domtf on
+ws_fin_9of12 and therefore only fires on a wsf9of12 signal bar. Joe 0824, asked whether it should
+read dtf_state_flip instead: "not yet; we need to build our wsf fu first. it's on my radar."
+
 THE HEADER IS TWO LINES, Joe 0824: "print the column names on 2 lines so that the report fits in my
 screen". Each name splits at its own hyphen or space, never mid-word, so nothing is renamed. Column
 widths are then computed from the data and the two header halves, which is what narrows the table:
@@ -95,6 +117,8 @@ import sys
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.compute.momo_gated import curl_gates
+from optimus9.analysis.jig import wsf_facing_dr, stoch_out_extreme
+from build_wsf_setup_model import LTF, HTF
 
 WIN_FROM = '2026-08-04 00:00:00'
 DAY      = '2026-08-04'
@@ -104,6 +128,7 @@ SLOPE_MIN   = 1.0    # momo_core MOMO_SLOPE_MIN, r-units per sample
 MOMO_KILL    = 'state'  # which reading of Joe 0820's rule to read back. See build_wsf_line_bar.py
 MOMO_FENCE_R = 17       # momo-fence-r, Joe 0820: 100 - 17 = 83 at the top, 17 at the bottom
 MOMO_XWOB    = 4        # 5 s bars held outside the fence before an exit counts. Joe 0821
+MAGE_KNOB    = 20       # Joe 0823: "{100 - knob:20 fence}" -> the facing fence is 80 / 20
 WMT_TF_LO    = 2        # the weak-mage scan's lowest timeframe. Joe 0821 moved it from 1 to 2
 KNOBS = ('kw4_fs21_sn6_hi85_lo15_r20.5_sl1_arc4_sk13.9_cr0.4_'
          f'mk{MOMO_KILL}_mf{MOMO_FENCE_R}_xw{MOMO_XWOB}')
@@ -151,6 +176,8 @@ def main():
         db.disconnect()
         return 1
 
+    face = db.execute('SELECT wlb_g30Mage a, wlb_ws1Mage b, wlb_ws2Mage c FROM ws_line_bar '
+                      'WHERE wlb_utc=%s', (bar,), fetch=True)
     rows = db.execute("""SELECT b.wbt_tf tf, b.wbt_r r, b.wbt_mage mg, b.wbt_mage_oob_tol mt,
               b.wbt_weak_mage_tf wmt, l.wflb_verdict u, l.wflb_curl_ends ce, l.wflb_stalled sl, l.wflb_slope sp,
               l.wflb_ungated ung, l.wflb_aligned al, l.wflb_bend_align ba, l.wflb_bendfit bf,
@@ -243,6 +270,59 @@ def main():
     else:
         state, why = 'wsf-exhaust', 'no r line from ws1 to ws8 carries momentum'
     print(f'    STATE AT THIS BAR: {state}   -   {why}')
+
+    # ----- FOOTNOTES, Joe 0824: "add any pertinent data to the report. it seems that most of them
+    # are footnotes. only add data columns if you need to". Every one of these is a reading of the
+    # WHOLE board, so none of them is a column. The producers are imported, never restated.
+    H = {int(x['tf']): x for x in rows}
+    hd = {t: heading(bool(H[t]['ob']), float(H[t]['sp'])) for t in H}
+    away = sorted(t for t in H if hd[t] == 'away')
+    tow = sorted(t for t in H if hd[t] == 'toward')
+    rib = sorted(t for t in H if LO < float(H[t]['r']) < HI)
+    tfs = lambda g: ','.join(f'ws{t}' for t in g) if g else '-'
+    print()
+    print('    FOOTNOTES')
+
+    # 1. which way wsf is facing. Joe 0823: "wsf's dr will be set by the positioing of gcws30Mage,
+    #    ws1Mage and ws2Mage - if they are all > {100 - knob:20 fence} then dr = +1". jig's producer.
+    if face:
+        f = face[0]
+        fdr = int(wsf_facing_dr([[f['a']], [f['b']], [f['c']]], 100 - MAGE_KNOB, MAGE_KNOB)[0])
+        w = {1: 'dr +1', -1: 'dr -1', 0: 'no facing - they do not all agree, so this is a stub'}[fdr]
+        print(f"      facing        gcws30Mage {float(f['a']):.2f}   ws1Mage {float(f['b']):.2f}"
+              f"   ws2Mage {float(f['c']):.2f}   against the {100 - MAGE_KNOB}/{MAGE_KNOB} fence"
+              f"  ->  {w}")
+        if fdr != dr:
+            print(f"                    THE BOARD ABOVE IS READ AT dr {dr:+d}, WHICH IS NOT WHAT THE"
+                  f" THREE MAGE LINES SAY.")
+    else:
+        print('      facing        gcws30Mage / ws1Mage / ws2Mage are not banked at this bar')
+
+    # 2. Joe's template markers, spec 3.5: ws8r reversing, many aways, many ltf `r IB`s, weak-mage.
+    w8 = H.get(8)
+    past = (float(w8['r']) - HI) if dr > 0 else (LO - float(w8['r'])) if w8 else None
+    print(f"      template      away {len(away)} ({tfs(away)})   toward {len(tow)} ({tfs(tow)})"
+          f"   r IB {len(rib)} ({tfs(rib)})")
+    print(f"                    LTF away {len([t for t in away if t in LTF])}"
+          f"   HTF toward {len([t for t in tow if t in HTF])}"
+          f"   (LTF is ws1-ws4, HTF is ws5-ws8, Joe 0824)")
+    if w8:
+        print(f"                    ws8r {float(w8['r']):.2f} is {abs(past):.2f} "
+              f"{'past' if past > 0 else 'short of'} the {HI if dr > 0 else LO:g} fence"
+              f"   verdict {w8['u']}   after {w8['lv2'] or 'nothing'}   dwell {int(w8['vdw'])} s")
+    print(f"                    weak-mage {'ws' + str(wmt) if wmt else 'NONE'}"
+          f"   Mage lines out of bounds {sum(1 for t in H if H[t]['mt'])} of {len(H)}")
+
+    # 3. the stoch reading. jig.stoch_out_extreme - the outgoing reading at an extreme fixes which
+    #    way r can still move. Joe 0824: "r has dropped to the ~floor ... and has nowhere to go".
+    rise = sorted(t for t in H if stoch_out_extreme(H[t]['so']) > 0)
+    fall = sorted(t for t in H if stoch_out_extreme(H[t]['so']) < 0)
+    want = 'fall' if dr > 0 else 'rise'
+    with_trade = fall if dr > 0 else rise
+    print(f"      stoch         r can only RISE on {len(rise)} ({tfs(rise)})"
+          f"   r can only FALL on {len(fall)} ({tfs(fall)})")
+    print(f"                    a dr {dr:+d} trade needs r to {want}, so {len(with_trade)} of"
+          f" {len(H)} lines are mechanically committed to it")
     print()
     db.disconnect()
     return 0

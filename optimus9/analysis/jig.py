@@ -1550,6 +1550,37 @@ def wsf_facing_dr(mages, hi, lo):
     return np.where(up, 1, np.where(dn, -1, 0)).astype(np.int8)
 
 
+def stoch_out_extreme(stoch_out):
+    """[PRODUCER · 0824] Is the reading LEAVING the seven-bar window at an extreme?
+
+    r is the mean of the last SEVEN closed stoch readings, so its next step is already fixed:
+
+        r at next close = r + (stoch now - stoch out) / 7
+
+    stoch is (RSI - RSI lo) / (RSI hi - RSI lo) x 100, so it is EXACTLY 0 when the outgoing RSI was
+    the window's low and EXACTLY 100 when it was the window's high. That makes two readings exact
+    rather than thresholded:
+
+        stoch out = 0    whatever arrives is at least as big  ->  r CANNOT FALL   -> returns +1
+        stoch out = 100  whatever arrives is no bigger        ->  r CANNOT RISE   -> returns -1
+        anything else                                                             -> returns 0
+
+    This is the mechanical form of Joe's 0824 lesson: "r has dropped to the ~floor (momo), and has
+    nowhere to go (none)".
+
+    ROUNDED TO 6 PLACES, AND THAT IS NOT A KNOB. The division leaves float residue - 08-04 00:52:30
+    ws5 stored 1.4168726029049243e-14 for 0 and 08:02:50 ws6 stored 99.99999999999999 for 100, and
+    raw equality missed both. The nearest genuine readings on the same boards are 42.41 and 50.00,
+    seven orders away. It recovers the intended number; it does not choose a level.
+
+    Causal: one bar, one already-measured value.
+    """
+    if stoch_out is None:
+        return 0
+    v = round(float(stoch_out), 6)
+    return 1 if v == 0.0 else -1 if v == 100.0 else 0
+
+
 def wsf_facing_dr_held(dr, xwob):
     """[PRODUCER · Joe 0824] wsf_facing_dr() with a hold on it.
 
