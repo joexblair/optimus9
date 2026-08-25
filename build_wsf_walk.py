@@ -16,12 +16,29 @@ CAUSAL BY CONSTRUCTION. The walk visits bars in order and every test reads that 
     The weak-mage timeframe is re-read at each bar of the walk.
   - the cross is the RISING EDGE of a race held XCROSS_XWOB bars. wsf_x_cross latches `fired`.
 
-WHAT JOE HAS NOT SAID, and what this does about it - see docs/wsf_setup_model.md 3.22.4:
-  - nothing closes a slot. IMPLEMENTED AS: the opposing dr that ends dormancy frees both slots,
-    because otherwise the walk is dormant forever after the second trade and Rule 2's "until"
-    means nothing. THIS IS MY READING OF JOE'S SENTENCE, NOT HIS INSTRUCTION.
-  - nothing disarms a pending setup. As built it stays armed until the cross prints.
-  - an opposing dr with only ONE slot filled does nothing. Rule 2 names both slots occupied.
+JOE 0825, the two calls that settled the slot accounting:
+
+    "1:06:30 shouldn't print, because the 2nd wsf-exhaust event is already locked in and waiting
+     for its x-cross trade signal --this means the pyramid mech needs to hold 2 slots for
+     wsf-exhaust, as well as 2 slots for open positions <- this is only my guess at the logic -
+     the build logic is your call"
+
+    "all open trades (1 or 2) are closed by the next opposing dr trade"
+
+ONE POOL OF TWO SLOTS, AND THAT IS MY CALL. Each slot is either ARMED - a wsf-exhaust locked in and
+walking forward for its cross - or OPEN, once that cross has printed. A slot moves armed -> open; it
+is never both and never a third thing.
+
+  WHY NOT 2 ARMED PLUS 2 OPEN, which is Joe's guess. With one open position and two armed setups,
+  both armed setups can convert, and that is three open trades against "max 2 trades". The second
+  conversion would have to be blocked and thrown away, which is a worse outcome than never arming
+  it. One pool cannot overfill.
+  IT GIVES JOE THE BEHAVIOUR HE ASKED FOR. At 01:06:30 the pool holds one open trade from 01:02:35
+  and one armed setup from 00:58:15, so nothing new arms - which is his point exactly.
+
+CLOSING, Joe 0825: an opposing dr closes ALL open trades, one or two. MY ADDITION, STATED: it also
+CLEARS ARMED SLOTS. An armed setup faces the direction that has just been contradicted, so walking
+it forward would enter against the new dr. Not Joe's instruction.
 
     python3 build_wsf_walk.py
 """
@@ -48,7 +65,7 @@ DDL = '''CREATE TABLE IF NOT EXISTS wsf_walk (
     wwk_knobs VARCHAR(96) NOT NULL,
     wwk_seq INT NOT NULL,
     wwk_utc DATETIME NOT NULL,
-    wwk_event VARCHAR(12) NOT NULL,  -- armed | signal | dormant | wake
+    wwk_event VARCHAR(12) NOT NULL,  -- armed | signal | dormant | close
     wwk_dr TINYINT,                  -- the dr in force at the event
     wwk_slots TINYINT,               -- slots occupied AFTER the event
     wwk_tf SMALLINT,                 -- the x line, on a signal row
@@ -98,64 +115,76 @@ def main():
 
     rows = []
     seq = 0
-    slots = 0          # occupied trade slots
-    open_dr = 0        # the dr the open trades face
-    armed_dr = 0       # 0 = not armed
+    pool = []          # ONE POOL OF MAX_TRADES SLOTS. Each is {'dr': +-1, 'state': armed | open}
     prev_won = {}      # (tf, dr) -> the previous bar's race winner, for the rising edge
+    was_ready = False  # the previous bar was a wsf-exhaust with a dr, for the arming rising edge
     dormant_from = None
+
+    def side():
+        return pool[0]['dr'] if pool else 0
+
+    def n_open():
+        return sum(1 for s_ in pool if s_['state'] == 'open')
 
     for i, t in enumerate(T):
         dr = int(DR[i])
         board = V.get(t)
 
-        # RULE 2. Both slots occupied: no action until an OPPOSING dr prints, from either source.
-        if slots >= MAX_TRADES:
+        # JOE 0825: "all open trades (1 or 2) are closed by the next opposing dr trade". The test
+        # runs whenever ANY slot is held, not only when both are. Armed slots are cleared with them.
+        if pool:
             src = None
-            if dr != 0 and dr == -open_dr:
+            if dr != 0 and dr == -side():
                 src = 'three-mage'
-            elif t in SIG and SIG[t] == -open_dr:
+            elif t in SIG and SIG[t] == -side():
                 src = 'wsf9of12'
             if src:
+                op, ar = n_open(), len(pool) - n_open()
                 seq += 1
-                rows.append((KNOBS, seq, t, 'wake', -open_dr, 0, None, None, src,
-                             f'opposing dr {-open_dr:+d} from {src} after '
-                             f'{(i - dormant_from) * GRID} s dormant. Both slots freed.'))
-                slots, open_dr, armed_dr, dormant_from = 0, 0, 0, None
-            # nothing else happens while dormant, including arming
-            for k in list(prev_won):
-                prev_won[k] = XC.get((t, k[0], k[1]))
-            continue
+                rows.append((KNOBS, seq, t, 'close', -side(), 0, None, None, src,
+                             f'opposing dr {-side():+d} from {src} closes {op} open'
+                             + (f' and clears {ar} armed' if ar else '')
+                             + (f'. {(i - dormant_from) * GRID} s dormant.' if dormant_from else '.')))
+                pool, dormant_from = [], None
 
         # a pending setup: has the weak-mage line's cross printed at THIS bar?
-        if armed_dr:
-            wm = WM.get((t, armed_dr))
-            if wm:
-                won = XC.get((t, int(wm), armed_dr))
-                was = prev_won.get((int(wm), armed_dr))
-                if won is not None and was is None:
-                    slots += 1
-                    open_dr = armed_dr
+        for s_ in pool:
+            if s_['state'] != 'armed':
+                continue
+            wm = WM.get((t, s_['dr']))
+            if not wm:
+                continue
+            won = XC.get((t, int(wm), s_['dr']))
+            if won is not None and prev_won.get((int(wm), s_['dr'])) is None:
+                s_['state'] = 'open'
+                seq += 1
+                rows.append((KNOBS, seq, t, 'signal', s_['dr'], len(pool), int(wm), won, None,
+                             f'ws{wm}x crossed its {won} target. '
+                             f'{n_open()} open, {len(pool) - n_open()} armed.'))
+                if n_open() >= MAX_TRADES:
+                    dormant_from = i
                     seq += 1
-                    rows.append((KNOBS, seq, t, 'signal', armed_dr, slots, int(wm), won, None,
-                                 f'ws{wm}x crossed its {won} target. Slot {slots} of {MAX_TRADES}.'))
-                    armed_dr = 0
-                    if slots >= MAX_TRADES:
-                        dormant_from = i
-                        seq += 1
-                        rows.append((KNOBS, seq, t, 'dormant', open_dr, slots, None, None, None,
-                                     'both slots occupied - no action until an opposing dr prints'))
+                    rows.append((KNOBS, seq, t, 'dormant', s_['dr'], len(pool), None, None, None,
+                                 'both slots occupied - no action until an opposing dr prints'))
+                break                                  # one conversion per bar
 
-        # arm on a wsf-exhaust bar that has a dr, when a slot is free and the side agrees
-        if not armed_dr and slots < MAX_TRADES and dr != 0 and board:
-            if slots == 0 or dr == open_dr:          # RULE 1: pyramiding is same-side only
-                if not [tf for tf in range(1, 9) if board.get((dr, tf)) in ('momo', 'curl')]:
-                    armed_dr = dr
-                    seq += 1
-                    rows.append((KNOBS, seq, t, 'armed', dr, slots, None, None, None,
-                                 'wsf-exhaust with a dr - walking forward for the x-cross'))
+        # arm on the RISING EDGE of a wsf-exhaust bar that has a dr, when the pool has room and
+        # the side agrees.
+        # THE RISING EDGE IS THE POINT. A wsf-exhaust runs for many consecutive bars, so arming on
+        # every bar of it filled BOTH slots from ONE event, 5 s apart - 00:53:15 and 00:53:20. Two
+        # setups five seconds apart is one event, not a pyramid. Joe 0825 made the same point about
+        # 01:06:30: "the 2nd wsf-exhaust event is already locked in and waiting for its x-cross".
+        ready = (dr != 0 and board is not None
+                 and not [tf for tf in range(1, 9) if board.get((dr, tf)) in ('momo', 'curl')])
+        if ready and not was_ready and len(pool) < MAX_TRADES:
+            if not pool or dr == side():               # RULE 1: pyramiding is same-side only
+                pool.append({'dr': dr, 'state': 'armed'})
+                seq += 1
+                rows.append((KNOBS, seq, t, 'armed', dr, len(pool), None, None, None,
+                             f'wsf-exhaust with a dr - walking forward for the x-cross. '
+                             f'{n_open()} open, {len(pool) - n_open()} armed.'))
+        was_ready = ready
 
-        for k in list(prev_won):
-            prev_won[k] = XC.get((t, k[0], k[1]))
         for tf in range(1, 9):
             for d in (1, -1):
                 prev_won[(tf, d)] = XC.get((t, tf, d))

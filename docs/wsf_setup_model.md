@@ -1705,3 +1705,49 @@ pick, none of them built:
 2. **an opposing dr frees a single open slot too**, then the walk re-arms on the new side.
 3. **slot 2 may be opposite** - but then it is not pyramiding and Rule 2's wake test has two
    directions to compare against.
+
+### 3.22.6  the slot accounting, settled 0825
+
+Joe 0825, verbatim, the two calls:
+
+> "1:06:30 shouldn't print, because the 2nd wsf-exhaust event is already locked in and waiting for
+> its x-cross trade signal --this means the pyramid mech needs to hold 2 slots for wsf-exhaust, as
+> well as 2 slots for open positions <- this is only my guess at the logic - the build logic is
+> your call"
+
+> "all open trades (1 or 2) are closed by the next opposing dr trade"
+
+**ONE POOL OF TWO SLOTS. My call, and the reason.** Each slot is either ARMED - a wsf-exhaust locked
+in and walking forward for its cross - or OPEN, once that cross has printed. A slot moves armed to
+open and is never both.
+
+- **not 2 armed plus 2 open**, which is Joe's guess: with one open trade and two armed setups, both
+  armed can convert, and that is three open against *"max 2 trades"*. The second conversion would
+  have to be blocked and discarded, which is worse than never arming it. One pool cannot overfill.
+- **it gives Joe the behaviour he asked for.** At 01:06:30 the pool holds one open trade from
+  01:02:35 and one armed setup from 00:58:15, so nothing new arms.
+
+**CLOSING.** An opposing dr closes ALL open trades, one or two - Joe's words. **MY ADDITION, STATED:
+it also CLEARS ARMED SLOTS.** An armed setup faces the direction that has just been contradicted, so
+walking it forward would enter against the new dr. Not Joe's instruction.
+
+**A DEFECT THE FIRST RUN EXPOSED, and the fix.** Arming ran on every bar of a wsf-exhaust, and a
+wsf-exhaust runs for many consecutive bars - so BOTH slots filled from ONE event, five seconds
+apart: 00:53:15 and 00:53:20. Two setups five seconds apart is one event, not a pyramid. **Arming is
+now the RISING EDGE** of "a dr is present and the state is wsf-exhaust". The pair becomes 00:53:15
+and 00:58:15 - two separate events.
+
+**THE RESULT over 17,280 bars: 19 armed, 14 signals, 7 dormant stretches, 7 closes.** The 7h38m dead
+stretch is gone - the close rule frees the pool at 00:18:35 and the walk arms at 00:53:15, which is
+the trade Joe confirmed.
+
+    00:53:15  armed   dr -1                     0 open, 1 armed
+    00:58:15  armed   dr -1                     0 open, 2 armed
+    01:02:35  signal  ws3x crossed boundary     1 open, 1 armed
+    01:15:25  signal  ws4x crossed Mage         2 open, 0 armed  -> dormant
+    01:34:05  close   opposing dr +1 from wsf9of12, after 1120 s dormant
+
+**Both trades Joe confirmed now appear**: 00:53:15 arms and fires at 01:02:35, and 01:03:40 is
+correctly silent because the 00:58:15 setup already holds the second slot.
+
+**Nine of the fourteen signals are pyramids** - a same-side second entry while the first is open.
