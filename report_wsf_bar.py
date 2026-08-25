@@ -33,7 +33,9 @@ none of them became a column. No producer is restated here - each is imported.
                from 5 seconds earlier. It also says plainly when the board's dr is not the one the
                three lines give.
                THE LABEL IS `dr`, Joe 0825: "it's better to stick with our universal dr". "facing"
-               was my coinage from Joe's question "which way am I facing?" and is gone.
+               was my coinage from Joe's question "which way am I facing?" and is gone. The two
+               readings are labelled together, Joe 0825 verbatim: "three-mage-lb: {yes/no},
+               three-mage-dr: {dr}" - lb is whether the lookback found a bar, dr is what it gives.
     template   Joe's spec 3.5 markers - the away count, the toward count, the r IB count, the LTF
                and HTF splits, how far ws8r is from its fence and what its verdict did, the
                weak-mage and how many Mage lines are out. LTF and HTF are imported from
@@ -309,21 +311,27 @@ def main():
                               [x['c'] for x in face]], 100 - MAGE_KNOB, MAGE_KNOB)
         lb, lg = wsf_dr_lookback(live, DR_LOOKBACK_S // 5)
         fdr, lag = int(lb[-1]), int(lg[-1])
-        print(f"      dr            gcws30Mage {float(f['a']):.2f}   ws1Mage {float(f['b']):.2f}"
-              f"   ws2Mage {float(f['c']):.2f}   against the {100 - MAGE_KNOB}/{MAGE_KNOB} fence")
-        if fdr == 0:
-            print(f"                    no dr - the three lines have not all been on one side of the"
-                  f" fence in the last {DR_LOOKBACK_S} s")
-        elif lag == 0:
-            print(f"                    dr {fdr:+d}, all three outside the fence at THIS bar")
-        else:
+        # THE LABELS ARE JOE'S, 0825, verbatim: "label them together, like this:
+        # 'three-mage-lb: {yes/no}, three-mage-dr: {dr}'".
+        head = (f"three-mage-lb: {'yes' if fdr else 'no'}, "
+                f"three-mage-dr: {f'{fdr:+d}' if fdr else 'none'}")
+        if fdr and lag:
             src = face[len(face) - 1 - lag]
-            print(f"                    dr {fdr:+d}, from {str(src['t'])[11:]}, {lag * 5} s back"
-                  f"   (gcws30Mage {float(src['a']):.2f}   ws1Mage {float(src['b']):.2f}"
-                  f"   ws2Mage {float(src['c']):.2f})")
+            head += f"   from {str(src['t'])[11:]}, {lag * 5} s back"
+        elif fdr:
+            head += '   all three outside the fence at THIS bar'
+        else:
+            head += f'   nothing on one side of the fence in the last {DR_LOOKBACK_S} s'
+        print(f'      dr            {head}')
+        if fdr and lag:
+            print(f"                    at {str(src['t'])[11:]}   gcws30Mage {float(src['a']):.2f}"
+                  f"   ws1Mage {float(src['b']):.2f}   ws2Mage {float(src['c']):.2f}")
+        print(f"                    at this bar   gcws30Mage {float(f['a']):.2f}"
+              f"   ws1Mage {float(f['b']):.2f}   ws2Mage {float(f['c']):.2f}"
+              f"   against the {100 - MAGE_KNOB}/{MAGE_KNOB} fence")
         if fdr != 0 and fdr != dr:
-            print(f"                    THE BOARD ABOVE IS READ AT dr {dr:+d}, WHICH IS NOT WHAT THE"
-                  f" THREE MAGE LINES GIVE.")
+            print(f"                    THE BOARD ABOVE IS READ AT dr {dr:+d}, WHICH IS NOT WHAT"
+                  f" three-mage-dr GIVES.")
     else:
         print('      dr            gcws30Mage / ws1Mage / ws2Mage are not banked at this bar')
 
