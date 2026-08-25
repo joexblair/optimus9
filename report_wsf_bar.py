@@ -45,6 +45,14 @@ none of them became a column. No producer is restated here - each is imported.
     stoch      jig.stoch_out_extreme - the reading LEAVING the seven-bar window, at 0 or at 100,
                fixes which way r can still move. Then how many lines are committed to the
                direction the bar is read at.
+    x-cross    ON A wsf-exhaust BAR ONLY - the cross that turns the exhaust into a trade signal.
+               Joe, spec 1.6, verbatim: "the next action after `wsf-exhaust`: walk forward. if
+               ws{weak-mage}x-cross has printed, then create a trade signal". The watched line is
+               ws{weak-mage-tf}x and the weak-mage timeframe is RE-READ AT EACH BAR of the walk,
+               which is what build_wsf_exhaust_bar.py line 43 does. The moment is the RISING EDGE
+               of a cross held XCROSS_XWOB 5 bars - wsf_x_cross latches `fired`, so without the
+               rising-edge test a cross already running would be reported as new. NO CAP on the
+               walk; Joe named no horizon.
 
 THE dtf STATE IS STILL NOT QUERIED HERE. The footer's "domTF is blocking" rule reads wsf_domtf on
 ws_fin_9of12 and therefore only fires on a wsf9of12 signal bar. Joe 0824, asked whether it should
@@ -125,6 +133,7 @@ NOT REPORTED. The wsf momentum state - momoc, exhaust, momo-none. The three-stat
 open questions and nothing here invents it.
 """
 import sys
+import datetime as dt
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.compute.momo_gated import curl_gates
@@ -140,6 +149,7 @@ MOMO_KILL    = 'state'  # which reading of Joe 0820's rule to read back. See bui
 MOMO_FENCE_R = 17       # momo-fence-r, Joe 0820: 100 - 17 = 83 at the top, 17 at the bottom
 MOMO_XWOB    = 4        # 5 s bars held outside the fence before an exit counts. Joe 0821
 MAGE_KNOB    = 20       # Joe 0823: "{100 - knob:20 fence}" -> the dr fence is 80 / 20
+XCROSS_XWOB  = 5        # the x-cross hold, build_wsf_x_cross.py / build_wsf_exhaust_bar.py
 DR_LOOKBACK_S = 180     # Joe 0823: "restrict the lookback to 3 minutes". Owned by
                         # build_dtf_delegation as DDS_LOOKBACK_S; repeated here because this report
                         # reads the line cache directly and does not import that builder.
@@ -350,6 +360,39 @@ def main():
           f"   r can only FALL on {len(fall)} ({tfs(fall)})")
     print(f"                    a dr {dr:+d} trade needs r to {want}, so {len(with_trade)} of"
           f" {len(H)} lines are mechanically committed to it")
+
+    # 4. the x-cross that turns a wsf-exhaust into a trade signal. Joe, spec 1.6, verbatim:
+    #    "the next action after `wsf-exhaust`: walk forward. if ws{weak-mage}x-cross has printed,
+    #    then create a trade signal". Printed ONLY on a wsf-exhaust bar, because that is the state
+    #    his rule starts from.
+    #    THE WATCHED LINE IS ws{weak-mage-tf}x, and the weak-mage timeframe is re-read AT EACH BAR
+    #    of the walk, not fixed at this bar - build_wsf_exhaust_bar.py line 43 does the same.
+    #    THE MOMENT IS THE RISING EDGE of a cross held XCROSS_XWOB bars: the first bar where the
+    #    race has a winner and the bar before it did not. wsf_x_cross latches `fired`, so without
+    #    the rising-edge test a cross already running would be reported as new.
+    #    NO CAP ON THE WALK. Joe named no horizon; the search runs to the end of the tape.
+    if state == 'wsf-exhaust':
+        xr = db.execute("""SELECT x.wxc_utc u, x.wxc_tf tf, x.wxc_race_won won
+             FROM wsf_x_cross x
+             JOIN wsf_bar_tf b ON b.wbt_utc=x.wxc_utc AND b.wbt_dr=x.wxc_dr AND b.wbt_tf=x.wxc_tf
+            WHERE x.wxc_dr=%s AND x.wxc_xwob=%s AND b.wbt_wmt_tf_lo=%s
+              AND x.wxc_tf=b.wbt_weak_mage_tf AND x.wxc_utc >= %s
+            ORDER BY x.wxc_utc""", (dr, XCROSS_XWOB, WMT_TF_LO, bar), fetch=True)
+        fired = None
+        prev_won = None
+        for k, y in enumerate(xr):
+            if y['won'] is not None and (k == 0 or prev_won is None):
+                if k > 0 or str(y['u']) != bar:      # a cross already standing at this bar is not new
+                    fired = y
+                    break
+            prev_won = y['won']
+        if fired:
+            gap = int((fired['u'] - dt.datetime.strptime(bar, '%Y-%m-%d %H:%M:%S')).total_seconds())
+            print(f"      x-cross       ws{fired['tf']}x crossed its {fired['won']} target at "
+                  f"{str(fired['u'])[11:]}, {gap // 60}m{gap % 60:02d}s after this bar"
+                  f"   ->  TRADE SIGNAL")
+        else:
+            print('      x-cross       no cross on the weak-mage line to the end of the tape')
     print()
     db.disconnect()
     return 0
