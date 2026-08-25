@@ -1510,3 +1510,102 @@ time that delegation fires, the condition has been dead for 2m20s and gcws30Mage
   marker holds the whole way through while everything else deteriorates.
 
 **No wsf-exhaust in the window, so no trade at either minute.**
+
+## 3.21  MODELLING LESSON — depth, blast radius, and mid-board
+
+Joe 0825, verbatim, both lessons:
+
+> "you're right about depth, but the more we search for depth the less profit we claim. the
+> wsf-model-report data is designed to predict depth, as best as it can. we can call our depth
+> predictions with confidence because we are following the ebb and flow of predicatble human
+> emotions - it's what drives the momentum calcs (stochrsi and BB%B). when the humans have given as
+> much as they feel comfortable with, they start to back off; this is what we are reflecting in the
+> report"
+
+> "each r line has a small 'blast radius'. this is why ws3 reacted to ws2, and it's also why ws5
+> will react to ws4: ws4 needs to release the momentum pressure it's holding on to (r=95), so it
+> will fall (taking ws3 with it). ws4 will easily impact ws5, because ws5r is near-mid-board AND
+> because ws7/8 are firmly in mid-board - mid-board is the space where momentum is the lowest, so
+> while the LTFS are building up and releasing pressure, ws7/8 are treading water and waiting for
+> something bigger to come along"
+
+### 3.21.1  depth is IN the report, and waiting for more of it costs money
+
+- **the report already predicts depth.** `stoch now`, `stoch out`, `sat clock` and `sat left` say
+  how far r can travel and how long before it must - see 3.17.
+- **so "I would not claim how far it falls" was the wrong answer.** The board carries a depth call
+  and refusing to make it is a cost, not caution. Joe: *"the more we search for depth the less
+  profit we claim"*.
+- **why the call can be made with confidence, in Joe's terms**: the momentum calculations - stochrsi
+  and BB%B - track how much people are willing to give before they back off. The report is a
+  reading of that ebb and flow, not a statistical guess.
+
+### 3.21.2  BLAST RADIUS - Joe's word, and it is SMALL
+
+- **each r line affects its immediate neighbours on the ladder, not the whole board.** ws2 reaches
+  ws3. ws4 reaches ws5. A line does not reach across the ladder.
+- **this is the mechanism under the matryoshka order in 3.12.** The low timeframes lead, and they
+  lead by passing the move along one step at a time.
+- **a line at an extreme is HOLDING PRESSURE and must release it.** Joe on ws4 at 03:53:00: *"ws4
+  needs to release the momentum pressure it's holding on to (r=95), so it will fall"*.
+- **the release travels in both directions.** ws4 falling takes ws3 with it AND impacts ws5.
+
+### 3.21.3  MID-BOARD - Joe's word for the space where momentum is lowest
+
+- **mid-board is where a line has the least momentum.** A line sitting there is, in Joe's words,
+  *"treading water and waiting for something bigger to come along"*.
+- **it makes a line easy to move.** ws5r near-mid-board is why ws4's release reaches it easily.
+- **a `momo` verdict on a mid-board line is the weakest kind of carry.** The line is in the
+  lowest-momentum space on the board; it is holding the state up on nothing.
+- **the practical read**: count where the carrying lines SIT, not just that they carry. Carriers at
+  an extreme are holding real pressure. Carriers mid-board are not.
+
+### 3.21.4  what this rewrites in the earlier notes
+
+- **3.16 said a high-timeframe r at the floor with momo behind it has already made the move.** That
+  stands, and mid-board now explains the middle case: a line neither at the floor nor at the
+  ceiling has nothing stored either way.
+- **3.20.6 recorded my read of 03:53 as "the facing dies".** Wrong twice over - the dr was there
+  through the lookback, and the board was in a pressure release, not a stand-off.
+- **a reading of 100.00 or 0.00 is a limit, and a limit is a turning point.** It is the maximum
+  pressure a line can hold, not a strength reading.
+
+### 3.21.5  the 03:53:00 verdict, rebuilt on 3.21 — and one caveat on the depth columns
+
+**THE CAVEAT, measured.** `r move/bar` = (stoch now - stoch out) / 7 says what r does IF THE BAR
+CLOSED NOW. It is exact for that instant and it does NOT survive a developing bar that keeps
+moving. At 03:53:00 it read positive on six of eight lines; between 03:53:00 and 03:54:00 seven of
+eight r values FELL, because the developing stoch collapsed inside the minute - ws1 82.89 to 12.00,
+ws2 76.32 to 13.15, ws3 100.00 to 54.35, ws4 100.00 to 84.11.
+
+**What IS robust is `stoch out`**, because it is a CLOSED reading and cannot change. At 03:53:00:
+
+    cannot rise (stoch out = 100)   ws2r, ws3r
+    cannot fall (stoch out = 0)     ws1r, ws6r, ws8r
+    free either way                 ws4r, ws5r, ws7r
+
+**The release chain at 03:53:00, read with blast radius and mid-board:**
+
+| line | r | where it sits | what it is doing | its 8-bar extreme is protected for |
+|---|---|---|---|---|
+| ws2r | 81.60 | near its fence | turned 5 s ago, cannot rise, falling 3.38 per bar | 3 bars x 2 min = **6 min** |
+| ws3r | 100.00 | AT the ceiling | cannot rise, no momentum for 645 s, inside ws2's radius | 7 bars x 3 min = 21 min |
+| ws4r | 95.25 | near the ceiling | holding pressure, no momentum for 235 s, heading away | 7 bars x 4 min = 28 min |
+| ws5r | 69.64 | near-mid-board | carrying, 720 s - the longest carry - inside ws4's radius | 7 bars x 5 min = 35 min |
+| ws6r | 51.73 | mid-board | carrying, 300 s | 7 bars x 6 min = 42 min |
+| ws7r | 49.04 | mid-board | carrying, **20 s** | 7 bars x 7 min = 49 min |
+| ws8r | 44.18 | mid-board | sideways for **2180 s = 36 min** - treading water | 7 bars x 8 min = 56 min |
+
+**THE VERDICT: SHORT, dr +1.**
+
+- **the release has already started.** ws2r turned 5 seconds before the bar and cannot rise.
+- **the two lines above it cannot hold.** ws3r is at the ceiling with no momentum for 645 s; ws4r
+  holds 95.25 of pressure with no momentum for 235 s and is heading away.
+- **all three lines carrying the state sit in or beside the lowest-momentum space on the board.**
+  ws5r near-mid-board, ws6r and ws7r firmly mid-board, and ws7r acquired its carry 20 s ago.
+- **ws8r has been sideways for 36 minutes.** It is not holding the move up; it is waiting.
+- **the state reads wsf-momoc and the mechanic as built would hold.** This verdict overrides it, the
+  same shape as Joe's 08:02:50 template being *"a candidate for overriding domTF BLOCK"*.
+
+**DEPTH.** ws3r and ws4r each have the whole board beneath them and nothing stored to resist with.
+ws2r's ceiling protection expires first, in 6 minutes, and it is the line that starts the chain.
