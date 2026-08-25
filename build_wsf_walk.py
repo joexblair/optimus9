@@ -65,7 +65,7 @@ DDL = '''CREATE TABLE IF NOT EXISTS wsf_walk (
     wwk_knobs VARCHAR(96) NOT NULL,
     wwk_seq INT NOT NULL,
     wwk_utc DATETIME NOT NULL,
-    wwk_event VARCHAR(12) NOT NULL,  -- armed | signal | dormant | close
+    wwk_event VARCHAR(12) NOT NULL,  -- armed | signal | dormant | wake | flip | close
     wwk_dr TINYINT,                  -- the dr in force at the event
     wwk_slots TINYINT,               -- slots occupied AFTER the event
     wwk_tf SMALLINT,                 -- the x line, on a signal row
@@ -118,6 +118,8 @@ def main():
     pool = []          # ONE POOL OF MAX_TRADES SLOTS. Each is {'dr': +-1, 'state': armed | open}
     prev_won = {}      # (tf, dr) -> the previous bar's race winner, for the rising edge
     was_ready = False  # the previous bar was a wsf-exhaust with a dr, for the arming rising edge
+    flip = None        # the opposing setup that will close the pool. Outside the pool by design.
+    awake = None       # which source printed the opposing dr that ended dormancy
     dormant_from = None
 
     def side():
@@ -130,22 +132,45 @@ def main():
         dr = int(DR[i])
         board = V.get(t)
 
-        # JOE 0825: "all open trades (1 or 2) are closed by the next opposing dr trade". The test
-        # runs whenever ANY slot is held, not only when both are. Armed slots are cleared with them.
-        if pool:
+        # RULE 2's WAKE. Joe 0825: "stay dormant until an opposing (three-mage or wsf9of12) dr
+        # prints". The wake does NOT close anything - it only permits the walk to start watching
+        # the opposing side.
+        if pool and not awake:
             src = None
             if dr != 0 and dr == -side():
                 src = 'three-mage'
             elif t in SIG and SIG[t] == -side():
                 src = 'wsf9of12'
             if src:
-                op, ar = n_open(), len(pool) - n_open()
+                awake = src
                 seq += 1
-                rows.append((KNOBS, seq, t, 'close', -side(), 0, None, None, src,
-                             f'opposing dr {-side():+d} from {src} closes {op} open'
-                             + (f' and clears {ar} armed' if ar else '')
-                             + (f'. {(i - dormant_from) * GRID} s dormant.' if dormant_from else '.')))
-                pool, dormant_from = [], None
+                rows.append((KNOBS, seq, t, 'wake', -side(), len(pool), None, None, src,
+                             f'opposing dr {-side():+d} from {src}'
+                             + (f' after {(i - dormant_from) * GRID} s dormant' if dormant_from else '')
+                             + '. Watching for the opposing trade. Nothing closed.'))
+
+        # THE OPPOSING TRADE. Joe 0825: "all open trades (1 or 2) are closed by the next opposing
+        # dr trade" and "did the model verdict a short signal + x-cross at 01:34:05? that's the
+        # only thing that should close trades". So the close needs the FULL chain on the opposing
+        # side: an opposing wsf-exhaust with an opposing dr, walked forward to its own x-cross.
+        # A bare dr print closes nothing.
+        # THE FLIP SITS OUTSIDE THE TWO-SLOT POOL. My call: the pool is Joe's "max 2 trades" for
+        # positions; the flip is the closing mechanism, and it becomes slot 1 of the new pool the
+        # moment it fires.
+        if flip and flip['state'] == 'armed':
+            wm = WM.get((t, flip['dr']))
+            if wm:
+                won = XC.get((t, int(wm), flip['dr']))
+                if won is not None and prev_won.get((int(wm), flip['dr'])) is None:
+                    op, ar = n_open(), len(pool) - n_open()
+                    seq += 1
+                    rows.append((KNOBS, seq, t, 'close', flip['dr'], 1, int(wm), won, awake,
+                                 f'ws{wm}x crossed its {won} target on the opposing side - '
+                                 f'closes {op} open'
+                                 + (f' and clears {ar} armed' if ar else '')
+                                 + f'. Becomes slot 1 of the new pool.'))
+                    pool = [{'dr': flip['dr'], 'state': 'open'}]
+                    flip, awake, dormant_from, was_ready = None, None, None, True
 
         # a pending setup: has the weak-mage line's cross printed at THIS bar?
         for s_ in pool:
@@ -176,8 +201,14 @@ def main():
         # 01:06:30: "the 2nd wsf-exhaust event is already locked in and waiting for its x-cross".
         ready = (dr != 0 and board is not None
                  and not [tf for tf in range(1, 9) if board.get((dr, tf)) in ('momo', 'curl')])
-        if ready and not was_ready and len(pool) < MAX_TRADES:
-            if not pool or dr == side():               # RULE 1: pyramiding is same-side only
+        if ready and not was_ready:
+            if pool and dr == -side() and awake and flip is None:
+                flip = {'dr': dr, 'state': 'armed'}    # the opposing setup that will close the pool
+                seq += 1
+                rows.append((KNOBS, seq, t, 'flip', dr, len(pool), None, None, awake,
+                             'opposing wsf-exhaust - walking forward for the x-cross that closes '
+                             'the open trades'))
+            elif len(pool) < MAX_TRADES and (not pool or dr == side()):   # RULE 1: same-side only
                 pool.append({'dr': dr, 'state': 'armed'})
                 seq += 1
                 rows.append((KNOBS, seq, t, 'armed', dr, len(pool), None, None, None,

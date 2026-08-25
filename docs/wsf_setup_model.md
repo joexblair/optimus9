@@ -1751,3 +1751,39 @@ the trade Joe confirmed.
 correctly silent because the 00:58:15 setup already holds the second slot.
 
 **Nine of the fourteen signals are pyramids** - a same-side second entry while the first is open.
+
+### 3.22.7  CORRECTED 0825 — a bare dr print closes nothing
+
+Joe 0825, on the 01:34:05 row: *"I don't think this aligns with the rule 'all open trades (1 or 2)
+are closed by the next opposing dr trade' -did the model verdict a short signal + x-cross at
+01:34:05? that's the only thing that should close trades"*.
+
+**He is right, and the build was wrong.** It closed on a raw wsf9of12 side print. There was no
+verdict and no x-cross at 01:34:05.
+
+**The two things are now separate, and both of Joe's sentences are used:**
+
+    RULE 2's WAKE   an opposing dr prints, from three-mage or wsf9of12.
+                    It closes NOTHING. It only permits the walk to start watching the other side.
+
+    THE CLOSE       the FULL chain on the opposing side - an opposing wsf-exhaust with an opposing
+                    dr, walked forward to its OWN x-cross. That, and only that, closes open trades.
+
+**THE FLIP SITS OUTSIDE THE TWO-SLOT POOL. My call.** The pool is Joe's *"max 2 trades"* for
+positions; the opposing setup is the closing mechanism, so it is not a third position. The moment
+its cross prints it closes everything held and becomes slot 1 of the new pool.
+
+**THE RESULT: 7 armed, 7 signals, 6 flips-to-close, 6 wakes, 6 dormant stretches.** The walk is
+never flat after the first entry - it holds 1 or 2 and turns over on the opposing trade.
+
+    00:18:35  wake    opposing dr -1 from wsf9of12. Nothing closed.
+    00:25:15  signal  1 open   +1
+    00:31:40  signal  2 open   +1   -> dormant
+    00:53:15  flip    opposing wsf-exhaust, walking for its cross
+    01:02:35  close   ws3x crossed boundary - closes 2 open, becomes slot 1 at dr -1
+    01:03:40  armed   1 open, 1 armed
+    01:15:25  signal  2 open   -1   -> dormant
+    01:34:05  wake    opposing dr +1 from wsf9of12 after 1120 s dormant. NOTHING CLOSED.
+
+**Joe's two confirmed bars both land where he read them.** 00:53:15 is the flip that turns the
+board, its cross at 01:02:35 is the entry, and **01:03:40 is the pyramid on top of it**.
