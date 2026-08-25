@@ -28,10 +28,12 @@ none of them became a column. No producer is restated here - each is imported.
                to 3 minutes". The three lines are read from ws_line_bar, PROVEN identical to
                build_dtf_delegation's own values across all 85 delegation bars, 0 mismatches, and
                the lookback producer is PROVEN to reproduce all 85 banked answers, 0 mismatches.
-               IT REPORTS THE LOOKBACK ANSWER, naming the bar it came from and how far back.
-               Reading only the bar itself said "no dr" at 03:53:00 while the mechanic had dr +1
-               from 5 seconds earlier. It also says plainly when the board's dr is not the one the
-               three lines give.
+               IT REPORTS THE LOOKBACK ANSWER. Reading only the bar itself said "no dr" at
+               03:53:00 while the mechanic had dr +1 from 5 seconds earlier. It also says plainly
+               when the board's dr is not the one the three lines give.
+               ONE LINE. Joe 0825: "my label was the complete label. one line of footer real-estate
+               is all that is needed". The Mage values, the source bar and the lag are banked in
+               dtf_delegation and wsf_mage_oob and none of them is needed to reach a verdict.
                THE LABEL IS `dr`, Joe 0825: "it's better to stick with our universal dr". "facing"
                was my coinage from Joe's question "which way am I facing?" and is gone. The two
                readings are labelled together, Joe 0825 verbatim: "three-mage-lb: {yes/no},
@@ -311,29 +313,17 @@ def main():
                               [x['c'] for x in face]], 100 - MAGE_KNOB, MAGE_KNOB)
         lb, lg = wsf_dr_lookback(live, DR_LOOKBACK_S // 5)
         fdr, lag = int(lb[-1]), int(lg[-1])
-        # THE LABELS ARE JOE'S, 0825, verbatim: "label them together, like this:
-        # 'three-mage-lb: {yes/no}, three-mage-dr: {dr}'".
+        # ONE LINE, AND THE LABEL IS JOE'S COMPLETE LABEL, 0825 verbatim: "my label was the
+        # complete label. one line of footer real-estate is all that is needed:
+        # 'three-mage-lb: {yes/no}, three-mage-dr: {dr}'". The Mage values, the source bar and the
+        # lag are all banked elsewhere and none of them is needed to reach a verdict.
         head = (f"three-mage-lb: {'yes' if fdr else 'no'}, "
                 f"three-mage-dr: {f'{fdr:+d}' if fdr else 'none'}")
-        if fdr and lag:
-            src = face[len(face) - 1 - lag]
-            head += f"   from {str(src['t'])[11:]}, {lag * 5} s back"
-        elif fdr:
-            head += '   all three outside the fence at THIS bar'
-        else:
-            head += f'   nothing on one side of the fence in the last {DR_LOOKBACK_S} s'
-        print(f'      dr            {head}')
-        if fdr and lag:
-            print(f"                    at {str(src['t'])[11:]}   gcws30Mage {float(src['a']):.2f}"
-                  f"   ws1Mage {float(src['b']):.2f}   ws2Mage {float(src['c']):.2f}")
-        print(f"                    at this bar   gcws30Mage {float(f['a']):.2f}"
-              f"   ws1Mage {float(f['b']):.2f}   ws2Mage {float(f['c']):.2f}"
-              f"   against the {100 - MAGE_KNOB}/{MAGE_KNOB} fence")
-        if fdr != 0 and fdr != dr:
-            print(f"                    THE BOARD ABOVE IS READ AT dr {dr:+d}, WHICH IS NOT WHAT"
-                  f" three-mage-dr GIVES.")
+        if fdr and fdr != dr:
+            head += f'   BOARD READ AT dr {dr:+d}'
+        print(f'      {head}')
     else:
-        print('      dr            gcws30Mage / ws1Mage / ws2Mage are not banked at this bar')
+        print('      three-mage-lb: no, three-mage-dr: none   (the three lines are not banked here)')
 
     # 2. Joe's template markers, spec 3.5: ws8r reversing, many aways, many ltf `r IB`s, weak-mage.
     w8 = H.get(8)
