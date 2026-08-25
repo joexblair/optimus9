@@ -21,12 +21,19 @@ THE FOOTNOTES, Joe 0824: "add any pertinent data to the report. it seems that mo
 footnotes. only add data columns if you need to". Every one is a reading of the WHOLE board, so
 none of them became a column. No producer is restated here - each is imported.
 
-    facing     gcws30Mage, ws1Mage and ws2Mage against the 80/20 fence, and the dr they give.
-               jig.wsf_facing_dr. Joe 0823: "wsf's dr will be set by the positioing of gcws30Mage,
-               ws1Mage and ws2Mage - if they are all > {100 - knob:20 fence} then dr = +1". The
-               three lines are read from ws_line_bar, PROVEN identical to build_dtf_delegation's
-               own values across all 85 delegation bars, 0 mismatches. It also says plainly when
-               the board's dr is not the one the three lines give.
+    dr         gcws30Mage, ws1Mage and ws2Mage against the 80/20 fence, and the dr they give.
+               jig.wsf_facing_dr for the fence test, jig.wsf_dr_lookback for the 3-minute lookback.
+               Joe 0823: "wsf's dr will be set by the positioing of gcws30Mage, ws1Mage and ws2Mage
+               - if they are all > {100 - knob:20 fence} then dr = +1" and "restrict the lookback
+               to 3 minutes". The three lines are read from ws_line_bar, PROVEN identical to
+               build_dtf_delegation's own values across all 85 delegation bars, 0 mismatches, and
+               the lookback producer is PROVEN to reproduce all 85 banked answers, 0 mismatches.
+               IT REPORTS THE LOOKBACK ANSWER, naming the bar it came from and how far back.
+               Reading only the bar itself said "no dr" at 03:53:00 while the mechanic had dr +1
+               from 5 seconds earlier. It also says plainly when the board's dr is not the one the
+               three lines give.
+               THE LABEL IS `dr`, Joe 0825: "it's better to stick with our universal dr". "facing"
+               was my coinage from Joe's question "which way am I facing?" and is gone.
     template   Joe's spec 3.5 markers - the away count, the toward count, the r IB count, the LTF
                and HTF splits, how far ws8r is from its fence and what its verdict did, the
                weak-mage and how many Mage lines are out. LTF and HTF are imported from
@@ -117,7 +124,7 @@ import sys
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.compute.momo_gated import curl_gates
-from optimus9.analysis.jig import wsf_facing_dr, stoch_out_extreme
+from optimus9.analysis.jig import wsf_facing_dr, wsf_dr_lookback, stoch_out_extreme
 from build_wsf_setup_model import LTF, HTF
 
 WIN_FROM = '2026-08-04 00:00:00'
@@ -128,7 +135,10 @@ SLOPE_MIN   = 1.0    # momo_core MOMO_SLOPE_MIN, r-units per sample
 MOMO_KILL    = 'state'  # which reading of Joe 0820's rule to read back. See build_wsf_line_bar.py
 MOMO_FENCE_R = 17       # momo-fence-r, Joe 0820: 100 - 17 = 83 at the top, 17 at the bottom
 MOMO_XWOB    = 4        # 5 s bars held outside the fence before an exit counts. Joe 0821
-MAGE_KNOB    = 20       # Joe 0823: "{100 - knob:20 fence}" -> the facing fence is 80 / 20
+MAGE_KNOB    = 20       # Joe 0823: "{100 - knob:20 fence}" -> the dr fence is 80 / 20
+DR_LOOKBACK_S = 180     # Joe 0823: "restrict the lookback to 3 minutes". Owned by
+                        # build_dtf_delegation as DDS_LOOKBACK_S; repeated here because this report
+                        # reads the line cache directly and does not import that builder.
 WMT_TF_LO    = 2        # the weak-mage scan's lowest timeframe. Joe 0821 moved it from 1 to 2
 KNOBS = ('kw4_fs21_sn6_hi85_lo15_r20.5_sl1_arc4_sk13.9_cr0.4_'
          f'mk{MOMO_KILL}_mf{MOMO_FENCE_R}_xw{MOMO_XWOB}')
@@ -176,8 +186,11 @@ def main():
         db.disconnect()
         return 1
 
-    face = db.execute('SELECT wlb_g30Mage a, wlb_ws1Mage b, wlb_ws2Mage c FROM ws_line_bar '
-                      'WHERE wlb_utc=%s', (bar,), fetch=True)
+    # the three lines over the lookback window ENDING at this bar, so the lookback can run.
+    face = db.execute('SELECT wlb_utc t, wlb_g30Mage a, wlb_ws1Mage b, wlb_ws2Mage c '
+                      'FROM ws_line_bar WHERE wlb_utc <= %s ORDER BY wlb_utc DESC LIMIT %s',
+                      (bar, DR_LOOKBACK_S // 5 + 1), fetch=True)
+    face = list(reversed(face))
     rows = db.execute("""SELECT b.wbt_tf tf, b.wbt_r r, b.wbt_mage mg, b.wbt_mage_oob_tol mt,
               b.wbt_weak_mage_tf wmt, l.wflb_verdict u, l.wflb_curl_ends ce, l.wflb_stalled sl, l.wflb_slope sp,
               l.wflb_ungated ung, l.wflb_aligned al, l.wflb_bend_align ba, l.wflb_bendfit bf,
@@ -283,20 +296,36 @@ def main():
     print()
     print('    FOOTNOTES')
 
-    # 1. which way wsf is facing. Joe 0823: "wsf's dr will be set by the positioing of gcws30Mage,
-    #    ws1Mage and ws2Mage - if they are all > {100 - knob:20 fence} then dr = +1". jig's producer.
+    # 1. the dr the three Mage lines give. Joe 0823: "wsf's dr will be set by the positioing of
+    #    gcws30Mage, ws1Mage and ws2Mage - if they are all > {100 - knob:20 fence} then dr = +1",
+    #    and "restrict the lookback to 3 minutes". BOTH producers are jig's, and the lookback is
+    #    the same one build_dtf_delegation runs - proven identical on all 85 delegation rows,
+    #    0 mismatches.
+    #    IT REPORTS THE LOOKBACK ANSWER, NOT THE BAR-ONLY TEST. Reading only the bar said "no dr"
+    #    on 08-04 03:53:00 while the mechanic had dr +1 from 5 seconds earlier.
     if face:
-        f = face[0]
-        fdr = int(wsf_facing_dr([[f['a']], [f['b']], [f['c']]], 100 - MAGE_KNOB, MAGE_KNOB)[0])
-        w = {1: 'dr +1', -1: 'dr -1', 0: 'no facing - they do not all agree, so this is a stub'}[fdr]
-        print(f"      facing        gcws30Mage {float(f['a']):.2f}   ws1Mage {float(f['b']):.2f}"
-              f"   ws2Mage {float(f['c']):.2f}   against the {100 - MAGE_KNOB}/{MAGE_KNOB} fence"
-              f"  ->  {w}")
-        if fdr != dr:
+        f = face[-1]
+        live = wsf_facing_dr([[x['a'] for x in face], [x['b'] for x in face],
+                              [x['c'] for x in face]], 100 - MAGE_KNOB, MAGE_KNOB)
+        lb, lg = wsf_dr_lookback(live, DR_LOOKBACK_S // 5)
+        fdr, lag = int(lb[-1]), int(lg[-1])
+        print(f"      dr            gcws30Mage {float(f['a']):.2f}   ws1Mage {float(f['b']):.2f}"
+              f"   ws2Mage {float(f['c']):.2f}   against the {100 - MAGE_KNOB}/{MAGE_KNOB} fence")
+        if fdr == 0:
+            print(f"                    no dr - the three lines have not all been on one side of the"
+                  f" fence in the last {DR_LOOKBACK_S} s")
+        elif lag == 0:
+            print(f"                    dr {fdr:+d}, all three outside the fence at THIS bar")
+        else:
+            src = face[len(face) - 1 - lag]
+            print(f"                    dr {fdr:+d}, from {str(src['t'])[11:]}, {lag * 5} s back"
+                  f"   (gcws30Mage {float(src['a']):.2f}   ws1Mage {float(src['b']):.2f}"
+                  f"   ws2Mage {float(src['c']):.2f})")
+        if fdr != 0 and fdr != dr:
             print(f"                    THE BOARD ABOVE IS READ AT dr {dr:+d}, WHICH IS NOT WHAT THE"
-                  f" THREE MAGE LINES SAY.")
+                  f" THREE MAGE LINES GIVE.")
     else:
-        print('      facing        gcws30Mage / ws1Mage / ws2Mage are not banked at this bar')
+        print('      dr            gcws30Mage / ws1Mage / ws2Mage are not banked at this bar')
 
     # 2. Joe's template markers, spec 3.5: ws8r reversing, many aways, many ltf `r IB`s, weak-mage.
     w8 = H.get(8)

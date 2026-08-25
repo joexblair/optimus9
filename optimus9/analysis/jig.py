@@ -1581,6 +1581,36 @@ def stoch_out_extreme(stoch_out):
     return 1 if v == 0.0 else -1 if v == 100.0 else 0
 
 
+def wsf_dr_lookback(dr, nbars):
+    """[PRODUCER · Joe 0823] The most recent dr the three Mage lines gave, within nbars.
+
+    Joe 0823: "restrict the lookback to 3 minutes" - 36 bars at the 5 s grid. At a bar where the
+    three lines are not all outside the fence, this is the dr wsf actually uses.
+
+        dr      the per-bar output of wsf_facing_dr - +1, -1 or 0
+        nbars   how far back to look, in bars. The bar itself counts, so the window is nbars + 1.
+
+    -> (dr_out, lag) both int arrays, one per bar:
+        dr_out  the most recent non-zero dr in the window, 0 if there is none
+        lag     how many bars back it came from. 0 means the bar itself answered.
+                -1 where dr_out is 0.
+
+    Causal: bar i reads bars i-nbars to i and nothing later.
+    """
+    dr = np.asarray(dr, np.int8)
+    n = len(dr)
+    out = np.zeros(n, np.int8)
+    lag = np.full(n, -1, np.int32)
+    last = -1
+    for i in range(n):
+        if dr[i] != 0:
+            last = i
+        if last >= 0 and (i - last) <= int(nbars):
+            out[i] = dr[last]
+            lag[i] = i - last
+    return out, lag
+
+
 def wsf_facing_dr_held(dr, xwob):
     """[PRODUCER · Joe 0824] wsf_facing_dr() with a hold on it.
 

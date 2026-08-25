@@ -34,7 +34,7 @@ from optimus9.compute.line_config import LineStore, BBLine, override, mech_lines
 from optimus9.orchestration.rpl_cache import cache_jig_perline
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 from optimus9.analysis import ws_strat as WS
-from optimus9.analysis.jig import wsf_facing_dr
+from optimus9.analysis.jig import wsf_facing_dr, wsf_dr_lookback
 from optimus9.analysis.domtf import guide_wire_dr
 import build_momo_landed as B
 
@@ -91,6 +91,9 @@ def main():
     DR = guide_wire_dr(np.asarray(J.W.line(f'x{GW_TF}'), float), HI, LO, GW_XWOB)
     MG = [np.asarray(J.W.line(n), float) for n in FACE]
     WDR = wsf_facing_dr(MG, MHI, MLO)
+    # THE LOOKBACK IS jig.wsf_dr_lookback AND IS NOT RESTATED HERE. report_wsf_bar calls the same
+    # producer, so the report and this builder cannot answer the question differently.
+    WLB, WLG = wsf_dr_lookback(WDR, DDS_LOOKBACK_S // GRID)
 
     TAGDIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                           'optimus9', 'orchestration', '.ws_cache', 'tagged')
@@ -154,8 +157,7 @@ def main():
             if d: last_dr = d
             continue
         k = i0 + s; seq += 1
-        nb = DDS_LOOKBACK_S // GRID
-        j = next((z for z in range(k, max(-1, k - nb - 1), -1) if WDR[z] != 0), None)
+        j = None if int(WLG[k]) < 0 else k - int(WLG[k])
         rows.append((knobs, seq,
                      dt.datetime.fromtimestamp(int(ts[k]) / 1000, timezone.utc)
                        .strftime('%Y-%m-%d %H:%M:%S'),
