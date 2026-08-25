@@ -1609,3 +1609,99 @@ ws2 76.32 to 13.15, ws3 100.00 to 54.35, ws4 100.00 to 84.11.
 
 **DEPTH.** ws3r and ws4r each have the whole board beneath them and nothing stored to resist with.
 ws2r's ceiling protection expires first, in 6 minutes, and it is the line that starts the chain.
+
+## 3.22  THE MODEL AS IT STANDS, 0825 — and Joe's two new rules
+
+### 3.22.1  the model, banked
+
+**Question 2, which way am I facing.** `jig.wsf_facing_dr` on gcws30Mage, ws1Mage and ws2Mage
+against the 80/20 fence, then `jig.wsf_dr_lookback` over 180 s. If there is no dr there is no
+verdict - the board cannot be read at a direction. 00:52:30 and 04:45 are both refused on this
+alone.
+
+**Question 3, what state am I in.** The report footer. `wsf-exhaust` is the state that lets a trade
+fire; `wsf-momoc` and `wsf-momo-none` do not.
+
+**Then the board, in the order it actually decides things:**
+
+1. **where the pressure sits.** A line at 100.00 or 0.00 is at a limit, and a limit is a turning
+   point. A line near its fence with momentum that ended recently is holding pressure it must
+   release - Joe 0825 on ws4 at 95.
+2. **whether the pressure has anywhere to go.** 03:43:30 is a hold because the high timeframes had
+   already spent themselves; 04:49:00 is a trade because they had not.
+3. **where the carriers sit.** Mid-board is the lowest-momentum space, so a `momo` verdict there is
+   the weakest kind of carry. Carriers mid-board do not defend the state.
+4. **blast radius.** A line reaches its neighbours, not across the ladder. The trigger is a
+   neighbour turning - ws2r turning 5 s before 03:53:00.
+5. **what the board cannot do.** `stoch out` at 0 or 100 is a closed reading and cannot change.
+   Count the lines mechanically committed to the trade's own direction. Six of eight at 00:53:15
+   and 01:03:40 is the strongest seen; two of eight is the weakest.
+6. **Joe's template markers** - ws8r reversing at its fence, the away count, the low-timeframe
+   `r IB` count, weak-mage NONE with every Mage line out.
+7. **the entry** is not the setup bar. It is the ws{weak-mage-tf}x cross that follows, and the
+   weak-mage timeframe is re-read at each bar of the walk.
+
+**What the model does NOT have**: an answer to question 1, am I in trade. Every verdict so far has
+assumed flat. Joe's two rules below are the first part of that answer.
+
+### 3.22.2  RULE 1 - pyramiding, maximum two trades
+
+Joe 0825, verbatim: *"allows pyramiding, max 2 trades"*.
+
+- **two slots.** A second entry is allowed while the first is open.
+- **pyramiding means the same side**, so slot 2 only opens on the same dr as slot 1. That is the
+  word's meaning and it is also what Rule 2 assumes - an OPPOSING dr is the thing that ends
+  dormancy, which only makes sense if both open trades face the same way. STATED, not asked.
+
+### 3.22.3  RULE 2 - both slots occupied, the walk goes dormant
+
+Joe 0825, verbatim: *"if both trade slots are occupied, the walk will take no action/stay dormant
+until an opposing (three-mage or wsf9of12) dr prints. keep it causal"*.
+
+- **two sources wake it**, either one: the three-Mage dr (`jig.wsf_facing_dr` with the 180 s
+  lookback) or the wsf9of12 signal's own side (`ws_fin_9of12.wsf_side`).
+- **opposing** means the sign is the reverse of the open trades' dr.
+- **causal**: both are read at their own bar. The three-Mage lookback only looks backward, and a
+  wsf9of12 side exists at the bar it prints.
+
+### 3.22.4  THREE THINGS JOE HAS NOT SAID, and one of them is implemented
+
+1. **what CLOSES a slot.** Nothing in the model closes a position. **IMPLEMENTED AS: the opposing
+   dr that ends dormancy also frees both slots** - because otherwise "dormant until an opposing dr
+   prints" has no meaning, the walk would be dormant forever after the second trade. This is my
+   reading of Joe's sentence, not his instruction, and it is the exit rule by default.
+2. **what DISARMS a pending setup.** Joe's 1.6 says "walk forward" until the cross prints. As built
+   the walk stays armed until it does, even if the state leaves wsf-exhaust in between. NOT ASKED.
+3. **whether an opposing dr while only ONE slot is filled does anything.** Rule 2 names both slots
+   occupied only. As built, one open trade plus an opposing dr does nothing. NOT ASKED.
+
+### 3.22.5  the walk is BUILT, and Rule 1 as written costs the two trades Joe just confirmed
+
+`build_wsf_walk.py` runs the causal forward walk over 08-04 and banks every event to `wsf_walk`.
+Over 17,280 bars: **9 armed, 9 signals, 4 dormant stretches, 4 wakes.**
+
+**THE PROBLEM, measured.** Slot 1 is taken at 00:25:15 at dr +1. Pyramiding is same-side, so every
+dr -1 setup after it is blocked while that slot stays open - and Rule 2 only frees slots when BOTH
+are occupied. The walk therefore arms nothing between **00:25:15 and 08:03:15, a stretch of 7h38m**.
+
+Inside that stretch there are **39 separate trade-ready periods, all of them dr -1**, including:
+
+| first bar | dr | ends |
+|---|---|---|
+| 00:53:15 | -1 | 00:54:15 |
+| 00:58:15 | -1 | 00:58:25 |
+| 00:59:20 | -1 | 00:59:25 |
+| **01:03:40** | **-1** | 01:04:10 |
+| 01:06:30 | -1 | 01:06:35 |
+
+**00:53:15 and 01:03:40 are the two Joe just confirmed** - *"that's a well placed trade"* and
+*"good"*. As the rules are written they never happen.
+
+**This is concretion 3 in 3.22.4, and it is load-bearing.** Joe's Rule 2 names both slots occupied.
+It says nothing about ONE slot occupied and an opposing dr arriving. Three readings, all Joe's to
+pick, none of them built:
+
+1. **as written** - same-side only, one slot filled, opposing setups blocked. Costs 39 periods.
+2. **an opposing dr frees a single open slot too**, then the walk re-arms on the new side.
+3. **slot 2 may be opposite** - but then it is not pyramiding and Rule 2's wake test has two
+   directions to compare against.
