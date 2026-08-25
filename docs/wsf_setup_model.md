@@ -1477,3 +1477,36 @@ Nothing changed in the code this turn. The concretions, for Joe:
    alongside? Joe 0823: *"the stub will capture only the dtf-free delegation moments"*.
 3. does the 180 s knob stay at 180 s?
 4. do the 63 moments with no answer stay stubs, or become something else?
+
+### 3.20.6  what 03:53 and 03:54 show — the lookback hands over a dead condition
+
+Joe 0824: *"what do you find at 03:53 and 03:54?"*
+
+**The all-three-out run ENDS at 03:53:00.** gcws30Mage falls through the 80 fence:
+
+| bar | gcws30Mage | ws1Mage | ws2Mage | all three above 80 |
+|---|---|---|---|---|
+| 03:52:50 | 90.29 | 93.93 | 92.32 | yes |
+| **03:52:55** | **81.03** | **88.28** | **85.81** | **yes - the LAST bar of the run** |
+| 03:53:00 | 79.35 | 85.22 | 85.23 | **no** |
+| 03:53:05 | 71.35 | 80.74 | 79.90 | no |
+| 03:53:30 | 60.86 | 75.36 | 73.48 | no |
+
+03:52:55 is the bar the 3-minute lookback hands to the 03:55:20 delegation, 2m25s later. **By the
+time that delegation fires, the condition has been dead for 2m20s and gcws30Mage has fallen from
+81.03 to below 60.** This is the risk already flagged in 3.20.5 question 3, now with a number on it.
+
+**Across the two minutes, 24 bars, dr +1:**
+
+- **the state never changes.** wsf-momoc on every bar, ws5r ws6r and ws7r carrying throughout.
+  ws7r joined since 03:50:20.
+- **no verdict changes on any line.** Two heading changes only, both on ws3r: away to toward at
+  03:54:40, back to away at 03:54:45.
+- **the facing reads `none` on all 24 bars.**
+- **the board drifts against a dr +1 trade.** Lines that can only RISE go from 3 to 4; lines that
+  can only FALL stay at 2. A dr +1 trade needs r to fall.
+- **the low timeframes are falling**: ws1r 40.52 to 28.68, ws3r 100.00 to 83.12, ws4r 95.25 to 90.70.
+- **every Mage line is still out of bounds and weak-mage is NONE** on all 24 bars, so Joe's superior
+  marker holds the whole way through while everything else deteriorates.
+
+**No wsf-exhaust in the window, so no trade at either minute.**
