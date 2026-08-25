@@ -1787,3 +1787,87 @@ never flat after the first entry - it holds 1 or 2 and turns over on the opposin
 
 **Joe's two confirmed bars both land where he read them.** 00:53:15 is the flip that turns the
 board, its cross at 01:02:35 is the entry, and **01:03:40 is the pyramid on top of it**.
+
+## 3.23  THE x-CROSS FORCED wsf-exhaust — Joe's 0825 ingredient, and his answers
+
+Joe 0825, the ingredient verbatim:
+
+> "because ws8r is mid-board, and ws7r's verdict is recently none (ie has just left the fence), AND
+> ws7r was crossed, ws8r is confirming that it cannot carry its momentum past the fence"
+> "because ws8r cannot carry its momentum, the wsf-exhaust is declared at the time of the x-cross"
+> "because the x-cross created the wsf-exhaust event, it will simultaeneously create a trade signal"
+> "this mech can apply to any TF that has momo, eg TF3, TF4, TF5 @ ~10:57"
+
+### 3.23.1  Joe's answers to the eleven questions, verbatim
+
+| # | the question | Joe |
+|---|---|---|
+| 1 | which x is watched | *"I'm making a guess - use the highest line holding the momo (ws8x)"* |
+| 2 | how recent is "recently none" | *"compared against the lines in its blast radius (6 and 8)"* |
+| 3 | must the previous verdict be momo | *"specific to this ingredient: past the fence with `none` state"* |
+| 4 | what is mid-board | *"we'll need to sweep this. start with a fence based on 100-{knob:35} (ie 65:35 fence)"* |
+| 5 | must the confirmer be mid-board | **CORRECTED BY JOE**: *"I was wrong: it's not always mid-board, it just needs to be inside the fence"* |
+| 6 | replace or join the weak-mage x-cross | *"both exist, side by side"* |
+| 7 | what does "r outside the fence at the cross" replace | *"no, this is a new condition. it needs to have a higher momentum=true TF (eg ws8) inside the fence while the crossed (lower, eg 7) line is outside the fence"* |
+| 8 | several lines past the fence | *"create a race condition"* |
+| 9 | does it re-fire if r continues | *"no. if that happens, the trade will fail and the mechanisms will need to re-start when dr is captured (ie, keep walking until dr)"* |
+| 10 | the signal on the same bar | *"when x-cross forces the wsf-exhaust event, any open positions are closed and the first pyramid slot is opened"* |
+| 11 | does the dr latch apply | *"the dr latch applies"* |
+
+### 3.23.2  THE NEW KNOB
+
+    MID_FENCE_KNOB = 35     # Joe 0825: "start with a fence based on 100-{knob:35} (ie 65:35 fence)"
+                            # -> the fence is 65 / 35. TO BE SWEPT - Joe: "we'll need to sweep this".
+
+This sits alongside the fences already in use: the 85/15 system boundary, momo-fence-r 83/17, and the
+three-Mage 80/20 dr fence. **It is not yet consumed by any code.**
+
+### 3.23.3  MEASURED AGAINST JOE'S OWN CSV, and one contradiction
+
+`transfer/0804_wsf-exhaust_timestamps.csv` holds 37 rows, **24 marked
+`x-cross_forced_wsf-exhaust` = yes**, each with a TF and a dr.
+
+**Joe's `TF` column is the LOWEST line holding momo at that bar, not the highest.** Measured at each
+labelled bar:
+
+| est | Joe's TF | dr | momo holders at that bar | lowest | highest |
+|---|---|---|---|---|---|
+| 03:22 | 6 | -1 | ws6,ws7,ws8 | **ws6** | ws8 |
+| 03:53 | 5 | +1 | ws5,ws6,ws7 | **ws5** | ws7 |
+| 04:14 | 4 | -1 | ws4,ws5 | **ws4** | ws5 |
+| 10:00 | 4 | +1 | ws4,ws5,ws6,ws7,ws8 | **ws4** | ws8 |
+| 10:57 | 3 | +1 | ws3,ws4,ws5 | **ws3** | ws5 |
+| 11:38 | 5 | -1 | ws5,ws6,ws7 | **ws5** | ws7 |
+| 11:57 | 4 | +1 | ws4,ws5,ws6 | **ws4** | ws6 |
+| 12:15 | 3 | -1 | ws3,ws4 | **ws3** | ws4 |
+| 14:48 | 6 | +1 | ws6,ws7,ws8 | **ws6** | ws8 |
+| 15:56 | 4 | +1 | ws4,ws5,ws6 | **ws4** | ws6 |
+| 19:26 | 2 | -1 | ws2,ws3 | **ws2** | ws3 |
+| 19:46 | 3 | +1 | ws3,ws4,ws7,ws8 | **ws3** | ws8 |
+| 21:12 | 2 | -1 | ws2,ws3,ws4 | **ws2** | ws4 |
+| 23:15 | 6 | +1 | ws6,ws7,ws8 | **ws6** | ws8 |
+| 23:40 | 4 | -1 | ws4,ws5,ws6 | **ws4** | ws6 |
+
+**16 of 24 match the lowest exactly.** The eight that do not are all rows where Joe's estimate is to
+the minute and the board moved; none of them matches the highest either.
+
+**And the cross is the line's OWN x crossing its OWN r** - not a cross-timeframe one. Tested at
+XCROSS_XWOB 5:
+
+| est | Joe's TF | the own-x cross | offset from Joe's estimate |
+|---|---|---|---|
+| 10:57 | 3 | ws3x under ws3r at **10:57:30** | +30 s |
+| 23:40 | 4 | ws4x under ws4r at **23:40:25** | +25 s |
+| 19:26 | 2 | ws2x over ws2r at **19:26:20** | +20 s |
+| 03:53 | 5 | ws5x under ws5r at **03:55:20** | +2m20s |
+| 12:15 | 3 | ws3x over ws3r at **12:17:25** | +2m25s |
+| 11:57 | 4 | ws4x under ws4r at **12:00:20** | +3m20s |
+| 23:15 | 6 | **none** in est-3m to est+5m | - |
+
+**The cross-timeframe reading was tested and rejected**: ws8x under ws7r lands at 01:56:45 and
+02:00:20; ws5x under ws2r lands at 11:03:55 and 11:05:20. Neither is near Joe's estimates.
+
+**THE CONTRADICTION, and it is the one thing blocking the build.** Joe's answer to question 1 says
+the **highest** momo holder. His own 24 labelled rows say the **lowest**. At 01:59:20 - the case the
+ingredient was described on - ws8 was the ONLY momo holder, so highest and lowest are the same line
+and that example cannot separate them.
