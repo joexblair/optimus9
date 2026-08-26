@@ -63,6 +63,20 @@ MID_FENCE_KNOB = 35     # KNOB, Joe 0825: "start with a fence based on 100-{knob
                         # here for the sweep Joe asked for.
 WMT_TF_LO     = 2       # the weak-mage scan floor, Joe 0821
 MAX_TRADES    = 2       # KNOB, Joe 0825: "allows pyramiding, max 2 trades"
+FRESH_BOARD   = 0       # 0 off | 1 mask as `none` | 2 mask as `curl`.  KNOB, Joe 0826: "what happens if you set all line headings to `toward`
+                        # and all line verdicts to `none`, after a trade signal fires - ie, create a
+                        # fresh board for the walk to develop".
+                        # When a slot OPENS, every line's verdict is stamped, and that line reads
+                        # the MASK VALUE until its own verdict DIFFERS from the stamp - at which
+                        # point the line has developed and its real reading resumes.
+                        # 1 masks as `none`. Joe 0826: "none was a bad call on my side" - an
+                        #   all-`none` board is exhausted by definition, so the walk arms at once.
+                        # 2 masks as `curl`. Joe 0826: "force the lines to prove that they are
+                        #   heading away from the dr that created the trade signal".
+                        # THE HEADING HALF IS NOT IMPLEMENTED because the walk never reads heading;
+                        # it would change only the report's away/toward counts.
+                        # MY READING of "for the walk to develop", stated. Joe did not say how long
+                        # the fresh board holds.
 GRID          = 5       # seconds per bar
 
 DDL = '''CREATE TABLE IF NOT EXISTS wsf_walk (
@@ -85,6 +99,9 @@ DDL = '''CREATE TABLE IF NOT EXISTS wsf_walk (
 COLS = ['wwk_knobs', 'wwk_seq', 'wwk_utc', 'wwk_event', 'wwk_dr', 'wwk_slots',
         'wwk_tf', 'wwk_target', 'wwk_source', 'wwk_note',
         'wwk_slot1_utc', 'wwk_slot1_state', 'wwk_slot2_utc', 'wwk_slot2_state']
+
+
+WALK_KNOBS = f'{KNOBS}_mt{MAX_TRADES}_fb{FRESH_BOARD}'
 
 
 def main():
@@ -135,6 +152,7 @@ def main():
     pool = []          # ONE POOL OF MAX_TRADES SLOTS. Each is {'dr': +-1, 'state': armed | open}
     prev_won = {}      # (tf, dr) -> the previous bar's race winner, for the rising edge
     was_ready = False  # the previous bar was a wsf-exhaust with a dr, for the arming rising edge
+    stamp = {}         # FRESH_BOARD: (dr, tf) -> the verdict at the last slot opening
     forced_armed = True  # the x-cross forced exhaust is ONE SHOT. Joe 0825: "does the exhaust
                          # re-fire if r continues - no ... the mechanisms will need to re-start when
                          # dr is captured (ie, keep walking until dr)". So it disarms on a fire and
@@ -160,9 +178,22 @@ def main():
     def n_open():
         return sum(1 for s_ in pool if s_['state'] == 'open')
 
+    def fresh(raw_board):
+        """FRESH_BOARD: a stamped line reads `none` until its own verdict changes."""
+        if not FRESH_BOARD or not stamp or raw_board is None:
+            return raw_board
+        out = dict(raw_board)
+        for key, was in list(stamp.items()):
+            if key in out:
+                if out[key] == was:
+                    out[key] = 'none' if FRESH_BOARD == 1 else 'curl'
+                else:
+                    del stamp[key]          # the line has developed - real reading resumes
+        return out
+
     for i, t in enumerate(T):
         dr = int(DR[i])
-        board = V.get(t)
+        board = fresh(V.get(t))
         if int(DRr[i]) != 0:            # a LIVE three-Mage print re-arms the forced exhaust
             forced_armed = True
 
@@ -178,7 +209,7 @@ def main():
             if src:
                 awake = src
                 seq += 1
-                rows.append((KNOBS, seq, t, 'wake', -side(), len(pool), None, None, src,
+                rows.append((WALK_KNOBS, seq, t, 'wake', -side(), len(pool), None, None, src,
                              f'opposing dr {-side():+d} from {src}'
                              + (f' after {(i - dormant_from) * GRID} s dormant' if dormant_from else '')
                              + '. Watching for the opposing trade. Nothing closed.')
@@ -215,8 +246,9 @@ def main():
             if forced is not None:
                 op, ar = n_open(), len(pool) - n_open()
                 pool = [{'dr': dr, 'state': 'open', 'at': t}]
+                stamp = dict(V.get(t) or {}) if FRESH_BOARD else {}
                 seq += 1
-                rows.append((KNOBS, seq, t, 'forced', dr, 1, forced, 'r', None,
+                rows.append((WALK_KNOBS, seq, t, 'forced', dr, 1, forced, 'r', None,
                              f'ws{forced}x crossed ws{forced}r while ws{forced}r is past the fence '
                              f'and ws{max(h for h in inside if h > forced)}r holds momo inside it'
                              + (f' - closes {op} open' if op else '')
@@ -244,8 +276,9 @@ def main():
                 if won is not None and prev_won.get((int(wm), flip['dr'])) is None:
                     op, ar = n_open(), len(pool) - n_open()
                     newpool = [{'dr': flip['dr'], 'state': 'open', 'at': t}]
+                    stamp = dict(V.get(t) or {}) if FRESH_BOARD else {}
                     seq += 1
-                    rows.append((KNOBS, seq, t, 'close', flip['dr'], 1, int(wm), won, awake,
+                    rows.append((WALK_KNOBS, seq, t, 'close', flip['dr'], 1, int(wm), won, awake,
                                  f'ws{wm}x crossed its {won} target on the opposing side - '
                                  f'closes {op} open'
                                  + (f' and clears {ar} armed' if ar else '')
@@ -263,14 +296,15 @@ def main():
             won = XC.get((t, int(wm), s_['dr']))
             if won is not None and prev_won.get((int(wm), s_['dr'])) is None:
                 s_['state'] = 'open'
+                stamp = dict(V.get(t) or {}) if FRESH_BOARD else {}
                 seq += 1
-                rows.append((KNOBS, seq, t, 'signal', s_['dr'], len(pool), int(wm), won, None,
+                rows.append((WALK_KNOBS, seq, t, 'signal', s_['dr'], len(pool), int(wm), won, None,
                              f'ws{wm}x crossed its {won} target. '
                              f'{n_open()} open, {len(pool) - n_open()} armed.') + slots_of(pool, t))
                 if n_open() >= MAX_TRADES:
                     dormant_from = i
                     seq += 1
-                    rows.append((KNOBS, seq, t, 'dormant', s_['dr'], len(pool), None, None, None,
+                    rows.append((WALK_KNOBS, seq, t, 'dormant', s_['dr'], len(pool), None, None, None,
                                  'both slots occupied - no action until an opposing dr prints')
                                 + slots_of(pool, t))
                 break                                  # one conversion per bar
@@ -287,13 +321,13 @@ def main():
             if pool and dr == -side() and awake and flip is None:
                 flip = {'dr': dr, 'state': 'armed', 'at': t}   # the opposing setup that closes the pool
                 seq += 1
-                rows.append((KNOBS, seq, t, 'flip', dr, len(pool), None, None, awake,
+                rows.append((WALK_KNOBS, seq, t, 'flip', dr, len(pool), None, None, awake,
                              'opposing wsf-exhaust - walking forward for the x-cross that closes '
                              'the open trades') + slots_of(pool, t))
             elif len(pool) < MAX_TRADES and (not pool or dr == side()):   # RULE 1: same-side only
                 pool.append({'dr': dr, 'state': 'armed', 'at': t})
                 seq += 1
-                rows.append((KNOBS, seq, t, 'armed', dr, len(pool), None, None, None,
+                rows.append((WALK_KNOBS, seq, t, 'armed', dr, len(pool), None, None, None,
                              f'wsf-exhaust with a dr - walking forward for the x-cross. '
                              f'{n_open()} open, {len(pool) - n_open()} armed.') + slots_of(pool, t))
         was_ready = ready
@@ -309,10 +343,10 @@ def main():
         if col not in have:
             db.execute(f'ALTER TABLE wsf_walk ADD COLUMN {col} {spec}')
             print(f'  added {col}', flush=True)
-    n = db.execute('SELECT COUNT(*) c FROM wsf_walk WHERE wwk_knobs=%s', (KNOBS,), fetch=True)[0]['c']
+    n = db.execute('SELECT COUNT(*) c FROM wsf_walk WHERE wwk_knobs=%s', (WALK_KNOBS,), fetch=True)[0]['c']
     if n:
         print(f'  replacing {n} rows at these knobs', flush=True)
-        db.execute('DELETE FROM wsf_walk WHERE wwk_knobs=%s', (KNOBS,))
+        db.execute('DELETE FROM wsf_walk WHERE wwk_knobs=%s', (WALK_KNOBS,))
     db.executemany(f'INSERT INTO wsf_walk ({",".join(COLS)}) VALUES '
                    f'({",".join(["%s"] * len(COLS))})', rows)
 

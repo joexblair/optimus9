@@ -27,22 +27,26 @@ import numpy as np
 
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
-from optimus9.compute.line_config import LineStore
+from optimus9.compute.line_config import LineStore, mech_lines
 from optimus9.orchestration.rpl_cache import cache_jig_perline
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 
 START = dt.datetime(2026, 8, 4, 0, 0, tzinfo=timezone.utc)
 END   = dt.datetime(2026, 8, 5, 0, 0, tzinfo=timezone.utc)
 
-GROUPS = [('ws1', 60), ('ws2', 120), ('ws3', 180), ('ws4', 240), ('ws5', 300), ('ws6', 360),
-          ('ws7', 420), ('ws8', 480), ('ws9', 540), ('ws10', 600),
-          ('gcws15', 15), ('gcws30', 30)]
-# ws7, ws9 and ws10 added to the line store on Joe 0816, "update the linestore accordingly", so
-# every timeframe in jig.MOMO_CHECK_TFS (2 to 10) has all five lines.
+GROUPS = ([(f'ws{t}', t * 60) for t in range(1, 28)] + [('gcws15', 15), ('gcws30', 30)])
+# EXTENDED 0826, Joe: "extend the line cache - let's have everything from gcws15 to ws27 included".
+# ws7, ws9 and ws10 were added to the line store on Joe 0816, "update the linestore accordingly".
+#
+# A LINE IS INCLUDED ONLY WHERE A CONFIG EXISTS. Two sources are tried, in order:
+#   1. LineStore (indicator_configs) - ws1..ws10, ws15, ws22, gcws15, gcws30
+#   2. mech_line_config via mech_lines - wsf roles x/m/Mage/b/r at TF1-8, domtf roles r/x at TF13-27
+# The fallback is the same route build_domtf_mage_cache.py and build_dtf_delegation.py already use,
+# so nothing is hardcoded and nothing is invented. Anything with no config in either source prints
+# `no config` and is skipped - see the skip list the run prints.
 KINDS = ['x', 'm', 'Mage', 'b', 'r']
-COL = {'ws1': 'ws1', 'ws2': 'ws2', 'ws3': 'ws3', 'ws4': 'ws4', 'ws5': 'ws5', 'ws6': 'ws6',
-       'ws7': 'ws7', 'ws8': 'ws8', 'ws9': 'ws9', 'ws10': 'ws10',
-       'gcws15': 'g15', 'gcws30': 'g30'}
+COL = {f'ws{t}': f'ws{t}' for t in range(1, 28)}
+COL.update({'gcws15': 'g15', 'gcws30': 'g30'})
 
 
 def u(ms):
@@ -55,14 +59,26 @@ def main():
                       'lo_boundary lo FROM optimus9_system WHERE sys_pk=1', fetch=True)[0]
     HI, LO = float(sysr['h']), float(sysr['lo'])
     ls = LineStore(db)
-    names, ovr = [], {}
+    # the second source: every mech's declared lines, keyed by name
+    MECH = {}
+    for m in ('wsf', 'domtf'):
+        for grp in mech_lines(db, m):
+            MECH[f"ws{grp['tf_seconds'] // 60}{grp['role']}"] = grp['override']
+    names, ovr, skipped = [], {}, []
     for g, _ in GROUPS:
         for k in KINDS:
             n = f'{g}{k}'
             try:
                 ovr[n] = (*ls.resolve(n), ls.value_mode(n)); names.append(n)
             except Exception:
-                print(f'  no config for {n}, skipped', flush=True)
+                if n in MECH:
+                    ovr[n] = MECH[n]; names.append(n)
+                else:
+                    skipped.append(n)
+    if skipped:
+        print(f'  NO CONFIG in indicator_configs or mech_line_config, skipped {len(skipped)}:',
+              flush=True)
+        print('    ' + ', '.join(skipped), flush=True)
     J = cache_jig_perline(END_MS, HOURS, WARMUP, ovr,
                           pxs_cfg={'src': sysr['s'], 'len': sysr['l']}, rebuild=False)
     ts = np.asarray(J.ts); W = J.W
