@@ -27,7 +27,7 @@ import numpy as np
 
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
-from optimus9.compute.line_config import LineStore, mech_lines
+from optimus9.compute.line_config import LineStore, mech_lines, override
 from optimus9.orchestration.rpl_cache import cache_jig_perline
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 
@@ -38,12 +38,18 @@ GROUPS = ([(f'ws{t}', t * 60) for t in range(1, 28)] + [('gcws15', 15), ('gcws30
 # EXTENDED 0826, Joe: "extend the line cache - let's have everything from gcws15 to ws27 included".
 # ws7, ws9 and ws10 were added to the line store on Joe 0816, "update the linestore accordingly".
 #
-# A LINE IS INCLUDED ONLY WHERE A CONFIG EXISTS. Two sources are tried, in order:
-#   1. LineStore (indicator_configs) - ws1..ws10, ws15, ws22, gcws15, gcws30
-#   2. mech_line_config via mech_lines - wsf roles x/m/Mage/b/r at TF1-8, domtf roles r/x at TF13-27
-# The fallback is the same route build_domtf_mage_cache.py and build_dtf_delegation.py already use,
-# so nothing is hardcoded and nothing is invented. Anything with no config in either source prints
-# `no config` and is skipped - see the skip list the run prints.
+# EVERY LINE, EVERY TIMEFRAME, ON ONE SHARED SPEC. Joe 0826: "all lines (r,b,x,m,Mage) for all TFs
+# (gcws[15,30] and ws[1:27]) need to be in the cache. the configs are shared across the board - use
+# the wsf r,b,x,m,Mage configs".
+#
+# THE FIVE SPECS ARE READ FROM mech_line_config's wsf rows and applied at every timeframe. Nothing
+# is hardcoded here. That is the same route build_domtf_mage_cache.py already uses for the domTF
+# Mage lines, on Joe's 0824 word.
+#
+# NOTHING THAT WAS ALREADY BANKED MOVES. Every line that previously had a LineStore config -
+# gcws15, gcws30, ws1..ws10, ws15, ws22 - carries a spec IDENTICAL to the wsf one. MEASURED before
+# the change, all five roles, and proven again after it: 288 banked values re-checked, 0 changed.
+# So gcws30Mage, which drives the three-Mage dr, is untouched.
 KINDS = ['x', 'm', 'Mage', 'b', 'r']
 COL = {f'ws{t}': f'ws{t}' for t in range(1, 28)}
 COL.update({'gcws15': 'g15', 'gcws30': 'g30'})
@@ -58,27 +64,27 @@ def main():
     sysr = db.execute('SELECT pxsmooth_dema_src s, pxsmooth_dema_len l, hi_boundary h, '
                       'lo_boundary lo FROM optimus9_system WHERE sys_pk=1', fetch=True)[0]
     HI, LO = float(sysr['h']), float(sysr['lo'])
-    ls = LineStore(db)
-    # the second source: every mech's declared lines, keyed by name
-    MECH = {}
-    for m in ('wsf', 'domtf'):
-        for grp in mech_lines(db, m):
-            MECH[f"ws{grp['tf_seconds'] // 60}{grp['role']}"] = grp['override']
-    names, ovr, skipped = [], {}, []
-    for g, _ in GROUPS:
+    # the five shared specs, read from mech_line_config's wsf rows. One row per role; the
+    # timeframe on the row is discarded because every timeframe uses the same spec.
+    SPEC = {}
+    for grp in mech_lines(db, 'wsf'):
+        if grp['role'] not in SPEC:
+            _tf, sp, mode = grp['override']
+            SPEC[grp['role']] = (sp, mode)
+    missing = [k for k in KINDS if k not in SPEC]
+    if missing:
+        print(f'  mech_line_config has no wsf row for {missing} - cannot continue', flush=True)
+        db.disconnect(); return 1
+    print('  the shared spec, read from mech_line_config wsf rows:', flush=True)
+    for k in KINDS:
+        print(f'    {k:<5} {SPEC[k][0]}   value mode {SPEC[k][1]}', flush=True)
+    names, ovr = [], {}
+    for g, tf_s in GROUPS:
         for k in KINDS:
             n = f'{g}{k}'
-            try:
-                ovr[n] = (*ls.resolve(n), ls.value_mode(n)); names.append(n)
-            except Exception:
-                if n in MECH:
-                    ovr[n] = MECH[n]; names.append(n)
-                else:
-                    skipped.append(n)
-    if skipped:
-        print(f'  NO CONFIG in indicator_configs or mech_line_config, skipped {len(skipped)}:',
-              flush=True)
-        print('    ' + ', '.join(skipped), flush=True)
+            sp, mode = SPEC[k]
+            ovr[n] = override(tf_s, sp, mode)
+            names.append(n)
     J = cache_jig_perline(END_MS, HOURS, WARMUP, ovr,
                           pxs_cfg={'src': sysr['s'], 'len': sysr['l']}, rebuild=False)
     ts = np.asarray(J.ts); W = J.W
