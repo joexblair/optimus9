@@ -77,10 +77,14 @@ DDL = '''CREATE TABLE IF NOT EXISTS wsf_walk (
     wwk_target VARCHAR(10),          -- which target x crossed, on a signal row
     wwk_source VARCHAR(12),          -- on a wake row: three-mage | wsf9of12
     wwk_note VARCHAR(160) NOT NULL DEFAULT '',
+    -- the pyramid slots AFTER the event, so report_wsf_bar can print them at any bar
+    wwk_slot1_utc DATETIME, wwk_slot1_state VARCHAR(6),
+    wwk_slot2_utc DATETIME, wwk_slot2_state VARCHAR(6),
     UNIQUE KEY uq_wwk (wwk_knobs, wwk_utc, wwk_event))'''
 
 COLS = ['wwk_knobs', 'wwk_seq', 'wwk_utc', 'wwk_event', 'wwk_dr', 'wwk_slots',
-        'wwk_tf', 'wwk_target', 'wwk_source', 'wwk_note']
+        'wwk_tf', 'wwk_target', 'wwk_source', 'wwk_note',
+        'wwk_slot1_utc', 'wwk_slot1_state', 'wwk_slot2_utc', 'wwk_slot2_state']
 
 
 def main():
@@ -142,6 +146,17 @@ def main():
     def side():
         return pool[0]['dr'] if pool else 0
 
+    def slots_of(pl, when):
+        """the two pyramid slots AFTER the event, for report_wsf_bar's footer line.
+        A slot carries the bar it was TAKEN and whether it is armed or open."""
+        out = []
+        for k in range(MAX_TRADES):
+            if k < len(pl):
+                out += [pl[k].get('at', when), pl[k]['state']]
+            else:
+                out += [None, None]
+        return tuple(out)
+
     def n_open():
         return sum(1 for s_ in pool if s_['state'] == 'open')
 
@@ -166,7 +181,8 @@ def main():
                 rows.append((KNOBS, seq, t, 'wake', -side(), len(pool), None, None, src,
                              f'opposing dr {-side():+d} from {src}'
                              + (f' after {(i - dormant_from) * GRID} s dormant' if dormant_from else '')
-                             + '. Watching for the opposing trade. Nothing closed.'))
+                             + '. Watching for the opposing trade. Nothing closed.')
+                            + slots_of(pool, t))
 
         # THE x-CROSS FORCED wsf-exhaust. Joe 0825, the ingredient:
         #   "because ws8r is mid-board, and ws7r's verdict is recently none (ie has just left the
@@ -198,14 +214,14 @@ def main():
                            if any(h > p for h in inside) and XR.get((t, p, dr))), None)
             if forced is not None:
                 op, ar = n_open(), len(pool) - n_open()
+                pool = [{'dr': dr, 'state': 'open', 'at': t}]
                 seq += 1
                 rows.append((KNOBS, seq, t, 'forced', dr, 1, forced, 'r', None,
                              f'ws{forced}x crossed ws{forced}r while ws{forced}r is past the fence '
                              f'and ws{max(h for h in inside if h > forced)}r holds momo inside it'
                              + (f' - closes {op} open' if op else '')
                              + (f', clears {ar} armed' if ar else '')
-                             + '. Slot 1 of the new pool.'))
-                pool = [{'dr': dr, 'state': 'open'}]
+                             + '. Slot 1 of the new pool.') + slots_of(pool, t))
                 flip, awake, dormant_from, was_ready = None, None, None, True
                 forced_armed = False
                 for tf in range(1, 9):
@@ -227,13 +243,14 @@ def main():
                 won = XC.get((t, int(wm), flip['dr']))
                 if won is not None and prev_won.get((int(wm), flip['dr'])) is None:
                     op, ar = n_open(), len(pool) - n_open()
+                    newpool = [{'dr': flip['dr'], 'state': 'open', 'at': t}]
                     seq += 1
                     rows.append((KNOBS, seq, t, 'close', flip['dr'], 1, int(wm), won, awake,
                                  f'ws{wm}x crossed its {won} target on the opposing side - '
                                  f'closes {op} open'
                                  + (f' and clears {ar} armed' if ar else '')
-                                 + f'. Becomes slot 1 of the new pool.'))
-                    pool = [{'dr': flip['dr'], 'state': 'open'}]
+                                 + f'. Becomes slot 1 of the new pool.') + slots_of(newpool, t))
+                    pool = newpool
                     flip, awake, dormant_from, was_ready = None, None, None, True
 
         # a pending setup: has the weak-mage line's cross printed at THIS bar?
@@ -249,12 +266,13 @@ def main():
                 seq += 1
                 rows.append((KNOBS, seq, t, 'signal', s_['dr'], len(pool), int(wm), won, None,
                              f'ws{wm}x crossed its {won} target. '
-                             f'{n_open()} open, {len(pool) - n_open()} armed.'))
+                             f'{n_open()} open, {len(pool) - n_open()} armed.') + slots_of(pool, t))
                 if n_open() >= MAX_TRADES:
                     dormant_from = i
                     seq += 1
                     rows.append((KNOBS, seq, t, 'dormant', s_['dr'], len(pool), None, None, None,
-                                 'both slots occupied - no action until an opposing dr prints'))
+                                 'both slots occupied - no action until an opposing dr prints')
+                                + slots_of(pool, t))
                 break                                  # one conversion per bar
 
         # arm on the RISING EDGE of a wsf-exhaust bar that has a dr, when the pool has room and
@@ -267,17 +285,17 @@ def main():
                  and not [tf for tf in range(1, 9) if board.get((dr, tf)) in ('momo', 'curl')])
         if ready and not was_ready:
             if pool and dr == -side() and awake and flip is None:
-                flip = {'dr': dr, 'state': 'armed'}    # the opposing setup that will close the pool
+                flip = {'dr': dr, 'state': 'armed', 'at': t}   # the opposing setup that closes the pool
                 seq += 1
                 rows.append((KNOBS, seq, t, 'flip', dr, len(pool), None, None, awake,
                              'opposing wsf-exhaust - walking forward for the x-cross that closes '
-                             'the open trades'))
+                             'the open trades') + slots_of(pool, t))
             elif len(pool) < MAX_TRADES and (not pool or dr == side()):   # RULE 1: same-side only
-                pool.append({'dr': dr, 'state': 'armed'})
+                pool.append({'dr': dr, 'state': 'armed', 'at': t})
                 seq += 1
                 rows.append((KNOBS, seq, t, 'armed', dr, len(pool), None, None, None,
                              f'wsf-exhaust with a dr - walking forward for the x-cross. '
-                             f'{n_open()} open, {len(pool) - n_open()} armed.'))
+                             f'{n_open()} open, {len(pool) - n_open()} armed.') + slots_of(pool, t))
         was_ready = ready
 
         for tf in range(1, 9):
@@ -285,6 +303,12 @@ def main():
                 prev_won[(tf, d)] = XC.get((t, tf, d))
 
     db.execute(DDL)
+    have = {c['Field'] for c in db.execute('SHOW COLUMNS FROM wsf_walk', fetch=True)}
+    for col, spec in (('wwk_slot1_utc', 'DATETIME'), ('wwk_slot1_state', 'VARCHAR(6)'),
+                      ('wwk_slot2_utc', 'DATETIME'), ('wwk_slot2_state', 'VARCHAR(6)')):
+        if col not in have:
+            db.execute(f'ALTER TABLE wsf_walk ADD COLUMN {col} {spec}')
+            print(f'  added {col}', flush=True)
     n = db.execute('SELECT COUNT(*) c FROM wsf_walk WHERE wwk_knobs=%s', (KNOBS,), fetch=True)[0]['c']
     if n:
         print(f'  replacing {n} rows at these knobs', flush=True)

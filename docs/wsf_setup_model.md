@@ -1956,3 +1956,25 @@ on **ws2x crossing ws2r**.
 
 **ws2 is the lowest line past the fence and ws6, ws7 and ws8 all hold momo inside it.** The footer
 reads `wsf-momoc`; the forced trigger overrides it and declares the exhaust at the cross.
+
+### 3.23.7  the state and the pyramid slots on the report, 0826
+
+Joe 0826: *"let's make it real: replace wsf-momoc with wsf-forced-exhaust"* and *"the next line of
+the footer will show the in use pyramid slots"*.
+
+    STATE AT THIS BAR: wsf-forced-exhaust   -   ws2x crossed ws2r, ws2r past the fence, ws8r holding momo inside it. momentum on ws6r, ws7r, ws8r (the ws4 to ws8 group)
+    PYRAMID SLOTS: first - 01:47:20, second - null
+
+- **the state name is replaced, the reason is kept and prefixed.** The old `wsf-momoc` text still
+  prints after the forced reason, so nothing is lost.
+- **the report tests the CONDITION, not the fire.** The walk's one-shot guard - disarm on a fire,
+  re-arm on a live three-Mage print - lives in `build_wsf_walk.py` and is not repeated in the
+  report. A bar can therefore show `wsf-forced-exhaust` where the walk declined to act.
+- **the slots come from `wsf_walk`**, the most recent event at or before the bar. Four columns were
+  added to that table - `wwk_slot1_utc`, `wwk_slot1_state`, `wwk_slot2_utc`, `wwk_slot2_state`.
+- **a slot shows the time it was TAKEN.** An armed slot is marked, because it holds a slot without
+  holding a trade. MY CHOICE, stated:
+
+    PYRAMID SLOTS: first - 00:59:50, second - 01:03:40            both open
+    PYRAMID SLOTS: first - 00:59:50, second - 01:03:40 (armed)    one open, one armed
+    PYRAMID SLOTS: first - null, second - null                    the pool is empty

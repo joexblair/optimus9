@@ -116,6 +116,16 @@ THE COLUMNS, and where each comes from.
   blocked by 50  yes when this gate is what turned the verdict to none. Joe 0820 read ws8r at
                  07:36:20 as "not over 50 ... therefore momentum = false".
 
+THE STATE READS `wsf-forced-exhaust` when the x-cross forces it. Joe 0826: "let's make it real:
+replace wsf-momoc with wsf-forced-exhaust". The conditions are Joe's 0825 ingredient - a line at or
+past the fence reading `none`, a HIGHER line holding momo or curl INSIDE the fence, and the crossed
+line's OWN x crossing its OWN r (wxc_x_r at XCROSS_XWOB, the banked flag). The report shows the
+CONDITION; the walk's one-shot guard lives in build_wsf_walk.py and is not repeated here.
+
+THE PYRAMID SLOTS line, Joe 0826, follows the state. The slots belong to the walk, not to one bar,
+so they are read from wsf_walk - the most recent event at or before this bar. A slot shows the time
+it was TAKEN; an armed slot is marked, because it holds a slot without holding a trade.
+
 THE FOOTER, Joe 0820: "add a footer row that reports the wsf-momoc/momo-none/exhaust state".
 It is the reading AT THIS BAR and carries nothing forward:
     domTF is blocking          -> wsf-momo-none.  Joe 0820: "'none' occurs when a trade fires, or
@@ -285,6 +295,7 @@ def main():
     for c in cells:
         print('    ' + ' | '.join(f'{v:{a}{w}}' for v, (_t, _b, a), w in zip(c, COLS, W)))
 
+    V = {int(x['tf']): x['u'] for x in rows}
     mom = {int(x['tf']) for x in rows if x['u'] in ('momo', 'curl')}
     hi_grp = sorted(t for t in mom if t >= 4)
     lo_grp = sorted(t for t in mom if t <= 3)
@@ -296,7 +307,41 @@ def main():
         state, why = 'wsf-momoc', 'momentum on ' + ', '.join(f'ws{t}r' for t in lo_grp) + ' (the ws1 to ws3 group)'
     else:
         state, why = 'wsf-exhaust', 'no r line from ws1 to ws8 carries momentum'
+    # THE x-CROSS FORCED wsf-exhaust, Joe 0826: "let's make it real: replace wsf-momoc with
+    # wsf-forced-exhaust". The conditions are Joe 0825: a line P at or past the fence reading
+    # `none`, a HIGHER line holding momo or curl INSIDE the fence, and P's own x crossing P's own
+    # r - wxc_x_r at XCROSS_XWOB, the banked flag.
+    # THIS REPORTS THE CONDITION, NOT THE FIRE. The walk's one-shot guard - it disarms on a fire
+    # and re-arms on a live three-Mage print - lives in build_wsf_walk.py and is not repeated here.
+    R = {int(x['tf']): float(x['r']) for x in rows}
+    out = [tf for tf in R if V.get(tf) == 'none' and (R[tf] >= HI if dr > 0 else R[tf] <= LO)]
+    ins = [tf for tf in R if V.get(tf) in ('momo', 'curl')
+           and not (R[tf] >= HI if dr > 0 else R[tf] <= LO)]
+    xr = {int(x['tf']): int(x['f'] or 0) for x in db.execute(
+        'SELECT wxc_tf tf, wxc_x_r f FROM wsf_x_cross WHERE wxc_utc=%s AND wxc_dr=%s AND wxc_xwob=%s',
+        (bar, dr, XCROSS_XWOB), fetch=True)}
+    forced = next((p for p in sorted(out) if any(h > p for h in ins) and xr.get(p)), None)
+    if forced is not None:
+        state = 'wsf-forced-exhaust'
+        why = (f'ws{forced}x crossed ws{forced}r, ws{forced}r past the fence, '
+               f'ws{max(h for h in ins if h > forced)}r holding momo inside it. ' + why)
     print(f'    STATE AT THIS BAR: {state}   -   {why}')
+
+    # THE PYRAMID SLOTS, Joe 0826. They belong to the walk, not to one bar, so they are read from
+    # wsf_walk - the most recent event at or before this bar. A slot shows the time it was TAKEN;
+    # an armed slot is marked, because it holds a slot without holding a trade.
+    w = db.execute('SELECT wwk_slot1_utc a, wwk_slot1_state b, wwk_slot2_utc c, wwk_slot2_state d '
+                   'FROM wsf_walk WHERE wwk_utc <= %s ORDER BY wwk_utc DESC, wwk_seq DESC LIMIT 1',
+                   (bar,), fetch=True)
+    def slot(u, st):
+        if not u:
+            return 'null'
+        return str(u)[11:] + ('' if st == 'open' else f' ({st})')
+    if w:
+        print(f"    PYRAMID SLOTS: first - {slot(w[0]['a'], w[0]['b'])}, "
+              f"second - {slot(w[0]['c'], w[0]['d'])}")
+    else:
+        print('    PYRAMID SLOTS: first - null, second - null   (wsf_walk holds no events yet)')
 
     # ----- FOOTNOTES, Joe 0824: "add any pertinent data to the report. it seems that most of them
     # are footnotes. only add data columns if you need to". Every one of these is a reading of the
