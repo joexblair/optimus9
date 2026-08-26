@@ -56,6 +56,11 @@ KNOBS = 'kw4_fs21_sn6_hi85_lo15_r20.5_sl1_arc4_sk13.9_cr0.4_mkstate_mf17_xw4'
 MAGE_KNOB     = 20      # Joe 0823: the dr fence is 80 / 20
 DR_LOOKBACK_S = 180     # Joe 0823: "restrict the lookback to 3 minutes"
 XCROSS_XWOB   = 5       # the x-cross hold
+HI, LO        = 85.0, 15.0   # the system boundary. A line at/past it is OUT of the fence
+MID_FENCE_KNOB = 35     # KNOB, Joe 0825: "start with a fence based on 100-{knob:35} (ie 65:35
+                        # fence)". RECORDED, NOT CONSUMED - Joe corrected the condition on 0825 to
+                        # "it's not always mid-board, it just needs to be inside the fence". Kept
+                        # here for the sweep Joe asked for.
 WMT_TF_LO     = 2       # the weak-mage scan floor, Joe 0821
 MAX_TRADES    = 2       # KNOB, Joe 0825: "allows pyramiding, max 2 trades"
 GRID          = 5       # seconds per bar
@@ -65,7 +70,7 @@ DDL = '''CREATE TABLE IF NOT EXISTS wsf_walk (
     wwk_knobs VARCHAR(96) NOT NULL,
     wwk_seq INT NOT NULL,
     wwk_utc DATETIME NOT NULL,
-    wwk_event VARCHAR(12) NOT NULL,  -- armed | signal | dormant | wake | flip | close
+    wwk_event VARCHAR(12) NOT NULL,  -- armed | signal | dormant | wake | flip | close | forced
     wwk_dr TINYINT,                  -- the dr in force at the event
     wwk_slots TINYINT,               -- slots occupied AFTER the event
     wwk_tf SMALLINT,                 -- the x line, on a signal row
@@ -102,10 +107,18 @@ def main():
         WM[(str(x['t']), int(x['d']))] = x['w']
 
     XC = {}
-    for x in db.execute('SELECT wxc_utc t, wxc_tf tf, wxc_dr d, wxc_race_won w FROM wsf_x_cross '
-                        'WHERE wxc_xwob=%s AND wxc_utc >= %s AND wxc_utc < %s',
+    XR = {}
+    for x in db.execute('SELECT wxc_utc t, wxc_tf tf, wxc_dr d, wxc_race_won w, wxc_x_r xr '
+                        'FROM wsf_x_cross WHERE wxc_xwob=%s AND wxc_utc >= %s AND wxc_utc < %s',
                         (XCROSS_XWOB, WIN_FROM, WIN_TO), fetch=True):
         XC[(str(x['t']), int(x['tf']), int(x['d']))] = x['w']
+        XR[(str(x['t']), int(x['tf']), int(x['d']))] = int(x['xr'] or 0)
+
+    RV = defaultdict(dict)
+    for x in db.execute('SELECT wflb_utc t, wflb_tf tf, wflb_dr d, wflb_r r FROM wsf_line_bar '
+                        'WHERE wflb_knobs=%s AND wflb_utc >= %s AND wflb_utc < %s',
+                        (KNOBS, WIN_FROM, WIN_TO), fetch=True):
+        RV[str(x['t'])][(int(x['d']), int(x['tf']))] = float(x['r'])
 
     SIG = {}
     for x in db.execute("SELECT wsf_utc t, wsf_side s FROM ws_fin_9of12 WHERE wsf_ho_rule='median' "
@@ -118,6 +131,10 @@ def main():
     pool = []          # ONE POOL OF MAX_TRADES SLOTS. Each is {'dr': +-1, 'state': armed | open}
     prev_won = {}      # (tf, dr) -> the previous bar's race winner, for the rising edge
     was_ready = False  # the previous bar was a wsf-exhaust with a dr, for the arming rising edge
+    forced_armed = True  # the x-cross forced exhaust is ONE SHOT. Joe 0825: "does the exhaust
+                         # re-fire if r continues - no ... the mechanisms will need to re-start when
+                         # dr is captured (ie, keep walking until dr)". So it disarms on a fire and
+                         # re-arms only on a LIVE three-Mage print, not on the latch.
     flip = None        # the opposing setup that will close the pool. Outside the pool by design.
     awake = None       # which source printed the opposing dr that ended dormancy
     dormant_from = None
@@ -131,6 +148,8 @@ def main():
     for i, t in enumerate(T):
         dr = int(DR[i])
         board = V.get(t)
+        if int(DRr[i]) != 0:            # a LIVE three-Mage print re-arms the forced exhaust
+            forced_armed = True
 
         # RULE 2's WAKE. Joe 0825: "stay dormant until an opposing (three-mage or wsf9of12) dr
         # prints". The wake does NOT close anything - it only permits the walk to start watching
@@ -148,6 +167,51 @@ def main():
                              f'opposing dr {-side():+d} from {src}'
                              + (f' after {(i - dormant_from) * GRID} s dormant' if dormant_from else '')
                              + '. Watching for the opposing trade. Nothing closed.'))
+
+        # THE x-CROSS FORCED wsf-exhaust. Joe 0825, the ingredient:
+        #   "because ws8r is mid-board, and ws7r's verdict is recently none (ie has just left the
+        #    fence), AND ws7r was crossed, ws8r is confirming that it cannot carry its momentum
+        #    past the fence ... the wsf-exhaust is declared at the time of the x-cross ... it will
+        #    simultaeneously create a trade signal"
+        # and the condition, Joe 0825: "it needs to have a higher momentum=true TF (eg ws8) INSIDE
+        # the fence while the crossed (lower, eg 7) line is OUTSIDE the fence".
+        #
+        # THE WATCHED x IS THE CROSSED LINE'S OWN x, NOT THE CONFIRMER'S. Joe guessed the
+        # confirmer's - "use the highest line holding the momo (ws8x)" - and his own 19 labelled
+        # events say otherwise: the crossed line's own x lands nearer on 17 of the 19, exactly at
+        # 10:57:00 on one of them. MEASURED, not chosen.
+        #
+        # THE CROSS IS wxc_x_r AT XCROSS_XWOB 5, already banked on all 276,496 rows. Not recomputed.
+        # THE RACE, Joe 0825: "many lines past the fence when x crosses - create a race condition".
+        # First to cross wins; on a tie at the same bar the lowest timeframe takes it.
+        # ONE SHOT, Joe 0825: "does the exhaust re-fire if r continues - no. if that happens, the
+        # trade will fail and the mechanisms will need to re-start when dr is captured".
+        if dr != 0 and board and forced_armed:
+            rv = RV.get(t, {})
+            out = [tf for tf in range(1, 9) if board.get((dr, tf)) == 'none'
+                   and (dr, tf) in rv
+                   and (rv[(dr, tf)] >= HI if dr > 0 else rv[(dr, tf)] <= LO)]
+            inside = [tf for tf in range(1, 9) if board.get((dr, tf)) in ('momo', 'curl')
+                      and (dr, tf) in rv
+                      and not (rv[(dr, tf)] >= HI if dr > 0 else rv[(dr, tf)] <= LO)]
+            forced = next((p for p in sorted(out)
+                           if any(h > p for h in inside) and XR.get((t, p, dr))), None)
+            if forced is not None:
+                op, ar = n_open(), len(pool) - n_open()
+                seq += 1
+                rows.append((KNOBS, seq, t, 'forced', dr, 1, forced, 'r', None,
+                             f'ws{forced}x crossed ws{forced}r while ws{forced}r is past the fence '
+                             f'and ws{max(h for h in inside if h > forced)}r holds momo inside it'
+                             + (f' - closes {op} open' if op else '')
+                             + (f', clears {ar} armed' if ar else '')
+                             + '. Slot 1 of the new pool.'))
+                pool = [{'dr': dr, 'state': 'open'}]
+                flip, awake, dormant_from, was_ready = None, None, None, True
+                forced_armed = False
+                for tf in range(1, 9):
+                    for d in (1, -1):
+                        prev_won[(tf, d)] = XC.get((t, tf, d))
+                continue
 
         # THE OPPOSING TRADE. Joe 0825: "all open trades (1 or 2) are closed by the next opposing
         # dr trade" and "did the model verdict a short signal + x-cross at 01:34:05? that's the

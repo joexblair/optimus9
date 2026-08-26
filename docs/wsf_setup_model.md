@@ -1871,3 +1871,88 @@ XCROSS_XWOB 5:
 the **highest** momo holder. His own 24 labelled rows say the **lowest**. At 01:59:20 - the case the
 ingredient was described on - ws8 was the ONLY momo holder, so highest and lowest are the same line
 and that example cannot separate them.
+
+### 3.23.4  MEASURED — which x, and does the structure hold
+
+**Joe 0826 dropped five of the 24 labelled rows**: *"those 5 unmatched timestamps are highlighting
+my inaccurate human-ness. drop the 5 from memory - they will need different ingredients"*. The five
+are **04:45, 13:21, 14:19, 19:26, 21:26**. The set is now **19**.
+
+**THE STRUCTURE HOLDS AT 19 OF 19.** A line past the 85/15 fence reading `none`, with a HIGHER line
+holding momo INSIDE the fence.
+
+**THE WATCHED x IS THE CROSSED LINE'S OWN x, NOT THE CONFIRMER'S.** Joe guessed the confirmer's -
+*"use the highest line holding the momo (ws8x)"* - and his own 19 events say otherwise. The nearest
+own-x cross to each labelled time:
+
+| est | dr | crossed line | its own-x cross | offset | confirmer | its own-x cross | offset |
+|---|---|---|---|---|---|---|---|
+| 10:57 | +1 | ws2 | **10:57:00** | **0 s** | ws3 | 10:57:30 | 30 s |
+| 21:12 | -1 | ws1 | 21:11:55 | 5 s | ws2 | 21:12:40 | 40 s |
+| 10:00 | +1 | ws3 | 10:00:25 | 25 s | ws5 | 10:02:35 | 155 s |
+| 23:40 | -1 | ws3 | 23:40:25 | 25 s | ws4 | 23:40:25 | 25 s |
+| 15:56 | +1 | ws3 | 15:56:30 | 30 s | ws4 | 15:59:20 | 200 s |
+| 03:53 | +1 | ws3 | 03:53:35 | 35 s | ws5 | 03:55:20 | 140 s |
+| 11:57 | +1 | ws3 | 11:57:45 | 45 s | ws4 | 12:00:20 | 200 s |
+| 19:46 | +1 | ws2 | 19:46:50 | 50 s | ws3 | 19:48:50 | 170 s |
+| 03:22 | -1 | ws2 | 03:23:05 | 65 s | ws6 | 03:30:20 | 500 s |
+| 14:48 | +1 | ws3 | 14:49:10 | 70 s | ws6 | 14:52:00 | 240 s |
+| 12:15 | -1 | ws2 | 12:13:25 | 95 s | ws3 | 12:13:25 | 95 s |
+| 19:16 | +1 | ws4 | 19:17:40 | 100 s | ws5 | 19:20:20 | 260 s |
+| 23:15 | +1 | ws5 | 23:16:55 | 115 s | ws6 | 23:20:05 | 305 s |
+| 04:14 | -1 | ws3 | 04:16:35 | 155 s | ws4 | 04:17:10 | 190 s |
+| 11:38 | -1 | ws4 | 11:40:35 | 155 s | ws5 | 11:40:55 | 175 s |
+| 16:55 | -1 | ws2 | 16:58:00 | 180 s | ws1 | 16:57:10 | 130 s |
+| 15:36 | -1 | ws4 | 15:32:40 | 200 s | ws1 | 15:40:15 | 255 s |
+| 21:05 | +1 | ws5 | 21:08:30 | 210 s | ws6 | 21:09:05 | 245 s |
+| 20:17 | -1 | ws4 | 20:21:55 | 295 s | ws1 | 20:20:20 | 200 s |
+
+**The crossed line is nearer on 17 of 19.** Ten land within 100 s of a to-the-minute estimate.
+
+**The cross-timeframe reading was tested and rejected**: ws8x under ws7r lands at 01:56:45 and
+02:00:20; ws5x under ws2r at 11:03:55 and 11:05:20. Neither is near Joe's times.
+
+### 3.23.5  BUILT — and it fires 50 times against Joe's 19
+
+`build_wsf_walk.py` now carries a `forced` event. Conditions at each bar, dr from the latch:
+
+1. a line P at or past the 85/15 fence with `verdict` = none
+2. a line H > P holding momo or curl INSIDE the fence
+3. `wxc_x_r` = 1 for P at this bar, at XCROSS_XWOB 5 - **the banked producer, not recomputed**
+4. -> wsf-exhaust, and the trade signal on the same bar: **all open positions close, all armed slots
+   clear, and P becomes slot 1 of the new pool**. Joe 0825: *"when x-cross forces the wsf-exhaust
+   event, any open positions are closed and the first pyramid slot is opened"*.
+
+**THE RACE**, Joe 0825: *"many lines past the fence when x crosses - create a race condition"*. First
+to cross wins; on a tie at the same bar the **lowest timeframe** takes it. MY CHOICE, stated.
+
+**ONE SHOT**, Joe 0825: *"no. if that happens, the trade will fail and the mechanisms will need to
+re-start when dr is captured (ie, keep walking until dr)"*. The trigger disarms on a fire and
+re-arms only on a **LIVE three-Mage print**, never on the latch.
+
+**MID_FENCE_KNOB 35 is recorded and NOT consumed.** Joe corrected the condition to "inside the
+fence", so the 65/35 fence has nothing to act on yet. Kept for the sweep he asked for.
+
+**THE RESULT, AND IT IS NOT TUNED. 50 fires across 08-04 against Joe's 19 labelled events.**
+
+- **hits that land close**: 03:53:35 against 03:53, 11:57:45 against 11:57, 14:49:10 against 14:48,
+  13:20:20 against 13:21, 10:54:35 against 10:57, 16:58:00 against 16:55, 04:49:20 against 04:45.
+- **clusters remain**: 06:30:30 / 06:31:20 / 06:31:55 inside 85 s; 13:16:20 / 13:17:15 / 13:20:20;
+  17:24:45 / 17:28:20.
+- **the one-shot guard re-arms too easily.** A live three-Mage print is common, so the trigger
+  comes back within seconds of firing. Joe's restart condition may need to be something narrower
+  than any live print. NOT CHANGED - that is his ruling to make.
+
+### 3.23.6  the test case: walking from 01:40:55
+
+The first `forced` exhaust after Joe's confirmed `wsf-momoc` at 01:40:55 is **01:47:20, dr +1**,
+on **ws2x crossing ws2r**.
+
+    ws2r  87.10  past the 85 fence, verdict none, sideways behind it, dwell 295 s
+    ws3r  94.64  past the fence   ws4r 94.26 past   ws5r 93.56 past
+    ws6r  66.73  momo INSIDE the fence, 970 s      <- the confirmer, a higher TF than ws2
+    ws7r  71.43  momo INSIDE the fence, 980 s
+    ws8r  42.86  momo INSIDE the fence, 200 s
+
+**ws2 is the lowest line past the fence and ws6, ws7 and ws8 all hold momo inside it.** The footer
+reads `wsf-momoc`; the forced trigger overrides it and declares the exhaust at the cross.
