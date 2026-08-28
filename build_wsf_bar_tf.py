@@ -35,18 +35,25 @@ import numpy as np
 
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
-from optimus9.compute.line_config import mech_lines
+from optimus9.compute.line_config import mech_lines, override
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 from optimus9.orchestration.rpl_cache import LINE_DIR, TAPE_DIR, _line_key, _tape_key
 
 WIN_FROM = '2026-08-04 00:00:00'
 WIN_TO   = '2026-08-05 00:00:00'
-TFS      = list(range(1, 9))
+TFS      = list(range(1, 13))
 DRS      = (+1, -1)
 GRID_S   = 5
 WMT_LOOKBACK_S = 120     # ws-finisher_spec KNOBS. Joe 0817: "add a lookback tolerance ... knob:120sec"
 WMT_TF_LO = 2            # Joe 0821: "reduce the range for weak-mage-tf - it will now be applied to
 #                          TF2 to TF8". Was TF1 to TF8. The scan starts here.
+WMT_TF_HI = 12           # KNOB. Joe 0826: "weak-mage-tf scan is now TF2 to TF12". Was TF8, which was
+#                          the wsf ladder's ceiling until Joe 0826 moved it: "wsf is limited to
+#                          TF12. 13 to 27 belongs to dtf". The scan STOPS here.
+#                          IT IS IN THE UNIQUE KEY, same as WMT_TF_LO. Moving the ceiling changes
+#                          wbt_weak_mage_tf on EVERY row, including TF1-8 rows, because the scan
+#                          runs highest-down. Rows built at ceiling 8 keep their own key and are
+#                          not touched.
 
 DDL = '''CREATE TABLE IF NOT EXISTS wsf_bar_tf (
     wbt_pk BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -56,8 +63,10 @@ DDL = '''CREATE TABLE IF NOT EXISTS wsf_bar_tf (
     wbt_wmt_lookback_s SMALLINT NOT NULL, -- the Mage tolerance, 120 seconds
     wbt_wmt_tf_lo   SMALLINT NOT NULL DEFAULT 1,  -- KNOB. lowest timeframe the weak-mage scan
     --   starts at. Joe 0821 moved it from 1 to 2. In the unique key.
+    wbt_wmt_tf_hi   SMALLINT NOT NULL DEFAULT 8,  -- KNOB. highest timeframe the weak-mage scan
+    --   stops at. Joe 0826 moved it from 8 to 12. In the unique key.
     wbt_utc        DATETIME NOT NULL,   -- the bar, 5-second grid
-    wbt_tf         SMALLINT NOT NULL,   -- timeframe 1 to 8
+    wbt_tf         SMALLINT NOT NULL,   -- timeframe 1 to 12
     wbt_dr         TINYINT  NOT NULL,   -- direction read. +1 upward, -1 downward
     -- MAGE
     wbt_mage       DOUBLE,              -- ws{tf}Mage value, 0 to 100
@@ -73,11 +82,11 @@ DDL = '''CREATE TABLE IF NOT EXISTS wsf_bar_tf (
     wbt_r_step     VARCHAR(7),          -- how it got here from the previous distinct value
     wbt_r_over50   TINYINT,             -- 1 = above 50. Joe 0820 read ws8r "not over 50" as not engaged
     UNIQUE KEY uq_wbt (wbt_win_from, wbt_hi, wbt_lo, wbt_wmt_lookback_s, wbt_wmt_tf_lo,
-                       wbt_utc, wbt_tf, wbt_dr),
+                       wbt_wmt_tf_hi, wbt_utc, wbt_tf, wbt_dr),
     KEY k_bar (wbt_utc), KEY k_line (wbt_tf, wbt_dr), KEY k_wmt (wbt_weak_mage_tf))'''
 
 COLS = ['wbt_win_from', 'wbt_hi', 'wbt_lo', 'wbt_wmt_lookback_s', 'wbt_wmt_tf_lo',
-        'wbt_utc', 'wbt_tf', 'wbt_dr',
+        'wbt_wmt_tf_hi', 'wbt_utc', 'wbt_tf', 'wbt_dr',
         'wbt_mage', 'wbt_mage_oob', 'wbt_mage_ago_s', 'wbt_mage_oob_tol', 'wbt_weak_mage_tf',
         'wbt_r', 'wbt_r_prev', 'wbt_r_held_s', 'wbt_r_step', 'wbt_r_over50']
 
@@ -109,13 +118,23 @@ def main():
                       'FROM optimus9_system WHERE sys_pk=1', fetch=True)[0]
     PXS = {'src': sysr['src'], 'len': sysr['len']}
 
-    lines = {}
+    # THE SPEC IS SHARED ACROSS THE LADDER, Joe 0826: "the configs are shared across the board -
+    # use the wsf r,b,x,m,Mage configs". mech_line_config only carries wsf rows for TF1-8, so the
+    # override for TF9-12 is synthesised from the same spec at that timeframe - the identical
+    # pattern build_wsf_line_bar.py and the ws_line_bar cache already use. No config rows added.
+    SPEC, HI, LO = {}, None, None
     for g in mech_lines(db, 'wsf'):
-        tf = g['tf_seconds'] // 60
-        if g['role'] in ('Mage', 'r') and tf in TFS:
-            lines[(g['role'], tf)] = np.load(
-                os.path.join(LINE_DIR, _line_key(END_MS, HOURS, WARMUP, g['override']) + '.npy'))
+        if g['role'] not in SPEC:
+            _tfs, sp, mo = g['override']
+            SPEC[g['role']] = (sp, mo)
+        if g['role'] in ('Mage', 'r'):
             HI, LO = g['hi'], g['lo']
+    lines = {}
+    for role in ('Mage', 'r'):
+        sp, mo = SPEC[role]
+        for tf in TFS:
+            lines[(role, tf)] = np.load(os.path.join(
+                LINE_DIR, _line_key(END_MS, HOURS, WARMUP, override(tf * 60, sp, mo)) + '.npy'))
 
     ts = np.load(os.path.join(TAPE_DIR, _tape_key(END_MS, HOURS, WARMUP, PXS) + '.npz'))['__ts__']
     i0 = int(np.searchsorted(ts, int(dt.datetime.fromisoformat(WIN_FROM)
@@ -131,6 +150,14 @@ def main():
 
     db.execute(DDL)
     have = {c['Field'] for c in db.execute('SHOW COLUMNS FROM wsf_bar_tf', fetch=True)}
+    if 'wbt_wmt_tf_hi' not in have:
+        db.execute('ALTER TABLE wsf_bar_tf ADD COLUMN wbt_wmt_tf_hi SMALLINT NOT NULL DEFAULT 8 '
+                   'AFTER wbt_wmt_tf_lo')
+        db.execute('ALTER TABLE wsf_bar_tf DROP INDEX uq_wbt, ADD UNIQUE KEY uq_wbt '
+                   '(wbt_win_from, wbt_hi, wbt_lo, wbt_wmt_lookback_s, wbt_wmt_tf_lo, '
+                   'wbt_wmt_tf_hi, wbt_utc, wbt_tf, wbt_dr)')
+        print('  added wbt_wmt_tf_hi (existing rows stamped 8) and rebuilt the unique key',
+              flush=True)
     if 'wbt_wmt_tf_lo' not in have:
         db.execute('ALTER TABLE wsf_bar_tf ADD COLUMN wbt_wmt_tf_lo SMALLINT NOT NULL DEFAULT 1 '
                    'AFTER wbt_wmt_lookback_s')
@@ -139,8 +166,8 @@ def main():
                    'wbt_utc, wbt_tf, wbt_dr)')
         print('  added wbt_wmt_tf_lo and rebuilt the unique key', flush=True)
     where = ('wbt_win_from=%s AND wbt_hi=%s AND wbt_lo=%s AND wbt_wmt_lookback_s=%s '
-             'AND wbt_wmt_tf_lo=%s')
-    kv = (WIN_FROM, HI, LO, WMT_LOOKBACK_S, WMT_TF_LO)
+             'AND wbt_wmt_tf_lo=%s AND wbt_wmt_tf_hi=%s')
+    kv = (WIN_FROM, HI, LO, WMT_LOOKBACK_S, WMT_TF_LO, WMT_TF_HI)
     n = db.execute('SELECT COUNT(*) c FROM wsf_bar_tf WHERE ' + where, kv, fetch=True)[0]['c']
     if n:
         print(f'  deleting {n:,} rows already stored at these knobs', flush=True)
@@ -161,7 +188,7 @@ def main():
             tol[tf] = (ago[tf] >= 0) & (ago[tf] <= WMT_LOOKBACK_S)
         # the scan: ws1 upward, the first Mage the tolerance does NOT count as out
         wmt = np.zeros(nbar, np.int16)
-        for tf in [t for t in TFS if t >= WMT_TF_LO][::-1]:
+        for tf in [t for t in TFS if WMT_TF_LO <= t <= WMT_TF_HI][::-1]:
             wmt = np.where(~tol[tf], tf, wmt)
         for tf in TFS:
             r = lines[('r', tf)]
@@ -170,7 +197,8 @@ def main():
             rows = []
             for k in range(nbar):
                 a, b = float(rv[k]), float(rprev[k])
-                rows.append((WIN_FROM, HI, LO, WMT_LOOKBACK_S, WMT_TF_LO, utcs[k], tf, dr,
+                rows.append((WIN_FROM, HI, LO, WMT_LOOKBACK_S, WMT_TF_LO, WMT_TF_HI,
+                             utcs[k], tf, dr,
                              _f(lines[('Mage', tf)][i0 + k]), int(oob[tf][k]),
                              None if ago[tf][k] < 0 else int(ago[tf][k]), int(tol[tf][k]),
                              int(wmt[k]) or None,
@@ -181,7 +209,7 @@ def main():
                            f'({",".join(["%s"] * len(COLS))})', rows)
             total += len(rows)
         d = 'upward' if dr > 0 else 'downward'
-        print(f'  read {d:<8}: {nbar * len(TFS):,} rows over 8 timeframes', flush=True)
+        print(f'  read {d:<8}: {nbar * len(TFS):,} rows over {len(TFS)} timeframes', flush=True)
 
     print(f'\n  wsf_bar_tf : {total:,} rows', flush=True)
     db.disconnect()

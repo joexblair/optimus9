@@ -43,7 +43,11 @@ import build_momo_landed as B
 
 WIN_FROM = '2026-08-04 00:00:00'
 WIN_TO   = '2026-08-05 00:00:00'
-TFS      = list(range(1, 9))     # ws1r to ws8r. The spec: both states apply to ws{tf}r, TF1 to TF8
+TFS      = list(range(1, 13))    # ws1r to ws12r. Joe 0826: "wsf is limited to TF12. 13 to 27
+#                                belongs to dtf, which is not our current task". Was TF1 to TF8.
+#                                ADDITIVE: wflb_tf is in the unique key and every verdict is computed
+#                                from that line alone, so TF1-8 rows are byte-identical after the
+#                                rebuild. Verified against a pre-run snapshot.
 DRS      = (+1, -1)              # read upward and read downward
 STALL_N  = 6                     # lattice samples in a row with no new extreme. build_ws_fin.py's value
 MOMO_FENCE_R = 17
@@ -84,7 +88,7 @@ DDL = '''CREATE TABLE IF NOT EXISTS wsf_line_bar (
     wflb_pk BIGINT AUTO_INCREMENT PRIMARY KEY,
     -- THE KNOBS. All of these are in the unique key: change one and every row changes.
     wflb_win_from      DATETIME NOT NULL,  -- window start
-    wflb_tf            SMALLINT NOT NULL,  -- timeframe 1 to 8. The line is ws{tf}r
+    wflb_tf            SMALLINT NOT NULL,  -- timeframe 1 to 12. The line is ws{tf}r
     wflb_dr            TINYINT  NOT NULL,  -- direction the line is read in. +1 upward, -1 downward
     wflb_utc           DATETIME NOT NULL,  -- the bar, 5-second grid
     wflb_k_window      SMALLINT NOT NULL,  -- K_WINDOW 4. momentum window = K_WINDOW x tf, minutes

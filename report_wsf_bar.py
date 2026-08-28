@@ -120,11 +120,19 @@ THE STATE READS `wsf-forced-exhaust` when the x-cross forces it. Joe 0826: "let'
 replace wsf-momoc with wsf-forced-exhaust". The conditions are Joe's 0825 ingredient - a line at or
 past the fence reading `none`, a HIGHER line holding momo or curl INSIDE the fence, and the crossed
 line's OWN x crossing its OWN r (wxc_x_r at XCROSS_XWOB, the banked flag). The report shows the
-CONDITION; the walk's one-shot guard lives in build_wsf_walk.py and is not repeated here.
+CONDITION; the walk's one-shot guard lives in build_wsf_walk_events.py and is not repeated here.
 
-THE PYRAMID SLOTS line, Joe 0826, follows the state. The slots belong to the walk, not to one bar,
-so they are read from wsf_walk - the most recent event at or before this bar. A slot shows the time
-it was TAKEN; an armed slot is marked, because it holds a slot without holding a trade.
+THE `trade` FOOTNOTE is signal-level and comes from the x-cross mech at this bar, not from the
+slots. Joe 0828: "the slots have a different purpose: they serve at the machine level, not the
+signal level". It prints on any wsf-exhaust bar whose x-cross resolves.
+
+THE TRADE SLOTS line follows the state. They belong to the walk, not to one bar, so they are read
+from wsf_exhaust_event - the most recent event at or before this bar.
+Joe 0828: "I don't need to know about `armed`. what I'm looking for, at a glance, is: how many
+trades are open, and when did they open". So a slot prints the bar the TRADE OPENED - the x-cross -
+and a free slot prints `-empty-`.
+SOURCE MOVED 0828 from wsf_walk to wsf_exhaust_event. Joe sunsetted build_wsf_walk.py and the pool
+was ported into build_wsf_walk_events.py.
 
 THE FOOTER, Joe 0820: "add a footer row that reports the wsf-momoc/momo-none/exhaust state".
 It is the reading AT THIS BAR and carries nothing forward:
@@ -164,6 +172,9 @@ DR_LOOKBACK_S = 180     # Joe 0823: "restrict the lookback to 3 minutes". Owned 
                         # build_dtf_delegation as DDS_LOOKBACK_S; repeated here because this report
                         # reads the line cache directly and does not import that builder.
 WMT_TF_LO    = 2        # the weak-mage scan's lowest timeframe. Joe 0821 moved it from 1 to 2
+WMT_TF_HI    = 12       # the weak-mage scan's highest timeframe. Joe 0826: "weak-mage-tf scan
+                        # is now TF2 to TF12". It is in wsf_bar_tf's unique key, so it MUST be
+                        # pinned in every join here - the ceiling-8 rows are still banked.
 KNOBS = ('kw4_fs21_sn6_hi85_lo15_r20.5_sl1_arc4_sk13.9_cr0.4_'
          f'mk{MOMO_KILL}_mf{MOMO_FENCE_R}_xw{MOMO_XWOB}')
 # THE JOIN MUST PIN EVERY KNOB ON BOTH TABLES. Both now hold several knob sets side by side - that
@@ -224,8 +235,8 @@ def main():
          FROM wsf_bar_tf b
          JOIN wsf_line_bar l ON l.wflb_utc=b.wbt_utc AND l.wflb_tf=b.wbt_tf AND l.wflb_dr=b.wbt_dr
         WHERE b.wbt_win_from=%s AND b.wbt_utc=%s AND b.wbt_dr=%s AND l.wflb_knobs=%s
-              AND b.wbt_wmt_tf_lo=%s ORDER BY b.wbt_tf""",
-        (WIN_FROM, bar, dr, KNOBS, WMT_TF_LO), fetch=True)
+              AND b.wbt_wmt_tf_lo=%s AND b.wbt_wmt_tf_hi=%s ORDER BY b.wbt_tf""",
+        (WIN_FROM, bar, dr, KNOBS, WMT_TF_LO, WMT_TF_HI), fetch=True)
     if not rows:
         print(f'    no rows banked for {bar}. The dataset covers {DAY} only.')
         db.disconnect()
@@ -306,13 +317,16 @@ def main():
     elif lo_grp:
         state, why = 'wsf-momoc', 'momentum on ' + ', '.join(f'ws{t}r' for t in lo_grp) + ' (the ws1 to ws3 group)'
     else:
-        state, why = 'wsf-exhaust', 'no r line from ws1 to ws8 carries momentum'
+        # THE TEXT NAMES THE RANGE ACTUALLY TESTED, not a fixed ws1-ws8. The ladder ceiling
+        # moved to TF12 on Joe 0826 and a hardcoded string would state something untrue.
+        _lo, _hi = (min(r['tf'] for r in rows), max(r['tf'] for r in rows)) if rows else (1, 8)
+        state, why = 'wsf-exhaust', f'no r line from ws{_lo} to ws{_hi} carries momentum'
     # THE x-CROSS FORCED wsf-exhaust, Joe 0826: "let's make it real: replace wsf-momoc with
     # wsf-forced-exhaust". The conditions are Joe 0825: a line P at or past the fence reading
     # `none`, a HIGHER line holding momo or curl INSIDE the fence, and P's own x crossing P's own
     # r - wxc_x_r at XCROSS_XWOB, the banked flag.
     # THIS REPORTS THE CONDITION, NOT THE FIRE. The walk's one-shot guard - it disarms on a fire
-    # and re-arms on a live three-Mage print - lives in build_wsf_walk.py and is not repeated here.
+    # and re-arms on a live three-Mage print - lives in build_wsf_walk_events.py, not repeated here.
     R = {int(x['tf']): float(x['r']) for x in rows}
     out = [tf for tf in R if V.get(tf) == 'none' and (R[tf] >= HI if dr > 0 else R[tf] <= LO)]
     ins = [tf for tf in R if V.get(tf) in ('momo', 'curl')
@@ -327,21 +341,22 @@ def main():
                f'ws{max(h for h in ins if h > forced)}r holding momo inside it. ' + why)
     print(f'    STATE AT THIS BAR: {state}   -   {why}')
 
-    # THE PYRAMID SLOTS, Joe 0826. They belong to the walk, not to one bar, so they are read from
-    # wsf_walk - the most recent event at or before this bar. A slot shows the time it was TAKEN;
-    # an armed slot is marked, because it holds a slot without holding a trade.
-    w = db.execute('SELECT wwk_slot1_utc a, wwk_slot1_state b, wwk_slot2_utc c, wwk_slot2_state d '
-                   'FROM wsf_walk WHERE wwk_utc <= %s ORDER BY wwk_utc DESC, wwk_seq DESC LIMIT 1',
+    # THE TRADE SLOTS, Joe 0828. Read from wsf_exhaust_event - the most recent event at or before
+    # this bar. A slot prints the bar the trade OPENED; `-empty-` when the slot is free.
+    # THE LATEST RUN ONLY. Runs are kept side by side under wee_run, so an older run's slots must
+    # not leak into this bar's reading.
+    w = db.execute('SELECT wee_trade1_utc a, wee_trade1_tf af, wee_trade2_utc b, wee_trade2_tf bf '
+                   'FROM wsf_exhaust_event WHERE wee_utc <= %s '
+                   'AND wee_run = (SELECT MAX(wee_run) FROM wsf_exhaust_event) '
+                   'ORDER BY wee_utc DESC, wee_seq DESC LIMIT 1',
                    (bar,), fetch=True)
-    def slot(u, st):
-        if not u:
-            return 'null'
-        return str(u)[11:] + ('' if st == 'open' else f' ({st})')
-    if w:
-        print(f"    PYRAMID SLOTS: first - {slot(w[0]['a'], w[0]['b'])}, "
-              f"second - {slot(w[0]['c'], w[0]['d'])}")
-    else:
-        print('    PYRAMID SLOTS: first - null, second - null   (wsf_walk holds no events yet)')
+    t1, f1, t2, f2 = (w[0]['a'], w[0]['af'], w[0]['b'], w[0]['bf']) if w else (None, None, None, None)
+    cell = lambda u: (str(u)[11:] if u else '-empty-')
+    print('    ' + '-' * 43)
+    print(f"    | {'trade 1':^17} | {'trade 2':^17} |")
+    print('    ' + '-' * 43)
+    print(f"    | {cell(t1):^17} | {cell(t2):^17} |")
+    print('    ' + '-' * 43)
 
     # ----- FOOTNOTES, Joe 0824: "add any pertinent data to the report. it seems that most of them
     # are footnotes. only add data columns if you need to". Every one of these is a reading of the
@@ -380,16 +395,20 @@ def main():
     else:
         print('      three-mage-lb: no, three-mage-dr: none   (the three lines are not banked here)')
 
-    # 2. Joe's template markers, spec 3.5: ws8r reversing, many aways, many ltf `r IB`s, weak-mage.
-    w8 = H.get(8)
+    # 2. Joe's template markers, spec 3.5: the ceiling line reversing, many aways, many ltf
+    #    `r IB`s, weak-mage.
+    #    THE CEILING LINE IS READ FROM THE BOARD, NOT HARDCODED. It was ws8 while TF8 was the
+    #    ceiling; Joe 0826 moved the ladder to TF12, so a fixed ws8 named the wrong line.
+    top = max(H) if H else None
+    w8 = H.get(top)
     past = (float(w8['r']) - HI) if dr > 0 else (LO - float(w8['r'])) if w8 else None
     print(f"      template      away {len(away)} ({tfs(away)})   toward {len(tow)} ({tfs(tow)})"
           f"   r IB {len(rib)} ({tfs(rib)})")
     print(f"                    LTF away {len([t for t in away if t in LTF])}"
           f"   HTF toward {len([t for t in tow if t in HTF])}"
-          f"   (LTF is ws1-ws4, HTF is ws5-ws8, Joe 0824)")
+          f"   (LTF is ws{LTF[0]}-ws{LTF[-1]}, HTF is ws{HTF[0]}-ws{HTF[-1]}, Joe 0824)")
     if w8:
-        print(f"                    ws8r {float(w8['r']):.2f} is {abs(past):.2f} "
+        print(f"                    ws{top}r {float(w8['r']):.2f} is {abs(past):.2f} "
               f"{'past' if past > 0 else 'short of'} the {HI if dr > 0 else LO:g} fence"
               f"   verdict {w8['u']}   after {w8['lv2'] or 'nothing'}   dwell {int(w8['vdw'])} s")
     print(f"                    weak-mage {'ws' + str(wmt) if wmt else 'NONE'}"
@@ -406,23 +425,36 @@ def main():
     print(f"                    a dr {dr:+d} trade needs r to {want}, so {len(with_trade)} of"
           f" {len(H)} lines are mechanically committed to it")
 
+
     # 4. the x-cross that turns a wsf-exhaust into a trade signal. Joe, spec 1.6, verbatim:
     #    "the next action after `wsf-exhaust`: walk forward. if ws{weak-mage}x-cross has printed,
     #    then create a trade signal". Printed ONLY on a wsf-exhaust bar, because that is the state
     #    his rule starts from.
-    #    THE WATCHED LINE IS ws{weak-mage-tf}x, and the weak-mage timeframe is re-read AT EACH BAR
-    #    of the walk, not fixed at this bar - build_wsf_exhaust_bar.py line 43 does the same.
+    #    THE WATCHED LINE IS ws{weak-mage-tf}x, AND THE TIMEFRAME IS FIXED AT THIS BAR.
+    #    Joe 0828, ruling on the two readings: "reads weak-mage-tf at the exhaust bar and watches
+    #    that line forward -- this is the correct option". The walk does the same.
+    #    CORRECTED 0828. This query previously re-read the weak-mage timeframe at every forward
+    #    bar and took the first bar where the crossing line happened to match, which named ws2x at
+    #    00:25:15 where the walk named ws12x at 00:15:10 from the same data.
     #    THE MOMENT IS THE RISING EDGE of a cross held XCROSS_XWOB bars: the first bar where the
     #    race has a winner and the bar before it did not. wsf_x_cross latches `fired`, so without
     #    the rising-edge test a cross already running would be reported as new.
     #    NO CAP ON THE WALK. Joe named no horizon; the search runs to the end of the tape.
-    if state == 'wsf-exhaust':
-        xr = db.execute("""SELECT x.wxc_utc u, x.wxc_tf tf, x.wxc_race_won won
-             FROM wsf_x_cross x
-             JOIN wsf_bar_tf b ON b.wbt_utc=x.wxc_utc AND b.wbt_dr=x.wxc_dr AND b.wbt_tf=x.wxc_tf
-            WHERE x.wxc_dr=%s AND x.wxc_xwob=%s AND b.wbt_wmt_tf_lo=%s
-              AND x.wxc_tf=b.wbt_weak_mage_tf AND x.wxc_utc >= %s
-            ORDER BY x.wxc_utc""", (dr, XCROSS_XWOB, WMT_TF_LO, bar), fetch=True)
+    # BOTH EXHAUST STATES. wsf-forced-exhaust is a wsf-exhaust that the x-cross declared, so it
+    # arms the weak-mage line exactly the same way. The guard read only 'wsf-exhaust', which
+    # silently dropped the x-cross and trade footnotes on every forced event.
+    if state in ('wsf-exhaust', 'wsf-forced-exhaust'):
+        # the weak-mage timeframe AT THIS BAR. NULL is Joe's rule C: watch ws2x instead.
+        # Joe 0817 as corrected 0826: "if weak-mage-tf == None and domTF state is FREE, fire a
+        # trade signal on the next ws2x-cross".
+        wm_row = db.execute('SELECT wbt_weak_mage_tf w FROM wsf_bar_tf WHERE wbt_utc=%s '
+                            'AND wbt_dr=%s AND wbt_tf=1 AND wbt_wmt_tf_lo=%s AND wbt_wmt_tf_hi=%s',
+                            (bar, dr, WMT_TF_LO, WMT_TF_HI), fetch=True)
+        watch = int(wm_row[0]['w']) if wm_row and wm_row[0]['w'] else 2
+        route = 'weak-mage' if wm_row and wm_row[0]['w'] else 'rule C, no weak-mage'
+        xr = db.execute("""SELECT wxc_utc u, wxc_tf tf, wxc_race_won won FROM wsf_x_cross
+            WHERE wxc_dr=%s AND wxc_xwob=%s AND wxc_tf=%s AND wxc_utc >= %s
+            ORDER BY wxc_utc""", (dr, XCROSS_XWOB, watch, bar), fetch=True)
         fired = None
         prev_won = None
         for k, y in enumerate(xr):
@@ -435,9 +467,18 @@ def main():
             gap = int((fired['u'] - dt.datetime.strptime(bar, '%Y-%m-%d %H:%M:%S')).total_seconds())
             print(f"      x-cross       ws{fired['tf']}x crossed its {fired['won']} target at "
                   f"{str(fired['u'])[11:]}, {gap // 60}m{gap % 60:02d}s after this bar"
-                  f"   ->  TRADE SIGNAL")
+                  f"   ->  TRADE SIGNAL   ({route})")
+            # THE TRADE, Joe 0828: "for the footnote only, I want to capture the trade data as soon
+            # as the x-cross mech has produced a timestamp, when the event is 'exhaust'. ie before
+            # the mech knows anything about slot information -- that's where I'll look for the
+            # trade data that matches an exhaust event. the slots have a different purpose: they
+            # serve at the machine level, not the signal level".
+            # SO IT IS SOURCED FROM `fired` ABOVE, NOT FROM THE SLOT COLUMNS. It prints on any
+            # wsf-exhaust bar whose x-cross resolves, whether or not the walk banked an event there.
+            print(f"      trade         opened {str(fired['u'])[11:]} on ws{fired['tf']}x-cross")
         else:
-            print('      x-cross       no cross on the weak-mage line to the end of the tape')
+            print(f'      x-cross       no cross on ws{watch}x to the end of the tape   ({route})')
+            print('      trade         none - the x-cross mech produced no timestamp')
     print()
     db.disconnect()
     return 0

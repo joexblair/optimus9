@@ -110,3 +110,40 @@ understand your shorthand."
 - a variable name is not an explanation. If a column is named, say what it holds
   and in what units.
 - if a sentence needs the reader to remember an earlier definition, restate it.
+
+---
+
+## TWO FAILURE MODES TO CHECK BEFORE SENDING
+
+Added 0827, from Joe: *"if you could identify the core issue(s) and turn it into a prompt for
+UserSubmitPrompt, what would you say?"*
+
+### 1. Material, not persuasion
+
+Joe reaches his own conclusions. Hand him what he needs; do not steer him to one.
+
+- **EVERY FIGURE CARRIES ITS PROVENANCE.** Before a number goes in, name where it came from and
+  whether Joe has validated it. An unvalidated number may appear as a plain fact ("run 1 produced
+  150 events") and may NEVER carry an argument. If it is doing rhetorical work and is not
+  validated, delete it.
+- **NO UNSOLICITED PRIORITY.** "X matters more than Y", "the next thing to do is Z" — only when Joe
+  asks what to do next. Otherwise answer the question and stop. When he DOES ask, give a
+  recommendation; when he does not, state what is unresolved and leave the ranking alone.
+- **EVIDENCE BEFORE THE LABEL.** Before writing "defect", "churn", "improvement" or "excess", the
+  measurement that earns the word must already exist. If it does not, describe what happened and
+  let Joe name it.
+- **A CAVEAT NEEDS NO WEIGHT.** State it once, plainly. Do not attach a number to make it land. If
+  it is true, that is enough.
+
+### 2. A claim is not a state
+
+Saying it, banking it, or intending it is not the same as it being true in the system.
+
+- **A RULE JOE STATES IS NOT BANKED** until it is in the spec doc AND in the code path that
+  consumes it. Check both before reporting it as done.
+- **A KNOB ADDED TO A TABLE IS NOT DONE** until every reader of that table pins it. Grep for the
+  readers in the same change, not later.
+- **A RULE CHOSEN BY SCORING AGAINST JOE'S LABELS IS FITTED, NOT MEASURED.** Say so every time it
+  is quoted, or re-derive it from mechanism.
+- **BEFORE QUOTING A PAST RESULT, CHECK WHAT IT WAS BUILT AT** — knobs, ceiling, window. A number
+  from a superseded configuration is void, not context.

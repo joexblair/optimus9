@@ -37,8 +37,10 @@ KNOBS = 'kw4_fs21_sn6_hi85_lo15_r20.5_sl1_arc4_sk13.9_cr0.4_mkstate_mf17_xw4'
 WMT_TF_LO = 2
 HI, LO = 85.0, 15.0
 MFR_HI, MFR_LO = 83.0, 17.0   # momo-fence-r, Joe's wsf fence. `heading` and "past the fence" use it
-LTF = (1, 2, 3, 4)            # Joe 0824: "a lower TF (~1 to ~4)"
-HTF = (5, 6, 7, 8)
+LTF = (1, 2, 3, 4)            # Joe 0824: "a lower TF (~1 to ~4)". The split point is Joe's
+HTF = tuple(range(5, 13))     # ws5 to the ladder ceiling. Was (5,6,7,8) when the ceiling was TF8;
+#                               Joe 0826 moved it: "wsf is limited to TF12". Only the UPPER BOUND
+#                               follows the ceiling - the ws4/ws5 split is Joe's and is untouched.
 
 # THE LABELLED SETUPS. Joe's verdict is the label; everything else is derived from banked rows.
 #   (utc, dr, verdict, strength, notes)

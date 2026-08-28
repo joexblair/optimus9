@@ -47,7 +47,7 @@ import numpy as np
 
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
-from optimus9.compute.line_config import mech_lines
+from optimus9.compute.line_config import mech_lines, override
 from optimus9.compute.indicator_computer import IndicatorComputer as IC
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 from optimus9.analysis.jig import Jig
@@ -55,7 +55,7 @@ import pandas as pd
 
 WIN_FROM = '2026-08-04 00:00:00'
 WIN_TO   = '2026-08-05 00:00:00'
-TFS      = list(range(1, 9))
+TFS      = list(range(1, 13))   # Joe 0826: "wsf is limited to TF12". Was TF1 to TF8.
 DRS      = (+1, -1)
 GRID_S   = 5
 RSI_LEN, STC_LEN, K_LEN = 5, 8, 7      # Joe's r spec, 7|5|8: k_len 7, rsi 5, stc 8
@@ -89,11 +89,17 @@ def main():
             db.execute(f'ALTER TABLE wsf_bar_tf ADD COLUMN {col} {spec} COMMENT %s', (DOC[col][:255],))
             print(f'  added {col}', flush=True)
 
+    # THE SPEC IS SHARED ACROSS THE LADDER, Joe 0826: "the configs are shared across the board".
+    # mech_line_config only carries wsf rows for TF1-8, so TF9-12 is synthesised from the same r
+    # spec at that timeframe - the pattern build_wsf_line_bar.py and the cache already use.
     ovr = {}
+    rspec = None
     for g in mech_lines(db, 'wsf'):
-        tf = g['tf_seconds'] // 60
-        if g['role'] == 'r' and tf in TFS:
-            ovr[f'ws{tf}r'] = g['override']
+        if g['role'] == 'r' and rspec is None:
+            _tfs, sp, mo = g['override']
+            rspec = (sp, mo)
+    for tf in TFS:
+        ovr[f'ws{tf}r'] = override(tf * 60, rspec[0], rspec[1])
     print(f'  opening the jig over {HOURS} h + {WARMUP} warmup for {len(ovr)} r lines', flush=True)
 
     with Jig(END_MS, hours=HOURS, warmup=WARMUP, overrides=ovr) as j:

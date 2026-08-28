@@ -60,7 +60,34 @@ Producer: `jig.weak_mage_tf`. Runs at every `ws_fin_9of12` signal bar, and only 
 
 ### rule C
 
-Joe 0817: *"if weak-mage-tf == None and domTF state is FREE, fire a trade signal"*.
+Joe 0817, the original wording: *"if weak-mage-tf == None and domTF state is FREE, fire a trade
+signal"*.
+
+**CORRECTED, Joe 0826, verbatim:** *"I've missed a step in this, and it's the reason why TF1 is
+excluded from weak-mage-tf: the rule should read `if weak-mage-tf == None and domTF state is FREE,
+fire a trade signal on the next ws2x-cross`"*.
+
+So rule C does NOT fire at the exhaust bar. It walks forward to the next ws2x-cross, the same way
+a named weak-mage-tf walks forward to its own line's cross. **ws2 is the fallback line when the
+scan from TF2 upward finds no Mage that is inside the fence.**
+
+Joe gives TF1's exclusion from the weak-mage-tf scan (`WMT_TF_LO` = 2, Joe 0821) as the reason for
+this step. He has not said more than that.
+
+**THE CROSS IS THE RACE**, as it is for a named weak-mage-tf. Joe 0818: *"use ' x X [MAge,b,boundary]'
+for now"* and *"any one - race condition"* - `wxc_race_won` on `wsf_x_cross` at `XCROSS_XWOB` = 5
+bars = 20 s hold.
+
+### the dtf-free assumption, Joe 0826
+
+Joe 0826, verbatim: *"for the duration of our wsf modelling, assume that dtf-free == true"*.
+
+Rule C's second condition - *"domTF state is FREE"* - is therefore held TRUE for every bar of the
+wsf modelling. Nothing reads `dtf_delegation` and nothing tests a dtf block.
+
+**IT IS AN ASSUMPTION, NOT A MEASUREMENT.** It is scoped to the modelling and expires when Joe
+lifts it. Joe 0824 on the real thing: *"not yet; we need to build our wsf fu first. it's on my
+radar."*
 
 ### direction
 
@@ -186,11 +213,59 @@ reads ONE BAR under the IF/ELIF and carries no history.
 | | |
 |---|---|
 | the lines | `ws{tf}r` only. Not Mage, not x, not b |
-| coverage | TF1 to TF8. Joe 0817 asked for the per-TF report to be repeated on TF1-8 after seeing TF2-10 |
+| coverage | TF1 to TF12. Joe 0826: *"wsf is limited to TF12. 13 to 27 belongs to dtf, which is not our current task"*. Was TF1 to TF8 |
 | the two are exclusive | only one is active at a time |
 | what wsf-momoc does | blocks all trade activity |
 | what wsf-exhaust does | arms the weak-mage-tf. The trade signal then fires when ws{weak-mage-tf}x crosses ws{weak-mage-tf}r |
 | **what is unknown** | how the per-line states combine into "true for the lines" — per line, or one verdict over all eight. Joe 0817: *"these 2 states are the output of the modelling"* |
+
+### the maxTF declaration, Joe 0819
+
+**When the maxTF line is carrying momentum and its verdict flips to none, wsf-exhaust is declared.
+No lower line is read.**
+
+Joe 0819, the instruction to bank it, verbatim:
+
+> *"add this to the spec and re-create:*
+> *- stall TF values can only increase (eg a ws6r stall event cannot happen after a ws7r stall)*
+> *- when ws8r stalls or crosses to oob, wsf-exhaustion is declared"*
+
+Joe 0819, concreting it after correcting my wording, verbatim:
+
+> *"ws8r is the highest TF, so the wsf-exhaust signal is created when ws8r stalls or crosses into
+> oob"*
+
+Joe 0819, the precondition, verbatim: *"it needs to be carrying momentum before it"*.
+
+Joe 0819, his own worked example eg#2, verbatim: *"08:00 wsf9of12 and ws8r crossing to oob. ws8r is
+the highest TF, so the wsf-exhaust signal is created"*.
+
+**HOW IT IS READ TODAY.** Joe 0821 moved the stall-or-oob test into the verdict column: *"IF a
+momentum-true r line crosses into oob or stalls THEN it's momentum = false (or none). this needs to
+show up in the `verdict` column"*. So the declaration now reads off `wflb_verdict` on the maxTF
+line: momo -> none.
+
+**ws8r IS NOT A CONSTANT.** Joe wrote ws8 because TF8 was the ceiling on 0819. The rule names the
+maxTF line. maxTF is 12 from Joe 0826.
+
+**MEASURED, 08-04, dr +1, maxTF 12.** ws12r sits at 78.53 inside momo-fence-r 83 through 02:47:55
+carrying momo. Its 12-minute bar forms at 02:48:00 and it prints 88.10, past both momo-fence-r 83
+and the 85/15 system boundary. The `MOMO_XWOB` hold of 4 bars = 20 s completes at **02:48:15** and
+`wflb_verdict` flips momo -> none. wsf-exhaust is declared there.
+
+At that bar ws1r reads 60.83 and ws5r reads 66.12, both momo, both inside the fence. **Neither
+blocks the declaration** - they sit below the ceiling and the rule does not consult them. Joe 0826
+confirmed the event: *"02:48 is perfect"* and *"02:48:15 is a normal wsf-exhaust moment, which is
+also ok and correct"*.
+
+**WHERE IT WAS.** Joe asked for it in this spec on 0819 and it never landed here. It is not in
+`build_wsf_walk.py` either - that walk's exhaust test reads every line and has no maxTF branch.
+Restored 0826.
+
+**THE TWO COMPANIONS FROM THE SAME 0819 MESSAGE ARE STILL ABSENT**, and Joe has not ruled on
+restoring them: the stall-TF ratchet (*"stall TF values can only increase"*) and the latch reset
+(*"latch 1 and 2 reset on a trade fire, or when all ws{current-max-tf-with-momentum} lines are
+IB"*).
 
 ### carry-forward
 

@@ -156,3 +156,23 @@ The wsf setup model has its first two labelled rows.
 - **next session starts at 00:14:50**, delegation row 3. See `docs/wsf_setup_model.md` section 3.14,
   which carries the exact command, what the root table already says about that bar, and the four
   things misread at 00:13:00 so they are not repeated.
+
+## #7 review pyramids - two trades firing together, Joe 0828
+
+Joe, verbatim: *"there is a deeper spec needed to handle 2 trades that fire together; if we place 2
+standard sized trades together, we'll create unwanted slippage"*.
+
+MEASURED, the case that raised it. Trace of the walk 00:00 to 01:13:35 before the gate:
+
+    12  00:58:25  dr -1  forced  watch ws3  cross 01:02:35  opposing dr - closed the pool, took slot 1
+    13  00:59:50  dr -1  forced  watch ws3  cross 01:02:35  took slot 2 of 2
+
+Two forced exhausts 85 s apart, both fixing ws3 as the weak-mage line, both resolving to the SAME
+cross at 01:02:35. Two trade slots, one x-cross timestamp.
+
+THE 0828 GATE DOES NOT FIX IT. The in-flight gate suppresses a maxtf or plain exhaust firing between
+an exhaust and its cross. A forced exhaust fires through it, on Joe's word, so 00:59:50 still fires
+and the duplicate stands. That duplicate is what this task exists to spec.
+
+OPEN. No sizing model exists. `MAX_TRADES` = 2 is Joe 0825: *"allows pyramiding, max 2 trades"*.
+Nothing in the walk or the tables carries trade size, and slippage is not modelled anywhere.

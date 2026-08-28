@@ -34,7 +34,9 @@ from optimus9 import DatabaseManager
 
 WIN_FROM = '2026-08-04 00:00:00'
 WIN_TO   = '2026-08-05 00:00:00'
-TFS      = list(range(1, 9))
+TFS      = list(range(1, 13))    # Joe 0826: "wsf is limited to TF12". Was TF1 to TF8. ADDITIVE -
+#                                wxc_tf is in the unique key and each timeframe's crossing is read
+#                                off its own x and its own target, so TF1-8 rows do not move.
 DRS      = (+1, -1)
 TARGETS  = ('Mage', 'b', 'boundary', 'r')      # the race is the first three; r is stored beside them
 XCROSS_XWOB = 5
@@ -60,7 +62,7 @@ DDL = '''CREATE TABLE IF NOT EXISTS wsf_x_cross (
     wxc_hi       DOUBLE   NOT NULL,   -- upper boundary, 85
     wxc_lo       DOUBLE   NOT NULL,   -- lower boundary, 15
     wxc_utc      DATETIME NOT NULL,   -- the bar the crossing completes
-    wxc_tf       SMALLINT NOT NULL,   -- timeframe 1 to 8. The line is ws{tf}x
+    wxc_tf       SMALLINT NOT NULL,   -- timeframe 1 to 12. The line is ws{tf}x
     wxc_dr       TINYINT  NOT NULL,   -- direction read. +1 upward, -1 downward
     wxc_x        DOUBLE,              -- ws{tf}x at this bar
     wxc_mage     DOUBLE,              -- ws{tf}Mage at this bar
