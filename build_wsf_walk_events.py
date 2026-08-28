@@ -43,12 +43,18 @@ them is a change to Joe's existing artefact and I have not made it. FLAGGED, NOT
     python3 build_wsf_walk_events.py
 """
 import sys
+import os
 import datetime as dt
+from datetime import timezone
 from collections import defaultdict
+
+import numpy as np
 
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.analysis.jig import wsf_facing_dr, wsf_dr_lookback
+from optimus9.orchestration.rpl_cache import TAPE_DIR, _tape_key
+from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 from optimus9.compute.momo_gated import curl_gates
 from optimus9.compute import momo_core as MC
 
@@ -58,7 +64,8 @@ MAX_TF        = 12    # KNOB. Joe 0826: "wsf is limited to TF12"
 MAGE_KNOB     = 20    # the three-Mage dr fence is 80 / 20. Joe 0823
 DR_LOOKBACK_S = 180   # KNOB, Joe 0823: "restrict the lookback to 3 minutes". 36 bars at the 5 s grid
 XCROSS_XWOB   = 5     # KNOB. 5 bars = 20 s the x must hold on the far side
-BANK_FROM     = '01:03:00'  # RUN SCOPE, not a model knob. '' = bank from the first bar. A 'HH:MM:SS'
+BANK_TO       = '02:00:00'  # RUN SCOPE. '' = to the end of the window. 'HH:MM:SS' = stop banking there
+BANK_FROM     = ''    # RUN SCOPE, not a model knob. '' = bank from the first bar. A 'HH:MM:SS'
                       # holds banking until that bar. Joe 0828: "walk forward from 00:16".
                       # THE WALK ALWAYS STARTS AT WIN_FROM. This is a BANKING FLOOR, not a walk
                       # start - the trade pool depends on everything before it, so starting the
@@ -67,20 +74,98 @@ TRACE_ONLY    = 0     # RUN SCOPE. 1 = print every event and its pool move, bank
                       # 0828 because the console showed only the BANKED event, so the pool moves
                       # behind a banking floor were invisible and I described them from inference
                       # instead of from a reading.
-STOP_AFTER    = 1     # RUN SCOPE, not a model knob. 0 = walk the whole window. N = bank the first
+STOP_AFTER    = 0     # RUN SCOPE, not a model knob. 0 = walk the whole window. N = bank the first
                       # N events and stop. Joe 0827: "for the walk: stop on the first wsf-exhaust".
                       # It changes WHAT IS BANKED but not what the rules do, so it lives on the run
                       # columns (wee_stop_after) and NOT in the knob signature. MINE, STATED.
 WMT_TF_LO     = 2     # KNOB, Joe 0821. the weak-mage scan's floor
 WMT_TF_HI     = 12    # KNOB, Joe 0826: "weak-mage-tf scan is now TF2 to TF12"
 MAX_TRADES    = 2     # KNOB, Joe 0825: "allows pyramiding, max 2 trades"
+XCROSS_TARGET = 'r'   # KNOB, Joe 0828: "add this as a knob - we'll chose the better option later,
+                      # when we sweep". 'r' = x crosses its own r (wxc_x_r). 'race' = x crosses
+                      # Mage, b or the boundary (wxc_race_won).
+HIGH_TF_GAP   = 15.0  # KNOB, Joe 0828. The r gap under which the H+1 line takes the ungated cross
+#
+# ###############################################################################################
+# WHICH TF PRINTS THE UNGATED x-CROSS. Joe 0828, verbatim:
+#   -if any TF prints a x-cross while an r line is outside of momo-fence-r
+#   --gate the cross, hold the signal
+#   --tag the highest TF that is outside of momo-fence-r
+#   --if ws{highest_TF}r - ws{highest_TF +1}r < 15 (ie highTF+1 is close to highTF, so has potential
+#     continue the momentum and exit the fence )
+#   ---then ws{highest_TF +1}x will print the ungated cross
+#   --ELSE ws{highest_TF}x will print the ungated cross
+#   --if the the TF holding the gated x-cross (from row 1) == the TF designated to print the ungated
+#     cross, then the ungated cross is print the held x-cross
+#
+# JOE'S RULINGS ON MY READINGS, 0828:
+#   the gap is ABSOLUTE      - "yes you're right. the gap is absolute". A signed test fires on every
+#                              dr -1 bar, because the highest line outside the fence sits BELOW its
+#                              neighbour.
+#   H+1 needs momentum-true  - "good catch - yes, the H+1 line needs momentum-true". This reverses
+#                              my literal reading, which had no momentum test.
+#
+# MINE, STATED: if H is the ceiling ws12 there is no ws13, so the designated timeframe stays ws12.
+#
+# VALIDATED BY JOE, 0828: 24 OF 24 - every row in his csv carrying x-cross_forced_wsf-exhaust=yes.
+#   "I'm glad you kept the dropped rows, because now they're firing perfectly. in fact, all 24 rows
+#    are perfect" and "we can declare the experiment a success. bake it".
+#
+# WHAT IT REPLACED, AND THIS IS THE ONE THING TO CHECK. The forced exhaust previously required
+# THREE conditions, Joe 0825: a line P at or past the 85/15 fence reading `none`, a HIGHER line
+# holding momo or curl INSIDE the fence, and P's own x crossing P's own r. The experiment Joe
+# validated tested NONE of those - it tested only the gate above. So the two 0825 conditions are
+# GONE from the forced test. That is what "bake it" bakes.
+# ###############################################################################################
+WS1X_GATE     = 0     # KNOB. 1 = the ws1x entry gate is applied. 0 = off.
+#
+# ###############################################################################################
+# DISABLED 0828 ON JOE'S WORD. REVISIT AFTER wsf IS BAKED AND CEMENTED IN o9-live.
+# Joe 0828, verbatim: "understood, and there's no way around it at the moment. based on the
+# potential loss of profit, please disable the mech and a leave a flag in the code to look at this
+# again, after we've completely baked wsf and cemented it in the o9-live system".
+#
+# WHY IT WAS PARKED. The gate's flight starts at the TRADE-SIGNAL bar. Joe's TV read on the
+# 01:19:00 event found a qualifying low-oob cross at 01:27:40, which sits BETWEEN the exhaust bar
+# 01:19:00 and the signal bar 01:30:20 - outside the scan window. Starting the flight at the
+# exhaust bar instead would let the ws1x cross land BEFORE the weak-mage x-cross that creates the
+# trade signal, and that is not resolved.
+#
+# MEASURED ON THE SIX BANKED EVENTS, entry price only, signed by dr:
+#   00:02:30 dr +1   signal 00:15:10 -> entry 00:51:05   -0.646%
+#   00:58:25 dr -1   signal 01:02:35 -> entry 01:04:15   +0.222%
+#   01:13:35 dr -1   signal 01:15:25 -> entry 01:27:40   +0.102%
+#   01:16:30 dr -1   signal 01:18:50 -> entry 01:27:40   +0.031%
+#   01:19:00 dr -1   signal 01:30:20 -> entry 02:07:15   -0.768%
+#   01:47:20 dr +1   signal 01:48:20 -> entry 01:52:20   +0.169%
+#   4 improved, 2 worse, net -0.890%, average -0.148%. The two losses are the two longest waits.
+#
+# THE CODE AND THE FIVE wsf_event_signal COLUMNS ARE LEFT IN PLACE. With WS1X_GATE = 0 the gate
+# never fires, wes_ws1x_gate is 0 on every row and wes_entry_utc equals wes_utc.
+# ###############################################################################################
+WS1X_XWOB     = 4     # KNOB, Joe 0828: "wob 4". Bars ws1x must hold on the far side of ws1m
+#
+# THE ws1x ENTRY GATE, Joe 0828: "a mechanic that attempts to improve a trade's entry point by
+# requiring a `dr` sided ws1x-cross, if the ws1x value is on the opposing dr side of 50".
+#   TESTED AT THE TRADE-SIGNAL BAR - that is where "a trade's entry point" lives.
+#   THE OPPOSING SIDE OF 50: dr +1 is a SHORT and wants to sell high, so its opposing side is BELOW
+#     50. dr -1 wants to buy low, so its opposing side is ABOVE 50. Joe's own case at 01:48:20 -
+#     dr +1, ws1x -16.002 - is below 50 and he confirmed the gate applies.
+#   THE CROSS DIRECTION is the settled one: dr +1 -> ws1x crosses UNDER ws1m. dr -1 -> OVER.
+#   THE CROSS MUST BE OUT OF BOUNDS ON THE dr SIDE. Joe 0828: "I was expecting a cross in the high
+#     oob", and he agreed the 85/15 system boundary names it. dr +1 needs ws1x at or above 85;
+#     dr -1 needs ws1x at or below 15.
+#   IF NO QUALIFYING CROSS EVER PRINTS, THE ENTRY STAYS AT THE ORIGINAL SIGNAL BAR. The gate only
+#     ever MOVES an entry, never removes a trade - Joe's word is "attempts to improve". MINE,
+#     STATED, and the one call here Joe has not made.
 HI, LO        = 85.0, 15.0   # the system boundary
 GRID          = 5     # seconds per bar
 
 # EVERY KNOB THAT CHANGES ROWS IS IN THE SIGNATURE, AND THE SIGNATURE IS IN ALL THREE UNIQUE KEYS.
 # Joe's standing rule. A run at another ceiling or another hold lands alongside, not on top.
 SIG = (f'{KNOBS}_mt{MAX_TF}_mg{MAGE_KNOB}_dl{DR_LOOKBACK_S}_xw{XCROSS_XWOB}'
-       f'_wl{WMT_TF_LO}_wh{WMT_TF_HI}_tr{MAX_TRADES}')
+       f'_wl{WMT_TF_LO}_wh{WMT_TF_HI}_tr{MAX_TRADES}_g1{WS1X_GATE}x{WS1X_XWOB}'
+       f'_xt{XCROSS_TARGET}_hg{HIGH_TF_GAP:g}')
 
 DDL_EVENT = '''CREATE TABLE IF NOT EXISTS wsf_exhaust_event (
     wee_pk BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -94,6 +179,8 @@ DDL_EVENT = '''CREATE TABLE IF NOT EXISTS wsf_exhaust_event (
     --   walked. N = the run stopped after N events, so absence of a later event proves nothing
     wee_bank_from  VARCHAR(8) NOT NULL DEFAULT '',  -- the run's banking floor. '' = from the first
     --   bar. 'HH:MM:SS' = events before that bar were walked but not banked
+    wee_bank_to    VARCHAR(8) NOT NULL DEFAULT '',  -- the run's banking ceiling. '' = to the end of
+    --   the window. 'HH:MM:SS' = events after that bar were walked but not banked
     wee_seq        INT      NOT NULL,      -- order within the run
     wee_utc        DATETIME NOT NULL,      -- the bar the wsf-exhaust is declared
     wee_dr         TINYINT  NOT NULL,      -- the latched three-Mage dr in force. +1 or -1
@@ -156,17 +243,59 @@ DDL_SIG = '''CREATE TABLE IF NOT EXISTS wsf_event_signal (
     wes_route     VARCHAR(12) NOT NULL,    -- weak-mage | rule-c
     wes_target    VARCHAR(10),             -- which race target won: Mage | b | boundary
     wes_note      VARCHAR(255) NOT NULL DEFAULT '',
+    -- THE ws1x ENTRY GATE, Joe 0828. All five read at the SIGNAL bar or after it.
+    wes_ws1x_gate     TINYINT NOT NULL DEFAULT 0,  -- 1 = ws1x was on the opposing dr side of 50
+    --   at the signal bar, so the gate applied and the entry waited
+    wes_ws1x_signal   DOUBLE,      -- ws1x at the signal bar
+    wes_entry_utc     DATETIME,    -- the bar the entry lands on AFTER the gate. Equal to wes_utc
+    --   when the gate did not apply, or when no qualifying cross ever printed
+    wes_pxs_signal    DOUBLE,      -- px_smooth at wes_utc
+    wes_pxs_entry     DOUBLE,      -- px_smooth at wes_entry_utc
     UNIQUE KEY uq_wes (wes_event_pk),
     CONSTRAINT fk_wes_event FOREIGN KEY (wes_event_pk)
         REFERENCES wsf_exhaust_event (wee_pk) ON DELETE CASCADE) ENGINE=InnoDB'''
 
-E_COLS = ['wee_knobs','wee_run','wee_dt_created','wee_stop_after','wee_bank_from','wee_seq',
+DDL_TRADE = '''CREATE TABLE IF NOT EXISTS wsf_trade (
+    wtr_pk BIGINT AUTO_INCREMENT PRIMARY KEY,
+    -- Joe 0828: "you can create a trade event table. columns: slot_nbr, dt_opened, dt_closed,
+    -- open_pxs, close_pxs -- this will be helpful for a quick look at potential profit".
+    wtr_slot_nbr  TINYINT  NOT NULL,   -- 1 or 2. Which pyramid slot the trade held
+    wtr_dt_opened DATETIME NOT NULL,   -- the x-cross bar that opened it
+    wtr_dt_closed DATETIME,            -- the OPPOSING trade's x-cross bar. NULL = still open
+    wtr_open_pxs  DOUBLE,              -- px_smooth at wtr_dt_opened
+    wtr_close_pxs DOUBLE,              -- px_smooth at wtr_dt_closed
+    -- THE FOUR COLUMNS JOE DID NOT NAME, and why each is here.
+    wtr_knobs     VARCHAR(200) NOT NULL,  -- the knob signature. Without it a run at another
+    --   ceiling would land on top of this one, against Joe's standing rule
+    wtr_run       INT      NOT NULL,      -- the run. Joe 0828: "no deletes" - runs append
+    wtr_open_event_pk  BIGINT,            -- FK -> the wsf_exhaust_event that opened it. NULL
+    --   when that event sits behind the run's banking floor - the trade is real either way, and
+    --   dropping it would hide a trade from the profit view. MINE, STATED
+    wtr_close_event_pk BIGINT,            -- FK -> the event whose cross closed it. NULL = open
+    wtr_dr        TINYINT  NOT NULL,      -- the dr the trade was taken at. dr +1 = SHORT
+    UNIQUE KEY uq_wtr (wtr_knobs, wtr_run, wtr_dt_opened, wtr_slot_nbr),
+    KEY k_wtr_open (wtr_dt_opened),
+    CONSTRAINT fk_wtr_open FOREIGN KEY (wtr_open_event_pk)
+        REFERENCES wsf_exhaust_event (wee_pk) ON DELETE CASCADE,
+    CONSTRAINT fk_wtr_close FOREIGN KEY (wtr_close_event_pk)
+        REFERENCES wsf_exhaust_event (wee_pk)) ENGINE=InnoDB'''
+# THE CLOSE IS THE OPPOSING TRADE'S x-CROSS, NOT ITS EXHAUST BAR. Joe 0825: "all open trades (1 or
+# 2) are closed by the next opposing dr trade" and "did the model verdict a short signal + x-cross
+# at 01:34:05? that's the only thing that should close trades". So the bar that OPENS the opposing
+# trade is the same bar that CLOSES the ones before it. MINE, STATED.
+# A TRADE WHOSE OWN CROSS NEVER PRINTS NEVER OPENS, so it gets no row here at all.
+
+T_COLS = ['wtr_knobs','wtr_run','wtr_slot_nbr','wtr_dt_opened','wtr_dt_closed',
+          'wtr_open_pxs','wtr_close_pxs','wtr_open_event_pk','wtr_close_event_pk','wtr_dr']
+
+E_COLS = ['wee_knobs','wee_run','wee_dt_created','wee_stop_after','wee_bank_from','wee_bank_to','wee_seq',
           'wee_utc','wee_dr','wee_test','wee_max_tf','wee_trigger_tf','wee_holding',
           'wee_past_fence','wee_note',
           'wee_trade1_utc','wee_trade1_tf','wee_trade2_utc','wee_trade2_tf',
           'wee_xc_utc','wee_xc_tf']
 I_COLS = ['wei_event_pk','wei_ingredient_pk','wei_used','wei_value']
-S_COLS = ['wes_event_pk','wes_utc','wes_lag_s','wes_watch_tf','wes_route','wes_target','wes_note']
+S_COLS = ['wes_event_pk','wes_utc','wes_lag_s','wes_watch_tf','wes_route','wes_target','wes_note',
+          'wes_ws1x_gate','wes_ws1x_signal','wes_entry_utc','wes_pxs_signal','wes_pxs_entry']
 
 # THE CATALOGUE IS NOT IN THIS FILE. It lives in wsf_ingredient, built by build_wsf_ingredient.py.
 # Joe 0827: "you should have every ingredient listed in single table. that table holds the dataset
@@ -227,6 +356,24 @@ def _curl_mode(row):
          'quad_r2': row['bf'], 'quad_why': None}, gate2=False)[0] else 'none'
 
 
+def _held1(st, x, m, dr):
+    """ws1x crossing ws1m at WS1X_XWOB, the same semantics as build_wsf_x_cross.held().
+
+    The run counts CONSECUTIVE bars on the far side and only counts if x was on the NEAR side
+    before it crossed. It confirms on the bar the run reaches the hold, not the bar it started."""
+    far = (x < m) if dr > 0 else (x > m)
+    if not far:
+        st.update(run=0, was_near=True, fired=False)
+        return False
+    if not st.get('was_near'):
+        return False
+    st['run'] = st.get('run', 0) + 1
+    if st['run'] >= WS1X_XWOB and not st.get('fired'):
+        st['fired'] = True
+        return True
+    return False
+
+
 def _heading(row):
     """report_wsf_bar's rule: past momo-fence-r is away, else the slope's sign against dr."""
     if row['m']:
@@ -279,6 +426,13 @@ def main():
                         (WMT_TF_LO, WMT_TF_HI, WIN_FROM, WIN_TO), fetch=True):
         WM[(str(x['t']), int(x['d']))] = x['w']
 
+    # ws1x and ws1m at every bar, for the entry gate.
+    W1 = {}
+    for x in db.execute('SELECT wlb_utc t, wlb_ws1x x, wlb_ws1m m FROM ws_line_bar '
+                        'WHERE wlb_utc >= %s AND wlb_utc < %s', (WIN_FROM, WIN_TO), fetch=True):
+        W1[str(x['t'])] = (float(x['x']), float(x['m']))
+
+    XCT = {}          # the cross the ungated-cross gate reads, per XCROSS_TARGET
     XR, XRACE = {}, {}
     for x in db.execute('SELECT wxc_utc t, wxc_tf tf, wxc_dr d, wxc_x_r xr, wxc_race_won w '
                         'FROM wsf_x_cross WHERE wxc_xwob=%s AND wxc_tf <= %s '
@@ -286,6 +440,8 @@ def main():
                         (XCROSS_XWOB, MAX_TF, WIN_FROM, WIN_TO), fetch=True):
         XR[(str(x['t']), int(x['tf']), int(x['d']))] = int(x['xr'] or 0)
         XRACE[(str(x['t']), int(x['tf']), int(x['d']))] = x['w']
+        XCT[(str(x['t']), int(x['tf']), int(x['d']))] = (
+            int(x['xr'] or 0) if XCROSS_TARGET == 'r' else (1 if x['w'] else 0))
 
     RUN_UTC = None   # stamped at INSERT, below, so wee_dt_created is a creation time
     RUN = 1                         # replaced below, once the table exists
@@ -317,6 +473,7 @@ def main():
     #   3. "IF IT'S A FORCED-EXHAUST" READS AS THE EVENT UNDER TEST, not the one holding the gate.
     #      A forced exhaust fires through the window; a maxtf or plain exhaust does not.
     gate_until = None      # the cross bar of the event holding the gate. None = no gate in flight
+    pending = {}           # dr -> the timeframe designated to print the ungated cross, while held
 
     # THE POOL. Ported from build_wsf_walk.py 0828. ONE pool of MAX_TRADES slots, each armed or
     # open. My call there and unchanged here: 2 armed plus 2 open would let both armed convert and
@@ -335,6 +492,20 @@ def main():
             out += [pool[k]['xc'], pool[k]['tf']] if k < len(pool) else [None, None]
         return tuple(out)
 
+    # px_smooth at every bar, from the same tape the lines are built on.
+    sysr = db.execute('SELECT pxsmooth_dema_src s, pxsmooth_dema_len l FROM optimus9_system '
+                      'WHERE sys_pk=1', fetch=True)[0]
+    tape = np.load(os.path.join(TAPE_DIR, _tape_key(END_MS, HOURS, WARMUP,
+                                                    {'src': sysr['s'], 'len': sysr['l']}) + '.npz'))
+    tape_ts, tape_px = tape['__ts__'], tape['__pxs__']
+
+    def pxs_at(bar):
+        k = int(np.searchsorted(tape_ts, int(dt.datetime.strptime(bar, '%Y-%m-%d %H:%M:%S')
+                                             .replace(tzinfo=timezone.utc).timestamp() * 1000)))
+        v = float(tape_px[k])
+        return v if np.isfinite(v) else None
+
+    trades = []           # every trade the pool opened, closed or still open
     VALUE_NAMES = set()   # every ingredient this script knows how to read, filled as it walks
     events, ingr, sigs = [], [], []
     prev_top = {}          # last bar's verdict on the ceiling line, per dr
@@ -364,8 +535,31 @@ def main():
         inside = [tf for tf in range(1, MAX_TF + 1) if board.get((dr, tf)) in ('momo', 'curl')
                   and (dr, tf) in rv
                   and not (rv[(dr, tf)] >= HI if dr > 0 else rv[(dr, tf)] <= LO)]
-        c = next((p for p in sorted(past)
-                  if any(h > p for h in inside) and XR.get((t, p, dr))), None)
+        # 3c  THE UNGATED x-CROSS, Joe 0828. Replaces the 0825 three-condition forced test.
+        #     `past` and `inside` above are still computed - they fill wee_past_fence and the
+        #     ingredient rows - but the forced verdict no longer reads them.
+        c = None
+        if dr in pending and XCT.get((t, pending[dr], dr)):
+            c = pending.pop(dr)                    # the held cross is released on its own bar
+        else:
+            xtfs = [tf for tf in range(1, MAX_TF + 1) if XCT.get((t, tf, dr))]
+            outside = [tf for tf in range(1, MAX_TF + 1) if MFR.get(t, {}).get((dr, tf))]
+            if xtfs and outside:
+                h = max(outside)
+                if h >= MAX_TF:
+                    des = h                        # MINE, STATED: no ws13 above the ceiling
+                else:
+                    ra, rb = rv.get((dr, h)), rv.get((dr, h + 1))
+                    if ra is None or rb is None:
+                        des = h
+                    else:
+                        des = (h + 1 if abs(ra - rb) < HIGH_TF_GAP
+                               and board.get((dr, h + 1)) in ('momo', 'curl') else h)
+                if des in xtfs:
+                    c = des
+                    pending.pop(dr, None)
+                else:
+                    pending[dr] = des              # gate the cross, hold the signal
 
         on = a or b or (c is not None)
         # THE RISING EDGE. A wsf-exhaust stretch runs for many consecutive bars; one event is one
@@ -377,7 +571,10 @@ def main():
 
         tests = [n for n, f in (('maxtf', a), ('plain', b), ('forced', c is not None)) if f]
         trig = MAX_TF if a else (c if c is not None else None)
-        bank = (not BANK_FROM) or t[11:] >= BANK_FROM
+        # THE IN-FLIGHT GATE, Joe 0828. Evaluated here, before the signal scan, because the signal
+        # rows are withheld for a gated event. A forced exhaust is never gated.
+        gated = (gate_until is not None and t < gate_until and 'forced' not in tests)
+        bank = ((not BANK_FROM) or t[11:] >= BANK_FROM) and ((not BANK_TO) or t[11:] <= BANK_TO)
         seq += 1
 
         # ---- the signal, recipe steps 4 and 5
@@ -393,9 +590,32 @@ def main():
                 break
             prev_won = w
         lag = None if fired_utc is None else (IDX[fired_utc] - i) * GRID
+        # ---- THE ws1x ENTRY GATE, recipe step 5c. Causal: it only reads the signal bar forward.
+        g_on, g_x1, entry = 0, None, fired_utc
+        if WS1X_GATE and fired_utc and fired_utc in W1:
+            g_x1 = W1[fired_utc][0]
+            # the OPPOSING side of 50 for this dr
+            if (g_x1 < 50.0) if dr > 0 else (g_x1 > 50.0):
+                g_on = 1
+                runs1 = {}
+                j = IDX[fired_utc]
+                # warm the hold from the signal bar so a run already standing cannot fire
+                for k in range(j, len(T)):
+                    if T[k] not in W1:
+                        continue
+                    x1, m1 = W1[T[k]]
+                    hit = _held1(runs1, x1, m1, dr)
+                    if hit and ((x1 >= HI) if dr > 0 else (x1 <= LO)):
+                        entry = T[k]
+                        break
+                else:
+                    entry = fired_utc     # no qualifying cross - the entry does not move
         if bank and not gated:
             sigs.append(((t, dr), fired_utc, lag, watch, route, fired_target,
-                         '' if fired_utc else 'no cross to the end of the tape'))
+                         '' if fired_utc else 'no cross to the end of the tape',
+                         g_on, g_x1, entry,
+                         pxs_at(fired_utc) if fired_utc else None,
+                         pxs_at(entry) if entry else None))
 
         # ---- THE POOL, recipe step 6. An opposing exhaust closes what is open and takes slot 1;
         # Joe 0825: "when x-cross forces the wsf-exhaust event, any open positions are closed and
@@ -409,9 +629,6 @@ def main():
             pool_note = f'took slot {len(pool)} of {MAX_TRADES}'
         else:
             pool_note = 'both slots occupied - dormant, no action'
-        # THE GATE. Applied AFTER the cross is known, because the gate the event would itself
-        # hold is its own cross, and before the pool moves, because a gated event moves nothing.
-        gated = (gate_until is not None and t < gate_until and 'forced' not in tests)
         if gated:
             if TRACE_ONLY:
                 print(f"  {seq:<4}{t[11:]:<10}{dr:>+3}  {','.join(tests):<14}"
@@ -429,7 +646,7 @@ def main():
         # only the rows are withheld. seq keeps counting so the sequence numbers stay honest.
         if not bank:
             continue
-        events.append((SIG, RUN, RUN_UTC, STOP_AFTER, BANK_FROM, seq, t, dr, ','.join(tests), MAX_TF, trig,
+        events.append((SIG, RUN, RUN_UTC, STOP_AFTER, BANK_FROM, BANK_TO, seq, t, dr, ','.join(tests), MAX_TF, trig,
                        _lines(holding), _lines(past),
                        f'declared by {" + ".join(tests)}. {pool_note}')
                       + slots_of() + (fired_utc, watch))
@@ -561,7 +778,7 @@ def main():
         print('\n  TRACE ONLY - nothing banked', flush=True)
         db.disconnect()
         return 0
-    for ddl in (DDL_EVENT, DDL_INGR, DDL_SIG):
+    for ddl in (DDL_EVENT, DDL_INGR, DDL_SIG, DDL_TRADE):
         db.execute(ddl)
     # NO DELETE. The run number is one past the highest already banked at this signature, so the
     # previous run's events, ingredient usage and signals all stand.
@@ -584,6 +801,20 @@ def main():
                    f'({",".join(["%s"] * len(S_COLS))})',
                    [(PK[k],) + tuple(r) for k, *r in ((x[0],) + x[1:] for x in sigs)])
 
+    # THE TRADES. Every pool slot that opened, plus whatever the pool still holds at the end of the
+    # walk - those close NULL and are flagged by that, not dropped.
+    for k, p in enumerate(pool):
+        if p['xc']:
+            trades.append({'slot': k + 1, 'open': p['xc'], 'close': None,
+                           'open_ev': (p['at'], p['dr']), 'close_ev': None, 'dr': p['dr']})
+    trows = [(SIG, RUN, x['slot'], x['open'], x['close'],
+              pxs_at(x['open']), pxs_at(x['close']) if x['close'] else None,
+              PK.get(x['open_ev']), PK.get(x['close_ev']) if x['close_ev'] else None, x['dr'])
+             for x in trades]
+    dropped = sum(1 for x in trades if not PK.get(x['open_ev']))
+    db.executemany(f'INSERT INTO wsf_trade ({",".join(T_COLS)}) VALUES '
+                   f'({",".join(["%s"] * len(T_COLS))})', trows)
+
     # THE GUARD THAT MAKES AUTO-CONFIRM SAFE. A new ingredient lands live the moment it is added
     # to wsf_ingredient, so it gets a row here whether or not this script knows how to read it. A
     # row with a NULL value is either "no machine reading" by design or "nobody wrote the reader
@@ -604,7 +835,11 @@ def main():
     print(f'  wsf_event_ingredient : {len(ingr):,} rows  ({len(CAT)} ingredients per event)',
           flush=True)
     print(f'  wsf_event_signal     : {len(sigs):,} rows, '
-          f'{sum(1 for s in sigs if s[3])} with a cross\n', flush=True)
+          f'{sum(1 for s in sigs if s[1])} with a cross', flush=True)
+    print(f'  wsf_trade            : {len(trows):,} trades, '
+          f'{sum(1 for r in trows if r[4] is None)} still open'
+          + (f'   ({dropped} opened before the banking floor, so no event link)' if dropped else '')
+          + '\n', flush=True)
     print(f"  {'#':<5}{'utc':<11}{'dr':>4}  {'declared by':<20}{'watch':<8}{'signal':<11}{'lag':>8}",
           flush=True)
     # THE PRINT READS E_COLS BY NAME, NOT BY POSITION. Adding wee_run and wee_run_utc shifted every

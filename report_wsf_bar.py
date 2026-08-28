@@ -157,6 +157,8 @@ from optimus9 import DatabaseManager
 from optimus9.compute.momo_gated import curl_gates
 from optimus9.analysis.jig import wsf_facing_dr, wsf_dr_lookback, stoch_out_extreme
 from build_wsf_setup_model import LTF, HTF
+from build_wsf_walk_events import SIG as WALK_SIG   # the walk owns the knob signature;
+                                                    # this report joins to it, never restates it
 
 WIN_FROM = '2026-08-04 00:00:00'
 DAY      = '2026-08-04'
@@ -172,6 +174,8 @@ DR_LOOKBACK_S = 180     # Joe 0823: "restrict the lookback to 3 minutes". Owned 
                         # build_dtf_delegation as DDS_LOOKBACK_S; repeated here because this report
                         # reads the line cache directly and does not import that builder.
 WMT_TF_LO    = 2        # the weak-mage scan's lowest timeframe. Joe 0821 moved it from 1 to 2
+XCROSS_TARGET = 'r'     # KNOB, Joe 0828. 'r' = x crosses its own r. 'race' = Mage, b, boundary
+HIGH_TF_GAP   = 15.0    # KNOB, Joe 0828. The r gap under which the H+1 line takes the ungated cross
 WMT_TF_HI    = 12       # the weak-mage scan's highest timeframe. Joe 0826: "weak-mage-tf scan
                         # is now TF2 to TF12". It is in wsf_bar_tf's unique key, so it MUST be
                         # pinned in every join here - the ceiling-8 rows are still banked.
@@ -321,35 +325,71 @@ def main():
         # moved to TF12 on Joe 0826 and a hardcoded string would state something untrue.
         _lo, _hi = (min(r['tf'] for r in rows), max(r['tf'] for r in rows)) if rows else (1, 8)
         state, why = 'wsf-exhaust', f'no r line from ws{_lo} to ws{_hi} carries momentum'
-    # THE x-CROSS FORCED wsf-exhaust, Joe 0826: "let's make it real: replace wsf-momoc with
-    # wsf-forced-exhaust". The conditions are Joe 0825: a line P at or past the fence reading
-    # `none`, a HIGHER line holding momo or curl INSIDE the fence, and P's own x crossing P's own
-    # r - wxc_x_r at XCROSS_XWOB, the banked flag.
-    # THIS REPORTS THE CONDITION, NOT THE FIRE. The walk's one-shot guard - it disarms on a fire
-    # and re-arms on a live three-Mage print - lives in build_wsf_walk_events.py, not repeated here.
+    # THE x-CROSS FORCED wsf-exhaust. Joe 0828's ungated-cross gate, verbatim:
+    #   -if any TF prints a x-cross while an r line is outside of momo-fence-r
+    #   --gate the cross, hold the signal
+    #   --tag the highest TF that is outside of momo-fence-r
+    #   --if ws{highest_TF}r - ws{highest_TF +1}r < 15 ... then ws{highest_TF +1}x will print the
+    #     ungated cross  --ELSE ws{highest_TF}x will print the ungated cross
+    #   --if the the TF holding the gated x-cross == the TF designated to print the ungated cross,
+    #     then the ungated cross is print the held x-cross
+    # The gap is ABSOLUTE and ws{H+1} must be momentum-true - both Joe 0828.
+    # REPLACED 0828. The 0825 three-condition test - P past the fence reading none, a HIGHER holder
+    # inside the fence, P's own x crossing its own r - is gone. Joe validated the gate alone on all
+    # 24 of his forced rows: "all 24 rows are perfect ... bake it".
+    #
+    # ONE BAR CANNOT SEE A HELD CROSS. The walk carries `pending` across bars, so a cross gated at
+    # an earlier bar and released here is invisible to a single-bar read. This prints the
+    # release-at-the-gated-bar case only, which is what the walk's own trace shows at most events.
     R = {int(x['tf']): float(x['r']) for x in rows}
     out = [tf for tf in R if V.get(tf) == 'none' and (R[tf] >= HI if dr > 0 else R[tf] <= LO)]
     ins = [tf for tf in R if V.get(tf) in ('momo', 'curl')
            and not (R[tf] >= HI if dr > 0 else R[tf] <= LO)]
-    xr = {int(x['tf']): int(x['f'] or 0) for x in db.execute(
-        'SELECT wxc_tf tf, wxc_x_r f FROM wsf_x_cross WHERE wxc_utc=%s AND wxc_dr=%s AND wxc_xwob=%s',
-        (bar, dr, XCROSS_XWOB), fetch=True)}
-    forced = next((p for p in sorted(out) if any(h > p for h in ins) and xr.get(p)), None)
+    xc = {int(x['tf']): (int(x['f'] or 0) if XCROSS_TARGET == 'r' else (1 if x['w'] else 0))
+          for x in db.execute('SELECT wxc_tf tf, wxc_x_r f, wxc_race_won w FROM wsf_x_cross '
+                              'WHERE wxc_utc=%s AND wxc_dr=%s AND wxc_xwob=%s',
+                              (bar, dr, XCROSS_XWOB), fetch=True)}
+    xtfs = sorted(tf for tf in R if xc.get(tf))
+    OB = {int(x['tf']): int(x['ob'] or 0) for x in rows}   # wflb_mfr_out, the momo-fence-r flag
+    outside = sorted(tf for tf in R if OB.get(tf))
+    forced, why_gate = None, None
+    if xtfs and outside:
+        h = max(outside)
+        top = max(R)
+        if h >= top:
+            des, why_gate = h, f'ws{h} is the ceiling'
+        else:
+            ra, rb = R.get(h), R.get(h + 1)
+            gap = None if ra is None or rb is None else abs(ra - rb)
+            mom = V.get(h + 1) in ('momo', 'curl')
+            if gap is not None and gap < HIGH_TF_GAP and mom:
+                des = h + 1
+                why_gate = (f'|ws{h}r - ws{h+1}r| = {gap:.2f} under {HIGH_TF_GAP:g} '
+                            f'and ws{h+1}r holds momentum')
+            else:
+                des = h
+                why_gate = (f'|ws{h}r - ws{h+1}r| = {gap:.2f} at or over {HIGH_TF_GAP:g}'
+                            if gap is not None and gap >= HIGH_TF_GAP
+                            else f'ws{h+1}r has no momentum')
+        if des in xtfs:
+            forced = des
     if forced is not None:
         state = 'wsf-forced-exhaust'
-        why = (f'ws{forced}x crossed ws{forced}r, ws{forced}r past the fence, '
-               f'ws{max(h for h in ins if h > forced)}r holding momo inside it. ' + why)
+        why = (f'ws{forced}x printed the ungated cross. highest line outside momo-fence-r is '
+               f'ws{max(outside)}; {why_gate}. ' + why)
     print(f'    STATE AT THIS BAR: {state}   -   {why}')
 
     # THE TRADE SLOTS, Joe 0828. Read from wsf_exhaust_event - the most recent event at or before
     # this bar. A slot prints the bar the trade OPENED; `-empty-` when the slot is free.
-    # THE LATEST RUN ONLY. Runs are kept side by side under wee_run, so an older run's slots must
-    # not leak into this bar's reading.
+    # THE LATEST RUN AT THIS KNOB SIGNATURE ONLY. `wee_run` restarts at 1 for every signature -
+    # the walk allocates it as MAX(wee_run) WHERE wee_knobs = SIG - so MAX(wee_run) on its own
+    # picks the highest number across ALL signatures, which is a different walk. Joe's standing
+    # rule: every knob that changes rows goes in the unique key AND in every summary query.
     w = db.execute('SELECT wee_trade1_utc a, wee_trade1_tf af, wee_trade2_utc b, wee_trade2_tf bf '
-                   'FROM wsf_exhaust_event WHERE wee_utc <= %s '
-                   'AND wee_run = (SELECT MAX(wee_run) FROM wsf_exhaust_event) '
+                   'FROM wsf_exhaust_event WHERE wee_utc <= %s AND wee_knobs = %s '
+                   'AND wee_run = (SELECT MAX(wee_run) FROM wsf_exhaust_event WHERE wee_knobs = %s) '
                    'ORDER BY wee_utc DESC, wee_seq DESC LIMIT 1',
-                   (bar,), fetch=True)
+                   (bar, WALK_SIG, WALK_SIG), fetch=True)
     t1, f1, t2, f2 = (w[0]['a'], w[0]['af'], w[0]['b'], w[0]['bf']) if w else (None, None, None, None)
     cell = lambda u: (str(u)[11:] if u else '-empty-')
     print('    ' + '-' * 43)

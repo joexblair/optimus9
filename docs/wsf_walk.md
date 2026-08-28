@@ -123,6 +123,46 @@ Read today through the verdict column, per Joe 0821: the maxTF line's verdict fl
 **ws8 was the ceiling on 0819. The ceiling is 12 from Joe 0826.** Full entry in
 `docs/ws-finisher_spec.md`, section *the maxTF declaration, Joe 0819*.
 
+### which TF prints the ungated x-cross, Joe 0828
+
+Joe's replacement process for choosing the forced x-cross timeframe, verbatim:
+
+> *-if any TF prints a x-cross while an r line is outside of momo-fence-r*
+> *--gate the cross, hold the signal*
+> *--tag the highest TF that is outside of momo-fence-r*
+> *--if ws{highest_TF}r - ws{highest_TF +1}r < 15 (ie highTF+1 is close to highTF, so has potential*
+> *continue the momentum and exit the fence )*
+> *---then ws{highest_TF +1}x will print the ungated cross*
+> *--ELSE ws{highest_TF}x will print the ungated cross*
+> *--if the the TF holding the gated x-cross (from row 1) == the TF designated to print the ungated*
+> *cross, then the ungated cross is print the held x-cross*
+
+**JOE'S RULINGS ON THE READINGS, 0828:**
+
+| the reading | Joe |
+|---|---|
+| the gap is ABSOLUTE, not signed | *"yes you're right. the gap is absolute"*. A signed test fires on every dr -1 bar, because the highest line outside the fence sits BELOW its neighbour |
+| the H+1 line must be momentum-true | *"good catch - yes, the H+1 line needs momentum-true"*. This reverses my literal reading, which had no momentum test |
+| the cross target is a knob | *"add this as a knob - we'll chose the better option later, when we sweep"*. `XCROSS_TARGET` = `r` (x crosses its own r) or `race` (Mage, b, boundary) |
+| the gap is a knob | `HIGH_TF_GAP` = 15, Joe's first guess |
+
+**MINE, STATED**: if the highest line outside the fence is the ceiling ws12 there is no ws13, so the
+designated timeframe stays ws12. And when the designated timeframe is not among the bar's crossers,
+the walk goes forward to that line's own x-cross at the same hold.
+
+**VALIDATED BY JOE, 0828: 24 OF 24.** Run over every row in
+`transfer/0804_wsf-exhaust_timestamps.csv` carrying `x-cross_forced_wsf-exhaust = yes`. Joe:
+*"I'm glad you kept the dropped rows, because now they're firing perfectly. in fact, all 24 rows
+are perfect"*.
+
+**THE FIVE DROPPED ROWS ARE BACK IN.** Joe 0826 had retired 04:45, 13:21, 14:19, 19:26 and 21:26 -
+*"those 5 unmatched timestamps are highlighting my inaccurate human-ness. drop the 5 from memory -
+they will need different ingredients"*. His 0828 statement supersedes it: they fire correctly under
+this process and the different ingredient is this one.
+
+**NOT BUILT.** The process lives only in a scratch experiment reading banked columns. It is not in
+`build_wsf_walk_events.py`, neither knob is in any knob signature, and nothing is banked.
+
 ### the x-cross forced wsf-exhaust, Joe 0825
 
 > *"because ws8r is mid-board, and ws7r's verdict is recently none (ie has just left the fence), AND
@@ -344,6 +384,12 @@ earlier confirmed wsf-exhaust event"*.
 Every run of `build_wsf_walk_events.py` appends under a new `wee_run` number at the same knob
 signature. The children hang off the parent by foreign key, so a run's ingredient usage and its
 signals stay attached to that run.
+
+**EVERY READER PINS THE SIGNATURE.** `wee_run` restarts at 1 for each knob signature, so
+`MAX(wee_run)` on its own picks the highest run number across ALL signatures — a different walk.
+Any query that means "the latest run" must carry `wee_knobs = SIG` in both the outer filter and
+the sub-select. `report_wsf_bar.py` imports `SIG` from `build_wsf_walk_events.py` rather than
+restating it: the walk owns the signature, the report joins to it.
 
 **THE TABLES ARE RELATIONAL.** Joe 0827: *"the tables should be relational, joined by FKs"*.
 `wsf_event_ingredient` and `wsf_event_signal` carry only `wei_event_pk` / `wes_event_pk`, foreign
