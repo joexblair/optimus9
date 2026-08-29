@@ -152,6 +152,7 @@ open questions and nothing here invents it.
 """
 import sys
 import datetime as dt
+from collections import defaultdict
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.compute.momo_gated import curl_gates
@@ -161,6 +162,7 @@ from build_wsf_walk_events import SIG as WALK_SIG   # the walk owns the knob sig
                                                     # this report joins to it, never restates it
 
 WIN_FROM = '2026-08-04 00:00:00'
+MAX_TF   = 12    # KNOB, mirrored from build_wsf_walk_events. Joe 0826: "wsf is limited to TF12"
 DAY      = '2026-08-04'
 HI, LO   = 85.0, 15.0
 LEVEL_SLACK = 13.9   # momo_core. How far the 50 gate can slacken for a cleanly tracking line
@@ -168,6 +170,14 @@ SLOPE_MIN   = 1.0    # momo_core MOMO_SLOPE_MIN, r-units per sample
 MOMO_KILL    = 'state'  # which reading of Joe 0820's rule to read back. See build_wsf_line_bar.py
 MOMO_FENCE_R = 17       # momo-fence-r, Joe 0820: 100 - 17 = 83 at the top, 17 at the bottom
 MOMO_XWOB    = 4        # 5 s bars held outside the fence before an exit counts. Joe 0821
+MOMO_STALL_DELAY = 5    # KNOB, Joe 0829: "option 2: create a {knob:5} MOMO_STALL_DELAY
+                        # (25 seconds)". 5 bars = 25 s at the 5 s grid. The bars r must hold
+                        # off its extrema before `heading` prints away. It REPLACES the stall
+                        # test inside heading() - see the docstring there.
+                        # NOT IN ANY KNOB SIGNATURE. `heading` is ingredient 4, home
+                        # report_wsf_bar, NOT BANKED, so nothing banked reads this. The day a
+                        # test reads `heading` it must go into the walk's signature or the
+                        # A/B overwrites itself. MINE, STATED.
 MAGE_KNOB    = 20       # Joe 0823: "{100 - knob:20 fence}" -> the dr fence is 80 / 20
 XCROSS_XWOB  = 5        # the x-cross hold, build_wsf_x_cross.py / build_wsf_exhaust_bar.py
 DR_LOOKBACK_S = 180     # Joe 0823: "restrict the lookback to 3 minutes". Owned by
@@ -194,14 +204,116 @@ def _i(v):
     return '' if v is None else str(int(v))
 
 
-def heading(out_fence, slope):
-    """Left momo-fence-r -> away. Otherwise the slope's sign against the direction read.
+def extrema(db, bar, dr):
+    """`extrema r` and `extrema dwell` per line, Joe 0829: "add the last 2 columns (`lowest r`,
+    and `at`) to wsf-model-report. call them `extrema r` and `extrema dwell`".
 
-    Joe 0820: "apply the fence to this mech". The test was against the global 85/15 boundary; it is
-    now against momo-fence-r, 83/17."""
-    if out_fence:
-        return 'away'
-    return 'toward' if slope > 0 else 'away' if slope < 0 else 'flat'
+    THE EXTREME IS THE TRUE ONE, Joe 0829 C7 - the highest or lowest r the line actually printed,
+    not the stall lattice's sampled extreme. The two differ: at 10:40:25 the lattice put ws9's
+    extreme at 38.19 and the true low was 22.13, and ws11's lattice extreme predated its real low
+    by 18 minutes because the lattice sampled past it.
+
+    THE CYCLE IS BOUNDED BY momentum-true, Joe 0829 C4: "a line will lose away status when it is
+    tagged as momentum-true (ie, it's travelled far enough start a new cycle)". So the search runs
+    from the line's last momo-or-curl bar to this bar.
+
+    dr -1 reads the lowest r, dr +1 the highest - the extreme is on the oob side of the direction.
+
+    MINE, STATED, three of them:
+      a line with no momentum-true bar since WIN_FROM starts its cycle at WIN_FROM. That is where
+        the data begins; there is nothing earlier to read.
+      a line that is momentum-true AT this bar starts its cycle here, so its extrema r is its r
+        now and its dwell is 0 s. That is C4 applied to the current bar, not a special case.
+      the dwell is seconds, Joe 0829 C8 "agreed", printed like the last-verdict dwell beside it.
+
+    -> {tf: (extrema_r, dwell_seconds, bars_held_off_the_extrema)}
+    """
+    out = {}
+    hist = defaultdict(list)
+    for x in db.execute('SELECT wflb_tf tf, wflb_utc t, wflb_r r, wflb_verdict v '
+                        'FROM wsf_line_bar WHERE wflb_knobs=%s AND wflb_dr=%s AND wflb_tf<=%s '
+                        'AND wflb_utc >= %s AND wflb_utc <= %s ORDER BY wflb_tf, wflb_utc',
+                        (KNOBS, dr, MAX_TF, WIN_FROM, bar), fetch=True):
+        hist[int(x['tf'])].append((x['t'], float(x['r']), x['v']))
+    now = dt.datetime.strptime(bar, '%Y-%m-%d %H:%M:%S')
+    for tf, seq in hist.items():
+        start = 0
+        for k in range(len(seq) - 1, -1, -1):
+            if seq[k][2] in ('momo', 'curl'):
+                start = k
+                break
+        seg = seq[start:]
+        pick = min(seg, key=lambda z: z[1]) if dr < 0 else max(seg, key=lambda z: z[1])
+        # THE HOLD, Joe 0829's MOMO_STALL_DELAY, counted ELAPSE - Joe 0829 chose it over the
+        # consecutive-with-reset reading I had built. Bars since the turn, no reset; only a NEW
+        # extrema restarts it. A wobble back onto the extrema does not un-happen a turn.
+        #
+        # I HAD THIS WRONG. I built it on the MOMO_XWOB 4 / wflb_mfr_run precedent, which counts
+        # consecutive bars and resets. That hold asks "is the line outside the fence NOW", where a
+        # return genuinely cancels the state. This one asks "did the line turn", where it does not.
+        # Measured over 08-04, both dr, TF1 to TF12, on 3,064 turns:
+        #     reading   printed away   never printed   median lag   worst lag
+        #     stall            1,940     1,124 36.7%        0m00s      14m25s
+        #     reset            1,815     1,249 40.8%        0m20s      19m40s
+        #     elapse           1,961     1,103 36.0%        0m20s       0m20s
+        # The reset reading was worse than the stall it replaced on both counts. Elapse beats the
+        # stall on both and has no tail at all.
+        ex, held, turned = None, 0, False
+        for _t, r, _v in seg:
+            if ex is None or (r < ex if dr < 0 else r > ex):
+                ex, held, turned = r, 0, False   # a new extrema - the line has not turned
+                continue
+            if turned or ((r > ex) if dr < 0 else (r < ex)):
+                turned = True
+                held += 1                        # the clock runs from the turn, whatever r does
+        out[tf] = (pick[1], int((now - pick[0]).total_seconds()), held)
+    return out
+
+
+def heading(dr, held, extrema_r, momentum_true):
+    """Joe 0829, verbatim: "`toward` means the line is heading towards the oob, and `away` means
+    that the line has gone as far as it can into oob, printed an extrema, and is now moving `away`
+    from the extrema".
+
+    THIS REPLACES A FITTED RULE. The old one read the slope sign and called any line outside
+    momo-fence-r `away`. It was mine, fitted to Joe read at 07:36:20, and at 10:40:25 it printed
+    the exact inverse of Joe definition on all twelve lines.
+
+    JOE RULINGS, 0829, one per condition:
+      C1  the fence is momo-fence-r, not the 85/15 boundary. It fixes which side oob is on.
+      C2  "no - it can be away if it heading away from an extrema" - reaching oob is NOT required.
+          A line that turned above the fence still reads away; `extrema r` tells you it never
+          sprang from oob, which Joe 0829 calls "important information ... it tells us that the
+          line does not have the same momentum power as a line that sprang from oob".
+      C3  "using `stall` makes the most sense - it is an established mech that we can rely on".
+      C4  "a line will lose away status when it is tagged as momentum-true (ie, it is travelled
+          far enough start a new cycle)".
+      C6  no `flat`: "I have never seen it printed on a exhaust report, so it can not have a
+          value-add to the mech".
+      C9  the move off the extrema is tested as "r now vs r then", not by the slope.
+      C10 `away` needs "a genuine `stalled` event", not one sample past the extreme.
+
+    C10 IS SUPERSEDED. Joe 0829, after seeing the cost: "now I see the downfall of using stall -
+    300 seconds consumes a lot of potential profit. if your reading `toward` while it is truly
+    heading away, your recipe will be muddied". Measured over 08-04, both dr, TF1 to TF12: of 3,064
+    turns, 36.7% never printed away before the cycle reset and 11.9% printed late, median 0m50s and
+    worst 14m25s on ws12. Joe chose option 2: "create a {knob:5} MOMO_STALL_DELAY (25 seconds)".
+    The stall no longer gates away; a bar hold on the move does. `stalled` stays on the board as
+    ingredient 9, it just stops deciding this column.
+
+    THE HOLD, MINE, STATED, on the precedent of MOMO_XWOB 4 and wflb_mfr_run:
+      it counts CONSECUTIVE bars off the extrema and resets if r returns to it.
+      a new extrema resets it too - a line printing a better extreme has not turned.
+
+    dr -1 puts oob at the bottom, so away is r rising above the extrema; dr +1 is the mirror.
+
+    MINE, STATED: r_now exactly equal to extrema_r has not moved off it, so it reads toward. With
+    `flat` gone there is nowhere else for a tie to land."""
+    if momentum_true:
+        return 'toward'                    # C4 - a new cycle has started
+    if extrema_r is None:
+        return 'toward'
+    return 'away' if held >= MOMO_STALL_DELAY else 'toward'
 
 
 def main():
@@ -241,6 +353,7 @@ def main():
         WHERE b.wbt_win_from=%s AND b.wbt_utc=%s AND b.wbt_dr=%s AND l.wflb_knobs=%s
               AND b.wbt_wmt_tf_lo=%s AND b.wbt_wmt_tf_hi=%s ORDER BY b.wbt_tf""",
         (WIN_FROM, bar, dr, KNOBS, WMT_TF_LO, WMT_TF_HI), fetch=True)
+    EX = extrema(db, bar, dr)
     if not rows:
         print(f'    no rows banked for {bar}. The dataset covers {DAY} only.')
         db.disconnect()
@@ -257,7 +370,8 @@ def main():
     # fits in my screen". Each name is split at its own hyphen or space, never mid-word, so no
     # column is renamed. Every column is then as narrow as the widest of its two header halves and
     # its own data, which is what pulls the table in.
-    COLS = (('line', '', '<'), ('r', 'value', '>'), ('heading', '', '<'), ('r', 'IB', '<'),
+    COLS = (('line', '', '<'), ('r', 'value', '>'), ('heading', '', '<'),
+            ('extrema', 'r', '>'), ('extrema', 'dwell', '>'), ('r', 'IB', '<'),
             ('verdict', '', '<'), ('curl', 'dr', '>'), ('wsf-curl', 'mode', '<'),
             ('stalled', '', '<'), ('50', 'gate', '>'), ('blocked', 'by 50', '<'),
             ('last', 'verdict', '<'), ('last-verdict', 'dwell', '>'), ('Mage', 'value', '>'),
@@ -267,7 +381,8 @@ def main():
     cells = []
     for x in rows:
         tf = int(x['tf']); rv = float(x['r'])
-        h = heading(bool(x['ob']), float(x['sp']))
+        exr, exd, exheld = EX.get(tf, (None, 0, 0))
+        h = heading(dr, exheld, exr, x['u'] in ('momo', 'curl'))
         rib = 'yes' if LO < rv < HI else ''
         # the slack the level gate earned at this bar, recomputed from the stored fit
         trk = max(0.0, min(1.0, float(x['fi']) * min(1.0, abs(float(x['sp'])) / SLOPE_MIN)))
@@ -296,7 +411,9 @@ def main():
                 {'aligned': bool(x['al']), 'quad': x['ba'] is not None,
                  'quad_aligned': None if x['ba'] is None else bool(x['ba']),
                  'quad_r2': x['bf'], 'quad_why': None}, gate2=False)[0] else 'none'
-        cells.append([f'ws{tf}', f'{rv:.2f}', h, rib, x['u'], cdr, cm,
+        cells.append([f'ws{tf}', f'{rv:.2f}', h,
+                      (f'{exr:.2f}' if exr is not None else '-'), f'{exd} s',
+                      rib, x['u'], cdr, cm,
                       'yes' if x['sl'] else '', f'{gate:.2f}', blocked,
                       (x['lv2'] or ''), f"{int(x['vdw'])} s", f"{float(x['mg']):.2f}",
                       'yes' if x['mt'] else '', 'yes' if wmt == tf else '',
@@ -492,7 +609,23 @@ def main():
                             (bar, dr, WMT_TF_LO, WMT_TF_HI), fetch=True)
         watch = int(wm_row[0]['w']) if wm_row and wm_row[0]['w'] else 2
         route = 'weak-mage' if wm_row and wm_row[0]['w'] else 'rule C, no weak-mage'
-        xr = db.execute("""SELECT wxc_utc u, wxc_tf tf, wxc_race_won won FROM wsf_x_cross
+        # BIG-HAMMER, Joe 0829: "if wsf-forced-exhaust fires, then the trade prints at the same
+        # time". On a forced bar the cross IS the exhaust, so there is nothing to scan forward for.
+        # The line is the designated one from the gate above, Joe 0829: "the trade rides the
+        # designated line that created the wsf-forced-exhaust". weak-mage-tf is still read and
+        # printed in the board's `weak mage` column - Joe 0829: "weak-mage is decoration only when
+        # a forced exhaust happens".
+        if forced is not None:
+            print(f"      x-cross       ws{forced}x crossed its {XCROSS_TARGET} target at "
+                  f"{bar[11:]}, 0m00s after this bar   ->  TRADE SIGNAL   (big-hammer)")
+            print(f"      trade         opened {bar[11:]} on ws{forced}x-cross")
+            wmt = int(wm_row[0]['w']) if wm_row and wm_row[0]['w'] else None
+            print(f"      weak-mage     {('ws' + str(wmt)) if wmt else 'NONE'}"
+                  f"   decoration only on a forced exhaust - big-hammer took the signal")
+            _bh = True
+        else:
+            _bh = False
+        xr = [] if _bh else db.execute("""SELECT wxc_utc u, wxc_tf tf, wxc_race_won won FROM wsf_x_cross
             WHERE wxc_dr=%s AND wxc_xwob=%s AND wxc_tf=%s AND wxc_utc >= %s
             ORDER BY wxc_utc""", (dr, XCROSS_XWOB, watch, bar), fetch=True)
         fired = None
@@ -516,7 +649,7 @@ def main():
             # SO IT IS SOURCED FROM `fired` ABOVE, NOT FROM THE SLOT COLUMNS. It prints on any
             # wsf-exhaust bar whose x-cross resolves, whether or not the walk banked an event there.
             print(f"      trade         opened {str(fired['u'])[11:]} on ws{fired['tf']}x-cross")
-        else:
+        elif not _bh:
             print(f'      x-cross       no cross on ws{watch}x to the end of the tape   ({route})')
             print('      trade         none - the x-cross mech produced no timestamp')
     print()

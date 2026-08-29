@@ -64,7 +64,7 @@ MAX_TF        = 12    # KNOB. Joe 0826: "wsf is limited to TF12"
 MAGE_KNOB     = 20    # the three-Mage dr fence is 80 / 20. Joe 0823
 DR_LOOKBACK_S = 180   # KNOB, Joe 0823: "restrict the lookback to 3 minutes". 36 bars at the 5 s grid
 XCROSS_XWOB   = 5     # KNOB. 5 bars = 20 s the x must hold on the far side
-BANK_TO       = '02:00:00'  # RUN SCOPE. '' = to the end of the window. 'HH:MM:SS' = stop banking there
+BANK_TO       = ''          # RUN SCOPE. '' = to the end of the window. 'HH:MM:SS' = stop banking there
 BANK_FROM     = ''    # RUN SCOPE, not a model knob. '' = bank from the first bar. A 'HH:MM:SS'
                       # holds banking until that bar. Joe 0828: "walk forward from 00:16".
                       # THE WALK ALWAYS STARTS AT WIN_FROM. This is a BANKING FLOOR, not a walk
@@ -240,8 +240,9 @@ DDL_SIG = '''CREATE TABLE IF NOT EXISTS wsf_event_signal (
     wes_utc       DATETIME,                -- the bar the cross confirmed. NULL = never fired
     wes_lag_s     INT,                     -- seconds from the exhaust to the signal
     wes_watch_tf  SMALLINT,                -- the line whose x was watched
-    wes_route     VARCHAR(12) NOT NULL,    -- weak-mage | rule-c
-    wes_target    VARCHAR(10),             -- which race target won: Mage | b | boundary
+    wes_route     VARCHAR(12) NOT NULL,    -- weak-mage | rule-c | big-hammer
+    wes_target    VARCHAR(10),             -- which race target won: Mage | b | boundary.
+    --   On a big-hammer signal it is XCROSS_TARGET instead - the reading the gate made
     wes_note      VARCHAR(255) NOT NULL DEFAULT '',
     -- THE ws1x ENTRY GATE, Joe 0828. All five read at the SIGNAL bar or after it.
     wes_ws1x_gate     TINYINT NOT NULL DEFAULT 0,  -- 1 = ws1x was on the opposing dr side of 50
@@ -579,17 +580,30 @@ def main():
 
         # ---- the signal, recipe steps 4 and 5
         wm = WM.get((t, dr))
-        route = 'weak-mage' if wm else 'rule-c'
-        watch = int(wm) if wm else 2          # rule C's fallback line, Joe 0826: "the next ws2x-cross"
-        fired_utc, fired_target = None, None
-        prev_won = XRACE.get((t, watch, dr))
-        for j in range(i + 1, len(T)):
-            w = XRACE.get((T[j], watch, dr))
-            if w is not None and prev_won is None:
-                fired_utc, fired_target = T[j], w
-                break
-            prev_won = w
-        lag = None if fired_utc is None else (IDX[fired_utc] - i) * GRID
+        if 'forced' in tests:
+            # BIG-HAMMER, Joe 0829: "if wsf-forced-exhaust fires, then the trade prints at the same
+            # time", and 0825: "because the x-cross created the wsf-exhaust event, it will
+            # simultaeneously create a trade signal". The cross IS the exhaust, so there is nothing
+            # to wait for. THE LINE, Joe 0829: "the trade rides the designated line that created the
+            # wsf-forced-exhaust" - `c` from the ungated-cross gate above, NOT weak-mage-tf, which
+            # Joe 0829 calls "decoration only when a forced exhaust happens". It is still read and
+            # still banked as an ingredient; it no longer selects the line. THE TARGET, Joe 0829:
+            # "use x crosses r for now. we have the race option prepared as a sweep" - so the
+            # target is XCROSS_TARGET, the same reading the gate itself made, not a race winner.
+            route, watch = 'big-hammer', c
+            fired_utc, fired_target, lag = t, XCROSS_TARGET, 0
+        else:
+            route = 'weak-mage' if wm else 'rule-c'
+            watch = int(wm) if wm else 2      # rule C's fallback line, Joe 0826: "the next ws2x-cross"
+            fired_utc, fired_target = None, None
+            prev_won = XRACE.get((t, watch, dr))
+            for j in range(i + 1, len(T)):
+                w = XRACE.get((T[j], watch, dr))
+                if w is not None and prev_won is None:
+                    fired_utc, fired_target = T[j], w
+                    break
+                prev_won = w
+            lag = None if fired_utc is None else (IDX[fired_utc] - i) * GRID
         # ---- THE ws1x ENTRY GATE, recipe step 5c. Causal: it only reads the signal bar forward.
         g_on, g_x1, entry = 0, None, fired_utc
         if WS1X_GATE and fired_utc and fired_utc in W1:
@@ -663,7 +677,11 @@ def main():
             'the maxTF declaration':     f'ws{MAX_TF}r {top_prev} -> {top_now}',
             'the plain wsf-exhaust':     'true' if b else 'false',
             'the x-cross forced exhaust': (f'ws{c}x crossed ws{c}r' if c is not None else 'no cross'),
-            'weak-mage-tf':              (f'ws{wm}' if wm else 'NONE'),
+            # Joe 0829: "weak-mage is decoration only when a forced exhaust happens" - still
+            # read at every event and still banked, it just no longer selects the traded line.
+            'weak-mage-tf':              ((f'ws{wm}' if wm else 'NONE')
+                                          + (' - decoration, big-hammer took the signal'
+                                             if 'forced' in tests else '')),
             'rule C':                    ('applied - watch ws2x' if not wm else 'not applied'),
             'the x-cross race':          (f'{fired_target} at {fired_utc[11:]}' if fired_utc else 'none'),
             'x-cross direction':         ('x crosses UNDER' if dr > 0 else 'x crosses OVER'),
@@ -850,7 +868,7 @@ def main():
         lag = '' if s[2] is None else f'{s[2] // 60}m{s[2] % 60:02d}s'
         print(f"  {e[E_AT['wee_seq']]:<5}{e[E_AT['wee_utc']][11:]:<11}"
               f"{e[E_AT['wee_dr']]:>+4}  {e[E_AT['wee_test']]:<20}"
-              f"{('ws' + str(s[3]) + (' rc' if s[4] == 'rule-c' else '')):<8}"
+              f"{('ws' + str(s[3]) + {'rule-c': ' rc', 'big-hammer': ' bh'}.get(s[4], '')):<8}"
               f"{(s[1][11:] if s[1] else '-'):<11}{lag:>8}", flush=True)
     db.disconnect()
     return 0

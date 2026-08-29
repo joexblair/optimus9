@@ -137,6 +137,32 @@ Joe's replacement process for choosing the forced x-cross timeframe, verbatim:
 > *--if the the TF holding the gated x-cross (from row 1) == the TF designated to print the ungated*
 > *cross, then the ungated cross is print the held x-cross*
 
+**THE PROMOTE IS ONE STEP PER CROSS, AND THAT IS THE DESIGN. Joe 0829, verbatim:**
+
+> *"when a higher line takes over, the walk continues. on the next x-cross, the test is repeated
+> and potentially finds a new htf that has exited the fence"*
+
+The climb up the timeframes is not a loop inside one bar. Each x-cross runs the test once, moves
+the designated line at most one timeframe up, and the walk carries on; the next x-cross runs the
+test again against whatever has exited the fence by then. The code already does this - `des` is
+`h + 1` or `h`, never an iteration - so this records the intent, it does not change the mechanic.
+
+**THE FENCE IS NOT A LEVER. Joe 0829, verbatim:**
+
+> *"I've learnt the fence is not a lever - let's stick with 83/17"*
+
+`MOMO_FENCE_R` stays at 17, so momo-fence-r stays 83 at the top and 17 at the bottom. Two other
+values were built and measured against the 24 forced-flagged rows and against the 00:00-08:00 walk,
+both landing alongside 83/17 under their own knob signatures:
+
+| fence | of the 24 rows, unchanged | worst gap to Joe's estimate | of the 23 events to 08:00, kept |
+|---|---|---|---|
+| 83 / 17 | - | 47m40s | - |
+| 80 / 20 | 18 of 24 | 17m25s | 21 of 23 |
+| 70 / 30 | 7 of 24 | 15m00s | 12 of 23 |
+
+Joe 0829 on 70/30: *"70/30 usn't the right move"*.
+
 **JOE'S RULINGS ON THE READINGS, 0828:**
 
 | the reading | Joe |
@@ -181,6 +207,139 @@ this process and the different ingredient is this one.
 
 **THE 65/35 MID-BOARD FENCE IS DEFUNCT.** Joe 0825: *"I was wrong: it's not always mid-board, it
 just needs to be inside the fence"*. `MID_FENCE_KNOB` = 35 is recorded and not consumed.
+
+### big-hammer - the forced exhaust's own trade signal, Joe 0829
+
+> *"if wsf-forced-exhaust fires, then the trade prints at the same time"*
+
+The same rule Joe stated on 0825 and which never reached the code:
+
+> *"because the x-cross created the wsf-exhaust event, it will simultaeneously create a trade
+> signal"*
+
+**JOE'S RULINGS, 0829, verbatim:**
+
+- which line the trade rides: *"confirmed - the trade rides the designated line that created the
+  wsf-forced-exhaust"* - not the weak-mage line. The two disagree on 38 of the day's 43 forced
+  events.
+- the route's name: *"call it big-hammer"*. `wes_route` takes a third value alongside `weak-mage`
+  and `rule-c`.
+- the cross target: *"use x crosses r for now. we have the race option prepared as a sweep - I
+  asked for it to go in the knobs section earlier today/late last night"* - `XCROSS_TARGET` = 'r',
+  the sweep is task #2.
+- weak-mage-tf on a forced event: *"weak-mage is decoration only when a forced exhaust happens"* -
+  still read and still banked as an ingredient, no longer selects the line.
+
+**THE IN-FLIGHT GATE CONSEQUENCE, measured before the build.** A forced exhaust's flight window
+collapses to zero, so events behind it are no longer suppressed. Across the full day that released
+exactly ONE event, 11:54:05, and it fired into a full pool and opened nothing. Joe 0829:
+*"is this really a problem, or do the 2 trade slots handle your concern?"* - the slots handle it.
+The other 37 gated events are held by `maxtf` or `plain` exhausts, whose flights are unchanged.
+
+**BUILT 0829** in `build_wsf_walk_events.py` (the signal block) and `report_wsf_bar.py` (the
+x-cross footnote). Run 5 of the full day at the unchanged knob signature; run 4 kept beside it as
+the before. 43 of 71 events route `big-hammer`, all at lag 0, all on the designated line, all with
+`wes_target` = 'r'. 0 events lost, 1 added, 0 non-forced trade bars moved.
+
+### heading, the extrema, and the two new columns, Joe 0829
+
+> *"I've always thought that `toward` means the line is heading towards the oob, and `away` means
+> that the line has gone as far as it can into oob, printed an extrema, and is now moving `away`
+> from the extrema"*
+> *"this is how it needs to be shaped - it provides rich data about the lines recent path"*
+
+> *"knowing if it failed oob is important information; it tells us that the line does not have the
+> same momentum power as a line that sprang from oob"*
+
+> *"add the last 2 columns (`lowest r`, and `at`) to wsf-model-report. call them `extrema r` and
+> `extrema dwell`"*
+
+**WHAT IT REPLACED.** The old `heading` read the slope's sign and called any line outside
+momo-fence-r `away`. Its own docstring said `MY RULE, fitted to Joe's read at 07:36:20`. At
+10:40:25 it printed the exact inverse of Joe's definition on all twelve lines - away 8 / toward 4
+where the definition gives toward 8 / away 4.
+
+**JOE'S RULINGS, 0829, verbatim, one per concretion:**
+
+| | ruling |
+|---|---|
+| C1 which fence is oob | *"momo-fence-r"* - 83 / 17, not the 85/15 boundary |
+| C2 must a line have reached oob | *"no - it can be away if it heading away from an extrema. the two new report columns will fill the gaps"* |
+| C3 what marks the extrema | *"using `stall` makes the most sense - it's an established mech that we can rely on"* |
+| C4 when `away` ends | *"a line will lose away status when it is tagged as momentum-true (ie, it's travelled far enough start a new cycle)"* |
+| C5 never-oob and falling | *"`heading` == `toward`. any decision that includes heading must have `verdict`'s input as well"* |
+| C6 does `flat` survive | *"I don't think so. I've never seen it printed on a exhaust report, so it can't have a value-add to the mech"* |
+| C7 which extreme | *"the true extreme"* - not the stall lattice's sampled one |
+| C8 dwell in seconds | *"agreed"* |
+| C9 how the move off is tested | *"r now vs r then"* |
+| C10 must the stall be genuine | *"yes - a genuine `stalled` event. your scenario 'ws1 to ws8 all sit at 0 to 5 samples' would need to be reviewed on the next walk bar"* |
+
+**C10 IS SUPERSEDED BY MOMO_STALL_DELAY, Joe 0829.** After seeing what the stall costs:
+
+> *"now I see the downfall of using stall - 300 seconds consumes a lot of potential profit. if
+> your reading `toward` while it is truly heading away, your recipe will be muddied"*
+> *"what are our options?"*
+> *"option 2: create a {knob:5} MOMO_STALL_DELAY (25 seconds)"*
+> *"ELAPSE"*
+
+`MOMO_STALL_DELAY` = 5 bars = 25 s at the 5 s grid. `away` prints once r has been off its extrema
+for that many bars. The stall no longer gates it; `stalled` stays on the board as ingredient 9 and
+stops deciding this column.
+
+**ELAPSE, NOT RESET.** The clock runs from the turn and only a NEW extrema restarts it. A wobble
+back onto the extrema does not un-happen a turn. I first built it the other way, on the
+`MOMO_XWOB` 4 / `wflb_mfr_run` precedent, and that was wrong: that hold asks "is the line outside
+the fence NOW", where a return genuinely cancels the state; this one asks "did the line turn",
+where it does not.
+
+Measured over 08-04, both dr, TF1 to TF12, on 3,064 turns:
+
+| reading | printed away | never printed | median lag | worst lag |
+|---|---|---|---|---|
+| the stall | 1,940 | 1,124 - 36.7% | 0m00s | 14m25s |
+| reset | 1,815 | 1,249 - 40.8% | 0m20s | 19m40s |
+| **elapse** | **1,961** | **1,103 - 36.0%** | **0m20s** | **0m20s** |
+
+The reset reading was worse than the stall it replaced on both counts. Elapse beats the stall on
+both and has no tail.
+
+**THE 36% FLOOR SURVIVES EVERY READING.** More than a third of turns still never print `away`,
+because C4's momentum-true boundary resets the cycle before the hold completes. Neither the knob
+value nor the counting rule touches that.
+
+**`MOMO_STALL_DELAY` IS NOT IN ANY KNOB SIGNATURE.** `heading` is ingredient 4, home
+`report_wsf_bar`, NOT BANKED, so nothing banked reads it. The day a test reads `heading`, it must
+go into the walk's signature or the A/B overwrites itself. MINE, STATED.
+
+**HEADING IS NOT IN THE RECIPE YET, AND THAT IS DELIBERATE. Joe 0829:**
+
+> *"I think it's integral to the decision making, but we need to model it first. we can't model it
+> until I've validated the full day, which is currently in-play"*
+
+Task #12. None of the three declaring tests reads `heading`, and neither does the signal. Run 6
+reproduces run 5 byte-identically across all 71 events, so the whole reshape changes no verdict, no
+signal, no trade and no slot. It is built and idle, like the other seventeen banked-and-unread
+ingredients.
+
+**C5's SECOND CLAUSE IS A STANDING RULE, NOT A COLUMN RULE.** Any future test that reads `heading`
+must read `verdict` alongside it. Nothing reads `heading` today.
+
+**WHY C7 MATTERS.** The stall lattice samples every 22 to 29 bars on the high timeframes, so its
+extreme is a lattice point and not the line's real one. At 10:40:25 the lattice put ws9's extreme
+at 38.19 where the true low was 22.13, and ws11's lattice extreme predated its real low by 18
+minutes because the lattice sampled past it.
+
+**MINE, STATED, three:**
+- a line with no momentum-true bar since `WIN_FROM` starts its cycle at `WIN_FROM`. That is where
+  the data begins and there is nothing earlier to read.
+- a line that is momentum-true AT the bar starts its cycle there, so `extrema r` is its own r and
+  `extrema dwell` is 0 s. That is C4 applied to the current bar, not a special case.
+- `r now` exactly equal to `extrema r` has not moved off it, so it reads `toward`. With `flat` gone
+  under C6 there is nowhere else for a tie to land.
+
+**BUILT 0829** in `report_wsf_bar.py` - the `heading()` producer and a new `extrema()` producer.
+Report-only: ingredient 4 `heading` has home `report_wsf_bar` and is NOT BANKED, and the two new
+columns join it there. No walk change, no knob signature change, no re-run.
 
 ### the trade slots, Joe 0825
 
