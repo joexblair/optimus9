@@ -78,6 +78,15 @@ STOP_AFTER    = 0     # RUN SCOPE, not a model knob. 0 = walk the whole window. 
                       # N events and stop. Joe 0827: "for the walk: stop on the first wsf-exhaust".
                       # It changes WHAT IS BANKED but not what the rules do, so it lives on the run
                       # columns (wee_stop_after) and NOT in the knob signature. MINE, STATED.
+DR_SEED       = 1     # KNOB, Joe 0829: "I can tell you that 08-04 starts the day on dr +1".
+                      # The dr held from WIN_FROM until the first wsf9of12 marker. There is no
+                      # 08-03 in ws_fin_9of12, ws_line_bar, wsf_line_bar or wsf_x_cross, so his
+                      # G3a answer - "use the last marker from 08-03" - has no data behind it and
+                      # this seed stands in its place. It agrees with the first marker, 00:08:20
+                      # at +1, so the opening 100 bars and that marker are one unbroken run.
+HO_RULE       = 'median'    # KNOB. Which ws_fin_9of12 variant sets the dr. 4 are stored for the
+LINE_HCAP     = 'ws1b:1'    # day; this pair is the one report_wsf_bar.py already pins. Precedent,
+                      # MINE, STATED - the walk and the report must not read different markers.
 WMT_TF_LO     = 2     # KNOB, Joe 0821. the weak-mage scan's floor
 WMT_TF_HI     = 12    # KNOB, Joe 0826: "weak-mage-tf scan is now TF2 to TF12"
 MAX_TRADES    = 2     # KNOB, Joe 0825: "allows pyramiding, max 2 trades"
@@ -165,7 +174,8 @@ GRID          = 5     # seconds per bar
 # Joe's standing rule. A run at another ceiling or another hold lands alongside, not on top.
 SIG = (f'{KNOBS}_mt{MAX_TF}_mg{MAGE_KNOB}_dl{DR_LOOKBACK_S}_xw{XCROSS_XWOB}'
        f'_wl{WMT_TF_LO}_wh{WMT_TF_HI}_tr{MAX_TRADES}_g1{WS1X_GATE}x{WS1X_XWOB}'
-       f'_xt{XCROSS_TARGET}_hg{HIGH_TF_GAP:g}')
+       f'_xt{XCROSS_TARGET}_hg{HIGH_TF_GAP:g}'
+       f'_dr9s{DR_SEED:+d}_hr{HO_RULE}_lh{LINE_HCAP}')
 
 DDL_EVENT = '''CREATE TABLE IF NOT EXISTS wsf_exhaust_event (
     wee_pk BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -391,9 +401,41 @@ def main():
                       (WIN_FROM, WIN_TO), fetch=True)
     T = [str(x['t']) for x in face]
     IDX = {t: i for i, t in enumerate(T)}
+    # THREE-MAGE IS STILL COMPUTED AND STILL BANKED - it just no longer sets the dr.
+    # Joe 0829, G3b: "not removed entirely. it won't show any activity before we integrate wsf
+    # with dtf", and G3d on DR_LOOKBACK_S and MAGE_KNOB: "not dead - dormant until a later time".
+    # Both readings still fill ingredients 2 and 32 on every event row.
     DRr = wsf_facing_dr([[float(x['a']) for x in face], [float(x['b']) for x in face],
                          [float(x['c']) for x in face]], 100.0 - MAGE_KNOB, float(MAGE_KNOB))
-    DR, LAG = wsf_dr_lookback(DRr, DR_LOOKBACK_S // GRID)
+    DR3, LAG = wsf_dr_lookback(DRr, DR_LOOKBACK_S // GRID)
+
+    # THE dr IS NOW SET AND LATCHED BY wsf9of12. Joe 0829, G1: "the dr is set and latched by
+    # wsf9of12. between markers, nothing changes to dr", and G3c on how long it holds: "'forever'
+    # is too dramatic. 'until the next wsf9of12' is more precise".
+    #
+    # WHY. Joe 0829: "three-mage was created specifically for dtf-free events. I let it bleed into
+    # wsf, which was useful at the time but now I see we are missing trades because three-mage is
+    # to restricive for wsf ops". Measured on 08-04: the three-Mage dr read 0 on 11,213 of 17,280
+    # bars, and the walk skips a 0 bar entirely - no test, no state update. So the walk read 6,067
+    # bars, 35.1% of the day. Worse, `prev_top` and `was_on` only advance on a bar the walk reads,
+    # so the maxTF test compared ws12's verdict across the skipped stretch: 8 of the 71 events were
+    # declared that way, the worst spanning 5h01m20s during which ws12 changed verdict 24 times.
+    # wsf_side is only +1 or -1, never 0, so with the seed every bar now has a dr and the maxTF
+    # test always compares against the bar before.
+    mk = {str(x['u']): int(x['s']) for x in db.execute(
+        'SELECT DISTINCT wsf_utc u, wsf_side s FROM ws_fin_9of12 WHERE wsf_win_from=%s '
+        'AND wsf_ho_rule=%s AND wsf_line_hcap=%s ORDER BY wsf_utc',
+        (WIN_FROM, HO_RULE, LINE_HCAP), fetch=True)}
+    DR = []
+    cur = DR_SEED
+    for t in T:
+        if t in mk:
+            cur = mk[t]
+        DR.append(cur)
+    print(f'  dr from wsf9of12: {len(mk)} markers at {HO_RULE}/{LINE_HCAP}, '
+          f'seeded {DR_SEED:+d} to the first one. '
+          f'three-Mage read 0 on {sum(1 for v in DR3 if int(v) == 0):,} of {len(T):,} bars '
+          f'and is now dormant', flush=True)
     print(f'  {len(T):,} bars   knobs {SIG}', flush=True)
 
     # EVERY COLUMN THE 22 READERS NEED, in one pass. LB[bar][(dr, tf)] is the whole line row.
@@ -513,8 +555,11 @@ def main():
     was_on = {1: False, -1: False}   # the exhaust condition on the previous bar, per dr
     seq = 0
 
+    last_mk = None
     for i, t in enumerate(T):
         dr = int(DR[i])
+        if t in mk:
+            last_mk = t
         if dr == 0:
             continue
         board, rv = V.get(t), R.get(t)
@@ -670,8 +715,16 @@ def main():
                   if U.get(t, {}).get((dr, tf)) in ('momo', 'curl')
                   and board.get((dr, tf)) == 'none']
         vals = {
-            'three-mage dr':             f'dr {dr:+d}, lookback lag {int(LAG[i]) * GRID} s',
-            'the dr latch':              f'live print at this bar: {"yes" if int(DRr[i]) else "no"}',
+            # DORMANT, Joe 0829 G3b and G3d. Still read at every event, no longer sets the dr.
+            'three-mage dr':             (f'DORMANT - reads dr {int(DR3[i]):+d}, lookback lag '
+                                          f'{int(LAG[i]) * GRID} s. The walk dr is {dr:+d}, set by '
+                                          f'wsf9of12'),
+            # Joe 0829 G1: set and latched by wsf9of12, held until the next marker.
+            'the dr latch':              (f'dr {dr:+d} from wsf9of12'
+                                          + (' - a marker prints at this bar'
+                                             if t in mk else
+                                             f' - held from the marker at {last_mk[11:]}'
+                                             if last_mk else ' - held from the seed')),
             'verdict':                   f'holding momo or curl: {_lines(holding) or "none"}',
             'r value':                   f'past the fence: {_lines(past) or "none"}',
             'the maxTF declaration':     f'ws{MAX_TF}r {top_prev} -> {top_now}',

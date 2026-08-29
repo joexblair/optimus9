@@ -341,6 +341,71 @@ minutes because the lattice sampled past it.
 Report-only: ingredient 4 `heading` has home `report_wsf_bar` and is NOT BANKED, and the two new
 columns join it there. No walk change, no knob signature change, no re-run.
 
+### the dr is set by wsf9of12, Joe 0829
+
+> *"start using wsf9of12 to primarily set the walk's dr. the three mage lb will be secondary (ie
+> wsf9of12 will override it)"*
+> *"three-mage was created specifically for dtf-free events. I let it bleed into wsf, which was
+> useful at the time but now I see we are missing trades because three-mage is to restricive for
+> wsf ops"*
+> *"I can tell you that 08-04 starts the day on dr +1"*
+
+**WHY IT MATTERS - THE WALK WAS BLIND ON TWO THIRDS OF THE DAY.** The walk skips a bar outright
+when the dr reads 0: no test, no state update. The three-Mage dr read 0 on **11,213 of 17,280
+bars**, so the walk read 6,067 bars, 35.1% of 08-04.
+
+Worse, `prev_top` and `was_on` only advance on a bar the walk reads. The maxTF test compares
+ws12's verdict against the last bar the walk read, not the bar before. **8 of the 71 events were
+declared across a skipped stretch** - the worst spanning 5h01m20s, during which ws12 changed
+verdict 24 times and flipped from momentum to none on ten separate occasions. Joe 0829: *"this is
+very concerning. how did you find the wsf-exhaust moments if your ignoring so many bars?"*
+
+**JOE'S RULINGS, 0829, verbatim:**
+
+| | ruling |
+|---|---|
+| G1 what happens between markers | *"the dr is set and latched by wsf9of12. between markers, nothing changes to dr"* |
+| G2 the dr 0 bars | *"G1 answers this"* |
+| G3a before the first marker | *"use the last marker from 08-03"* - there is no 08-03 in any table, so `DR_SEED` +1 stands in its place, on his word: *"08-04 starts the day on dr +1"*. It agrees with the first marker, 00:08:20 at +1 |
+| G3b is three-Mage retired | *"not removed entirely. it won't show any activity before we integrate wsf with dtf"* |
+| G3c how long the latch holds | *"'forever' is too dramatic. 'until the next wsf9of12' is more precise"* |
+| G3d DR_LOOKBACK_S and MAGE_KNOB | *"not dead - dormant until a later time"* |
+| G4 the signature change | *"I doubt it will make a considerable change - if anything, we'll see more rows breaking current runs of monotonic same-sided dr rows"* - confirmed: 121 markers, 27 side changes. The new rows come from bars the walk could not see, not from a flapping dr |
+
+**THE VARIANT PIN IS MINE, STATED.** `ws_fin_9of12` stores 4 knob variants for the day.
+`HO_RULE='median'` and `LINE_HCAP='ws1b:1'` is the pair `report_wsf_bar.py` already pins - the walk
+and the report must not read different markers.
+
+**THE RESULT, three-Mage against wsf9of12, both full-day, unchanged tests:**
+
+| | three-Mage dr | wsf9of12 dr |
+|---|---|---|
+| bars the walk read | 6,067 | 17,280 |
+| events banked | 71 | 210 |
+| declared by forced | 43 | 141 |
+| declared by maxtf | 17 | 31 |
+| declared by plain | 9 | 32 |
+| dr +1 | 48 | 116 |
+| dr -1 | **23** | **94** |
+| pool actions - a slot opened | 20 | 49 |
+
+**BOTH MISSES JOE FOUND BY EYE ARE NOW DECLARED.** *"~03:20 dr -1 is missing"* - the new walk fires
+03:25:45, 03:30:20 and 03:38:30. The ~10:38 held cross that was stranded when the walk stopped
+seeing dr -1 bars now fires at 10:44:50, the bar ws6 actually crossed.
+
+**AGAINST JOE'S OWN VERDICTS ON THE OLD WALK:** 12 of 14 `valid` kept, 6 of 7 held-for-dtf kept,
+2 of 2 `fail` kept. The two `valid` events lost are 01:13:35 and 03:43:15, both on the list of 8
+declared across a skipped stretch. 03:43:15 did not vanish - ws12 had already gone to `none` at
+03:38:30 on the dr -1 board, and the new walk declares at that bar instead, 4m45s earlier.
+
+**forced IS NO LONGER ALWAYS THE SOLE TEST.** Under three-Mage it never combined; under wsf9of12
+two events do - 07:25:10 `plain,forced` and 18:33:15 `maxtf,forced`. Both route big-hammer, since
+the code branches on `'forced' in tests`. I told Joe the opposite when he ruled C1 on big-hammer,
+and his ruling still applies cleanly to both.
+
+**BUILT 0829** in `build_wsf_walk_events.py`. The signature now ends `_dr9s+1_hrmedian_lhws1b:1`,
+so every earlier run stands untouched under its own signature.
+
 ### the trade slots, Joe 0825
 
 > *"1. allows pyramiding, max 2 trades. 2. if both trade slots are occupied, the walk will take no
