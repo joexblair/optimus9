@@ -31,7 +31,8 @@ report + pine: `report_momo_landed.py`. reads: `build_eyes_on_pine.py`.
 
 -at each marker, tag the ws{8..33}r lines that qualify for momentum (momo or curl)
 --the verdict is `momo_g(R[tf], dr, marker_bar)`
---the momo window is DYNAMIC: `{K_WINDOW:4} x TF` minutes. TF8 -> 32 min, TF33 -> 132 min
+--the momo window is DYNAMIC: `{k_window} x TF` minutes, `k_window` from `momo_config`.
+  AT k_window 6 (0903): TF8 -> 48 min, TF33 -> 198 min. Was 4: TF8 -> 32 min, TF33 -> 132 min
 --`momo_window()` rebinds `MOMO_WINDOW_MIN` and `MOMO_SAMPLES` per TF, then restores
 -1,684 (marker x TF) tags on 154 of 160 markers
 -2 markers tag nothing: 08-04 20:41:55 and 20:54:55, both dr +1
@@ -75,11 +76,14 @@ report + pine: `report_momo_landed.py`. reads: `build_eyes_on_pine.py`.
 |---|---|---|
 | fence_momo_landed | 20 | fence [20, 80] |
 | XWOB | 4 | 5s bars = 20s held outside the fence |
-| K_WINDOW | 4 | momo window = 4 x TF minutes |
+| k_window | 6 | momo window = k_window x TF minutes. **From `momo_config` since 0903**, was 4 |
 | TFS | 8..33 | minutes, 26 lines |
 
--`MOMO_WINDOW_MIN` now dynamic at 4 x TF. `LEVEL_SLACK` 13.9, `MOMO_STEP_MIN` 5, `MOMO_SLOPE_MIN` 1.0,
- `MOMO_R2_MIN` 0.50 — all in the queued URGENT tuning task, untuned
+-`MOMO_WINDOW_MIN` is dynamic at `k_window` x TF. **ALL THE MOMENTUM KNOBS MOVED TO `momo_config`
+ ON 0903**, one bank per machine keyed on the line's timeframe. This file's range 8..33 crosses
+ two bands, so it binds per timeframe: TF8-12 take the `wsf` bank, TF13-33 the `domtf` bank.
+ `momo_slope_min` 1.2 and `momo_r2_min` 0.70 were swept on 0903 (was 1.0 / 0.50); `level_slack`
+ 13.9 and `momo_step_min` 5 are unchanged and still untuned. Listing: `docs/ws-finisher_spec.md`
 
 ---
 
@@ -178,4 +182,5 @@ report + pine: `report_momo_landed.py`. reads: `build_eyes_on_pine.py`.
 
 -a filename's meaning does not move. contents refresh, meaning stays
 -Joe's eyes on the pine are a measurement. reads go in `eyes_on_pine`, one row per event, verbatim
--momo's window is dynamic at 4 x TF; the other momo constants are not, and are untuned
+-momo's window is dynamic at `k_window` x TF; every momo constant now lives in `momo_config`,
+ and the three swept on 0903 are fitted to eight eyeballed 08-04 pivots on ws20r, not measured

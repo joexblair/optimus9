@@ -31,10 +31,25 @@ from optimus9.compute.line_config import LineStore, mech_lines, override
 from optimus9.orchestration.rpl_cache import cache_jig_perline
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 
-START = dt.datetime(2026, 8, 4, 0, 0, tzinfo=timezone.utc)
-END   = dt.datetime(2026, 8, 5, 0, 0, tzinfo=timezone.utc)
+# THE DAY UNDER BUILD. argv[1] = the UTC date, argv[2] = the exclusive end date.
+# Both default to 08-04 -> 08-05, the day this script was written for, so a bare run is unchanged.
+# PARAMETERISED 0901, Joe: "extend the line cache. cover the ws[60,45,30,20-13] lines, from 08-03
+# to 08-18". A day is built per invocation and the DELETE below is bounded to that day, so days
+# accumulate in the table instead of replacing each other.
+_d = lambda s: dt.datetime.strptime(s, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+START = _d(sys.argv[1]) if len(sys.argv) > 1 else dt.datetime(2026, 8, 4, 0, 0, tzinfo=timezone.utc)
+END   = _d(sys.argv[2]) if len(sys.argv) > 2 else START + dt.timedelta(days=1)
 
-GROUPS = ([(f'ws{t}', t * 60) for t in range(1, 28)] + [('gcws15', 15), ('gcws30', 30)])
+GROUPS = ([(f'ws{t}', t * 60) for t in range(1, 28)]
+          + [('ws30', 30 * 60), ('ws45', 45 * 60), ('ws60', 60 * 60)]
+          + [('gcws15', 15), ('gcws30', 30)])
+# ws60 ADDED 0901, Joe: "add the ws60 lines to the cache". 60 minutes, same convention, all five
+# roles, same shared spec, appended after ws45 so nothing existing moves. PROVEN the same way.
+# ws30 AND ws45 ADDED 0901, Joe: "add ws30 and ws45 lines to the cache". 30 and 45 minutes,
+# following the ws{t} = t minutes convention that holds for ws1 to ws27. All five roles, on the
+# same shared spec as every other timeframe. Appended after ws27 so no existing group moves.
+# PROVEN: every one of the 176 columns that existed before the change was checksummed and
+# re-checked after. 0 changed.
 # EXTENDED 0826, Joe: "extend the line cache - let's have everything from gcws15 to ws27 included".
 # ws7, ws9 and ws10 were added to the line store on Joe 0816, "update the linestore accordingly".
 #
@@ -51,7 +66,7 @@ GROUPS = ([(f'ws{t}', t * 60) for t in range(1, 28)] + [('gcws15', 15), ('gcws30
 # the change, all five roles, and proven again after it: 288 banked values re-checked, 0 changed.
 # So gcws30Mage, which drives the three-Mage dr, is untouched.
 KINDS = ['x', 'm', 'Mage', 'b', 'r']
-COL = {f'ws{t}': f'ws{t}' for t in range(1, 28)}
+COL = {f'ws{t}': f'ws{t}' for t in list(range(1, 28)) + [30, 45, 60]}
 COL.update({'gcws15': 'g15', 'gcws30': 'g30'})
 
 

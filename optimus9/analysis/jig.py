@@ -1367,14 +1367,30 @@ def ws_fin_9of12(W, hi, lo, g30, n=WSF_N, handicap=WSF_HANDICAP, vote_hold=WSF_V
 # ws-FINISHER — the weak-mage-tf. Joe 0817. NOTHING FROM domTF BELONGS HERE.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 
-WMT_TFS        = list(range(1, 9))   # scan ws1Mage up to ws8Mage. Joe 0817 "confirmed: TF1 to TF8"
+# THE SINGLE TRUTH FOR weak-mage-tf. Joe 0831: "move it to the jig so that we have a single
+# truth". Every knob and both producers live here. build_wsf_bar_tf.py and build_ws_finisher.py
+# import from this block and declare nothing of their own.
+WMT_TF_LO      = 2                   # KNOB. Joe 0826 "weak-mage-tf scan is now TF2 to TF12".
+WMT_TF_HI      = 12                  #   WAS TF1 to TF8, Joe 0817 "confirmed: TF1 to TF8". The 0826
+#                                      ruling had reached build_wsf_bar_tf.py and had NOT reached
+#                                      this file until the 0831 move. ws_fin_weak_mage's 121 rows
+#                                      were built at 1..8 and are kept alongside on Joe 0831 "W1,
+#                                      keep alongside" - the range is now in that table's unique
+#                                      key so a rebuild at 2..12 cannot overwrite them.
+WMT_TFS        = list(range(WMT_TF_LO, WMT_TF_HI + 1))   # derived. Never set independently.
 WMT_LOOKBACK_S = 120                 # KNOB, seconds. Joe 0817 "add a lookback tolerance to capture
-#                                      Mage values that were recently oob. knob:120sec"
-WMT_SAME_SIDE  = True                # KNOB. Joe 0817 "unsure. create a knob for it. default to
-#                                      same-side". MY DEFINITION, stated 0817: with it ON a line's
-#                                      out-of-bounds readings only count on the side dr points at —
+#                                      Mage values that were recently oob. knob:120sec". This is
+#                                      the weak-mage tolerance and NOTHING ELSE. three-mage's dr
+#                                      lookback is DR_LOOKBACK_S 180 s in build_wsf_walk_events.py,
+#                                      Joe 0823 "restrict the lookback to 3 minutes" - a different
+#                                      knob at a different value on a different mechanic.
+WMT_SAME_SIDE  = True                # FIXED at True, Joe 0831 "W3, fixed as True". Was a knob on
+#                                      Joe 0817 "unsure. create a knob for it. default to
+#                                      same-side". MY DEFINITION, stated 0817: a line's
+#                                      out-of-bounds readings only count on the side dr points at -
 #                                      the high boundary when dr is positive, the low boundary when
-#                                      dr is negative. With it OFF either side counts.
+#                                      dr is negative. The per-bar producer still accepts the
+#                                      argument; no caller passes anything but the default.
 
 
 def weak_mage_tf(mage, hi, lo, bar, lookback_bars, dr, tfs=WMT_TFS, same_side=WMT_SAME_SIDE):
@@ -1430,6 +1446,61 @@ def weak_mage_tf(mage, hi, lo, bar, lookback_bars, dr, tfs=WMT_TFS, same_side=WM
             if weak is None:
                 weak = tf
     return weak, detail
+
+
+def weak_mage_tf_series(mage, hi, lo, dr, grid_s, tfs=None, lookback_s=WMT_LOOKBACK_S,
+                        tf_lo=WMT_TF_LO, tf_hi=WMT_TF_HI):
+    """[PRODUCER · Joe 0817, vectorised 0831] weak_mage_tf answered at EVERY bar at once.
+
+    Same three steps as the per-bar weak_mage_tf above, and the same rulings behind them:
+      1. out of bounds   ws{TF}Mage >= hi when dr is positive, <= lo when dr is negative. Joe 0817,
+                         "with it ON a line's out-of-bounds readings only count on the side dr
+                         points at". Same-side is FIXED here, Joe 0831 "W3, fixed as True".
+      2. the tolerance   a line out of bounds at any bar inside the last `lookback_s` seconds still
+                         counts as out. Joe 0817 "add a lookback tolerance to capture Mage values
+                         that were recently oob. knob:120sec".
+      3. the scan        the LOWEST timeframe in tf_lo..tf_hi the tolerance does not count as out.
+                         Joe 0826 "weak-mage-tf scan is now TF2 to TF12".
+
+    NO WEAK-MAGE-TF IS A RESULT, NOT A FAILURE - Joe 0817. It arrives here as 0, because the return
+    is an integer array. The caller turns 0 into None on the way to the database.
+
+        mage        {tf: array} the Mage line per timeframe, one value per grid bar, FULL LENGTH.
+                    The arrays must start at the beginning of the cache, not at the window, or the
+                    seconds-since-last-out counter has no history to count from.
+        hi / lo     the boundaries, 85 and 15
+        dr          the bias. Only its sign is read; this producer holds no LONG/SHORT logic
+        grid_s      seconds per bar, 5
+        tfs         the timeframes to compute rows for. Defaults to every key in `mage`. This can
+                    be WIDER than tf_lo..tf_hi - wsf_bar_tf banks a row per timeframe whether or
+                    not that timeframe takes part in the scan
+        tf_lo/tf_hi the scan range, inclusive
+
+    -> (oob, ago, tol, wmt), all full length.
+       oob  {tf: bool array}  out of bounds at this bar
+       ago  {tf: int array}   seconds since last out of bounds, -1 = never on this side yet
+       tol  {tf: bool array}  counted as out under the tolerance
+       wmt  int16 array       the weak-mage-tf, 0 meaning none
+    """
+    if tfs is None:
+        tfs = sorted(mage)
+    oob, ago, tol = {}, {}, {}
+    n = None
+    for tf in tfs:
+        m = np.asarray(mage[tf], float)
+        n = len(m)
+        o = (m >= hi) if dr > 0 else (m <= lo)
+        idx = np.arange(n)
+        lasto = np.maximum.accumulate(np.where(o, idx, -1))
+        oob[tf] = o
+        ago[tf] = np.where(lasto < 0, -1, (idx - lasto) * grid_s)
+        tol[tf] = (ago[tf] >= 0) & (ago[tf] <= lookback_s)
+    wmt = np.zeros(n, np.int16)
+    # walk the range DOWNWARD so the last write wins and the answer is the LOWEST timeframe the
+    # tolerance does not count as out
+    for tf in [t for t in tfs if tf_lo <= t <= tf_hi][::-1]:
+        wmt = np.where(~tol[tf], tf, wmt)
+    return oob, ago, tol, wmt
 
 
 MOMO_CHECK_TFS = list(range(2, 11))

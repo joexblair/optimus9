@@ -38,12 +38,18 @@ from optimus9.analysis.jig import (ws_fin_9of12, WSF_N, WSF_HANDICAP, WSF_LINE_H
 from optimus9.compute import momo_gated as MG
 from optimus9.compute.momo_gated import momo_g, momo_window
 
-MG.MOMO_FIXED_SAMPLES = 21   # KNOB, Joe 0814. Every domTF line's momentum fit uses 21 sample
-#                              points across its own 4 x timeframe window, so the gap scales with
+# MOMO_FIXED_SAMPLES IS NOT SET HERE, 0903. It was assigned 21 at import, which landed on
+# top of whatever bank a caller had bound and said nothing about it. The value now comes
+# from momo_config - both banks hold 21, so no number moved. Joe 0814 set 21; the bank
+# carries it as mmc_momo_fixed_samples.
+# Joe 0814's note kept: every domTF line's momentum fit uses 21 sample
+#                              points across its own k_window x timeframe window, so the gap scales with
 #                              the line (2.6 min on ws13r, 5.4 min on ws27r) instead of the count.
 from optimus9.compute import momo_core as MC
+from optimus9.compute.momo_config import momo_bank, momo_config
 from optimus9.analysis import domtf as DT   # THE domTF MECHANIC. Joe 0822: import, don't duplicate
-import build_momo_landed as B          # domTF constants only: TFS, R_SPEC, K_WINDOW 4
+import build_momo_landed as B          # domTF constants only: TFS, R_SPEC. K_WINDOW moved to
+#                                        momo_config 0903 - it is a momentum knob, not a domTF one
 
 DOMTF_MIN = 13      # KNOB, Joe 0813: "8 has proven that it is too low to be of value when we're in
 DOMTF_MAX = 27      # a large leg (between 17:00 and 21:00) ... make the domTF range 13 to 27".
@@ -121,8 +127,16 @@ G30_LEVEL = 'g30_marker'          # Joe 0813 named it
 XWOB = 2
 
 # THE WINDOW. Joe named 08-04 00:00:00 -> 12:22:00 for the report. Both ends stamped on every row.
-START = dt.datetime(2026, 8, 4, 0, 0, tzinfo=timezone.utc)   # Joe 0814: the 08-04 window
-END = dt.datetime(2026, 8, 5, 0, 0, tzinfo=timezone.utc)
+# argv[1] = the UTC date to walk, argv[2] = the exclusive end. Both default to 08-04 -> 08-05,
+# the window this file was written for, so a bare run is unchanged.
+# PARAMETERISED 0902, Joe: "create and bank the ws_fin_9of12 for the full test window (ending
+# at 08-18)". One run per day: wsf_win_from stamps the day and is the first column of the
+# unique key, so days accumulate instead of replacing each other. 08-04 and 08-05 already sat
+# in the table as separate win_from values before this change.
+_d = lambda z: dt.datetime.strptime(z, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+_a = [z for z in sys.argv[1:] if not z.startswith("--")]
+START = _d(_a[0]) if _a else dt.datetime(2026, 8, 4, 0, 0, tzinfo=timezone.utc)
+END = _d(_a[1]) if len(_a) > 1 else START + dt.timedelta(days=1)
 
 u = lambda t: dt.datetime.fromtimestamp(int(t) / 1000, timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
@@ -337,12 +351,18 @@ def _wsf_key(win_from, hi, lo):
 AB = '--ab' in sys.argv     # print the restricted vs unrestricted race, write nothing
 
 
-def _tag_one(tf, dr, path, r, i0, i1, window_min, fixed_samples):
+def _tag_one(tf, dr, path, r, i0, i1, window_min, bank):
     """One line, one direction: momo or curl at every bar of the walked window. Written to `path`.
-    Module level and taking plain arrays so it can run in a worker process."""
-    MG.MOMO_FIXED_SAMPLES = fixed_samples
+    Module level and taking plain arrays so it can run in a worker process.
+
+    THE WHOLE BANK IS PASSED AND BOUND HERE, 0903. It used to take fixed_samples alone and assign
+    it, while the other ten knobs reached the worker only because a forked process inherits its
+    parent's memory. Passing one knob explicitly reads as though the knobs are handled when ten of
+    them are not passed at all, and the inheritance stops being true under any start method except
+    fork. The worker now binds the bank itself, so it runs on the same numbers however it is
+    started, and the numbers it used are visible in the call."""
     m = np.zeros(int(i1) + 1, bool)
-    with momo_window(window_min):
+    with momo_config(bank), momo_window(window_min):
         for i in range(int(i0), int(i1) + 1):
             m[i] = momo_g(r, dr, i)[0] in ('momo', 'curl')
     np.save(path, m)
@@ -359,6 +379,18 @@ def main():
         print(f'  FENCE OVERRIDE {HI:.0f} / {LO:.0f}   '
               f"(optimus9_system still says {float(sysr['h']):.0f} / {float(sysr['lo']):.0f})",
               flush=True)
+    # THE domTF BANK. Every momentum verdict this file computes is on a domTF line, TF13..27, so
+    # one bank covers the run - checked, not assumed, because a run that straddled two banks would
+    # write one cache filename over two different knob sets.
+    _bk = {tf: momo_bank(db, tf) for tf in DOMTF_TFS}
+    _ids = {(b['mech'], b['tf_lo'], b['tf_hi'], b['version']) for b in _bk.values()}
+    if len(_ids) != 1:
+        raise SystemExit(f'DOMTF_TFS {DOMTF_TFS[0]}..{DOMTF_TFS[-1]} spans {len(_ids)} momentum '
+                         f'banks: {sorted(_ids)}. One run must sit inside one bank.')
+    BANK = _bk[DOMTF_TFS[0]]
+    print(f"  momentum bank: {BANK['mech']} tf{BANK['tf_lo']}..{BANK['tf_hi']} v{BANK['version']}"
+          f"  k_window {BANK['k_window']}  slope {BANK['momo_slope_min']}"
+          f"  r2 {BANK['momo_r2_min']}  samples {BANK['momo_fixed_samples']}", flush=True)
     ls = LineStore(db)
     ovr = {n: (*ls.resolve(n), ls.value_mode(n)) for n in set(LINES + list(WS.LINES))}
     for tf in DOMTF_TFS:
@@ -388,7 +420,7 @@ def main():
     # the stall, asked at every bar of every domTF line, on that line's own momentum lattice
     LAT = {}
     for tf in DOMTF_TFS:
-        with momo_window(B.K_WINDOW * tf):
+        with momo_config(BANK), momo_window(BANK['k_window'] * tf):
             LAT[tf] = (int(MC.MOMO_STEP_BARS), int(MC.MOMO_SAMPLES))
     STALL = {dr: {tf: stall_mask(R[tf], dr, STALL_N, *LAT[tf]) for tf in DOMTF_TFS}
              for dr in (+1, -1)}
@@ -402,16 +434,17 @@ def main():
     # ONLY THE WALKED WINDOW. The race runs from a signal bar to i1 and every signal sits at or
     # after i0, so no bar outside [i0, i1] is ever read. Bars outside stay False.
     # 30 line-direction passes, each ~9 min serially. Run them in a process pool.
-    jobs = [(tf, dr, os.path.join(TAGDIR, f'tag_{tf}_{"u" if dr > 0 else "d"}_{B.K_WINDOW}_'
-                                          f'{MG.MOMO_FIXED_SAMPLES}_{i0}_{i1}.npy'))
+    jobs = [(tf, dr, os.path.join(TAGDIR,
+                                  f'tag_{tf}_{"u" if dr > 0 else "d"}_{BANK["k_window"]}_'
+                                  f'{BANK["momo_fixed_samples"]}_{i0}_{i1}.npy'))
             for tf in DOMTF_TFS for dr in (+1, -1)]
     todo = [j for j in jobs if not os.path.exists(j[2])]
     if todo:
         print(f'  tagged masks: {len(todo)} of {len(jobs)} to build, {os.cpu_count()} cores',
               flush=True)
         with mp.Pool(min(len(todo), max(1, (os.cpu_count() or 2) - 1))) as pool:
-            pool.starmap(_tag_one, [(tf, dr, f, R[tf], i0, i1, B.K_WINDOW * tf,
-                                     MG.MOMO_FIXED_SAMPLES) for tf, dr, f in todo])
+            pool.starmap(_tag_one, [(tf, dr, f, R[tf], i0, i1, BANK['k_window'] * tf, BANK)
+                                    for tf, dr, f in todo])
     TAG = {+1: {}, -1: {}}
     for tf, dr, f in jobs:
         TAG[dr][tf] = np.load(f)
@@ -427,7 +460,7 @@ def main():
     CURLED = {+1: {}, -1: {}}
     for tf in HTFS:
         back = int(CURL_RECENCY_TF_BARS * tf * 12)      # 2 TF bars -> grid bars
-        with momo_window(B.K_WINDOW * tf):
+        with momo_config(BANK), momo_window(BANK['k_window'] * tf):
             for dr in (+1, -1):
                 c = np.zeros(len(ts), bool)
                 for i in range(i0 - back, i1 + 1):
@@ -480,8 +513,11 @@ def main():
         # domTF, at the SIGNAL bar, dr = the event side. THE MECHANIC LIVES IN optimus9.analysis
         # .domtf - Joe 0822: "import, don't duplicate/split/fork". These 23 lines used to sit here,
         # which is why report_domtf_walk.py had to copy them and the copy drifted.
-        blk, opp = DT.blocking_at(R, DOMTF_TFS, sd, w, B.K_WINDOW,
-                                  NESTED_OPPOSITION, NESTED_OPPOSITION_MIN, RESCUE_REJECTED_CURL)
+        # blocking_at opens its own momentum windows inside, so the bank is bound around it.
+        with momo_config(BANK):
+            blk, opp = DT.blocking_at(R, DOMTF_TFS, sd, w, BANK['k_window'],
+                                      NESTED_OPPOSITION, NESTED_OPPOSITION_MIN,
+                                      RESCUE_REJECTED_CURL)
         # THE HANDOVER. Only a blocked signal has a turn to wait out.
         ho_i = ho_tf = 0; ho_how = None; curled = []; pool = []; joins = []; leaves = []
         if blk:

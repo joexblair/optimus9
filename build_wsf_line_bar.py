@@ -38,6 +38,7 @@ from optimus9.orchestration.rpl_cache import LINE_DIR, TAPE_DIR, _line_key, _tap
 from optimus9.compute import momo_gated as MG
 from optimus9.compute.momo_gated import momo_g_why, momo_window
 from optimus9.compute import momo_core as MC
+from optimus9.compute.momo_config import momo_bank, momo_config
 from optimus9.analysis.jig import _stall_rows
 import build_momo_landed as B
 
@@ -81,7 +82,8 @@ MOMO_KILL = 'state'
 # condition, not a one-bar event. Measured on 08-04: 'state' turns 52,359 rows to none, 'moment'
 # turns 2,138. It is in the unique key, so a run at another reading lands alongside instead of
 # on top.
-FIXED    = 21                    # MOMO_FIXED_SAMPLES. build_ws_fin.py sets this at import
+# MOMO_FIXED_SAMPLES IS NOT SET HERE, 0903. It comes from momo_config, per bank, and is read
+# into BANK in main() below. It used to be a literal 21 assigned over whatever a caller had bound.
 GRID_S   = 5
 
 DDL = '''CREATE TABLE IF NOT EXISTS wsf_line_bar (
@@ -91,13 +93,14 @@ DDL = '''CREATE TABLE IF NOT EXISTS wsf_line_bar (
     wflb_tf            SMALLINT NOT NULL,  -- timeframe 1 to 12. The line is ws{tf}r
     wflb_dr            TINYINT  NOT NULL,  -- direction the line is read in. +1 upward, -1 downward
     wflb_utc           DATETIME NOT NULL,  -- the bar, 5-second grid
-    wflb_k_window      SMALLINT NOT NULL,  -- K_WINDOW 4. momentum window = K_WINDOW x tf, minutes
+    wflb_k_window      SMALLINT NOT NULL,  -- k_window AS USED FOR THIS ROW, from momo_config.
+    --                                        momentum window = k_window x tf, minutes
     wflb_fixed_samples SMALLINT NOT NULL,  -- MOMO_FIXED_SAMPLES 21, points in the straight-line fit
     wflb_stall_n       SMALLINT NOT NULL,  -- STALL_N 6, lattice samples with no new extreme
     wflb_hi            DOUBLE   NOT NULL,  -- high boundary 85
     wflb_lo            DOUBLE   NOT NULL,  -- low boundary 15
-    wflb_r2_min        DOUBLE   NOT NULL,  -- MOMO_R2_MIN 0.50, straight-line fit floor
-    wflb_slope_min     DOUBLE   NOT NULL,  -- MOMO_SLOPE_MIN 1.0, slope floor
+    wflb_r2_min        DOUBLE   NOT NULL,  -- momo_r2_min AS USED FOR THIS ROW, straight-line fit floor
+    wflb_slope_min     DOUBLE   NOT NULL,  -- momo_slope_min AS USED FOR THIS ROW, slope floor
     wflb_arc_min       DOUBLE   NOT NULL,  -- CURL_ARC_MIN 4.0, arc floor
     wflb_slack         DOUBLE   NOT NULL,  -- LEVEL_SLACK 13.9
     wflb_curl_r2_min   DOUBLE   NOT NULL,  -- CURL_R2_MIN 0.40, the bend's own fit floor
@@ -215,7 +218,17 @@ def main():
     print(f'  boundaries {HI:.0f} / {LO:.0f}   wsf9of12 signal bars in the window: {len(sig_bars)}',
           flush=True)
 
-    MG.MOMO_FIXED_SAMPLES = FIXED
+    # THE wsf BANK. Every line this file measures is TF1..12, so one bank covers the run -
+    # checked, not assumed, because one knob signature must not cover two knob sets.
+    _bk = {tf: momo_bank(db, tf) for tf in TFS}
+    _ids = {(b['mech'], b['tf_lo'], b['tf_hi'], b['version']) for b in _bk.values()}
+    if len(_ids) != 1:
+        raise SystemExit(f'TFS {TFS[0]}..{TFS[-1]} spans {len(_ids)} momentum banks: '
+                         f'{sorted(_ids)}. One run must sit inside one bank.')
+    BANK = _bk[TFS[0]]
+    FIXED = BANK['momo_fixed_samples']
+    print(f"  momentum bank: {BANK['mech']} tf{BANK['tf_lo']}..{BANK['tf_hi']} v{BANK['version']}",
+          flush=True)
     ts = np.load(os.path.join(TAPE_DIR, _tape_key(END_MS, HOURS, WARMUP, PXS) + '.npz'))['__ts__']
     i0 = int(np.searchsorted(ts, int(dt.datetime.fromisoformat(WIN_FROM)
                                      .replace(tzinfo=timezone.utc).timestamp() * 1000)))
@@ -253,11 +266,15 @@ def main():
                    '(wflb_win_from, wflb_tf, wflb_dr, wflb_utc, wflb_knobs)')
         print('  unique key rebuilt on the knob signature - the 16-part limit was reached',
               flush=True)
-    KNOB = (WIN_FROM, None, None, None, B.K_WINDOW, FIXED, STALL_N, HI, LO,
-            MC.MOMO_R2_MIN, MC.MOMO_SLOPE_MIN, MC.CURL_ARC_MIN, MC.LEVEL_SLACK, MG.CURL_R2_MIN)
-    KNOBSIG = (f'kw{B.K_WINDOW}_fs{FIXED}_sn{STALL_N}_hi{HI:g}_lo{LO:g}_r2{MC.MOMO_R2_MIN:g}_'
-               f'sl{MC.MOMO_SLOPE_MIN:g}_arc{MC.CURL_ARC_MIN:g}_sk{MC.LEVEL_SLACK:g}_'
-               f'cr{MG.CURL_R2_MIN:g}_mk{MOMO_KILL}_mf{MOMO_FENCE_R}_xw{MOMO_XWOB}')
+    # THE SIGNATURE IS BUILT FROM THE BANK, not from module globals, so it records the numbers
+    # this run actually used rather than whatever happened to be bound.
+    KNOB = (WIN_FROM, None, None, None, BANK['k_window'], FIXED, STALL_N, HI, LO,
+            BANK['momo_r2_min'], BANK['momo_slope_min'], BANK['curl_arc_min'],
+            BANK['level_slack'], BANK['curl_r2_min'])
+    KNOBSIG = (f"kw{BANK['k_window']}_fs{FIXED}_sn{STALL_N}_hi{HI:g}_lo{LO:g}"
+               f"_r2{BANK['momo_r2_min']:g}_sl{BANK['momo_slope_min']:g}"
+               f"_arc{BANK['curl_arc_min']:g}_sk{BANK['level_slack']:g}"
+               f"_cr{BANK['curl_r2_min']:g}_mk{MOMO_KILL}_mf{MOMO_FENCE_R}_xw{MOMO_XWOB}")
     print(f'  knob signature: {KNOBSIG}', flush=True)
     where = 'wflb_win_from=%s AND wflb_knobs=%s'
     kv = (WIN_FROM, KNOBSIG)
@@ -271,14 +288,14 @@ def main():
         r = np.load(os.path.join(LINE_DIR,
                                  _line_key(END_MS, HOURS, WARMUP,
                                            override(tf * 60, KLine(**B.R_SPEC), 'emerging')) + '.npy'))
-        with momo_window(B.K_WINDOW * tf):
+        with momo_config(BANK), momo_window(BANK['k_window'] * tf):
             step, samples = int(MC.MOMO_STEP_BARS), int(MC.MOMO_SAMPLES)
         span = (samples - 1) * step
         lat = np.stack([r[i - span:i + 1:step] for i in range(i0, i1 + 1)])   # the stall lattice
         for dr in DRS:
             mask, since = _stall_rows(lat, dr, STALL_N)
             rows = []
-            with momo_window(B.K_WINDOW * tf):
+            with momo_config(BANK), momo_window(BANK['k_window'] * tf):
                 prev_mfr = prev_st = 0      # the bar before the window, for the 'moment' reading
                 run = 0                     # consecutive bars outside momo-fence-r
                 was_inside = False          # the run only counts if it started from inside
@@ -303,9 +320,9 @@ def main():
                     else:
                         dwell += GRID_S
                     rows.append((
-                        WIN_FROM, tf, dr, utcs[k], B.K_WINDOW, FIXED, STALL_N, HI, LO,
-                        MC.MOMO_R2_MIN, MC.MOMO_SLOPE_MIN, MC.CURL_ARC_MIN, MC.LEVEL_SLACK,
-                        MG.CURL_R2_MIN,
+                        WIN_FROM, tf, dr, utcs[k], BANK['k_window'], FIXED, STALL_N, HI, LO,
+                        BANK['momo_r2_min'], BANK['momo_slope_min'], BANK['curl_arc_min'],
+                        BANK['level_slack'], BANK['curl_r2_min'],
                         _f(rv), int(bool(mask[k])),
                         None if int(since[k]) < 0 else int(since[k]),
                         ung, gat, why,

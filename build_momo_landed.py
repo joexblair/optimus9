@@ -30,6 +30,7 @@ from optimus9.orchestration.rpl_cache import cache_jig_perline
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 from optimus9.analysis.jig import oob_ib_cross, momo_landed
 from optimus9.compute.momo_gated import momo_g, momo_window
+from optimus9.compute.momo_config import momo_bank, momo_config
 
 # Joe 0810: "disable the current clear mechanism: instead of clearing on 'first momentum line
 # exiting fence', now it will be 'highest TF momentum line curling against bias'".
@@ -49,7 +50,12 @@ MARKER_LINES = ('ws1Mage', 'ws1b')   # read for the per-bar table only; not the 
 MARKER_GATE_BY = 'ws1Mage+ws1b'      # the release path that defines a ws1 marker
 FENCE = 20                        # fence_momo_landed = [20, 80]
 XWOB = 4                          # 5 s pxs bars the tagged line must hold outside the fence
-K_WINDOW = 4                      # momo window = K_WINDOW * TF minutes. Joe 0810
+# BAKED IN 0903, Joe: "good work - bake it in". WAS 4 (Joe 0810). The window is K_WINDOW x the
+# line's OWN timeframe, so this moves every timeframe, not just the ws20 the grid was scored on:
+# ws8 32 -> 48 min, ws20 80 -> 120 min, ws33 132 -> 198 min.
+# K_WINDOW LEFT THIS FILE 0903. It is a momentum knob, not a domTF one, and it now lives in
+# momo_config as mmc_k_window - one value per bank, read per timeframe. Joe 0810 set the
+# k_window x TF shape; Joe 0903 set it to 6 and moved it to the bank.
 START = dt.datetime(2026, 8, 4, 12, 0, tzinfo=timezone.utc)
 u = lambda t: dt.datetime.fromtimestamp(int(t) / 1000, timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
@@ -127,12 +133,29 @@ def main(rebuild=False):
             MK[c] = int(x['s']); SRC[c] = [MARKER_GATE_BY]
     mk = sorted(MK)
     print(f'{len(mk):,} ws1 markers (gcws30 signals released by ws1Mage+ws1b)   window {u(ts[i0])} -> {u(ts[-1])}   '
-          f'fence [{FENCE},{100-FENCE}]  xwob {XWOB} ({XWOB*5}s)  momo window {K_WINDOW} x TF', flush=True)
+          f'fence [{FENCE},{100-FENCE}]  xwob {XWOB} ({XWOB*5}s)  momo window {KW} x TF', flush=True)
+
+    # THE BANKS, ONE PER TIMEFRAME. This file runs TFS 8 to 33, which crosses the wsf band (1..12)
+    # into the domtf band (13..60), so there is no single bank for the run - each line takes the
+    # bank that owns its own timeframe. Read once here; binding inside the loop is cheap.
+    BANKS = {tf: momo_bank(db, tf) for tf in TFS}
+    for _tf, _b in sorted(BANKS.items()):
+        print(f"  TF{_tf} momentum bank: {_b['mech']} v{_b['version']} "
+              f"k_window {_b['k_window']}", flush=True)
+
+    # ONE k_window IN THE ROW KEY. This table keys on a single k_window per run, but the run now
+    # spans two banks. They agree today; if they ever stop agreeing, one value would stand for two
+    # different knob sets, so this fails instead of writing it.
+    _kws = {b['k_window'] for b in BANKS.values()}
+    if len(_kws) != 1:
+        raise SystemExit(f'the banks in this run hold different k_window values: {sorted(_kws)}. '
+                         'This table records one k_window per run, so it cannot span them.')
+    KW = _kws.pop()
 
     # --- momentum at each marker. momo_window rebinds MOMO_WINDOW_MIN per TF (Joe 0810, option A).
     tagged, detail = {}, {}
     for tf in TFS:
-        with momo_window(K_WINDOW * tf):
+        with momo_config(BANKS[tf]), momo_window(BANKS[tf]['k_window'] * tf):
             for c in mk:
                 st, sl, r2, rw = momo_g(R[tf], MK[c], c)
                 if st in ('momo', 'curl'):
@@ -146,7 +169,7 @@ def main(rebuild=False):
     # curl test Joe defined on 0805 (momo_gated.momo_g), run with the OPPOSITE dr. Lives here, not
     # in the jig, for the same SRP reason `tagged` does: momo_g imports build_exhv2.
     def counter_curl(tf, dr, bar):
-        with momo_window(K_WINDOW * tf):
+        with momo_config(BANKS[tf]), momo_window(BANKS[tf]['k_window'] * tf):
             st, _sl, _r2, _rw = momo_g(R[tf], -int(dr), bar)
         return st == 'curl'
 
@@ -158,14 +181,14 @@ def main(rebuild=False):
     rows = []
     for e in ev:
         st, sl, r2, rw = detail[(e['marker'], e['tf'])]
-        rows.append((FENCE, XWOB, K_WINDOW, CLEAR_ON, e['tf'], e['dr'],
+        rows.append((FENCE, XWOB, KW, CLEAR_ON, e['tf'], e['dr'],
                      int(ts[e['bar']]), u(ts[e['bar']]), int(ts[e['cross']]), u(ts[e['cross']]),
                      int(ts[e['marker']]), u(ts[e['marker']]),
                      (int(ts[e['bar']]) - int(ts[e['marker']])) / 60000.0,
                      e['val'], float(pxs[e['bar']]), st, sl, r2, rw))
     db.execute(EV_DDL)
     db.execute('DELETE FROM momo_landed WHERE ml_fence=%s AND ml_xwob=%s AND ml_kwindow=%s '
-               'AND ml_clear=%s', (FENCE, XWOB, K_WINDOW, CLEAR_ON))
+               'AND ml_clear=%s', (FENCE, XWOB, KW, CLEAR_ON))
     if rows:
         cols = ('ml_fence,ml_xwob,ml_kwindow,ml_clear,ml_tf,ml_dr,ml_ms,ml_utc,ml_cross_ms,ml_cross_utc,'
                 'ml_marker_ms,ml_marker_utc,ml_lag_min,ml_r,ml_pxs,ml_momo_state,ml_momo_slope,'
@@ -180,7 +203,7 @@ def main(rebuild=False):
         tg = tagged.get(i, {})
         tgs = ','.join(f"{tf}:{detail[(i, tf)][0][0]}" for tf in sorted(tg)) if tg else None
         lv = live_log.get(i, {})
-        brows.append([FENCE, XWOB, K_WINDOW, CLEAR_ON, int(ts[i]), u(ts[i]), int(evt[i]),
+        brows.append([FENCE, XWOB, KW, CLEAR_ON, int(ts[i]), u(ts[i]), int(evt[i]),
                       None if not np.isfinite(pxs[i]) else float(pxs[i]),
                       1 if i in MK else 0, MK.get(i), '+'.join(SRC[i]) if i in SRC else None,
                       len(tg), (tgs[:255] if tgs else None),
@@ -192,7 +215,7 @@ def main(rebuild=False):
     db.execute(BAR_DDL)
     db.execute('DELETE FROM momo_landed_bar WHERE mlb_fence=%s AND mlb_xwob=%s AND mlb_kwindow=%s '
                'AND mlb_clear=%s',
-               (FENCE, XWOB, K_WINDOW, CLEAR_ON))
+               (FENCE, XWOB, KW, CLEAR_ON))
     bc = ('mlb_fence,mlb_xwob,mlb_kwindow,mlb_clear,mlb_ms,mlb_utc,mlb_evt,mlb_pxs,mlb_marker,'
           'mlb_marker_side,mlb_marker_src,mlb_tagged,mlb_tag_tfs,mlb_landed,mlb_landed_tf,'
           'mlb_live,mlb_live_tfs,mlb_cleared,mlb_clear_tf,'

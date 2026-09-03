@@ -40,7 +40,8 @@ def blocking_at(R, tfs, dr, bar, k_window, nested_opposition=True, nested_min=3,
         tfs        the domTF ladder, DOMTF_MIN..DOMTF_MAX
         dr         +1 or -1
         bar        the bar index
-        k_window   K_WINDOW 4. Each line's momentum window is k_window x its own timeframe, minutes
+        k_window   from momo_config, mmc_k_window. Each line's momentum window is k_window x its
+                   own timeframe, in minutes. Passed in, never read from a global here.
 
     -> (blocking, opposing). `blocking` is empty when the nested-opposition rule fires.
 

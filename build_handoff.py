@@ -19,6 +19,7 @@ from optimus9.orchestration.rpl_cache import cache_jig_perline
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 from optimus9.analysis.jig import momo_landed, handoff
 from optimus9.compute.momo_gated import momo_g, momo_window
+from optimus9.compute.momo_config import momo_bank, momo_config
 import build_momo_landed as B
 
 NEAR = 2                          # KNOB "near {fence-2:knob} the fence" -> [78,80) / (20,22]
@@ -93,16 +94,33 @@ def main():
             MK[c] = int(x['s'])
     mk = sorted(MK)
 
+    # THE BANKS, ONE PER TIMEFRAME. This file runs B.TFS 8 to 33, which crosses the wsf band (1..12)
+    # into the domtf band (13..60), so there is no single bank for the run - each line takes the
+    # bank that owns its own timeframe. Read once here; binding inside the loop is cheap.
+    BANKS = {tf: momo_bank(db, tf) for tf in B.TFS}
+    for _tf, _b in sorted(BANKS.items()):
+        print(f"  TF{_tf} momentum bank: {_b['mech']} v{_b['version']} "
+              f"k_window {_b['k_window']}", flush=True)
+
+    # ONE k_window IN THE ROW KEY. This table keys on a single k_window per run, but the run now
+    # spans two banks. They agree today; if they ever stop agreeing, one value would stand for two
+    # different knob sets, so this fails instead of writing it.
+    _kws = {b['k_window'] for b in BANKS.values()}
+    if len(_kws) != 1:
+        raise SystemExit(f'the banks in this run hold different k_window values: {sorted(_kws)}. '
+                         'This table records one k_window per run, so it cannot span them.')
+    KW = _kws.pop()
+
     tagged = {}
     for tf in B.TFS:
-        with momo_window(B.K_WINDOW * tf):
+        with momo_config(BANKS[tf]), momo_window(BANKS[tf]['k_window'] * tf):
             for c in mk:
                 st, _s, _r2, _r = momo_g(R[tf], MK[c], c)
                 if st in ('momo', 'curl'):
                     tagged.setdefault(c, {})[tf] = MK[c]
 
     def counter_curl(tf, dr, bar):
-        with momo_window(B.K_WINDOW * tf):
+        with momo_config(BANKS[tf]), momo_window(BANKS[tf]['k_window'] * tf):
             st, _s, _r2, _r = momo_g(R[tf], -int(dr), bar)
         return st == 'curl'
 
@@ -117,7 +135,7 @@ def main():
     rows = []
     for h in hofs:
         chain = '>'.join(str(c['tf']) for c in h['chain']) + ('>' if h['chain'] else '') + str(h['tf'])
-        rows.append((B.FENCE, B.XWOB, B.K_WINDOW, NEAR, B.CLEAR_ON,
+        rows.append((B.FENCE, B.XWOB, KW, NEAR, B.CLEAR_ON,
                      int(ts[h['bar']]), u(ts[h['bar']]), h['tf'], h['dr'],
                      int(ts[h['origin_bar']]), u(ts[h['origin_bar']]), h['origin_tf'],
                      h['deferred_s'], len(h['chain']), chain[:255],
@@ -125,19 +143,19 @@ def main():
     db.execute(DDL)
     db.execute('DELETE FROM handoff WHERE hof_fence=%s AND hof_xwob=%s AND hof_kwindow=%s '
                'AND hof_near=%s AND hof_clear=%s',
-               (B.FENCE, B.XWOB, B.K_WINDOW, NEAR, B.CLEAR_ON))
+               (B.FENCE, B.XWOB, KW, NEAR, B.CLEAR_ON))
     if rows:
         db.executemany(f'INSERT INTO handoff ({COLS}) VALUES '
                        f'({",".join(["%s"] * len(COLS.split(",")))})', rows)
     print(f'handoff : {len(rows):,} rows', flush=True)
 
-    brows = [(B.FENCE, B.XWOB, B.K_WINDOW, NEAR, B.CLEAR_ON, int(ts[b['bar']]), u(ts[b['bar']]),
+    brows = [(B.FENCE, B.XWOB, KW, NEAR, B.CLEAR_ON, int(ts[b['bar']]), u(ts[b['bar']]),
               b['tf'], b['dr'], b['defer_to'], ','.join(str(z) for z in b['htfs'])[:255],
               float(R[b['tf']][b['bar']])) for b in blocked]
     db.execute(BLK_DDL)
     db.execute('DELETE FROM handoff_blocked WHERE hbk_fence=%s AND hbk_xwob=%s AND hbk_kwindow=%s '
                'AND hbk_near=%s AND hbk_clear=%s',
-               (B.FENCE, B.XWOB, B.K_WINDOW, NEAR, B.CLEAR_ON))
+               (B.FENCE, B.XWOB, KW, NEAR, B.CLEAR_ON))
     if brows:
         db.executemany(f'INSERT INTO handoff_blocked ({BCOLS}) VALUES '
                        f'({",".join(["%s"] * len(BCOLS.split(",")))})', brows)

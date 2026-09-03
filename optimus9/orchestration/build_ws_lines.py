@@ -41,7 +41,27 @@ from optimus9 import DatabaseManager
 from optimus9.compute.line_config import LineStore
 from optimus9.orchestration.rpl_cache import cache_jig_perline
 
-TAPE_END = dt.datetime(2026, 8, 9, 12, 0, tzinfo=timezone.utc)
+# TAPE_END MOVED 0901, Joe: "extend the line cache. cover the ws[60,45,30,20-13] lines, from
+# 08-03 to 08-18", then "V1, a" - move END_MS here, in place, one truth for all 26 importers.
+# WAS 2026-08-09 12:00, which capped the cache 8.5 days short of 08-18.
+# WHY 08-19 12:00 AND NOT 08-19 00:00: a day's row set in ws_line_bar runs 00:00:00 through the
+# NEXT day's 00:00:00 inclusive (17,281 rows), so 08-18 needs the 08-19 00:00:00 bar. A tape ending
+# at 08-19 00:00 stops at 08-18 23:59:55. 12:00 also mirrors the convention the old value used.
+#
+# THE TAPE IS A FIXED WIDTH, NOT CLAMPED TO THE DATA START. 1,632,960 bars = 94.5 days ending at
+# END_MS. Moving END_MS forward slides the FRONT off by the same amount: the window was
+# 2026-05-07 00:00 -> 2026-08-09 11:59:55 and becomes 2026-05-17 12:00 -> 2026-08-19 11:59:55.
+# The old window starting on kline_collection's first row was coincidence, not a clamp.
+#
+# MEASURED BEFORE THE MOVE, on the 08-04 slice (17,281 bars, timestamps identical on both tapes),
+# three lines built at the new END_MS against the same spec cached at the old one:
+#     line       bars differing   max abs diff   OOB sign diffs   cross-85   cross-15
+#     ws1r               16,880      5.684e-14                0          0          0
+#     ws20Mage            6,482      5.102e-10                0          0          0
+#     ws60x                   0      0.000e+00                0          0          0
+# The values are NOT bit-identical - a different warmup start leaves float residue in the
+# recursion. No CONSUMED reading changes: 0 sign flips against hi 85 / lo 15, 0 crossing changes.
+TAPE_END = dt.datetime(2026, 8, 19, 12, 0, tzinfo=timezone.utc)
 END_MS = int(TAPE_END.timestamp() * 1000)
 HOURS = 40
 WARMUP = 1114

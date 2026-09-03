@@ -78,8 +78,12 @@ from optimus9.analysis import ws_strat as WS
 from optimus9.analysis.jig import stall_mask, domtf_handover_median
 from optimus9.compute import momo_gated as MG
 from optimus9.compute.momo_gated import momo_window
+from optimus9.compute.momo_config import momo_bank, momo_config
 
-MG.MOMO_FIXED_SAMPLES = 21
+# MOMO_FIXED_SAMPLES IS NOT SET HERE, 0903. It was assigned 21 at import, which landed on
+# top of whatever bank a caller had bound and said nothing about it. The value now comes
+# from momo_config - both banks hold 21, so no number moved. Joe 0814 set 21; the bank
+# carries it as mmc_momo_fixed_samples.
 from optimus9.compute import momo_core as MC
 import build_momo_landed as B
 
@@ -142,9 +146,18 @@ def main():
 
     i0 = int(np.searchsorted(ts, int(START.timestamp() * 1000)))
     i1 = int(np.searchsorted(ts, int(END.timestamp() * 1000)))
+    # THE BANK. DOMTF_TFS 13 to 27 all fall in one band, so one bank covers the run - checked, not assumed.
+    _bk = {tf: momo_bank(db, tf) for tf in DOMTF_TFS}
+    _ids = {(b['mech'], b['tf_lo'], b['tf_hi'], b['version']) for b in _bk.values()}
+    if len(_ids) != 1:
+        raise SystemExit(f'DOMTF_TFS spans {len(_ids)} momentum banks: {sorted(_ids)}. '
+                         'One run must sit inside one bank.')
+    BANK = _bk[DOMTF_TFS[0]]
+    print(f"  momentum bank: {BANK['mech']} tf{BANK['tf_lo']}..{BANK['tf_hi']} "
+          f"v{BANK['version']}", flush=True)
     LAT = {}
     for tf in DOMTF_TFS:
-        with momo_window(B.K_WINDOW * tf):
+        with momo_config(BANK), momo_window(BANK['k_window'] * tf):
             LAT[tf] = (int(MC.MOMO_STEP_BARS), int(MC.MOMO_SAMPLES))
     STALL = {dr: {tf: stall_mask(R[tf], dr, STALL_N, *LAT[tf]) for tf in DOMTF_TFS}
              for dr in (+1, -1)}
@@ -154,7 +167,8 @@ def main():
     TAG = {+1: {}, -1: {}}
     for dr, c in ((+1, 'u'), (-1, 'd')):
         for tf in DOMTF_TFS:
-            f = os.path.join(TAGDIR, f'tag_{tf}_{c}_{B.K_WINDOW}_{MG.MOMO_FIXED_SAMPLES}_'
+            f = os.path.join(TAGDIR, f'tag_{tf}_{c}_{BANK["k_window"]}_'
+                                     f'{BANK["momo_fixed_samples"]}_'
                                      f'{i0}_{i1}.npy')
             if not os.path.exists(f):
                 print(f'  MISSING cached mask {f}', flush=True); return 1

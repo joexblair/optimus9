@@ -94,6 +94,7 @@ def curl_gates(f, gate2=True):
 
     gate2=False drops the SECOND gate only. Gate 1 and gate 3 are unchanged, and so is the
     quad-missing check, because gate 3 needs the same measurement gate 2 does."""
+    X._require_bound()
     # gate 1 - the same alignment test momo() applies to its own branch
     if not f['aligned']:
         return False, 'curl, but the slope points against dr'
@@ -112,7 +113,8 @@ def curl_gates(f, gate2=True):
 #   errant 07-27 09:19:00 s22 quadratic r2 = 0.3238  -> 0.40 is the lowest 0.05 step above it.
 #   Across the 2,289 bars already passing gates 1+2: min 0.1553 p10 0.4157 median 0.6735 max 0.8719,
 #   so 0.40 sits below the 10th percentile and keeps 90.8% of them. The errant bar is an outlier.
-CURL_R2_MIN = 0.40
+CURL_R2_MIN = None   # -> momo_config, mmc_curl_r2_min. The note above is the derivation;
+#                      the VALUE now comes from the bank. Version 1 of both banks holds 0.40.
 
 STATE = {'none': 0, 'momo': 1, 'curl': 2, 'sideways': 3}
 
@@ -125,7 +127,9 @@ def states(r, dr, lo, hi):
     return s
 
 
-MOMO_FIXED_SAMPLES = 21
+MOMO_FIXED_SAMPLES = None   # -> momo_config, mmc_momo_fixed_samples. None until a machine is named.
+# MOVED TO THE BANK 0903. The note below is the derivation and it still stands; the VALUE now
+# comes from the momo_config table, one bank per machine. Version 1 of both banks holds 21.
 # KNOB, Joe 0814, MADE GLOBAL BY JOE 0820: "set it to 21 (both in your caller, and the code's
 # default)". 0 = the gap between samples stays at MOMO_STEP_MIN and the sample count is whatever the
 # window divided by that gives. A positive value fixes the SAMPLE COUNT and scales the gap instead.
@@ -181,6 +185,7 @@ def momo_window(window_min):
     Joe 0810 on the window itself: "it should be dynamic. use this value: {knob:4} x {TF width}".
     MOMO_STEP_MIN stays 5 and does NOT scale, so the sample count varies with the window: 6 at a
     32-min window (TF8 x 4), 26 at 132 min (TF33 x 4). Queued for A/B — see task #1."""
+    X._require_bound()   # this reads MOMO_FIXED_SAMPLES and the step grid, so it is an entry point
     prev_w, prev_s, prev_b = X.MOMO_WINDOW_MIN, X.MOMO_SAMPLES, X.MOMO_STEP_BARS
     X.MOMO_WINDOW_MIN = int(window_min)
     if MOMO_FIXED_SAMPLES > 0:

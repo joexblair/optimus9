@@ -99,6 +99,65 @@ One row per line, ws1r to ws12r, at the bar, in the direction dr names.
 
 Joe 0817: *"the first Mage that prints an IB value, is the weak-mage-tf"*.
 
+### one truth, Joe 0831
+
+Joe 0831: *"move it to the jig so that we have a single truth"*.
+
+Before the move the mechanic lived in two places that did not import from each other, and the two
+had drifted. `optimus9/analysis/jig.py` carried `WMT_LOOKBACK_S` 120 s and `WMT_TFS` TF1..TF8 — the
+0817 range. `build_wsf_bar_tf.py` carried its own `WMT_LOOKBACK_S` 120 s and `WMT_TF_LO` 2 /
+`WMT_TF_HI` 12 — the 0826 range. Joe's 0826 range change had reached one file and not the other.
+
+| | |
+|---|---|
+| where the knobs live now | `optimus9/analysis/jig.py`, the ws-FINISHER block. Nothing else declares them |
+| the per-bar producer | `jig.weak_mage_tf` — one bar, returns `(weak_tf, detail)` |
+| the every-bar producer | `jig.weak_mage_tf_series` — added 0831, returns `(oob, ago, tol, wmt)` over the full cache |
+| who imports them | `build_wsf_bar_tf.py` and `build_ws_finisher.py`. Neither declares a knob of its own |
+| `WMT_SAME_SIDE` | **FIXED at True**, Joe 0831: *"W3, fixed as True"*. It is no longer a knob and is not in any unique key |
+
+**PROVEN, not asserted.** `wsf_bar_tf` was rebuilt through the jig producer and every one of the
+**414,744 rows** compared against a snapshot taken before the move: 0 keys lost, 0 keys gained,
+and **0 rows changed** on `wbt_weak_mage_tf`, `wbt_mage_oob`, `wbt_mage_ago_s` and
+`wbt_mage_oob_tol`.
+
+**THE 120-SECOND TOLERANCE IS WEAK-MAGE'S AND NOTHING ELSE.** Joe 0831 asked whether it belonged
+to three-mage. It does not, and never has. Three-mage's dr lookback is `DR_LOOKBACK_S` = **180 s**
+in `build_wsf_walk_events.py`, from Joe 0823: *"restrict the lookback to 3 minutes"*. Two knobs,
+two values, two mechanics, no shared code path.
+
+### the scan range is in ws_fin_weak_mage's unique key, Joe 0831
+
+Joe 0831, W1: *"keep alongside"*. W2, on adding the range to the key: *"do it"*.
+
+Making the jig the single truth pushes the 0826 range TF2..TF12 onto `build_ws_finisher.py`, whose
+table `ws_fin_weak_mage` held 121 rows built at the 0817 range TF1..TF8 — the rows carrying the
+four bars Joe read himself to settle the rule. The old key was
+`(wfm_lookback_s, wfm_same_side, wfm_hi, wfm_lo, wfm_utc)`, which does not mention the range, so a
+rebuild would have overwritten them.
+
+| | |
+|---|---|
+| the key now | `(wfm_lookback_s, wfm_same_side, wfm_hi, wfm_lo, wfm_tf_lo, wfm_tf_hi, wfm_utc)` |
+| the existing 121 rows | stamped `wfm_tf_lo` 1 / `wfm_tf_hi` 8 — what they were actually built at |
+| the new 121 rows | `wfm_tf_lo` 2 / `wfm_tf_hi` 12 |
+| the DELETE | pins the range, so a rebuild at one range cannot reach rows at another |
+| the per-timeframe columns | `wfm_tf1..wfm_tf12` and `wfm_tf1_ago..wfm_tf12_ago` all exist, so both ranges fit the same table |
+
+| range | rows | no weak-mage-tf | rule C fires |
+|---|---|---|---|
+| TF1 to TF8 | 121 | 30 | 12 |
+| TF2 to TF12 | 121 | 23 | 12 |
+
+**JOE'S FOUR 0817 BARS READ THE SAME ON BOTH RANGES.**
+
+| utc | dr | TF1-8 | TF2-12 |
+|---|---|---|---|
+| 10:53:35 | +1 | TF8 | TF8 |
+| 11:34:00 | −1 | TF2 | TF2 |
+| 08:02:50 | +1 | TF4 | TF4 |
+| 04:49:15 | +1 | None | None |
+
 ## 1.5 the additions Joe has made since the 36-item list
 
 ### the baton, Joe 0825

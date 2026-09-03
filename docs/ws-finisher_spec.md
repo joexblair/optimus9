@@ -327,6 +327,112 @@ That is the reversal Joe saw at 11:32, and the gate throws away the number that 
 | the boundaries | **85 / 15** | read from `optimus9_system`. Joe 0817: *"85/15 is good for now, BUT the final spec will have fuzzy logic applied to boundaries. the final spec will be model based"* |
 | `STALL_N` | **6** | consecutive lattice samples with no new extreme in the direction the line is read. Joe 0819: *"add this to the knobs"*. No boundary condition — the domTF spec, 0814: *"a stalled line has stopped moving wherever it sits"*. Inherited from `build_ws_fin.py`; the wsf sampling width around it is Joe's held task #60 |
 
+### the momentum knobs — one bank per machine, 0903
+
+Joe 0903: *"I want the settings to be global per machine, ie dtf and wsf will have their own
+config. individual configs can be applied to single line (if needed in the future)"* and *"wsf and
+dtf become internal labels that apply to different indicator groups"*.
+
+They live in the `momo_config` table, built by `build_momo_config.py` and read by
+`optimus9/compute/momo_config.py`. **THE LOOKUP TAKES A TIMEFRAME, NOT A MACHINE NAME.** The bands
+do not overlap, so a line's own timeframe picks its bank and no caller ever asserts a machine — a
+producer that could name a machine could name the wrong one, which is exactly what happened on 0903
+before the split.
+
+| bank | timeframes | set by |
+|---|---|---|
+| `wsf` | **1 to 12** | Joe 0826: *"wsf is limited to TF12"* |
+| `domtf` | **13 to 60** | Joe 0813: *"make the domTF range 13 to 27"*, extended to 60 on 0903 when asked whether the band runs 13 to 60 — *"yes"* — after the ws30, ws45 and ws60 lines joined the cache |
+
+Both banks are at version 1 and hold identical values. Joe 0903: *"we have the wem table
+duplicated, so I'm fine for wsf to inherit the dtf config"*. They are separable from row one; they
+are not different yet.
+
+| knob | v1 | what it does |
+|---|---|---|
+| `momo_slope_min` | **1.2** | slope floor, r-points per sample. Under it the fit reads flat. **Was 1.0** |
+| `momo_r2_min` | **0.70** | how straight the straight-line fit must be to read as a line, 0 to 1. **Was 0.50** |
+| `momo_window_min` | **60** | the default fit window in minutes, before `k_window` scales it per line |
+| `momo_step_min` | **5** | minutes between fit samples. 5 min = 60 bars at the 5-second grid |
+| `momo_fixed_samples` | **21** | points in the fit. A fixed count scales the gap with the line instead of the count. Joe 0814, made global 0820 |
+| `k_window` | **6** | the fit window is `k_window` × the line's own timeframe, in minutes. **Was 4.** Joe 0810 set the shape; 0903 set the value and moved it out of `build_momo_landed.py` |
+| `level_slack` | **13.9** | how far the 50 gate slackens for a cleanly tracking line. Joe 0731 *"coin-toss it"* |
+| `curl_arc_min` | **4.0** | how much the line must bend to read as a curl rather than sideways. Joe 0731 |
+| `curl_vtx_lo` | **0.05** | the bend's turning point must sit past this fraction of the window |
+| `curl_vtx_hi` | **0.95** | and before this one. Not on either edge |
+| `curl_r2_min` | **0.40** | how well the BENT fit describes the window, 0 to 1. Joe 0805, chosen to clear the errant 07-27 09:19 curl |
+
+**HOW `momo_slope_min`, `momo_r2_min` AND `k_window` GOT THEIR 0903 VALUES.** A 75-setting grid,
+scored against eight 08-04 pivots Joe eyeballed at ±22 minutes, on **ws20r only**. Joe 0903: *"good
+work - bake it in"*. **FITTED, NOT MEASURED**, and fitted on one line in the `domtf` band. The
+grid's ceiling was 6 of 8 — at the 17:00 dr −1 and 21:25 dr +1 pivots ws20r reads `none` for the
+whole 20 minutes beforehand, so no setting can produce a flip there. Joe 0903 on those two: *"21:25
+and 17:00 are ok. if they are both none, then wsf is free to handle the trade decisions"*.
+
+**UNBOUND RAISES.** `momo_core` ships with all of these set to `None`. A producer that calls the
+verdict without naming a timeframe gets a plain error, not another band's numbers. There is
+deliberately no default — a default is what let one machine borrow another's values.
+
+    from optimus9.compute.momo_config import momo_bank, momo_config
+    with momo_config(momo_bank(db, 20)):     # timeframe 20 -> the domtf bank
+        ...
+
+**A SWEEP MUST PASS A VERSION.** Carried over from `line_config.py:167`: reading the live bank
+during a sweep means a live config change mid-run silently alters the run, and nothing on the rows
+says so.
+
+### the dtf knobs
+
+Joe 0903 moved these here: *"dtf and wsf knobs will both live in the wsf spec"*. That overrides
+this spec's opening line, which says nothing from domTF is in it. The domTF **mechanic** still
+lives in `docs/domTF-finisher_spec.md`; only its knob values are recorded here.
+
+| knob | value | where | what it does |
+|---|---|---|---|
+| `DOMTF_MIN` / `DOMTF_MAX` | **13** / **27** | `build_ws_fin.py` | shortest and longest timeframe the domTF layer may use. Joe 0813: *"make the domTF range 13 to 27"* |
+| `DOMTF_HTF_BAND` | **(22, 27)** | `build_ws_fin.py` | when a line in this band has recently curled into the move, only this band may end the domTF turn. Joe 0814: *"from 22-27 (semi arbitrary)"* |
+| `CURL_RECENCY_TF_BARS` | **2** | `build_ws_fin.py` | how recent that curl must be, in bars of the line's OWN timeframe. 44 min on ws22r, 54 min on ws27r. Joe 0814 |
+| `RESCUE_REJECTED_CURL` | **True** | `build_ws_fin.py` | a bend thrown away for pointing against the move still counts as a vote the other way. Joe 0813: *"yes"* / *"if other lines are backing the curl line, it has considerable weight"* |
+| `HANDOVER_RULE` | **'median'** | `build_ws_fin.py` | `'first'` is the race, first past the post. `'median'` is one watched line, the median of the tagged group, re-derived every bar. Joe 0814: *"this is, in part, our AB between task8 and task9"* |
+| `STALL_N` | **6** | `build_ws_fin.py` | lattice samples in a row with no new extreme. Joe 0810 set 3; Joe 0814 raised it to 6 because at 3 the stall won 48 of 51 handovers |
+| `HANDOVER_XWOB` | **4** | `build_ws_fin.py` | bars the fast partner must hold on the far side of its r line |
+| `NESTED_OPPOSITION_MIN` | **3** | `build_ws_fin.py` | how many r lines must print a reversal or curl before the opposition counts. Joe 0813: *"there has to be a domino effect for the logic to be stable"* |
+| `FENCE_OVERRIDE` | **None** | `build_ws_fin.py` | `None` uses `optimus9_system`'s 85 / 15. A pair runs one walk at a different fence and writes nothing back |
+| `G30_LEVEL` | **'g30_marker'** | `build_ws_fin.py` | Joe 0813 named it |
+| `XWOB` | **2** | `build_ws_fin.py` | bars held, for the 9-of-12 signal |
+
+### the wsf knobs
+
+| knob | value | where | what it does |
+|---|---|---|---|
+| `TFS` / `MAX_TF` | **1 to 12** | `build_wsf_line_bar.py`, `build_wsf_walk_events.py` | the lines wsf measures. Joe 0826: *"wsf is limited to TF12. 13 to 27 belongs to dtf"* |
+| `STALL_N` | **6** | `build_wsf_line_bar.py` | lattice samples with no new extreme. Inherited from `build_ws_fin.py`. The wsf sampling width around it is Joe's held task #60 |
+| `MOMO_FENCE_R` | **17** | `build_wsf_line_bar.py` | momo-fence-r, so the band is 83 at the top and 17 at the bottom. Joe 0820: *"create a new fence: momo-fence-r 100-{knob:17}"* and *"I don't want it to be global"* |
+| `MOMO_XWOB` | **4** | `build_wsf_line_bar.py` | bars the line must hold outside momo-fence-r. 4 bars = 20 s. Joe 0821: *"add an {knob:4} xwob to the fence exit"* |
+| `MOMO_KILL` | **'state'** | `build_wsf_line_bar.py` | `'state'` = the line IS outside or IS stalled, so the verdict is none. `'moment'` = only the crossing bar. `'off'` = no override. Joe 0820: *"it's momentum = false"*, which describes a condition |
+| `MAGE_KNOB` | **20** | `build_wsf_walk_events.py` | the three-Mage dr fence is 80 / 20. Joe 0823 |
+| `DR_LOOKBACK_S` | **180 seconds** | `build_wsf_walk_events.py` | Joe 0823: *"restrict the lookback to 3 minutes"*. 36 bars at the 5-second grid |
+| `XCROSS_XWOB` | **5** | `build_wsf_walk_events.py` | bars the x must hold on the far side. 5 bars = 20 s |
+| `XCROSS_TARGET` | **'r'** | `build_wsf_walk_events.py` | what the x crosses. Joe 0828: *"add this as a knob - we'll chose the better option later"*. Open as task #61 |
+| `HIGH_TF_GAP` | **15.0** | `build_wsf_walk_events.py` | the r gap under which the H+1 line takes the ungated cross. Joe 0828 |
+| `DR_SEED` | **+1** | `build_wsf_walk_events.py` | Joe 0829: *"I can tell you that 08-04 starts the day on dr +1"* |
+| `HO_RULE` / `LINE_HCAP` | **'median'** / **'ws1b:1'** | `build_wsf_walk_events.py` | which `ws_fin_9of12` variant sets the dr. Four are stored per day |
+| `WMT_TF_LO` / `WMT_TF_HI` | **2** / **12** | `build_wsf_walk_events.py` | the weak-mage scan's floor and ceiling. Joe 0821, then Joe 0826: *"weak-mage-tf scan is now TF2 to TF12"* |
+| `MAX_TRADES` | **2** | `build_wsf_walk_events.py` | Joe 0825: *"allows pyramiding, max 2 trades"*. Open as task #7 |
+| `WS1X_GATE` / `WS1X_XWOB` | **0** / **4** | `build_wsf_walk_events.py` | the ws1x entry gate, off. Joe 0828: *"wob 4"* |
+| the 5-second grid | **5 seconds** | `GRID_S`, `GRID` | seconds per bar. Not a knob — the tape's resolution |
+
+**TWO ENTRIES ABOVE CONTRADICT WHAT IS WRITTEN ELSEWHERE IN THIS SPEC.** Recorded, not resolved:
+
+- `WMT_TFS` in the table at the top of this section says **1 to 8**, from Joe 0817. The code runs
+  **2 to 12**, from Joe 0826. The later ruling is in the code; the earlier one is still in the table.
+- `build_wsf_walk_events.py:63` holds a literal knob signature,
+  `kw4_fs21_sn6_hi85_lo15_r20.5_sl1_arc4_sk13.9_cr0.4_mkstate_mf17_xw4`. It names the momentum
+  knobs at their pre-0903 values, and it is a POINTER to the `wsf_line_bar` rows banked under that
+  signature, not a setting. It is correct for the rows that exist today. The next
+  `build_wsf_line_bar` run banks under `kw6_..._r20.7_sl1.2_...` and this literal will no longer
+  find them.
+
 ### knobs this spec does not own
 
 | value | where it is set | note |

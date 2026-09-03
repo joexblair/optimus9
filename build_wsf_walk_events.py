@@ -56,6 +56,7 @@ from optimus9.analysis.jig import wsf_facing_dr, wsf_dr_lookback
 from optimus9.orchestration.rpl_cache import TAPE_DIR, _tape_key
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 from optimus9.compute.momo_gated import curl_gates
+from optimus9.compute.momo_config import momo_bank, momo_config
 from optimus9.compute import momo_core as MC
 
 WIN_FROM, WIN_TO = '2026-08-04 00:00:00', '2026-08-05 00:00:00'
@@ -345,13 +346,12 @@ def _depth(bar, dr):
 
 
 def _level_gate(row, dr):
-    """the level the line had to reach at this bar. Recomputed from the banked fit and slope,
-    the same expression report_wsf_bar prints - not a second implementation of the gate."""
-    if row['fi'] is None or row['sp'] is None:
-        return None
-    trk = max(0.0, min(1.0, float(row['fi'])
-                       * min(1.0, abs(float(row['sp'])) / MC.MOMO_SLOPE_MIN)))
-    return (50 - MC.LEVEL_SLACK * trk) if dr > 0 else (50 + MC.LEVEL_SLACK * trk)
+    """the level the line had to reach at this bar, from this row's banked fit and slope.
+
+    THE FORMULA IS NOT HERE. momo_core.level_gate() owns it, 0903, so that this and
+    report_wsf_bar cannot print different gates for the same bar - which they did, because
+    report_wsf_bar held its own copies of the two knobs. This function only knows the row shape."""
+    return MC.level_gate(row['fi'], row['sp'], dr)
 
 
 def _curl_mode(row):
@@ -394,8 +394,24 @@ def _heading(row):
 
 
 def main():
+    """Bind the momentum bank, then run. THE BIND IS HERE AND NOT INSIDE THE WORK because the two
+    momentum calls this file makes - the 50 gate and the curl gates - sit in helpers reached from
+    deep inside _main, and both read a banked wsf_line_bar row. Every line in this file is TF1 to
+    MAX_TF 12, which is one bank; checked, not assumed."""
     db = DatabaseManager(**get_db_config()); db.connect()
+    _bk = {tf: momo_bank(db, tf) for tf in range(1, MAX_TF + 1)}
+    _ids = {(b['mech'], b['tf_lo'], b['tf_hi'], b['version']) for b in _bk.values()}
+    if len(_ids) != 1:
+        raise SystemExit(f'TF1..{MAX_TF} spans {len(_ids)} momentum banks: {sorted(_ids)}. '
+                         'One run must sit inside one bank.')
+    BANK = _bk[1]
+    print(f"  momentum bank: {BANK['mech']} tf{BANK['tf_lo']}..{BANK['tf_hi']} v{BANK['version']}",
+          flush=True)
+    with momo_config(BANK):
+        return _main(db)
 
+
+def _main(db):
     face = db.execute('SELECT wlb_utc t, wlb_g30Mage a, wlb_ws1Mage b, wlb_ws2Mage c '
                       'FROM ws_line_bar WHERE wlb_utc >= %s AND wlb_utc < %s ORDER BY wlb_utc',
                       (WIN_FROM, WIN_TO), fetch=True)

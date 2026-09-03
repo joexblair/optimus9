@@ -1,0 +1,23 @@
+2026-09-03 03:10:45  DatabaseManager             INFO      MySQL connected
+2026-09-03 03:10:45  DatabaseManager             INFO      MySQL disconnected
+  202 frozen extrema; 42 runs are 20 min or longer
+  hit = `none` in (extrema - 20 min, extrema]
+  fp  = `none` in [run start, extrema - 20 min)
+
+  knob                value     hit/202  fp/202     hit/42  fp/42     none bars
+  ----------------    -----     -------  ------     ------  -----     ---------
+  K_WINDOW                2    155/202       15    15/42       15       103,944
+  K_WINDOW                3    146/202        5    10/42        5       110,665
+  K_WINDOW                4    119/202        0     5/42        0       112,237  <- current
+  K_WINDOW                5     93/202       19     7/42       19       113,188
+  K_WINDOW                6    105/202       24    13/42       24       112,812
+  MOMO_R2_MIN           0.5    119/202        0     5/42        0       112,237  <- current
+  MOMO_R2_MIN          0.55    119/202        7     5/42        7       112,780
+  MOMO_R2_MIN           0.6    124/202       12     5/42       12       113,692
+  MOMO_R2_MIN          0.65    128/202       18     9/42       18       115,067
+  MOMO_R2_MIN           0.7    148/202       25    12/42       25       117,229
+  MOMO_SLOPE_MIN        0.8    108/202        0     6/42        0       112,804
+  MOMO_SLOPE_MIN        1.0    119/202        0     5/42        0       112,237  <- current
+  MOMO_SLOPE_MIN        1.2    122/202        3     4/42        3       112,653
+  MOMO_SLOPE_MIN        1.5    127/202        8     6/42        8       113,835
+  MOMO_SLOPE_MIN        2.0    134/202       13     8/42       13       113,873

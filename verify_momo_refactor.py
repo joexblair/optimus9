@@ -26,6 +26,7 @@ from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.compute import momo_core as NEW_CORE
 from optimus9.compute import momo_gated as NEW_GATED
+from optimus9.compute.momo_config import momo_config
 
 BASE_COMMIT = '5a9c604'          # the commit before the refactor
 LINES = ('wlb_ws1r', 'wlb_ws2r', 'wlb_ws10r')   # three r lines off the 08-04 tape
@@ -34,7 +35,9 @@ STEP_1 = 7                       # every 7th bar of the 17,281 in the window
 STEP_2 = 23                      # every 23rd bar
 TFS_2 = (13, 21, 27)             # the timeframes check 2 walks
 FIXED_SAMPLES_2 = 21             # what build_ws_fin.py sets
-K_WINDOW = 4                     # momentum window = 4 x the timeframe, in minutes
+K_WINDOW = 4                     # momentum window = 4 x the timeframe, in minutes. FROZEN at
+#                                  what build_ws_fin set on 0818. It was never a momo_core
+#                                  constant, so it cannot be read out of the old module.
 
 # v_ws_fin_walk as it stood before the refactor. THE RECIPE, so this is reproducible:
 #   SELECT * FROM v_ws_fin_walk          (the view carries its own ORDER BY wfw_row)
@@ -70,25 +73,56 @@ def series(db):
     return {c: np.array([float(r[c]) for r in rows]) for c in LINES}
 
 
+def _frozen_bank(old_core, old_gated, fixed_samples=None):
+    """The 0818 numbers, as a bank, taken out of the OLD code itself.
+
+    WHY THIS EXISTS, 0903. The momentum knobs left momo_core for the momo_config table, so the new
+    side of every check needs a bank bound. Binding today's live bank would put the two sides on
+    different numbers - 1.2 and 0.70 against the old code's 1.0 and 0.50 - and every difference
+    reported would be a knob difference, not the code difference this harness exists to detect.
+
+    Joe 0903 chose to freeze it: "leave both sides on the 0818 numbers, so it stays a frozen record
+    of that specific proof."
+
+    NOT ONE VALUE IS WRITTEN DOWN HERE. Every number is read out of the module this harness already
+    loads from git BASE_COMMIT, so the frozen record IS the frozen code and the two cannot drift.
+    """
+    return {'mech': f'frozen@{BASE_COMMIT}', 'version': 0, 'tf_lo': 0, 'tf_hi': 0,
+            'momo_slope_min': old_core.MOMO_SLOPE_MIN,
+            'momo_r2_min': old_core.MOMO_R2_MIN,
+            'momo_window_min': old_core.MOMO_WINDOW_MIN,
+            'momo_step_min': old_core.MOMO_STEP_MIN,
+            'level_slack': old_core.LEVEL_SLACK,
+            'curl_arc_min': old_core.CURL_ARC_MIN,
+            'curl_vtx_lo': old_core.CURL_VTX_LO,
+            'curl_vtx_hi': old_core.CURL_VTX_HI,
+            'momo_fixed_samples': (old_gated.MOMO_FIXED_SAMPLES if fixed_samples is None
+                                   else fixed_samples),
+            'curl_r2_min': old_gated.CURL_R2_MIN,
+            'k_window': K_WINDOW}
+
+
 def check_1(old_core, old_gated, data):
     n = bad = 0
-    for name, r in data.items():
-        for dr in DIRS:
-            for w in range(0, len(r), STEP_1):
-                for o, nw in ((old_core.momo(r, dr, w), NEW_CORE.momo(r, dr, w)),
-                              (old_gated.momo_g(r, dr, w), NEW_GATED.momo_g(r, dr, w))):
-                    n += 1
-                    if not _same(o, nw):
-                        bad += 1
-                        print(f'  DIFF {name} dir {dr} bar {w}: was {o} now {nw}')
+    with momo_config(_frozen_bank(old_core, old_gated)):
+        for name, r in data.items():
+            for dr in DIRS:
+                for w in range(0, len(r), STEP_1):
+                    for o, nw in ((old_core.momo(r, dr, w), NEW_CORE.momo(r, dr, w)),
+                                  (old_gated.momo_g(r, dr, w), NEW_GATED.momo_g(r, dr, w))):
+                        n += 1
+                        if not _same(o, nw):
+                            bad += 1
+                            print(f'  DIFF {name} dir {dr} bar {w}: was {o} now {nw}')
     return n, bad
 
 
-def check_2(old_gated, data):
+def check_2(old_core, old_gated, data):
+    # the old side has no bank, so it is set directly, exactly as it was on 0818. The new side takes
+    # the same number through a frozen bank instead of an assignment, so nothing overwrites a bank.
     old_gated.MOMO_FIXED_SAMPLES = FIXED_SAMPLES_2
-    NEW_GATED.MOMO_FIXED_SAMPLES = FIXED_SAMPLES_2
     n = bad = 0
-    try:
+    with momo_config(_frozen_bank(old_core, old_gated, fixed_samples=FIXED_SAMPLES_2)):
         for tf in TFS_2:
             for name, r in data.items():
                 for dr in DIRS:
@@ -101,8 +135,6 @@ def check_2(old_gated, data):
                         if not _same(a, b):
                             bad += 1
                             print(f'  DIFF tf {tf} {name} dir {dr}: was {a} now {b}')
-    finally:
-        NEW_GATED.MOMO_FIXED_SAMPLES = 0
     return n, bad
 
 
@@ -125,7 +157,7 @@ def main():
     n1, b1 = check_1(old_core, old_gated, data)
     print(f'check 1  default 60-minute window          {n1:>7,} calls  {b1} mismatches')
 
-    n2, b2 = check_2(old_gated, data)
+    n2, b2 = check_2(old_core, old_gated, data)
     print(f'check 2  momo_window, {FIXED_SAMPLES_2} fixed points        {n2:>7,} calls  {b2} mismatches')
 
     rows, sha = check_3(db)

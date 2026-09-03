@@ -21,14 +21,17 @@ re-seed into the harness via TaskCreate if you want live tracking. Statuses as o
     window divided by that gives), timeframes 1, 2 and 3 all get the same lattice — 2 points, 300
     seconds apart. "Less width for smaller TFs" has nothing to act on below timeframe 4. At
     timeframe 1 that 2-point lattice spans 5.0 minutes against a 4-minute window.
-  - at `MOMO_FIXED_SAMPLES` = 21 the floor is gone: gap 10 s at timeframe 1, 25 s at 2, 35 s at 3.
-    `build_ws_fin.py` sets 21 at import; the module default in `momo_gated.py` stays 0, so any
-    ws-finisher script that does not set it inherits the floored version.
-  - the stall's lattice IS the momentum lattice — `build_ws_fin.py:345-349` reads `MOMO_STEP_BARS`
-    and `MOMO_SAMPLES` out of `momo_window(K_WINDOW 4 x TF)` and hands them straight to
+  - at `momo_fixed_samples` = 21 the floor is gone: gap 10 s at timeframe 1, 25 s at 2, 35 s at 3.
+  - the stall's lattice IS the momentum lattice — `build_ws_fin.py` reads `MOMO_STEP_BARS` and
+    `MOMO_SAMPLES` out of `momo_window(k_window x TF)` and hands them straight to
     `jig.stall_mask(y, dr, n, step, samples)`.
-  - two ways it can go, both Joe's call: set `MOMO_FIXED_SAMPLES` to 21 everywhere so the floor
-    never applies, or leave the default and accept that timeframes 1 to 3 share one lattice.
+  - **SUPERSEDED 0903, the closing question is gone.** This entry used to end "two ways it can go,
+    both Joe's call: set `MOMO_FIXED_SAMPLES` to 21 everywhere, or leave the default and accept
+    that timeframes 1 to 3 share one lattice." There is no default any more. Every momentum knob
+    moved to the `momo_config` table, `momo_fixed_samples` is 21 in both banks, and an unbound call
+    raises instead of falling back. The two statements this entry made about where the value came
+    from — that `build_ws_fin.py` sets 21 at import and that `momo_gated.py` defaults to 0 — are
+    both false as of 0903. **What is still open is unchanged: the sampling WIDTH for TF1-8.**
 
 - **#61** [pending] Sweep the ws{weak-mage-tf}x cross target — the line the fast partner has to
   cross before a trade signal is created. Joe 0818: *"I'm not sure if we x-cross m, or x-cross
@@ -95,6 +98,46 @@ re-seed into the harness via TaskCreate if you want live tracking. Statuses as o
 - #47 gcs5/gcs1 finishers → replace s30Mage-wob (first post-infra job)
 
 **New (fell out of 0706, not yet formal tasks):** state-log double-logging bug (arm written 2–10×/bar) · ~9% arm over-fire · sunset the orphaned st5 + s1m/s1r seeds · o9-live pyramid/hedge sizing to match backtest.
+
+---
+
+## 0903 — the momentum knobs became a per-machine bank
+
+Joe: *"I want the settings to be global per machine, ie dtf and wsf will have their own config"* /
+*"it seems like now is right for a SRP refactor"* / *"whatever SRP tells you. we have a no
+hardcoding rule"*.
+
+- **the bank.** `momo_config` table, `build_momo_config.py`, read by `optimus9/compute/momo_config.py`.
+  Eleven knobs, one bank per machine, **keyed on the line's own timeframe**: `wsf` 1..12, `domtf`
+  13..60. A caller passes the timeframe it already holds and never names a machine.
+- **`momo_core` and `momo_gated` own no numbers.** All eleven ship as `None`; an unbound call raises
+  a plain error naming the file and the two lines needed to bind. There is deliberately no default —
+  a default is what let one machine run on another's values.
+- **proven value-neutral.** `verify_momo_refactor.py`, old code from git `5a9c604` against new, both
+  sides frozen on the 0818 numbers: **473,976 + 216,378 comparisons, 0 mismatches**. A 150-row
+  report also came out byte-identical through the new path.
+- **twelve files converted.** `build_ws_fin`, `build_wsf_line_bar`, `build_wsf_event_mark`,
+  `build_wsf_marker_snapshot`, `build_wsf_walk_events`, `report_wsf_bar`, `report_domtf_walk`,
+  `build_momo_landed`, `build_handoff`, `verify_momo_refactor`. `optimus9/analysis/domtf.py` and
+  `build_wsf_ingredient.py` needed no change. `build_momo_landed` and `build_handoff` run TF8..33,
+  which crosses both bands, so they bind per timeframe.
+- **three knobs changed value**, baked in by Joe: `k_window` 4 -> **6**, `momo_slope_min` 1.0 ->
+  **1.2**, `momo_r2_min` 0.50 -> **0.70**. Chosen by a 75-setting grid scored against eight
+  eyeballed 08-04 pivots on **ws20r only**. **FITTED, NOT MEASURED.**
+- **four silences fixed.** The 50 gate was implemented twice, once following the shared knobs and
+  once on `report_wsf_bar`'s own copies, so the gate printed differed from the gate applied by up to
+  ~1 point; `momo_core.level_gate()` now owns it and both callers use it. Three files assigned
+  `MOMO_FIXED_SAMPLES` over whatever a caller had bound. `build_ws_fin._tag_one` passed one knob to
+  its worker processes and inherited the other ten by fork.
+- **sunset**, Joe: RPL (*"RPL is sunsetted"*), the s46 path (*"s46 is dead"*), `build_ws_momo`
+  (*"sunset build_ws_momo"*). None binds a bank; none is expected to run.
+- **the A/B**, Joe: *"wsf_event_mark is our current state - let's get an AB on that"* and
+  *"duplicate the table before re-keying"*. `wsf_event_mark_ab`, 281 events x 2 knob sets, keyed on
+  the momentum knob set so both readings live side by side. **187 of 281 readings changed** —
+  68.2% of the 154 he marked `poor`, 62.5% of the 56 `good`, 66.2% of the 71 unmarked. Joe 0903:
+  *"the AB changes are accepted"*.
+- **all knobs are now listed in one place**: `docs/ws-finisher_spec.md` -> KNOBS. Joe: *"dtf and wsf
+  knobs will both live in the wsf spec"*.
 
 ---
 

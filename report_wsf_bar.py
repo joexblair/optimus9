@@ -110,7 +110,8 @@ THE COLUMNS, and where each comes from.
                  moved this one. It changes only lines sitting between 83 and 85.
   50 gate        the level test inside momo_core. The line must be on the far side of 50 for its
                  direction, but the gate SLACKENS by up to LEVEL_SLACK 13.9 points in proportion to
-                 how cleanly the line tracks: slack = 13.9 x r2 x min(1, |slope| / MOMO_SLOPE_MIN 1.0).
+                 how cleanly the line tracks: slack = level_slack x r2 x min(1, |slope| /
+                 momo_slope_min), both read from the bound bank - see momo_core.level_gate().
                  A line that tracks perfectly can sit 13.9 points the wrong side of 50 and still pass.
                  This column prints the level the line actually had to reach at this bar.
   blocked by 50  yes when this gate is what turned the verdict to none. Joe 0820 read ws8r at
@@ -155,7 +156,9 @@ import datetime as dt
 from collections import defaultdict
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
+from optimus9.compute import momo_core as MC   # level_gate(): the ONE 50-gate formula, 0903
 from optimus9.compute.momo_gated import curl_gates
+from optimus9.compute.momo_config import momo_bank, momo_config
 from optimus9.analysis.jig import wsf_facing_dr, wsf_dr_lookback, stoch_out_extreme
 from build_wsf_setup_model import LTF, HTF
 from build_wsf_walk_events import SIG as WALK_SIG   # the walk owns the knob signature;
@@ -165,8 +168,10 @@ WIN_FROM = '2026-08-04 00:00:00'
 MAX_TF   = 12    # KNOB, mirrored from build_wsf_walk_events. Joe 0826: "wsf is limited to TF12"
 DAY      = '2026-08-04'
 HI, LO   = 85.0, 15.0
-LEVEL_SLACK = 13.9   # momo_core. How far the 50 gate can slacken for a cleanly tracking line
-SLOPE_MIN   = 1.0    # momo_core MOMO_SLOPE_MIN, r-units per sample
+# THE TWO KNOBS THIS FILE USED TO HOLD ARE GONE, 0903. LEVEL_SLACK 13.9 and MOMO_SLOPE_MIN 1.0
+# were literals here while build_wsf_walk_events read the shared ones, so the gate printed here and
+# the gate the walk applied were different numbers and nothing said so. momo_core.level_gate() now
+# owns the formula and both callers use it, so both follow whichever bank is bound.
 MOMO_KILL    = 'state'  # which reading of Joe 0820's rule to read back. See build_wsf_line_bar.py
 MOMO_FENCE_R = 17       # momo-fence-r, Joe 0820: 100 - 17 = 83 at the top, 17 at the bottom
 MOMO_XWOB    = 4        # 5 s bars held outside the fence before an exit counts. Joe 0821
@@ -325,6 +330,17 @@ def main():
     force = sys.argv[2].lower() if len(sys.argv) > 2 else None
 
     db = DatabaseManager(**get_db_config()); db.connect()
+    # THE BANK. This report reads wsf_line_bar rows, TF1..12, which is one bank; checked, not
+    # assumed. It is bound for the whole run because the 50 gate and the curl gates are computed
+    # from those banked rows further down.
+    _bk = {tf: momo_bank(db, tf) for tf in range(1, 13)}
+    _ids = {(b['mech'], b['tf_lo'], b['tf_hi'], b['version']) for b in _bk.values()}
+    if len(_ids) != 1:
+        raise SystemExit(f'TF1..12 spans {len(_ids)} momentum banks: {sorted(_ids)}. '
+                         'One run must sit inside one bank.')
+    _CFG = momo_config(_bk[1]); _CFG.__enter__()   # held for the life of main; the name keeps it
+    #                                                alive - drop the reference and Python collects
+    #                                                it, which runs its finally and unbinds.
     sig = db.execute("SELECT wsf_side s, wsf_domtf d FROM ws_fin_9of12 WHERE wsf_utc=%s "
                      "AND wsf_ho_rule='median' AND wsf_line_hcap='ws1b:1'", (bar,), fetch=True)
     if force in ('up', 'down'):
@@ -385,8 +401,7 @@ def main():
         h = heading(dr, exheld, exr, x['u'] in ('momo', 'curl'))
         rib = 'yes' if LO < rv < HI else ''
         # the slack the level gate earned at this bar, recomputed from the stored fit
-        trk = max(0.0, min(1.0, float(x['fi']) * min(1.0, abs(float(x['sp'])) / SLOPE_MIN)))
-        gate = (50 - LEVEL_SLACK * trk) if dr > 0 else (50 + LEVEL_SLACK * trk)
+        gate = MC.level_gate(x['fi'], x['sp'], dr)
         blocked = '' if int(x['lv']) else 'yes'
         # curl_dr, Joe 0824: "the curl_dr will represent the end of the curl - ie if r was 80 and
         # heading upwards, then the following curl will be curl_dr -1 (the curl has reversed the

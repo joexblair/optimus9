@@ -46,6 +46,7 @@ from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 from optimus9.orchestration.rpl_cache import LINE_DIR, TAPE_DIR, _line_key, _tape_key
 from optimus9.compute import momo_gated as MG
 from optimus9.compute.momo_gated import momo_g_why, momo_window
+from optimus9.compute.momo_config import momo_bank, momo_config
 from optimus9.compute import momo_core as MC
 import build_momo_landed as B
 
@@ -53,7 +54,8 @@ WIN_FROM = '2026-08-04 00:00:00'
 TAGS_CSV = '/home/joe/thecodes/transfer/260819_wsf_model_training_timestamps.csv'
 TFS      = list(range(1, 9))      # ws1 to ws8. Both Mage and r at each
 GRID_S   = 5                      # the bar grid, seconds
-FIXED    = 21
+# MOMO_FIXED_SAMPLES IS NOT SET HERE, 0903. It comes from momo_config, per bank, and is read
+# into FIXED in main(). It used to be a literal 21 assigned over whatever a caller had bound.
 # MOMO_FIXED_SAMPLES. Joe 0820: "set it to 21 (both in your caller, and the code's default)".
 # 21 is the shape Joe settled 0814 - docs/domTF-finisher_spec.md M10, "should it be 21 samples per
 # line?" / "bank the spec and code". Every line's straight-line fit uses 21 points across its own
@@ -71,7 +73,8 @@ DDL = '''CREATE TABLE IF NOT EXISTS wsf_marker_snapshot (
     wms_win_from      DATETIME     NOT NULL,  -- scope. 08-04, the CSV's own range
     wms_hi            DOUBLE       NOT NULL,  -- upper fence, 85, from mech_line_config
     wms_lo            DOUBLE       NOT NULL,  -- lower fence, 15, from mech_line_config
-    wms_k_window      SMALLINT     NOT NULL,  -- K_WINDOW 4. momentum window = K_WINDOW x tf, minutes
+    wms_k_window      SMALLINT     NOT NULL,  -- k_window AS USED FOR THIS ROW, from momo_config.
+    --                                           momentum window = k_window x tf, minutes
     wms_fixed_samples SMALLINT     NOT NULL,  -- MOMO_FIXED_SAMPLES. 0 = sample count comes from
     --   the window; a positive value fixes the count and scales the gap instead
     wms_ladder        VARCHAR(128) NOT NULL,  -- the offset set, comma separated seconds
@@ -128,7 +131,16 @@ def main():
                       'FROM optimus9_system WHERE sys_pk=1', fetch=True)[0]
     PXS = {'src': sysr['src'], 'len': sysr['len']}
 
-    MG.MOMO_FIXED_SAMPLES = FIXED     # ASSIGNED, not inherited. Joe 0820
+    # THE BANK. TFS 1 to 8 all fall in one band, so one bank covers the run - checked, not assumed.
+    _bk = {tf: momo_bank(db, tf) for tf in TFS}
+    _ids = {(b['mech'], b['tf_lo'], b['tf_hi'], b['version']) for b in _bk.values()}
+    if len(_ids) != 1:
+        raise SystemExit(f'TFS spans {len(_ids)} momentum banks: {sorted(_ids)}. '
+                         'One run must sit inside one bank.')
+    BANK = _bk[TFS[0]]
+    print(f"  momentum bank: {BANK['mech']} tf{BANK['tf_lo']}..{BANK['tf_hi']} "
+          f"v{BANK['version']}", flush=True)
+    FIXED = BANK['momo_fixed_samples']
     tags = read_tags()
     nf = sum(1 for _, t in tags if t == 'f')
     print(f'  {len(tags)} markers from the CSV: {nf} tagged f, {len(tags) - nf} tagged d', flush=True)
@@ -172,7 +184,7 @@ def main():
         print('  added column wms_r_dist to the existing table', flush=True)
     where = ('wms_win_from=%s AND wms_hi=%s AND wms_lo=%s AND wms_k_window=%s '
              'AND wms_fixed_samples=%s AND wms_ladder=%s')
-    kv = (WIN_FROM, HI, LO, B.K_WINDOW, FIXED, lad)
+    kv = (WIN_FROM, HI, LO, BANK['k_window'], FIXED, lad)
     n = db.execute('SELECT COUNT(*) c FROM wsf_marker_snapshot WHERE ' + where,
                    kv, fetch=True)[0]['c']
     if n:
@@ -186,7 +198,7 @@ def main():
     for tf in TFS:
         mage, r = lines[('Mage', tf)], lines[('r', tf)]
         rows = []
-        with momo_window(B.K_WINDOW * tf):
+        with momo_config(BANK), momo_window(BANK['k_window'] * tf):
             for m, tag in tags:
                 dr = side[m.strftime('%Y-%m-%d %H:%M:%S')]
                 i_m = idx[m]
@@ -195,7 +207,7 @@ def main():
                     mv, rv = float(mage[i]), float(r[i])
                     _, _, f = momo_g_why(r, dr, i, quad=True)
                     rows.append((
-                        WIN_FROM, HI, LO, B.K_WINDOW, FIXED, lad,
+                        WIN_FROM, HI, LO, BANK['k_window'], FIXED, lad,
                         m.strftime('%Y-%m-%d %H:%M:%S'), tag, dr, off, u(ts[i]), tf,
                         _f(mv),
                         None if not np.isfinite(mv) else int(mv >= HI if dr > 0 else mv <= LO),

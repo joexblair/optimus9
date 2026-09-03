@@ -38,22 +38,27 @@ from optimus9 import DatabaseManager
 from optimus9.compute.line_config import mech_lines, override
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 from optimus9.orchestration.rpl_cache import LINE_DIR, TAPE_DIR, _line_key, _tape_key
+from optimus9.analysis.jig import (weak_mage_tf_series, WMT_LOOKBACK_S,
+                                   WMT_TF_LO, WMT_TF_HI)
 
 WIN_FROM = '2026-08-04 00:00:00'
 WIN_TO   = '2026-08-05 00:00:00'
 TFS      = list(range(1, 13))
 DRS      = (+1, -1)
 GRID_S   = 5
-WMT_LOOKBACK_S = 120     # ws-finisher_spec KNOBS. Joe 0817: "add a lookback tolerance ... knob:120sec"
-WMT_TF_LO = 2            # Joe 0821: "reduce the range for weak-mage-tf - it will now be applied to
-#                          TF2 to TF8". Was TF1 to TF8. The scan starts here.
-WMT_TF_HI = 12           # KNOB. Joe 0826: "weak-mage-tf scan is now TF2 to TF12". Was TF8, which was
-#                          the wsf ladder's ceiling until Joe 0826 moved it: "wsf is limited to
-#                          TF12. 13 to 27 belongs to dtf". The scan STOPS here.
-#                          IT IS IN THE UNIQUE KEY, same as WMT_TF_LO. Moving the ceiling changes
-#                          wbt_weak_mage_tf on EVERY row, including TF1-8 rows, because the scan
-#                          runs highest-down. Rows built at ceiling 8 keep their own key and are
-#                          not touched.
+# THE WEAK-MAGE KNOBS ARE NOT DECLARED HERE. Joe 0831: "move it to the jig so that we have a
+# single truth". WMT_LOOKBACK_S (120 s), WMT_TF_LO (2) and WMT_TF_HI (12) are imported from
+# optimus9.analysis.jig above, along with the producer that reads them. This file used to carry
+# its own copies at the same values, and the two could have drifted.
+#   WMT_LOOKBACK_S  Joe 0817: "add a lookback tolerance ... knob:120sec"
+#   WMT_TF_LO       Joe 0821: "reduce the range for weak-mage-tf - it will now be applied to
+#                   TF2 to TF8". Was TF1 to TF8. The scan starts here.
+#   WMT_TF_HI       Joe 0826: "weak-mage-tf scan is now TF2 to TF12". Was TF8, which was the wsf
+#                   ladder's ceiling until Joe 0826 moved it: "wsf is limited to TF12. 13 to 27
+#                   belongs to dtf". The scan STOPS here.
+# BOTH ARE IN THE UNIQUE KEY. Moving the ceiling changes wbt_weak_mage_tf on EVERY row, including
+# TF1-8 rows, because the scan runs highest-down. Rows built at ceiling 8 keep their own key and
+# are not touched.
 
 DDL = '''CREATE TABLE IF NOT EXISTS wsf_bar_tf (
     wbt_pk BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -175,21 +180,16 @@ def main():
 
     total = 0
     for dr in DRS:
-        # per timeframe: is Mage out of bounds on THIS side, how long since it last was, and
-        # whether the 120-second tolerance still counts it as out
-        oob, ago, tol = {}, {}, {}
-        for tf in TFS:
-            m = lines[('Mage', tf)]
-            o = (m >= HI) if dr > 0 else (m <= LO)
-            idx = np.arange(len(m))
-            lasto = np.maximum.accumulate(np.where(o, idx, -1))
-            ago[tf] = np.where(lasto < 0, -1, (idx - lasto) * GRID_S)[i0:i1 + 1]
-            oob[tf] = o[i0:i1 + 1]
-            tol[tf] = (ago[tf] >= 0) & (ago[tf] <= WMT_LOOKBACK_S)
-        # the scan: ws1 upward, the first Mage the tolerance does NOT count as out
-        wmt = np.zeros(nbar, np.int16)
-        for tf in [t for t in TFS if WMT_TF_LO <= t <= WMT_TF_HI][::-1]:
-            wmt = np.where(~tol[tf], tf, wmt)
+        # the out-of-bounds reading, the 120-second tolerance and the scan, all from the jig's
+        # single producer. It answers over the FULL cache so the seconds-since-last-out counter
+        # has history to count from; the window slice happens after.
+        oob_f, ago_f, tol_f, wmt_f = weak_mage_tf_series(
+            {tf: lines[('Mage', tf)] for tf in TFS}, HI, LO, dr, GRID_S,
+            tfs=TFS, lookback_s=WMT_LOOKBACK_S, tf_lo=WMT_TF_LO, tf_hi=WMT_TF_HI)
+        oob = {tf: oob_f[tf][i0:i1 + 1] for tf in TFS}
+        ago = {tf: ago_f[tf][i0:i1 + 1] for tf in TFS}
+        tol = {tf: tol_f[tf][i0:i1 + 1] for tf in TFS}
+        wmt = wmt_f[i0:i1 + 1]
         for tf in TFS:
             r = lines[('r', tf)]
             rprev, rheld = travel(r, i0, i1)

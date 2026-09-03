@@ -1,0 +1,291 @@
+  wsf_event_mark_ab   281 events x 2 knob sets
+  A  kw4_sl1_r20.5      k_window 4, momo_slope_min 1.0, momo_r2_min 0.50   (pre-0903)
+  B  kw6_sl1.2_r20.7   k_window 6, momo_slope_min 1.2, momo_r2_min 0.70   (domtf v1)
+  the three columns are ws30r / ws45r / ws60r, read at the event bar at the row's dr
+  mo = momo   cu = curl   side = sideways   no = none
+
+  utc         dr  verdict  A  ws30/ws45/ws60     B  ws30/ws45/ws60             
+  --------   ---  -------  --------------------  --------------------  ------- 
+  00:02:30    +1  -        no / no / no          no / no / side        CHANGED 
+  00:02:30    +1  poor     no / no / no          no / no / side        CHANGED 
+  00:15:10    +1  -        no / no / no          no / no / side        CHANGED 
+  00:15:10    +1  poor     no / no / no          no / no / side        CHANGED 
+  00:20:20    -1  poor     no / mo / no          no / mo / no                  
+  00:21:25    -1  poor     no / mo / no          no / mo / no                  
+  00:24:50    -1  poor     side / mo / no        no / mo / no          CHANGED 
+  00:25:50    -1  poor     side / mo / no        no / mo / no          CHANGED 
+  00:32:50    -1  poor     side / mo / no        no / mo / no          CHANGED 
+  00:36:20    -1  poor     side / no / no        no / mo / no          CHANGED 
+  01:12:15    -1  good     side / no / no        side / mo / side      CHANGED 
+  01:13:35    -1  -        side / no / no        side / mo / side      CHANGED 
+  01:16:30    -1  -        side / no / no        side / mo / side      CHANGED 
+  01:16:30    -1  good     side / no / no        side / mo / side      CHANGED 
+  01:19:00    -1  -        side / no / no        side / mo / side      CHANGED 
+  01:19:00    -1  poor     side / no / no        side / mo / side      CHANGED 
+  01:21:50    -1  good     side / no / no        side / mo / side      CHANGED 
+  01:22:35    -1  good     side / side / no      side / mo / side      CHANGED 
+  01:23:00    -1  poor     side / side / no      side / mo / side      CHANGED 
+  01:23:55    -1  good     side / side / no      side / mo / side      CHANGED 
+  01:24:15    -1  poor     side / side / no      side / mo / side      CHANGED 
+  01:25:25    -1  good     side / side / cu      side / mo / side      CHANGED 
+  01:30:15    -1  poor     side / side / cu      side / mo / side      CHANGED 
+  01:30:55    -1  poor     side / side / cu      side / no / side      CHANGED 
+  01:49:35    +1  -        cu / no / no          side / no / no        CHANGED 
+  01:49:35    +1  poor     cu / no / no          side / no / no        CHANGED 
+  01:54:25    +1  -        cu / no / no          side / no / no        CHANGED 
+  01:54:25    +1  poor     cu / no / no          side / no / no        CHANGED 
+  01:55:05    +1  poor     cu / no / no          side / no / no        CHANGED 
+  01:56:40    +1  poor     cu / no / no          side / no / no        CHANGED 
+  01:59:20    +1  poor     cu / no / no          side / no / no        CHANGED 
+  02:02:25    +1  good     cu / no / no          side / no / no        CHANGED 
+  02:25:00    +1  -        side / no / no        side / no / no                
+  02:25:00    +1  poor     side / no / no        side / no / no                
+  02:48:15    +1  -        mo / no / no          mo / no / no                  
+  02:48:15    +1  good     mo / no / no          mo / no / no                  
+  02:58:40    +1  poor     mo / no / no          mo / no / no                  
+  03:00:20    +1  poor     mo / cu / no          mo / cu / no                  
+  03:02:30    +1  good     mo / cu / no          mo / cu / no                  
+  03:05:15    +1  poor     mo / cu / no          mo / cu / no                  
+  03:09:15    +1  poor     mo / no / no          mo / cu / no          CHANGED 
+  03:25:45    -1  good     no / no / mo          no / no / cu          CHANGED 
+  03:30:20    -1  poor     no / no / mo          no / no / no          CHANGED 
+  03:38:30    -1  good     no / no / mo          no / no / no          CHANGED 
+  03:43:15    +1  -        no / mo / no          mo / no / no          CHANGED 
+  03:53:35    +1  -        no / mo / no          mo / no / no          CHANGED 
+  03:53:35    +1  good     no / mo / no          mo / no / no          CHANGED 
+  03:55:20    +1  -        no / mo / no          mo / mo / side        CHANGED 
+  03:55:20    +1  poor     no / mo / no          mo / mo / side        CHANGED 
+  04:17:55    +1  poor     side / mo / no        no / mo / side        CHANGED 
+  04:36:05    +1  poor     cu / mo / no          side / mo / no        CHANGED 
+  04:49:20    +1  -        cu / mo / cu          side / mo / no        CHANGED 
+  04:49:20    +1  good     cu / mo / cu          side / mo / no        CHANGED 
+  05:10:00    -1  -        no / no / no          no / no / no                  
+  05:10:00    -1  poor     no / no / no          no / no / no                  
+  05:12:05    -1  poor     no / no / no          no / no / no                  
+  05:13:35    -1  poor     no / no / no          no / no / no                  
+  05:14:15    -1  poor     no / no / no          no / no / no                  
+  05:17:20    -1  -        no / no / no          no / no / no                  
+  05:17:20    -1  poor     no / no / no          no / no / no                  
+  05:30:50    -1  poor     cu / no / no          side / no / no        CHANGED 
+  05:48:20    -1  -        cu / no / side        no / no / no          CHANGED 
+  05:48:20    -1  poor     cu / no / side        no / no / no          CHANGED 
+  05:54:50    -1  -        no / no / side        cu / no / no          CHANGED 
+  05:54:50    -1  poor     no / no / side        cu / no / no          CHANGED 
+  06:07:05    -1  poor     mo / no / no          cu / no / no          CHANGED 
+  06:13:00    -1  -        mo / no / no          cu / no / no          CHANGED 
+  06:13:00    -1  poor     mo / no / no          cu / no / no          CHANGED 
+  06:14:55    -1  -        mo / no / no          cu / no / no          CHANGED 
+  06:14:55    -1  poor     mo / no / no          cu / no / no          CHANGED 
+  06:18:30    -1  poor     mo / no / no          no / no / no          CHANGED 
+  06:28:25    -1  -        mo / no / no          no / no / side        CHANGED 
+  07:00:20    -1  good     mo / side / cu        mo / no / no          CHANGED 
+  07:01:05    -1  good     mo / side / cu        mo / no / no          CHANGED 
+  07:12:20    -1  good     mo / mo / cu          mo / cu / no          CHANGED 
+  07:13:00    -1  good     mo / mo / cu          mo / cu / no          CHANGED 
+  07:24:30    -1  -        mo / mo / cu          mo / cu / no          CHANGED 
+  07:24:30    -1  poor     mo / mo / cu          mo / cu / no          CHANGED 
+  07:25:10    -1  good     mo / mo / cu          mo / cu / no          CHANGED 
+  07:25:45    -1  poor     mo / mo / cu          mo / cu / no          CHANGED 
+  07:28:05    +1  poor     no / no / no          no / no / no                  
+  07:36:20    +1  -        no / no / no          no / no / no                  
+  07:36:20    +1  poor     no / no / no          no / no / no                  
+  07:37:20    +1  -        no / no / no          no / no / no                  
+  07:37:20    +1  poor     no / no / no          no / no / no                  
+  07:40:45    +1  poor     no / no / side        no / no / no          CHANGED 
+  07:44:55    +1  poor     no / no / no          no / no / no                  
+  07:58:05    +1  good     no / no / side        no / no / no          CHANGED 
+  08:08:25    +1  -        no / no / no          no / no / no                  
+  08:08:25    +1  good     no / no / no          no / no / no                  
+  08:15:20    +1  poor     no / no / no          no / no / no                  
+  08:35:20    -1  poor     no / mo / no          no / mo / side        CHANGED 
+  08:43:20    -1  poor     no / mo / no          no / mo / side        CHANGED 
+  08:44:15    -1  poor     no / mo / no          no / mo / side        CHANGED 
+  08:47:40    -1  poor     no / mo / no          no / mo / side        CHANGED 
+  08:52:40    +1  good     no / no / no          no / no / no                  
+  08:54:10    +1  good     no / no / no          no / no / no                  
+  08:55:05    +1  good     no / no / no          no / no / no                  
+  08:57:30    +1  good     no / no / no          no / no / no                  
+  08:58:20    +1  good     no / no / no          no / no / no                  
+  09:01:50    +1  poor     mo / no / no          no / no / no          CHANGED 
+  09:14:25    -1  -        no / mo / no          no / mo / side        CHANGED 
+  09:14:25    -1  poor     no / mo / no          no / mo / side        CHANGED 
+  09:24:25    -1  poor     no / mo / no          no / mo / side        CHANGED 
+  09:25:35    -1  poor     no / mo / no          no / mo / side        CHANGED 
+  09:40:30    -1  -        no / mo / side        no / mo / no          CHANGED 
+  09:40:30    -1  good     no / mo / side        no / mo / no          CHANGED 
+  09:45:20    +1  poor     mo / no / no          no / no / no          CHANGED 
+  09:52:50    +1  poor     mo / no / no          mo / no / no                  
+  10:02:35    +1  good     mo / no / no          mo / no / no                  
+  10:21:50    +1  -        mo / no / no          mo / no / no                  
+  10:24:15    +1  poor     mo / no / no          mo / no / no                  
+  10:25:40    +1  -        mo / no / no          mo / no / no                  
+  10:44:50    -1  good     no / no / cu          no / mo / side        CHANGED 
+  10:48:00    +1  -        mo / no / no          mo / no / no                  
+  10:49:00    +1  -        mo / no / no          mo / no / no                  
+  10:49:25    -1  poor     no / no / cu          no / mo / side        CHANGED 
+  10:54:35    +1  -        mo / no / no          mo / no / no                  
+  10:54:35    +1  good     mo / no / no          mo / no / no                  
+  10:56:20    +1  -        mo / no / no          mo / no / no                  
+  10:56:20    +1  good     mo / no / no          mo / no / no                  
+  10:57:00    +1  good     mo / no / no          mo / no / no                  
+  10:57:30    +1  good     mo / no / no          mo / no / no                  
+  10:59:55    +1  good     mo / no / no          mo / no / no                  
+  11:02:30    +1  poor     mo / no / no          mo / no / no                  
+  11:14:30    +1  poor     mo / no / no          mo / no / no                  
+  11:17:20    +1  poor     mo / no / no          mo / no / no                  
+  11:23:30    +1  poor     mo / no / no          mo / no / no                  
+  11:24:00    +1  poor     mo / no / no          mo / no / no                  
+  11:27:05    -1  poor     no / no / side        no / no / cu          CHANGED 
+  11:42:20    -1  good     no / no / side        no / no / cu          CHANGED 
+  11:45:20    +1  poor     no / no / no          mo / no / no          CHANGED 
+  11:47:05    +1  poor     no / no / no          mo / no / no          CHANGED 
+  11:50:25    +1  -        no / no / no          mo / no / no          CHANGED 
+  11:53:15    +1  -        no / mo / no          mo / no / no          CHANGED 
+  11:53:15    +1  poor     no / mo / no          mo / no / no          CHANGED 
+  11:54:05    +1  -        no / mo / no          mo / no / no          CHANGED 
+  11:54:05    +1  poor     no / mo / no          mo / no / no          CHANGED 
+  11:54:20    +1  -        no / mo / no          mo / no / no          CHANGED 
+  11:54:20    +1  poor     no / mo / no          mo / no / no          CHANGED 
+  11:57:45    +1  -        no / mo / no          mo / no / no          CHANGED 
+  11:57:45    +1  good     no / mo / no          mo / no / no          CHANGED 
+  11:58:15    +1  -        side / mo / no        mo / no / no          CHANGED 
+  11:58:15    +1  good     side / mo / no        mo / no / no          CHANGED 
+  11:59:30    +1  -        side / mo / no        mo / no / no          CHANGED 
+  11:59:30    +1  good     side / mo / no        mo / no / no          CHANGED 
+  12:04:55    +1  poor     side / mo / no        mo / cu / no          CHANGED 
+  12:15:10    +1  poor     no / mo / no          no / cu / no          CHANGED 
+  12:23:55    +1  poor     no / mo / no          no / cu / no          CHANGED 
+  12:28:10    +1  poor     side / mo / no        no / cu / no          CHANGED 
+  12:33:05    +1  poor     side / mo / no        no / cu / no          CHANGED 
+  12:42:20    +1  good     no / mo / no          no / no / no          CHANGED 
+  12:50:30    +1  poor     cu / mo / no          side / no / no        CHANGED 
+  13:03:40    -1  -        no / no / no          no / no / no                  
+  13:03:40    -1  poor     no / no / no          no / no / no                  
+  13:14:25    -1  -        no / no / no          no / no / no                  
+  13:14:25    -1  good     no / no / no          no / no / no                  
+  13:25:20    -1  good     no / no / no          no / no / no                  
+  13:30:10    -1  poor     no / no / no          no / no / no                  
+  13:30:20    -1  poor     no / no / no          no / no / no                  
+  13:32:10    -1  poor     no / no / no          no / no / no                  
+  13:45:25    +1  good     no / mo / no          no / mo / no                  
+  13:48:20    -1  poor     mo / no / side        cu / no / no          CHANGED 
+  13:50:45    -1  poor     mo / no / side        cu / no / no          CHANGED 
+  13:52:05    -1  poor     mo / no / side        cu / no / no          CHANGED 
+  13:54:20    -1  poor     mo / no / side        cu / no / no          CHANGED 
+  13:55:30    -1  poor     mo / no / side        cu / no / no          CHANGED 
+  13:59:45    -1  -        mo / no / side        cu / no / no          CHANGED 
+  14:05:30    -1  -        mo / no / no          cu / no / no          CHANGED 
+  14:05:30    -1  poor     mo / no / no          cu / no / no          CHANGED 
+  14:13:10    -1  poor     mo / no / no          no / no / no          CHANGED 
+  14:14:25    -1  poor     mo / no / no          no / no / no          CHANGED 
+  14:25:45    -1  good     mo / no / no          no / no / no          CHANGED 
+  14:26:40    -1  poor     mo / no / no          no / no / no          CHANGED 
+  14:39:20    +1  poor     no / no / no          no / no / no                  
+  14:45:45    +1  -        no / no / no          no / no / no                  
+  14:52:00    +1  good     no / side / no        no / no / no          CHANGED 
+  15:03:00    +1  poor     no / no / no          no / no / no                  
+  15:04:20    +1  poor     no / no / no          no / no / no                  
+  15:06:30    -1  poor     no / no / no          mo / no / side        CHANGED 
+  15:08:20    -1  poor     no / no / no          mo / no / side        CHANGED 
+  15:16:25    -1  poor     no / no / no          mo / no / side        CHANGED 
+  15:42:30    -1  -        side / no / side      mo / no / side        CHANGED 
+  15:42:30    -1  good     side / no / side      mo / no / side        CHANGED 
+  15:46:40    -1  poor     side / no / side      mo / no / side        CHANGED 
+  15:48:20    +1  -        no / cu / no          no / no / side        CHANGED 
+  15:53:55    +1  -        no / cu / no          no / side / side      CHANGED 
+  15:53:55    +1  good     no / cu / no          no / side / side      CHANGED 
+  15:55:20    +1  -        no / cu / no          no / side / side      CHANGED 
+  15:55:20    +1  poor     no / cu / no          no / side / side      CHANGED 
+  16:05:30    +1  poor     no / cu / cu          no / side / side      CHANGED 
+  16:13:50    +1  poor     no / side / cu        no / side / side      CHANGED 
+  16:16:45    +1  poor     no / side / cu        no / no / side        CHANGED 
+  16:17:55    +1  poor     no / side / cu        no / side / side      CHANGED 
+  16:20:45    +1  poor     no / side / cu        no / no / side        CHANGED 
+  16:27:45    +1  poor     no / no / cu          no / no / side        CHANGED 
+  16:28:25    +1  poor     no / no / cu          no / no / side        CHANGED 
+  16:36:30    -1  good     no / no / no          no / side / side      CHANGED 
+  17:16:45    +1  -        mo / no / side        cu / no / side        CHANGED 
+  17:16:45    +1  poor     mo / no / side        cu / no / side        CHANGED 
+  17:17:15    +1  -        mo / no / side        cu / no / side        CHANGED 
+  17:17:15    +1  poor     mo / no / side        cu / no / side        CHANGED 
+  17:20:50    +1  poor     mo / no / side        cu / no / side        CHANGED 
+  17:21:30    +1  poor     mo / no / side        cu / no / side        CHANGED 
+  17:24:45    +1  -        mo / no / side        cu / no / side        CHANGED 
+  17:24:45    +1  poor     mo / no / side        cu / no / side        CHANGED 
+  17:30:25    +1  poor     mo / no / side        no / no / cu          CHANGED 
+  17:34:05    +1  poor     mo / no / side        no / no / cu          CHANGED 
+  17:38:40    +1  poor     mo / side / mo        mo / no / cu          CHANGED 
+  17:44:20    +1  -        mo / side / mo        mo / no / cu          CHANGED 
+  17:44:20    +1  poor     mo / side / mo        mo / no / cu          CHANGED 
+  17:49:10    +1  -        mo / side / mo        mo / no / cu          CHANGED 
+  17:49:10    +1  poor     mo / side / mo        mo / no / cu          CHANGED 
+  17:49:45    +1  -        mo / side / mo        mo / no / cu          CHANGED 
+  17:49:45    +1  poor     mo / side / mo        mo / no / cu          CHANGED 
+  17:55:20    +1  poor     mo / no / mo          mo / no / cu          CHANGED 
+  18:02:40    +1  poor     mo / no / mo          mo / no / cu          CHANGED 
+  18:03:45    +1  poor     mo / no / mo          mo / no / cu          CHANGED 
+  18:10:15    +1  -        mo / no / mo          mo / side / cu        CHANGED 
+  18:10:15    +1  poor     mo / no / mo          mo / side / cu        CHANGED 
+  18:12:15    +1  poor     mo / no / mo          mo / side / cu        CHANGED 
+  18:13:05    +1  poor     mo / no / mo          mo / side / cu        CHANGED 
+  18:33:15    +1  poor     mo / cu / mo          mo / no / cu          CHANGED 
+  18:33:25    +1  poor     mo / cu / mo          mo / no / cu          CHANGED 
+  18:43:00    +1  poor     mo / cu / side        mo / no / cu          CHANGED 
+  18:46:45    +1  poor     mo / cu / side        mo / no / side        CHANGED 
+  18:47:15    +1  -        mo / cu / side        mo / no / side        CHANGED 
+  19:17:40    +1  -        side / mo / mo        mo / cu / mo          CHANGED 
+  19:17:40    +1  poor     side / mo / mo        mo / cu / mo          CHANGED 
+  19:31:35    +1  -        side / mo / mo        mo / cu / mo          CHANGED 
+  19:31:35    +1  poor     side / mo / mo        mo / cu / mo          CHANGED 
+  20:00:10    +1  poor     side / mo / mo        mo / no / mo          CHANGED 
+  20:01:40    +1  poor     side / mo / mo        mo / no / mo          CHANGED 
+  20:02:30    +1  poor     side / mo / mo        mo / no / mo          CHANGED 
+  20:09:45    +1  good     side / mo / mo        mo / no / mo          CHANGED 
+  20:15:25    +1  -        side / mo / mo        mo / mo / mo          CHANGED 
+  20:15:35    -1  good     no / no / no          no / no / no                  
+  20:28:05    -1  good     no / no / no          no / no / no                  
+  20:36:15    +1  -        mo / mo / mo          mo / mo / mo                  
+  20:42:05    +1  -        mo / mo / mo          mo / mo / mo                  
+  20:42:05    +1  poor     mo / mo / mo          mo / mo / mo                  
+  20:44:25    +1  -        mo / mo / mo          mo / mo / mo                  
+  20:44:25    +1  poor     mo / mo / mo          mo / mo / mo                  
+  20:49:10    +1  poor     mo / mo / mo          mo / mo / mo                  
+  21:09:05    +1  poor     no / mo / mo          mo / mo / mo          CHANGED 
+  21:19:45    +1  -        no / mo / mo          mo / mo / mo          CHANGED 
+  21:24:05    +1  -        no / mo / mo          mo / mo / mo          CHANGED 
+  21:24:05    +1  good     no / mo / mo          mo / mo / mo          CHANGED 
+  21:26:40    +1  -        no / mo / mo          mo / mo / mo          CHANGED 
+  21:26:40    +1  good     no / mo / mo          mo / mo / mo          CHANGED 
+  21:26:50    +1  -        no / mo / mo          mo / mo / mo          CHANGED 
+  21:26:50    +1  good     no / mo / mo          mo / mo / mo          CHANGED 
+  21:38:40    +1  good     no / mo / mo          side / mo / mo        CHANGED 
+  21:43:55    +1  good     no / mo / mo          no / mo / mo                  
+  21:49:40    -1  poor     no / no / no          no / no / no                  
+  21:50:55    -1  poor     no / no / no          no / no / no                  
+  21:52:35    -1  poor     no / no / no          no / no / no                  
+  21:54:35    -1  poor     no / no / no          no / no / no                  
+  21:55:30    -1  poor     no / no / no          no / no / no                  
+  21:57:30    -1  poor     no / no / no          no / no / no                  
+  22:00:30    -1  poor     no / no / no          no / no / no                  
+  22:01:35    -1  poor     no / no / no          no / no / no                  
+  22:03:10    -1  -        no / no / no          no / no / no                  
+  22:10:25    -1  -        no / no / no          no / no / no                  
+  22:10:25    -1  poor     no / no / no          no / no / no                  
+  22:38:05    -1  poor     no / no / no          no / no / no                  
+  22:38:40    -1  -        no / no / no          no / no / no                  
+  22:40:55    -1  -        no / no / no          no / no / no                  
+  22:40:55    -1  poor     no / no / no          no / no / no                  
+  22:41:30    -1  -        no / no / no          no / no / no                  
+  22:41:30    -1  good     no / no / no          no / no / no                  
+  22:47:20    -1  poor     no / no / no          no / no / no                  
+  22:56:15    -1  poor     no / no / no          no / no / no                  
+  22:57:45    -1  poor     no / no / no          no / no / no                  
+  23:01:10    -1  poor     mo / no / no          no / no / no          CHANGED 
+  23:02:00    -1  poor     mo / no / no          no / no / no          CHANGED 
+  23:04:50    -1  poor     mo / no / no          mo / no / no                  
+  23:16:55    +1  good     no / no / no          no / no / mo          CHANGED 
+  23:20:05    +1  poor     no / no / no          no / no / mo          CHANGED 
+  23:20:20    +1  poor     no / no / no          no / no / mo          CHANGED 
+  23:42:10    -1  poor     mo / no / no          mo / no / no                  
+
+  281 events   187 changed   94 unchanged

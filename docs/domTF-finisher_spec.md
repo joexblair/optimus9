@@ -440,9 +440,13 @@ walk writes.
 | `DOMTF_HTF_BAND` | **(22, 27)** | the high band that may take a handover when the high timeframe is curled |
 | `CURL_RECENCY_TF_BARS` | **2** | how recent that curl must be, counted in bars of the line's own timeframe |
 | `RESCUE_REJECTED_CURL` | **True** | a curl the gate rejected is still allowed back into the pool |
+| — | — | **THE MOMENTUM KNOBS BELOW LEFT THIS FILE 0903.** They live in the `momo_config`
+table, one bank per machine, keyed on the line's own timeframe: `wsf` 1..12, `domtf` 13..60.
+The values shown are `domtf` version 1. Full listing and provenance: `docs/ws-finisher_spec.md`
+-> KNOBS. Joe 0903: *"dtf and wsf knobs will both live in the wsf spec"* |
 | `NESTED_OPPOSITION` | **True** | on |
 | `NESTED_OPPOSITION_MIN` | **3** | how many nested lines must oppose before the opposition counts |
-| `K_WINDOW` | **4** | each line's momentum window = 4 × its own timeframe, in minutes. From `build_momo_landed.py` |
+| `k_window` | **6** | each line's momentum window = `k_window` × its own timeframe, in minutes. **MOVED 0903** out of `build_momo_landed.py` into the `momo_config` table, one value per bank. Was 4 |
 | `TFS` | **8 to 33** | the full ladder the r lines are built on. `DOMTF_TFS` is the 13-27 slice of it |
 | `R_SPEC` | **k_len 7, rsi 5, stc 8, close** | how every ws{tf}r line is built |
 
@@ -452,12 +456,12 @@ walk writes.
 |---|---|---|
 | `MOMO_FIXED_SAMPLES` | **21** | set by `build_ws_fin.py` at import; the module default is 0. Every line's fit uses 21 points across its own window, so the gap between points scales with the timeframe |
 | `MOMO_WINDOW_MIN` | **60** | the window, minutes. Was 45 |
-| `MOMO_STEP_MIN` | **5** | gap between points when `MOMO_FIXED_SAMPLES` is 0 |
-| `MOMO_SAMPLES` | **12** | 60 / 5, the point count that follows from the two above |
-| `MOMO_R2_MIN` | **0.50** | how straight the line must be to read as a straight line |
-| `MOMO_SLOPE_MIN` | **1.0** | slope floor, r-units per 5-minute point |
-| `LEVEL_SLACK` | **13.9** | how far past the boundary the level gate slackens, scaled by the fit |
-| `CURL_ARC_MIN` | **4.0** | how much bend a curl needs |
+| `momo_step_min` | **5** | gap between points when `momo_fixed_samples` is 0. In `momo_config` since 0903 |
+| `MOMO_SAMPLES` | **12** | 60 / 5, the point count that follows from the two above. DERIVED, not a knob — and overridden whenever `momo_fixed_samples` (21) is set, which every domTF path does |
+| `momo_r2_min` | **0.70** | how straight the line must be to read as a straight line. **In `momo_config` since 0903**, was 0.50 |
+| `momo_slope_min` | **1.2** | slope floor, r-points per sample. **In `momo_config` since 0903**, was 1.0 |
+| `level_slack` | **13.9** | how far past the boundary the level gate slackens, scaled by the fit. In `momo_config` since 0903 |
+| `curl_arc_min` | **4.0** | how much bend a curl needs. In `momo_config` since 0903 |
 | `CURL_VTX_LO` / `CURL_VTX_HI` | **0.05 / 0.95** | where the bend's turning point must sit inside the window |
 | `CURL_R2_MIN` | **0.40** | the bend's own fit floor |
 
@@ -591,7 +595,7 @@ purposes, you might want to use it as the root level table for your lessons"*.
 
 | # | condition | knob | whose |
 |---|---|---|---|
-| 1 | the ladder ws13r..ws27r, each fitted over `K_WINDOW` 4 x its own timeframe at 21 points | 13-27 | Joe |
+| 1 | the ladder ws13r..ws27r, each fitted over `k_window` x its own timeframe at `momo_fixed_samples` points, both from `momo_config` | 13-27 | Joe |
 | 2 | **ws13x** sets dr: at or below 15 held 6 bars -> dr -1; at or above 85 held 6 bars -> dr +1; between -> **dr 0** | 85/15, xwob 6 | Joe 0823 |
 | 3 | dr 0 -> the momentum tests do NOT run, and the state is free | — | Joe: *"there is no direction, therefore no change to the domTF momentum tests"* |
 | 4 | each line's verdict in the dr direction; momo or curl makes it blocking | — | Joe |

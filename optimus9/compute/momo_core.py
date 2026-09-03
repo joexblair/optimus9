@@ -31,17 +31,43 @@ Checked by rebuilding the domTF walk and hashing v_ws_fin_walk against the pre-r
 """
 import numpy as np
 
-MOMO_R2_MIN = 0.50          # the "fuzzy straight line". Joe's refs: momo 0.921 / sideways 0.024
-MOMO_SLOPE_MIN = 1.0        # the floor knob, r-units per 5-min sample. Joe's refs: 2.858 / 0.217
-MOMO_WINDOW_MIN = 60        # Joe 0731: was 45. SWEEP KNOB.
-CURL_ARC_MIN = 4.0          # Joe 0731: a CURL is not sideways. SWEEP KNOB - see the curl block in momo().
-CURL_VTX_LO, CURL_VTX_HI = 0.05, 0.95      # vertex must sit inside the window, not on its edge
-MOMO_STEP_MIN = 5           # sample spacing. 5 min = 60 bars at the 5 s grid
-MOMO_STEP_BARS = MOMO_STEP_MIN * 12
-MOMO_SAMPLES = MOMO_WINDOW_MIN // MOMO_STEP_MIN     # 60/5 = 12 samples (was 9 at 45 min)
-LEVEL_SLACK = 13.9          # Joe 0731 "coin-toss it". Drawn uniform 0-15 on os.urandom entropy.
+# THE NUMBERS LEFT THIS FILE 0903. They live in the momo_config table, one bank per machine, read
+# by optimus9/compute/momo_config.py. Joe 0903: "I want the settings to be global per machine, ie
+# dtf and wsf will have their own config" / "it seems like now is right for a SRP refactor".
+#
+# WHAT THIS FIXES. They were shared globals, so the 0903 bake-in of a dtf sweep (K_WINDOW 4->6,
+# MOMO_SLOPE_MIN 1.0->1.2, MOMO_R2_MIN 0.50->0.70) moved wsf's verdict at the same time, with
+# nothing on any row to say so. Version 1 of both banks holds exactly those values, so the split
+# changed the shape and not one number.
+#
+# THIS FILE NOW OWNS THE VERDICT AND NONE OF THE NUMBERS. None until a machine is named:
+#     with momo_config(momo_bank(db, 'wsf')):   ...
+# There is deliberately no default. A default is what let one machine borrow another's numbers.
+MOMO_R2_MIN = None          # the "fuzzy straight line". Joe's refs: momo 0.921 / sideways 0.024
+MOMO_SLOPE_MIN = None       # the floor knob, r-units per 5-min sample. Joe's refs: 2.858 / 0.217
+MOMO_WINDOW_MIN = None      # Joe 0731: was 45.
+CURL_ARC_MIN = None         # Joe 0731: a CURL is not sideways. See the curl block in verdict().
+CURL_VTX_LO, CURL_VTX_HI = None, None      # vertex must sit inside the window, not on its edge
+MOMO_STEP_MIN = None        # sample spacing, minutes. 5 min = 60 bars at the 5 s grid
+MOMO_STEP_BARS = None       # DERIVED from MOMO_STEP_MIN by momo_config, not a knob
+MOMO_SAMPLES = None         # DERIVED from the window and the step by momo_config, not a knob
+LEVEL_SLACK = None          # Joe 0731 "coin-toss it". Drawn uniform 0-15 on os.urandom entropy.
 #                             The level gate slackens by LEVEL_SLACK * T, where the tracking score
 #                             T = R2 * min(1, |slope|/momo_slope_min) clipped to [0,1].
+
+_BOUND = None               # set by momo_config.momo_config() to "<machine> v<version>"
+
+
+def _require_bound():
+    """Raise a plain error if no machine has been named. Called by every entry point that reads a
+    knob, so a producer that forgets fails loudly instead of running on whatever was left behind."""
+    if _BOUND is None:
+        raise RuntimeError(
+            "momo: the knobs are not bound to a machine.\n"
+            "  from optimus9.compute.momo_config import momo_bank, momo_config\n"
+            "  with momo_config(momo_bank(db, 'domtf')):   # or 'wsf'\n"
+            "      ... call the verdict in here ...\n"
+            "Joe 0903: the settings are global per machine, so a caller must say which machine.")
 
 
 def momo_fit(r, dr, w, quad='auto'):
@@ -76,6 +102,7 @@ def momo_fit(r, dr, w, quad='auto'):
       quad_aligned  does the bend point with dr (qa < 0 for dr < 0)
       quad_why      plain-words reason when the bend could not be measured
     """
+    _require_bound()
     f = {'w': int(w), 'dr': int(dr), 'ok': False, 'why': None,
          'slope': 0.0, 'r2': 0.0, 'r_at_bar': float('nan'),
          'trk': 0.0, 'slack': 0.0, 'level': False, 'aligned': False, 'flat': False,
@@ -143,6 +170,7 @@ def verdict(f):
 
     The reason exists because `none` used to mean four different things in this file and six more in
     momo_gated, and a caller could not tell "no data" from "the line reversed"."""
+    _require_bound()
     if not f['ok']:
         return 'none', f['why']
     if f['flat']:
@@ -164,6 +192,31 @@ def verdict(f):
     if f['r2'] < MOMO_R2_MIN:
         return 'none', 'sloped, but too crooked to call a line'
     return 'momo', 'momo'
+
+
+def level_gate(r2, slope, dr):
+    """The level the line had to reach at this bar, recomputed from a STORED fit.
+
+    ONE IMPLEMENTATION, LIFTED OUT 0903. A caller holding the banked measurements but not the
+    series runs this instead of its own copy. Same reason momo_gated.curl_gates was lifted out on
+    0824, and the fork it prevents had already happened here: report_wsf_bar.py:168-169 carried its
+    own MOMO_SLOPE_MIN 1.0 and LEVEL_SLACK 13.9 while build_wsf_walk_events read the shared ones,
+    so the two printed different gates for the same bar and nothing said so.
+
+        r2     the straight-line fit's r-squared, as banked (wflb_fit)
+        slope  the straight-line fit's slope, as banked (wflb_slope)
+        dr     +1 or -1
+
+    -> the gate level, or None when either measurement is missing.
+
+    THE SAME EXPRESSION momo_fit() uses on a live series, including its max(1e-9, ...) guard on the
+    divisor, so a stored-fit gate and a live one cannot drift apart.
+    """
+    _require_bound()
+    if r2 is None or slope is None:
+        return None
+    trk = max(0.0, min(1.0, float(r2) * min(1.0, abs(float(slope)) / max(1e-9, MOMO_SLOPE_MIN))))
+    return (50 - LEVEL_SLACK * trk) if dr > 0 else (50 + LEVEL_SLACK * trk)
 
 
 def momo_why(r, dr, w, quad='auto'):

@@ -474,8 +474,9 @@ Both read downward, fence 15. ws8r is inside the boundary at both.
 |---|---|---|
 | `MOMO_FENCE_R` | **17**, so the band is 83/17 | `build_wsf_line_bar.py`, in the unique key |
 | `MOMO_KILL` | **state** | `build_wsf_line_bar.py`, in the unique key |
-| `MOMO_FIXED_SAMPLES` | **21** | `momo_gated.py` module default, global since Joe 0820 |
-| `K_WINDOW` | **4** | momentum window = 4 x tf minutes |
+| `momo_fixed_samples` | **21** | points in the fit. **From `momo_config` since 0903** — it was a `momo_gated.py` module default, global since Joe 0820 |
+| `k_window` | **6** | momentum window = `k_window` x tf minutes. **From `momo_config` since 0903**, was 4 |
+| `momo_slope_min` / `momo_r2_min` | **1.2** / **0.70** | slope and straightness floors. From `momo_config`, swept 0903, was 1.0 / 0.50. FITTED to eight eyeballed 08-04 pivots on ws20r |
 | `STALL_N` | **6** | lattice samples with no new extreme |
 | `WMT_LOOKBACK_S` | **120 s** | the Mage tolerance on the weak-mage scan |
 | the boundary | **85 / 15** | `optimus9_system` |
