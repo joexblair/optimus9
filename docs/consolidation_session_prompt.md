@@ -10,8 +10,12 @@ scalpers"* / *"the goal is to identify when consolidation is happening, so that 
 trading decisions"* / *"we have no existing consolidation detection"* / *"this is a green-fields
 build"*.
 
-This is **task #13** on `docs/task_register.md`: *"Consolidation detection - a mech that does not
-exist yet"*.
+**THIS WORK IS UNREGISTERED.** An earlier draft of this brief said it was task #13 on
+`docs/task_register.md`. It is not. Line 59 of that file reads *"#13 HTF overlap: does it raise
+s30r's swing-follow rate"*, and `grep -i consolidat docs/task_register.md` returns exactly one hit
+— line 85, *"#20 Consolidate pk machine spec into one doc"*, which is unrelated. The "#13" came
+from the session-local Claude Code task list, which is a different list with its own numbering.
+Whether this gets a register entry, and under what number, is Joe's call.
 
 ---
 
@@ -138,7 +142,23 @@ i = int(np.searchsorted(ts, ms_of_the_bar_you_want))
 
 ## 5. The line vocabulary — what Joe means by "BB%B and StochRSI"
 
-Read from `mech_line_config`, the live per-machine line config table. Five roles per timeframe:
+Read from `mech_line_config`, the table `build_ws_line_bar.py` uses to fill `ws_line_bar`.
+**The timeframe on the row is deliberately discarded** — `build_ws_line_bar.py:82-83`: *"the five
+shared specs, read from mech_line_config's wsf rows. One row per role; the timeframe on the row is
+discarded because every timeframe uses the same spec."* It then applies that one spec at every
+group, gcws15 and gcws30 included.
+
+**SO DO NOT READ THE TABLE'S OWN TIMEFRAME COLUMNS AS COVERAGE.** `mech_line_config` holds 7 rows:
+`wsf` × 5 roles at `mlc_tf_lo` 60 s to `mlc_tf_hi` 480 s, and `domtf` × 2 roles (r and x only) at
+780 s to 1620 s. No row names 15 s or 30 s. That is not a gap — those bands are covered by the
+same wsf spec applied at their timeframe.
+
+**A DIFFERENT PRODUCER USES A DIFFERENT SOURCE.** `optimus9/orchestration/build_ws_lines.py` builds
+its cache through `overrides()` → `LineStore.resolve` → `vw_indicator_configs_live`, not through
+`mech_line_config`. If you are reading `ws_line_bar`, mech_line_config is your source. If you are
+reading that other cache, it is not.
+
+Five roles per timeframe:
 
 | role | type | parameters | what it is |
 |---|---|---|---|
@@ -235,8 +255,25 @@ These are measured this session, not recalled.
 
 ### 8.1 The lines repeat between their own timeframe's bar updates
 
-The tape is a 5-second grid. A ws4 line only changes when a new 4-minute bar forms. Between updates
-the value is **literally identical**, so `|X_i - X_{i-1}|` is exactly zero.
+The tape is a 5-second grid. On a large share of bars a line's value is **literally identical** to
+the previous bar, so `|X_i - X_{i-1}|` is exactly zero.
+
+**THE REASON IS NOT WHAT AN EARLIER DRAFT OF THIS BRIEF SAID.** It claimed a ws4 line only changes
+when a new 4-minute bar forms. That is false and was measured false:
+
+| ws4r over all 276,480 bar-to-bar transitions | count |
+|---|---|
+| transitions where ws4r changed | 98,521 |
+| of those, landing on a `wlb_ws4_newbar = 1` row | **4,444** |
+| of those, landing anywhere else | **94,077** |
+| `wlb_ws4_newbar = 1` rows in total | 5,760 |
+
+- `value_mode` is `emerging` on all 30 band lines, so a line moves **as its own bar builds**. It is
+  not a step function held flat between own-bar closes.
+- It does not even always move at its own bar start: only 4,444 of the 5,760 ws4 bar starts carry a
+  change.
+- **Why the other repeats happen is not measured.** Do not substitute another guess for the one
+  this brief got wrong. If the mechanism matters to your design, measure it.
 
 | line | bars identical to the previous bar | share of 276,481 |
 |---|---|---|
