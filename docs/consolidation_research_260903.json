@@ -1,0 +1,299 @@
+{
+ "question": "we need to build a consolidation detector, that wil be applied to a scalping strategy.  the scalping strategy uses BB%B and StochRSI lines, ranging from 15sec to 4 minutes\n\ndon't chase threads that rely on a TF larger than 10 minutes - they don't qualify as scalpers\n\nthe goal is to identify when consolidation is happening, so that we can make informed trading decisions",
+ "summary": "The verified evidence does not hand over a consolidation detector \u2014 it rules out three of the obvious ways to build one and leaves exactly one causal primitive standing. Ruled out: any detector that declares a regime by ratioing current variance/dispersion to a baseline window (badly size-distorted under volatility clustering \u2014 a true null rejects in the majority of cases, and 360 high-frequency bars carry a very small effective sample size that Newey-West cannot repair), and any detector that thresholds a rescaled-range Hurst exponent against 0.5 (the finite-sample null is not 0.5 but +0.05 to +0.08 above it at scalping window lengths, and the single-window 2-sigma band of +/-0.17 in H cannot even separate 0.5 from 0.6). Left standing: the Kaufman Efficiency Ratio, KER_t(X,n) = |X_t - X_{t-n}| / sum|X_i - X_{i-1}|, which is bounded [0,1] by the triangle inequality, reads only bars t-n..t (no lookahead), is timeframe-agnostic so it computes identically at 15s and 4min \u2014 and which this repo already implements (`ker()` in /home/joe/thecodes/ker_router_clean.py, 144-bar window on the s5m line). Its cutoff is not documented anywhere and must be calibrated on our own bars. The remaining verified material is causality plumbing, all from TradingView's own primary docs: emit only on confirmed bar close (barstate.isconfirmed), pull higher-TF context with expr[1] + lookahead_on (never plain lookahead_off, never lookahead_on unoffset), use lookahead_off / request.security_lower_tf for lower-TF pulls, and accept that any swing-boundary detector is structurally late by its confirmation lag.",
+ "findings": [
+  {
+   "claim": "Bar counts are not sample sizes: 360 non-overlapping 5-minute observations (18 bars/day x 20 days) carry a very small effective sample size, and a Newey-West correction with 90 augmentation lags still leaves the statistic far from standard normal. Switching squared returns to absolute returns reduces outlier sensitivity but does not repair the inference.",
+   "confidence": "high",
+   "vote": "3-0 unanimous",
+   "sources": [
+    "https://public.econ.duke.edu/~boller/Published_Papers/jf_01.pdf (Andersen, Bollerslev & Das 2001, Journal of Finance 56(1) 305-327 \u2014 primary)"
+   ],
+   "evidence": "Verbatim from the paper, p.311: \"Even though the test statistics are calculated from 360 observations, the effective sample size is very small, and the statistic with 90 augmentation lags is still far from being standard normally distributed.\"\n\n| element | paper's own words | check |\n|---|---|---|\n| 360 obs | \"20*18 = 360 nonoverlapping observations\" | exact |\n| 90 lags | \"q = 90 ... 5-day, or 90 5-minute intervals\" | exact |\n| abs returns | \"presumably more robust\" test set up p.310, verdict is the quoted sentence | supported |\n\n5-minute sampling sits inside the <=10-min scalping band, so this transfers directly: an \"N bars\" count on 15s-4min data is not N independent observations, and a HAC patch will not restore normal-theory p-values under the volatility clustering that a consolidation regime is made of. Verifier extracted the PDF locally and matched every element; three counter-searches found no dispute, only downstream work building on it. Directly reinforces the repo's existing effective-n discipline (no percentage without its episode count)."
+  },
+  {
+   "claim": "A detector that declares consolidation by ratioing current-window variance to a reference window is badly size-distorted: under GARCH(1,1) 5-minute returns (omega=0.308e-6, alpha=0.00924, beta=0.991, implied from daily yen-dollar), a TRUE constant-variance null is rejected in the majority of cases, and an observed variance ratio of 2.43 \u2014 p = 6.5e-17 under F(359,359) \u2014 carries p = 0.082 under the correct simulated distribution. Threshold must therefore be calibrated from a simulated or empirical null, never from F or chi-square theory.",
+   "confidence": "medium",
+   "vote": "2-1 (dissent was on the claim's own arithmetic gloss, not the paper)",
+   "sources": [
+    "https://public.econ.duke.edu/~boller/Published_Papers/jf_01.pdf (primary)"
+   ],
+   "evidence": "Verbatim, p.309: \"if the GARCH process provides a reasonable approximation ... standard inference based on variance-ratio statistics will reject the null hypothesis in the majority of cases, even when it is valid, that is, test size is badly distorted. For example, a realization of the variance-ratio statistic of 2.43 is in the extreme upper tail of the F(359,359) distribution, but is at best mildly significant in the simulated GARCH(1,1) distribution with an associated p-value of 0.082.\"\n\n| quantity | value | source |\n|---|---|---|\n| VR observed | 2.43 | paper |\n| p under F(359,359) | 6.50e-17 | verifier computed independently |\n| p under simulated GARCH null | 0.082 | paper |\n| null in simulation | TRUE (\"the unconditional variance is constant\") | paper |\n\nDISSENT / DO NOT CARRY FORWARD: the claim's \"~10x mis-sized rejection rate\" appears nowhere in the paper \u2014 there is no size table and no stated nominal level; it is the claim's own arithmetic on \"majority\" (>50%) vs an assumed 5%, i.e. a floor, and it is specific to 360-obs 5-min windows. The word \"Any\" is rhetoric. Both stretches err conservative (fn.6: the calibration's daily persistence is below typical estimates, so distortions are \"a conservative estimate\"), so the operational rule survives: no variance-ratio consolidation cutoff from distributional theory."
+  },
+  {
+   "claim": "The paper's working repair is a two-step causal normalization: regress 2*log|R(t,n)| - log(sigma_t^2) + log(N) on a Flexible Fourier Form (third-order polynomial + event dummies + optional sinusoids), with the daily volatility factor estimated causally as the sum of the PREVIOUS day's 5-minute volatilities. That statistic tracks the standard normal closely; holding the volatility factor constant does not. Intraday shape and day-to-day volatility persistence separate.",
+   "confidence": "medium",
+   "vote": "2-1 (dissent on transfer distance, not on the mechanic)",
+   "sources": [
+    "https://public.econ.duke.edu/~boller/Published_Papers/jf_01.pdf (primary)",
+    "https://arxiv.org/abs/2601.16613 (Christensen, Hounyo & Podolskij 2026 \u2014 partial counter on separability)"
+   ],
+   "evidence": "Verbatim: \"on estimating the daily volatility factor entering Y(t,n) by the sum of the one-day lagged five-minute volatilities ... the close correspondence between the distribution of the FFF test ... and the normal distribution is striking.\" Regressand Y(t,n) = 2 log|R(t,n)| - log sigma_t^2 + log N is the paper's eq. (6), character-for-character. The negative control is also the paper's own: \"the normal distribution provides a poor approximation ... based on a constant sigma_t^2.\"\n\n| caveat | detail |\n|---|---|\n| causal variant is simulation-only | demonstrated in Fig.3 Monte Carlo; the paper's own EMPIRICAL section used a full-sample MA(1)-GARCH daily factor (lookahead) |\n| sinusoids set to zero | in both the simulation and the empirics they used P=0, third-order polynomial only |\n| separability partially undercut | 2026 nonparametric test finds \"important sources of heteroskedasticity remain present\" beyond the diurnal pattern |\n| jump fragility | Boudt, Croux & Laurent (JEF 18(2) 2011): \"price jumps cause a large bias in the classical periodicity estimators\" |\n| SCOPE LIMIT | the paper deliberately refuses sub-5-minute sampling (\"our analysis is based on five-minute returns ... to mitigate the effects of nonsynchronous quotations\") and its output is a 20/60-day before/after break test, NOT a per-bar online signal |\n\nTakeaway for the build: the transferable part is the SHAPE \u2014 normalize each bar by a causally-estimated recent volatility level before testing whether dispersion is low, rather than comparing raw dispersion across windows. The specific FFF machinery does not transfer to a 15s-4min per-bar detector."
+  },
+  {
+   "claim": "A fixed H=0.5 threshold is the wrong trend/consolidation divider. H=0.5 for an uncorrelated process holds only asymptotically; the finite-sample expectation comes from Anis & Lloyd (1976) and is always above 0.5, decreasing with series length. Any detector thresholding raw R/S H against 0.5 misclassifies by a length-dependent offset larger than the H excursion it is trying to detect.",
+   "confidence": "high",
+   "vote": "3-0 unanimous, with independent numeric reproduction",
+   "sources": [
+    "https://arxiv.org/pdf/1201.3511 (Kristoufek 2012, Physica A 391(17) 4252-4260 \u2014 primary)",
+    "Anis & Lloyd (1976), Biometrika 63(1) 111-116 (underlying formula)",
+    "Hamed (2007), Water Resources Research 43 W04413 (corroborating)",
+    "https://arxiv.org/abs/1805.08931 (Ceballos & Largo 2017, corroborating)"
+   ],
+   "evidence": "Verbatim: \"the condition for the process to be characterized as uncorrelated, which is H = 0.5, was shown to hold only asymptotically\" and \"the expected value of H for independent and short-range dependent processes is not 0.5 but the value needs to be calculated from Eq. 3\" and \"the expected value of Hurst exponent decreases with increasing time series length.\"\n\nVerifier recomputed Anis-Lloyd E(R/S) directly and took the log-log slope over dyadic scales v = 16..N/2:\n\n| N (bars) | E[H] under a TRUE null | offset vs 0.5 |\n|---|---|---|\n| 128 | 0.5758 | +0.0758 |\n| 256 | 0.5657 | +0.0657 |\n| 512 | 0.5572 | +0.0572 |\n| 1024 | 0.5496 | +0.0496 |\n| 4096 | 0.5385 | +0.0385 |\n| 65536 | 0.5243 | +0.0243 |\n\nAt the window lengths a 15s-4min detector would use (N = 128-512), the offset is +0.057 to +0.076 \u2014 larger than the excursion most detectors would call \"trending\". Ceballos & Largo Table 1 confirms the correction works: after Anis-Lloyd adjustment, i.i.d. estimates land at 0.4964-0.5057 for N=128-1024. Qualifications: \"must\" is strong (Peters 1994, Weron 2002 bootstrap CIs and Hamed 2007 are competing corrections); the N-dependence propagates through the SCALE SET fed to the regression, not the raw count; a detector that calibrates its own threshold from a rolling percentile of H is outside this claim and unaffected."
+  },
+  {
+   "claim": "The Hurst exponent cannot gate a consolidation call per window at scalping lengths. The R/S study's entire evidence base starts at 512 observations with a 32-bar minimum sub-period and is 100% synthetic \u2014 no market data at any frequency. At its shortest tested length the estimator variance for iid normal is 0.0070 (sd 0.084 in H, +/-0.17 two-sigma), so a single window cannot separate H=0.5 from H=0.6, and the sd shrinks at roughly T^-1/3, not the CLT T^-1/2, so intervals stay wider than naive sizing assumes.",
+   "confidence": "high",
+   "vote": "3-0 and 3-0 (two independent unanimous claims merged)",
+   "sources": [
+    "https://arxiv.org/pdf/1201.3511 (Kristoufek 2012 \u2014 primary)",
+    "Couillard & Davison (2005), Physica A 348 404-418 (primary, sub-CLT rate)",
+    "Weron (2002), arXiv cond-mat/0103510 (corroborating, larger sd)"
+   ],
+   "evidence": "Verbatim: \"we simulate 1,000 time series with lengths ranging from 2^9 to 2^14 ... We use the minimum scale vmin = 2^5 and the maximum scale vmax = T. Such choice avoids biases of the low scales where the standard deviations can be estimated inefficiently\" and \"the standard deviation of the estimates does not converge according to the central limit theorem ... the slower convergence of standard deviation makes the confidence intervals wider.\"\n\nTable 1, iid normal, R/S:\n| length T | variance | sd in H | 2-sigma band |\n|---|---|---|---|\n| 512 | 0.0070 | 0.0837 | +/-0.167 |\n| 1024 | 0.0036 | 0.0600 | +/-0.120 |\n| 16384 | 0.0008 | 0.0283 | +/-0.057 |\n\nSeparating H=0.5 from H=0.6 at T=512 is 1.19 sigma \u2014 a single-window 95% CI contains both. Sub-CLT rate confirmed on three independent datasets: fitted d(log sd)/d(log T) = -0.312 (Kristoufek), ~-0.333 (Couillard & Davison), -0.347 (Weron), vs -0.500 for CLT. Weron's sd at L=512 is 0.1043, LARGER than Kristoufek's, so +/-0.17 is conservative.\n\nWindow-length arithmetic against our band:\n| bar TF | 512 bars | 128 bars | 32-bar minimum sub-period |\n|---|---|---|---|\n| 15s | 128 min | 32 min | 8 min |\n| 4min | 34.1 h | 8.5 h | 128 min |\n\nAt 4min bars a sub-hour window is ~15 bars \u2014 below the 32-bar MINIMUM SUB-PERIOD, so the estimator cannot form even one scale. Harder failure than merely running below tested length. The paper has no empirical section at all (headers: intro / R-S methodology / MC methodology / MC results / conclusions); every result is synthetic iid, AR(1) theta=0.25, ARFIMA(0,0.25,0)."
+  },
+  {
+   "claim": "The Kaufman Efficiency Ratio is the one directly implementable, provably causal, timeframe-agnostic consolidation primitive in the verified set: KER_t(X,n) = |X_t - X_{t-n}| / sum_{i=t-n+1}^{t} |X_i - X_{i-1}|. Every index runs backward from t (max index anywhere is t), so it is computable on closed bars with no lookahead; it is bounded [0,1] by the triangle inequality, collapsing toward 0 when bar-to-bar movement accumulates without net displacement and rising toward 1 on a straight run. The source documents NO output range, NO default Length, NO threshold and NO trending-vs-consolidating statement \u2014 so any cutoff must be calibrated on our own data.",
+   "confidence": "high",
+   "vote": "3-0, 3-0, 3-0 (three unanimous claims merged)",
+   "sources": [
+    "https://www.sierrachart.com/index.php?page=doc%2FStudiesReference.php&ID=508 (primary vendor spec, last modified 2025-10-01)",
+    "/home/joe/thecodes/ker_router_clean.py (existing repo implementation)",
+    "/home/joe/thecodes/live_strength_dig.py (existing repo implementation)"
+   ],
+   "evidence": "Formula verified verbatim against RAW HTML (curl, 17,699 bytes), not a summarizer:\n\n| component | page text | earliest bar | latest bar |\n|---|---|---|---|\n| Direction (numerator) | \\|X_t - X_{t-n}\\| | t-n | t |\n| Volatility (denominator) | sum_{i=t-n+1}^{t} \\|X_i - X_{i-1}\\| | t-n | t |\n| Inputs | \"Input Data\", \"Length\" \u2014 nothing else | \u2014 | \u2014 |\n\nNo t+1, no i+1, no centered term, no Displacement input that could shift the series forward. Guard documented: defined \"provided that the Volatility is not zero\". Warm-up n+1 bars.\n\nAbsence verified by grep on the raw page: \"between\" 0 hits, \"0 and 1\" 0 hits, \"default\" 0 hits, \"threshold\" 0 hits, \"trend\" 0, \"consolidat\" 0, \"chop\" 0, \"rang\" 0. NOTE: the WebFetch summarizer FABRICATED an \"Output Range ... choppy or ranging conditions\" section that does not exist in the HTML \u2014 anyone taking a fetch summary of this page would wrongly believe the threshold guidance is documented.\n\nALREADY IN THE REPO \u2014 this is not a new build: /home/joe/thecodes/ker_router_clean.py line 29 implements it exactly as `d = np.diff(a); abs(d.sum()) / (np.abs(d).sum() + 1e-9)`, applied to the s5m line over a 144-bar window at entry, splitting real trades by KER quartile; /home/joe/thecodes/live_strength_dig.py computes KER of the leg into es across several lines vs MFE. The formula matches Sierra Chart's exactly (net displacement over summed path). n is in bars, not minutes, so at n=10 on 15s bars the lookback is 2.5 min \u2014 well inside the 10-minute ceiling.\n\nKNOWN LIMITS (from third-party critique, not disputing the formula): the ratio lags by its own window n so a breakout can begin while the reading still says chop; short lookbacks on thin data read noisily; it carries no direction/entry information; and \"path length\" is the path of the SAMPLED series (closes of the input), so wicks and intra-bar excursions between closes never enter the denominator."
+  },
+  {
+   "claim": "The consolidation state must be emitted only on confirmed bar close. Repainting is defined by TradingView as historical vs realtime calculations behaving differently, and on an unclosed bar the close is still mutable, so any detector evaluated on the in-progress 15s-4min bar can produce a different signal live than the same code produces once the bar is historical. The documented fix is gating on barstate.isconfirmed (always true on historical bars, true on realtime bars only at the final update), at the cost of one bar of latency.",
+   "confidence": "high",
+   "vote": "2-1 on the repaint mechanism (dissent on wording strength), 3-0 on the isconfirmed fix",
+   "sources": [
+    "https://www.tradingview.com/pine-script-docs/concepts/repainting/ (primary)",
+    "https://www.tradingview.com/pine-script-docs/concepts/bar-states/ (primary)",
+    "https://www.tradingview.com/pine-script-docs/language/execution-model/ (primary)"
+   ],
+   "evidence": "Verbatim: \"On realtime bars, the high, low and close values are not fixed; they can change values many times before the realtime bar closes\"; \"using barstate.isconfirmed is actually one way to avoid repainting that will reproduce on historical bars, which are always 'confirmed'\"; pattern given literally as `xUp = ta.crossover(close, ma) and barstate.isconfirmed`. Cost documented, not invented: \"while they prevent repainting, they will also trigger signals later than repainting scripts. This is an inevitable compromise.\" Docs also state \"more than 95% of indicators in existence exhibit some form of repainting behavior.\"\n\n| TF | latency cost of the gate |\n|---|---|\n| 15s | 15s |\n| 1min | 60s |\n| 4min | 240s |\n\nTWO CORRECTIONS TO CARRY:\n1. The original claim called BB%B and StochRSI \"functions of high/low/close\". They are NOT \u2014 both are close-only in standard form (%B = (close - lower)/(upper - lower) on a close-sourced band; TradingView's StochRSI is ta.stoch(rsi, rsi, rsi, len) over ta.rsi(close,14) and never reads bar high or low). The conclusion is unaffected: close alone is fluid intrabar, which is sufficient to carry the repaint.\n2. \"Will differ\" overstates the source, which says \"may not be repeatable\". The execution model pins the boundary: \"Only the values for a realtime bar's final tick become part of the internal time series\" \u2014 a value read AT bar close is identical live vs historical; divergence exists strictly intrabar. Also, fluid HLC is ONE of ~10 documented repaint causes, not \"the\" mechanism.\n\nSCOPE CAVEAT: barstate.isconfirmed does not work inside a request.security() call \u2014 apply the gate on the chart timeframe, outside the request layer."
+  },
+  {
+   "claim": "Multi-timeframe plumbing for a 15s-to-4min stack has two OPPOSITE correct answers depending on direction. Pulling a HIGHER timeframe (4m/10m context into 15s decisions) requires BOTH the [1] offset and lookahead = barmerge.lookahead_on \u2014 lookahead_on unoffset structurally leaks future data (it resolves the HTF bar's final value on the HTF period's FIRST chart bar), and TradingView moderates published scripts that do it. Pulling a LOWER timeframe inverts it: there the lookahead flag silently selects WHICH intrabar you get \u2014 lookahead_on returns the first intrabar of the chart period, lookahead_off the last \u2014 so a 15s-into-1m measure returns a different number depending on a flag that has nothing to do with the measurement.",
+   "confidence": "high",
+   "vote": "3-0, 3-0, 3-0, 2-1 (four claims merged; the 2-1 dissent was over 'the offset, not the flag' being reductive)",
+   "sources": [
+    "https://www.tradingview.com/pine-script-docs/concepts/other-timeframes-and-data/ (primary)",
+    "https://www.tradingview.com/pine-script-docs/concepts/repainting/ (primary)",
+    "https://www.tradingview.com/pine-script-docs/faq/other-data-and-timeframes/ (primary)"
+   ],
+   "evidence": "| direction | correct form | what goes wrong otherwise |\n|---|---|---|\n| chart TF -> HIGHER TF (15s pulling 1m/4m) | request.security(sym, tf, expr[1], lookahead = barmerge.lookahead_on) | lookahead_on WITHOUT [1] = future leak on historical bars; lookahead_off = realtime repaint |\n| chart TF -> LOWER TF (1m pulling 15s) | lookahead_off, or better request.security_lower_tf() | lookahead_on returns the FIRST intrabar historically but the LAST in realtime |\n\nVerbatim support: \"The [1] offset to the series and the use of lookahead = barmerge.lookahead_on are interdependent. Neither can be removed without compromising the integrity of the function.\" / \"the plot of the series requested using barmerge.lookahead_on without an offset shows final HTF high prices before they are actually available on historical bars\" / \"Using lookahead to produce misleading results is not allowed in script publications ... will be moderated\" / \"When using barmerge.lookahead_on, it will return the first available intrabar from the chart period ... barmerge.lookahead_off ... the last intrabar from the chart period\" / \"we recommend using request.security_lower_tf() ... it returns an array containing the data for all available LTF bars.\"\n\nEXEMPTIONS (where lookahead_on is safe unoffset): expression already carries a historical offset; requested TF equals chart TF; request is for an intrabar TF smaller than the chart. The HTF rule bites only when the requested TF is strictly higher.\n\nALSO: on realtime bars the lookahead flag is inert for LTF requests (\"regardless of the lookahead value, as the realtime intrabar information ... is not yet sorted\") \u2014 so a 15s-into-1m measure is additionally non-reproducible across the historical/realtime boundary. Nuance: \"the offset, not the flag\" is reductive \u2014 the offset kills the future reference, lookahead_on is what makes the confirmed value arrive on the correct chart bar instead of lagging a full HTF period."
+  },
+  {
+   "claim": "A swing/pivot-boundary consolidation detector is structurally late by construction: a pivot is not knowable on the bar it occurs, only after its confirmation condition is met. In Pine that is a fixed right-leg count (lag = rightLegBars x barSeconds; 5 bars on a 15s chart = 75s after the extreme printed). In this repo the confirmation is percentage-based instead, so the lag is data-dependent rather than fixed \u2014 and it has already been measured.",
+   "confidence": "high",
+   "vote": "3-0 unanimous",
+   "sources": [
+    "https://www.tradingview.com/pine-script-docs/faq/techniques/ (primary)",
+    "https://www.tradingview.com/pine-script-docs/concepts/repainting/ (primary)",
+    "/home/joe/thecodes/optimus9/compute/swing_detect.py",
+    "/home/joe/thecodes/pivot_causal_lag.py"
+   ],
+   "evidence": "Verbatim: \"By definition, these points are not the same, because a pivot is only confirmed after a certain number of bars have elapsed.\" Corroborated on the repainting page: \"Scripts detecting pivots after 5 bars have elapsed will often go back in the past to plot pivot levels or values on the actual pivot, 5 bars in the past\" \u2014 a bar \"may get a price placed on it if it is identified as a pivot, 5 bars after the actual pivot occurs.\" Docs pass left==right in every example so they cannot discriminate the legs, but ta.pivothigh(source, leftbars, rightbars) qualifies a bar only once `rightbars` FUTURE bars exist, so the lag is the right leg.\n\nREPO REFINEMENT \u2014 the fixed-bar formula does NOT map here. /home/joe/thecodes/optimus9/compute/swing_detect.py confirms a High \"once price reverses >= pct% from the running extreme\", i.e. a percentage ZigZag, so the confirmation lag is variable in bars and depends on how fast price moves away. /home/joe/thecodes/pivot_causal_lag.py already measures the cost of that lag directly: it enters at the CONFIRMATION bar (\"the first bar where price has moved pct% from the extreme. That bar is knowable in real time\"), across pct = 0.5 / 0.9 / 1.5 on 5-second base bars, and re-implements find_pivots so the confirmation bar can be recorded, asserting pivot indices identical to the library's.\n\nESCAPE HATCH: lag-free range boundaries exist (ta.highest/ta.lowest, Donchian, BB width, ATR bands) and are unaffected \u2014 the claim self-scopes to swing-boundary detectors. Provisional intrabar pivot marking is possible but is exactly the repainting the docs warn against, i.e. not causally available."
+  }
+ ],
+ "caveats": "SINGLE-SOURCE CONCENTRATION. Nine findings rest on four documents. Findings 1-3 are all one paper (Andersen, Bollerslev & Das 2001); findings 4-5 are all one paper (Kristoufek 2012, which has NO empirical section \u2014 every result is synthetic). Findings 7-9 are all TradingView's own docs. There is no independent replication of the ABD or Kristoufek results in this evidence set, only downstream work that builds on them.\n\nTRANSFER DISTANCE. The ABD paper explicitly refuses sub-5-minute sampling and its output is a 20/60-day before/after structural-break test, not a per-bar online signal \u2014 its cautions transfer, its machinery does not. The Kristoufek study never tests below 512 observations and excludes scales below 32 bars by design, so at 4min bars a sub-hour window falls below its minimum sub-period entirely. Neither paper touches BB%B or StochRSI.\n\nNOTHING VERIFIED GIVES A NUMBER. No source in the surviving set documents a consolidation threshold, a default window length, or an output range for any metric. Sierra Chart's KER page is formula-only \u2014 verified by grep, zero hits for \"threshold\", \"default\", \"trend\", \"consolidat\", \"chop\", \"rang\". Every cutoff is ours to calibrate, and per finding 2 it cannot be calibrated from distributional theory.\n\nWHAT FAILED VERIFICATION \u2014 do not quietly re-import it. The entire microstructure-noise thesis was refuted 0-3 across four separate claims (Hansen-Lunde and Bandi-Russell sources): that 15s/30s clock bars manufacture artificial autocorrelation; that one minute is the clean/contaminated boundary; that the volatility signature plot drops at ultra-high frequency so 15s variance falsely reads as consolidation; and that realized variance at high frequency measures the noise process. None survived. This means there is currently NO verified evidence for avoiding 15s bars on microstructure grounds \u2014 but equally no verified evidence that they are safe. It is an open hole, not a cleared one. Also refuted 0-3: Bollinger BandWidth as a scale-free consolidation number comparable across instruments and across the TF ladder \u2014 do not assume that comparability.\n\nALSO REFUTED (1-2 and 0-3): the claim that close-only bars structurally under-read intra-bar oscillation, and the tick-vs-minute bar-timeout diagnostics. Note the tension with finding 6's own caveat, which IS verified: KER's denominator is the path of the sampled closes, so intra-bar excursion genuinely does not enter it. That limit stands on the Sierra Chart formula itself, independent of the refuted claims.\n\nTOOLING HAZARD, VERIFIED IN-SESSION. A WebFetch summary of the Sierra Chart page fabricated an \"Output Range ... choppy or ranging conditions\" section that does not exist in the raw HTML. Two other pages needed raw curl to check negatives. Treat fetch summaries of spec pages as unreliable.\n\nTIME-SENSITIVITY. Low. The econometric results are finite-sample properties of fixed estimators (1976, 2001, 2012) and do not decay. The KER formula is mid-1990s and stable. The only moving parts are the TradingView docs (currently Pine v6, pages live as of 2026-09-03) \u2014 language semantics can change with a version bump, and 15S interval availability is plan-dependent and was NOT verified in-session.\n\nVERIFIER BUDGET EXHAUSTION. Findings 5 (partly), 8 (LTF component) and 9 were verified without a counter-search because the session's 200-search budget ran out. All three are vendor-documentation or arithmetic claims where the doc is ground truth, so the risk is low, but no adversarial web pass was run on them.",
+ "openQuestions": [
+  "What is the KER cutoff, and at what window length per timeframe? Nothing verified supplies one, and finding 2 forbids deriving it from theory \u2014 so it has to come from an empirical null on our own bars. The repo already runs KER at n=144 on the s5m line (ker_router_clean.py); is 144 the right n for a consolidation READ, or was it fitted for the size-router question it was built for?",
+  "Should KER read the LINE or the PRICE? Both existing implementations (ker_router_clean.py on s5m, live_strength_dig.py on 'several lines') feed it a line, not price. A line is already smoothed, which changes the denominator's path length and therefore the ratio's whole scale \u2014 the two are not interchangeable and no verified source addresses which input a consolidation detector should use.",
+  "Do BB%B and StochRSI themselves carry a consolidation reading, and what is its causal form? Not one surviving claim addresses either indicator as a consolidation measure \u2014 the verified set is about the STATISTICS of regime detection and the CAUSALITY of computing it, never about the two lines the strategy actually runs. If %B hugging 0.5 or StochRSI cycling inside a band is the intended signal, it is entirely unevidenced here.",
+  "Does the existing Pine emitter fleet already obey the finding-8 rules? There are ~60 .pine files in the repo and a live causal/lookahead register (docs/causal_lookahead_register.md) whose arbiter is o9-live alignment. Any request.security call pulling a higher TF without expr[1] + lookahead_on, or any signal not gated on barstate.isconfirmed, is a register entry that has not been opened \u2014 grep has not been run.",
+  "Is the 15s end of the band actually safe? The microstructure-noise block was refuted 0-3, which removes the argument against 15s bars without supplying an argument for them. Given the repo's 5-second base bar, this is decidable in-house rather than by literature."
+ ],
+ "refuted": [
+  {
+   "claim": "Calendar-time (clock) bars sampled faster than every 30 seconds carry a pronounced bias in realized-variance measures, because clock sampling re-samples the same price multiple times and thereby manufactures autocorrelation in the intraday returns. A 15s or 30s clock bar therefore contains artificial serial dependence that is an artifact of the sampling scheme, not of the market \u2014 directly hazardous for a consolidation detector, which reads low/flat variance as consolidation.",
+   "vote": "0-3",
+   "source": "https://web-docs.stern.nyu.edu/salomon/docs/Hansen-Lunde.pdf"
+  },
+  {
+   "claim": "One minute is the concrete threshold above which short-lived microstructure noise dependence stops biasing a bias-corrected variance estimator: if noise time-dependence is shorter than one minute, returns spanning one minute or more are unbiased. This puts the 1m-4m end of the 15sec-4min band in clean territory and the 15s-30s end inside the contaminated region.",
+   "vote": "0-3",
+   "source": "https://web-docs.stern.nyu.edu/salomon/docs/Hansen-Lunde.pdf"
+  },
+  {
+   "claim": "As sampling frequency rises, the volatility signature plot DROPS rather than rises \u2014 measured variance is biased downward at ultra-high frequency, because noise innovations are negatively correlated with true returns. This holds for both calendar-time and tick-time sampling and for both the raw and bias-corrected estimators. Consequence: a variance/range measure computed on 15s data will read artificially LOW, i.e. it will falsely signal consolidation.",
+   "vote": "0-3",
+   "source": "https://web-docs.stern.nyu.edu/salomon/docs/Hansen-Lunde.pdf"
+  },
+  {
+   "claim": "Close-only minute OHLCV structurally cannot see intra-minute oscillation: a one-minute window containing three 0.05% round-trip oscillations contributes ~0.15% to a tick-native realized-volatility accumulator but a close-to-close return of approximately zero. Any activity or volatility measure built from bar closes therefore systematically under-reads oscillating-but-net-flat price action \u2014 which is exactly the signature of consolidation a detector must catch. Falsifiable by recomputing both accumulators over the same minute of aggTrade data.",
+   "vote": "1-2",
+   "source": "https://arxiv.org/html/2608.26158"
+  },
+  {
+   "claim": "The paper's bar-timeout diagnostic is itself a low-activity/consolidation detector: an activity-threshold bar that fails to reach its threshold closes on a maximum-duration cap (d_max), and a timeout rate above 10% is treated as evidence the threshold is unachievable under prevailing market conditions. The minute-pipeline Renko bars hit a 12.3% timeout rate against 0.0% for the tick pipeline, i.e. the minute-resolution signal stalls in low-trend environments where the tick signal does not.",
+   "vote": "0-3",
+   "source": "https://arxiv.org/html/2608.26158"
+  },
+  {
+   "claim": "Apparent serial dependence at high sampling frequency is substantially a sampling-frequency artefact, not market structure: the raw oversampled tick series reject serial independence, but coarsened to the minute pipeline's bar count, matched tick volatility bars attain Ljung-Box p=0.51. A detector compared across 15s and 4m will therefore measure different autocorrelation for reasons of bar count alone unless frequency is matched.",
+   "vote": "0-3",
+   "source": "https://arxiv.org/html/2608.26158"
+  },
+  {
+   "claim": "A variance/volatility statistic computed by summing squared intra-bar returns at very high frequency is a biased estimator of the underlying price variability \u2014 it measures the noise process, not the true (frictionless) variance. Applied to a consolidation detector, a low-volatility reading built from 15-second bars is not a clean read of true price variability; the microstructure noise component contaminates it and biases it upward as bar size shrinks.",
+   "vote": "0-3",
+   "source": "https://www.semanticscholar.org/paper/Microstructure-Noise%2C-Realized-Variance%2C-and-Bandi-Russell/9c01f17a58cef8e7b58a5a2132fa16e0617c7f98"
+  },
+  {
+   "claim": "The optimal sampling frequency for a variance estimator is finite, not \"as fast as possible\": the noise-induced bias that grows at high frequency is traded off against the variance reduction that high-frequency sampling buys, and the trade-off has an MSE-minimizing interior solution. This means there is a determinable best bar size inside the 15s-4m scalping band rather than a free choice, and picking the fastest available bar is provably not optimal.",
+   "vote": "0-3",
+   "source": "https://www.semanticscholar.org/paper/Microstructure-Noise%2C-Realized-Variance%2C-and-Bandi-Russell/9c01f17a58cef8e7b58a5a2132fa16e0617c7f98"
+  },
+  {
+   "claim": "Bollinger BandWidth gives a single normalized consolidation number computable from the same Bollinger Bands the strategy already runs for %B: ((Upper Band - Lower Band) / Middle Band) * 100. Because it is divided by the middle band it is scale-free, so the same value is comparable across instruments and across the 15sec-4min timeframe ladder.",
+   "vote": "0-3",
+   "source": "https://chartschool.stockcharts.com/table-of-contents/technical-indicators-and-overlays/technical-indicators/bollinger-bandwidth"
+  }
+ ],
+ "unverified": [],
+ "sources": [
+  {
+   "url": "https://chartschool.stockcharts.com/table-of-contents/technical-indicators-and-overlays/technical-indicators/bollinger-bandwidth",
+   "quality": "secondary",
+   "angle": "broad / primary \u2014 native BB squeeze detection",
+   "claimCount": 5
+  },
+  {
+   "url": "https://www.tradingview.com/script/tqitSsyG-Bollinger-Band-Width-Percentile/",
+   "quality": "blog",
+   "angle": "broad / primary \u2014 native BB squeeze detection",
+   "claimCount": 5
+  },
+  {
+   "url": "https://chartschool.stockcharts.com/table-of-contents/trading-strategies-and-models/trading-strategies/bollinger-band-squeeze",
+   "quality": "secondary",
+   "angle": "broad / primary \u2014 native BB squeeze detection",
+   "claimCount": 5
+  },
+  {
+   "url": "https://www.luxalgo.com/blog/bollinger-bands-strategy-squeeze-then-surge/",
+   "quality": "blog",
+   "angle": "broad / primary \u2014 native BB squeeze detection",
+   "claimCount": 5
+  },
+  {
+   "url": "https://chartschool.stockcharts.com/table-of-contents/technical-indicators-and-overlays/technical-indicators/ttm-squeeze",
+   "quality": "secondary",
+   "angle": "broad / primary \u2014 native BB squeeze detection",
+   "claimCount": 5
+  },
+  {
+   "url": "https://pineify.app/resources/blog/bbwp-indicator-tradingview-pine-script",
+   "quality": "blog",
+   "angle": "broad / primary \u2014 native BB squeeze detection",
+   "claimCount": 5
+  },
+  {
+   "url": "https://www.luxalgo.com/library/concept/choppiness-index/",
+   "quality": "secondary",
+   "angle": "quantitative regime classification",
+   "claimCount": 5
+  },
+  {
+   "url": "https://public.econ.duke.edu/~boller/Published_Papers/jf_01.pdf",
+   "quality": "primary",
+   "angle": "quantitative regime classification",
+   "claimCount": 5
+  },
+  {
+   "url": "https://quanterlab.com/articles/mr-variance-ratio",
+   "quality": "blog",
+   "angle": "quantitative regime classification",
+   "claimCount": 5
+  },
+  {
+   "url": "https://macrosynergy.com/research/detecting-trends-and-mean-reversion-with-the-hurst-exponent/",
+   "quality": "secondary",
+   "angle": "quantitative regime classification",
+   "claimCount": 5
+  },
+  {
+   "url": "https://arxiv.org/pdf/1201.3511",
+   "quality": "primary",
+   "angle": "quantitative regime classification",
+   "claimCount": 5
+  },
+  {
+   "url": "https://www.sierrachart.com/index.php?page=doc%2FStudiesReference.php&ID=508",
+   "quality": "primary",
+   "angle": "quantitative regime classification",
+   "claimCount": 5
+  },
+  {
+   "url": "https://www.fmz.com/lang/en/strategy/489893",
+   "quality": "blog",
+   "angle": "indicator-signature \u2014 StochRSI and %B inside a range",
+   "claimCount": 5
+  },
+  {
+   "url": "https://chartschool.stockcharts.com/table-of-contents/technical-indicators-and-overlays/technical-indicators/b-indicator",
+   "quality": "secondary",
+   "angle": "indicator-signature \u2014 StochRSI and %B inside a range",
+   "claimCount": 5
+  },
+  {
+   "url": "https://www.zeiierman.com/blog/rsi-vs-stochastic-rsi",
+   "quality": "blog",
+   "angle": "indicator-signature \u2014 StochRSI and %B inside a range",
+   "claimCount": 5
+  },
+  {
+   "url": "https://web-docs.stern.nyu.edu/salomon/docs/Hansen-Lunde.pdf",
+   "quality": "primary",
+   "angle": "microstructure validity at 15s-4m",
+   "claimCount": 5
+  },
+  {
+   "url": "https://arxiv.org/html/2608.26158",
+   "quality": "primary",
+   "angle": "microstructure validity at 15s-4m",
+   "claimCount": 5
+  },
+  {
+   "url": "https://www.semanticscholar.org/paper/Microstructure-Noise%2C-Realized-Variance%2C-and-Bandi-Russell/9c01f17a58cef8e7b58a5a2132fa16e0617c7f98",
+   "quality": "primary",
+   "angle": "microstructure validity at 15s-4m",
+   "claimCount": 4
+  },
+  {
+   "url": "https://www.tradingview.com/pine-script-docs/concepts/repainting/",
+   "quality": "primary",
+   "angle": "contrarian / causal implementation pitfalls",
+   "claimCount": 5
+  },
+  {
+   "url": "https://www.tradingview.com/pine-script-docs/concepts/other-timeframes-and-data/",
+   "quality": "primary",
+   "angle": "contrarian / causal implementation pitfalls",
+   "claimCount": 5
+  },
+  {
+   "url": "https://www.tradingview.com/pine-script-docs/faq/techniques/",
+   "quality": "primary",
+   "angle": "contrarian / causal implementation pitfalls",
+   "claimCount": 5
+  }
+ ],
+ "stats": {
+  "angles": 5,
+  "sourcesFetched": 21,
+  "claimsExtracted": 104,
+  "claimsVerified": 25,
+  "confirmed": 16,
+  "killed": 9,
+  "unverified": 0,
+  "afterSynthesis": 9,
+  "urlDupes": 1,
+  "budgetDropped": 8,
+  "agentCalls": 103
+ }
+}
