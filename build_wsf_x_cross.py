@@ -31,9 +31,13 @@ import numpy as np
 
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
+import pxs_mode as PX
 
-WIN_FROM = '2026-08-04 00:00:00'
-WIN_TO   = '2026-08-05 00:00:00'
+# THE WINDOW TAKES POSITIONAL DATES, flags skipped. Defaults are unchanged, so a run with no
+# arguments is exactly what it was; the chain needs 08-04, 08-05 and 08-06 built one day each.
+_pos = [z for z in sys.argv[1:] if not z.startswith('-')]
+WIN_FROM = _pos[0] if len(_pos) > 0 else '2026-08-04 00:00:00'
+WIN_TO   = _pos[1] if len(_pos) > 1 else '2026-08-05 00:00:00'
 TFS      = list(range(1, 13))    # Joe 0826: "wsf is limited to TF12". Was TF1 to TF8. ADDITIVE -
 #                                wxc_tf is in the unique key and each timeframe's crossing is read
 #                                off its own x and its own target, so TF1-8 rows do not move.
@@ -115,6 +119,7 @@ def held(runs, key, x, t, dr):
 
 def main():
     db = DatabaseManager(**get_db_config()); db.connect()
+    db = PX.wrap(db)   # every table name in this file routes through the switch
     sysr = db.execute('SELECT hi_boundary hi, lo_boundary lo FROM optimus9_system WHERE sys_pk=1',
                       fetch=True)[0]
     HI, LO = float(sysr['hi']), float(sysr['lo'])

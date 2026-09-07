@@ -52,9 +52,11 @@ from optimus9.compute.indicator_computer import IndicatorComputer as IC
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 from optimus9.analysis.jig import Jig
 import pandas as pd
+import pxs_mode as PX
 
-WIN_FROM = '2026-08-04 00:00:00'
-WIN_TO   = '2026-08-05 00:00:00'
+_pos = [z for z in sys.argv[1:] if not z.startswith('-')]
+WIN_FROM = _pos[0] if len(_pos) > 0 else '2026-08-04 00:00:00'
+WIN_TO   = _pos[1] if len(_pos) > 1 else '2026-08-05 00:00:00'
 TFS      = list(range(1, 13))   # Joe 0826: "wsf is limited to TF12". Was TF1 to TF8.
 DRS      = (+1, -1)
 GRID_S   = 5
@@ -83,6 +85,7 @@ DOC = {
 
 def main():
     db = DatabaseManager(**get_db_config()); db.connect()
+    db = PX.wrap(db)   # every table name in this file routes through the switch
     have = {c['Field'] for c in db.execute('SHOW COLUMNS FROM wsf_bar_tf', fetch=True)}
     for col, spec in ADD:
         if col not in have:
@@ -102,8 +105,12 @@ def main():
         ovr[f'ws{tf}r'] = override(tf * 60, rspec[0], rspec[1])
     print(f'  opening the jig over {HOURS} h + {WARMUP} warmup for {len(ovr)} r lines', flush=True)
 
-    with Jig(END_MS, hours=HOURS, warmup=WARMUP, overrides=ovr) as j:
-        base = j.W.base
+    # UNDER --pxs4 the frame's `close` column IS the smoothed price, so IC.resample and
+    # build_source below read pxs without either being touched. Only .base and .ts are used from
+    # the jig here - checked, not assumed - so the stand-in provides only those.
+    with (PX.frame(db) if PX.ON
+          else Jig(END_MS, hours=HOURS, warmup=WARMUP, overrides=ovr)) as j:
+        base = j.base if PX.ON else j.W.base
         ts = np.asarray(j.ts)
         i0 = int(np.searchsorted(ts, int(dt.datetime.fromisoformat(WIN_FROM)
                                          .replace(tzinfo=timezone.utc).timestamp() * 1000)))

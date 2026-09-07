@@ -58,8 +58,19 @@ from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 from optimus9.compute.momo_gated import curl_gates
 from optimus9.compute.momo_config import momo_bank, momo_config
 from optimus9.compute import momo_core as MC
+import pxs_mode as PX
+# THE LINE CACHE AND THE WINDOW FOLLOW THE SWITCH. Rebinding the names the file already uses means
+# every _line_key / _tape_key call below reads the pxs cache without being touched.
+if PX.ON:
+    LINE_DIR, TAPE_DIR = PX.LINE_DIR, PX.TAPE_DIR
+    END_MS, HOURS, WARMUP = PX.PXS_END_MS, PX.PXS_HOURS, PX.PXS_WARMUP
 
-WIN_FROM, WIN_TO = '2026-08-04 00:00:00', '2026-08-05 00:00:00'
+
+# THE WINDOW TAKES POSITIONAL DATES, flags skipped. Defaults are unchanged, so a run with no
+# arguments is exactly what it was; the chain needs 08-04, 08-05 and 08-06 built one day each.
+_pos = [z for z in sys.argv[1:] if not z.startswith('-')]
+WIN_FROM = _pos[0] if len(_pos) > 0 else '2026-08-04 00:00:00'
+WIN_TO   = _pos[1] if len(_pos) > 1 else '2026-08-05 00:00:00'
 KNOBS = 'kw4_fs21_sn6_hi85_lo15_r20.5_sl1_arc4_sk13.9_cr0.4_mkstate_mf17_xw4'
 MAX_TF        = 12    # KNOB. Joe 0826: "wsf is limited to TF12"
 MAGE_KNOB     = 20    # the three-Mage dr fence is 80 / 20. Joe 0823
@@ -399,6 +410,7 @@ def main():
     deep inside _main, and both read a banked wsf_line_bar row. Every line in this file is TF1 to
     MAX_TF 12, which is one bank; checked, not assumed."""
     db = DatabaseManager(**get_db_config()); db.connect()
+    db = PX.wrap(db)   # every table name in this file routes through the switch
     _bk = {tf: momo_bank(db, tf) for tf in range(1, MAX_TF + 1)}
     _ids = {(b['mech'], b['tf_lo'], b['tf_hi'], b['version']) for b in _bk.values()}
     if len(_ids) != 1:
@@ -555,7 +567,9 @@ def _main(db):
     sysr = db.execute('SELECT pxsmooth_dema_src s, pxsmooth_dema_len l FROM optimus9_system '
                       'WHERE sys_pk=1', fetch=True)[0]
     tape = np.load(os.path.join(TAPE_DIR, _tape_key(END_MS, HOURS, WARMUP,
-                                                    {'src': sysr['s'], 'len': sysr['l']}) + '.npz'))
+                                                    {'src': sysr['s'],
+                                                     'len': PX.DEMA if PX.ON else sysr['l']})
+                                + '.npz'))
     tape_ts, tape_px = tape['__ts__'], tape['__pxs__']
 
     def pxs_at(bar):

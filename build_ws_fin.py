@@ -30,6 +30,7 @@ from optimus9 import DatabaseManager
 from optimus9.compute.line_config import LineStore, KLine, BBLine, override
 from optimus9.orchestration.rpl_cache import cache_jig_perline
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
+import pxs_mode as PX
 from optimus9.analysis import ws_strat as WS
 from optimus9.analysis.jig import (ws_fin_9of12, WSF_N, WSF_HANDICAP, WSF_LINE_HANDICAP,
                                    WSF_VOTE_HOLD,
@@ -308,7 +309,7 @@ def create_view(db):
     look correct while six knobs happened to hold one value each."""
     sub = ', '.join(f'{c} k{n}' for n, c in enumerate(WFW_KEY_COLS))
     on = ' AND '.join(f'w.{c} = k.k{n}' for n, c in enumerate(WFW_KEY_COLS))
-    db.execute(f'''CREATE OR REPLACE VIEW v_ws_fin_walk AS
+    db.execute(PX.sql(f'''CREATE OR REPLACE VIEW v_ws_fin_walk AS
         SELECT w.wfw_row                                                     AS `#`,
                w.wfw_g30_marker                                              AS g30_marker,
                w.wfw_qual                                                    AS qual,
@@ -327,7 +328,7 @@ def create_view(db):
         FROM ws_fin_walk w
         JOIN (SELECT {sub} FROM ws_fin_walk ORDER BY wfw_pk DESC LIMIT 1) k
           ON {on}
-        ORDER BY w.wfw_row''')
+        ORDER BY w.wfw_row'''))
 
 
 def _wsf_key(win_from, hi, lo):
@@ -396,13 +397,25 @@ def main():
     for tf in DOMTF_TFS:
         ovr[f'r{tf}'] = override(tf * 60, KLine(**B.R_SPEC), 'emerging')
         ovr[f'x{tf}'] = override(tf * 60, BBLine(**X_SPEC), 'emerging')
-    J = cache_jig_perline(END_MS, HOURS, WARMUP, ovr,
-                          pxs_cfg={'src': sysr['s'], 'len': sysr['l']}, rebuild=False)
-    ts = np.asarray(J.ts)
-    W = J.W
-    V = {n: np.asarray(W.line(n), float) for n in LINES}
-    R = {tf: np.asarray(W.line(f'r{tf}'), float) for tf in DOMTF_TFS}
-    Xl = {tf: np.asarray(W.line(f'x{tf}'), float) for tf in DOMTF_TFS}
+    if PX.ON:
+        # THE LINES ARE ALREADY BUILT on the smoothed price. build_pxs_line_cache holds every
+        # ws/gcws role at every group; ovr here names the same specs, so the filenames match.
+        ts, W = PX.line_reader(sysr['s'], ovr)
+        line = W.line
+        _pl = line
+        V = {n: _pl(n) for n in LINES}
+        R = {tf: _pl(f'r{tf}') for tf in DOMTF_TFS}
+        Xl = {tf: _pl(f'x{tf}') for tf in DOMTF_TFS}
+    else:
+        J = cache_jig_perline(END_MS, HOURS, WARMUP, ovr,
+                              pxs_cfg={'src': sysr['s'], 'len': sysr['l']}, rebuild=False)
+        ts = np.asarray(J.ts)
+        W = J.W
+        # ONE ACCESSOR FOR BOTH SOURCES, so a later reader cannot reach for W and find it unbound.
+        line = lambda n: np.asarray(W.line(n), float)
+        V = {n: np.asarray(W.line(n), float) for n in LINES}
+        R = {tf: np.asarray(W.line(f'r{tf}'), float) for tf in DOMTF_TFS}
+        Xl = {tf: np.asarray(W.line(f'x{tf}'), float) for tf in DOMTF_TFS}
     # the fast partner must cross to the far side of its r line and hold HANDOVER_XWOB bars, and
     # the r line must be back inside the boundaries. One mask per line per direction.
     def _runlen(m):
@@ -417,6 +430,10 @@ def main():
 
     i0 = int(np.searchsorted(ts, int(START.timestamp() * 1000)))
     i1 = int(np.searchsorted(ts, int(END.timestamp() * 1000)))
+    # The pxs tape ends 08-06 23:59:55, so the last day has no next-midnight bar to close on.
+    if i1 > len(ts) - 1:
+        print(f'  last day is short: ending at index {len(ts) - 1}', flush=True)
+        i1 = len(ts) - 1
     # the stall, asked at every bar of every domTF line, on that line's own momentum lattice
     LAT = {}
     for tf in DOMTF_TFS:
@@ -474,7 +491,7 @@ def main():
 
 
     # THE g30 CLOCK — candidate level, computed from cache bar 0 so a dwell may start before i0
-    cand = WS.candidates(np.asarray(W.line('gcws30b'), float), HI, LO, XWOB,
+    cand = WS.candidates(line('gcws30b'), HI, LO, XWOB,
                          min_ib=WS.MIN_IB_DWELL)
     G = {int(e['conf']): e for e in cand}
     g30_pairs = sorted((b, int(G[b]['side'])) for b in G)
@@ -591,10 +608,10 @@ def main():
         print(f"\n  changed the handover bar on {ch} of {sum(1 for a in ab if a[2])} restricted")
         return 0
 
-    db.execute(DDL)
+    db.execute(PX.sql(DDL))
     # SCHEMA MOVED 0813 — the object changed from the qualification to the combined signal, so the
     # table gains g30 / qual / domTF columns. ADD COLUMN keeps an existing table's rows.
-    have = {r['Field'] for r in db.execute('SHOW COLUMNS FROM ws_fin_9of12', fetch=True)}
+    have = {r['Field'] for r in db.execute(f'SHOW COLUMNS FROM {PX.t("ws_fin_9of12")}', fetch=True)}
     ADD = [('wsf_g30_level', "VARCHAR(20) NOT NULL DEFAULT ''"),
            ('wsf_require', "VARCHAR(64) NOT NULL DEFAULT ''"),
            ('wsf_line_xwob', "VARCHAR(64) NOT NULL DEFAULT ''"),
@@ -630,9 +647,9 @@ def main():
     # keyed on the knobs, not the window — the unique key is not the window. Every knob in the
     # key is here, so a run at a different STALL_N lands alongside instead of on top.
     where, kv = _wsf_key(u(ts[i0]), HI, LO)
-    db.execute('DELETE FROM ws_fin_9of12 WHERE ' + where, kv)
+    db.execute(f'DELETE FROM {PX.t("ws_fin_9of12")} WHERE ' + where, kv)
     if rows:
-        db.executemany(f'INSERT INTO ws_fin_9of12 ({",".join(COLS)}) VALUES '
+        db.executemany(f'INSERT INTO {PX.t("ws_fin_9of12")} ({",".join(COLS)}) VALUES '
                        f'({",".join(["%s"] * len(COLS))})', rows)
     print(f'ws_fin_9of12 : {len(rows):,} rows, {len(COLS)} stamped columns', flush=True)
 
@@ -663,25 +680,25 @@ def main():
             ','.join(str(t) for t in blk_s)[:96],
             ','.join(str(t) for t in rep[w]['joins'])[:96],
             ','.join(str(t) for t in rep[w]['leaves'])[:96]]))
-    db.execute(WALK_DDL)
-    db.execute('DELETE FROM ws_fin_walk WHERE wfw_win_from=%s AND wfw_n_lines=%s '
+    db.execute(PX.sql(WALK_DDL))
+    db.execute(f'DELETE FROM {PX.t("ws_fin_walk")} WHERE wfw_win_from=%s AND wfw_n_lines=%s '
                'AND wfw_handicap=%s AND wfw_hold=%s '
                'AND wfw_sticky=%s AND wfw_hi=%s AND wfw_lo=%s AND wfw_g30_level=%s '
                'AND wfw_line_hcap=%s AND wfw_line_xwob=%s AND wfw_ho_rule=%s AND wfw_stall_n=%s '
                'AND wfw_ho_xwob=%s AND wfw_curl_tfbars=%s AND wfw_htf_band=%s', tuple(ident))
-    db.executemany(f'INSERT INTO ws_fin_walk ({",".join(WALK_COLS)}) VALUES '
+    db.executemany(f'INSERT INTO {PX.t("ws_fin_walk")} ({",".join(WALK_COLS)}) VALUES '
                    f'({",".join(["%s"] * len(WALK_COLS))})', wrows)
     print(f'ws_fin_walk  : {len(wrows):,} rows, {len(WALK_COLS)} stamped columns', flush=True)
 
     create_view(db)
     print('v_ws_fin_walk : the latest walk, one row per event, rendered', flush=True)
 
-    db.execute(SHRINK_DDL)
-    db.execute('DELETE FROM ws_fin_tagshrink WHERE wfs_ho_rule=%s AND wfs_stall_n=%s '
+    db.execute(PX.sql(SHRINK_DDL))
+    db.execute(f'DELETE FROM {PX.t("ws_fin_tagshrink")} WHERE wfs_ho_rule=%s AND wfs_stall_n=%s '
                'AND wfs_signal >= %s AND wfs_signal < %s',
                (HANDOVER_RULE, STALL_N, u(ts[i0]), u(ts[i1])))
     if shrink:
-        db.executemany(f'INSERT INTO ws_fin_tagshrink ({",".join(SHRINK_COLS)}) VALUES '
+        db.executemany(f'INSERT INTO {PX.t("ws_fin_tagshrink")} ({",".join(SHRINK_COLS)}) VALUES '
                        f'({",".join(["%s"] * len(SHRINK_COLS))})', shrink)
     print(f'ws_fin_tagshrink : {len(shrink):,} rows  '
           f'({len({r[2] for r in shrink})} signals saw a line leave)', flush=True)

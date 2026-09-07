@@ -19,6 +19,7 @@ Kinds x, m, Mage, b, r. A kind is skipped where the line store has no config for
 Nothing here is a mechanic. It is the raw lines and the raw crossings, so a question can be
 answered with one query instead of a rerun.
 """
+import os
 import sys
 import datetime as dt
 from datetime import timezone
@@ -28,6 +29,7 @@ import numpy as np
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.compute.line_config import LineStore, mech_lines, override
+import pxs_mode as PX
 from optimus9.orchestration.rpl_cache import cache_jig_perline
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 
@@ -37,8 +39,10 @@ from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 # to 08-18". A day is built per invocation and the DELETE below is bounded to that day, so days
 # accumulate in the table instead of replacing each other.
 _d = lambda s: dt.datetime.strptime(s, '%Y-%m-%d').replace(tzinfo=timezone.utc)
-START = _d(sys.argv[1]) if len(sys.argv) > 1 else dt.datetime(2026, 8, 4, 0, 0, tzinfo=timezone.utc)
-END   = _d(sys.argv[2]) if len(sys.argv) > 2 else START + dt.timedelta(days=1)
+# FLAGS ARE NOT DATES. --pxs4 and --rebuild sit in argv too, so only bare positionals are parsed.
+_pos = [a for a in sys.argv[1:] if not a.startswith('-')]
+START = _d(_pos[0]) if len(_pos) > 0 else dt.datetime(2026, 8, 4, 0, 0, tzinfo=timezone.utc)
+END   = _d(_pos[1]) if len(_pos) > 1 else START + dt.timedelta(days=1)
 
 GROUPS = ([(f'ws{t}', t * 60) for t in range(1, 28)]
           + [('ws30', 30 * 60), ('ws45', 45 * 60), ('ws60', 60 * 60)]
@@ -101,28 +105,49 @@ def main():
             ovr[n] = override(tf_s, sp, mode)
             names.append(n)
     J = cache_jig_perline(END_MS, HOURS, WARMUP, ovr,
-                          pxs_cfg={'src': sysr['s'], 'len': sysr['l']}, rebuild=False)
-    ts = np.asarray(J.ts); W = J.W
+                          pxs_cfg={'src': sysr['s'], 'len': sysr['l']}, rebuild=False) \
+        if not PX.ON else None
+    if PX.ON:
+        # THE LINES ARE ALREADY BUILT, on the smoothed price, by build_pxs_line_cache.py. ovr here
+        # is constructed exactly as that script constructs it - same GROUPS, same five shared
+        # mech_line_config specs - so the filenames match. Nothing is rebuilt.
+        from optimus9.orchestration.rpl_cache import _line_key as _lk, _tape_key as _tk
+        _key = lambda n: os.path.join(PX.LINE_DIR, _lk(PX.PXS_END_MS, PX.PXS_HOURS,
+                                                       PX.PXS_WARMUP, ovr[n]) + '.npy')
+        ts = np.load(os.path.join(PX.TAPE_DIR, _tk(PX.PXS_END_MS, PX.PXS_HOURS, PX.PXS_WARMUP,
+                     {'src': sysr['s'], 'len': PX.DEMA}) + '.npz'))['__ts__']
+        V = {n: np.load(_key(n)) for n in names}
+    else:
+        ts = np.asarray(J.ts); W = J.W
+        V = {n: np.asarray(W.line(n), float) for n in names}
     i0 = int(np.searchsorted(ts, int(START.timestamp() * 1000)))
     i1 = int(np.searchsorted(ts, int(END.timestamp() * 1000)))
-    V = {n: np.asarray(W.line(n), float) for n in names}
+    # A DAY RUNS 00:00:00 THROUGH THE NEXT DAY'S 00:00:00 INCLUSIVE - 17,281 rows. The pxs tape
+    # ends 08-06 23:59:55 (Joe 0905 "increase the line-cache to the end of 08-06"), so the last
+    # day has no 08-07 00:00:00 bar to close on and comes out one row short. Clamping to the last
+    # bar that exists is the only option that does not move the cache window, which the three
+    # banked pxs knob sets were built against.
+    if i1 > len(ts) - 1:
+        print(f'  last day is short: {END:%Y-%m-%d %H:%M} has no bar; ending at index '
+              f'{len(ts) - 1}', flush=True)
+        i1 = len(ts) - 1
     print(f'  {len(names)} lines, bars {i0} to {i1} = {i1 - i0 + 1:,}', flush=True)
 
     cols = [f'wlb_{COL[g]}{k}' for g, _ in GROUPS for k in KINDS if f'{g}{k}' in V]
     flags = [f'wlb_{COL[g]}_newbar' for g, _ in GROUPS]
-    db.execute('CREATE TABLE IF NOT EXISTS ws_line_bar (\n'
+    db.execute(f'CREATE TABLE IF NOT EXISTS {PX.t("ws_line_bar")} (\n'
                '  wlb_pk BIGINT AUTO_INCREMENT PRIMARY KEY,\n'
                '  wlb_ms BIGINT NOT NULL, wlb_utc DATETIME NOT NULL,\n'
                + ''.join(f'  {c} DOUBLE,\n' for c in cols)
                + ''.join(f'  {c} TINYINT NOT NULL DEFAULT 0,\n' for c in flags)
                + '  UNIQUE KEY uq_wlb (wlb_ms), KEY (wlb_utc))')
-    have = {r['Field'] for r in db.execute('SHOW COLUMNS FROM ws_line_bar', fetch=True)}
+    have = {r['Field'] for r in db.execute(f'SHOW COLUMNS FROM {PX.t("ws_line_bar")}', fetch=True)}
     for c in cols:
         if c not in have:
-            db.execute(f'ALTER TABLE ws_line_bar ADD COLUMN {c} DOUBLE')
+            db.execute(f'ALTER TABLE {PX.t("ws_line_bar")} ADD COLUMN {c} DOUBLE')
     for c in flags:
         if c not in have:
-            db.execute(f'ALTER TABLE ws_line_bar ADD COLUMN {c} TINYINT NOT NULL DEFAULT 0')
+            db.execute(f'ALTER TABLE {PX.t("ws_line_bar")} ADD COLUMN {c} TINYINT NOT NULL DEFAULT 0')
 
     rows = []
     for i in range(i0, i1 + 1):
@@ -137,14 +162,14 @@ def main():
             r.append(1 if sec % tf == 0 else 0)
         rows.append(tuple(r))
     allc = ['wlb_ms', 'wlb_utc'] + cols + flags
-    db.execute('DELETE FROM ws_line_bar WHERE wlb_utc >= %s AND wlb_utc <= %s',
+    db.execute(f'DELETE FROM {PX.t("ws_line_bar")} WHERE wlb_utc >= %s AND wlb_utc <= %s',
                (u(ts[i0]), u(ts[i1])))
     for s in range(0, len(rows), 2000):
-        db.executemany(f'INSERT INTO ws_line_bar ({",".join(allc)}) VALUES '
+        db.executemany(f'INSERT INTO {PX.t("ws_line_bar")} ({",".join(allc)}) VALUES '
                        f'({",".join(["%s"] * len(allc))})', rows[s:s + 2000])
     print(f'  ws_line_bar : {len(rows):,} rows, {len(allc)} columns', flush=True)
 
-    db.execute('''CREATE TABLE IF NOT EXISTS ws_line_cross (
+    db.execute(f'''CREATE TABLE IF NOT EXISTS {PX.t("ws_line_cross")} (
         wlc_pk BIGINT AUTO_INCREMENT PRIMARY KEY,
         wlc_ms BIGINT NOT NULL, wlc_utc DATETIME NOT NULL,
         wlc_group   VARCHAR(8) NOT NULL,    -- ws1..ws6, gcws15, gcws30
@@ -171,12 +196,12 @@ def main():
                 elif A[i - 1] >= B[i - 1] and A[i] < B[i]:
                     cr.append((int(ts[i]), u(ts[i]), g, a, b, 'down',
                                float(A[i]), float(B[i]), float(A[i - 1]), float(B[i - 1])))
-    db.execute('DELETE FROM ws_line_cross WHERE wlc_utc >= %s AND wlc_utc <= %s',
+    db.execute(f'DELETE FROM {PX.t("ws_line_cross")} WHERE wlc_utc >= %s AND wlc_utc <= %s',
                (u(ts[i0]), u(ts[i1])))
     C = ['wlc_ms', 'wlc_utc', 'wlc_group', 'wlc_line', 'wlc_against', 'wlc_dir',
          'wlc_val', 'wlc_level', 'wlc_val_prev', 'wlc_level_prev']
     for s in range(0, len(cr), 2000):
-        db.executemany(f'INSERT INTO ws_line_cross ({",".join(C)}) VALUES '
+        db.executemany(f'INSERT INTO {PX.t("ws_line_cross")} ({",".join(C)}) VALUES '
                        f'({",".join(["%s"] * len(C))})', cr[s:s + 2000])
     print(f'  ws_line_cross : {len(cr):,} rows', flush=True)
     db.disconnect()

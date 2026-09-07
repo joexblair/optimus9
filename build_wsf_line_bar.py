@@ -41,9 +41,19 @@ from optimus9.compute import momo_core as MC
 from optimus9.compute.momo_config import momo_bank, momo_config
 from optimus9.analysis.jig import _stall_rows
 import build_momo_landed as B
+import pxs_mode as PX
+# THE LINE CACHE AND THE WINDOW FOLLOW THE SWITCH. Rebinding the names the file already uses means
+# every _line_key / _tape_key call below reads the pxs cache without being touched.
+if PX.ON:
+    LINE_DIR, TAPE_DIR = PX.LINE_DIR, PX.TAPE_DIR
+    END_MS, HOURS, WARMUP = PX.PXS_END_MS, PX.PXS_HOURS, PX.PXS_WARMUP
 
-WIN_FROM = '2026-08-04 00:00:00'
-WIN_TO   = '2026-08-05 00:00:00'
+
+# THE WINDOW TAKES POSITIONAL DATES, flags skipped. Defaults are unchanged, so a run with no
+# arguments is exactly what it was; the chain needs 08-04, 08-05 and 08-06 built one day each.
+_pos = [z for z in sys.argv[1:] if not z.startswith('-')]
+WIN_FROM = _pos[0] if len(_pos) > 0 else '2026-08-04 00:00:00'
+WIN_TO   = _pos[1] if len(_pos) > 1 else '2026-08-05 00:00:00'
 TFS      = list(range(1, 13))    # ws1r to ws12r. Joe 0826: "wsf is limited to TF12. 13 to 27
 #                                belongs to dtf, which is not our current task". Was TF1 to TF8.
 #                                ADDITIVE: wflb_tf is in the unique key and every verdict is computed
@@ -206,10 +216,14 @@ def _f(x):
 
 def main():
     db = DatabaseManager(**get_db_config()); db.connect()
+    db = PX.wrap(db)   # every table name in this file routes through the switch
     sysr = db.execute('SELECT pxsmooth_dema_src src, pxsmooth_dema_len len, '
                       'hi_boundary hi, lo_boundary lo FROM optimus9_system WHERE sys_pk=1',
                       fetch=True)[0]
-    PXS = {'src': sysr['src'], 'len': sysr['len']}
+    # THE TAPE'S DEMA IS THE RUN'S DEMA. The live optimus9_system value is 2; a --pxs4 run
+    # reads the dema-4 tape, and using the live value here looked for a dema-2 file in the
+    # dema-4 folder.
+    PXS = {'src': sysr['src'], 'len': PX.DEMA if PX.ON else sysr['len']}
     HI, LO = float(sysr['hi']), float(sysr['lo'])
     MFR_HI, MFR_LO = 100.0 - MOMO_FENCE_R, float(MOMO_FENCE_R)   # momo-fence-r, Joe 0820
     sig_bars = {str(x['g']) for x in db.execute(
@@ -220,7 +234,10 @@ def main():
 
     # THE wsf BANK. Every line this file measures is TF1..12, so one bank covers the run -
     # checked, not assumed, because one knob signature must not cover two knob sets.
-    _bk = {tf: momo_bank(db, tf) for tf in TFS}
+    # THE BANK VERSION FOLLOWS THE SWITCH. Joe 0906, option (b): the pxs4 line bar is built at the
+    # knobs the walk filters on, so the two event sets differ only by the price. Close mode passes
+    # None and reads the live bank exactly as before.
+    _bk = {tf: momo_bank(db, tf, version=PX.BANK_VERSION if PX.ON else None) for tf in TFS}
     _ids = {(b['mech'], b['tf_lo'], b['tf_hi'], b['version']) for b in _bk.values()}
     if len(_ids) != 1:
         raise SystemExit(f'TFS {TFS[0]}..{TFS[-1]} spans {len(_ids)} momentum banks: '

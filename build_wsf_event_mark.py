@@ -38,8 +38,37 @@ from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 from optimus9.orchestration.rpl_cache import LINE_DIR, TAPE_DIR, _line_key, _tape_key
 import build_momo_landed as B
 from build_wsf_walk_events import SIG
+import pxs_mode as PX
+# THE LINE CACHE AND THE WINDOW FOLLOW THE SWITCH. Rebinding the names the file already uses means
+# every _line_key / _tape_key call below reads the pxs cache without being touched.
+if PX.ON:
+    LINE_DIR, TAPE_DIR = PX.LINE_DIR, PX.TAPE_DIR
+    END_MS, HOURS, WARMUP = PX.PXS_END_MS, PX.PXS_HOURS, PX.PXS_WARMUP
+
 
 MOMO_TFS = (30, 45, 60)   # the three dtf lines the momentum column reports, in this order
+
+# THE Mage SIGN MASKS. One definition, here, because a second copy is how report_domtf_walk.py
+# forked from momo_g_why - the fault the momo_gated refactor was written to stop.
+#   the character  '+' the lower-numbered line is ABOVE the higher-numbered one, '-' below,
+#                  '0' equal, '.' either value missing
+#   ws1..ws12      12 pairs: g30Mage v ws1Mage, ws1 v ws2, ... ws11 v ws12
+#   ws13..ws30     16 pairs: ws12 v ws13, ws13 v ws14, ... ws26 v ws27, ws27 v ws30. Joe 0904
+#                  "skip them" - ws_line_bar carries no wlb_ws28Mage or wlb_ws29Mage - and Joe
+#                  0904 "start at ws12"
+MASK_LTF_SEQ = ('g30',) + tuple(str(t) for t in range(1, 13))
+MASK_HTF_SEQ = tuple(str(t) for t in range(12, 28)) + ('30',)
+MASK_TAGS = tuple(dict.fromkeys(MASK_LTF_SEQ + MASK_HTF_SEQ))   # every Mage column both need
+MASK_COL = lambda tag: f'wlb_g30Mage' if tag == 'g30' else f'wlb_ws{tag}Mage'
+
+
+def sign_mask(vals, seq):
+    """The mask for one bar. `vals` maps a tag to that Mage line's value or None."""
+    out = []
+    for lo, hi in zip(seq, seq[1:]):
+        a, b = vals.get(lo), vals.get(hi)
+        out.append('.' if a is None or b is None else '+' if a > b else '-' if a < b else '0')
+    return ''.join(out)
 MOMO_SHORT = {'momo': 'mo', 'none': 'no', 'curl': 'cu', 'sideways': 'side'}
 # KNOB-FREE LABEL MAP, Joe 0902: "please use the same mo|no|cu|side outputs". The same four short
 # forms the printed reports use, so a value read from the table and a value read from a report are
@@ -69,6 +98,15 @@ DDL = '''CREATE TABLE IF NOT EXISTS wsf_event_mark (
     wem_momo_30_45_60 VARCHAR(40),        -- ws30r / ws45r / ws60r, read at wem_utc, at wem_dr
     --                                   values mo | no | cu | side, Joe 0902 "please use the same
     --                                   mo|no|cu|side outputs". Longest is 'side / side / side'
+    -- THE Mage SIGN MASKS, READ AT THE EXHAUST BAR. Joe 0904: "add the ws13..30 and ws1..12 sign
+    -- mask columns to the wsf_event_mark report". Read at wem_utc, the same anchor
+    -- wem_momo_30_45_60 uses. A mask has no dr in it - it only compares two Mage lines.
+    wem_mask_ws1_12   VARCHAR(24),        -- 12 chars. g30Mage v ws1Mage, then each adjacent pair
+    --                                   up to ws11 v ws12
+    wem_mask_ws13_30  VARCHAR(24),        -- 16 chars. ws12 v ws13, then each adjacent pair up to
+    --                                   ws26 v ws27, then ws27 v ws30. ws28 and ws29 have no
+    --                                   column on ws_line_bar - Joe 0904 "skip them" - and Joe
+    --                                   0904 "start at ws12" is why the run opens at ws12
     -- JOE'S COLUMNS. Empty on write, his alone.
     wem_verdict   VARCHAR(16),            -- his call on the trade
     wem_words     VARCHAR(500),           -- his words
@@ -111,7 +149,7 @@ def fill_momo(db):
     sy = db.execute('SELECT pxsmooth_dema_src s, pxsmooth_dema_len l FROM optimus9_system '
                     'WHERE sys_pk=1', fetch=True)[0]
     ts = np.load(os.path.join(TAPE_DIR, _tape_key(END_MS, HOURS, WARMUP,
-                 {'src': sy['s'], 'len': sy['l']}) + '.npz'))['__ts__']
+                 {'src': sy['s'], 'len': PX.DEMA if PX.ON else sy['l']}) + '.npz'))['__ts__']
     R = {tf: np.load(os.path.join(LINE_DIR, _line_key(END_MS, HOURS, WARMUP,
          override(tf * 60, KLine(**B.R_SPEC), 'emerging')) + '.npy')) for tf in MOMO_TFS}
     # THE BAR INDEX COMES FROM THE TAPE'S OWN ts. Not len(npy)-len(rows), which put a read 77,759
@@ -148,10 +186,57 @@ def fill_momo(db):
     print(f'  wem_momo_30_45_60 : filled {len(upd)} of {len(todo)} rows', flush=True)
 
 
+def fill_masks(db):
+    """The two Mage sign-mask columns, for every row that has not got them yet.
+
+    Joe 0904: "add the ws13..30 and ws1..12 sign mask columns to the wsf_event_mark report".
+
+    READ AT wem_utc, the exhaust bar - the same anchor wem_momo_30_45_60 already uses on this
+    table. A mask carries no dr: it only asks which of two Mage lines is on top.
+
+    ADDS ONLY, the same shape as fill_momo. It creates the columns if absent, fills only rows
+    where they are NULL, and never rewrites a row. Safe against the refuse-guard.
+    """
+    have = {r['Field'] for r in db.execute('SHOW COLUMNS FROM wsf_event_mark', fetch=True)}
+    for col in ('wem_mask_ws1_12', 'wem_mask_ws13_30'):
+        if col not in have:
+            db.execute(f'ALTER TABLE wsf_event_mark ADD COLUMN {col} VARCHAR(24)')
+            print(f'  wsf_event_mark : added column {col}', flush=True)
+    todo = db.execute('SELECT wem_pk pk, wem_utc u FROM wsf_event_mark '
+                      'WHERE wem_mask_ws1_12 IS NULL OR wem_mask_ws13_30 IS NULL '
+                      'ORDER BY wem_utc', fetch=True)
+    if not todo:
+        print('  wem_mask_ws1_12 / wem_mask_ws13_30 : every row already carries a value',
+              flush=True)
+        return
+    cols = ', '.join(f'{MASK_COL(t)} `{t}`' for t in MASK_TAGS)
+    lo, hi = min(r['u'] for r in todo), max(r['u'] for r in todo)
+    bars = {r['wlb_utc']: r for r in db.execute(
+        f"SELECT wlb_utc, {cols} FROM ws_line_bar WHERE wlb_utc >= %s AND wlb_utc <= %s",
+        (lo, hi), fetch=True)}
+    upd, miss = [], []
+    for r in todo:
+        row = bars.get(r['u'])
+        if row is None:
+            miss.append(str(r['u']))
+            continue
+        v = {t: (None if row[t] is None else float(row[t])) for t in MASK_TAGS}
+        upd.append((sign_mask(v, MASK_LTF_SEQ), sign_mask(v, MASK_HTF_SEQ), r['pk']))
+    if miss:
+        print(f'  {len(miss)} rows have no bar on ws_line_bar and are left NULL: '
+              f'{miss[:5]}{" ..." if len(miss) > 5 else ""}', flush=True)
+    db.executemany('UPDATE wsf_event_mark SET wem_mask_ws1_12=%s, wem_mask_ws13_30=%s '
+                   'WHERE wem_pk=%s', upd)
+    print(f'  wem_mask_ws1_12 / wem_mask_ws13_30 : filled {len(upd)} of {len(todo)} rows',
+          flush=True)
+
+
 def main():
     db = DatabaseManager(**get_db_config()); db.connect()
+    db = PX.wrap(db)   # every table name in this file routes through the switch
     db.execute(DDL)
     fill_momo(db)          # BEFORE the refuse guard - it adds a column, it never rewrites a row
+    fill_masks(db)         # the same - adds columns and fills NULLs, never rewrites
     run = SRC_RUN
     if run is None:
         got = db.execute('SELECT MAX(wee_run) r FROM wsf_exhaust_event WHERE wee_knobs=%s',
@@ -208,13 +293,20 @@ def main():
     print("     WHERE (wem_knobs, wem_run) = (SELECT wem_knobs, wem_run FROM wsf_event_mark")
     print("                                    ORDER BY wem_created DESC LIMIT 1)")
     print("     ORDER BY wem_utc;\n")
+    # THE MASKS ARE READ BACK, not recomputed here - fill_masks banked them a moment ago, so the
+    # printed report and the table cannot drift apart.
+    mk = {(r['u'], r['d']): r for r in db.execute(
+        'SELECT wem_utc u, wem_dr d, wem_mask_ws1_12 a, wem_mask_ws13_30 b FROM wsf_event_mark '
+        'WHERE wem_knobs=%s AND wem_run=%s', (SIG, run), fetch=True)}
     print(f"  {'seq':>4} {'bar':<10}{'dr':>3}  {'declared by':<12}{'line':<6}{'route':<11}"
-          f"{'trade':<10}{'lag':>7}{'px at trade':>13}  verdict")
+          f"{'trade':<10}{'lag':>7}{'px at trade':>13}  {'ws1..ws12':<14}{'ws13..ws30':<18}verdict")
     for v in vals:
         lg = int(v[11]); px = v[12]
+        m = mk.get((v[4], v[5]), {})
         print(f"  {v[3]:>4} {str(v[4])[11:]:<10}{v[5]:>+3}  {v[6]:<12}ws{v[8]:<4}{v[9]:<11}"
               f"{str(v[10])[11:]:<10}{f'{lg//60}m{lg%60:02d}s':>7}"
-              f"{(f'{px:.6f}' if px is not None else '-'):>13}  -")
+              f"{(f'{px:.6f}' if px is not None else '-'):>13}  "
+              f"{(m.get('a') or '-'):<14}{(m.get('b') or '-'):<18}-")
     db.disconnect()
     return 0
 

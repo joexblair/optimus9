@@ -40,9 +40,19 @@ from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 from optimus9.orchestration.rpl_cache import LINE_DIR, TAPE_DIR, _line_key, _tape_key
 from optimus9.analysis.jig import (weak_mage_tf_series, WMT_LOOKBACK_S,
                                    WMT_TF_LO, WMT_TF_HI)
+import pxs_mode as PX
+# THE LINE CACHE AND THE WINDOW FOLLOW THE SWITCH. Rebinding the names the file already uses means
+# every _line_key / _tape_key call below reads the pxs cache without being touched.
+if PX.ON:
+    LINE_DIR, TAPE_DIR = PX.LINE_DIR, PX.TAPE_DIR
+    END_MS, HOURS, WARMUP = PX.PXS_END_MS, PX.PXS_HOURS, PX.PXS_WARMUP
 
-WIN_FROM = '2026-08-04 00:00:00'
-WIN_TO   = '2026-08-05 00:00:00'
+
+# THE WINDOW TAKES POSITIONAL DATES, flags skipped. Defaults are unchanged, so a run with no
+# arguments is exactly what it was; the chain needs 08-04, 08-05 and 08-06 built one day each.
+_pos = [z for z in sys.argv[1:] if not z.startswith('-')]
+WIN_FROM = _pos[0] if len(_pos) > 0 else '2026-08-04 00:00:00'
+WIN_TO   = _pos[1] if len(_pos) > 1 else '2026-08-05 00:00:00'
 TFS      = list(range(1, 13))
 DRS      = (+1, -1)
 GRID_S   = 5
@@ -119,9 +129,10 @@ def travel(a, i0, i1):
 
 def main():
     db = DatabaseManager(**get_db_config()); db.connect()
+    db = PX.wrap(db)   # every table name in this file routes through the switch
     sysr = db.execute('SELECT pxsmooth_dema_src src, pxsmooth_dema_len len '
                       'FROM optimus9_system WHERE sys_pk=1', fetch=True)[0]
-    PXS = {'src': sysr['src'], 'len': sysr['len']}
+    PXS = {'src': sysr['src'], 'len': PX.DEMA if PX.ON else sysr['len']}   # the run's dema
 
     # THE SPEC IS SHARED ACROSS THE LADDER, Joe 0826: "the configs are shared across the board -
     # use the wsf r,b,x,m,Mage configs". mech_line_config only carries wsf rows for TF1-8, so the

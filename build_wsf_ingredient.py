@@ -31,6 +31,7 @@ import datetime as dt
 
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
+import pxs_mode as PX
 
 DDL = '''CREATE TABLE IF NOT EXISTS wsf_ingredient (
     wig_pk        BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -103,6 +104,7 @@ COLS = ['wig_num','wig_name','wig_home','wig_source','wig_read','wig_note',
 
 def main():
     db = DatabaseManager(**get_db_config()); db.connect()
+    db = PX.wrap(db)   # every table name in this file routes through the switch
     db.execute(DDL)
     now = dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
