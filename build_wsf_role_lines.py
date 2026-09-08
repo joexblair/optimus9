@@ -13,7 +13,8 @@ registered properly, delete its entry here rather than leaving two sources for t
 
 THE SPECS COME FROM mech_lines(db, 'wsf'), not from literals, so a role respec moves these lines
 with every other wsf line. The one exception is `r`, which build_momo_landed owns as R_SPEC and
-which mech_lines reports identically — asserted at import so the two cannot drift silently.
+which mech_lines reports identically. overrides_for() asserts the two agree on every build, so
+they cannot drift silently.
 
 THE CACHE KEY is build_ws_lines' END_MS / HOURS / WARMUP. Move the window there and this script
 rebuilds against the new key on its next run; the old files keep their own names and are not
