@@ -61,7 +61,18 @@ from optimus9.orchestration.rpl_cache import cache_jig_perline
 #     ws60x                   0      0.000e+00                0          0          0
 # The values are NOT bit-identical - a different warmup start leaves float residue in the
 # recursion. No CONSUMED reading changes: 0 sign flips against hi 85 / lo 15, 0 crossing changes.
-TAPE_END = dt.datetime(2026, 8, 19, 12, 0, tzinfo=timezone.utc)
+#
+# TAPE_END MOVED AGAIN 0908, Joe: "extend the line cache to 09-08 00:00". WAS 2026-08-19 12:00.
+# 00:00 AND NOT 12:00, AGAINST THE CONVENTION ABOVE - Joe chose it explicitly when the cost was put
+# to him. The last bar is 2026-09-07 23:59:55, so 09-07 holds 17,280 rows, ONE SHORT of the 17,281
+# a full day carries. 09-06 is the last complete day. The 12:00 mirror was not available:
+# kline_collection ends 2026-09-08 06:12:35, which is 5.8 h short of 09-08 12:00.
+# DATA CHECKED BEFORE THE MOVE: 08-19 12:00 -> 09-08 00:00 holds 336,961 rows against 336,961
+# expected at the 5 s grid, 0 non-5 s steps. The extension span has no gaps.
+# THE FRONT SLIDES, as documented above: the window becomes 2026-06-05 12:00 -> 2026-09-07 23:59:55,
+# still 29 days inside kline_collection's 2026-05-07 start. HOURS 40 and WARMUP 1114 unchanged, so
+# the tape stays 1,632,960 bars.
+TAPE_END = dt.datetime(2026, 9, 8, 0, 0, tzinfo=timezone.utc)
 END_MS = int(TAPE_END.timestamp() * 1000)
 HOURS = 40
 WARMUP = 1114
