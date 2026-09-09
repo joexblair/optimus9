@@ -30,3 +30,4 @@ optimus9/orchestration/.rpl_cache/
 # derived numpy archives (Joe 0810) — tape_board.npz alone is 310 MB
 *.npz
 *.npy
+.tf_walk_cache/

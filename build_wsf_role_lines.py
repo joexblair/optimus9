@@ -50,9 +50,13 @@ import build_momo_landed as B
 # added 0906.
 WANTED = {
     **{tf: ('r', 'x', 'm', 'Mage', 'b') for tf in (30, 45, 60, 90, 120)},
-    **{tf: ('r', 'x', 'Mage', 'b') for tf in (11, 12, 13, 14, 16, 17, 18)},
+    **{tf: ('r', 'x', 'm', 'Mage', 'b') for tf in (11, 12, 13, 14, 16, 17, 18)},
+    **{tf: ('r', 'x', 'm', 'Mage', 'b') for tf in (19, 20, 21, 23)},
     **{tf: ('Mage', 'b') for tf in (6, 7, 8, 9, 10, 15)},
 }
+# 0908 ADDED `m` at 11..14 and 16..18, and the whole role set at 19, 20, 21, 23. Joe's TF2-23
+# walk scans every timeframe in that range, and `m` is the x-cross target its terminator uses
+# (x X m). ws22 is a registry line and needs nothing here; 19, 20, 21 and 23 are not registered.
 
 
 def role_specs(db):
