@@ -15,9 +15,14 @@ momo      the report body uses a 10-minute lattice span and momo_slope_min 0.4.
           Joe's eyeballed ~05:36 on 08-25. Re-declare that every time these numbers are quoted.
 
 COLUMNS Joe specified, in his order:
-  utc, line, backstop utc, dr run, dr, r, top mom TF, top, top+1, prev mom, run bars, +1..+4 TF,
+  utc, line, backstop utc, dr run, dr, r, top mom TF, top, top+1, top backstop, prev mom,
+  run bars, +1..+4 TF,
   then mage mask and the two HTF momentum columns on the right.
 
+  top backstop the SAME mech as `backstop utc`, read off ws{top mom TF} instead of ws{line}.
+               NULL when top mom TF is 0. Joe 0910: "add a column that behaves the same as
+               'wdv_backstop_utc'. this new column will print the x-cross timestamp of the
+               wdv_top_mom_tf TF". The column name is a placeholder - Joe has not named it.
   backstop utc THE BACKSTOP. Joe 0910 named it: "change `race utc` to `backstop utc`". The value
                is the impending ws{line} x-cross-race - the first race confirmation strictly after
                the row's bar, at the row's dr. The mech is build_wsf_x_cross's verbatim:
@@ -111,6 +116,11 @@ DDL = '''CREATE TABLE IF NOT EXISTS wsf_dtf_v3 (
     wdv_top_mom_tf INT         NOT NULL,  -- highest TF in 5..23 momentum-true. 0 = none
     wdv_top       DOUBLE       NULL,      -- r of wdv_top_mom_tf. NULL when it is 0
     wdv_top1      DOUBLE       NULL,      -- r of wdv_top_mom_tf + 1. NULL when 0 or above ws23
+    wdv_top_backstop_utc DATETIME NULL,    -- THE SAME MECH AS wdv_backstop_utc, read off
+    --   ws{wdv_top_mom_tf} instead of ws{wdv_line}: the first x-cross-RACE confirmation STRICTLY
+    --   AFTER this row's bar, at this row's dr. NULL when wdv_top_mom_tf is 0 - 0 means no
+    --   timeframe held momentum, it is not a timeframe number and there is no ws0 line.
+    --   PLACEHOLDER NAME, Joe has not named this column. Joe 0910
     wdv_prev_mom  VARCHAR(32)  NULL,      -- '{TF} {verdict} -{mins}m'. NULL when top_mom_tf != 0
     wdv_run_bars  INT          NOT NULL,  -- length of the sideways run this row opens, 5 s bars
     wdv_nx1       VARCHAR(16)  NULL,      -- '{r} ({TF})' for the row's line + 1. Joe 0910
@@ -187,9 +197,16 @@ def race_bars(x, MG, B, bound, dr, xwob=None):
 
 
 def fill_race(db):
-    """Fill wdv_backstop_utc on rows already banked. The column adds a field to existing rows; it does
-    not move them, so it is written in place at the same knob set."""
+    """Fill wdv_backstop_utc and wdv_top_backstop_utc on rows already banked.
+
+    Both are the SAME mech - see race_bars. wdv_backstop_utc reads ws{wdv_line}; wdv_top_backstop_utc
+    reads ws{wdv_top_mom_tf} and is NULL when that is 0. Neither moves a row, so both are written in
+    place at whatever knob set the row already carries, across every bank in the table."""
     have = {c['Field'] for c in db.execute('SHOW COLUMNS FROM wsf_dtf_v3', fetch=True)}
+    if 'wdv_top_backstop_utc' not in have:
+        db.execute('ALTER TABLE wsf_dtf_v3 ADD COLUMN wdv_top_backstop_utc DATETIME NULL '
+                   'AFTER wdv_top1')
+        print('  added wdv_top_backstop_utc after wdv_top1', flush=True)
     if 'wdv_backstop_utc' not in have:
         if 'wdv_race_utc' in have:      # Joe 0910 renamed it. CHANGE keeps every value in place
             db.execute('ALTER TABLE wsf_dtf_v3 CHANGE COLUMN wdv_race_utc wdv_backstop_utc DATETIME NULL')
@@ -204,33 +221,44 @@ def fill_race(db):
     for g in mech_lines(db, 'wsf'):
         if g['role'] not in SPEC:
             _t, s_, m_ = g['override']; SPEC[g['role']] = (s_, m_)
-    rows = db.execute('SELECT wdv_pk, wdv_ms, wdv_line, wdv_dr FROM wsf_dtf_v3 ORDER BY wdv_line, wdv_ms',
-                      fetch=True)
+    rows = db.execute('SELECT wdv_pk, wdv_ms, wdv_line, wdv_dr, wdv_top_mom_tf FROM wsf_dtf_v3 '
+                      'ORDER BY wdv_line, wdv_ms', fetch=True)
     ts = np.load(os.path.join(TAPE_DIR, _tape_key(END_MS, HOURS, WARMUP,
                  {'src': sy['s'], 'len': sy['l']}) + '.npz'))['__ts__']
     L = lambda tf, role: np.load(os.path.join(LINE_DIR, _line_key(END_MS, HOURS, WARMUP,
                          override(tf * 60, *SPEC[role])) + '.npy'))
     print(f'  {len(rows):,} rows   race hold {XRACE} bars, a run spanning {(XRACE - 1) * 5} s   '
           f'boundary {HI:g} / {LO:g}', flush=True)
-    upd, hit = [], {}
-    for tf in sorted({int(r['wdv_line']) for r in rows}):
+    # every timeframe either column has to resolve. top_mom_tf 0 is not a timeframe - it is
+    # excluded here and lands as NULL below.
+    need = ({int(r['wdv_line']) for r in rows}
+            | {int(r['wdv_top_mom_tf']) for r in rows if int(r['wdv_top_mom_tf']) > 0})
+    IX, hit = {}, {}
+    for tf in sorted(need):
         X, MG, B = L(tf, 'x'), L(tf, 'Mage'), L(tf, 'b')
-        ix = {d: np.flatnonzero(race_bars(X, MG, B, HI if d > 0 else LO, d)) for d in (+1, -1)}
-        hit[tf] = {d: len(ix[d]) for d in (+1, -1)}
-        for r in rows:
-            if int(r['wdv_line']) != tf:
-                continue
-            d = int(r['wdv_dr'])
-            if d == 0:
-                continue
-            i0 = int(np.searchsorted(ts, int(r['wdv_ms'])))
-            a = ix[d]
-            q = int(np.searchsorted(a, i0, side='right'))   # STRICTLY after the row bar
-            v = (dt.datetime.fromtimestamp(int(ts[a[q]]) / 1000, tz=timezone.utc)
-                 .strftime('%Y-%m-%d %H:%M:%S')) if q < len(a) else None
-            upd.append((v, int(r['wdv_pk'])))
-    db.executemany('UPDATE wsf_dtf_v3 SET wdv_backstop_utc=%s WHERE wdv_pk=%s', upd)
-    print(f'  wrote {len(upd):,} rows', flush=True)
+        IX[tf] = {d: np.flatnonzero(race_bars(X, MG, B, HI if d > 0 else LO, d)) for d in (+1, -1)}
+        hit[tf] = {d: len(IX[tf][d]) for d in (+1, -1)}
+
+    def nxt(tf, d, i0):
+        """The first race confirmation STRICTLY after bar i0 on ws{tf} at direction d."""
+        a = IX[tf][d]
+        q = int(np.searchsorted(a, i0, side='right'))
+        return (dt.datetime.fromtimestamp(int(ts[a[q]]) / 1000, tz=timezone.utc)
+                .strftime('%Y-%m-%d %H:%M:%S')) if q < len(a) else None
+
+    upd = []
+    for r in rows:
+        d = int(r['wdv_dr'])
+        if d == 0:
+            continue
+        i0 = int(np.searchsorted(ts, int(r['wdv_ms'])))
+        t = int(r['wdv_top_mom_tf'])
+        upd.append((nxt(int(r['wdv_line']), d, i0),
+                    nxt(t, d, i0) if t > 0 else None,
+                    int(r['wdv_pk'])))
+    db.executemany('UPDATE wsf_dtf_v3 SET wdv_backstop_utc=%s, wdv_top_backstop_utc=%s '
+                   'WHERE wdv_pk=%s', upd)
+    print(f'  wrote {len(upd):,} rows, both backstop columns', flush=True)
     for tf in sorted(hit):
         print(f'    ws{tf:<3} race confirmations on the cache: dr +1 {hit[tf][+1]:>6,}   '
               f'dr -1 {hit[tf][-1]:>6,}', flush=True)

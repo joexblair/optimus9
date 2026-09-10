@@ -264,6 +264,38 @@ Seconds from the row bar to the impending race: min 5, mean 642.8, max 7,905.
 **The race hold of 5 bars is NOT in the unique key.** A different race xwob overwrites this column
 instead of landing beside it.
 
+### The top-momentum backstop column
+
+Joe 0910: *"add a column that behaves the same as 'wdv_backstop_utc'. this new column will print
+the x-cross timestamp of the wdv_top_mom_tf TF"*. Column `wdv_top_backstop_utc`, `AFTER wdv_top1`.
+
+**The mech is identical** — the first x-cross-race confirmation strictly after the row's bar, at
+the row's own dr. The only change is the line it reads: ws{`wdv_top_mom_tf`} instead of
+ws{`wdv_line`}. NULL when `wdv_top_mom_tf` is 0, because 0 means no timeframe held momentum; it is
+not a timeframe number and there is no ws0.
+
+**THE COLUMN NAME IS A PLACEHOLDER.** Joe has not named it. `wdv_top_backstop_utc` is built from
+his word "backstop" plus the table's existing `wdv_top`. `AFTER wdv_top1` is also mine — he gave
+no position.
+
+**Two verifications had no rows to compare, and that is recorded rather than skipped:**
+
+- no row in the table has its own `wdv_line` equal to its `wdv_top_mom_tf`, so a direct equality
+  check against `wdv_backstop_utc` had 0 rows
+- a self-join on same knob set, same bar, same dr, where one row's line is another row's top mom
+  TF, matched 0 pairs. The table holds one row per line per dr run, so rows almost never share a
+  bar
+
+**Proven instead by independent replication.** A plain Python loop replicating
+`build_wsf_x_cross.held` verbatim — separate code from the vectorised `race_bars` the column is
+filled with — was run on a 20-row sample spread across the 1,023 rows that carry a real
+`wdv_top_mom_tf`. **20 of 20 match.** That covers the plumbing (the column reads the top-momentum
+timeframe, not the row's own line) on top of the earlier `wsf_x_cross` proof of the mech itself.
+
+**Filled in place** across both banks: 1,219 rows, 196 NULL, and those 196 are exactly the rows
+with `wdv_top_mom_tf` = 0. No row with a real top-momentum timeframe is missing a value, and none
+lands at or before its own bar. Seconds from the row bar: min 5, mean 921.8, max 8,030.
+
 ### The mask mech
 
 `build_wsf_event_mark.sign_mask`. One character per ADJACENT PAIR in the sequence: `+` the lower
