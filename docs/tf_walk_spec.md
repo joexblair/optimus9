@@ -267,9 +267,12 @@ From that bar:
 
 1. walk forward, **no cap**, to the first bar ws1Mage's consecutive-oob run reaches 3 bars = 15 s.
    oob is the dr-side boundary: 85.0 at dr +1, 15.0 at dr -1.
-2. the SIGNAL is the first bar **strictly after** that, where gcws{30|15}Mage crosses the same
-   boundary in the dr direction — dr +1 crosses DOWN through 85.0, dr -1 crosses UP through 15.0.
-3. no confirmation hold on that crossing.
+2. at gate `rev`, find the first **ws1Mage reversal** at or after that bar — `_mage_rev(ws1Mage, 2)`,
+   2 consecutive same-direction 5 s bars. At gate `off` this step is skipped.
+3. the SIGNAL is the first bar **strictly after** the anchor (the reversal at `rev`, the dwell bar
+   at `off`), where gcws{30|15}Mage crosses the same boundary in the dr direction — dr +1 crosses
+   DOWN through 85.0, dr -1 crosses UP through 15.0.
+4. no confirmation hold on that crossing.
 
 ### Provenance
 
@@ -284,20 +287,44 @@ From that bar:
 | confirmation hold | none | Joe was offered one 0910 and did not take it |
 | signal strictly after the dwell bar | yes | **MINE.** It is what reproduces the three timestamps Joe read |
 | modes | `g30` = gcws30 lines, `g15` = gcws15 lines | Joe 0910 *"add a mode that uses gcws15 in place of gcws30, to make the signals more surgical"*. ws1Mage and the boundary are the same in both |
+| gates | `off` = no reversal step, `rev` = the signal must follow one | Joe 0910 *"apply the first two items"*. Both banks are kept |
+| reversal | `_mage_rev(ws1Mage, 2)` — 2 consecutive same-direction 5 s bars | Joe 0910 *"use a reversal wob of 2 for ws1Mage"* |
+| reversal at or after the dwell bar | yes | **MINE.** Joe gave no rule on where the reversal sits relative to the dwell |
+| reversal direction | not filtered — an up-turn and a down-turn both count | **MINE.** Joe said "ws1 Mage reversing" and never ruled on direction |
 
-### DROPPED AND OPEN — two components of Joe's first description are not in this mechanic
+### The reversal step, and how little it filters
 
-Joe 0910 first described it as: *"ws1 Mage reversing, followed by gcws30 x cross m when gcws30Mage
-is closer to 50"*, then *"use a reversal wob of 2 for ws1Mage. if the gcws15 x-cross-m happens
-inside a lookback period of 15 seconds from the ws1Mage's reversal, accept the gcws30 signal"*.
+**MEASURED:** `_mage_rev(ws1Mage, 2)` fires **360,738** times on the cache's 1,632,960 bars — one
+every 4.5 bars, one every ~23 seconds. A step that only requires "a reversal" filters almost
+nothing. It moved 47 of 565 hand-offs at `g30` and 65 of 565 at `g15`, and none of the three
+hand-offs Joe read.
 
-Neither the **ws1Mage reversal at wob 2** nor the **gcws15 x-cross-m 15-second lookback** is in
-the construction he read and passed. They dropped out when the reporting moved to listing crosses.
-They are NOT rejected. They are unresolved, and the banked table has no column for either.
+### STILL HELD — the gcws15 x-cross-m 15-second lookback
 
-The 15-second lookback also never had its direction ruled — whether the gcws15 cross must land
-within 15 s AFTER the reversal, or whether the 15 s is looked BACK from the cross. The two
-readings agree at the 00:45:30 and 01:50:00 hand-offs and disagree at 03:24:00.
+Joe 0910: *"I'm not sure about lookback direction - expand on it please"*. Not applied, not banked.
+
+**A CORRECTION TO WHAT WAS WRITTEN HERE BEFORE.** The earlier note called the split "cross within
+15 s after the reversal" against "look back 15 s from the cross". Those are the same condition
+described from the two ends, not two readings. The real split is which event LEADS, and it sits
+inside Joe's own two sentences:
+
+| reading | window | which event leads | Joe's words it fits |
+|---|---|---|---|
+| cross follows the reversal | cross bar in [reversal, reversal + 15 s] | ws1Mage turns, then gcws15 crosses | *"ws1 Mage reversing, **followed by** gcws30 x cross m"* |
+| cross precedes the reversal | cross bar in [reversal − 15 s, reversal] | gcws15 crosses, then ws1Mage turns | *"inside a **lookback** period of 15 seconds **from** the ws1Mage's reversal"* |
+
+Both are causal. Both use 15 s = 3 bars. Measured over all 565 hand-offs at `g30`, against the
+ungated reversal step:
+
+| gate | signals | no signal | mean min | median min | same as ungated |
+|---|---|---|---|---|---|
+| every reversal counts | 565 | 0 | 24.69 | 11.00 | 565 |
+| cross follows the reversal | 565 | 0 | 25.27 | 12.67 | 471 |
+| cross precedes the reversal | 565 | 0 | 25.22 | 12.00 | 520 |
+| cross either side | 565 | 0 | 24.78 | 11.50 | 557 |
+
+Neither reading loses a hand-off. "Cross follows" moves 94 of 565; "cross precedes" moves 45. The
+three hand-offs Joe read are identical under all four, so they cannot separate the readings.
 
 ### The three hand-offs Joe read
 
@@ -310,9 +337,22 @@ readings agree at the 00:45:30 and 01:50:00 hand-offs and disagree at 03:24:00.
 | 03:24:00 | +1 | g30 | 03:31:45 | 03:33:50 | 9.83 | 83.07 |
 | 03:24:00 | +1 | g15 | 03:31:45 | 03:33:20 | 9.33 | 84.38 |
 
-The g30 column reproduces the three timestamps Joe passed.
+The g30 column reproduces the three timestamps Joe passed. At gate `rev` all six rows keep the
+same signal; the reversals they run through are 00:45:35, 01:50:05 and 03:32:10.
 
 ### Result, first run
+
+| item | g30 off | g30 rev | g15 off | g15 rev |
+|---|---|---|---|---|
+| knob set | `mb_g30_dw3_hold0_srcv3` | `mb_g30_dw3_hold0_rev2_srcv3` | `mb_g15_dw3_hold0_srcv3` | `mb_g15_dw3_hold0_rev2_srcv3` |
+| rows | 565 | 565 | 565 | 565 |
+| hand-offs with no signal | 0 | 0 | 0 | 0 |
+| signal minutes, min | 0.08 | 0.17 | 0.08 | 0.17 |
+| signal minutes, mean | 24.30 | 24.69 | 23.88 | 24.28 |
+| signal minutes, max | 219.17 | 219.17 | 218.92 | 218.92 |
+| hand-offs moved by the reversal step | - | 47 | - | 65 |
+
+The earlier two-column figures, kept for the record:
 
 | item | g30 | g15 |
 |---|---|---|
@@ -332,9 +372,9 @@ hand-offs Joe read, and its mean over all 565 is 0.42 minutes earlier than g30's
 ### Open
 
 1. Name the mechanic.
-2. Rule whether the ws1Mage reversal at wob 2 belongs in it.
-3. Rule whether the gcws15 x-cross-m 15-second lookback belongs in it, and which direction the
-   15 s runs.
+2. Rule the ws1Mage reversal DIRECTION — an up-turn and a down-turn both count today.
+3. Rule which event leads in the 15-second lookback. Held on Joe 0910: *"I'm not sure about
+   lookback direction"*.
 4. Rule the ws1Mage oob dwell floor. 3 bars = 15 s is the smallest value satisfying Joe's sentence,
    not a value he gave.
 5. Joe 0910: *"this new mech doesn't have a specific job at present"* — it consumes wsf-dtf-v3

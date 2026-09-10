@@ -20,11 +20,23 @@ MODES. Joe 0910: "add a mode that uses gcws15 in place of gcws30, to make the si
 surgical". `g30` uses gcws30Mage/x/m (30 s); `g15` uses gcws15Mage/x/m (15 s). ws1Mage and the
 boundary are the same in both. The mode is in the knob string, so the two banks sit side by side.
 
-NOT IN THIS MECHANIC, AND OPEN. Joe's first description of it had two more components:
-  - ws1Mage reversing, _mage_rev(ws1Mage, 2) - 2 consecutive same-direction 5 s bars
-  - a gcws15 x-cross-m inside a 15-second lookback of that reversal
-Neither is in the construction Joe read and passed on 0910. They dropped out when the reporting
-moved to listing crosses. They are NOT silently rejected - they are unresolved.
+THE REVERSAL STEP. Joe 0910 asked for it: "apply the first two items". GATE 'rev' inserts it -
+the signal must fall STRICTLY AFTER a ws1Mage reversal, _mage_rev(ws1Mage, 2) = 2 consecutive
+same-direction 5 s bars, that itself sits AT OR AFTER the dwell bar. GATE 'off' is the earlier
+bank without it, kept beside this one.
+
+  MEASURED, and it matters: _mage_rev(ws1Mage, 2) fires 360,738 times on the cache's 1,632,960
+  bars - one every 4.5 bars = every ~23 s. A step that only requires "a reversal" filters almost
+  nothing.
+
+  REVERSAL DIRECTION IS NOT FILTERED. Joe said "ws1 Mage reversing" and never said whether an
+  up-turn and a down-turn both count. Both count here. THAT IS MINE and it is open.
+
+STILL NOT IN THIS MECHANIC. The gcws15 x-cross-m inside a 15-second lookback of the reversal is
+NOT applied. Joe 0910: "I'm not sure about lookback direction". The two readings - the cross
+FOLLOWING the reversal within 15 s, or PRECEDING it within 15 s - move 94 and 45 of the 565
+hand-offs off the ungated answer respectively, and neither changes the three hand-offs Joe read.
+Held until he rules.
 
 THE DWELL FLOOR IS MINE. Joe 0910: "ws1Mage needs to be oob for longer than the 03:29:20 dwell".
 That dwell measured 2 bars = 10 s, so any run of 3 bars = 15 s or more satisfies him. 3 is the
@@ -44,11 +56,14 @@ import numpy as np
 
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
+from optimus9.analysis.lr_v2 import _mage_rev
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP, line_names, overrides, PREFIXES
 from optimus9.orchestration.rpl_cache import LINE_DIR, TAPE_DIR, _line_key, _tape_key
 
 DWELL   = 3           # ws1Mage oob run, bars = 15 s. MINE - smallest run longer than 10 s
 HOLD    = 0           # confirmation bars on the boundary crossing. Joe declined one 0910
+REV_WOB = 2           # ws1Mage reversal, bars = 10 s. Joe 0910
+GATES   = ['off', 'rev']   # 'off' = no reversal step; 'rev' = the signal must follow one
 MODES   = ['g30', 'g15']
 LINEOF  = {'g30': 'gcws30', 'g15': 'gcws15'}
 SRC_KNOBS = 'v3_sp10_sl0.4_f25.75_drws1Mage.ws13m_bv1'   # the wsf_dtf_v3 bank the hand-offs come from
@@ -57,6 +72,8 @@ DDL = '''CREATE TABLE IF NOT EXISTS mage_boundary_signal (
     mbs_pk        BIGINT AUTO_INCREMENT PRIMARY KEY,
     mbs_knobs     VARCHAR(160) NOT NULL,  -- every knob that moves a row. First part of the key
     mbs_mode      VARCHAR(8)   NOT NULL,  -- 'g30' = gcws30 lines, 'g15' = gcws15 lines
+    mbs_gate      VARCHAR(8)   NOT NULL,  -- 'off' = no reversal step, 'rev' = signal follows one
+    mbs_rev_utc   DATETIME     NULL,      -- the ws1Mage reversal the signal follows. NULL at 'off'
     mbs_handoff_utc DATETIME   NOT NULL,  -- the wsf_dtf_v3 row bar this walk starts from
     mbs_handoff_ms  BIGINT     NOT NULL,
     mbs_src_line  INT          NOT NULL,  -- wsf_dtf_v3.wdv_line, the timeframe in minutes
@@ -73,13 +90,14 @@ DDL = '''CREATE TABLE IF NOT EXISTS mage_boundary_signal (
     UNIQUE KEY u_row (mbs_knobs, mbs_handoff_utc, mbs_src_line),
     KEY k_ms (mbs_handoff_ms), KEY k_mode (mbs_mode, mbs_dr))'''
 
-COLS = ['mbs_knobs', 'mbs_mode', 'mbs_handoff_utc', 'mbs_handoff_ms', 'mbs_src_line', 'mbs_dr',
-        'mbs_dwell_utc', 'mbs_dwell_min', 'mbs_sig_utc', 'mbs_sig_min',
+COLS = ['mbs_knobs', 'mbs_mode', 'mbs_gate', 'mbs_rev_utc', 'mbs_handoff_utc', 'mbs_handoff_ms',
+        'mbs_src_line', 'mbs_dr', 'mbs_dwell_utc', 'mbs_dwell_min', 'mbs_sig_utc', 'mbs_sig_min',
         'mbs_mage', 'mbs_x', 'mbs_m', 'mbs_ws1mage', 'mbs_n_cross']
 
 
-def knobs(mode):
-    return f'mb_{mode}_dw{DWELL}_hold{HOLD}_srcv3'
+def knobs(mode, gate):
+    g = '' if gate == 'off' else f'_rev{REV_WOB}'
+    return f'mb_{mode}_dw{DWELL}_hold{HOLD}{g}_srcv3'
 
 
 def runs_ge(mask, n):
@@ -102,6 +120,15 @@ def main(show=False):
     t0 = time.time()
     db = DatabaseManager(**get_db_config()); db.connect()
     db.execute(DDL)
+    # ADDITIVE MIGRATION for a table built before the reversal step existed. The 1,130 rows banked
+    # 0910 were built WITHOUT it, so 'off' is what they are - the default states that, it does not
+    # overwrite anything. Nothing is dropped.
+    have = {r['Field'] for r in db.execute('SHOW COLUMNS FROM mage_boundary_signal', fetch=True)}
+    if 'mbs_gate' not in have:
+        db.execute("ALTER TABLE mage_boundary_signal "
+                   "ADD COLUMN mbs_gate VARCHAR(8) NOT NULL DEFAULT 'off' AFTER mbs_mode, "
+                   "ADD COLUMN mbs_rev_utc DATETIME NULL AFTER mbs_gate")
+        print('  migrated: mbs_gate + mbs_rev_utc added, existing rows marked gate=off', flush=True)
     if show:
         for r in db.execute('SELECT mbs_knobs k, COUNT(*) n, SUM(mbs_sig_utc IS NULL) miss, '
                             'MIN(mbs_handoff_utc) lo, MAX(mbs_handoff_utc) hi, AVG(mbs_sig_min) am '
@@ -127,10 +154,16 @@ def main(show=False):
     # oob on arrival can satisfy the floor at the hand-off bar itself. THAT IS MINE.
     dwell_ok = {+1: np.flatnonzero(runs_ge(G1 >= HI, DWELL)),
                 -1: np.flatnonzero(runs_ge(G1 <= LO, DWELL))}
+    # THE REVERSAL BARS. Direction is NOT filtered - an up-turn and a down-turn both count.
+    # Joe said "ws1 Mage reversing" and never ruled on direction. THAT IS MINE and it is open.
+    REV = np.flatnonzero(_mage_rev(G1, REV_WOB) != 0)
 
     print(f'  source {SRC_KNOBS}: {len(src):,} hand-offs', flush=True)
     print(f'  ws1Mage oob dwell floor {DWELL} bars = {DWELL * 5} s   boundary {HI:g} / {LO:g}   '
           f'crossing hold {HOLD}', flush=True)
+
+    print(f'  ws1Mage reversals at wob {REV_WOB} bars = {REV_WOB * 5} s: {len(REV):,} on '
+          f'{len(ts):,} bars = one every {len(ts) / max(1, len(REV)):.1f} bars', flush=True)
 
     for mode in MODES:
         g = LINEOF[mode]
@@ -139,43 +172,55 @@ def main(show=False):
         sig_ix = {+1: cross_idx(MA, HI, -1), -1: cross_idx(MA, LO, +1)}
         any_ix = {+1: np.sort(np.concatenate([cross_idx(MA, HI, -1), cross_idx(MA, HI, +1)])),
                   -1: np.sort(np.concatenate([cross_idx(MA, LO, +1), cross_idx(MA, LO, -1)]))}
-        K = knobs(mode)
-        out = []
-        for r in src:
-            dr = int(r['wdv_dr'])
-            if dr == 0:
-                continue
-            i0 = int(np.searchsorted(ts, int(r['wdv_ms'])))
-            dw = dwell_ok[dr]
-            p = int(np.searchsorted(dw, i0))
-            ib = int(dw[p]) if p < len(dw) else None
-            sg = None
-            if ib is not None:
-                s = sig_ix[dr]
-                q = int(np.searchsorted(s, ib, side='right'))     # STRICTLY after the dwell bar
-                sg = int(s[q]) if q < len(s) else None
-            nc = None
-            if sg is not None:
-                a = any_ix[dr]
-                nc = int(np.searchsorted(a, sg, side='right') - np.searchsorted(a, i0, side='right'))
-            out.append((K, mode, r['wdv_utc'], int(r['wdv_ms']), int(r['wdv_line']), dr,
-                        None if ib is None else u(ib).strftime('%Y-%m-%d %H:%M:%S'),
-                        None if ib is None else round((int(ts[ib]) - int(r['wdv_ms'])) / 60000, 4),
-                        None if sg is None else u(sg).strftime('%Y-%m-%d %H:%M:%S'),
-                        None if sg is None else round((int(ts[sg]) - int(r['wdv_ms'])) / 60000, 4),
-                        None if sg is None else round(float(MA[sg]), 2),
-                        None if sg is None else round(float(XV[sg]), 2),
-                        None if sg is None else round(float(MV[sg]), 2),
-                        None if sg is None else round(float(G1[sg]), 2), nc))
+        for gate in GATES:
+            K = knobs(mode, gate)
+            out = []
+            for r in src:
+                dr = int(r['wdv_dr'])
+                if dr == 0:
+                    continue
+                i0 = int(np.searchsorted(ts, int(r['wdv_ms'])))
+                dw = dwell_ok[dr]
+                p = int(np.searchsorted(dw, i0))
+                ib = int(dw[p]) if p < len(dw) else None
+                rb, sg = None, None
+                if ib is not None:
+                    anchor = ib
+                    if gate == 'rev':
+                        # the first reversal AT OR AFTER the dwell bar. MINE - Joe gave no rule
+                        q = int(np.searchsorted(REV, ib, side='left'))
+                        rb = int(REV[q]) if q < len(REV) else None
+                        anchor = rb
+                    if anchor is not None:
+                        s = sig_ix[dr]
+                        q = int(np.searchsorted(s, anchor, side='right'))   # STRICTLY after it
+                        sg = int(s[q]) if q < len(s) else None
+                nc = None
+                if sg is not None:
+                    a = any_ix[dr]
+                    nc = int(np.searchsorted(a, sg, side='right')
+                             - np.searchsorted(a, i0, side='right'))
+                out.append((K, mode, gate,
+                            None if rb is None else u(rb).strftime('%Y-%m-%d %H:%M:%S'),
+                            r['wdv_utc'], int(r['wdv_ms']), int(r['wdv_line']), dr,
+                            None if ib is None else u(ib).strftime('%Y-%m-%d %H:%M:%S'),
+                            None if ib is None else round((int(ts[ib]) - int(r['wdv_ms'])) / 60000, 4),
+                            None if sg is None else u(sg).strftime('%Y-%m-%d %H:%M:%S'),
+                            None if sg is None else round((int(ts[sg]) - int(r['wdv_ms'])) / 60000, 4),
+                            None if sg is None else round(float(MA[sg]), 2),
+                            None if sg is None else round(float(XV[sg]), 2),
+                            None if sg is None else round(float(MV[sg]), 2),
+                            None if sg is None else round(float(G1[sg]), 2), nc))
 
-        n = db.execute('SELECT COUNT(*) c FROM mage_boundary_signal WHERE mbs_knobs=%s',
-                       (K,), fetch=True)[0]['c']
-        if n:
-            print(f'  {mode}: {n:,} rows already banked at {K} - nothing written', flush=True)
-        else:
-            db.executemany(f"INSERT INTO mage_boundary_signal ({','.join(COLS)}) "
-                           f"VALUES ({','.join(['%s'] * len(COLS))})", out)
-            print(f'  {mode}: banked {len(out):,} rows at {K}', flush=True)
+            n = db.execute('SELECT COUNT(*) c FROM mage_boundary_signal WHERE mbs_knobs=%s',
+                           (K,), fetch=True)[0]['c']
+            if n:
+                print(f'  {mode}/{gate}: {n:,} rows already banked at {K} - nothing written',
+                      flush=True)
+            else:
+                db.executemany(f"INSERT INTO mage_boundary_signal ({','.join(COLS)}) "
+                               f"VALUES ({','.join(['%s'] * len(COLS))})", out)
+                print(f'  {mode}/{gate}: banked {len(out):,} rows at {K}', flush=True)
     db.disconnect()
     print(f'  {time.time() - t0:.0f}s', flush=True)
     return 0
