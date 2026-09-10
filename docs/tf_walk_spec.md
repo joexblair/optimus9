@@ -215,6 +215,54 @@ in dr run 5:
 ws7r lands 95 s after Joe's eyeball, not on it. The sweep was scored against the sideways verdict
 alone; this row additionally requires r outside 25/75, so the first qualifying bar is later.
 
+### The impending x-cross-race column
+
+Joe 0910: *"add a column to the right of wdv_line that shows the impending ws{wdv_line}x-cross-race
+timestamp"*. Column `wdv_race_utc`, `AFTER wdv_line`.
+
+The value is the first race confirmation **strictly after** the row's bar, at the row's own dr. A
+race confirming on the row bar itself is not impending.
+
+**The mech is `build_wsf_x_cross`'s, verbatim.** The race is the FIRST of three to cross — x
+against its Mage, its b, or the boundary (85.0 at dr +1, 15.0 at dr -1). `x X r` is stored beside
+the race in that producer and is not in it. dr +1 the x crosses DOWN under its target, dr -1 it
+crosses UP over. `XCROSS_XWOB` = 5 bars — x must hold the far side for 5 consecutive bars, a run
+spanning 20 s, and must have been on the NEAR side before it crossed. The crossing confirms on the
+bar the run reaches 5, not the bar it started. A NaN bar zeroes the run but does not clear the
+fired latch.
+
+`build_wsf_x_cross` itself carries **TF 1 to 12 only** (Joe 0826: *"wsf is limited to TF12"*), and
+`wdv_line` runs 5 to 23. The column therefore computes the race off the cached role lines. That
+table is not touched.
+
+**Cross-validated before anything was written.** Against the banked `wsf_x_cross` rows at xwob 5
+on 08-04, ws5 to ws10 both directions — the only timeframes `build_ws_line_bar` states carry a
+spec identical to the wsf one:
+
+| tf | dr | computed here | wsf_x_cross | both | here only | table only |
+|---|---|---|---|---|---|---|
+| ws5 | +1 | 238 | 238 | 238 | 0 | 0 |
+| ws5 | -1 | 255 | 255 | 255 | 0 | 0 |
+| ws6 | +1 | 244 | 244 | 244 | 0 | 0 |
+| ws6 | -1 | 239 | 239 | 239 | 0 | 0 |
+| ws7 | +1 | 214 | 214 | 214 | 0 | 0 |
+| ws7 | -1 | 217 | 217 | 217 | 0 | 0 |
+| ws8 | +1 | 214 | 214 | 214 | 0 | 0 |
+| ws8 | -1 | 202 | 202 | 202 | 0 | 0 |
+| ws9 | +1 | 197 | 197 | 197 | 0 | 0 |
+| ws9 | -1 | 184 | 184 | 184 | 0 | 0 |
+| ws10 | +1 | 181 | 181 | 181 | 0 | 0 |
+| ws10 | -1 | 187 | 187 | 187 | 0 | 0 |
+
+2,572 confirmations, 0 mismatches either way.
+
+**Filled in place**, at the same knob set — the column adds a field to existing rows, it does not
+move them. 565 of 565 rows carry a value; none is NULL and none lands at or before its row bar.
+Seconds from the row bar to the impending race: min 5, mean 642.8, max 7,905.
+
+**The race hold of 5 bars is NOT in the unique key.** A different race xwob overwrites this column
+instead of landing beside it.
+
 ### The mask mech
 
 `build_wsf_event_mark.sign_mask`. One character per ADJACENT PAIR in the sequence: `+` the lower

@@ -14,8 +14,18 @@ momo      the report body uses a 10-minute lattice span and momo_slope_min 0.4.
           Joe's eyeballed ~05:36 on 08-25. Re-declare that every time these numbers are quoted.
 
 COLUMNS Joe specified, in his order:
-  utc, line, dr run, dr, r, top mom TF, top, top+1, prev mom, run bars, +1..+4 TF,
+  utc, line, race utc, dr run, dr, r, top mom TF, top, top+1, prev mom, run bars, +1..+4 TF,
   then mage mask and the two HTF momentum columns on the right.
+
+  race utc     the IMPENDING ws{line} x-cross-race - the first race confirmation strictly after
+               the row's bar, at the row's dr. Joe 0910. The mech is build_wsf_x_cross's verbatim:
+               the race is the FIRST of x crossing its Mage, its b, or the boundary (85 at dr +1,
+               15 at dr -1); x must hold the far side XCROSS_XWOB = 5 bars (a run spanning 20 s),
+               and must have
+               been on the near side before it crossed. dr +1 the x crosses DOWN under its target,
+               dr -1 it crosses UP over. build_wsf_x_cross itself only carries TF 1..12 (Joe 0826
+               "wsf is limited to TF12"), so this column computes the race off the cached role
+               lines rather than reading that table. That table is not touched.
 
   top mom TF   the HIGHEST timeframe in 5..23 with a momo or curl verdict at that bar's dr.
                0 means none of them held momentum. It is not a timeframe number.
@@ -64,6 +74,8 @@ TFS      = list(range(5, 24))          # the report body
 HTF      = [120, 90, 60, 45, 30]       # the two HTF momentum columns, printed high to low
 MASK_SEQ = ['g30'] + [str(t) for t in range(1, 19)]   # 19 tags -> 18 pairs. Joe 0910
 FL, FH   = 25.0, 75.0                  # the fence. Joe 0910
+XRACE    = 5                           # x-cross-race hold, bars. A 5-bar run spans 20 s.
+#                                        XCROSS_XWOB in build_wsf_x_cross, same value
 SPAN     = 10                          # lattice span, minutes. FITTED
 SLOPE    = 0.4                         # momo_slope_min. FITTED
 BANKV    = 1                           # momo_config version for the banked-bank HTF column
@@ -78,6 +90,13 @@ DDL = '''CREATE TABLE IF NOT EXISTS wsf_dtf_v3 (
     wdv_utc       DATETIME     NOT NULL,  -- the row bar, exact
     wdv_ms        BIGINT       NOT NULL,  -- the same bar in epoch ms, for ordering
     wdv_line      INT          NOT NULL,  -- the timeframe whose r went sideways, minutes
+    wdv_race_utc  DATETIME     NULL,      -- the IMPENDING ws{wdv_line} x-cross-RACE: the first
+    --   race confirmation STRICTLY AFTER this row's bar, at this row's dr. The race is the first
+    --   of three to cross - x crossing its Mage, its b, or the boundary - the mech verbatim from
+    --   build_wsf_x_cross. Hold 5 bars on the far side - a 5-bar run spans 20 s - and x must
+    --   have been on the near side first. NULL = none before the cache ends.
+    --   THE HOLD OF 5 IS NOT IN THE UNIQUE KEY:
+    --   a different race xwob overwrites this column instead of landing beside it. Joe 0910
     wdv_dr_run    INT          NOT NULL,  -- which dr run inside the window, 1-based
     wdv_dr        TINYINT      NOT NULL,  -- +1 or -1 at the row bar
     wdv_r         DOUBLE       NOT NULL,  -- that line's r at the row bar
@@ -96,7 +115,7 @@ DDL = '''CREATE TABLE IF NOT EXISTS wsf_dtf_v3 (
     UNIQUE KEY u_row (wdv_knobs, wdv_utc, wdv_line),
     KEY k_ms (wdv_ms), KEY k_line (wdv_line, wdv_dr))'''
 
-COLS = ['wdv_knobs', 'wdv_utc', 'wdv_ms', 'wdv_line', 'wdv_dr_run', 'wdv_dr', 'wdv_r',
+COLS = ['wdv_knobs', 'wdv_utc', 'wdv_ms', 'wdv_line', 'wdv_race_utc', 'wdv_dr_run', 'wdv_dr', 'wdv_r',
         'wdv_top_mom_tf', 'wdv_top', 'wdv_top1', 'wdv_prev_mom', 'wdv_run_bars',
         'wdv_nx1', 'wdv_nx2', 'wdv_nx3', 'wdv_nx4', 'wdv_mage_mask',
         'wdv_htf_bank', 'wdv_htf_fit']
@@ -109,6 +128,99 @@ def sign_mask(vals, seq):
         a, b = vals.get(lo), vals.get(hi)
         out.append('.' if a is None or b is None else '+' if a > b else '-' if a < b else '0')
     return ''.join(out)
+
+
+def race_bars(x, MG, B, bound, dr, xwob=None):
+    """Per bar: did the ws{tf} x-cross-RACE confirm here, at direction `dr`.
+
+    [MECH verbatim from build_wsf_x_cross.held / far_side.] The race is the FIRST of three to
+    cross - x against its Mage, its b, or the boundary. Each target is run independently and the
+    race fires when ANY of them confirms.
+
+      far side   dr +1 -> x BELOW the target; dr -1 -> x ABOVE it
+      the hold   x must sit on the far side for `xwob` consecutive 5 s bars. It confirms on the
+                 bar the run REACHES xwob, not the bar it started
+      near first x must have been on the NEAR side at some earlier finite bar. A line standing on
+                 the far side since the start never crossed
+      NaN        zeroes the run but does NOT clear the fired latch and does NOT set was-near.
+                 Only a near-side bar clears the latch, so one far-side stretch broken by NaN
+                 still fires only once
+
+    Returns a bool array, one per bar."""
+    xwob = XRACE if xwob is None else xwob
+    n = len(x)
+    out = np.zeros(n, bool)
+    for t in (MG, B, np.full(n, float(bound))):
+        valid = np.isfinite(x) & np.isfinite(t)
+        f = (x < t) if dr > 0 else (x > t)
+        far, near = valid & f, valid & ~f
+        if not near.any():
+            continue
+        idx = np.arange(n)
+        # run = consecutive far bars, zeroed by a near bar or a NaN bar
+        reset = np.where(~far, idx + 1, 0)
+        run = (idx + 1) - np.maximum.accumulate(reset)
+        # only after the first near-side bar can a run count at all
+        run = np.where(idx >= int(np.flatnonzero(near)[0]), run, 0)
+        cand = np.flatnonzero(run == xwob)
+        if not len(cand):
+            continue
+        # the fired latch: within one stretch with no near bar, only the FIRST run==xwob counts
+        last_near = np.maximum.accumulate(np.where(near, idx, -1))
+        prev = -1
+        for i in cand:
+            ln = last_near[i]
+            if ln > prev:            # a near bar has happened since the last fire
+                out[i] = True
+                prev = i
+    return out
+
+
+def fill_race(db):
+    """Fill wdv_race_utc on rows already banked. The column adds a field to existing rows; it does
+    not move them, so it is written in place at the same knob set."""
+    have = {c['Field'] for c in db.execute('SHOW COLUMNS FROM wsf_dtf_v3', fetch=True)}
+    if 'wdv_race_utc' not in have:
+        db.execute('ALTER TABLE wsf_dtf_v3 ADD COLUMN wdv_race_utc DATETIME NULL AFTER wdv_line')
+        print('  added wdv_race_utc after wdv_line', flush=True)
+    sy = db.execute('SELECT pxsmooth_dema_src s, pxsmooth_dema_len l, hi_boundary hi, '
+                    'lo_boundary lo FROM optimus9_system WHERE sys_pk=1', fetch=True)[0]
+    HI, LO = float(sy['hi']), float(sy['lo'])
+    SPEC = {}
+    for g in mech_lines(db, 'wsf'):
+        if g['role'] not in SPEC:
+            _t, s_, m_ = g['override']; SPEC[g['role']] = (s_, m_)
+    rows = db.execute('SELECT wdv_pk, wdv_ms, wdv_line, wdv_dr FROM wsf_dtf_v3 ORDER BY wdv_line, wdv_ms',
+                      fetch=True)
+    ts = np.load(os.path.join(TAPE_DIR, _tape_key(END_MS, HOURS, WARMUP,
+                 {'src': sy['s'], 'len': sy['l']}) + '.npz'))['__ts__']
+    L = lambda tf, role: np.load(os.path.join(LINE_DIR, _line_key(END_MS, HOURS, WARMUP,
+                         override(tf * 60, *SPEC[role])) + '.npy'))
+    print(f'  {len(rows):,} rows   race hold {XRACE} bars, a run spanning {(XRACE - 1) * 5} s   '
+          f'boundary {HI:g} / {LO:g}', flush=True)
+    upd, hit = [], {}
+    for tf in sorted({int(r['wdv_line']) for r in rows}):
+        X, MG, B = L(tf, 'x'), L(tf, 'Mage'), L(tf, 'b')
+        ix = {d: np.flatnonzero(race_bars(X, MG, B, HI if d > 0 else LO, d)) for d in (+1, -1)}
+        hit[tf] = {d: len(ix[d]) for d in (+1, -1)}
+        for r in rows:
+            if int(r['wdv_line']) != tf:
+                continue
+            d = int(r['wdv_dr'])
+            if d == 0:
+                continue
+            i0 = int(np.searchsorted(ts, int(r['wdv_ms'])))
+            a = ix[d]
+            q = int(np.searchsorted(a, i0, side='right'))   # STRICTLY after the row bar
+            v = (dt.datetime.fromtimestamp(int(ts[a[q]]) / 1000, tz=timezone.utc)
+                 .strftime('%Y-%m-%d %H:%M:%S')) if q < len(a) else None
+            upd.append((v, int(r['wdv_pk'])))
+    db.executemany('UPDATE wsf_dtf_v3 SET wdv_race_utc=%s WHERE wdv_pk=%s', upd)
+    print(f'  wrote {len(upd):,} rows', flush=True)
+    for tf in sorted(hit):
+        print(f'    ws{tf:<3} race confirmations on the cache: dr +1 {hit[tf][+1]:>6,}   '
+              f'dr -1 {hit[tf][-1]:>6,}', flush=True)
+
 
 
 def show(db):
@@ -271,4 +383,7 @@ def main():
 
 
 if __name__ == '__main__':
+    if '--race' in sys.argv:
+        _db = DatabaseManager(**get_db_config()); _db.connect()
+        fill_race(_db); _db.disconnect(); sys.exit(0)
     sys.exit(main())
