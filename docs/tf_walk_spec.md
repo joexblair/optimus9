@@ -215,10 +215,11 @@ in dr run 5:
 ws7r lands 95 s after Joe's eyeball, not on it. The sweep was scored against the sideways verdict
 alone; this row additionally requires r outside 25/75, so the first qualifying bar is later.
 
-### The impending x-cross-race column
+### The backstop column
 
 Joe 0910: *"add a column to the right of wdv_line that shows the impending ws{wdv_line}x-cross-race
-timestamp"*. Column `wdv_race_utc`, `AFTER wdv_line`.
+timestamp"*, then *"change `race utc` to `backstop utc`"*. Column `wdv_backstop_utc`,
+`AFTER wdv_line`. **Backstop is Joe's word for it.** The value did not change with the name.
 
 The value is the first race confirmation **strictly after** the row's bar, at the row's own dr. A
 race confirming on the row bar itself is not impending.
