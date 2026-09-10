@@ -5,7 +5,8 @@ THE ROW. One row per (line, dr run): the FIRST bar in that dr run where the line
 
 dr        ws1Mage AND ws13m both oob, SAME side, latched. Previous dr holds until then.
 fence     25 / 75 (Joe 0910 raised it from 30/70)
-lines     ws5..ws23 (Joe 0910: "increase the max r lines to ws23")
+lines     ws1..ws23. Joe 0910 set ws5..ws23 ("increase the max r lines to ws23") then added
+          the low end ("add the ws1,2,3,4 r lines to the report"). THE RANGE IS IN KNOBS.
 window    the WALK is 08-25 00:00:00 -> 08-28 00:00:00. Joe 0910 "extend the report to 08-27
           (full days)"; a day runs 00:00:00 through the NEXT day's 00:00:00 inclusive.
           The verdict/dr warm-up starts 08-23 so the 21-sample lattice and the dr latch are warm.
@@ -71,7 +72,8 @@ from optimus9.compute.momo_gated import momo_g_why, momo_window
 from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP
 from optimus9.orchestration.rpl_cache import LINE_DIR, TAPE_DIR, _line_key, _tape_key
 
-TFS      = list(range(5, 24))          # the report body
+TFS      = list(range(1, 24))          # the report body. Joe 0910 added ws1..ws4 to the
+#                                        ws5..ws23 he set earlier; the range is in KNOBS
 HTF      = [120, 90, 60, 45, 30]       # the two HTF momentum columns, printed high to low
 MASK_SEQ = ['g30'] + [str(t) for t in range(1, 19)]   # 19 tags -> 18 pairs. Joe 0910
 FL, FH   = 25.0, 75.0                  # the fence. Joe 0910
@@ -83,7 +85,11 @@ BANKV    = 1                           # momo_config version for the banked-bank
 WARM     = '2026-08-23 00:00:00'
 W0, W1   = '2026-08-25 00:00:00', '2026-08-28 00:00:00'
 
-KNOBS = (f'v3_sp{SPAN}_sl{SLOPE}_f{FL:g}.{FH:g}_drws1Mage.ws13m_bv{BANKV}')
+# THE TIMEFRAME RANGE IS A KNOB THAT MOVES ROWS - `prev mom` on every row scans TFS, so a
+# wider range can change it on rows that already existed. It goes in the string, and the
+# 565 rows banked 0910 stay at the earlier string, which with no tf prefix means ws5..ws23.
+KNOBS = (f'v3_tf{TFS[0]}.{TFS[-1]}_sp{SPAN}_sl{SLOPE}_f{FL:g}.{FH:g}'
+         f'_drws1Mage.ws13m_bv{BANKV}')
 
 DDL = '''CREATE TABLE IF NOT EXISTS wsf_dtf_v3 (
     wdv_pk        BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -117,7 +123,9 @@ DDL = '''CREATE TABLE IF NOT EXISTS wsf_dtf_v3 (
     UNIQUE KEY u_row (wdv_knobs, wdv_utc, wdv_line),
     KEY k_ms (wdv_ms), KEY k_line (wdv_line, wdv_dr))'''
 
-COLS = ['wdv_knobs', 'wdv_utc', 'wdv_ms', 'wdv_line', 'wdv_backstop_utc', 'wdv_dr_run', 'wdv_dr', 'wdv_r',
+# wdv_backstop_utc is NOT in this list. It is written by fill_race(), which main() calls after the
+# insert - one implementation of the backstop, not two.
+COLS = ['wdv_knobs', 'wdv_utc', 'wdv_ms', 'wdv_line', 'wdv_dr_run', 'wdv_dr', 'wdv_r',
         'wdv_top_mom_tf', 'wdv_top', 'wdv_top1', 'wdv_prev_mom', 'wdv_run_bars',
         'wdv_nx1', 'wdv_nx2', 'wdv_nx3', 'wdv_nx4', 'wdv_mage_mask',
         'wdv_htf_bank', 'wdv_htf_fit']
@@ -370,6 +378,7 @@ def main():
         db.executemany(f"INSERT INTO wsf_dtf_v3 ({','.join(COLS)}) "
                        f"VALUES ({','.join(['%s'] * len(COLS))})", out)
         print(f'  banked {len(out):,} rows into wsf_dtf_v3', flush=True)
+    fill_race(db)
     db.disconnect()
 
     print(f'\n=== wsf-dtf-v3 ===', flush=True)

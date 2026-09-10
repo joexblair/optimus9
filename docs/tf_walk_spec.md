@@ -271,6 +271,39 @@ timeframe's Mage is above the higher's, `-` below, `0` equal, `.` a line is miss
 `flip_report.py`, which filled `wsf_momo_flip_rep`'s mask columns, is ABSENT from the repo;
 `build_wsf_event_mark` is the surviving implementation.
 
+### ws1..ws4 added, and why the range went into the knob string
+
+Joe 0910: *"add the ws1,2,3,4 r lines to the report"*. `TFS` went from `range(5, 24)` to
+`range(1, 24)`.
+
+New lines add rows that collide with nothing — the unique key is (knobs, utc, line). But
+**`top mom TF` and `prev mom` both scan TFS**, so a wider range changes them on rows that already
+existed. The timeframe range is therefore a knob that moves rows, and it is now in the string:
+
+| bank | knob string | rows | lines |
+|---|---|---|---|
+| ws5..ws23, banked 0910 | `v3_sp10_sl0.4_f25.75_drws1Mage.ws13m_bv1` | 565 | 5..23 |
+| ws1..ws23 | `v3_tf1.23_sp10_sl0.4_f25.75_drws1Mage.ws13m_bv1` | 654 | 1..23 |
+
+The earlier string carries no `tf` prefix; that absence means ws5..ws23. Nothing was overwritten.
+
+**Measured, on the 565 rows the two banks share:**
+
+| field | rows that differ |
+|---|---|
+| `r` | 0 |
+| `top mom TF` | 31 |
+| `prev mom` | 44 |
+
+Every one of the 31 moved from **0** to a low timeframe — 0 -> 1 on 4 rows, 0 -> 2 on 8, 0 -> 3 on
+6, 0 -> 4 on 13. `top mom TF` = 0 means no timeframe in the range held momentum; with ws1..ws4 in
+the scan, one of them did. Those 31 rows also lose their `prev mom`, which only fills when
+`top mom TF` is 0 — that accounts for 31 of the 44 `prev mom` differences.
+
+Rows per line in the ws1..ws23 bank: ws1 9, ws2 16, ws3 28, ws4 36, ws5 44, ws6 42, ws7 34, ws8 34,
+ws9 33, ws10 32, ws11 34, ws12 29, ws13 33, ws14 28, ws15 27, ws16 27, ws17 22, ws18 21, ws19 24,
+ws20 25, ws21 26, ws22 24, ws23 26.
+
 ### Result, first run
 
 | item | value |
