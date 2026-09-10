@@ -249,3 +249,93 @@ spans do.
   produce 4 to 7 per 8 hours against a structural ceiling of 8 dr runs. Open.
 - 0910: *"at 00:42, that should be TF19, TF22, or TF23"* - measured at three spans and at
   momo_config v0 and v1; none reads those three as momentum-true at that bar. Open.
+
+---
+
+## 8. The Mage-crosses-boundary signal
+
+**THIS MECHANIC HAS NO NAME.** Joe 0910: *"this new mech doesn't have a specific job at present"*.
+`build_mage_boundary_signal.py`, table `mage_boundary_signal`, column prefix `mbs_` — every one of
+those is a PLACEHOLDER built from Joe's own words. Rename on his word; do not coin one.
+
+Joe 0910 passed it: *"that's the best outcome - bank it and add to the spec"*.
+
+### The row
+
+One row per (`wsf_dtf_v3` row, mode). The wsf_dtf_v3 row is the HAND-OFF — its bar and its dr.
+From that bar:
+
+1. walk forward, **no cap**, to the first bar ws1Mage's consecutive-oob run reaches 3 bars = 15 s.
+   oob is the dr-side boundary: 85.0 at dr +1, 15.0 at dr -1.
+2. the SIGNAL is the first bar **strictly after** that, where gcws{30|15}Mage crosses the same
+   boundary in the dr direction — dr +1 crosses DOWN through 85.0, dr -1 crosses UP through 15.0.
+3. no confirmation hold on that crossing.
+
+### Provenance
+
+| item | value | source |
+|---|---|---|
+| hand-off population | every `wsf_dtf_v3` row at `v3_sp10_sl0.4_f25.75_drws1Mage.ws13m_bv1` | Joe's three examples are all rows of that table |
+| dr | the source row's own `wdv_dr` | from the row |
+| ws1Mage oob dwell floor | 3 bars = 15 s | Joe 0910 *"ws1Mage needs to be oob for longer than the 03:29:20 dwell"*. **The floor value is MINE** — that dwell measured 2 bars = 10 s, so 3 bars is the smallest satisfying run. Any larger floor also satisfies him and moves every timestamp |
+| dwell counted through bars before the hand-off | yes | **MINE.** A line already oob on arrival satisfies the floor at the hand-off bar itself |
+| boundary | 85.0 / 15.0, live from `optimus9_system` | standing |
+| crossing direction | dr +1 crosses under its target, dr -1 crosses over | the settled x-cross rule. It is also the out-of-bounds -> in-bounds direction `gcws30b` uses in `build_ws_fin` and `emit_ws_gated` |
+| confirmation hold | none | Joe was offered one 0910 and did not take it |
+| signal strictly after the dwell bar | yes | **MINE.** It is what reproduces the three timestamps Joe read |
+| modes | `g30` = gcws30 lines, `g15` = gcws15 lines | Joe 0910 *"add a mode that uses gcws15 in place of gcws30, to make the signals more surgical"*. ws1Mage and the boundary are the same in both |
+
+### DROPPED AND OPEN — two components of Joe's first description are not in this mechanic
+
+Joe 0910 first described it as: *"ws1 Mage reversing, followed by gcws30 x cross m when gcws30Mage
+is closer to 50"*, then *"use a reversal wob of 2 for ws1Mage. if the gcws15 x-cross-m happens
+inside a lookback period of 15 seconds from the ws1Mage's reversal, accept the gcws30 signal"*.
+
+Neither the **ws1Mage reversal at wob 2** nor the **gcws15 x-cross-m 15-second lookback** is in
+the construction he read and passed. They dropped out when the reporting moved to listing crosses.
+They are NOT rejected. They are unresolved, and the banked table has no column for either.
+
+The 15-second lookback also never had its direction ruled — whether the gcws15 cross must land
+within 15 s AFTER the reversal, or whether the 15 s is looked BACK from the cross. The two
+readings agree at the 00:45:30 and 01:50:00 hand-offs and disagree at 03:24:00.
+
+### The three hand-offs Joe read
+
+| hand-off | dr | mode | dwell met | signal | +min | Mage at the signal |
+|---|---|---|---|---|---|---|
+| 00:45:30 | +1 | g30 | 00:45:30 | 00:49:10 | 3.67 | 84.60 |
+| 00:45:30 | +1 | g15 | 00:45:30 | 00:48:00 | 2.50 | 84.93 |
+| 01:50:00 | -1 | g30 | 01:50:00 | 01:54:35 | 4.58 | 21.85 |
+| 01:50:00 | -1 | g15 | 01:50:00 | 01:51:20 | 1.33 | 17.22 |
+| 03:24:00 | +1 | g30 | 03:31:45 | 03:33:50 | 9.83 | 83.07 |
+| 03:24:00 | +1 | g15 | 03:31:45 | 03:33:20 | 9.33 | 84.38 |
+
+The g30 column reproduces the three timestamps Joe passed.
+
+### Result, first run
+
+| item | g30 | g15 |
+|---|---|---|
+| knob set | `mb_g30_dw3_hold0_srcv3` | `mb_g15_dw3_hold0_srcv3` |
+| rows | 565 | 565 |
+| hand-offs with no dwell | 0 | 0 |
+| hand-offs with no signal | 0 | 0 |
+| signal minutes, min | 0.08 | 0.08 |
+| signal minutes, mean | 24.30 | 23.88 |
+| signal minutes, max | 219.17 | 218.92 |
+| mean boundary crossings, hand-off to signal | 6.07 | 9.56 |
+| hand-off span | 08-25 00:00:00 -> 08-27 23:12:10 | same |
+
+Every hand-off produced a signal in both modes. The g15 mode fires earlier at all three of the
+hand-offs Joe read, and its mean over all 565 is 0.42 minutes earlier than g30's.
+
+### Open
+
+1. Name the mechanic.
+2. Rule whether the ws1Mage reversal at wob 2 belongs in it.
+3. Rule whether the gcws15 x-cross-m 15-second lookback belongs in it, and which direction the
+   15 s runs.
+4. Rule the ws1Mage oob dwell floor. 3 bars = 15 s is the smallest value satisfying Joe's sentence,
+   not a value he gave.
+5. Joe 0910: *"this new mech doesn't have a specific job at present"* — it consumes wsf-dtf-v3
+   hand-offs and emits a timestamp. Nothing reads it.
