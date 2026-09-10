@@ -1,7 +1,10 @@
 # The TF2-23 walk
 
-**THE MECHANIC HAS NO NAME.** Joe has called it "the mech" and "the walk". Every filename and
-heading here is a placeholder — rename on his word, do not coin one.
+**THE MECHANIC STILL HAS NO NAME.** Joe has called it "the mech" and "the walk". Every filename
+and heading for the WALK is a placeholder — rename on his word, do not coin one.
+
+Joe 0910 named the **report** built beside it: `wsf-dtf-v3`. That is the report's name, not the
+walk's. §7 covers it. §6 item 6 stays open.
 
 Joe 0909, given as six numbered steps. This doc records the steps, every concretion that had to be
 settled to run them, who settled each one, and what is still open.
@@ -164,3 +167,85 @@ Numbers from these are void, not context:
 4. Rule strict vs inclusive on the oob boundary tests.
 5. The mechanic that walk 5's early exit calls for does not exist.
 6. Name the mechanic.
+
+---
+
+## 7. wsf-dtf-v3
+
+**Joe named it 0910.** Producer `build_wsf_dtf_v3.py`, table `wsf_dtf_v3`.
+
+One row per (line, dr run): the FIRST bar in that dr run where the line's r is `sideways` AND
+outside the fence. Joe 0909: *"keep the first sideways event per dr flip"*.
+
+### Settings
+
+| item | value | source |
+|---|---|---|
+| window | 08-25 00:00:00 -> 08-28 00:00:00 | Joe 0910 "extend the report to 08-27 (full days)" |
+| warm-up | 08-23 00:00 | mine - the 21-sample lattice and the dr latch need history |
+| lines | ws5..ws23 | Joe 0910 "increase the max r lines to ws23" |
+| dr | ws1Mage AND ws13m both oob, same side, latched | Joe 0909 |
+| fence | 25 / 75 | Joe 0910, raised from 30/70 |
+| lattice span | 10 minutes, every line | **FITTED** |
+| momo_slope_min | 0.4 | **FITTED** |
+| mask sequence | gcws30 then ws1..ws18 - 19 tags, 18 pairs | Joe 0910 |
+| HTF momentum | ws120, ws90, ws60, ws45, ws30, at BOTH the banked banks and the fitted settings | Joe 0910 "Both, as two columns" |
+| knob set | `v3_sp10_sl0.4_f25.75_drws1Mage.ws13m_bv1` | in `wdv_knobs`, first part of the unique key |
+
+`wdv_line` is an **INT holding the timeframe**, not a line name - `WHERE wdv_line = 7`, never
+`'ws7r'`, which matches nothing and returns an empty result rather than an error.
+
+### THE SPAN AND THE SLOPE FLOOR ARE FITTED, NOT MEASURED
+
+Both were chosen by sweeping until ws7r read `sideways` at Joe's eyeballed ~05:36 on 08-25.
+Joe 0910 selected two rows from that sweep: *"these 2 line's feel less like fitting, and the
+timing is close enough"*. A knob chosen by scoring against Joe's label is fitted, and must be
+re-declared as fitted every time it is quoted. Nothing anchors either number to a mechanism.
+
+The extended test Joe set for them: *"the extended test will be to show the sideways moment on
+ws9 and ws10. both should have fired before ~05:55"*. Both did, and the banked table carries them
+in dr run 5:
+
+| line | banked utc | r | note |
+|---|---|---|---|
+| ws7r | 05:37:35 | 88.4 | Joe eyeballed ~05:36 - this is the knob's own target |
+| ws10r | 05:40:00 | 87.1 | before ~05:55 |
+| ws9r | 05:51:15 | 89.0 | before ~05:55 |
+
+ws7r lands 95 s after Joe's eyeball, not on it. The sweep was scored against the sideways verdict
+alone; this row additionally requires r outside 25/75, so the first qualifying bar is later.
+
+### The mask mech
+
+`build_wsf_event_mark.sign_mask`. One character per ADJACENT PAIR in the sequence: `+` the lower
+timeframe's Mage is above the higher's, `-` below, `0` equal, `.` a line is missing.
+`flip_report.py`, which filled `wsf_momo_flip_rep`'s mask columns, is ABSENT from the repo;
+`build_wsf_event_mark` is the surviving implementation.
+
+### Result, first run
+
+| item | value |
+|---|---|
+| rows | 565 |
+| span | 08-25 00:00:00 -> 08-27 23:12:10 |
+| distinct lines | 19 |
+| dr runs carrying rows | 61 of 66 in the window |
+| top_mom_tf = 0 | 112 rows, all carrying a prev_mom |
+| htf_bank non-null | 418 |
+| htf_fit non-null | 48 |
+| build time | 660 s |
+
+`htf_bank` names at least one momentum-true line on 418 of 565 rows; `htf_fit` on 48. The
+10-minute span reads those five lines as momentum-true far less often than their own banked
+spans do.
+
+### Joe's reads standing against this report
+
+- 0910: *"so far, I don't think we're fitting"*
+- 0909: *"the mech is starting to shape up - the first 4 rows are exiting at good times"*
+- 0909: *"the x-cross-m exit fires too early. it's not a fault in the build - it is a new
+  mechanism that I've been expecting to build"*
+- 0910: *"I was expecting ~9 events for each TF"* - under the first-per-dr-run rule the lines
+  produce 4 to 7 per 8 hours against a structural ceiling of 8 dr runs. Open.
+- 0910: *"at 00:42, that should be TF19, TF22, or TF23"* - measured at three spans and at
+  momo_config v0 and v1; none reads those three as momentum-true at that bar. Open.
