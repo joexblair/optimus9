@@ -139,10 +139,35 @@ Joe dropped the idea 0911 rather than rule the mapping.
 ## 9. The ws1Mage reversal wob
 
 `_mage_rev(ws1Mage, n)` from `optimus9/analysis/lr_v2.py:272`. Returns per bar: `+1` ws1Mage turned
-from falling to rising, `-1` turned from rising to falling, `0` no turn. `n` is the confirmation
-bars — the turn counts once ws1Mage has moved `n` consecutive bars the same way, and the event
-fires on bar `n`. A flat bar extends the run rather than breaking it. Boundary-agnostic: it does
-not require the line to be outside a fence.
+from falling to rising, `-1` turned from rising to falling, `0` no turn.
+
+**`n` COUNTS STEPS BETWEEN BARS, NOT BARS.** `_mage_rev` runs on `np.diff(line)`, so `n` is the
+number of consecutive same-direction steps and the event fires on the step that reaches `n`. A run
+of `n` steps spans `n x 5 s` of movement across `n + 1` bars: wob 2 = 10 s, wob 6 = 30 s. A flat
+step extends the run rather than breaking it. Boundary-agnostic: it does not require the line to be
+outside a fence.
+
+This is the OPPOSITE arithmetic to the x-cross hold, which counts BARS — there a 5-bar run spans
+20 s. Do not carry one formula to the other.
+
+Worked example, the 17:19:10 event at wob 6:
+
+| utc | ws1Mage | step |
+|---|---|---|
+| 17:18:40 | 45.42 | -5.55 |
+| 17:18:45 | 47.89 | +2.47 |
+| 17:18:50 | 47.89 | +0.00 |
+| 17:18:55 | 54.98 | +7.09 |
+| 17:19:00 | 57.45 | +2.46 |
+| 17:19:05 | 61.14 | +3.70 |
+| 17:19:10 | 63.29 | +2.14 |
+
+The up-run starts at 17:18:45 and the 6th step lands on 17:19:10, where the event fires. 17:18:50
+is a flat step that extends the run.
+
+**Line identity, checked 0911.** `build_mage_boundary_signal.py` resolves ws1Mage through the
+registry (`OVR['ws1Mage']`); the wob tests resolve it through the wsf mech role spec
+(`override(60, *SPEC['Mage'])`). Both give cache key `25cfa2ad06f04c39a0b7` — the same array.
 
 Joe 0911: *"we need a wob for the reversal. test with wob 6"*.
 
