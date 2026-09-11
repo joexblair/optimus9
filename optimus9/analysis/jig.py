@@ -138,6 +138,57 @@ def oob_ib_cross(line, hi, lo, xwob):
     return out
 
 
+# ── ws1mage-rev (Joe 0911 named it) ────────────────────────────────────────────────────────────
+WS1MR_DWELL   = 3     # 5s bars ws1Mage's oob run must REACH. MINE - the smallest run strictly
+#                       longer than the 10 s dwell Joe rejected 0910. Joe has not ruled a value.
+WS1MR_REV_WOB = 2     # KNOB. STEPS for the ws1Mage reversal. Joe 0910, reaffirmed 0911.
+WS1MR_HOLD    = 4     # KNOB. bars IB must hold for the boundary cross. Joe 0911: "use these
+#                       values, reversal:2, boundary:4. both are knobs". A wob here is a KNOWLEDGE
+#                       delay, not lookahead - `sig` is the cross bar, `sig_conf` the bar it becomes
+#                       knowable, and a truncation test confirms neither moves once reported.
+
+
+def ws1mage_rev(g1, sig_mage, hi, lo, dwell=WS1MR_DWELL, rev_wob=WS1MR_REV_WOB,
+                hold=WS1MR_HOLD, gate='rev'):
+    """[PRODUCER · Joe 0911 named it `ws1mage-rev`] The three legs of the mechanic, as index arrays
+    per dr. Joe 0910 on the chain it came from: "that's the best outcome - bank it and add to the
+    spec. this new mech doesn't have a specific job at present".
+
+      dwell_ok  bars where ws1Mage's CONSECUTIVE-oob run has REACHED `dwell` bars. oob is the
+                dr-side boundary: >= hi at dr +1, <= lo at dr -1. The run counts through bars
+                before any caller's start, so a line already oob on arrival qualifies at once.
+      rev       bars where ws1Mage reverses - _mage_rev(g1, rev_wob), EITHER direction. `rev_wob`
+                counts STEPS between bars, so a run of n steps spans n x 5 s across n + 1 bars.
+                Direction is NOT filtered: Joe said "ws1 Mage reversing" and never ruled on it.
+                Empty at gate='off'.
+      sig       bars where `sig_mage` crosses the dr-side boundary OUT OF BOUNDS -> IN BOUNDS.
+                DELEGATES to oob_ib_cross, which requires the landing bar to be IB on BOTH sides.
+                A line that leaps from beyond one boundary to beyond the other does not cross.
+      sig_conf  the bar each `sig` becomes KNOWABLE = cross + hold - 1. Equal to `sig` at hold 1.
+                oob_ib_cross returns both and BOTH ARE CAUSAL; the hold delays knowledge, it does
+                not read forward. Carry sig_conf wherever a consumer needs to act on the event.
+
+    `g1` is ws1Mage. `sig_mage` is the line that controls the cross - gcws30Mage or gcws15Mage.
+    A caller walks forward from its own bar: first dwell_ok >= its bar, then (at gate='rev') the
+    first rev at or after that, then the first sig STRICTLY after the anchor.
+
+    Causal - every leg reads only bars <= itself. Returns {dr: {'dwell_ok','rev','sig'}}."""
+    g1 = np.asarray(g1, float); sm = np.asarray(sig_mage, float)
+    idx = np.arange(len(g1))
+    rev = np.flatnonzero(_mage_rev(g1, rev_wob) != 0) if gate == 'rev' else np.empty(0, int)
+    oib = oob_ib_cross(sm, hi, lo, hold)
+    out = {}
+    for dr in (+1, -1):
+        oob = (g1 >= hi) if dr > 0 else (g1 <= lo)
+        run = (idx + 1) - np.maximum.accumulate(np.where(oob, 0, idx + 1))
+        pair = sorted((k, c) for k, c, sd in oib if sd == dr)
+        out[dr] = {'dwell_ok': np.flatnonzero(run >= max(1, int(dwell))),
+                   'rev': rev,
+                   'sig': np.array([k for k, _ in pair], dtype=int),
+                   'sig_conf': np.array([c for _, c in pair], dtype=int)}
+    return out
+
+
 def momo_landed(R, tagged, hi, lo, fence, xwob, i0=0, i1=None,
                 clear_on='hi_tf_counter_curl', counter_curl=None, reset_at=None):
     """[PRODUCER · Joe 0810] Walk the ws1 markers and emit a `momo_landed` event when a
@@ -420,6 +471,15 @@ class _Causal:
         """Boundary-agnostic reversal of a line (lr_v2._mage_rev): +1 up-turn / -1 down-turn confirmed after `wob`
         consecutive same-direction steps (wob<=0 = first slope-flip). Causal — fires from steps <= the bar."""
         return np.asarray(_mage_rev(np.asarray(line, float), wob))
+
+    def ws1mage_rev(self, sig_mage='gcws30Mage', g1='ws1Mage', hi=None, lo=None, **kw):
+        """`ws1mage-rev` (Joe 0911 named it). Delegates to the module producer. Lines by NAME by
+        default - ws1Mage and gcws30Mage - or pass arrays. hi/lo default to the jig's own
+        boundaries. See the producer for the three legs and every knob."""
+        g = self.line(g1) if isinstance(g1, str) else g1
+        m = self.line(sig_mage) if isinstance(sig_mage, str) else sig_mage
+        return ws1mage_rev(g, m, self.j.cfg.hi if hi is None else hi,
+                           self.j.cfg.lo if lo is None else lo, **kw)
 
     def clean_dirty(self, r, x, side, hi, lo, fh, fl, wob, mode='exhv2', spend_bars=None):
         """[PRODUCER · Joe 0731] The clean/dirty flag on one r line. Causal, no lookahead.

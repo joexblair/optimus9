@@ -67,7 +67,9 @@ existing bank instead of overwriting it.
 | mask sequence | gcws30 then ws1..ws18 — 19 tags, 18 pairs | **NO** | Joe 0910 |
 | HTF lines | ws120, ws90, ws60, ws45, ws30 | **NO** | Joe 0910 |
 | warm-up | 2026-08-23 00:00:00 | **NO** | mine — the 21-sample lattice and the dr latch need history |
-| ws1Mage reversal wob | **UNDER TEST** — 2 and 6 measured | not in any bank | `_mage_rev(ws1Mage, n)`. The reversal is not in the dr mech and not in the report; this row records the knob and what it is worth. See §9 |
+| **ws1mage-rev** reversal wob | **2 steps** = 10 s | not yet in any bank | Joe 0911: *"use these values, reversal:2, boundary:4. both are knobs"*. `jig.WS1MR_REV_WOB` |
+| **ws1mage-rev** boundary xwob | **4 bars** — in-bounds must hold 4 bars | not yet in any bank | Joe 0911, same message. `jig.WS1MR_HOLD` |
+| **ws1mage-rev** ws1Mage oob dwell | 3 bars = 15 s | not yet in any bank | **MINE.** Joe rejected the 10 s dwell at 03:29:20 and never named a floor. `jig.WS1MR_DWELL` |
 | window | 2026-08-25 00:00:00 to 2026-08-28 00:00:00 | **NO** | Joe 0910 *"extend the report to 08-27 (full days)"* |
 
 ### THE SPAN AND THE SLOPE FLOOR ARE FITTED, NOT MEASURED
@@ -136,7 +138,49 @@ Joe dropped the idea 0911 rather than rule the mapping.
 
 ---
 
-## 9. The ws1Mage reversal wob
+## 9. ws1mage-rev — the mechanic, on the Jig
+
+Joe 0911 named it and put it on the Jig: *"this is the reversal mech that we built. add it to the
+Jig, name it ws1mage-rev"*, and *"everything we build must run through the Jig"*.
+
+Producer `ws1mage_rev(g1, sig_mage, hi, lo, dwell, rev_wob, hold, gate)` at
+`optimus9/analysis/jig.py:151`, exposed as `jig.causal.ws1mage_rev(...)`. It DELEGATES - the
+reversal to `lr_v2._mage_rev`, the boundary cross to the Jig's own `oob_ib_cross`. Nothing is
+re-implemented.
+
+Four index arrays per dr: `dwell_ok`, `rev`, `sig` (the cross bar), `sig_conf` (the bar the cross
+becomes knowable = cross + hold - 1).
+
+### THE TWO KNOBS, Joe 0911
+
+| knob | value | units |
+|---|---|---|
+| `WS1MR_REV_WOB` | **2** | STEPS between bars. A run of n steps spans n x 5 s across n + 1 bars, so 2 = 10 s |
+| `WS1MR_HOLD` | **4** | BARS in-bounds must hold for the boundary cross to count |
+
+`WS1MR_DWELL` = 3 bars is the third knob in the chain and it is MINE, unruled.
+
+### THE xwob IS NOT LOOKAHEAD - truncation-tested 0911
+
+Joe 0911: *"applying a wob should never impact lookahead"*. Correct, and an earlier claim of mine
+that it was lookahead is WITHDRAWN. Recomputing with the tape cut bar by bar, at xwob 4: the
+17:12:00 crossing is not reported at a cut of 17:12:05 or 17:12:10, appears for the first time at
+17:12:15, and never moves after that. The hold delays KNOWLEDGE; nothing reads forward. `sig` and
+`sig_conf` are both causal.
+
+### The walk from the 08-25 17:06:30 dr -1 flip, at reversal 2 / boundary 4
+
+| leg | utc | +s |
+|---|---|---|
+| dr -1 flip (start) | 17:06:30 | 0 |
+| ws1Mage oob dwell met | 17:08:10 | 100 |
+| ws1Mage reversal | 17:08:20 | 110 |
+| **ws1mage-rev event (cross)** | **17:12:00** | 330 |
+| knowable at | 17:12:15 | 345 |
+
+ws1Mage 8.13 at the reversal; gcws30Mage 16.00 at the cross.
+
+### The reversal wob, measured
 
 `_mage_rev(ws1Mage, n)` from `optimus9/analysis/lr_v2.py:272`. Returns per bar: `+1` ws1Mage turned
 from falling to rising, `-1` turned from rising to falling, `0` no turn.
