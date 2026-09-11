@@ -21,23 +21,10 @@ THE FOOTNOTES, Joe 0824: "add any pertinent data to the report. it seems that mo
 footnotes. only add data columns if you need to". Every one is a reading of the WHOLE board, so
 none of them became a column. No producer is restated here - each is imported.
 
-    dr         gcws30Mage, ws1Mage and ws2Mage against the 80/20 fence, and the dr they give.
-               jig.wsf_facing_dr for the fence test, jig.wsf_dr_lookback for the 3-minute lookback.
-               Joe 0823: "wsf's dr will be set by the positioing of gcws30Mage, ws1Mage and ws2Mage
-               - if they are all > {100 - knob:20 fence} then dr = +1" and "restrict the lookback
-               to 3 minutes". The three lines are read from ws_line_bar, PROVEN identical to
-               build_dtf_delegation's own values across all 85 delegation bars, 0 mismatches, and
-               the lookback producer is PROVEN to reproduce all 85 banked answers, 0 mismatches.
-               IT REPORTS THE LOOKBACK ANSWER. Reading only the bar itself said "no dr" at
-               03:53:00 while the mechanic had dr +1 from 5 seconds earlier. It also says plainly
-               when the board's dr is not the one the three lines give.
-               ONE LINE. Joe 0825: "my label was the complete label. one line of footer real-estate
-               is all that is needed". The Mage values, the source bar and the lag are banked in
-               dtf_delegation and wsf_mage_oob and none of them is needed to reach a verdict.
-               THE LABEL IS `dr`, Joe 0825: "it's better to stick with our universal dr". "facing"
-               was my coinage from Joe's question "which way am I facing?" and is gone. The two
-               readings are labelled together, Joe 0825 verbatim: "three-mage-lb: {yes/no},
-               three-mage-dr: {dr}" - lb is whether the lookback found a bar, dr is what it gives.
+    dr         DROPPED 0911. Joe: "drop the threemage dr mech. I'm happy with our current dr
+               mech". The project's dr is ws1Mage + ws13m, both out of bounds on the same side,
+               latched - docs/wsf_dtf_v3_spec.md section 2. The three-mage footnote also read
+               ws_line_bar, which stops at 08-19.
     template   Joe's spec 3.5 markers - the away count, the toward count, the r IB count, the LTF
                and HTF splits, how far ws8r is from its fence and what its verdict did, the
                weak-mage and how many Mage lines are out. LTF and HTF are imported from
@@ -159,14 +146,14 @@ from optimus9 import DatabaseManager
 from optimus9.compute import momo_core as MC   # level_gate(): the ONE 50-gate formula, 0903
 from optimus9.compute.momo_gated import curl_gates
 from optimus9.compute.momo_config import momo_bank, momo_config
-from optimus9.analysis.jig import wsf_facing_dr, wsf_dr_lookback, stoch_out_extreme
+from optimus9.analysis.jig import stoch_out_extreme
 from build_wsf_setup_model import LTF, HTF
 from build_wsf_walk_events import SIG as WALK_SIG   # the walk owns the knob signature;
                                                     # this report joins to it, never restates it
 
-WIN_FROM = '2026-08-04 00:00:00'
+WIN_FROM = '2026-08-25 00:00:00'
 MAX_TF   = 12    # KNOB, mirrored from build_wsf_walk_events. Joe 0826: "wsf is limited to TF12"
-DAY      = '2026-08-04'
+DAY      = '2026-08-25 to 2026-08-27'
 HI, LO   = 85.0, 15.0
 # THE TWO KNOBS THIS FILE USED TO HOLD ARE GONE, 0903. LEVEL_SLACK 13.9 and MOMO_SLOPE_MIN 1.0
 # were literals here while build_wsf_walk_events read the shared ones, so the gate printed here and
@@ -183,9 +170,9 @@ MOMO_STALL_DELAY = 5    # KNOB, Joe 0829: "option 2: create a {knob:5} MOMO_STAL
                         # report_wsf_bar, NOT BANKED, so nothing banked reads this. The day a
                         # test reads `heading` it must go into the walk's signature or the
                         # A/B overwrites itself. MINE, STATED.
-MAGE_KNOB    = 20       # Joe 0823: "{100 - knob:20 fence}" -> the dr fence is 80 / 20
+MAGE_KNOB    = 20       # DEAD since 0911 - the three-mage dr mech it fed is dropped.
 XCROSS_XWOB  = 5        # the x-cross hold, build_wsf_x_cross.py / build_wsf_exhaust_bar.py
-DR_LOOKBACK_S = 180     # Joe 0823: "restrict the lookback to 3 minutes". Owned by
+DR_LOOKBACK_S = 180     # DEAD since 0911 - same. Kept so the value is not lost.
                         # build_dtf_delegation as DDS_LOOKBACK_S; repeated here because this report
                         # reads the line cache directly and does not import that builder.
 WMT_TF_LO    = 2        # the weak-mage scan's lowest timeframe. Joe 0821 moved it from 1 to 2
@@ -194,8 +181,14 @@ HIGH_TF_GAP   = 15.0    # KNOB, Joe 0828. The r gap under which the H+1 line tak
 WMT_TF_HI    = 12       # the weak-mage scan's highest timeframe. Joe 0826: "weak-mage-tf scan
                         # is now TF2 to TF12". It is in wsf_bar_tf's unique key, so it MUST be
                         # pinned in every join here - the ceiling-8 rows are still banked.
-KNOBS = ('kw4_fs21_sn6_hi85_lo15_r20.5_sl1_arc4_sk13.9_cr0.4_'
-         f'mk{MOMO_KILL}_mf{MOMO_FENCE_R}_xw{MOMO_XWOB}')
+# THE KNOB STRING MUST BE THE ONE THAT BUILT wsf_dtf_v3. Joe 0911: "the key needs to reflect the
+# settings that built the current wsf_dtf_v3 data, most especially the sideways events that created
+# the wdv_utc timestamps". That is momo_config v1 with TWO FITTED OVERRIDES - momo_slope_min 0.4 and
+# a FIXED 10-minute lattice span, which at 21 samples puts the gap at 30 s for EVERY timeframe.
+# PROVEN: all 371 wsf_dtf_v3 rows at ws1..ws12 read `sideways` on this bank at their own bar and dr,
+# 0 misses.
+KNOBS = ('kw6_fs21_sn6_hi85_lo15_r20.7_sl0.4_arc4_sk13.9_cr0.4_'
+         f'mk{MOMO_KILL}_mf{MOMO_FENCE_R}_xw{MOMO_XWOB}_sp10')
 # THE JOIN MUST PIN EVERY KNOB ON BOTH TABLES. Both now hold several knob sets side by side - that
 # is what the unique keys are for - so a join that pins only some of them returns one row per
 # COMBINATION. Unpinned, this report printed four rows per line.
@@ -353,11 +346,6 @@ def main():
         db.disconnect()
         return 1
 
-    # the three lines over the lookback window ENDING at this bar, so the lookback can run.
-    face = db.execute('SELECT wlb_utc t, wlb_g30Mage a, wlb_ws1Mage b, wlb_ws2Mage c '
-                      'FROM ws_line_bar WHERE wlb_utc <= %s ORDER BY wlb_utc DESC LIMIT %s',
-                      (bar, DR_LOOKBACK_S // 5 + 1), fetch=True)
-    face = list(reversed(face))
     rows = db.execute("""SELECT b.wbt_tf tf, b.wbt_r r, b.wbt_mage mg, b.wbt_mage_oob_tol mt,
               b.wbt_weak_mage_tf wmt, l.wflb_verdict u, l.wflb_curl_ends ce, l.wflb_stalled sl, l.wflb_slope sp,
               l.wflb_ungated ung, l.wflb_aligned al, l.wflb_bend_align ba, l.wflb_bendfit bf,
@@ -549,23 +537,10 @@ def main():
     #    0 mismatches.
     #    IT REPORTS THE LOOKBACK ANSWER, NOT THE BAR-ONLY TEST. Reading only the bar said "no dr"
     #    on 08-04 03:53:00 while the mechanic had dr +1 from 5 seconds earlier.
-    if face:
-        f = face[-1]
-        live = wsf_facing_dr([[x['a'] for x in face], [x['b'] for x in face],
-                              [x['c'] for x in face]], 100 - MAGE_KNOB, MAGE_KNOB)
-        lb, lg = wsf_dr_lookback(live, DR_LOOKBACK_S // 5)
-        fdr, lag = int(lb[-1]), int(lg[-1])
-        # ONE LINE, AND THE LABEL IS JOE'S COMPLETE LABEL, 0825 verbatim: "my label was the
-        # complete label. one line of footer real-estate is all that is needed:
-        # 'three-mage-lb: {yes/no}, three-mage-dr: {dr}'". The Mage values, the source bar and the
-        # lag are all banked elsewhere and none of them is needed to reach a verdict.
-        head = (f"three-mage-lb: {'yes' if fdr else 'no'}, "
-                f"three-mage-dr: {f'{fdr:+d}' if fdr else 'none'}")
-        if fdr and fdr != dr:
-            head += f'   BOARD READ AT dr {dr:+d}'
-        print(f'      {head}')
-    else:
-        print('      three-mage-lb: no, three-mage-dr: none   (the three lines are not banked here)')
+    # THE THREE-MAGE dr MECH IS DROPPED. Joe 0911: "drop the threemage dr mech. I'm happy with our
+    # current dr mech". The board's dr comes from the caller; the project's dr is ws1Mage + ws13m
+    # both oob on the same side, latched (docs/wsf_dtf_v3_spec.md section 2). It also read
+    # `ws_line_bar`, which stops at 08-19 and could never have covered 08-25.
 
     # 2. Joe's template markers, spec 3.5: the ceiling line reversing, many aways, many ltf
     #    `r IB`s, weak-mage.

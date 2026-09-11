@@ -82,6 +82,23 @@ MOMO_XWOB = 4
 # THE SEMANTICS ARE jig.momo_landed's, not a fork: the run counts CONSECUTIVE bars outside, and it
 # only counts if the line was INSIDE on the bar before it went out. A line already outside does not
 # land on that standing position - it waits for a return inside and a fresh exit.
+# ── MATCHING wsf_dtf_v3, Joe 0911 ─────────────────────────────────────────────────────────────
+# "the key needs to reflect the settings that built the current wsf_dtf_v3 data, most especially
+# the sideways events that created the wdv_utc timestamps."
+#
+# build_wsf_dtf_v3 computes every verdict as
+#     bk = dict(momo_bank(db, tf, version=1)); bk['momo_slope_min'] = 0.4
+#     with momo_config(bk), momo_window(10):
+# - momo_config v1 as the base, but with TWO OVERRIDES: the slope floor forced to 0.4, and the
+# momentum window forced to a FIXED 10 minutes instead of k_window x tf.
+#
+# BOTH OVERRIDES ARE FITTED, NOT MEASURED. They were swept until ws7r read `sideways` at Joe's
+# eyeballed ~05:36 on 08-25. Re-declare that every time either number is quoted.
+#
+# Leave both None to reproduce the earlier banks byte-for-byte.
+SLOPE_OVERRIDE    = 0.4    # FITTED. None = use the bank's momo_slope_min
+SPAN_OVERRIDE_MIN = 10     # FITTED. None = use k_window x tf, minutes
+
 MOMO_KILL = 'state'
 # Joe 0820: "IF a momentum-true r line crosses into oob or stalls THEN it's momentum = false (or
 # none). this needs to show up in the `verdict` column."
@@ -243,7 +260,12 @@ def main():
         raise SystemExit(f'TFS {TFS[0]}..{TFS[-1]} spans {len(_ids)} momentum banks: '
                          f'{sorted(_ids)}. One run must sit inside one bank.')
     BANK = _bk[TFS[0]]
+    if SLOPE_OVERRIDE is not None:
+        BANK = dict(BANK); BANK['momo_slope_min'] = SLOPE_OVERRIDE
     FIXED = BANK['momo_fixed_samples']
+    # the momentum window: fixed minutes when overridden, else this line's own k_window x tf
+    win_of = lambda tf: (SPAN_OVERRIDE_MIN if SPAN_OVERRIDE_MIN is not None
+                         else BANK['k_window'] * tf)
     print(f"  momentum bank: {BANK['mech']} tf{BANK['tf_lo']}..{BANK['tf_hi']} v{BANK['version']}",
           flush=True)
     ts = np.load(os.path.join(TAPE_DIR, _tape_key(END_MS, HOURS, WARMUP, PXS) + '.npz'))['__ts__']
@@ -291,7 +313,8 @@ def main():
     KNOBSIG = (f"kw{BANK['k_window']}_fs{FIXED}_sn{STALL_N}_hi{HI:g}_lo{LO:g}"
                f"_r2{BANK['momo_r2_min']:g}_sl{BANK['momo_slope_min']:g}"
                f"_arc{BANK['curl_arc_min']:g}_sk{BANK['level_slack']:g}"
-               f"_cr{BANK['curl_r2_min']:g}_mk{MOMO_KILL}_mf{MOMO_FENCE_R}_xw{MOMO_XWOB}")
+               f"_cr{BANK['curl_r2_min']:g}_mk{MOMO_KILL}_mf{MOMO_FENCE_R}_xw{MOMO_XWOB}"
+               + (f'_sp{SPAN_OVERRIDE_MIN}' if SPAN_OVERRIDE_MIN is not None else ''))
     print(f'  knob signature: {KNOBSIG}', flush=True)
     where = 'wflb_win_from=%s AND wflb_knobs=%s'
     kv = (WIN_FROM, KNOBSIG)
@@ -305,14 +328,14 @@ def main():
         r = np.load(os.path.join(LINE_DIR,
                                  _line_key(END_MS, HOURS, WARMUP,
                                            override(tf * 60, KLine(**B.R_SPEC), 'emerging')) + '.npy'))
-        with momo_config(BANK), momo_window(BANK['k_window'] * tf):
+        with momo_config(BANK), momo_window(win_of(tf)):
             step, samples = int(MC.MOMO_STEP_BARS), int(MC.MOMO_SAMPLES)
         span = (samples - 1) * step
         lat = np.stack([r[i - span:i + 1:step] for i in range(i0, i1 + 1)])   # the stall lattice
         for dr in DRS:
             mask, since = _stall_rows(lat, dr, STALL_N)
             rows = []
-            with momo_config(BANK), momo_window(BANK['k_window'] * tf):
+            with momo_config(BANK), momo_window(win_of(tf)):
                 prev_mfr = prev_st = 0      # the bar before the window, for the 'moment' reading
                 run = 0                     # consecutive bars outside momo-fence-r
                 was_inside = False          # the run only counts if it started from inside

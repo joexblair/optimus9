@@ -25,6 +25,61 @@ Joe 0911, verbatim:
 **sub-wsf and wsf overlap on ws1 to ws4.** That is what Joe wrote; it is recorded as written and
 not reconciled.
 
+**ws12 IS THE MAX wsf LINE. ws13 BELONGS TO dtf.** Joe 0911, correcting himself: *"I've made a
+mistake: ws13 belongs to dtf, ws12 is the max wsf line. the wsf-model-report shows ws1..ws12"*.
+This agrees with the code, which has held it since Joe 0826 (*"wsf is limited to TF12"*):
+`build_wsf_line_bar.py:57`, `build_wsf_bar_tf.py:56` and `report_wsf_bar.py` are all
+`range(1, 13)`. There is no ws13 anywhere in the wsf chain and none is wanted.
+
+### The wsf-model-report
+
+`report_wsf_bar.py` — THE wsf-model-report, format named and fixed by Joe 0820. Shows **ws1..ws12**,
+one row per timeframe. Its source tables are `wsf_bar_tf` and `wsf_line_bar`; it recomputes nothing.
+
+`wsf_setup_board` is the BANKED wsf-model-report and carries ws1..ws8 only, 32 rows - a narrower
+slice than the report itself prints.
+
+| chain step | producer | window built |
+|---|---|---|
+| `wsf_line_bar` | `build_wsf_line_bar.py` | 08-25 00:00:00 -> 08-28 00:00:00, Joe 0911 |
+| `wsf_bar_tf` | `build_wsf_bar_tf.py` | 08-25 00:00:00 -> 08-28 00:00:00, Joe 0911 |
+
+Joe 0911: *"replace that chain (08-04 is no longer needed), and use the live knob set"*. Both
+producers read the CACHED .npy line arrays, not `ws_line_bar`, so nothing upstream had to be built.
+The 08-04 rows were left in place - both producers delete only rows at their own (win_from, knobs)
+key, and the standing rule is no deletes.
+
+**THE LIVE KNOB SET**, from the producers' own constants:
+
+    kw4_fs21_sn6_hi85_lo15_r20.5_sl1_arc4_sk13.9_cr0.4_mkstate_mf17_xw4
+
+| knob | value | producer constant |
+|---|---|---|
+| k_window | 4 | `kw4` |
+| fixed samples | 21 | `fs21` |
+| stall n | 6 | `sn6`, `STALL_N` — build_ws_fin.py's value |
+| boundaries | 85.0 / 15.0 | `hi85_lo15` |
+| r2 min | 0.5 | `r20.5` |
+| slope min | 1 | `sl1` |
+| arc | 4 | `arc4` |
+| level_slack | 13.9 | `sk13.9` — coin-tossed 0731, never swept |
+| curl | 0.4 | `cr0.4` |
+| momentum kill | state | `mkstate`, `MOMO_KILL` |
+| momo fence r | 17 | `mf17`, `MOMO_FENCE_R` — the 83/17 fence |
+| momo xwob | 4 | `xw4`, `MOMO_XWOB` |
+
+**THE THREE-MAGE dr MECH IS DROPPED.** Joe 0911: *"drop the threemage dr mech. I'm happy with our
+current dr mech"*. Removed from `report_wsf_bar.py` - the footnote, the `ws_line_bar` query that fed
+it and the `wsf_facing_dr` / `wsf_dr_lookback` imports. The project's dr is the one in section 2:
+ws1Mage and ws13m both out of bounds on the same side, latched.
+
+`report_wsf_bar.py` is re-pointed at the 08-25 window and at the wsf_dtf_v3-matching knob string:
+
+    kw6_fs21_sn6_hi85_lo15_r20.7_sl0.4_arc4_sk13.9_cr0.4_mkstate_mf17_xw4_sp10
+
+**PROVEN, not asserted:** all 371 `wsf_dtf_v3` rows at ws1..ws12 read `sideways` on that bank at
+their own bar and dr. 0 misses.
+
 ## 2. The dr flip
 
 Joe 0911, verbatim:
@@ -57,7 +112,7 @@ existing bank instead of overwriting it.
 | knob | value | in KNOBS | source |
 |---|---|---|---|
 | timeframe range | ws1 to ws23 | yes, `tf1.23` | Joe 0910 *"increase the max r lines to ws23"* then *"add the ws1,2,3,4 r lines to the report"*. It moves rows — `top mom TF` and `prev mom` both scan it |
-| lattice span | 10 minutes, every line | yes, `sp10` | **FITTED** |
+| lattice span | **10 minutes = the SPAN, every line. The GAP between samples is 30 s** | yes, `sp10` | **FITTED** |
 | `momo_slope_min` | 0.4 | yes, `sl0.4` | **FITTED** |
 | fence | 25.0 / 75.0 | yes, `f25.75` | Joe 0910, raised from 30/70 |
 | dr pair | ws1Mage + ws13m | yes, `drws1Mage.ws13m` | Joe 0909 |
@@ -71,6 +126,27 @@ existing bank instead of overwriting it.
 | **ws1mage-rev** boundary xwob | **4 bars** — in-bounds must hold 4 bars | not yet in any bank | Joe 0911, same message. `jig.WS1MR_HOLD` |
 | **ws1mage-rev** ws1Mage oob dwell | 3 bars = 15 s | not yet in any bank | **MINE.** Joe rejected the 10 s dwell at 03:29:20 and never named a floor. `jig.WS1MR_DWELL` |
 | window | 2026-08-25 00:00:00 to 2026-08-28 00:00:00 | **NO** | Joe 0910 *"extend the report to 08-27 (full days)"* |
+
+### THE 10 MINUTES IS THE SPAN, NOT THE GAP
+
+`momo_window(10)` sets the TOTAL SPAN of the momentum lattice to 10 minutes. `MOMO_FIXED_SAMPLES`
+is 21, so the GAP between samples is 600 s / 20 intervals = **30 s = 6 bars, at EVERY timeframe**.
+
+`momo_gated.py:130-158`: with `MOMO_FIXED_SAMPLES` at 0 the GAP would be held at `MOMO_STEP_MIN`
+and the sample count would float with the window. A positive value fixes the SAMPLE COUNT and
+scales the gap instead. At 21 with the span pinned, every timeframe gets the same 30 s gap.
+
+The producer prints it on every line: `lattice 21 points 6 bars apart = 30 s, span 600 s`.
+
+Contrast with the bank's own `k_window` x TF span, which this overrides:
+
+| bank | span | gap |
+|---|---|---|
+| plain v1, k_window 6 x TF | ws1r 360 s ... ws12r 4,300 s | ws1r 15 s ... ws12r 215 s |
+| this bank, fixed 10 min | 600 s at every timeframe | 30 s at every timeframe |
+
+`momo_gated.py:149` notes the consequence: with one fixed gap, the slope floor demands the same
+r-per-minute of every timeframe.
 
 ### THE SPAN AND THE SLOPE FLOOR ARE FITTED, NOT MEASURED
 
