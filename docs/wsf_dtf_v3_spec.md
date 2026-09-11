@@ -212,17 +212,24 @@ Joe 0911 rulings on the board, all verbatim:
 - **`blocked by 50`** is `yes` when that gate is what turned the verdict to `none`. Joe 0820 on
   ws8r at 07:36:20: *"not over 50 ... therefore momentum = false"*
 
-### THE CROSS BAR AND THE CONFIRM BAR ARE DIFFERENT BARS
+### THE CROSS BAR AND THE CONFIRM BAR - THE WOB DECIDES, NOT A RULING
 
 A ws1mage-rev event has two timestamps and both are causal:
 
-| bar | what it is |
-|---|---|
-| `sig` | the CROSS bar - when gcws30Mage crossed the boundary |
-| `sig_conf` | the CONFIRM bar - `sig + boundary_xwob - 1`, when the cross becomes knowable |
+| bar | what it is | where it is used |
+|---|---|---|
+| `sig` | the CROSS bar - when gcws30Mage crossed the boundary | a HISTORICAL event's timestamp, eg `wdv_backstop_utc` |
+| `sig_conf` | the CONFIRM bar - `sig + boundary_xwob - 1` | the bar the mechanic FIRES on |
 
-At the 08-25 walk: cross 17:12:00, confirm 17:12:15. **Which bar the wsf-model-report should describe
-is NOT RULED.** I ran it at 17:12:00 first without flagging the choice, then at 17:12:15.
+**THE wsf-model-report GOES ON THE CONFIRM BAR.** Joe 0911: *"if the differnece is a wob
+calculation, is it really a choice?"* It is not. Once `boundary_xwob` is 4,
+`sig_conf = sig + 3` is arithmetic. And at the cross bar nothing has fired yet - the in-bounds run
+is one bar old; the cross bar is a label computed backwards once the run completes.
+
+At the 08-25 walk: cross 17:12:00, confirm **17:12:15**, and 17:12:15 is where the board goes.
+
+I first called this a choice for Joe. It was not. Recorded because the pattern matters: before
+escalating, check whether the alternative is actually reachable.
 
 ## 5. The columns
 
