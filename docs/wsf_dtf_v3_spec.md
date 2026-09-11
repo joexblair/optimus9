@@ -105,6 +105,36 @@ sits outside the fence. Joe 0909: *"keep the first sideways event per dr flip"*.
 
 ## 4. Knobs
 
+**THE KNOBS LIVE IN THE DB.** Joe 0911: *"all hard-coded values need to be in the db. create a
+config table for our spec"*. Table `wsf_dtf_v3_config`, loader
+`optimus9/compute/v3_config.py`, seeder `seed_v3_config.py`. **38 knobs at v1.**
+
+One row per knob, not one wide row - the spec is still forming and a wide table needs a DDL change
+per knob. Each row carries its own provenance, which a wide table cannot:
+
+| column | holds |
+|---|---|
+| `wdc_owner` | `joe` = Joe set it. `mine` = I picked it and he has not ruled it |
+| `wdc_fitted` | 1 = the value was chosen by SCORING AGAINST JOE'S LABELS |
+| `wdc_in_key` | 1 = it is inside a bank's knob string / unique key |
+| `wdc_source` | Joe's words, or file:line |
+| `wdc_version` | in the unique key, so a change lands BESIDE the old value |
+
+Reading it:
+
+    from optimus9.compute.v3_config import v3_config
+    C = v3_config(db)
+    C['momo_span_min']          # 10
+    C.fitted('momo_span_min')   # True  -> say so when you quote it
+    C.mine_keys()               # ['dwell', 'warm_utc'] -> re-flag them in every report
+
+**At v1: 2 knobs are FITTED** - `momo_span_min` and `momo_slope_min`. **2 are MINE and unruled** -
+`dwell` and `warm_utc`.
+
+The table below is the same set, kept readable in the doc. The DB is the source of truth.
+
+
+
 Every knob that moves a row. The ones marked **in KNOBS** are inside `wdv_knobs`, which is the
 first part of the unique key `(wdv_knobs, wdv_utc, wdv_line)`, so a change lands BESIDE the
 existing bank instead of overwriting it.
