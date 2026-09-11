@@ -518,134 +518,15 @@ def main():
     print(f"    | {cell(t1):^17} | {cell(t2):^17} |")
     print('    ' + '-' * 43)
 
-    # ----- FOOTNOTES, Joe 0824: "add any pertinent data to the report. it seems that most of them
-    # are footnotes. only add data columns if you need to". Every one of these is a reading of the
-    # WHOLE board, so none of them is a column. The producers are imported, never restated.
-    H = {int(x['tf']): x for x in rows}
-    hd = {t: heading(bool(H[t]['ob']), float(H[t]['sp'])) for t in H}
-    away = sorted(t for t in H if hd[t] == 'away')
-    tow = sorted(t for t in H if hd[t] == 'toward')
-    rib = sorted(t for t in H if LO < float(H[t]['r']) < HI)
-    tfs = lambda g: ','.join(f'ws{t}' for t in g) if g else '-'
-    print()
-    print('    FOOTNOTES')
-
-    # 1. the dr the three Mage lines give. Joe 0823: "wsf's dr will be set by the positioing of
-    #    gcws30Mage, ws1Mage and ws2Mage - if they are all > {100 - knob:20 fence} then dr = +1",
-    #    and "restrict the lookback to 3 minutes". BOTH producers are jig's, and the lookback is
-    #    the same one build_dtf_delegation runs - proven identical on all 85 delegation rows,
-    #    0 mismatches.
-    #    IT REPORTS THE LOOKBACK ANSWER, NOT THE BAR-ONLY TEST. Reading only the bar said "no dr"
-    #    on 08-04 03:53:00 while the mechanic had dr +1 from 5 seconds earlier.
-    # THE THREE-MAGE dr MECH IS DROPPED. Joe 0911: "drop the threemage dr mech. I'm happy with our
-    # current dr mech". The board's dr comes from the caller; the project's dr is ws1Mage + ws13m
-    # both oob on the same side, latched (docs/wsf_dtf_v3_spec.md section 2). It also read
-    # `ws_line_bar`, which stops at 08-19 and could never have covered 08-25.
-
-    # 2. Joe's template markers, spec 3.5: the ceiling line reversing, many aways, many ltf
-    #    `r IB`s, weak-mage.
-    #    THE CEILING LINE IS READ FROM THE BOARD, NOT HARDCODED. It was ws8 while TF8 was the
-    #    ceiling; Joe 0826 moved the ladder to TF12, so a fixed ws8 named the wrong line.
-    top = max(H) if H else None
-    w8 = H.get(top)
-    past = (float(w8['r']) - HI) if dr > 0 else (LO - float(w8['r'])) if w8 else None
-    print(f"      template      away {len(away)} ({tfs(away)})   toward {len(tow)} ({tfs(tow)})"
-          f"   r IB {len(rib)} ({tfs(rib)})")
-    print(f"                    LTF away {len([t for t in away if t in LTF])}"
-          f"   HTF toward {len([t for t in tow if t in HTF])}"
-          f"   (LTF is ws{LTF[0]}-ws{LTF[-1]}, HTF is ws{HTF[0]}-ws{HTF[-1]}, Joe 0824)")
-    if w8:
-        print(f"                    ws{top}r {float(w8['r']):.2f} is {abs(past):.2f} "
-              f"{'past' if past > 0 else 'short of'} the {HI if dr > 0 else LO:g} fence"
-              f"   verdict {w8['u']}   after {w8['lv2'] or 'nothing'}   dwell {int(w8['vdw'])} s")
-    print(f"                    weak-mage {'ws' + str(wmt) if wmt else 'NONE'}"
-          f"   Mage lines out of bounds {sum(1 for t in H if H[t]['mt'])} of {len(H)}")
-
-    # 3. the stoch reading. jig.stoch_out_extreme - the outgoing reading at an extreme fixes which
-    #    way r can still move. Joe 0824: "r has dropped to the ~floor ... and has nowhere to go".
-    rise = sorted(t for t in H if stoch_out_extreme(H[t]['so']) > 0)
-    fall = sorted(t for t in H if stoch_out_extreme(H[t]['so']) < 0)
-    want = 'fall' if dr > 0 else 'rise'
-    with_trade = fall if dr > 0 else rise
-    print(f"      stoch         r can only RISE on {len(rise)} ({tfs(rise)})"
-          f"   r can only FALL on {len(fall)} ({tfs(fall)})")
-    print(f"                    a dr {dr:+d} trade needs r to {want}, so {len(with_trade)} of"
-          f" {len(H)} lines are mechanically committed to it")
-
-
-    # 4. the x-cross that turns a wsf-exhaust into a trade signal. Joe, spec 1.6, verbatim:
-    #    "the next action after `wsf-exhaust`: walk forward. if ws{weak-mage}x-cross has printed,
-    #    then create a trade signal". Printed ONLY on a wsf-exhaust bar, because that is the state
-    #    his rule starts from.
-    #    THE WATCHED LINE IS ws{weak-mage-tf}x, AND THE TIMEFRAME IS FIXED AT THIS BAR.
-    #    Joe 0828, ruling on the two readings: "reads weak-mage-tf at the exhaust bar and watches
-    #    that line forward -- this is the correct option". The walk does the same.
-    #    CORRECTED 0828. This query previously re-read the weak-mage timeframe at every forward
-    #    bar and took the first bar where the crossing line happened to match, which named ws2x at
-    #    00:25:15 where the walk named ws12x at 00:15:10 from the same data.
-    #    THE MOMENT IS THE RISING EDGE of a cross held XCROSS_XWOB bars: the first bar where the
-    #    race has a winner and the bar before it did not. wsf_x_cross latches `fired`, so without
-    #    the rising-edge test a cross already running would be reported as new.
-    #    NO CAP ON THE WALK. Joe named no horizon; the search runs to the end of the tape.
-    # BOTH EXHAUST STATES. wsf-forced-exhaust is a wsf-exhaust that the x-cross declared, so it
-    # arms the weak-mage line exactly the same way. The guard read only 'wsf-exhaust', which
-    # silently dropped the x-cross and trade footnotes on every forced event.
-    if state in ('wsf-exhaust', 'wsf-forced-exhaust'):
-        # the weak-mage timeframe AT THIS BAR. NULL is Joe's rule C: watch ws2x instead.
-        # Joe 0817 as corrected 0826: "if weak-mage-tf == None and domTF state is FREE, fire a
-        # trade signal on the next ws2x-cross".
-        wm_row = db.execute('SELECT wbt_weak_mage_tf w FROM wsf_bar_tf WHERE wbt_utc=%s '
-                            'AND wbt_dr=%s AND wbt_tf=1 AND wbt_wmt_tf_lo=%s AND wbt_wmt_tf_hi=%s',
-                            (bar, dr, WMT_TF_LO, WMT_TF_HI), fetch=True)
-        watch = int(wm_row[0]['w']) if wm_row and wm_row[0]['w'] else 2
-        route = 'weak-mage' if wm_row and wm_row[0]['w'] else 'rule C, no weak-mage'
-        # BIG-HAMMER, Joe 0829: "if wsf-forced-exhaust fires, then the trade prints at the same
-        # time". On a forced bar the cross IS the exhaust, so there is nothing to scan forward for.
-        # The line is the designated one from the gate above, Joe 0829: "the trade rides the
-        # designated line that created the wsf-forced-exhaust". weak-mage-tf is still read and
-        # printed in the board's `weak mage` column - Joe 0829: "weak-mage is decoration only when
-        # a forced exhaust happens".
-        if forced is not None:
-            print(f"      x-cross       ws{forced}x crossed its {XCROSS_TARGET} target at "
-                  f"{bar[11:]}, 0m00s after this bar   ->  TRADE SIGNAL   (big-hammer)")
-            print(f"      trade         opened {bar[11:]} on ws{forced}x-cross")
-            wmt = int(wm_row[0]['w']) if wm_row and wm_row[0]['w'] else None
-            print(f"      weak-mage     {('ws' + str(wmt)) if wmt else 'NONE'}"
-                  f"   decoration only on a forced exhaust - big-hammer took the signal")
-            _bh = True
-        else:
-            _bh = False
-        xr = [] if _bh else db.execute("""SELECT wxc_utc u, wxc_tf tf, wxc_race_won won FROM wsf_x_cross
-            WHERE wxc_dr=%s AND wxc_xwob=%s AND wxc_tf=%s AND wxc_utc >= %s
-            ORDER BY wxc_utc""", (dr, XCROSS_XWOB, watch, bar), fetch=True)
-        fired = None
-        prev_won = None
-        for k, y in enumerate(xr):
-            if y['won'] is not None and (k == 0 or prev_won is None):
-                if k > 0 or str(y['u']) != bar:      # a cross already standing at this bar is not new
-                    fired = y
-                    break
-            prev_won = y['won']
-        if fired:
-            gap = int((fired['u'] - dt.datetime.strptime(bar, '%Y-%m-%d %H:%M:%S')).total_seconds())
-            print(f"      x-cross       ws{fired['tf']}x crossed its {fired['won']} target at "
-                  f"{str(fired['u'])[11:]}, {gap // 60}m{gap % 60:02d}s after this bar"
-                  f"   ->  TRADE SIGNAL   ({route})")
-            # THE TRADE, Joe 0828: "for the footnote only, I want to capture the trade data as soon
-            # as the x-cross mech has produced a timestamp, when the event is 'exhaust'. ie before
-            # the mech knows anything about slot information -- that's where I'll look for the
-            # trade data that matches an exhaust event. the slots have a different purpose: they
-            # serve at the machine level, not the signal level".
-            # SO IT IS SOURCED FROM `fired` ABOVE, NOT FROM THE SLOT COLUMNS. It prints on any
-            # wsf-exhaust bar whose x-cross resolves, whether or not the walk banked an event there.
-            print(f"      trade         opened {str(fired['u'])[11:]} on ws{fired['tf']}x-cross")
-        elif not _bh:
-            print(f'      x-cross       no cross on ws{watch}x to the end of the tape   ({route})')
-            print('      trade         none - the x-cross mech produced no timestamp')
-    print()
+    # THE FOOTNOTES ARE DROPPED. Joe 0911: "the footnotes aren't needed". Every one was a
+    # reading of the WHOLE board rather than a column, and the last of them - the three-mage dr -
+    # Joe dropped the same day. The board and the trade pool are the report.
+    #
+    # THE COLUMNS JOE READS, 0911 verbatim: "the current valuable columns are r value, heading,
+    # extrema, extrema dwell (time since last r extrema), verdict, last verdict, last verdict
+    # dwell". The rest stay printed - they are not in the way - but they are not what he scans.
     db.disconnect()
     return 0
-
 
 if __name__ == '__main__':
     sys.exit(main())

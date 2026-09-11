@@ -185,6 +185,45 @@ Both were chosen by sweeping until ws7r read `sideways` at Joe's eyeballed ~05:3
 knob chosen by scoring against Joe's label is fitted. Re-declare it as fitted every time it is
 quoted. Nothing anchors either number to a mechanism.
 
+## 4a. The wsf-model-report, as Joe reads it
+
+Joe 0911 rulings on the board, all verbatim:
+
+| item | Joe's ruling |
+|---|---|
+| the columns he scans | *"the current valuable columns are r value, heading, extrema, extrema dwell (time since last r extrema), verdict, last verdict, last verdict dwell"* |
+| stoch / sat / RSI columns | *"these were created for you, but might not be needed now. create the columns and leave them empty"* - they exist in `wsf_bar_tf` and are NULL on all 1,244,184 rows of the 08-25 build |
+| weak mage repeating on every row | *"yes, it repeats by design"* - `wbt_weak_mage_tf` is one answer for the bar, printed per line |
+| the footnotes | *"the footnotes aren't needed"* - all 129 lines dropped from `report_wsf_bar.py` |
+| curl direction | *"for wsf, curl is allowed to fire in both directions"* |
+| `wsf-curl mode` | *"I don't know why wsf-curl mode is none. ignore it for now"* - OPEN |
+| 50 gate / blocked by 50 | *"I can't recall what the 50 gate and blocked by 50 columns do"* - the answer is below |
+
+### What the 50 gate and blocked-by-50 columns hold
+
+`report_wsf_bar.py:98-105`, the level test inside `momo_core.level_gate()`:
+
+- a line must be on the FAR side of 50 for its direction before momentum can be true
+- the gate SLACKENS by up to `level_slack` 13.9 points, in proportion to how cleanly the line
+  tracks: `slack = level_slack x r2 x min(1, |slope| / momo_slope_min)`, both read from the bound
+  bank
+- a line that tracks perfectly can therefore sit 13.9 points the WRONG side of 50 and still pass
+- **`50 gate`** prints the level the line actually had to reach at that bar
+- **`blocked by 50`** is `yes` when that gate is what turned the verdict to `none`. Joe 0820 on
+  ws8r at 07:36:20: *"not over 50 ... therefore momentum = false"*
+
+### THE CROSS BAR AND THE CONFIRM BAR ARE DIFFERENT BARS
+
+A ws1mage-rev event has two timestamps and both are causal:
+
+| bar | what it is |
+|---|---|
+| `sig` | the CROSS bar - when gcws30Mage crossed the boundary |
+| `sig_conf` | the CONFIRM bar - `sig + boundary_xwob - 1`, when the cross becomes knowable |
+
+At the 08-25 walk: cross 17:12:00, confirm 17:12:15. **Which bar the wsf-model-report should describe
+is NOT RULED.** I ran it at 17:12:00 first without flagging the choice, then at 17:12:15.
+
 ## 5. The columns
 
 | column | holds |
