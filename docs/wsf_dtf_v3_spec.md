@@ -38,8 +38,10 @@ at dr -1, read live from `optimus9_system`.
 
 `dr +1` is the high side. `dr -1` is the low side.
 
-**Proposed 0911, NOT BUILT:** swap ws1Mage for the ws1Mage-reversal mech, so the pair becomes
-**ws1Mage-rev + ws13m**. Open — see §5.
+**Proposed 0911 and DROPPED the same day.** Joe floated swapping ws1Mage for the ws1Mage-reversal
+mech, so the pair would become ws1Mage-rev + ws13m. He withdrew it: *"I'll drop the idea, dr mech
+will stay as ws1Mage + ws13m"*. It was never built. The reason it stalled is recorded in §8 — a
+reversal returns a TURN, and the rule it would have joined needs both members to have a SIDE.
 
 ## 3. The row
 
@@ -65,6 +67,7 @@ existing bank instead of overwriting it.
 | mask sequence | gcws30 then ws1..ws18 — 19 tags, 18 pairs | **NO** | Joe 0910 |
 | HTF lines | ws120, ws90, ws60, ws45, ws30 | **NO** | Joe 0910 |
 | warm-up | 2026-08-23 00:00:00 | **NO** | mine — the 21-sample lattice and the dr latch need history |
+| ws1Mage reversal wob | **UNDER TEST** — 2 and 6 measured | not in any bank | `_mage_rev(ws1Mage, n)`. The reversal is not in the dr mech and not in the report; this row records the knob and what it is worth. See §9 |
 | window | 2026-08-25 00:00:00 to 2026-08-28 00:00:00 | **NO** | Joe 0910 *"extend the report to 08-27 (full days)"* |
 
 ### THE SPAN AND THE SLOPE FLOOR ARE FITTED, NOT MEASURED
@@ -116,18 +119,56 @@ The first string carries no `tf` prefix; that absence means ws5..ws23.
 
 ## 7. Open
 
-1. **The dr-flip swap.** Joe 0911 proposed replacing ws1Mage with the ws1Mage-reversal mech.
-   Not built — the substitution is not yet defined. See the question in §8.
+1. **The ws1Mage reversal wob.** Not settled. §9 carries what 2 and 6 measure.
 2. **Name `wdv_top_backstop_utc`.** The name and its position after `wdv_top1` are both mine.
 3. **The x-cross-race hold is not in the unique key.** A sweep of it overwrites both backstop
    columns.
 4. **sub-wsf and wsf overlap on ws1..ws4**, as Joe wrote the bands.
 
-## 8. The dr-flip swap — what has to be settled first
+## 8. Why the dr-flip swap stalled — kept as the record, the idea is dropped
 
 The rule today needs both members to have a SIDE: "ws1Mage and ws13m both oob on the same side".
 `_mage_rev(ws1Mage, 2)` returns a TURN, not a side: `+1` a down-to-up turn, `-1` an up-to-down
 turn, `0` no turn. There is no single obvious mapping from a turn to a side, and the two candidate
 mappings are opposites of each other, so the choice changes every dr run in the report.
 
-Not built until Joe rules it.
+Joe dropped the idea 0911 rather than rule the mapping.
+
+---
+
+## 9. The ws1Mage reversal wob
+
+`_mage_rev(ws1Mage, n)` from `optimus9/analysis/lr_v2.py:272`. Returns per bar: `+1` ws1Mage turned
+from falling to rising, `-1` turned from rising to falling, `0` no turn. `n` is the confirmation
+bars — the turn counts once ws1Mage has moved `n` consecutive bars the same way, and the event
+fires on bar `n`. A flat bar extends the run rather than breaking it. Boundary-agnostic: it does
+not require the line to be outside a fence.
+
+Joe 0911: *"we need a wob for the reversal. test with wob 6"*.
+
+### Density across the whole cache, 1,632,960 bars
+
+| wob | reversals | one every |
+|---|---|---|
+| 2 | 360,738 | 4.5 bars = 22.6 s |
+| 6 | 66,650 | 24.5 bars = 122.5 s |
+
+wob 6 keeps 18.5% of what wob 2 fires.
+
+### The 08-25 17:06:30 test
+
+The dr -1 flip at 17:06:30 — ws1Mage 14.06 and ws13m 12.81, both below 15.0. The dr -1 run ends at
+the next flip, 17:19:45.
+
+| setting | next reversal after the flip | gap |
+|---|---|---|
+| wob 2 | 17:07:00 | 30 s |
+| wob 6 | 17:19:10 | 760 s |
+| **Joe's read** | **~17:09** | **~150 s** |
+
+Neither wob lands on Joe's read. At wob 2 there IS a reversal at 17:09:00, but it is the 9th of 20
+in that stretch, not the first. At wob 6 there is no reversal at all between 17:06:30 and 17:19:10.
+wob 6 produces 2 reversals in the whole 13.25-minute dr -1 run, and one of them is the dr flip bar
+itself.
+
+The disagreement between Joe's ~17:09 and both measured values is OPEN. Neither is ranked.
