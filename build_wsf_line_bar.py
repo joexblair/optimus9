@@ -99,9 +99,17 @@ MOMO_XWOB = 4
 SLOPE_OVERRIDE    = 0.4    # FITTED. None = use the bank's momo_slope_min
 SPAN_OVERRIDE_MIN = 10     # FITTED. None = use k_window x tf, minutes
 
-MOMO_KILL = 'state'
-# Joe 0820: "IF a momentum-true r line crosses into oob or stalls THEN it's momentum = false (or
-# none). this needs to show up in the `verdict` column."
+MOMO_KILL = 'off'
+# REVERSED 0912. Joe: "'a momentum-true r line that is out of bounds or stalled reads none' - this
+# verdict needs to be reversed - it was built for a different mechanic and will break our new spec".
+# The wsf-dtf-v3 spec rides ws1's momentum and hands the reins to the next higher TF when the ridden
+# line goes `sideways`. Under 'state' a line lost its momentum verdict exactly when it went oob -
+# which is when it is strongest - so the handover would fire on `none` instead of on `sideways`.
+# NOTHING WAS BUILT FOR THIS. The knob already had an 'off' setting and it is already in the unique
+# key, so the reversal is a knob flip and the new bank lands beside the old one.
+#
+# Joe 0820, the rule this replaces: "IF a momentum-true r line crosses into oob or stalls THEN it's
+# momentum = false (or none). this needs to show up in the `verdict` column."
 #   'state'  the line IS out of bounds on its side, or IS stalled -> the verdict is none.
 #   'moment' only the bar the line crossed, or the bar the stall began -> the verdict is none.
 #   'off'    no override; the verdict is the producer's own.

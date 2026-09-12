@@ -1,4 +1,8 @@
-"""seed_v3_config — every hard-coded value in the wsf-dtf-v3 chain, banked as version 1.
+"""seed_v3_config — every hard-coded value in the wsf-dtf-v3 chain.
+
+V2, 0912: momo_kill 'state' -> 'off', and chain_knobs follows it to ..._mkoff_... . Joe reversed
+the 0820 demotion: "it was built for a different mechanic and will break our new spec". v1 stays
+banked, so a run at the old reading is still reproducible.
 
 Joe 0911: "all hard-coded values need to be in the db. create a config table for our spec".
 
@@ -14,7 +18,7 @@ from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.compute.v3_config import DDL, TABLE, v3_config
 
-V = 1
+V = 2
 
 # section, key, value, type, units, owner, fitted, in_key, source, note
 ROWS = [
@@ -71,14 +75,16 @@ ROWS = [
   'Joe 0910: "add a mode that uses gcws15 in place of gcws30, to make the signals more surgical"', None),
 
  # ── the wsf-model-report chain ────────────────────────────────────────────────────────────────
- ('wsf_chain', 'chain_knobs', 'kw6_fs21_sn6_hi85_lo15_r20.7_sl0.4_arc4_sk13.9_cr0.4_mkstate_mf17_xw4_sp10',
+ ('wsf_chain', 'chain_knobs', 'kw6_fs21_sn6_hi85_lo15_r20.7_sl0.4_arc4_sk13.9_cr0.4_mkoff_mf17_xw4_sp10',
   'str', None, 'joe', 0, 1,
   'Joe 0911: "the key needs to reflect the settings that built the current wsf_dtf_v3 data"',
   'PROVEN: all 371 wsf_dtf_v3 rows at ws1..ws12 read sideways on it, 0 misses'),
  ('wsf_chain', 'stall_n', '6', 'int', 'lattice samples', 'joe', 0, 1, 'build_wsf_line_bar.py STALL_N, from build_ws_fin.py', None),
  ('wsf_chain', 'momo_fence_r', '17', 'int', 'r-points', 'joe', 0, 1, 'build_wsf_line_bar.py MOMO_FENCE_R', 'the 83/17 fence'),
  ('wsf_chain', 'momo_xwob', '4', 'int', 'bars', 'joe', 0, 1, 'build_wsf_line_bar.py MOMO_XWOB', None),
- ('wsf_chain', 'momo_kill', 'state', 'str', None, 'joe', 0, 1, 'build_wsf_line_bar.py MOMO_KILL', None),
+ ('wsf_chain', 'momo_kill', 'off', 'str', None, 'joe', 0, 1,
+  'Joe 0912: "this verdict needs to be reversed - it was built for a different mechanic and will break our new spec"',
+  "v1 was 'state' - Joe 0820's rule demoting a momentum-true line that is oob or stalled to none. 'off' = the producer's own verdict"),
  ('wsf_chain', 'grid_s', '5', 'int', 'seconds', 'joe', 0, 0, 'build_wsf_line_bar.py GRID_S', 'the base bar'),
  ('wsf_chain', 'xcross_target', 'r', 'str', None, 'joe', 0, 1, 'report_wsf_bar.py XCROSS_TARGET, Joe 0828',
   "'r' = x crosses its own r. 'race' = Mage, b, boundary"),
