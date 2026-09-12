@@ -393,3 +393,186 @@ wob 6 produces 2 reversals in the whole 13.25-minute dr -1 run, and one of them 
 itself.
 
 The disagreement between Joe's ~17:09 and both measured values is OPEN. Neither is ranked.
+
+---
+
+## 10. Spec context — what `r` is, Joe 0911/0912
+
+Joe's words, and the frame everything below reads through.
+
+### `r` is ONE line, zoomed
+
+> *"`r` is a single contiuation that we 'zoom-in on' by referencing it across diminishing TFs:
+> ws1/gcws30 are the most granular view of `r`, therefore the LTF `r`'s position on the board tells
+> us its immediate future (generally, the next 5 minutes)"*
+
+- ws1r and ws12r are not twelve different lines. They are one continuation sampled at twelve
+  magnifications
+- so the board is not a set of independent votes. The LTF rows are the near future of the HTF rows
+- the horizon Joe gives for the granular view is **roughly the next five minutes**
+
+### The first task at a dr flip
+
+> *"at the dr flip, the first task is to assess where the walk is starting from. to do this, we look
+> at the r line as a whole"*
+
+Not "is there a signal" — **where on the continuation are we standing**. Read the board top to
+bottom before reading any single row.
+
+### r turning away from dr means pxs pivoted
+
+> *"when r is low on the board and then turns away from its dr (ie r value starts to increase), this
+> tells us that pxs has pivoted. the report will show this inidcated in changes to `verdict`,
+> `heading`, so-on, with the added context of the walk's forward motion. the model-report will
+> evolve the values for the important columns per-bar"*
+
+- `low on the board` + `r rising at dr -1` = the pivot has happened
+- it shows in `verdict` and `heading` before it shows anywhere else
+- the report is a PER-BAR evolution, not a snapshot
+
+### Waning versus reversing
+
+> *"when you understand the purpose of `r`, then we can review `verdict` against `last-verdict`, in
+> the context of `last-verdict dwell`, to learn if momentum is waning or reversing"*
+
+The three columns are one reading, never three:
+
+| you have | it means |
+|---|---|
+| `verdict` = none, `last-verdict` = momo or curl, dwell LARGE | the momentum is long gone — waning |
+| `verdict` = none, `last-verdict` = sideways, dwell LARGE | it already flattened and then emptied — spent |
+| `verdict` = momo, `last-verdict` = none, dwell SMALL | it just arrived — loading |
+
+### AN `r` LINE WITH MOMENTUM PULLS THE TF ABOVE IT
+
+Joe 0912, on ws2r sitting at 8.88 while ws1r had already turned:
+
+> *"I guarantee that ws2 will lift in the upcoming bars, and here's why: an `r` line that has
+> momentum will organically lead (or pull) the TF immediately above it"*
+
+- the lead is STRUCTURAL, not coincidence. ws1 is the first minute of ws2's two
+- so a split between adjacent lines is not a disagreement — it is a **lag**, and the direction of
+  travel belongs to the faster line
+- this reverses how a split should be read. The granular line is not an outlier to be discounted;
+  it is the instruction the line above has not executed yet
+
+---
+
+## 11. Ingredients — my own learnings
+
+Observations I have made from the data, each with the bars and values that produced it AND the
+generalised shape. **Joe 0912: *"print the time's and values that you've observed, but also describe
+the same observations with generalisation so that you don't get hyper-focussed on exact
+values/exact differences ... you're modelling human behaviour, so no two sets of values will ever
+be exactly the same."*** The numbers are the evidence; the shape is the ingredient.
+
+### Why the shape and not the number — what StochRSI is measuring
+
+StochRSI is the position of RSI inside RSI's own recent range: a momentum reading of a momentum
+reading. What that measures about the people in the tape:
+
+| reading | the crowd state it reflects |
+|---|---|
+| high in its range | FOMO, euphoria, chasing |
+| low in its range | panic, capitulation |
+| cooling back off an extreme | the crowd is spent — the signal fires HERE, not at the extreme |
+
+That is why the ingredients below are written as shapes. A capitulation recurs; the number it
+bottoms at never does. It also explains Joe's mechanics from underneath: `extrema dwell` is *how
+long since the crowd's most extreme moment*, and `r turning away from its dr` is *the crowd
+finishing*.
+
+### INGREDIENT 1 — at a dr flip, the board can already be spent
+
+**Observed, 08-25 17:06:30, the dr -1 flip:**
+
+| what | value |
+|---|---|
+| lines reading `none` | 9 of 12 |
+| lines reading `away` | ws2, ws4, ws5, ws6, ws7, ws8, ws12 |
+| oldest extrema dwells | ws12 2525 s, ws4 2290 s, ws7 2290 s, ws5 1795 s, ws6 1565 s |
+| lines `blocked by 50` | ws4, ws5, ws6, ws7 — r 54.99 to 66.34 against dr -1 |
+| lines with momentum | ws3, and ws10/ws11 at dwell 5 s / 0 s |
+
+**The shape:** a dr flip is a statement about two Mage lines, not about the board. The board it
+lands on may have already made and left its move. The tells, in order of how much they carry:
+
+1. most lines reading `none` — no momentum anywhere to inherit
+2. `heading` = away on the majority, with `extrema dwell` in the **tens of minutes** rather than
+   seconds — the extremes are old
+3. the mid band sitting on the WRONG side of 50 for the new dr, with `blocked by 50` set — those
+   lines are barred from momentum by position alone
+4. whatever momentum exists having a **tiny** `last-verdict dwell` — it has just arrived and has
+   established nothing
+
+### INGREDIENT 2 — momo -> sideways -> none, with the dwell stacked by timeframe, is WANING
+
+**Observed at the same bar:**
+
+| line | last verdict | dwell |
+|---|---|---|
+| ws4 | momo | 2295 s |
+| ws5 | sideways | 1555 s |
+| ws6 | sideways | 1110 s |
+| ws7 | sideways | 690 s |
+| ws1 | curl | 410 s |
+| ws2 | momo | 255 s |
+
+**The shape:** the sequence `momo` then `sideways` then `none` is the decay of one impulse, not
+three unrelated states. Read the dwells across timeframes, not per line:
+
+- dwell **increasing** with timeframe = the impulse died at the fast end first and the slow lines
+  are still holding the corpse. That is **waning**
+- the same three states with dwells that are all SHORT and not ordered by timeframe = the board is
+  changing its mind, not finishing. That is a transition, and it is not the same ingredient
+- a large dwell on `sideways` is more final than a large dwell on `momo` — flattening first, then
+  emptying, is a completed move
+
+### INGREDIENT 3 — the granular line's turn precedes the board's, by about its own timeframe
+
+**Observed, ws1r and ws2r across the 17:06:30 flip to the 17:12:15 event and beyond:**
+
+| utc | what happened |
+|---|---|
+| 17:07:00, 17:07:15, 17:07:45 | ws1r printed three `curl`s, each dying within 5 s |
+| 17:09:00 | ws1r `momo` at r 15.31 — its lowest r of the window |
+| 17:09:20 | ws1r `momo` again at r 17.34 |
+| 17:10:00 | ws1r `momo` -> `none`, r jumped 17.34 -> 39.10 in one step |
+| 17:12:05 | ws2r bottomed, r 8.12, extrema 7.02 |
+| 17:12:15 | the ws1mage-rev event. ws1r 42.48 `away`; ws2r 8.88 still low |
+| 17:20:00 | ws1r 97.53, ws2r 65.74 |
+
+**The shape:** Joe's lead/pull rule, seen once end to end.
+
+- the faster line turns first; the line above it follows. Here the turn was ws1 at 17:10:00 and
+  ws2 at about 17:12:05 — a lag on the order of **ws2's own timeframe**, not a fixed number of bars
+- **repeated short-lived curls at the granular end are the crowd testing the extreme.** Three curls
+  dying inside 5 s each preceded the real turn by about two minutes. Treat a cluster of instant
+  curls as pressure building, not as failed signals
+- the turn itself is not gradual. ws1's r moved more in one step than in the preceding minute, and
+  the verdict died on the same bar. **A large single-step r move with the verdict collapsing is the
+  pivot**, and it reads clearer than any threshold on r's level
+- a split between adjacent lines at an event is a LAG. The faster line holds the instruction
+
+### INGREDIENT 4 — a signal can fire while the granular view already disagrees
+
+**Observed at the 17:12:15 ws1mage-rev event:** six lines read `momo` toward the low — ws3, ws4,
+ws5, ws6, ws10, ws12 — with `blocked by 50` cleared on all four lines that had been barred at the
+flip, as their r came back down through 50 (ws4 66.34 -> 40.70, ws5 61.08 -> 51.71). At the same
+bar ws1r read 42.48 `away` with its momentum 135 s dead.
+
+**The shape:** the mid band re-loading and the granular line leaving are not contradictory
+readings, they are **different points on the same continuation**. The board describes where the
+move has been; the granular line describes where it is going. When a signal fires on the board's
+state while the granular line has already turned, the signal is late by construction — the amount
+it is late by is the lag in Ingredient 3.
+
+**This is not yet ruled and it is not yet scored.** It is one event. What would settle it is the
+same board read at many ws1mage-rev events, with the granular line's heading recorded beside each.
+
+### The standing caution on this section
+
+Every ingredient here comes from ONE dr run on ONE day. They are hypotheses with a worked example
+attached, not measured rates. Joe 0912: *"it's all science, testing hypothesese."* When an
+ingredient is tested across a population, that result belongs here too — replacing the shape, not
+decorating it.
