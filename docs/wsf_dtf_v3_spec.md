@@ -1432,8 +1432,8 @@ place a trade. **Nothing calls it yet**; §17.2 is still unbuilt.
 | # | item |
 |---|---|
 | H-1 | **CLOSED 0914.** Joe: *"the hand-off is simply wsf tell dtf that it has control. when dtf receives control, it starts walking the wdv_utc rows (causal, currently pre-built in wsf_dtf_v3)"*. So the hand-off carries control and the bar, nothing more, and `handoff_routing.route` returning `'dtf'` with its `known_at` is the whole of it. See 19.1 |
-| H-2 | the ws4 ride ceiling is not banked. `handoff_routing` falls back to 4 when the config has no key for it |
-| H-3 | the momentum config the router runs — slope floor 0.05, reference slope 0.05, straightness 0, band 40, seam `skip_r2` — is not in `wsf_dtf_v3_config`. Joe's standing rule is that hard-coded values live in the DB |
+| H-2 | **CLOSED 0914.** Banked as `handoff.ride_tf_hi` = 4 at v4, deliberately separate from `band_subwsf` and `band_wsf_hi`. See 19.2 |
+| H-3 | **DEFERRED 0914.** Joe: *"we'll sweep it when the o9-live loop is built"*. See 19.3 |
 
 
 ### 19.1 WHAT THE dtf HAND-OFF CARRIES — Joe 0914, H-1 closed
@@ -1459,3 +1459,58 @@ spec-building"*:
 That closes the loop: wsf hands control to dtf, dtf walks the rows, and dtf hands back to the
 routing machine when it finds its pattern. **None of dtf's walk is specified and none of it is
 built.** Nothing in §19 depends on it.
+
+
+### 19.2 THE RIDE CEILING — Joe 0914, H-2 closed
+
+**Verbatim:**
+
+> we're talking about the TF limit of wsf, and where it belongs. I see it as a knob in a db table:
+> 4 was chosen by eyeballing only, so we might find that 5 is "better" in a sweep. `better` is yet
+> to be baked: it needs the routing completed after wsf and dtf are locked down
+
+**Banked at v4 as `handoff.ride_tf_hi` = 4, units timeframe.** It is the highest timeframe the
+machine will RIDE. `handoff_routing.route` reads it with no fallback.
+
+**IT IS DELIBERATELY SEPARATE** from the two band knobs it could have been folded into:
+
+| knob | value | what it bounds |
+|---|---|---|
+| `handoff.ride_tf_hi` | 4 | the highest line the machine rides |
+| `band_subwsf` | gcws30..ws4 | the sub-wsf band, per Joe 0911 |
+| `band_wsf_hi` | 12 | how far the hand-off scan reaches, per Joe 0914 C-1 |
+
+Reading the ceiling off `band_subwsf` would have needed no new knob, and Joe rejected that: a sweep
+must be able to move the ride ceiling to 5 without moving the band.
+
+**EYEBALLED, NOT FITTED.** `wdc_fitted` is 0 because the flag means *chosen by scoring against
+Joe's labels*; 4 was his own eye, which is a different provenance. The note records it as a sweep
+candidate.
+
+**`better` IS NOT DEFINED YET.** Joe 0914: *"it needs the routing completed after wsf and dtf are
+locked down"*. Until then there is no target to sweep this knob against.
+
+---
+
+### 19.3 THE MOMENTUM CONFIG — Joe 0914, H-3 deferred
+
+The config the router runs - slope floor 0.05, reference slope 0.05, straightness floor 0, level
+band 40, seam `skip_r2` - is **not** in `wsf_dtf_v3_config`, against Joe's standing rule that
+hard-coded values live in the DB.
+
+**Its provenance, both halves:**
+
+| | |
+|---|---|
+| **origin** | configuration number 1 of 2,580,480 - the loosest entry - taken by walk 5's cycle-7 ws4 digression on try 1, under the loosest-first ordering Joe himself called a fault on 0913: *"this highlights a fault in my instruction. the better method would be to sweep backwards from the tightest collection"* |
+| **validation** | the 14-day out-of-sample run: 213 tested test-points, 196 covered, 92.0%. That is independent of the sweep order |
+
+**The reversed sweep was never run.** Within the hour the divergence covered 12 of the 14 hard bars
+and Joe closed the sweep: *"I don't think we need to sweep"*.
+
+**DEFERRED, not dropped.** Joe 0914: *"I did, and it was based on the positive coverage that we
+pulled from IS and OOS. having said that, somewhere in my thoughts is tugging at it, but I can't
+pin it down. --we'll sweep it when the o9-live loop is built"*.
+
+His unresolved doubt is recorded as his, not interpreted. Nothing here tries to name what is
+tugging at it.

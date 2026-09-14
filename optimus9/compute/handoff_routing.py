@@ -101,8 +101,8 @@ def route(k, dr, L, banks, seams, cfg, C, DR, divergence=None, span_min=10):
 
     -> {'route': 'dtf'|'trade', 'why': str, 'known_at': bar, 'lines': [...], 'ws4': {...}}
     """
-    lo = int(C['band_subwsf_hi']) if 'band_subwsf_hi' in C else 4     # ws4 is the wsf ride ceiling
-    hi = int(C['band_wsf_hi'])                                        # Joe 0914 C-1: scan to ws12
+    lo = int(C['ride_tf_hi'])     # the highest timeframe the machine rides. Joe 0914, eyeballed
+    hi = int(C['band_wsf_hi'])    # how far the scan reaches above it. Joe 0914 C-1: ws12
     i0 = EX.last_dr_change(DR, k)
 
     ok, ws4 = ws4_pair(L['m4'], L['r4'], k, dr, C)

@@ -1,5 +1,10 @@
 """seed_v3_config — every hard-coded value in the wsf-dtf-v3 chain.
 
+V4, 0914: ONE KNOB ADDED - handoff.ride_tf_hi. Joe: "we're talking about the TF limit of wsf, and
+where it belongs. I see it as a knob in a db table: 4 was chosen by eyeballing only, so we might
+find that 5 is 'better' in a sweep". It is SEPARATE from band_subwsf and from band_wsf_hi, so a
+sweep can move the ride ceiling without moving either band.
+
 V3, 0914: FOUR KNOBS ADDED, no value changed. Two for the ride end (spec 17.2a) and two for the
 momentum expiry (spec 18). Joe set all four values; the labels and the two section names are MINE
 under his 0913 delegation - "I'll pass the knobs to you for labelling". v1 and v2 stay banked.
@@ -22,7 +27,7 @@ from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.compute.v3_config import DDL, TABLE, v3_config
 
-V = 3
+V = 4
 
 # section, key, value, type, units, owner, fitted, in_key, source, note
 ROWS = [
@@ -114,6 +119,12 @@ ROWS = [
   'Joe 0914, answering M-2: "yes, xwob5"',
   'the line must hold past the expiry fence for this. Units BARS to match momo_xwob and '
   'boundary_xwob, the two xwob rows already here; 5 bars = 25 s. Label mine'),
+
+ # ── the hand-off, spec 17.2 / 19, Joe 0914 ───────────────────────────────────────────────────
+ ('handoff', 'ride_tf_hi', '4', 'int', 'timeframe', 'joe', 0, 0,
+  'Joe 0914: "4 was chosen by eyeballing only, so we might find that 5 is \'better\' in a sweep"',
+  'the highest timeframe the machine RIDES. Separate from band_subwsf and band_wsf_hi so a sweep '
+  'can move it alone. EYEBALLED by Joe, not swept. Label mine. See spec 19.2'),
 ]
 
 
