@@ -1374,3 +1374,63 @@ at 84.54:
 
 **NOT BUILT.** No producer arms, bites or clears the expiry. The two knobs are banked at v3 and
 nothing reads them.
+
+
+---
+
+## 19. THE HANDOFF ROUTING MACHINE — Joe 0914 named it
+
+Joe 0914: *"I see how this new route 2 is affected by route 1 - will it flow cleanly if I replace
+route 1's 'If not, place a trade instead' with 'if not, delegate to the handoff routing machine'?"*
+and *"if so, build a machine that handles both routes"*.
+
+**IT FLOWS, AND IT COLLAPSES THE TWO ROUTES INTO ONE.** Joe 0914: *"route 1 would only open up if
+ws4Mage and ws4r have exited their respective boundaries, ie that would be the first test in any
+case"*. So there are not two routes with two entry points. There is one decision:
+
+| step | test | outcome |
+|---|---|---|
+| 1 | ws4Mage out of bounds on the dr side held `ride_end.mage_dwell` bars, AND ws4r outside momo-fence-r on the dr side held `ride_end.r_wob`+1 bars | hand to dtf |
+| 2 | otherwise, scan ws5 up to `band_wsf_hi` for momentum-true. **Any one line is enough** — Joe 0914 C-2 | hand to dtf |
+| 3 | otherwise | the trade machine |
+
+**The consolidation is not a separate route.** Joe's *"ws[1,2,3,4]Mage are all not oob because the
+market is consolidating"* is step 1 failing, which is exactly what step 2 is for.
+
+**Joe's 0914 answers that shape it:**
+
+| # | question | answer |
+|---|---|---|
+| C-1 | how far up does the scan run | **ws12**. Joe corrected his own ws13: *"my earlier call on ws13 was incorrect, I should have said ws12"* |
+| C-2 | how many lines must agree | *"only one is required"* |
+| C-3 | what settings the verdict uses above ws4 | *"use the ws2-ws4 config"*, and it is no longer to be called fitted: *"1) our OOS tests have proven value, 2) the line's config is consistent across the TFs"* |
+| C-4 | which fence is "not oob" | *"oob is always 15/85"* |
+
+**CAUSAL, with one stated delay.** Every test reads bars at or before the bar, except the
+divergence, whose anchors are the 24 bars after it (17.1 step 6). When a divergence carries a line,
+the decision is knowable at the firing bar, up to 120 s later. The producer returns `known_at` so a
+caller never acts earlier than it may.
+
+**BUILT 0914.** `optimus9/compute/handoff_routing.py` decides the route;
+`optimus9/compute/momo_expiry.py` answers §18's expiry question. SRP: the router owns no threshold
+— every knob arrives from `wsf_dtf_v3_config` — and it does not detect a ride end, ride a line or
+place a trade. **Nothing calls it yet**; §17.2 is still unbuilt.
+
+**Measured 0914 at the bars that exist:**
+
+| what | result |
+|---|---|
+| the expiry on Joe's example, ws6r 08-27 | armed 16:36:00, bitten 16:54:00, never cleared, expired at 17:09:10 |
+| the route at 08-27 17:09:10 dr +1, the one miss of 40 | **dtf**, carried by ws8, ws9, ws10, ws11, ws12. Knowable at the bar itself |
+| the ws4 pair at that bar | ws4Mage 82.92 with a 0-bar run, ws4r 36.92 with a 0-bar run — both fail |
+| the route at all 40 in-sample ws2 momentum bars | **dtf at 40 of 40**, every one carried by step 2 |
+| the ws4 pair across those 40 | passed **0 of 40** |
+| the trade machine | reached **0 times** in 41 bars |
+
+**OPEN**
+
+| # | item |
+|---|---|
+| H-1 | what a dtf hand-off actually carries — which dtf mechanic receives it, and with what. Named in 17.3b as Q-3's remainder and still unanswered |
+| H-2 | the ws4 ride ceiling is not banked. `handoff_routing` falls back to 4 when the config has no key for it |
+| H-3 | the momentum config the router runs — slope floor 0.05, reference slope 0.05, straightness 0, band 40, seam `skip_r2` — is not in `wsf_dtf_v3_config`. Joe's standing rule is that hard-coded values live in the DB |
