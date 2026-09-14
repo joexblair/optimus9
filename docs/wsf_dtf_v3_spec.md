@@ -1431,6 +1431,31 @@ place a trade. **Nothing calls it yet**; §17.2 is still unbuilt.
 
 | # | item |
 |---|---|
-| H-1 | what a dtf hand-off actually carries — which dtf mechanic receives it, and with what. Named in 17.3b as Q-3's remainder and still unanswered |
+| H-1 | **CLOSED 0914.** Joe: *"the hand-off is simply wsf tell dtf that it has control. when dtf receives control, it starts walking the wdv_utc rows (causal, currently pre-built in wsf_dtf_v3)"*. So the hand-off carries control and the bar, nothing more, and `handoff_routing.route` returning `'dtf'` with its `known_at` is the whole of it. See 19.1 |
 | H-2 | the ws4 ride ceiling is not banked. `handoff_routing` falls back to 4 when the config has no key for it |
 | H-3 | the momentum config the router runs — slope floor 0.05, reference slope 0.05, straightness 0, band 40, seam `skip_r2` — is not in `wsf_dtf_v3_config`. Joe's standing rule is that hard-coded values live in the DB |
+
+
+### 19.1 WHAT THE dtf HAND-OFF CARRIES — Joe 0914, H-1 closed
+
+**Verbatim:**
+
+> the hand-off is simply wsf tell dtf that it has control. when dtf receives control, it starts
+> walking the wdv_utc rows (causal, currently pre-built in wsf_dtf_v3)
+
+So the hand-off is a transfer of control and nothing else. `handoff_routing.route` returning
+`{'route': 'dtf', 'known_at': bar}` is the complete payload - there is no state to pass, because
+dtf reads the same `wsf_dtf_v3` rows from `wdv_utc` onward.
+
+**CONTEXT ONLY, NOT SPEC.** Joe 0914, marked by him as *"for context, but not for right-now
+spec-building"*:
+
+> dtf's walk is hunting for a sequence that's built off the other columns. when it finds the right
+> pattern, it will hand-off to the routing machine
+> the routing machine will probably engage ws1 to improve the trade's entry, then fire a trade
+> signal
+> this is still in dev
+
+That closes the loop: wsf hands control to dtf, dtf walks the rows, and dtf hands back to the
+routing machine when it finds its pattern. **None of dtf's walk is specified and none of it is
+built.** Nothing in §19 depends on it.
