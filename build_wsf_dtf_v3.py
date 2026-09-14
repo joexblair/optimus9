@@ -326,7 +326,10 @@ def main():
     CODE = {'none': 0, 'sideways': 1, 'curl': 2, 'momo': 3}
     ST = {}
     for tf in TFS:
-        bk = dict(BK[tf]); bk['momo_slope_min'] = SLOPE
+        # THE SPLIT, Joe 0912. Before momo_slack_ref existed, overriding momo_slope_min moved BOTH
+        # the flat/sloped branch test AND the level-gate slack. Both are set here so the rows this
+        # produces are identical to the pre-split ones. To sweep them apart, set them apart.
+        bk = dict(BK[tf]); bk['momo_slope_min'] = SLOPE; bk['momo_slack_ref'] = SLOPE
         a = np.zeros(len(ts), np.int8)
         with momo_config(bk), momo_window(SPAN):
             for k in range(i0, B + 1):
@@ -344,7 +347,7 @@ def main():
                 d = int(DR[k])
                 if d: a[k] = CODE[momo_g_why(R[tf], d, k, quad=True)[0]]
         HB[tf] = a
-        bk2 = dict(bk); bk2['momo_slope_min'] = SLOPE
+        bk2 = dict(bk); bk2['momo_slope_min'] = SLOPE; bk2['momo_slack_ref'] = SLOPE
         c = np.zeros(len(ts), np.int8)
         with momo_config(bk2), momo_window(SPAN):
             for k in range(A, B + 1):

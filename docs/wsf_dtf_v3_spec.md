@@ -10,6 +10,21 @@ signal; the wsf-dtf-v3 material there is the build record, and this doc supersed
 
 ---
 
+## 0. JOE'S ACTION POINTS (AP)
+
+> **REMINDER — Claude: whenever you open this doc, tell Joe he has open action points and list the
+> ones still open. Joe 0912 asked for this reminder to sit here so it reaches him.**
+
+Joe owns these. They are not tasks for me and I do not close them - Joe does.
+
+| # | status | action point |
+|---|--------|--------------|
+| AP-1 | open | review: the 10 minutes is the SPAN of the momentum lattice, not the gap. At 21 fixed samples the gap is 30 s = 6 bars, at EVERY timeframe |
+| AP-2 | open | is the mid-zone fence the final outcome, or is there a better method available |
+| AP-3 | open | which div tf belongs to which htf? |
+
+---
+
 ## 1. The bands
 
 Joe 0911, verbatim:
@@ -576,3 +591,722 @@ Every ingredient here comes from ONE dr run on ONE day. They are hypotheses with
 attached, not measured rates. Joe 0912: *"it's all science, testing hypothesese."* When an
 ingredient is tested across a population, that result belongs here too — replacing the shape, not
 decorating it.
+
+---
+
+## 12. Spec context — the divergence mech, Joe 0912
+
+### The four steps, Joe's verbatim
+
+> *"whenever a divergence test is requested*
+> *-1. capture the current value of r, capture the current dr*
+> *-2. look back to find the r extrema which is facing the opposing step 1's dr, and on the other*
+> *side of 50 from the r value taken in step 1*
+> *-3. look back from step 2, find the r extrema that is on the same side as step 1's dr. this r*
+> *extrema is the floater, and the step 1 r value is the anchor*
+> *-4 feed the andchor and floater timestamps and vaules into the divergence machine*
+> *eg if 08-25 17:34 is the anchor (dr 1), the step 2 lookback will find a dr -1 extrema at*
+> *~17:32:30, and the step 3 lookback will find the dr 1 floater at ~17:29"*
+
+### Step 3 is a BACKWARD block loop, Joe 0912
+
+> *"step 3 then looks back to 17:27, 17:22, etc (in one code loop) until it has proven that it has*
+> *gone past the extrema. the extrema and the timestamp are then apparent"*
+
+- the loop starts at the step-2 pivot and walks BACKWARD in blocks of 5 minutes (60 bars at the
+  5 s grid)
+- each block yields its own highest r (for a dr +1 anchor); the loop keeps the running highest
+- the loop stops at the first block that adds no new high — that block proves the top has been
+  passed
+- every bar the loop reads is already in the past at the anchor bar, so there is no delay and no
+  future bar is required
+
+**Worked example, gcws30r, anchor 08-25 17:34:00, dr +1, pivot 17:32:40:**
+
+| block | from | to | highest gcws30r in block | at | running highest | at | new high? |
+|-------|------|----|--------------------------|----|-----------------|----|-----------|
+| 1 | 17:27:40 | 17:32:40 | 90.65 | 17:29:30 | 90.65 | 17:29:30 | yes |
+| 2 | 17:22:40 | 17:27:40 | 69.48 | 17:27:30 | 90.65 | 17:29:30 | no — loop stops |
+
+- floater 17:29:30, gcws30r 90.65, close 0.18147
+- anchor 17:34:00, gcws30r 70.73, close 0.18423
+- osc delta −19.92, close delta +0.00276 → bearish
+
+### WHY THE LOOP MUST STOP AT THE PREVIOUS BUMP, Joe 0912
+
+> *"divergences rely on the previous peak for comparison against the current moment. when k is*
+> *printing a smaller vlaue than the last k 'bump', we know that the momentum is not as strong"*
+> *"the same goes for a trough, if the anchor is also a trough"*
+
+- the comparator is the PREVIOUS bump, not the highest bump in history
+- searching further back for a bigger peak substitutes an older bump and breaks the comparison
+- the stop-on-first-quiet-block rule is what makes the loop return the previous bump
+- the anchor being a trough is the mirror image: compare against the previous trough, and a
+  higher trough against a lower price low is the bullish reading
+
+**This is already in the 0711 research survey** (`docs/o9-live/divergence_research.md`), in two
+places:
+- Axis B option 1: *"Peak-to-peak / trough-to-trough (classic) — compare the two most recent
+  same-type extremes: price HH & osc LH → bearish"*
+- Finding 2: *"reading `s2r`+`s4r` at the turn vs the previous same-kind turn"*
+
+### Open — not decided, not coded
+
+- the loop's termination test on a TIE (a later block equalling the running high)
+- whether a block whose highest r sits on the wrong side of 50 for the dr is skipped or stops
+  the loop
+- block 1 is bars [pivot - 60, pivot), so THE PIVOT BAR IS EXCLUDED. That is what the
+  worked example was computed with
+- which bar of a flat top is the extrema when consecutive bars hold the same r
+- 5 minutes = 60 bars is Joe's value, stated 0912. It is not yet in the config table
+
+---
+
+## 13. The sideways / reversal hypothesis, Joe 0912 — NOT YET SCORED
+
+> *"we've landed here because I couldn't get a momentum stall/sideways/reversal with the existing*
+> *mechs. now that we have a divergence machine, I want to use it to enhance the momentum outputs.*
+> *we're in science mode, here's my hypothesis: if we see >= 3 samples printing the same values*
+> *(tolerance ~2%) on the dr side of 50, and we test for divergence for the next 2 minutes, then we*
+> *can create a reliable momentum sideways or reversal signal*
+> *-reversal is a new state. I'm not 100% sure that we need it yet, but it will help me while we*
+> *develop the science"*
+
+- built as `jig.sideways_reversal`, delegating to `jig.anchor_floater` for the divergence test
+- a SAMPLE is one 5 s bar. Evidence, not a choice: the per-sample table Joe read the hypothesis
+  off was 61 rows across 17:30:00–17:35:00
+- `sideways` fires on the bar a run REACHES 3 bars with every bar on the dr side of the MID-ZONE
+  FENCE and the run's max minus min within tolerance
+
+### THE MID-ZONE FENCE, Joe 0912
+
+> *"let's modify the dr side of 50 rule. instead of 50, create a mid-zone-fence of 40:60. the*
+> *sideways signal must be on the dr side of the fences edge"*
+
+- replaces the plain 50 test in the `sideways` run only
+- dr +1 reads the HIGH side, so every bar of the run must sit STRICTLY ABOVE 60
+- dr -1 reads the LOW side, so every bar of the run must sit STRICTLY BELOW 40
+- `anchor_floater` is untouched and still uses 50 for steps 1, 2 and 3 - that is the divergence
+  machine's own boundary and Joe did not change it
+- measured on the 18:45 walk: the ws1 sideways moves from 19:18:15 (ws1r 49.20) to 19:21:10
+  (ws1r 38.73), 2m55s later
+- `reversal` fires on the first bar in the following 24 bars (120 s) where the anchor/floater test
+  returns non-zero, with that bar as the anchor
+
+### Knobs
+
+| knob | value | units | whose |
+|------|-------|-------|-------|
+| `SR_SAMPLES` | 3 | 5 s bars | Joe 0912, ">= 3 samples" |
+| `SR_TOL` | 2.0 | r points across the run | MINE — Joe wrote "~2%", read as 2% of r's 0..100 scale |
+| `SR_TEST` | 24 | 5 s bars = 120 s | Joe 0912, "the next 2 minutes" |
+| `SR_FENCE` | (40.0, 60.0) | r points | Joe 0912, the mid-zone fence |
+| `AF_BLOCK` | 60 | 5 s bars = 300 s | Joe 0912, the step-3 block |
+| the line | ws1r | — | MINE — the report subject is ws1 |
+| walk start | ws1Mage oob-low run reaching 3 bars | 15 s | MINE — `WS1MR_DWELL`, Joe has not ruled |
+
+### THE WALK, Joe 0912
+
+**The renaming.** Joe 0912: *"it's a dr -1 flip, so the previous walk was dr -1. now that I'm
+typing, I see how the terminology is ambiguous. it would be better if I refered to flips that fire
+on the low side of board as a dr +1 flip"*
+
+- a flip that fires on the LOW side of the board is a **dr +1 flip**
+- the walk it opens is read at dr +1: ws1r's verdict comes from the dr +1 bank, and the flat run
+  must sit ABOVE 50
+- the latch itself is unchanged — it still sets its internal dr to -1 on the low side. The
+  renaming is how the WALK is labelled and read, not a change to `build_wsf_dtf_v3`
+
+**ws1Mage begins the walk.** Joe 0912: *"this event needs to fire on the opposite side of dr.
+ie ~16:42"*
+
+- the trigger is ws1Mage reaching oob on the side OPPOSITE the side the flip fired on
+- a low-side flip therefore waits for ws1Mage to reach HIGH oob (>= 75)
+- oob-dwell 6 bars = 30 s. Joe's value, given earlier for this same event: *"the next walk begins
+  at the opposing dr's ws1Mage oob cross (oob-dwell=6)"*
+- measured: the 16:14:05 low-side flip gives 16:42:25, which is Joe's ~16:42
+
+**Where the walk ends.** Joe 0912 ruled it: at the first `sideways`, or at its `reversal` when one
+fires inside the 2-minute test window. One event per walk, not a stream.
+
+### First run, 08-25, two dr +1 walks
+
+| walk | dr +1 flip (fired low) | ws1Mage begins | ws1r momo/curl | sideways | reversal |
+|------|------------------------|----------------|----------------|----------|----------|
+| nearest 16:21 | 16:14:05 | 16:42:25 | curl 17:00:00 | 17:00:10 | none |
+| nearest 17:09 | 17:05:10 | 17:20:00 | momo 17:20:00 | 17:20:00 | none |
+
+**Neither walk produced a reversal, and the gate that stopped it is the same in both:** step 3's
+block 1 held no bar above 50, so the loop stopped with no floater. That gate — "a block holding no
+dr-side bar stops the loop" — is MINE and unruled.
+
+- walk 1, anchors 17:00:15 and 17:00:20: pivot 16:57:05, block 1 = 16:52:05..16:57:05, no bar
+  above 50
+- walk 2, all 24 anchors: pivot 17:09:00, block 1 = 17:04:00..17:09:00, no bar above 50
+- walk 1's remaining 22 anchors never ran: 19 of them sat below 50 (step 1 rejects), and the last
+  3 did produce a floater at 17:00:00 r 58.29 but no divergence
+- at walk 2's sideways bar ws1r reads 97.53 with a run spanning 0.45 r points. The 0711 survey
+  Finding 4 names that shape: *"r pinned at 85/15 reads as a false equal-high"*
+
+---
+
+## 14. The seam jump and the r2 gate, Joe 0912 — SPEC STATED, NOT YET BUILT
+
+### What the r2 gate is
+
+- `momo_core.verdict` will only call a line `momo` when a straight line drawn through the 21
+  lattice samples actually describes them. `wflb_fit` is that score, `momo_r2_min` 0.7 is the floor
+- the score is 1.00 when every sample sits exactly on the line, and falls toward 0.00 as the
+  samples scatter away from it
+- the reason string on a failure is *"sloped, but too crooked to call a line"*
+
+### Why a seam step scores badly
+
+Five samples, the same total drop of 8 points, three shapes:
+
+| shape | the five values | straight-line score | passes the 0.7 floor? |
+|-------|-----------------|---------------------|-----------------------|
+| a steady slide | 50, 48, 46, 44, 42 | 1.0000 | yes |
+| flat, one step, flat | 50, 50, 50, 42, 42 | 0.7500 | yes |
+| flat, one step at the end | 50, 50, 50, 50, 42 | 0.5000 | NO |
+
+- the same move scores differently depending only on WHERE the step sits in the window
+- a step near the end of the window scores worst, and that is the freshest information
+
+### The seam, Joe 0912
+
+> *"the jump happens because it traversed the TF bar seam. this is the accepted nature of emerging*
+> *values"*
+> *"if the jump happend on the TF seam, there is no need for a threshold. the mech should simply*
+> *decide if the seam jump is towards dr"*
+> *"it's the final seam that matters. if we think about it, you're describing a `curl` state"*
+
+- no r-point threshold. The test is a timestamp test: was this step a seam step
+- the seam grid is MIDNIGHT-aligned, not epoch-aligned:
+  `(bar epoch ms - that day's midnight ms) mod (tf x 60 x 1000) == 0`
+- verified on 08-25 against the measured jump offsets: 11 of 11 dtf lines match
+- the offset changes every day, because 1440 minutes is not a whole number of 13-, 14-, 17-, 19-,
+  21-, 22- or 23-minute bars. ws13 is 300 s on 08-25, 120 s on 08-26, 720 s on 08-27
+- **THE FINAL SEAM IN THE WINDOW IS THE ONE THAT COUNTS.** Joe 0912. Earlier seams inside the same
+  window do not vote
+- **SCOPE: ACROSS THE BOARD.** Joe 0912 - every line, not only dtf. ws1's bar is 60 s so a 600 s
+  window holds 10 seams; the final one is the one that counts there too
+- a knob token is needed in the `wsf_line_bar` key, and the chain needs a rebuild
+
+### The three ways to handle the seam step — STILL JOE'S CALL
+
+Measured on the real 21 samples at 19:37:30, dr -1:
+
+| line | as it stands now | drop the seam sample and refit | line the two halves up and refit | gate |
+|------|------------------|--------------------------------|----------------------------------|------|
+| ws13 | 0.5423 | 0.5599 | 0.0001 | 0.70 |
+| ws14 | 0.4636 | 0.3835 | (undefined) | 0.70 |
+
+- **skip the gate** when the final seam step points at dr: both lines become `momo`, since the
+  slope, alignment and 50 gates already pass
+- **drop the seam sample and refit**: 0.5599 and 0.3835 - both still fail the 0.70 floor
+- **line the two halves up and refit**: removes the only movement in the window. ws13 falls to
+  0.0001. ws14 becomes a perfectly flat series with no variance at all, so the score is undefined -
+  the 1.0000 my helper returned there is an artefact of its divide-by-zero guard, not a score
+
+### Still open
+
+- off-seam movement is not covered by this rule. On 08-25 ws13 had 26 of its 96 moves above 5.0 r
+  points land off the seam, largest 10.99, and 1,183 off-seam bars moved more than 1.0 r point.
+  Joe 0912: *"noted. we'll get to them organically and consider the next move then"*
+
+---
+
+## 15. `momo_slack_ref` — the knob split out of `momo_slope_min`, Joe 0912
+
+> *"SRP says to separate"*
+
+### Why
+
+`momo_slope_min` was doing two unrelated jobs in `momo_core.py`:
+
+| job | where | what it decides |
+|-----|-------|-----------------|
+| the flat/sloped branch test | `momo_fit`, `flat=abs(sl) < MOMO_SLOPE_MIN` | whether a bar goes to the curl/sideways branch or the momo branch |
+| the level-gate slack scaling | `momo_fit` and `level_gate`, `trk = fit x min(1, abs(slope) / ...)` | how much of `level_slack` a line earns toward the 50 gate |
+
+- a sweep of that one number moved both at once and could not separate them
+- measured on the ws14 journeys, 08-25 to 09-01: raising it from 0.2 to 0.8 sent 96,314 bars from
+  the sloped branch to the flat branch, and the first firing of each journey flipped from
+  153 `momo` / 21 `curl` to 13 `momo` / 161 `curl`
+- it also shrank the slack for any given slope: a line at slope 0.4 keeps all of its slack at
+  floor 0.2 and half of it at floor 0.8
+
+### The knob
+
+| | |
+|---|---|
+| name | `momo_slack_ref` — Joe 0912 chose it |
+| what it is | the slope at which a line earns its FULL level-gate slack |
+| units | r-points per lattice sample, the same units as `momo_slope_min` |
+| where it lives | `momo_config.mmc_momo_slack_ref`, a DOUBLE NOT NULL |
+| seeded at | equal to `momo_slope_min` in every existing bank row - v0 at 1.0, v1 at 1.2 |
+| `momo_slope_min` now | the flat/sloped branch test ONLY |
+| key token | `_sr{value}`, appended ONLY when it differs from `momo_slope_min`, so every knob
+  string banked before the split is byte-identical and its rows stay matchable |
+
+### Every file that had to move
+
+| file | change |
+|------|--------|
+| `optimus9/compute/momo_core.py` | `MOMO_SLACK_REF = None`; both `trk` expressions now divide by it |
+| `optimus9/compute/momo_config.py` | KNOBS entry, and the float coercion list |
+| `build_momo_config.py` | the DDL column and the V1 seed dict |
+| `momo_config` table | `ALTER TABLE ... ADD COLUMN mmc_momo_slack_ref DOUBLE NOT NULL`, seeded equal |
+| `build_wsf_line_bar.py` | the conditional `_sr` key token, and the SLOPE_OVERRIDE site sets BOTH |
+| `build_wsf_dtf_v3.py` | both SLOPE override sites set BOTH |
+| `build_wsf_momo_flip_rep.py` | the conditional `_sr` key token |
+| `build_wsf_pxs_momo_flip_rep.py` | the conditional `_sr` key token |
+
+**THE OVERRIDE SITES ARE THE TRAP.** Before the split, `bk['momo_slope_min'] = 0.4` moved the
+branch test AND the gate. Every override site now sets both knobs, or the gate would silently keep
+the bank's 1.2 while the branch test ran at 0.4. To sweep them apart, set them apart deliberately.
+
+### Proof that nothing moved
+
+- recomputed 17,304 banked `wsf_line_bar` rows - 08-25 19:00:00 to 20:00:00, timeframes 1..12,
+  both dr - against the split code at `momo_slack_ref` = `momo_slope_min` = 0.4
+- compared the ungated verdict, the gated verdict, the slope, the straightness, the 50-gate pass
+  and the flat flag
+- **0 rows differ**
+- the key token comes out empty, so every banked knob string is unchanged
+
+---
+
+## 16. The test-point walk — Joe's rules, 0912/0913
+
+Producer `walk_mom_models.py`. Table `wsf_dtf_mom_models`.
+
+### The loop, Joe 0912 verbatim
+
+> *"-on each dr flip*
+> *--walk to same-side-dr ws1Mage crossing to oob*
+> *---walk to the next ws1r sideways or reverse (the test-point)*
+> *----scan the ws2r line for momentum-true*
+> *----for each r line (only ws2r for now) that continues to the dr-side fence exit, but is not*
+> *printing momentum-true at the test-point:*
+> *-----sweep your collection of mechs until you have a momentum-true state for the line*
+> *-----store the config (in a db table), and make it your working config*
+> *-----create a fake dr flip (eg if the last test-point was measured at dr 1, the fake flip is dr -1)*
+> *-----loop back to `walk to same-side-dr ws1Mage crossing to oob` and continue*
+> *------if the next test-point does not see momentum-true for ws2r*
+> *-------sweep again, find a config that works for both this ws2r test-point AND the previous*
+> *test-point*
+> *keep looping, test-pointing, sweeping until you can't find a sweep config that works for all of*
+> *the previous cycles. when you reach that stalemate stage, stop and produce a per-testpoint report*
+> *of your findings. use simple terms, no jagon"*
+
+### Spent momentum, Joe 0912 verbatim
+
+> *"I see the reason why you couldn't match a config: the momentum is almost spent. add this*
+> *condition: if ws2r is outside (or almost outside) the r-momo-fence at the test-point, then keep*
+> *walking to the next dr flip"*
+> *"let's stick with 17/83, no margin. we can review when this scenario recurs"*
+
+- the test reads the dr SIDE only, Joe's choice: at dr -1 a line past the LOW edge is spent, one
+  past the high edge is not
+- the walk then resumes at the next REAL latch flip, at whatever dr that flip sets - Joe's choice
+  over planting a flip
+
+### The ws1r oob step, Joe 0913 verbatim
+
+> *"that's another rule I missed: after walking to ws1Mage, the walk needs to walk to the next oob*
+> *ws1r*
+> *-in the case of 06:35, the market has been going sideways so there is no dr 1 ws1r oob (sideways*
+> *market = weak `r`) following the dr 1 ws1Mage oob*
+> *-the next event that fires after dr 1 ws1Mage , is a dr -1 ws1Mage at ~06:44, followed by a ws1r*
+> *oob @ ~06:47*
+> *-following the ~06:47 oob ws1r, the next dr -1 sideways/reverse signal (test-point) will be at*
+> *either ~06:49, or a divergence-supported signal at ~06:58"*
+
+> *"06:47:10 is fine"*
+> *"oob is alwasy 15/85"*
+> *"add `r` dwell as a knob, but don't sweep it during this walk. set the default to wob 2"*
+> *"it abandons it. treat a dr flip as a fresh start"*
+
+- `r` dwell is a wob, Joe 0913: 2 steps, so the oob run must reach 3 bars = 15 s
+- an opposite-dr ws1Mage oob arriving before the dr-side ws1r oob ABANDONS the current dr. The
+  walk takes the new dr and restarts its event hunt from that bar
+- a fresh start resets the EVENT SEQUENCE only. Joe 0913 chose to KEEP the accumulated
+  test-points, so a stalemate can still fire across a flip
+
+**Measured against Joe's read, 08-25 06:00:00 -> 07:10:00:**
+
+| what he read | what the data gives |
+|--------------|---------------------|
+| no dr +1 ws1r oob after the dr +1 ws1Mage oob | confirmed - none between 06:39:45 and 07:04:00 on either fence |
+| a dr -1 ws1Mage at ~06:44 | 06:44:10, run reaching 6 bars, ws1Mage 17.04 |
+| a ws1r oob @ ~06:47 | 06:47:00 on the 17 fence, 06:48:00 on the 15 boundary |
+| a test-point at ~06:49 | the first sideways print after the 17-fence oob is 06:47:10, which Joe accepted |
+
+### The trade signal, Joe 0913 verbatim — SHARED FOR CONTEXT, NOT BUILT
+
+> *"note, ws2 and ws3 are both outside of the fence at the ~06:58 test-point. these 3 lines*
+> *(ws1,2,3) + ws4Mage grazing low oob + a bull divergence from g30, is a trade signal. there is no*
+> *momentum at ~06:58, so the walk continues*
+> *-treat the trade signal as a dr flip"*
+
+Joe 0913: *"I shared it for context."* Three parts have no definition yet and it is NOT a restart
+trigger in the walk:
+- which fence "outside of the fence" reads for ws1r, ws2r and ws3r - 15/85 or 17/83
+- what "grazing low oob" means for ws4Mage
+- which divergence machine and at what knobs - `jig.divergence` is episode-based, and the
+  anchor/floater front end from Joe's four steps is a different one
+
+### The ws3 / ws4 digression, Joe 0912 verbatim — PARKED
+
+> *"if a stalemate fires at a test-point, run the same logic on ws3 and ws4. if either exit the*
+> *fence and a sweep config gives them momentum at the test-point, bank the config and continue the*
+> *loop on ws2 only (until the next stalemate)*
+> *you'll need a column in the dB table to record the digression"*
+
+> *"my perspective on the stalemate (ws3/ws4 temporary inclusion) stands, but it needs to be tested*
+> *after the spent-momentum mech"*
+
+Five things in it are unset: whether the ws3/ws4 config must satisfy every accumulated test-point
+or only the current one; what happens to the ws2 test-point that caused the stalemate; what to do
+if neither line works; whether to stop at the first that works; and the column name.
+
+### Walk results so far
+
+| walk | what it had | cycles | outcome |
+|------|-------------|--------|---------|
+| 1 | no spent rule, no ws1r oob step | 4 | stalemate at 08-25 06:01:55, 3 test-points, whole grid tried |
+| 2 | spent rule | 4 | stalemate at 08-25 06:35:10, 2 test-points, whole grid tried |
+
+- walk 2's spent rule fired once, at 08-25 04:59:30 with ws2r at 85.33, 2.33 past the high edge
+- it removed one of walk 1's three irreconcilable test-points and the stalemate still recurred
+
+---
+
+## 17. THE MACHINE'S PLAN — Joe 0913
+
+Joe 0913: *"this is part of a 15 step process that you created earlier. there has been changes
+since then, which need to be incorporated"* / *"steps 1 to 7 and 9 to 12 reflect the plan I have
+for the machine"* / *"update as needed and store the machine's plan in the spec, ensuring it is
+all causal"*.
+
+The 15-step list was my inventory of what `walk_mom_models.py` ran, written 0913. Joe selected
+**1-7 and 9-12** from it as the machine's plan and dropped the rest. What he dropped, and why it
+is consistent:
+
+| dropped step | what it was | why it is not in the plan |
+|---|---|---|
+| 8 | the fence-exit test | **it looks forward 420 bars.** It was a scoring device for the walk, not a live step |
+| 13 | the sweep | the settings are fixed. Joe 0913: *"I don't think we need to sweep"* |
+| 14 | the stalemate and the ws3/ws4 digression | both exist only to serve the sweep |
+| 15 | the pool | the pool only fills when a sweep fails |
+| 9 | the ws3 fallback | dropped 0913 after Joe answered O-1. ws3 arrives through 17.2 |
+
+---
+
+### 17.1 THE STEPS
+
+**Step 1 — the dr latch.** ws1Mage AND ws13m both out of bounds on the SAME side, latched. dr +1
+when both are at or above 75, dr -1 when both are at or below 25. Until both agree, the previous
+dr holds. Verbatim from `build_wsf_dtf_v3`. CAUSAL: reads only bars at or before each bar.
+
+**Step 2 — ws1Mage out of bounds.** From the cycle's start bar, the first bar where ws1Mage's
+CONSECUTIVE run on the dr side of the 25/75 fence has REACHED `MAGE_DWELL` = 6 bars = 30 s.
+CAUSAL: the run is counted backwards from each bar.
+
+**Step 3 — the abandon rule.** From that bar, two events race: ws1r reaching its own out-of-bounds
+dwell on the dr side, and ws1Mage reaching its out-of-bounds dwell on the OPPOSITE side. Whichever
+lands first decides. Opposite-side ws1Mage first means the walk abandons this dr and restarts its
+hunt from that bar with the dr flipped. Joe 0913: *"it abandons it. treat a dr flip as a fresh
+start"*. CAUSAL: the decision equals a bar-by-bar scan that acts on whichever condition becomes
+true first. The implementation searches forward and takes the earlier, which produces the same bar.
+
+**Step 4 — ws1r out of bounds.** The first bar where ws1r's consecutive run on the dr side of the
+15/85 fence has REACHED `R_OOB_BARS` = 3 bars = 15 s. That is the `r` dwell knob at wob 2, which
+spans 3 bars. Joe 0913 set the fence: *"oob is alwasy 15/85"*. CAUSAL: run counted backwards.
+
+**Step 5 — the flat-run signal. THIS IS THE TEST-POINT.** 3 consecutive bars of the line under
+test where the highest minus the lowest across the run is 2.0 r points or less, and all 3 sit on
+the dr side of the mid-zone fence — above 60 at dr +1, below 40 at dr -1. The test-point is the
+bar the run REACHES 3. The run fires once and re-arms only after the line breaks the flat
+condition. CAUSAL: backward-looking over 3 bars.
+
+- `SR_SAMPLES` = 3 bars. Joe 0912: *">= 3 samples printing the same values"*.
+- `SR_TOL` = 2.0 r points across the run. MINE, from Joe's *"tolerance ~2%"*, read as 2% of the
+  0..100 scale. UNRULED.
+- `SR_FENCE` = 40 / 60. Joe 0912: *"create a mid-zone-fence of 40:60. the sideways signal must be
+  on the dr side of the fences edge"*.
+
+**Step 6 — the divergence.** Runs ONLY when the line under test is not already momentum-true at
+the test-point. Joe 0913: *"if a test-point finds momentum on its own, divergence is not needed so
+the 2 minute delay is moot"* / *"if there is no momentum at the test-point, then the 2 minutes
+grace is accepted"*. The anchor is each of the `SR_TEST` = 24 bars = 120 s AFTER the test-point,
+and the line is momentum-true if any of them fires. Joe 0913 settled every part:
+
+| what | answer |
+|---|---|
+| price series | `__pxs__` from the tape — source `close`, DEMA length 2 |
+| the r line the divergence reads | `gcws30r`, registered at 30 seconds |
+| does the divergence move or gate the test-point | neither |
+| what a firing divergence does | marks the line momentum-true |
+| the alignment test | redundant. The machine returns bearish only at dr +1 and bullish only at dr -1, so any verdict that fires already aligns |
+| the anchor bar | each of the 24 bars AFTER the test-point |
+
+CAUSAL: `anchor_floater` reads back from its anchor bar only. The EVENT'S KNOWABLE BAR is the
+divergence's firing bar, up to 120 s after the test-point.
+
+**Step 7 — the spent test.** Is the line already past the dr-side edge of the 17/83 fence at the
+test-point. Joe 0912 fixed the edges and took no margin: *"let's stick with 17/83, no margin"*.
+CAUSAL: reads the line's value at the bar.
+
+**Step 9 — the ws3 fallback. DROPPED.** Joe 0913, answering O-1: *"O1 drop it. ws3 will be reached
+through the natural flow. this is where the """momentum and divergence test for momentum-true"""
+step comes into play."* Its trigger was step 8, which was dropped for looking forward. ws3 now
+arrives through 17.2 instead, which tests every line in the range.
+
+**Step 10 — the momentum verdict.** 21 samples 30 s apart, spanning 10 minutes back from the bar.
+A straight-line fit and a bend fit, then the gates in order:
+
+| # | gate | outcome |
+|---|---|---|
+| 1 | not enough usable samples | no verdict |
+| 2 | slope below `momo_slope_min` -> the line is treated as FLAT | go to gate 3 |
+| 3 | flat and on the wrong side of 50 | none |
+| 4 | flat, level, and a qualifying bend | curl |
+| 5 | flat and level | sideways |
+| 6 | sloped and on the wrong side of 50 | none |
+| 7 | sloped but not pointing at dr | none |
+| 8 | straightness below `momo_r2_min` | none, unless step 11 excuses it |
+| 9 | otherwise | momo |
+
+A curl counts as momentum only when the end of the curl faces dr — n-shaped at dr -1, u-shaped at
+dr +1. "Level" is judged against a band whose width is scaled by how weak the slope is, measured
+against `momo_slack_ref`. CAUSAL: both fits read only bars at or before the bar.
+
+**Step 11 — the seam rule.** Each timeframe's bar boundaries are laid out from that day's
+midnight. A jump across the line's own boundary that points at dr excuses the straightness gate.
+Joe 0912: *"if the jump happend on the TF seam, there is no need for a threshold. the mech should
+simply decide if the seam jump is towards dr"*. CAUSAL.
+
+**Step 12 — the lower-timeframe gate.** An optional condition read on the timeframe one below the
+line being tested. Four settings: none; the line below must itself be momentum-true; the line
+below's r must be further along than this line's r; the line below's Mage must be further along
+than this line's Mage. Joe 0913 set which settings the lower line is read at: **the candidate
+combination, not the held ws1 settings.** The "one below" is relative to the line under test —
+MINE, and UNRULED; the alternative is a fixed ws1/ws2 pair. CAUSAL.
+
+---
+
+### 17.2 THE HAND-OFF — Joe 0913, NEW
+
+**Verbatim:**
+
+> when we reach a test-point and find a higher TF showing momentum-true, we can confidently predict
+> price will continue its current course. to continue predicting price's course, we must move our
+> focus to the line carrying momentum, ride it, and repeat the same test-point process when it
+> reaches a flat-run signal
+> -eg ws2 is momentum true at a ws1 test-point
+> --ws2 walks forward until the "flat-run signal" (per your #5, below)
+> --momentum and divergence test for momentum-true
+> --the highest TF printing momentum is the line we ride until its flat-run signal
+> ---for now, highest TF = 4 and divergence is provided by g30
+
+**Joe 0913 improved the middle line, verbatim:**
+
+> I'll improve the statement: "momentum and divergence test for momentum-true from all lines in the
+> range (ie 1 to 4, at present)"
+
+**The loop this sets:**
+
+1. a test-point fires on the line currently in focus (ws1 at the start of a cycle).
+2. **every line ABOVE the one in focus is tested for momentum-true, up to the ws4 ceiling.** Not
+   in order, not until one prints: all of them. The step 10 verdict, or the step 6 divergence when
+   the verdict says none. At a ws1 test-point that is ws2, ws3, ws4. At a ws3 test-point it is ws4
+   alone. Joe 0913 corrected his own "1 to 4" wording: *"you're right"*.
+3. the HIGHEST timeframe printing momentum becomes the line in focus.
+4. step 5's flat-run signal is then run on THAT line, and the loop returns to 1.
+5. the ceiling is ws4. The divergence is always read on gcws30r, whatever line is in focus.
+6. **dr does not change during a ride.** Joe 0913, answering O-6: *"no"*.
+
+**The line in focus is never re-tested.** Joe 0913 corrected the range to lines ABOVE the one in
+focus. At a ws4 test-point there is nothing above it, so the ride ends — see 17.2a.
+
+**CAUSAL.** Every leg reads only bars at or before itself. The hand-off bar is the test-point bar
+when the verdict carries it, or the divergence's firing bar when the divergence carries it.
+
+**THIS REPLACES THE WALK-5 SHAPE.** Walk 5 tested ws2, fell back to ws3 only when ws2 never reached
+the fence, and ended the cycle at the fence exit. The plan tests ws2, ws3 and ws4 together, takes
+the highest that prints momentum, and ends the ride at that line's own flat-run signal. No fence
+is involved in either decision.
+
+---
+
+### 17.2a THE RIDE ENDS — Joe 0913
+
+**Three ways a ride ends. Two are Joe's direct answers; the third follows from the ws4 ceiling.**
+
+| # | ride end | source |
+|---|---|---|
+| E-1 | the line in focus is ws4 and it produces a flat-run signal. Nothing above it can take the hand-off | follows from the ws4 ceiling plus Joe's "lines above the one in focus" |
+| E-2 | ws1Mage **bare-crosses** to the opposing-dr out of bounds. No dwell. Joe 0913, answering P-1: *"bare cross"* | Joe, answering O-4 then P-1 |
+| E-3 | no line above the one in focus prints momentum at a test-point | Joe, answering O-7 |
+
+**WHAT HAPPENS AT A RIDE END — Joe 0913, verbatim:**
+
+> P2 wait for dr change. context: when the ride ends, one of 2 things happen - 1) ws4Mage and ws4r
+> are both firmly oob on dr side, so we handover to dtf to complete the ride, or 2) ws4Mage or ws4r
+> are weak (one has not exited the fence), and weak predicts a reversal - we would place a trade,
+> ride pxs until the dr change, then start the wsf process from scratch
+
+**CORRECTED 0913.** Joe's P2 sentence said both ws4 lines had to be out of bounds. He withdrew it:
+*"ahh - I did make a mistake when I said oob for them both"*. **ONE TEST PER LINE:**
+
+| branch | condition | what follows |
+|---|---|---|
+| A | ws4Mage out of bounds on the dr side **AND** ws4r outside momo-fence-r on the dr side | hand over to dtf to complete the ride |
+| B | anything else — the negation of A | weak predicts a reversal. Place a trade, ride pxs until the dr change, then start the wsf process from scratch |
+
+**A AND B ARE EXHAUSTIVE BY CONSTRUCTION.** B is A's negation, so no ride end falls between them.
+Measured 0913 at walk 5's 90 test-points: 2 branch A, 88 branch B, 0 left over.
+
+**The two tests, one per line:**
+
+| line | test | Joe's answer, verbatim | what it resolves to |
+|---|---|---|---|
+| ws4Mage | out of bounds | *"oob (15/85) with a dwell of {knob:12} (1 minute)"* | the 15/85 fence, dr side, consecutive run REACHING 12 bars = 60 s |
+| ws4r | outside the fence | *"r-momo-fence, wob {knob:3}"* | momo-fence-r = 83/17, knob `MOMO_FENCE_R` = 17, Joe 0820: *"create a new fence: momo-fence-r 100-{knob:17}"*. wob 3 steps spans 4 bars = 20 s |
+
+**ws4r is NOT tested against 15/85, and ws4Mage is NOT tested against momo-fence-r.** That was the
+mistake, and it is what created the 2-point band between the fences where a ride end could fall
+through. Under one test per line the band does not exist.
+
+**BRANCH A IS ONLY REACHABLE AT ws4.** Joe 0913, answering Q-3: *"yes, both A and B branch are
+possible, but there is no DTF handoff for ws1,2,3. ie, if we've riden ws3 to a flat-run signal and
+there is no ws4 momentum, the only option is to end the ride by delegating to the trade machine"*.
+
+| ride ends with the line in focus at | branches available |
+|---|---|
+| ws4 | A or B, decided by the ws4Mage / ws4r tests above |
+| ws1, ws2, ws3 | **B only.** There is no dtf hand-off below ws4 |
+
+**Neither knob is named.** Joe wrote them as `{knob:12}` and `{knob:3}`. They need names and a home
+in the config table before anything reads them.
+
+**P-2 answered.** *"wait for dr change"* — the next dr CHANGE from the latch, not merely a bar where
+the latch holds a dr. My earlier reading is now Joe's answer, so the flag is discharged.
+
+**E-3's branch is a stub.** Joe 0913, answering P-4: *"stub it. report them in a standalone table
+showing timestamps and the data present at the test-point"*. No trade machine exists.
+
+---
+
+### 17.3 JOE'S ANSWERS, 0913
+
+| # | question | Joe's answer, verbatim |
+|---|---|---|
+| O-1 | step 9's trigger | *"O1 drop it. ws3 will be reached through the natural flow."* Step 9 is dropped |
+| O-2 | all lines tested, or in order | answered by O-1's improved statement: **all lines in the range, 1 to 4** |
+| O-3 | flat-run knobs on ws2/ws3/ws4 | *"same, but likely to evolve as we develop the spec"* — 3 bars, 2.0 r points, 40:60, on every line |
+| O-4 | what ends a ride with no flat-run signal | *"presently, ws1Mage crossing over opposing-dr oob. this needs to be developed further"* |
+| O-5 | after a ride ends | *"wait for dr"*. And: *"these events needs to be tagged as their own row in the summary report"* |
+| O-6 | does dr change during a ride | *"no"* |
+| O-7 | no line prints momentum | *"it delegates to the unbuilt trade machine. stub it for now, tag as its own row in the summary report"* |
+| O-8 | `SR_TOL` = 2.0 r points | *"I can't remember why I set the tolerance. I won't change it - the ws1 test-points have been validated"* |
+
+**O-8 stands as Joe's.** He has validated the ws1 test-points it produces. The 2.0 reading was
+mine, from his *"tolerance ~2%"*; he has now adopted it rather than ruled on the derivation.
+
+---
+
+### 17.3a JOE'S ANSWERS TO THE NARROWER SET, 0913
+
+| # | question | Joe's answer, verbatim |
+|---|---|---|
+| P-1 | the ride-end cross — dwell or bare | *"bare cross"* |
+| P-2 | "wait for dr" | *"wait for dr change"*, with the two-branch context now at 17.2a |
+| P-3 | the summary report | *"similar to your reports that you showed after the OOS test. no need for a producer yet - you always create at least one report that we can build on, I'll let you know when I want to solidify"* |
+| P-4 | the trade machine stub | *"stub it. report them in a standalone table showing timestamps and the data present at the test-point"* |
+| P-5 | step 12's "one below" being relative to the line under test | *"we're in sync on this"* — my reading is adopted. The flag is discharged |
+
+**P-3 sets the report's form, not a producer.** The shape is the per-day category table and the
+per-test-point list produced for the 14-day out-of-sample run: one outcome category per row with
+counts, then every test-point as its own row. Joe 0913 will say when it should be solidified into
+a table and a producer.
+
+**Two categories need their own rows in that report**, per O-5 and O-7: the ride-end events, and
+the test-points where no line above prints momentum.
+
+---
+
+### 17.3b JOE'S ANSWERS ON THE RIDE-END TESTS, 0913
+
+| # | question | Joe's answer, verbatim |
+|---|---|---|
+| Q-1 | "firmly oob on dr side" | *"oob (15/85) with a dwell of {knob:12} (1 minute)"* |
+| Q-2 | "weak ... has not exited the fence" | *"r-momo-fence, wob {knob:3}"* |
+| Q-3 | do A and B apply to every ride end | *"yes, both A and B branch are possible, but there is no DTF handoff for ws1,2,3"* |
+
+---
+
+### 17.3c THE RIDE-END TESTS — ALL SETTLED, 0913
+
+**R-1 CLOSED.** It was the gap between branch A and branch B, and it existed only under the
+both-lines-oob reading Joe withdrew: *"ahh - I did make a mistake when I said oob for them both"*.
+One test per line leaves nothing between them. The bar that exposed it — cycle 49, 08-27 11:07:10,
+dr +1, ws4Mage 111.72, ws4r 83.01 — is branch A under the corrected rule.
+
+**R-2, R-3, R-4 CLOSED.** Joe 0913: *"your reads are good"*. They are now the rule, not my readings:
+
+| # | now the rule |
+|---|---|
+| R-2 | ws4r is "outside momo-fence-r" when its consecutive run outside 83/17 on the dr side REACHES 4 bars |
+| R-3 | the A/B test is read at the ride-end bar |
+| R-4 | ws4Mage's dwell is counted BACKWARDS from the ride-end bar, which is what keeps it causal |
+
+**R-5 CLOSED.** Joe 0913: *"I'll pass the knobs to you for labelling"*. **THE LABELS ARE MINE.**
+
+New rows in `wsf_dtf_v3_config`. No schema change — the table is already key/value:
+
+| section | key | value | units | owner | note |
+|---|---|---|---|---|---|
+| `ride_end` | `mage_dwell` | 12 | bars | joe | ws4Mage's run on the dr side of 15/85 must REACH this. 12 bars = 60 s. Joe 0913 `{knob:12}` (1 minute). Label mine |
+| `ride_end` | `r_wob` | 3 | steps | joe | ws4r's run outside momo-fence-r on the dr side. 3 steps SPAN 4 bars = 20 s. Joe 0913 `wob {knob:3}`. Label mine |
+
+Python constants, following `walk_mom_models.py`'s `R_DWELL_WOB` / `R_OOB_BARS` pairing:
+
+```
+RIDE_MAGE_DWELL = 12                      # bars = 60 s
+RIDE_R_WOB      = 3                       # steps
+RIDE_R_BARS     = RIDE_R_WOB + 1          # 4 bars = 20 s
+```
+
+**NO NEW FENCE KNOBS.** Both fences the ride-end test needs are already banked at v1 and v2:
+
+| what | where it already lives | value |
+|---|---|---|
+| the 15/85 boundary | `wsf_dtf_v3_config` `[dr] oob_hi` / `oob_lo` | 85.0 / 15.0 r-points |
+| momo-fence-r 83/17 | `wsf_dtf_v3_config` `[wsf_chain] momo_fence_r` | 17 r-points, band 100-17 |
+
+**ONE TRAP, FLAGGED.** The repo does not agree with itself on what a wob value counts.
+`[ws1mage_rev] boundary_xwob` = 4 carries units `bars`, while `walk_mom_models.R_DWELL_WOB` = 2
+spans 3 bars. `ride_end.r_wob` = 3 is written with units `steps` and its 4-bar span spelled out in
+the note, so a reader cannot take it for 3 bars. The wider inconsistency is untouched.
+
+**NOT WRITTEN.** These rows are proposed, not inserted. No config row, no python constant, and no
+reader exists yet.
+
+---
+
+### 17.4 NOT BUILT
+
+No producer runs 17.1 as a sequence or 17.2 at all. What exists:
+
+| step | where it lives today |
+|---|---|
+| 1, 2, 3, 4, 7 | `walk_mom_models.py` — as walk-5 scaffolding, not a machine |
+| 5 | `jig.sideways_reversal` — runs on ws1 only, and its caller reads the flat-run bar |
+| 6 | `jig.anchor_floater` — walk 5 fed it a price series of all zeros, so it never fired |
+| 9 | `walk_mom_models.py` — trigger depends on the dropped step 8 |
+| 10, 11, 12 | `momo_core.verdict`, `momo_seam`, `walk_mom_models.gate_ok` |
+| 17.2 | nowhere |

@@ -45,11 +45,13 @@ from contextlib import contextmanager
 from optimus9.compute import momo_core as MC
 from optimus9.compute import momo_gated as MG
 
-# the eleven knobs, column name -> where the value has to land.
+# the thirteen knobs, column name -> where the value has to land.
 # 'core' and 'gated' name the module whose global the verdict actually reads at call time.
 # k_window lands nowhere: the CALLER uses it to size momo_window(), it is not read inside the fit.
 KNOBS = {
     'momo_slope_min':     ('core',  'MOMO_SLOPE_MIN'),
+    'momo_slack_ref':     ('core',  'MOMO_SLACK_REF'),
+    'momo_seam':          ('core',  'MOMO_SEAM'),
     'momo_r2_min':        ('core',  'MOMO_R2_MIN'),
     'momo_window_min':    ('core',  'MOMO_WINDOW_MIN'),
     'momo_step_min':      ('core',  'MOMO_STEP_MIN'),
@@ -72,7 +74,7 @@ def momo_bank(db, tf, version=None):
         version  None reads the LIVE bank - the highest version whose live-after date has passed.
                  An integer reads that exact bank. A SWEEP MUST PASS ONE.
 
-    -> {'mech', 'tf_lo', 'tf_hi', 'version', and the eleven knob names}
+    -> {'mech', 'tf_lo', 'tf_hi', 'version', and the thirteen knob names}
 
     ONE DATABASE READ PER CALL. Hold the result across the inner loop; do not call it per bar.
     """
@@ -104,7 +106,8 @@ def momo_bank(db, tf, version=None):
     # the ints stay ints - momo_window() and the sample grid index with them
     for k in ('momo_window_min', 'momo_step_min', 'momo_fixed_samples', 'k_window'):
         bank[k] = int(bank[k])
-    for k in ('momo_slope_min', 'momo_r2_min', 'level_slack', 'curl_arc_min',
+    bank['momo_seam'] = str(bank['momo_seam'])          # 'off' | 'skip_r2', never a number
+    for k in ('momo_slope_min', 'momo_slack_ref', 'momo_r2_min', 'level_slack', 'curl_arc_min',
               'curl_vtx_lo', 'curl_vtx_hi', 'curl_r2_min'):
         bank[k] = float(bank[k])
     return bank

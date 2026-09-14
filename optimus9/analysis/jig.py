@@ -189,6 +189,252 @@ def ws1mage_rev(g1, sig_mage, hi, lo, dwell=WS1MR_DWELL, rev_wob=WS1MR_REV_WOB,
     return out
 
 
+# ── divergence (Joe 0912) ──────────────────────────────────────────────────────────────────────
+def divergence(osc, px, hi, lo, i0=0, i1=None):
+    """[PRODUCER · lifted from divergence_exit.div_sig 0706, split onto the jig 0912 on Joe's word]
+
+    THE EXTREMA DIVERGENCE. Joe 0912: "the jig has an updated version that relies on 2 lookbacks
+    based on extremas". The two lookbacks are two CONSECUTIVE SAME-SIDE OOB EPISODES, each
+    contributing its own extreme - not a fixed bar offset.
+
+      episode     a contiguous run of bars with osc >= hi (high side) or osc <= lo (low side)
+      its extreme the max of osc inside the run on the high side, the min on the low side, and the
+                  PRICE at that same bar
+      the pair    this episode's extreme against the PREVIOUS same-side episode's extreme
+      bearish +1  high side: price makes a HIGHER high while osc makes a LOWER high
+      bullish -1  low side:  price makes a LOWER low  while osc makes a HIGHER low
+      confirmed   at the EPISODE END - the last oob bar. Causal: nothing is read past that bar
+
+    `hi` and `lo` are REQUIRED, not defaulted. div_sig hardcoded 85/15 for the s5m book; which
+    fence this mechanic uses is the caller's, and it decides whether any episode exists at all.
+
+    `px` is the price at each bar. docs/o9-live/divergence_research.md:201 - "DEMA-smoothing the
+    price slope DESTROYS it (MAE 0.15 -> 0.35-0.85). The raw price slope is correct." So pass RAW
+    close, not px_smooth.
+
+    -> (sig, episodes)
+       sig       float array, +1 / -1 / 0 per bar, nonzero only on a confirming episode-end bar
+       episodes  [(side, start, end, extreme_bar, osc_at_extreme, px_at_extreme, fired)] in bar
+                 order, so a caller can show BOTH lookbacks behind any signal."""
+    osc = np.asarray(osc, float); px = np.asarray(px, float)
+    n = len(osc); i1 = n - 1 if i1 is None else i1
+    sig = np.zeros(n); eps_all = []
+    for side, thr, cmp_price, cmp_osc in ((1, hi, np.greater, np.less),
+                                          (-1, lo, np.less, np.greater)):
+        oob = (osc >= thr) if side == 1 else (osc <= thr)
+        eps = []
+        i = i0
+        while i <= i1:
+            if oob[i]:
+                j = i
+                while j <= i1 and oob[j]:
+                    j += 1
+                rr = osc[i:j]
+                if np.all(np.isnan(rr)):
+                    i = j; continue
+                m = int(np.nanargmax(rr) if side == 1 else np.nanargmin(rr))
+                eps.append([side, i, j - 1, i + m, float(rr[m]), float(px[i + m]), 0])
+                i = j
+            else:
+                i += 1
+        for k in range(1, len(eps)):
+            _, _, eb, _, rc, pc, _ = eps[k]
+            _, _, _, _, rp, pp, _ = eps[k - 1]
+            if cmp_price(pc, pp) and cmp_osc(rc, rp):
+                sig[eb] = float(side); eps[k][6] = int(side)
+        eps_all += eps
+    eps_all.sort(key=lambda e: e[2])
+    return sig, [tuple(e) for e in eps_all]
+
+
+# ── the anchor/floater divergence front end (Joe 0912) ─────────────────────────────────────────
+AF_BLOCK = 60    # KNOB. bars in ONE step-3 lookback block = 300 s = 5 minutes at the 5 s grid.
+#                  Joe 0912: "step 3 then looks back to 17:27, 17:22, etc (in one code loop)".
+
+
+def anchor_floater(r, px, dr, k, block=AF_BLOCK, mid=50.0):
+    """[PRODUCER · Joe 0912] THE FOUR STEPS that choose what goes into the divergence machine.
+
+    JOE'S VERBATIM SPEC, 0912:
+      "whenever a divergence test is requested
+       -1. capture the current value of r, capture the current dr
+       -2. look back to find the r extrema which is facing the opposing step 1's dr, and on the
+           other side of 50 from the r value taken in step 1
+       -3. look back from step 2, find the r extrema that is on the same side as step 1's dr. this
+           r extrema is the floater, and the step 1 r value is the anchor
+       -4 feed the andchor and floater timestamps and vaules into the divergence machine
+       eg if 08-25 17:34 is the anchor (dr 1), the step 2 lookback will find a dr -1 extrema at
+       ~17:32:30, and the step 3 lookback will find the dr 1 floater at ~17:29"
+
+    JOE'S VERBATIM ON STEP 3 BEING A BACKWARD LOOP, 0912:
+      "step 3 then looks back to 17:27, 17:22, etc (in one code loop) until it has proven that it
+       has gone past the extrema. the extrema and the timestamp are then apparent"
+
+    JOE'S VERBATIM ON WHY THE LOOP STOPS THERE, 0912:
+      "divergences rely on the previous peak for comparison against the current moment. when k is
+       printing a smaller vlaue than the last k 'bump', we know that the momentum is not as strong"
+      "the same goes for a trough, if the anchor is also a trough"
+
+    The comparator is the PREVIOUS bump, never the biggest bump in history. Walking past the first
+    quiet block would substitute an older bump and break the comparison. Already in the 0711 survey
+    (docs/o9-live/divergence_research.md) as Axis B option 1 - "compare the two most recent
+    same-type extremes" - and Finding 2 - "vs the previous same-kind turn".
+
+    CAUSAL. Every bar read is <= `k`. No fence: the 85/15 in `divergence` plays no part here.
+
+      step 1  the anchor is bar `k`: r[k], px[k], and `dr`. Returns None when r[k] sits on the
+              WRONG side of 50 for the dr, because step 2 is then self-contradictory (it asks for
+              an opposing-dr extreme on the side the anchor is already on).
+      step 2  the pivot. Walk back to the most recent CONTIGUOUS run of bars on the other side of
+              50, and take that run's extreme facing the opposing dr - its min at dr +1, its max
+              at dr -1. MINE, and unruled: Joe named a timestamp (~17:32:30), not a rule. The
+              alternative - a block loop like step 3 - walks too far, past 17:26 on his example.
+      step 3  the floater. From the pivot walk BACKWARD in blocks of `block` bars. Each block
+              yields its best dr-side value - the max at dr +1, the min at dr -1, counting only
+              bars on the dr side of 50. Keep the running best. Stop at the first block that adds
+              no new best. Block 1 is bars [pivot - block, pivot), so THE PIVOT BAR ITSELF IS
+              EXCLUDED. MINE and unruled: a tie stops the loop (strictly-better only), a block
+              holding no dr-side bar stops the loop, and a flat top keeps its EARLIEST bar.
+      step 4  the comparison, which is all `divergence` does at an episode end:
+                dr +1, the anchor is a high -> bearish when px rises and r falls
+                dr -1, the anchor is a low  -> bullish when px falls and r rises
+
+    -> None, or a dict:
+         anchor  (k, r, px)          floater (bar, r, px)
+         pivot   (bar, r, px)        blocks  [(from, to, best, best_bar, new_best)] in walk order
+         d_osc   r anchor minus r floater      d_px  px anchor minus px floater
+         fired   +1 bearish / -1 bullish / 0 none"""
+    r = np.asarray(r, float); px = np.asarray(px, float)
+    k = int(k); dr = int(dr); block = max(1, int(block))
+    if k < 1 or not np.isfinite(r[k]):
+        return None
+    if (r[k] <= mid) if dr > 0 else (r[k] >= mid):
+        return None
+    other = (r < mid) if dr > 0 else (r > mid)
+    j = k - 1
+    while j >= 0 and not other[j]:
+        j -= 1
+    if j < 0:
+        return None
+    e = j
+    while e >= 0 and other[e]:
+        e -= 1
+    e += 1
+    seg = r[e:j + 1]
+    if np.all(np.isnan(seg)):
+        return None
+    p = e + int(np.nanargmin(seg) if dr > 0 else np.nanargmax(seg))
+    same = (r > mid) if dr > 0 else (r < mid)
+    best = np.nan; bi = None; blocks = []; n = 0
+    while True:
+        n += 1
+        b_hi = p - (n - 1) * block
+        b_lo = max(0, p - n * block)
+        if b_hi <= 0 or b_lo >= b_hi:
+            break
+        cand = np.where(same[b_lo:b_hi], r[b_lo:b_hi], np.nan)
+        if np.all(np.isnan(cand)):
+            blocks.append((b_lo, b_hi, float('nan'), None, 0))
+            break
+        m = b_lo + int(np.nanargmax(cand) if dr > 0 else np.nanargmin(cand))
+        new = (bi is None) or ((r[m] > best) if dr > 0 else (r[m] < best))
+        if new:
+            best = float(r[m]); bi = m
+        blocks.append((b_lo, b_hi, float(r[m]), int(m), int(new)))
+        if not new:
+            break
+    if bi is None:
+        return None
+    d_osc = float(r[k]) - float(r[bi])
+    d_px = float(px[k]) - float(px[bi])
+    if dr > 0:
+        fired = 1 if (d_px > 0 and d_osc < 0) else 0
+    else:
+        fired = -1 if (d_px < 0 and d_osc > 0) else 0
+    return {'anchor': (k, float(r[k]), float(px[k])),
+            'pivot': (int(p), float(r[p]), float(px[p])),
+            'floater': (int(bi), float(r[bi]), float(px[bi])),
+            'blocks': blocks, 'd_osc': d_osc, 'd_px': d_px, 'fired': int(fired)}
+
+
+# ── sideways / reversal from a flat sample run + divergence (Joe 0912 hypothesis) ───────────────
+SR_SAMPLES = 3      # Joe 0912: ">= 3 samples printing the same values". A sample is ONE 5 s bar -
+#                     the per-sample table he read the hypothesis off was 61 rows over 5 minutes.
+SR_TOL     = 2.0    # MINE, and unruled. Joe 0912 wrote "tolerance ~2%". Read as 2% of r's 0..100
+#                     scale = 2.0 r POINTS across the run, not 2% of the r value.
+SR_TEST    = 24     # Joe 0912: "we test for divergence for the next 2 minutes" = 120 s = 24 bars.
+SR_FENCE   = (40.0, 60.0)   # THE MID-ZONE FENCE. Joe 0912: "let's modify the dr side of 50 rule.
+#                     instead of 50, create a mid-zone-fence of 40:60. the sideways signal must be
+#                     on the dr side of the fences edge". dr +1 reads the HIGH side, so the run
+#                     must sit ABOVE 60; dr -1 reads the LOW side, so the run must sit BELOW 40.
+#                     STRICTLY outside the edge - the same strictness the 50 test used.
+
+
+def sideways_reversal(r, px, dr, i0=0, i1=None, samples=SR_SAMPLES, tol=SR_TOL,
+                      test=SR_TEST, block=AF_BLOCK, mid=50.0, fence=SR_FENCE, first=False):
+    """[PRODUCER · Joe 0912 hypothesis, NOT YET SCORED] Momentum `sideways`, and a NEW `reversal`
+    state, built from a flat run of r samples plus the anchor/floater divergence test.
+
+    JOE'S VERBATIM, 0912:
+      "if we see >= 3 samples printing the same values (tolerance ~2%) on the dr side of 50, and we
+       test for divergence for the next 2 minutes, then we can create a reliable momentum sideways
+       or reversal signal"
+      "reversal is a new state. I'm not 100% sure that we need it yet, but it will help me while we
+       develop the science"
+
+      sideways  the bar where a run of consecutive bars REACHES `samples` bars with every bar on
+                the dr side of the MID-ZONE FENCE `fence` - above its high edge at dr +1, below its
+                low edge at dr -1 - and the run's max minus its min <= `tol`. Fires ONCE per run,
+                on the bar the run reaches `samples`. MINE: Joe said ">= 3", which is a state; the
+                bar that state becomes knowable is the third.
+
+                Joe 0912 replaced a plain 50 here with the 40:60 fence. `mid` is untouched and
+                stays 50 - it is the divergence machine's own boundary, used by `anchor_floater`
+                for steps 1, 2 and 3, and Joe did not change that.
+      reversal  the first bar in the `test` bars AFTER the sideways bar where `anchor_floater`
+                fires with that bar as the anchor. MINE: the window is bars sideways+1 through
+                sideways+test, so the sideways bar itself is not an anchor.
+
+    Nothing here reads past the bar it reports on. `anchor_floater` is causal and the flat run is
+    backward-looking, so both states are live-legal.
+
+    -> [(sideways_bar, reversal_bar or None, run_lo, run_hi, run_span, af or None)] in bar order,
+       where run_lo..run_hi is the flat run at the moment it fired, run_span is its max minus its
+       min in r points, and `af` is the full anchor_floater dict behind a reversal.
+
+    `first=True` returns after the first event and stops scanning. Joe 0912 bounded the walk there:
+    a walk ends at its first sideways, or at its reversal when one fires inside the `test` window."""
+    r = np.asarray(r, float); px = np.asarray(px, float)
+    n = len(r); i1 = n - 1 if i1 is None else int(i1)
+    i0 = int(i0); samples = max(2, int(samples)); test = max(0, int(test))
+    f_lo, f_hi = (float(fence[0]), float(fence[1])) if fence else (mid, mid)
+    side = (r > f_hi) if dr > 0 else (r < f_lo)
+    out = []; armed = True
+    for k in range(max(i0, samples - 1), i1 + 1):
+        lo = k - samples + 1
+        w = r[lo:k + 1]
+        if not (side[lo:k + 1].all() and np.all(np.isfinite(w))):
+            armed = True
+            continue
+        span = float(np.max(w) - np.min(w))
+        if span > tol:
+            armed = True
+            continue
+        if not armed:
+            continue
+        armed = False
+        rev = None; af = None
+        for t in range(k + 1, min(i1, k + test) + 1):
+            d = anchor_floater(r, px, dr, t, block=block, mid=mid)
+            if d is not None and d['fired']:
+                rev = t; af = d
+                break
+        out.append((int(k), rev, int(lo), int(k), span, af))
+        if first:
+            break
+    return out
+
+
 def momo_landed(R, tagged, hi, lo, fence, xwob, i0=0, i1=None,
                 clear_on='hi_tf_counter_curl', counter_curl=None, reset_at=None):
     """[PRODUCER · Joe 0810] Walk the ws1 markers and emit a `momo_landed` event when a
@@ -554,8 +800,30 @@ class _Causal:
         i = np.arange(len(c))
         return (cs[i + 1] - cs[np.maximum(0, i - k + 1)]) > 0
 
+    def divergence(self, osc, px, hi, lo, i0=0, i1=None):
+        """`divergence` - THE divergence calc, Joe 0912. Delegates to the module producer.
+        Two lookbacks based on EXTREMAS: consecutive same-side OOB episodes, each contributing its
+        own extreme, confirmed at the episode end. `osc` and `px` are arrays (px = RAW close);
+        `hi`/`lo` are the episode fence and are required. -> (sig, episodes). See the producer."""
+        return divergence(osc, px, hi, lo, i0=i0, i1=i1)
+
+    def anchor_floater(self, r, px, dr, k, **kw):
+        """Joe's four-step anchor/floater selection at bar `k`. Delegates to `anchor_floater`.
+        `r` and `px` are arrays on this jig's grid - pass jig.causal.line('ws1r') and RAW close."""
+        return anchor_floater(r, px, dr, k, **kw)
+
+    def sideways_reversal(self, r, px, dr, i0=0, i1=None, **kw):
+        """Joe 0912's flat-run + divergence hypothesis -> `sideways` and the new `reversal` state.
+        Delegates to `sideways_reversal`. NOT YET SCORED."""
+        return sideways_reversal(r, px, dr, i0=i0, i1=i1, **kw)
+
     def pk_state(self, line_slope, price_slope, slope_floor):
-        """Slope-sign divergence state — delegates to the production seam Pk5sGateComputer._pk_state_from_slopes
+        """OBSOLETE as the divergence calc - Joe 0912: "build it in the jig, and leave notes on all
+        other divergence calcs to let them know they're obsolete". Use jig.causal.divergence, which
+        pairs two EXTREMAS from consecutive OOB episodes instead of a fixed bar offset. Kept because
+        the live bias machine, the pine-parity path and build_dominoes_db still call the seam.
+
+        Slope-sign divergence state — delegates to the production seam Pk5sGateComputer._pk_state_from_slopes
         (the PK / vote-machine core). sign(line_slope) != sign(price_slope) -> DIVERGENCE +1 (bull, line rising) /
         -1 (bear, line falling); signs AGREE -> PM +-2 ('Price Match', trend continuation, NOT a divergence);
         |line_slope - price_slope| <= slope_floor -> 0 (noise band). Scalars or arrays.

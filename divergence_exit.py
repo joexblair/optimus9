@@ -30,7 +30,11 @@ db.disconnect()
 
 
 def div_sig(r):
-    """+1 bearish-div (OOB-hi exhaustion) / -1 bullish-div (OOB-lo), per bar at causal confirm (episode end)."""
+    """SUPERSEDED 0912 - this logic was LIFTED onto the jig as jig.divergence / jig.causal.divergence
+    on Joe's word, with the fence made a required argument instead of the hardcoded HI/LO below, and
+    the episode list returned so both lookbacks are visible. Call the jig; do not fork this.
+
+    +1 bearish-div (OOB-hi exhaustion) / -1 bullish-div (OOB-lo), per bar at causal confirm (episode end)."""
     n = len(r); sig = np.zeros(n)
     for side, thr, cmp_price, cmp_osc, val in [(1, HI, np.greater, np.less, 1), (-1, LO, np.less, np.greater, -1)]:
         eps = []                                                   # (end, price_extreme, osc_extreme)

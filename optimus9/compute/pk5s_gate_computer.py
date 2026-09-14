@@ -283,7 +283,12 @@ class Pk5sGateComputer:
     # ── per-line state evaluators ──────────────────────────────────────────
     @staticmethod
     def _pk_state_from_slopes(line_slope, price_slope, slope_floor):
-        """Core pk-state decision from the line & price slopes — the SEAM shared by the pooled
+        """OBSOLETE AS THE DIVERGENCE CALC - Joe 0912. Use jig.causal.divergence, which pairs two
+        EXTREMAS from consecutive OOB episodes rather than a fixed bar offset. This seam is KEPT and
+        unchanged: the live bias machine, the pine-parity path (bbstr.pine f_pk_state) and
+        build_dominoes_db all call it, and Joe has not retired those.
+
+        Core pk-state decision from the line & price slopes — the SEAM shared by the pooled
         standard_pk path and any direct-fed peak (e.g. the bias machine's anchor/floater feed,
         where line_slope = osc(anchor)-osc(floater), price_slope = px(anchor)-px(floater)).
         Returns {NaN, 0.0, ±1.0 divergence, ±2.0 PM}. Vectorised; also valid on scalars.

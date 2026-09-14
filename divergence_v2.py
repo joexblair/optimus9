@@ -1,4 +1,7 @@
-"""divergence_v2.py (Joe 0706) — divergence exit, r-lines vs m-lines, A/B'd against the curl (lr_exit_v2).
+"""OBSOLETE DIVERGENCE CALC, Joe 0912 - THE divergence calc is jig.causal.divergence, two
+lookbacks based on EXTREMAS. This file is left as the 0706 A/B record.
+
+divergence_v2.py (Joe 0706) — divergence exit, r-lines vs m-lines, A/B'd against the curl (lr_exit_v2).
 
 Divergence per line (episode-based, causal confirm at episode end). Favorable-side (sign==bd) = exhaustion → exit.
 Line families: r-lines (k-type) vs m-lines (BB oscillators, smoother). Modes per confluence K:

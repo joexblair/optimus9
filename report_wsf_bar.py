@@ -159,6 +159,8 @@ HI, LO   = 85.0, 15.0
 # were literals here while build_wsf_walk_events read the shared ones, so the gate printed here and
 # the gate the walk applied were different numbers and nothing said so. momo_core.level_gate() now
 # owns the formula and both callers use it, so both follow whichever bank is bound.
+MOMO_REACQ   = 'block'  # Joe 0912: a line cannot RE-ACQUIRE momentum-true while it is outside
+#                         momo-fence-r. Covers curl and momo. See build_wsf_line_bar.py.
 MOMO_KILL    = 'off'    # REVERSED 0912 on Joe's word - the 0820 demotion is gone. See
 #                         build_wsf_line_bar.py's MOMO_KILL block for why.
 MOMO_FENCE_R = 17       # momo-fence-r, Joe 0820: 100 - 17 = 83 at the top, 17 at the bottom
@@ -189,7 +191,7 @@ WMT_TF_HI    = 12       # the weak-mage scan's highest timeframe. Joe 0826: "wea
 # PROVEN: all 371 wsf_dtf_v3 rows at ws1..ws12 read `sideways` on this bank at their own bar and dr,
 # 0 misses.
 KNOBS = ('kw6_fs21_sn6_hi85_lo15_r20.7_sl0.4_arc4_sk13.9_cr0.4_'
-         f'mk{MOMO_KILL}_mf{MOMO_FENCE_R}_xw{MOMO_XWOB}_sp10')
+         f'mk{MOMO_KILL}_rq{MOMO_REACQ}_mf{MOMO_FENCE_R}_xw{MOMO_XWOB}_sp10')
 # MOMO_KILL IS 'off' SINCE 0912. Joe reversed the 0820 rule - "it was built for a different mechanic
 # and will break our new spec" - so `verdict` is now the producer's own answer, undemoted.
 # THE JOIN MUST PIN EVERY KNOB ON BOTH TABLES. Both now hold several knob sets side by side - that

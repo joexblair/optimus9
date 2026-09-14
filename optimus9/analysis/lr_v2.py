@@ -19,7 +19,11 @@ from optimus9.analysis.lr import _roll_or, BASE_TF
 
 
 def s5r_arm(W, cfg, slip=15):
-    """[1] s5r DIVERGENCE arm producer. s5r sits OOB on the side *opposing* the breach (slip fence =
+    """OBSOLETE AS A DIVERGENCE CALC - Joe 0912. THE divergence calc is jig.causal.divergence (two
+    lookbacks based on EXTREMAS). This one calls an OOB-on-the-opposing-side test "divergence"; it is
+    a different mechanic under the same word. Unchanged - the s5m arm still uses it.
+
+    [1] s5r DIVERGENCE arm producer. s5r sits OOB on the side *opposing* the breach (slip fence =
     hi-slip / lo+slip = 70/30); when s4m breaches OOB on that opposing (leg / trade-breach) side, s4m's
     OOB travel pulls s5r back to the leg → arm. Stoch-RSI veer: as a leg's momentum slows, the stoch veers
     off it — that pull is the signal.

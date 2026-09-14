@@ -88,6 +88,7 @@ MOMO_XWOB = 4
 #
 # build_wsf_dtf_v3 computes every verdict as
 #     bk = dict(momo_bank(db, tf, version=1)); bk['momo_slope_min'] = 0.4
+#     bk['momo_slack_ref'] = 0.4      # Joe 0912 split - set both, or the gate keeps the bank's
 #     with momo_config(bk), momo_window(10):
 # - momo_config v1 as the base, but with TWO OVERRIDES: the slope floor forced to 0.4, and the
 # momentum window forced to a FIXED 10 minutes instead of k_window x tf.
@@ -119,6 +120,27 @@ MOMO_KILL = 'off'
 # on top.
 # MOMO_FIXED_SAMPLES IS NOT SET HERE, 0903. It comes from momo_config, per bank, and is read
 # into BANK in main() below. It used to be a literal 21 assigned over whatever a caller had bound.
+MOMO_REACQ = 'block'
+# Joe 0912: "there's also a need for a new rule: a line cannot re-acquire momentum-true if it is
+# oob". Ruled the same day: the fence is MOMO-FENCE-R (83/17), and the block covers `curl` AND
+# `momo`.
+#   'block'  the producer says momentum-true, the line is outside momo-fence-r, and it was NOT
+#            already momentum-true -> the verdict is none.
+#   'off'    no block.
+#
+# THIS IS NOT THE 0820 RULE REVERSED EARLIER THE SAME DAY. That one demoted a line that ALREADY
+# held momentum when it went outside. This one only blocks a NEW acquisition; a line that already
+# holds momentum keeps it when it leaves the fence.
+#
+# WHAT IT WOULD HAVE CAUGHT. 08-25 17:34:00, ws1r at 93.95 - the top of an 84-point move it then
+# gave back in 8 minutes. It read `none` at 17:33:55 and acquired `momo` at 17:34:00, outside the
+# fence. Joe's read of the same bars: "I see repeating r values at 17:33-34".
+#
+# MINE, and unruled: the demotion target is `none`, following MOMO_KILL's precedent - for a curl
+# the alternative is `sideways`, since the underlying fit was flat-and-level. The "was it already
+# momentum-true" test reads the POST-rule verdict, so a blocked line stays blocked while it is
+# outside; without that latch "cannot re-acquire" would not hold past one bar. And `out_fence` is
+# the CONFIRMED exit (MOMO_XWOB 4 bars), the same reading MOMO_KILL uses.
 GRID_S   = 5
 
 DDL = '''CREATE TABLE IF NOT EXISTS wsf_line_bar (
@@ -209,7 +231,8 @@ COLS = ['wflb_win_from', 'wflb_tf', 'wflb_dr', 'wflb_utc', 'wflb_k_window', 'wfl
         'wflb_last_verdict', 'wflb_verdict_dwell']
 
 
-def wsf_verdict(ungated, out_fence, stalled, was_out, was_stalled, mode=MOMO_KILL):
+def wsf_verdict(ungated, out_fence, stalled, was_out, was_stalled, mode=MOMO_KILL,
+                prev_verdict=None, reacq=MOMO_REACQ):
     """[PRODUCER · Joe 0820] The momentum verdict after the ws-finisher's own rule.
 
     Joe 0820, corrected: "IF a momentum-true r line leaves momo-fence-r or stalls THEN its momentum
@@ -221,7 +244,13 @@ def wsf_verdict(ungated, out_fence, stalled, was_out, was_stalled, mode=MOMO_KIL
 
     This lives HERE and not in momo_core, because momo_core is shared with domTF, the s46 path and
     RPL, none of which Joe has asked to change. `wflb_ungated` keeps the producer's own answer."""
-    if mode == 'off' or ungated not in ('momo', 'curl'):
+    if ungated not in ('momo', 'curl'):
+        return ungated
+    # Joe 0912's block, applied BEFORE the 0820 rule: a line outside momo-fence-r cannot ACQUIRE
+    # momentum-true. One that already holds it is untouched.
+    if reacq == 'block' and out_fence and prev_verdict not in ('momo', 'curl'):
+        return 'none'
+    if mode == 'off':
         return ungated
     if mode == 'state':
         return 'none' if (out_fence or stalled) else ungated
@@ -269,7 +298,11 @@ def main():
                          f'{sorted(_ids)}. One run must sit inside one bank.')
     BANK = _bk[TFS[0]]
     if SLOPE_OVERRIDE is not None:
+        # THE SPLIT, Joe 0912. Before momo_slack_ref existed, overriding momo_slope_min moved BOTH
+        # the flat/sloped branch test AND the level-gate slack. Both are set here so the rows this
+        # produces are identical to the pre-split ones. To sweep them apart, set them apart.
         BANK = dict(BANK); BANK['momo_slope_min'] = SLOPE_OVERRIDE
+        BANK['momo_slack_ref'] = SLOPE_OVERRIDE
     FIXED = BANK['momo_fixed_samples']
     # the momentum window: fixed minutes when overridden, else this line's own k_window x tf
     win_of = lambda tf: (SPAN_OVERRIDE_MIN if SPAN_OVERRIDE_MIN is not None
@@ -321,7 +354,16 @@ def main():
     KNOBSIG = (f"kw{BANK['k_window']}_fs{FIXED}_sn{STALL_N}_hi{HI:g}_lo{LO:g}"
                f"_r2{BANK['momo_r2_min']:g}_sl{BANK['momo_slope_min']:g}"
                f"_arc{BANK['curl_arc_min']:g}_sk{BANK['level_slack']:g}"
-               f"_cr{BANK['curl_r2_min']:g}_mk{MOMO_KILL}_mf{MOMO_FENCE_R}_xw{MOMO_XWOB}"
+               f"_cr{BANK['curl_r2_min']:g}_mk{MOMO_KILL}_rq{MOMO_REACQ}"
+               f"_mf{MOMO_FENCE_R}_xw{MOMO_XWOB}"
+               # momo_slack_ref, Joe 0912 "SRP says to separate". The token appears ONLY when it
+               # differs from momo_slope_min, so every knob string banked before the split stays
+               # byte-identical and its rows stay matchable. Same pattern as _sp.
+               + (f"_sr{BANK['momo_slack_ref']:g}"
+                  if float(BANK['momo_slack_ref']) != float(BANK['momo_slope_min']) else '')
+               # momo_seam, Joe 0912. Token only when the seam excuse is on, so every key banked
+               # before it existed is unchanged.
+               + (f"_sm{BANK['momo_seam']}" if str(BANK['momo_seam']) != 'off' else '')
                + (f'_sp{SPAN_OVERRIDE_MIN}' if SPAN_OVERRIDE_MIN is not None else ''))
     print(f'  knob signature: {KNOBSIG}', flush=True)
     where = 'wflb_win_from=%s AND wflb_knobs=%s'
@@ -360,7 +402,8 @@ def main():
                     elif was_inside:
                         run += 1
                     mfrx = int(run >= MOMO_XWOB)          # the CONFIRMED exit
-                    vd = wsf_verdict(ung, mfrx, int(bool(mask[k])), prev_mfr, prev_st)
+                    vd = wsf_verdict(ung, mfrx, int(bool(mask[k])), prev_mfr, prev_st,
+                                     prev_verdict=prev_v)
                     if vd != prev_v:
                         if prev_v is not None:
                             last_v = prev_v      # what it held before this change

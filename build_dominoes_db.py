@@ -135,6 +135,14 @@ def main(argv):
         RUN[int(z)] = q - z
 
     # --- divergence, side-agnostic; normalised per row later ---------------------------------------
+    # OBSOLETE DIVERGENCE CALC. Joe 0912: "build it in the jig, and leave notes on all other
+    # divergence calcs to let them know they're obsolete". THE divergence calc is now
+    # jig.causal.divergence / jig.divergence - two lookbacks based on EXTREMAS, pairing consecutive
+    # same-side OOB episodes and confirming at the episode end. Everything below pairs a FIXED BAR
+    # OFFSET instead, which is what Joe replaced. Behaviour here is unchanged; this is a note.
+    #
+    # This caller also feeds px_smooth, which divergence_research.md:201 says DESTROYS the price
+    # slope (MAE 0.15 -> 0.35-0.85). The raw close is correct.
     ps = np.zeros(n); ps[L_DIV:] = px[L_DIV:] - px[:-L_DIV]
     DIV = {}
     for nm, _ in MAGES:

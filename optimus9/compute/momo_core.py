@@ -45,6 +45,18 @@ import numpy as np
 # There is deliberately no default. A default is what let one machine borrow another's numbers.
 MOMO_R2_MIN = None          # the "fuzzy straight line". Joe's refs: momo 0.921 / sideways 0.024
 MOMO_SLOPE_MIN = None       # the floor knob, r-units per 5-min sample. Joe's refs: 2.858 / 0.217
+#                             IT DOES ONE JOB: the flat/sloped branch test, at `flat=` below.
+MOMO_SEAM = None            # 'off' | 'skip_r2'. Joe 0912: a jump across the line's OWN bar seam
+#                             is not crookedness. At 'skip_r2', when the LAST seam inside the fit
+#                             window stepped TOWARD dr, the straightness floor is not applied.
+#                             The caller computes that fact with momo_seam.seam_toward_dr() and
+#                             puts it on the fit as f['seam_dr'] - this file owns no clock.
+MOMO_SLACK_REF = None       # SPLIT OUT OF MOMO_SLOPE_MIN, Joe 0912: "SRP says to separate".
+#                             The slope at which a line earns its FULL level-gate slack - the
+#                             denominator of `trk` in momo_fit() and level_gate(). One number
+#                             was steering the branch choice AND the gate together, so a sweep
+#                             of it could never separate the two effects. Seeded equal to
+#                             momo_slope_min, so every banked row is unchanged until it is moved.
 MOMO_WINDOW_MIN = None      # Joe 0731: was 45.
 CURL_ARC_MIN = None         # Joe 0731: a CURL is not sideways. See the curl block in verdict().
 CURL_VTX_LO, CURL_VTX_HI = None, None      # vertex must sit inside the window, not on its edge
@@ -123,7 +135,7 @@ def momo_fit(r, dr, w, quad='auto'):
     # TRACKING-WEIGHTED LEVEL GATE (Joe 0731). A hard gate at 50 rejects a line that is 0.63 away and
     # tracking cleanly (0520 06:26 s15: r 50.63, slope -1.891, R2 0.818). T scores how well the line
     # tracks; the gate slackens in proportion. A flat line earns T~0 and no slack.
-    trk = max(0.0, min(1.0, float(r2) * min(1.0, abs(sl) / max(1e-9, MOMO_SLOPE_MIN))))
+    trk = max(0.0, min(1.0, float(r2) * min(1.0, abs(sl) / max(1e-9, MOMO_SLACK_REF))))
     slack = LEVEL_SLACK * trk
     f.update(ok=True, slope=float(sl), r2=float(r2), r_at_bar=rw, trk=float(trk),
              slack=float(slack), n_lin=len(y),
@@ -190,7 +202,13 @@ def verdict(f):
     if not f['aligned']:
         return 'none', 'sloped, pointing against dr'
     if f['r2'] < MOMO_R2_MIN:
-        return 'none', 'sloped, but too crooked to call a line'
+        # THE SEAM EXCUSE, Joe 0912: "it's the final seam that matters ... the mech should simply
+        # decide if the seam jump is towards dr". A window whose only movement is one step across
+        # the line's own bar seam fits a straight line badly by construction; when that step went
+        # WITH dr it is a move, not crookedness. The fact is measured by the caller, in momo_seam.
+        if not (MOMO_SEAM == 'skip_r2' and f.get('seam_dr')):
+            return 'none', 'sloped, but too crooked to call a line'
+        return 'momo', 'momo, straightness excused by a dr-facing seam step'
     return 'momo', 'momo'
 
 
@@ -215,7 +233,7 @@ def level_gate(r2, slope, dr):
     _require_bound()
     if r2 is None or slope is None:
         return None
-    trk = max(0.0, min(1.0, float(r2) * min(1.0, abs(float(slope)) / max(1e-9, MOMO_SLOPE_MIN))))
+    trk = max(0.0, min(1.0, float(r2) * min(1.0, abs(float(slope)) / max(1e-9, MOMO_SLACK_REF))))
     return (50 - LEVEL_SLACK * trk) if dr > 0 else (50 + LEVEL_SLACK * trk)
 
 

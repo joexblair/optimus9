@@ -47,6 +47,14 @@ DDL = '''CREATE TABLE IF NOT EXISTS momo_config (
     mmc_live_after_dt DATETIME NOT NULL,  -- this bank is the live one from this moment
     -- the straight-line fit
     mmc_momo_slope_min  DOUBLE   NOT NULL,  -- slope floor, r-points per sample. A flatter line is 'flat'
+    mmc_momo_seam       VARCHAR(8) NOT NULL DEFAULT 'off',  -- 'off' | 'skip_r2'. Joe 0912: a step
+    --                                         across the line's OWN bar seam, pointing at dr, is a
+    --                                         move and not crookedness, so the straightness floor
+    --                                         is not applied on that window
+    mmc_momo_slack_ref  DOUBLE   NOT NULL,  -- the slope at which a line earns its FULL level-gate
+    --                                         slack. Split out of momo_slope_min 0912 on Joe's
+    --                                         word, "SRP says to separate": one number was doing
+    --                                         the flat/sloped branch test AND the gate scaling
     mmc_momo_r2_min     DOUBLE   NOT NULL,  -- straightness floor of the straight-line fit, 0 to 1
     mmc_momo_window_min INT      NOT NULL,  -- default fit window, minutes, before K_WINDOW scales it
     mmc_momo_step_min   INT      NOT NULL,  -- spacing between fit samples, minutes
@@ -79,7 +87,7 @@ BANDS = {'wsf': (1, 12), 'domtf': (13, 60)}
 # VERSION 1 = the values live in the code at the moment of the split, so the refactor changes the
 # SHAPE and not a single number. K_WINDOW 6 / slope 1.2 / r2 0.70 are Joe's 0903 bake-in; the other
 # eight are unchanged from where they have sat.
-V1 = dict(momo_slope_min=1.2, momo_r2_min=0.70, momo_window_min=60, momo_step_min=5,
+V1 = dict(momo_slope_min=1.2, momo_slack_ref=1.2, momo_seam='off', momo_r2_min=0.70, momo_window_min=60, momo_step_min=5,
           momo_fixed_samples=21, k_window=6, level_slack=13.9,
           curl_arc_min=4.0, curl_vtx_lo=0.05, curl_vtx_hi=0.95, curl_r2_min=0.40)
 MECHS = ('domtf', 'wsf')

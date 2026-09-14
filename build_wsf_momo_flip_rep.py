@@ -104,7 +104,12 @@ def KNOBS(variant, m_wob, xwob_cross, xwob, oob_hi, oob_lo, bank, mt):
     return (f"v{variant}_mw{int(m_wob)}_xwc{int(xwob_cross)}_xw{int(xwob)}"
             f"_hi{int(oob_hi)}_lo{int(oob_lo)}_bv{int(bank['version'])}"
             f"_kw{_n(bank['k_window'])}_sl{_n(bank['momo_slope_min'])}"
-            f"_r2{_n(bank['momo_r2_min'])}_mt{mt}")
+            f"_r2{_n(bank['momo_r2_min'])}_mt{mt}"
+            # momo_slack_ref, Joe 0912 split. Token only when it differs from
+            # momo_slope_min, so every key banked before the split is unchanged.
+            + (f"_sr{_n(bank['momo_slack_ref'])}"
+               if float(bank['momo_slack_ref']) != float(bank['momo_slope_min']) else '')
+            + (f"_sm{bank['momo_seam']}" if str(bank['momo_seam']) != 'off' else ''))
 
 
 def create(db):
