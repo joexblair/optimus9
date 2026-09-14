@@ -1,5 +1,9 @@
 """seed_v3_config — every hard-coded value in the wsf-dtf-v3 chain.
 
+V3, 0914: FOUR KNOBS ADDED, no value changed. Two for the ride end (spec 17.2a) and two for the
+momentum expiry (spec 18). Joe set all four values; the labels and the two section names are MINE
+under his 0913 delegation - "I'll pass the knobs to you for labelling". v1 and v2 stay banked.
+
 V2, 0912: momo_kill 'state' -> 'off', and chain_knobs follows it to ..._mkoff_... . Joe reversed
 the 0820 demotion: "it was built for a different mechanic and will break our new spec". v1 stays
 banked, so a run at the old reading is still reproducible.
@@ -18,7 +22,7 @@ from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.compute.v3_config import DDL, TABLE, v3_config
 
-V = 2
+V = 3
 
 # section, key, value, type, units, owner, fitted, in_key, source, note
 ROWS = [
@@ -92,6 +96,24 @@ ROWS = [
  ('wsf_chain', 'wmt_tf_hi', '12', 'int', 'timeframe', 'joe', 0, 1, 'report_wsf_bar.py WMT_TF_HI, Joe 0826', None),
  ('wsf_chain', 'threemage_dr', '0', 'int', None, 'joe', 0, 0,
   'Joe 0911: "drop the threemage dr mech. I\'m happy with our current dr mech"', '0 = dropped'),
+
+ # ── the ride end, spec 17.2a, Joe 0913. Branch A hands to dtf; branch B is its negation ───────
+ ('ride_end', 'mage_dwell', '12', 'int', 'bars', 'joe', 0, 0,
+  'Joe 0913: "oob (15/85) with a dwell of {knob:12} (1 minute)"',
+  'ws4Mage run on the dr side of 15/85 must REACH this. 12 bars = 60 s. Label mine'),
+ ('ride_end', 'r_wob', '3', 'int', 'steps', 'joe', 0, 0,
+  'Joe 0913: "r-momo-fence, wob {knob:3}"',
+  'ws4r run outside momo-fence-r on the dr side. 3 steps SPAN 4 bars = 20 s. Label mine'),
+
+ # ── the momentum expiry, spec 18, Joe 0914 ───────────────────────────────────────────────────
+ ('momo_expiry', 'fence', '50', 'int', 'r-points', 'joe', 0, 0,
+  'Joe 0914: "make the fence 50:50. add as a knob, we will sweep it later"',
+  'fence knobs are 100 - the closest edge, so 50 = a 50:50 fence. SEPARATE from the flat-run '
+  'signal\'s mid-zone fence, which stays 40/60 - Joe 0914 "(a)". Label and section mine'),
+ ('momo_expiry', 'xwob', '5', 'int', 'bars', 'joe', 0, 0,
+  'Joe 0914, answering M-2: "yes, xwob5"',
+  'the line must hold past the expiry fence for this. Units BARS to match momo_xwob and '
+  'boundary_xwob, the two xwob rows already here; 5 bars = 25 s. Label mine'),
 ]
 
 

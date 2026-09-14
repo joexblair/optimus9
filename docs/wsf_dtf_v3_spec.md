@@ -122,7 +122,11 @@ sits outside the fence. Joe 0909: *"keep the first sideways event per dr flip"*.
 
 **THE KNOBS LIVE IN THE DB.** Joe 0911: *"all hard-coded values need to be in the db. create a
 config table for our spec"*. Table `wsf_dtf_v3_config`, loader
-`optimus9/compute/v3_config.py`, seeder `seed_v3_config.py`. **38 knobs at v1.**
+`optimus9/compute/v3_config.py`, seeder `seed_v3_config.py`. **42 knobs at v3.**
+
+**v3, 0914 — four knobs added, no value changed.** Two for the ride end (17.2a) and two for the
+momentum expiry (§18). Joe set all four values; the labels and both section names are MINE under
+his 0913 delegation: *"I'll pass the knobs to you for labelling"*. v1 and v2 stay banked.
 
 One row per knob, not one wide row - the spec is still forming and a wide table needs a DDL change
 per knob. Each row carries its own provenance, which a wide table cannot:
@@ -143,8 +147,8 @@ Reading it:
     C.fitted('momo_span_min')   # True  -> say so when you quote it
     C.mine_keys()               # ['dwell', 'warm_utc'] -> re-flag them in every report
 
-**At v1: 2 knobs are FITTED** - `momo_span_min` and `momo_slope_min`. **2 are MINE and unruled** -
-`dwell` and `warm_utc`.
+**At v3: 2 knobs are FITTED** - `momo_span_min` and `momo_slope_min`. **2 are MINE and unruled** -
+`dwell` and `warm_utc`. The four added at v3 are Joe's values under my labels, so they are `joe`.
 
 The table below is the same set, kept readable in the doc. The DB is the source of truth.
 
@@ -171,6 +175,10 @@ existing bank instead of overwriting it.
 | **ws1mage-rev** boundary xwob | **4 bars** — in-bounds must hold 4 bars | not yet in any bank | Joe 0911, same message. `jig.WS1MR_HOLD` |
 | **ws1mage-rev** ws1Mage oob dwell | 3 bars = 15 s | not yet in any bank | **MINE.** Joe rejected the 10 s dwell at 03:29:20 and never named a floor. `jig.WS1MR_DWELL` |
 | window | 2026-08-25 00:00:00 to 2026-08-28 00:00:00 | **NO** | Joe 0910 *"extend the report to 08-27 (full days)"* |
+| **ride end** `mage_dwell` | **12 bars = 60 s** | not yet in any bank | Joe 0913: *"oob (15/85) with a dwell of {knob:12} (1 minute)"*. ws4Mage's run on the dr side of 15/85 |
+| **ride end** `r_wob` | **3 steps = 4 bars = 20 s** | not yet in any bank | Joe 0913: *"r-momo-fence, wob {knob:3}"*. ws4r's run outside momo-fence-r on the dr side |
+| **momo expiry** `fence` | **50** = a 50:50 fence | not yet in any bank | Joe 0914: *"make the fence 50:50"*. Fence knobs are 100 minus the closest edge. SEPARATE from the flat-run signal's 40/60 |
+| **momo expiry** `xwob` | **5 bars = 25 s** | not yet in any bank | Joe 0914: *"yes, xwob5"*. Units BARS, matching `momo_xwob` and `boundary_xwob`, the two xwob rows already banked |
 
 ### THE 10 MINUTES IS THE SPAN, NOT THE GAP
 
@@ -1310,3 +1318,59 @@ No producer runs 17.1 as a sequence or 17.2 at all. What exists:
 | 9 | `walk_mom_models.py` — trigger depends on the dropped step 8 |
 | 10, 11, 12 | `momo_core.verdict`, `momo_seam`, `walk_mom_models.gate_ok` |
 | 17.2 | nowhere |
+
+
+---
+
+## 18. THE MOMENTUM EXPIRY — Joe 0914
+
+**Verbatim:**
+
+> there's a missing mech from the momentum machine: if an r-line has already exited the
+> r-momo-fence and reversed back into the fence (ie its dr-side momentum has expired), it can not
+> be tagged as mom-true until it has travelled past the mid-zone-fence (40/60) edge
+> example: 08-27 17:09:10 dr +1, ws6 was outside of the fence at ~16:30. it won't be eligible for
+> mom-true until ~17:24
+
+**The rule, with Joe's 0914 answers folded in:**
+
+1. a line ARMS the expiry when it exits momo-fence-r 83/17 on the dr side. **No wob on the arming
+   cross** - Joe 0914: *"drop it"*.
+2. the expiry BITES when the line reverses back inside momo-fence-r. From that bar the line cannot
+   be tagged momentum-true.
+3. the expiry CLEARS when the line travels past the expiry fence, held for `momo_expiry.xwob`.
+4. the expiry also clears on a **dr flip** - Joe 0914, answering M-4.
+
+| # | question | Joe's answer, verbatim |
+|---|---|---|
+| (a) | is the 50:50 the flat-run signal's fence too | *"(a) - the expiry fence is its own knob, flat-run keeps 40/60"* |
+| M-2 | does the crossing need a dwell or wob | *"yes, xwob5"* |
+| M-3 | what arms the expiry | *"honour any wobs in place. if there isn't one, attach a wob 1 to it"* -> then, on being told the arming cross has no wob anywhere in the chain: *"drop it"* |
+| M-4 | does the expiry survive a dr flip | *"clears on a dr flip"* |
+
+**THE EXPIRY FENCE IS NOT THE MID-ZONE FENCE.** `momo_expiry.fence` = 50 is its own knob. The
+flat-run signal keeps `SR_FENCE` = 40/60 and every test-point already measured is unaffected.
+
+**Measured 0914 on Joe's own example** - ws6r, 08-27, dr +1. Last bar at or above 83 was 16:53:55
+at 84.54:
+
+| fence | knob | first bar at or below the edge after the exit | ws6r |
+|---|---|---|---|
+| 60:40 | 40 | 17:12:00 | 53.54 |
+| 55:45 | 45 | 17:12:00 | 53.54 |
+| **50:50** | **50** | **17:30:35** | **49.60** |
+| 45:55 | 55 | 18:18:00 | 40.06 |
+| 40:60 | 60 | 18:19:00 | 39.82 |
+
+- the 50:50 fence removes the 17:12 excursion, which is what Joe asked of it: *"my eyes didn't see
+  the 17:12 excursion. it's too early"*. ws6r bottomed at 53.54 there and never reached 50.
+- Joe's eyes read ~17:24. The 50 fence lands at 17:30:35, six and a half minutes later. Both
+  readings are on the table and the knob is set to be swept.
+- the 17:30:35 crossing is one bar deep - ws6r is back above 50 fifteen seconds later - which is
+  what `xwob` = 5 bars is for.
+
+**At the bar this came from**, 08-27 17:09:10 dr +1, ws6r is 79.63: armed at 16:36, bitten by
+16:54, and not yet past the expiry fence. Under this rule its `momo` verdict is disqualified.
+
+**NOT BUILT.** No producer arms, bites or clears the expiry. The two knobs are banked at v3 and
+nothing reads them.
