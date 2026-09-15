@@ -1,5 +1,11 @@
 """seed_v3_config — every hard-coded value in the wsf-dtf-v3 chain.
 
+V5, 0915: ONE KNOB ADDED - momo_expiry.return_bars. Joe: "I agree with your natural anchor, n can
+be 3 and swept (add the knob)". UNITS ARE BARS, and that is MINE: my sweep table was numbered in
+wobs, where a wob of 2 spans the 3 bars of the anchor and a wob of 3 spans 4. Naming the knob in
+bars makes both halves of Joe's sentence agree - the anchor IS 3, and n IS 3. It also steps around
+the repo's own wob/bars split (momo_xwob and boundary_xwob are bars; ride_end.r_wob is steps).
+
 V4, 0914: ONE KNOB ADDED - handoff.ride_tf_hi. Joe: "we're talking about the TF limit of wsf, and
 where it belongs. I see it as a knob in a db table: 4 was chosen by eyeballing only, so we might
 find that 5 is 'better' in a sweep". It is SEPARATE from band_subwsf and from band_wsf_hi, so a
@@ -27,7 +33,7 @@ from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.compute.v3_config import DDL, TABLE, v3_config
 
-V = 4
+V = 5
 
 # section, key, value, type, units, owner, fitted, in_key, source, note
 ROWS = [
@@ -119,6 +125,11 @@ ROWS = [
   'Joe 0914, answering M-2: "yes, xwob5"',
   'the line must hold past the expiry fence for this. Units BARS to match momo_xwob and '
   'boundary_xwob, the two xwob rows already here; 5 bars = 25 s. Label mine'),
+ ('momo_expiry', 'return_bars', '3', 'int', 'bars', 'joe', 0, 0,
+  'Joe 0915: "I agree with your natural anchor, n can be 3 and swept (add the knob)"',
+  'the expiry does not bite until the line holds back inside momo-fence-r for this. ANCHORED to '
+  'the flat-run signal\'s own 3 bars = 15 s - no knee in the sweep. Units bars, not wob: mine. '
+  'SWEEP CANDIDATE'),
 
  # ── the hand-off, spec 17.2 / 19, Joe 0914 ───────────────────────────────────────────────────
  ('handoff', 'ride_tf_hi', '4', 'int', 'timeframe', 'joe', 0, 0,

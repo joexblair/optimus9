@@ -115,7 +115,8 @@ def route(k, dr, L, banks, seams, cfg, C, DR, divergence=None, span_min=10):
         r = L.get('r%d' % tf)
         if r is None:
             continue
-        bitten, arm, bite, clear = EX.expired(r, k, dr, i0, C['momo_fence_r'], C['fence'], C['xwob'])
+        bitten, arm, bite, clear = EX.expired(r, k, dr, i0, C['momo_fence_r'], C['fence'],
+                                              C['xwob'], C['return_bars'])
         if bitten:
             continue                                   # spec 18: expired, cannot be momentum-true
         t, st = momentum_true(r, banks[tf], cfg, k, dr, seams.get(tf, False), span_min)

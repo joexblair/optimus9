@@ -122,7 +122,14 @@ sits outside the fence. Joe 0909: *"keep the first sideways event per dr flip"*.
 
 **THE KNOBS LIVE IN THE DB.** Joe 0911: *"all hard-coded values need to be in the db. create a
 config table for our spec"*. Table `wsf_dtf_v3_config`, loader
-`optimus9/compute/v3_config.py`, seeder `seed_v3_config.py`. **42 knobs at v3.**
+`optimus9/compute/v3_config.py`, seeder `seed_v3_config.py`. **44 knobs at v5.**
+
+**v5, 0915 — one knob added, no value changed.** `momo_expiry.return_bars` = 3, the hold on the
+expiry's return cross (§18.1). Joe: *"I agree with your natural anchor, n can be 3 and swept (add
+the knob)"*. The units are bars, and that reading is MINE.
+
+**v4, 0914 — one knob added, no value changed.** `handoff.ride_tf_hi` = 4, the ride ceiling,
+deliberately separate from `band_subwsf` and `band_wsf_hi` so a sweep can move it alone (19.2).
 
 **v3, 0914 — four knobs added, no value changed.** Two for the ride end (17.2a) and two for the
 momentum expiry (§18). Joe set all four values; the labels and both section names are MINE under
@@ -1280,6 +1287,10 @@ New rows in `wsf_dtf_v3_config`. No schema change — the table is already key/v
 |---|---|---|---|---|---|
 | `ride_end` | `mage_dwell` | 12 | bars | joe | ws4Mage's run on the dr side of 15/85 must REACH this. 12 bars = 60 s. Joe 0913 `{knob:12}` (1 minute). Label mine |
 | `ride_end` | `r_wob` | 3 | steps | joe | ws4r's run outside momo-fence-r on the dr side. 3 steps SPAN 4 bars = 20 s. Joe 0913 `wob {knob:3}`. Label mine |
+| `momo_expiry` | `fence` | 50 | r-points | joe | the expiry fence, 100 - the closest edge, so 50 = 50:50. Joe 0914. Label and section mine |
+| `momo_expiry` | `xwob` | 5 | bars | joe | the line must hold past the expiry fence for this to CLEAR. Joe 0914 `"yes, xwob5"`. Label mine |
+| `momo_expiry` | `return_bars` | 3 | bars | joe | the line must hold back INSIDE momo-fence-r for this before the expiry BITES. Joe 0915 `"n can be 3 and swept"`. Anchored to the flat-run's own 3 bars. Units bars, not wob: mine. SWEEP CANDIDATE. See 18.1 |
+| `handoff` | `ride_tf_hi` | 4 | timeframe | joe | the highest timeframe the machine RIDES. Joe 0914, eyeballed not swept. Label mine. See 19.2 |
 
 Python constants, following `walk_mom_models.py`'s `R_DWELL_WOB` / `R_OOB_BARS` pairing:
 
@@ -1301,8 +1312,9 @@ RIDE_R_BARS     = RIDE_R_WOB + 1          # 4 bars = 20 s
 spans 3 bars. `ride_end.r_wob` = 3 is written with units `steps` and its 4-bar span spelled out in
 the note, so a reader cannot take it for 3 bars. The wider inconsistency is untouched.
 
-**NOT WRITTEN.** These rows are proposed, not inserted. No config row, no python constant, and no
-reader exists yet.
+**WRITTEN 0914.** Both rows are banked at v3 and `handoff_routing.ws4_pair()` reads them. The
+python constants above were NOT written - the values arrive from the config, not from a module
+constant, so they are kept here only as the units they stand for.
 
 ---
 
@@ -1336,8 +1348,10 @@ No producer runs 17.1 as a sequence or 17.2 at all. What exists:
 
 1. a line ARMS the expiry when it exits momo-fence-r 83/17 on the dr side. **No wob on the arming
    cross** - Joe 0914: *"drop it"*.
-2. the expiry BITES when the line reverses back inside momo-fence-r. From that bar the line cannot
-   be tagged momentum-true.
+2. the expiry BITES when the line reverses back inside momo-fence-r **and holds there for
+   `momo_expiry.return_bars`** - Joe 0915. From the bar it first came back inside, the line cannot
+   be tagged momentum-true; the state is KNOWABLE `return_bars - 1` bars later, when the hold
+   completes. A brush against the fence that does not hold no longer bites.
 3. the expiry CLEARS when the line travels past the expiry fence, held for `momo_expiry.xwob`.
 4. the expiry also clears on a **dr flip** - Joe 0914, answering M-4.
 
@@ -1347,6 +1361,7 @@ No producer runs 17.1 as a sequence or 17.2 at all. What exists:
 | M-2 | does the crossing need a dwell or wob | *"yes, xwob5"* |
 | M-3 | what arms the expiry | *"honour any wobs in place. if there isn't one, attach a wob 1 to it"* -> then, on being told the arming cross has no wob anywhere in the chain: *"drop it"* |
 | M-4 | does the expiry survive a dr flip | *"clears on a dr flip"* |
+| 0915 | should the return cross carry a wob | *"create a wob that ensures we don't miss those mission-critical sideways"*, then *"C makes more sense to me"*, then *"I agree with your natural anchor, n can be 3 and swept (add the knob)"* and *"my read on your summary: it's a happy accident - keep the wob"* |
 
 **THE EXPIRY FENCE IS NOT THE MID-ZONE FENCE.** `momo_expiry.fence` = 50 is its own knob. The
 flat-run signal keeps `SR_FENCE` = 40/60 and every test-point already measured is unaffected.
@@ -1372,8 +1387,51 @@ at 84.54:
 **At the bar this came from**, 08-27 17:09:10 dr +1, ws6r is 79.63: armed at 16:36, bitten by
 16:54, and not yet past the expiry fence. Under this rule its `momo` verdict is disqualified.
 
-**NOT BUILT.** No producer arms, bites or clears the expiry. The two knobs are banked at v3 and
-nothing reads them.
+### 18.1 THE RETURN HOLD — Joe 0915
+
+Joe asked for it to stop a sideways being missed. **It was measured first, and nothing was being
+missed.** 08-25 to 08-28, ws2..ws12, at the banked knobs:
+
+| return_bars | seconds held | arm->bite pairs | with a flat-run inside the excursion | without | without % |
+|---|---|---|---|---|---|
+| 1 | 5 | 2,665 | 2,411 | 254 | 9.5% |
+| 2 | 10 | 2,072 | 1,896 | 176 | 8.5% |
+| **3** | **15** | **1,767** | **1,633** | **134** | **7.6%** |
+| 4 | 20 | 1,582 | 1,479 | 103 | 6.5% |
+| 5 | 25 | 1,442 | 1,351 | 91 | 6.3% |
+| 6 | 30 | 1,341 | 1,266 | 75 | 5.6% |
+| 8 | 40 | 1,184 | 1,128 | 56 | 4.7% |
+| 12 | 60 | 1,028 | 989 | 39 | 3.8% |
+
+The residual - the excursions that bit with no flat-run in them - is **entirely short**. At
+`return_bars` 4, 95 of the 103 are 15 s or less and 8 are 16-30 s. At 12, 38 of 39 are 15 s or
+less. **At every setting, including no hold at all, not one residual excursion exceeds 60 seconds.**
+
+**JOE'S CLAIM IS VALIDATED.** He wrote: *"for a line to expire, it must pass through either of
+these 2 states: sideways or reverse ... by definition, a line can't be ridden and expired at the
+same time"*. Across 2,665 arm->bite pairs there is no case of a line making a real run past
+momo-fence-r and coming back without going sideways first. The residual is brushes, not rides.
+
+**SO THE WOB DOES NOT DO WHAT IT WAS ASKED TO DO, and Joe kept it knowing that** - *"it's a happy
+accident - keep the wob"*. What it actually does is stop the expiry arming and biting on a
+five-second touch of the fence.
+
+**THE VALUE IS ANCHORED, NOT PREFERRED.** There is no knee in the curve - the miss rate falls
+smoothly from 9.5% to 3.8% and is still falling at 60 s. 3 bars is the **flat-run signal's own
+minimum**: the shortest excursion that could contain a sideways at all. Joe: *"I agree with your
+natural anchor, n can be 3 and swept"*.
+
+**UNITS ARE BARS, and that is MINE.** The sweep table above was originally numbered in wobs, where
+a wob of 2 spans the 3 bars of the anchor. Reading the knob in bars makes both halves of Joe's
+sentence agree - the anchor is 3 and n is 3 - and steps around the repo's own split, where
+`momo_xwob` and `boundary_xwob` are bars but `ride_end.r_wob` is steps.
+
+**BUILT.** `momo_expiry.expired()` takes `return_bars`; `handoff_routing.route()` passes it from
+the config. Banked at v5.
+
+**IT MOVES NOTHING WE HAVE MEASURED.** Re-run at `return_bars` 1 and 3: ws6r on 08-27 arms at
+16:36:00 and bites at 16:54:00 under both, and all 40 in-sample ws2 momentum bars route `dtf`
+under both, carrying the same 272 lines. The ws6 excursion is 18 minutes long - a real one.
 
 
 ---
