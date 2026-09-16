@@ -1012,7 +1012,7 @@ is consistent:
 
 | dropped step | what it was | why it is not in the plan |
 |---|---|---|
-| 8 | the fence-exit test | **it looks forward 420 bars.** It was a scoring device for the walk, not a live step |
+| 8 | the fence-exit test | **it looks forward 420 bars.** It was a scoring device for the walk, not a live step. Joe 0916 confirmed it is dead: *"exit_hi and exit_lo are not needed for this current work, because we're no longer tuning test-point and momentum"* — so `EXIT_HI` 80.0 / `EXIT_LO` 20.0 r-points and `REACH_BARS` 420 have no consumer |
 | 13 | the sweep | the settings are fixed. Joe 0913: *"I don't think we need to sweep"* |
 | 14 | the stalemate and the ws3/ws4 digression | both exist only to serve the sweep |
 | 15 | the pool | the pool only fills when a sweep fails |
@@ -1030,22 +1030,46 @@ dr holds. Verbatim from `build_wsf_dtf_v3`. CAUSAL: reads only bars at or before
 CONSECUTIVE run on the dr side of the 25/75 fence has REACHED `MAGE_DWELL` = 6 bars = 30 s.
 CAUSAL: the run is counted backwards from each bar.
 
-**Step 3 — the abandon rule.** From that bar, two events race: ws1r reaching its own out-of-bounds
-dwell on the dr side, and ws1Mage reaching its out-of-bounds dwell on the OPPOSITE side. Whichever
-lands first decides. Opposite-side ws1Mage first means the walk abandons this dr and restarts its
-hunt from that bar with the dr flipped. Joe 0913: *"it abandons it. treat a dr flip as a fresh
-start"*. CAUSAL: the decision equals a bar-by-bar scan that acts on whichever condition becomes
-true first. The implementation searches forward and takes the earlier, which produces the same bar.
+**Step 3 — the abandon rule. REMOVED, Joe 0916.** It raced ws1r's out-of-bounds dwell against
+ws1Mage reaching its dwell on the OPPOSITE side, and on the opposite-side win it PLANTED a dr
+flip. Planting a dr cannot survive Joe 0916's *"dr is global: ALL chains should be sharing the
+dr"*, and he ruled the case directly — *"keep going on dr +1 and set the test-point at
+16:32:10"*. Measured before removal: it fired on 1 of 167 dr stretches = 0.6%.
 
-**Step 4 — ws1r out of bounds.** The first bar where ws1r's consecutive run on the dr side of the
-15/85 fence has REACHED `R_OOB_BARS` = 3 bars = 15 s. That is the `r` dwell knob at wob 2, which
-spans 3 bars. Joe 0913 set the fence: *"oob is alwasy 15/85"*. CAUSAL: run counted backwards.
+**Step 4 — ws1r out of bounds. REMOVED, Joe 0916.** It read ws1r against the 15/85 oob fence.
+Joe 0916: *"r is never constrained by oob (85/15). r has its own r-momo-fence."* On r's own
+fence the step became a strict subset of step 5, which reads the same band plus a flatness test,
+so it could reject nothing step 5 accepts. Its only remaining effect was to stop step 5's 3-bar
+window straddling the anchor — a 2-bar block, superseded by the look-back below.
 
 **Step 5 — the flat-run signal. THIS IS THE TEST-POINT.** 3 consecutive bars of the line under
 test where the highest minus the lowest across the run is 2.0 r points or less, and all 3 sit on
-the dr side of the mid-zone fence — above 60 at dr +1, below 40 at dr -1. The test-point is the
-bar the run REACHES 3. The run fires once and re-arms only after the line breaks the flat
-condition. CAUSAL: backward-looking over 3 bars.
+the dr side of **the r-momo-fence, 17/83** — above 83 at dr +1, below 17 at dr -1. Joe 0915 moved
+this off the 40/60 mid-zone: *"apply r-momo-fence to the test-points"*, ALL of them. The
+test-point is the bar the run REACHES 3. CAUSAL: backward-looking over 3 bars.
+
+**Step 5a — the look-back. NEW, Joe 0916.** At the anchor (step 2's bar, which Joe named *"mk ==
+established ws1Mage oob"*), look BACK up to `tp_lookback_min` = 4 minutes = 48 bars for a flat run
+that has ALREADY completed on the dr side of 17/83. A hit means **the test-point IS the anchor
+bar**. Joe 0916 set the knob — *"idk - lets use {knob:4} minutes"* — and bounded it: *"if dr flips
+while the lookback is looking back, then we abandon and continue with the established mech"*, so
+it never reads earlier than the dr stretch's own start. It requires NOTHING of r at the anchor:
+*"at mk, nothing. lookback either finds a flat run, or it doesn't"*. No hit means the established
+forward scan runs instead. Measured: the look-back produces 21% to 41% of test-points, and the
+stretch start clips it on 84.8% of ws1 stretches. CAUSAL: reads bars at or before the anchor.
+
+**Step 5b — one test-point per dr stretch PER TIMEFRAME. NEW, Joe 0916.** *"one test-point per dr
+cycle, so long as the code treats this per tf - ie there will be multiple tf's setting test-points
+inside of a dr cycle"*. Once wsN has produced in a stretch it stops hunting until the next latch
+change. Without it the hunt re-fires every 30 s while the lines stay pinned — 79 test-points on
+09-03 against 21.
+
+**Step 5c — what advances the walk. CORRECTED, Joe 0916.** *"the dr latch only sets the cycle's
+dr"* — NOT its start bar. The bar comes from the walk, the dr is read from the latch at that bar.
+The forward scan is bounded by the opposing dr flip; if no flat run lands before it, that
+timeframe produces nothing in that stretch. The old build PLANTED a flip at
+`fence_exit(ws2r, 80/20, 420 bars) + 1` and planted `dr = -dr` with it — measured wrong against
+the latch on 21.0% of its own test-points.
 
 - `SR_SAMPLES` = 3 bars. Joe 0912: *">= 3 samples printing the same values"*.
 - `SR_TOL` = 2.0 r points across the run. MINE, from Joe's *"tolerance ~2%"*, read as 2% of the
@@ -1331,6 +1355,72 @@ No producer runs 17.1 as a sequence or 17.2 at all. What exists:
 | 10, 11, 12 | `momo_core.verdict`, `momo_seam`, `walk_mom_models.gate_ok` |
 | 17.2 | nowhere |
 
+
+---
+
+## 17.3 SNEAKY-TRADE-1 — Joe 0916 named it
+
+Joe 0916: *"to remove pyramid and main-trade references, I'm going to call this mech
+'sneaky-trade-1'"*.
+
+### The direction — settled, and it does NOT follow the dr-bias rule
+
+> *"when you reach a test-point (the moment when the sneaky trade signals), you will enter a long
+>  position if dr is +1, and short if dr is -1. this is all you need to consider - don't be swayed
+>  by the other potential activities that might be reliant on dr"*
+
+| dr | sneaky-trade-1 |
+|---|---|
+| +1 | LONG |
+| -1 | SHORT |
+
+In code that is scoring `* dr` — profit when price moves in the +dr direction. Spec 17.2's
+dr-bias rule (dr +1 = SHORT) governs OTHER mechanics and must not be applied here. Joe ruled this
+explicitly to stop the two being confused.
+
+### The trade
+
+| step | what | source |
+|---|---|---|
+| open | the first bar after the test-point where **ws1x**, having been out of bounds on the OPPOSING dr side (15/85), comes back IN BOUNDS. Bounded by the dr flip | Joe 0916: *"start calculating from the moment after 'test-point' when ws1x has crossed from opposing-dr-side oob, to ib"* |
+| close | the **first** `gcws30mage-rev` after the carrying line's r-momo-fence exit. The open must land BEFORE it, else no trade | causal; see the note below |
+| size | 22,000 coins, fixed | Joe 0916: *"I agree with 22K coins - its a good strategy to build from"* |
+| stop | NONE | swept on pxs at 5 s over the full observed range: every binding level loses, monotonically |
+
+**THE CLOSE WAS NOT CAUSAL AND IS FIXED.** It used to be the leash's maximum coil — `argmax` over
+every rev in the window. That is the global maximum of an oscillating series (60.1% of windows
+carry 2+ local peaks, median 2, max 11), so it is only knowable once the window has ended. A
+proper causal peak detector agrees with it on 0.7% of rows. Joe 0915 asked for three picks —
+*"test all 3: filter, time, size"* — and **size is the one that cannot be built**.
+
+### The gate — this is the entry condition, not a filter
+
+All three read at the test-point, before anything opens.
+
+| test | condition | why it is there |
+|---|---|---|
+| the ladder climbed | the highest timeframe carrying momentum is HIGHER than the one that found the test-point | rows where source == carrying line run -11.69/row, 8.2% wins |
+| `drop` >= 50 | dr-signed ws1Mage minus ws12Mage at the test-point | monotonic by band; route 3's own floor of 39.1 sits below break-even on causal rows |
+| src is ws1 or ws2 | the test-point came from the 1- or 2-minute line | ws3 -5.02/row, ws4 -12.42/row |
+
+**Mandatory.** The drag is a flat 16.06 USDT per trade at 22,000 coins, and the median move across
+all rows is +0.288% against the 0.550% needed to clear it. 73% of rows never clear the drag. The
+gate lifts that to 44.2%. Ungated the account goes to zero; gated it does not.
+
+### Measured — 87 days, gates chosen in-sample, tested on a held-out third
+
+| | in-sample | out-of-sample |
+|---|---|---|
+| window | 06-10 -> 08-06 | 08-07 -> 09-04 |
+| trades | 197 | 105 |
+| mean net | +3.99 USDT | +12.70 USDT |
+| wins | 44.2% | 64.8% |
+| end balance from 600 | 1,386.20 | 1,933.20 |
+| max drawdown | -16.13% | -16.94% |
+
+MAE and MFE read **pxs at every 5 s bar**. Sampling that series every 30 s was a defect; reading
+raw high/low instead is a different measurement — raw runs 0.624% deeper at the median, and that
+gap is the spike content pxs exists to remove.
 
 ---
 

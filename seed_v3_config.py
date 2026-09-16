@@ -33,7 +33,7 @@ from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.compute.v3_config import DDL, TABLE, v3_config
 
-V = 5
+V = 6
 
 # section, key, value, type, units, owner, fitted, in_key, source, note
 ROWS = [
@@ -130,6 +130,13 @@ ROWS = [
   'the expiry does not bite until the line holds back inside momo-fence-r for this. ANCHORED to '
   'the flat-run signal\'s own 3 bars = 15 s - no knee in the sweep. Units bars, not wob: mine. '
   'SWEEP CANDIDATE'),
+
+ # ── the test-point look-back, Joe 0916 ───────────────────────────────────────────────────────
+ ('wsf_chain', 'tp_lookback_min', '4', 'int', 'minutes', 'joe', 0, 0,
+  'Joe 0916: "idk - lets use {knob:4} minutes"',
+  'at the established wsNMage oob, look BACK this far for an already-completed flat run; a hit '
+  'means the test-point IS that anchor bar. 4 min = 48 bars. NO KNEE - Joe\'s choice ("idk"), not '
+  'a measurement. Clipped at the dr stretch start. SWEEP CANDIDATE'),
 
  # ── the hand-off, spec 17.2 / 19, Joe 0914 ───────────────────────────────────────────────────
  ('handoff', 'ride_tf_hi', '4', 'int', 'timeframe', 'joe', 0, 0,
