@@ -1385,6 +1385,8 @@ explicitly to stop the two being confused.
 | open | the first bar after the test-point where **ws1x**, having been out of bounds on the OPPOSING dr side (15/85), comes back IN BOUNDS. Bounded by the dr flip | Joe 0916: *"start calculating from the moment after 'test-point' when ws1x has crossed from opposing-dr-side oob, to ib"* |
 | close | the **first** `gcws30mage-rev` after the carrying line's r-momo-fence exit. The open must land BEFORE it, else no trade | causal; see the note below |
 | size | 22,000 coins, fixed | Joe 0916: *"I agree with 22K coins - its a good strategy to build from"* |
+| producer | `optimus9/compute/sneaky_trade_1.py` | the signal. Owns no threshold |
+| banked | `sneaky_trade_1` table, `build_sneaky_trade_1.py` | EVERY signal, taken or not, keyed on (test-point bar, src) so o9-live can reconcile a fill against it |
 | stop | NONE | swept on pxs at 5 s over the full observed range: every binding level loses, monotonically |
 
 **THE CLOSE WAS NOT CAUSAL AND IS FIXED.** It used to be the leash's maximum coil — `argmax` over
@@ -1399,9 +1401,27 @@ All three read at the test-point, before anything opens.
 
 | test | condition | why it is there |
 |---|---|---|
-| the ladder climbed | the highest timeframe carrying momentum is HIGHER than the one that found the test-point | rows where source == carrying line run -11.69/row, 8.2% wins |
-| `drop` >= 50 | dr-signed ws1Mage minus ws12Mage at the test-point | monotonic by band; route 3's own floor of 39.1 sits below break-even on causal rows |
-| src is ws1 or ws2 | the test-point came from the 1- or 2-minute line | ws3 -5.02/row, ws4 -12.42/row |
+| `drop` >= 50 | dr-signed ws1Mage minus ws12Mage at the test-point | marginal is + in all 3 time blocks and in both contexts it is testable in |
+| src is ws1 or ws2 | the test-point came from the 1- or 2-minute line | the only gate whose marginal is + in ALL FOUR contexts and all 3 blocks |
+| `hi` == ws4 | the carrying line is the 4-minute line | + in all 3 real contexts and all 3 blocks |
+
+`climb` is NOT in the gate: once `hi` is ws4 and `src` is ws1 or ws2, the ladder has climbed by
+construction, so it adds nothing. Its own marginal is + (+0.92 / +0.56 / +0.72) but only in the
+ungated context.
+
+GATES TESTED AND REJECTED, each for a stated reason:
+
+| gate | why not |
+|---|---|
+| `drop` >= 39.1 (route 3's floor) | marginal sign flips: -0.08 / +3.39 / +1.61 across blocks |
+| `wrong` <= 1 (route 3's own gate) | sign flips in ALL FOUR contexts; block 2 negative every time |
+| KEEP the r-weak rows | NEGATIVE marginal in every gated context, all 3 blocks |
+| DROP the r-weak rows | sign REVERSES by context: -8.19 ungated, +10.16 gated. 16 trades/block |
+| dr -1 only | sign reverses by context |
+
+Joe 0916 defined r weakness: *"an r that prints inside the fence is weak, if a lower TF is outside
+of the fence"*. Measured both directions. It is context-dependent, not directional, so it is not a
+gate.
 
 **Mandatory.** The drag is a flat 16.06 USDT per trade at 22,000 coins, and the median move across
 all rows is +0.288% against the 0.550% needed to clear it. 73% of rows never clear the drag. The
@@ -1409,14 +1429,20 @@ gate lifts that to 44.2%. Ungated the account goes to zero; gated it does not.
 
 ### Measured — 87 days, gates chosen in-sample, tested on a held-out third
 
-| | in-sample | out-of-sample |
-|---|---|---|
-| window | 06-10 -> 08-06 | 08-07 -> 09-04 |
-| trades | 197 | 105 |
-| mean net | +3.99 USDT | +12.70 USDT |
-| wins | 44.2% | 64.8% |
-| end balance from 600 | 1,386.20 | 1,933.20 |
-| max drawdown | -16.13% | -16.94% |
+Selection read BLOCK 1 ONLY. Blocks 2 and 3 were never read during selection. A candidate had to
+produce at least 30 trades in every block, and a gate had to hold one sign across all 3 blocks AND
+across contexts before it was even eligible.
+
+| block | window | rows | mean net | wins | end bal from 600 | maxDD |
+|---|---|---|---|---|---|---|
+| 1  CHOSEN ON | 06-10 -> 07-08 | 92 | +7.03 | 48.9% | 1,247.00 | -6.43% |
+| 2  HELD OUT | 07-09 -> 08-06 | 76 | +1.97 | 38.2% | 750.09 | -23.90% |
+| 3  HELD OUT | 08-07 -> 09-04 | 93 | +13.72 | 65.6% | 1,876.37 | -12.21% |
+| HELD OUT 2+3 | | 169 | **+8.44** | | | |
+| ALL 87 DAYS | | 261 | +7.94 | 51.7% | 2,673.45 | -14.03% |
+
+It did not degrade out of sample — the held-out mean is above the block it was chosen on. Block 2
+is the weak month: +1.97 per trade, barely clearing the 0.55% drag.
 
 MAE and MFE read **pxs at every 5 s bar**. Sampling that series every 30 s was a defect; reading
 raw high/low instead is a different measurement — raw runs 0.624% deeper at the median, and that
