@@ -171,17 +171,68 @@ for margin and liquidation**.
 
 ---
 
-## 8. OPEN — Joe's to rule on
+## 8. THE RECONCILIATION CONTRACT — Joe 0917
 
-**The reconciliation contract is not defined.** Which fields are compared, what tolerance on the
-fill price and on the bar, and what counts as a match, a miss, or an extra. That is Joe's call and
-it is a conversation, not a build.
+It is two lines. Joe: *"surely it just needs the entry and exit timestamps to align with the
+underlying events that cause them, possibly with a 30 second tolerance"* — and he is right.
+
+```
+1  a fill MATCHES a signal when its timestamp is within 30 s of that signal's
+   st1_open_bar (for an entry) or st1_close_bar (for an exit)
+2  a fill with no signal inside 30 s is an EXTRA
+   a taken signal with no fill inside 30 s is a MISS
+```
+
+Everything else is a case to investigate, which is the receiving session's job — not a list to
+pre-enumerate.
+
+### Why 30 s is safe, measured
+
+| | n | gap between consecutive bars, seconds: min / p1 / p5 / median |
+|---|---|---|
+| OPEN bars, taken rows | 216 | 20 / 142 / 439 / **22,805** |
+| CLOSE bars, taken rows | 191 | 3,530 / 4,524 / 7,276 / 27,255 |
+
+| tolerance | taken OPEN bars with another taken OPEN inside it |
+|---|---|
+| 5 s | 0 of 216 |
+| 15 s | 0 of 216 |
+| **30 s** | **1 of 216** |
+| 60 s | 1 of 216 |
+
+The median gap between taken opens is six hours. At 30 s exactly one pair is ambiguous. Tightening
+to 15 s removes it; loosening to 60 s adds nothing new.
+
+### THE THIRD LINE — the duplicate count. Joe 0917: *"agreed"*
+
+Timestamp alignment cannot catch this, and it fires on day one.
+
+```
+3  REPORT, every run: the number of taken signals sharing an identical open AND close bar
+```
+
+**39 of the 255 taken signals share their open and close bar with another taken signal.** Same
+timestamps, two or three separate signals — one move found by two or three timeframes. Timestamp
+alignment calls all of them a match and cannot tell you whether live should have placed 1 order or
+3.
+
+```sql
+SELECT st1_open_bar, st1_close_bar, COUNT(*) n, GROUP_CONCAT(st1_src) srcs
+FROM sneaky_trade_1 WHERE st1_taken = 1
+GROUP BY st1_open_bar, st1_close_bar HAVING n > 1;
+```
+
+**STILL OPEN AND JOE'S: is a shared bar pair ONE order or one order per signal?** The first
+reconciliation report will show what live actually did. Until it is ruled, count these separately
+and label them — do not silently collapse them, and do not log them as breaks. At 22,000 coins a
+3-way duplicate is 66,000 coins of exposure and three lots of drag.
+
+## 8b. DEFERRED — Joe 0916, *"agreed that the others will surface as needed"*
 
 Deferred by Joe 0916, *"agreed that the others will surface as needed"*:
 
 | item | note |
 |---|---|
-| duplicate simultaneous orders (task #7) | **will surface on day one.** 5 of 12 rows in one sample were one move found by 2-3 timeframes. The reconciler will see a count mismatch immediately |
 | the 0.55% drag | measured at 88,000 coins, not 22,000. Joe: *"accepting it is ok"* |
 | warm-up state at session start | the lines and the dr latch must be warm before the first stretch is usable |
 | the order type that closes at a dr flip | undefined |
