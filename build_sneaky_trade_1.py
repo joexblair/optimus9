@@ -10,6 +10,16 @@ EVERY ROW IS BANKED, INCLUDING THE ONES THE GATE DECLINES. `st1_taken` carries t
 `st1_why` the reason. A reconciler needs to see a signal that should NOT have traded as much as
 one that should — an extra fill is as much a break as a missing one.
 
+THE STAGGER LIVES HERE, NOT IN THE PRODUCER. Joe 0917: two taken signals can land on the same open
+bar AND the same close bar - always ws1 and ws2, always carrying ws4, always exactly two. He ruled
+they are TWO orders, and that both ends move: *"create the entries 5 seconds apart"* and *"stagger
+the exits as well. I've staggered to contain slippage, so it makes sense to treat both ends"*.
+The second order - the one whose test-point came later - opens and closes one 5 s bar after the
+first. The producer sees one signal at a time and cannot know it has a sibling, so the rule belongs
+in the builder.
+Measured cost over 87 days: -10.34 USDT, 0.52% of the total. That is price drift only; the
+collision it avoids is NOT in the 0.55% drag, which was measured on single fills.
+
 THE PRODUCER IS optimus9/compute/sneaky_trade_1.py. This script only walks the tape and writes.
 """
 import os, sys, time, numpy as np, pandas as pd, datetime as dt
@@ -50,6 +60,9 @@ DDL = '''CREATE TABLE IF NOT EXISTS sneaky_trade_1 (
     st1_mae_pct   DECIMAL(8,4),           -- pxs at EVERY 5 s bar, in the dr direction
     st1_mfe_pct   DECIMAL(8,4),
     st1_move_pct  DECIMAL(8,4),           -- close to open, in the dr direction
+    st1_slot      TINYINT NOT NULL,       -- 0 = first order at this open/close pair, 1 = second.
+                                            -- Joe 0917 staggers the second by one 5 s bar at BOTH
+                                            -- ends to contain the same-instant collision
     st1_taken     TINYINT NOT NULL,       -- the gate verdict
     st1_why       VARCHAR(32),            -- why it was declined
     st1_build     VARCHAR(19) NOT NULL,   -- when this row was written
@@ -131,14 +144,41 @@ def main():
                          round(float(-mv.min()), 4), round(float(mv.max()), 4), round(float(mv[-1]), 4),
                          1 if sig['taken'] else 0, sig['why'] or None, stamp))
         if q % 500 == 0: print('  %d/%d stretches  %d rows  %.0fs' % (q, len(STR), len(rows), time.time() - t0), flush=True)
+    # THE STAGGER. Group the TAKEN rows on (open bar, close bar); the second, ordered by its
+    # test-point, moves one 5 s bar at BOTH ends. Declined rows keep slot 0 and never move.
+    import collections as _c
+    grp = _c.defaultdict(list)
+    for i, r in enumerate(rows):
+        if r[20] == 1:
+            grp[(r[10], r[13])].append(i)
+    staggered = []
+    for _, idx in grp.items():
+        for slot, i in enumerate(sorted(idx, key=lambda j: (rows[j][0], rows[j][1]))):
+            if slot == 0: continue
+            r = list(rows[i])
+            ob, cb = r[10] + slot, r[13] + slot
+            a, c = jrow(ob), jrow(cb)
+            if c <= a: c = min(a + 1, len(PXS) - 1)
+            P0, PX = float(PXS[a]), float(PXS[c])
+            mv = (PXS[a:c + 1] - P0) / P0 * 100.0 * r[3]
+            r[10], r[11], r[12] = ob, us(ob), round(P0, 8)
+            r[13], r[14], r[15] = cb, us(cb), round(PX, 8)
+            r[16] = round((ts[cb] - ts[ob]) / 6e4, 2)
+            r[17], r[18], r[19] = round(float(-mv.min()), 4), round(float(mv.max()), 4), round(float(mv[-1]), 4)
+            staggered.append((i, slot, tuple(r)))
+    for i, slot, r in staggered: rows[i] = r
+    slots = {i: 0 for i in range(len(rows))}
+    for i, slot, _ in staggered: slots[i] = slot
+    rows = [tuple(list(r)[:20] + [slots[i]] + list(r)[20:]) for i, r in enumerate(rows)]
+    print('staggered %d second orders by one 5 s bar at both ends' % len(staggered), flush=True)
     cols = ('st1_tp_bar,st1_src,st1_tp_utc,st1_dr,st1_side,st1_hi,st1_drop,st1_wrong,'
             'st1_fx_bar,st1_fx_utc,st1_open_bar,st1_open_utc,st1_open_px,'
             'st1_close_bar,st1_close_utc,st1_close_px,st1_mins,'
-            'st1_mae_pct,st1_mfe_pct,st1_move_pct,st1_taken,st1_why,st1_build')
-    ph = ','.join(['%s'] * 23)
+            'st1_mae_pct,st1_mfe_pct,st1_move_pct,st1_slot,st1_taken,st1_why,st1_build')
+    ph = ','.join(['%s'] * 24)
     upd = ','.join('%s=VALUES(%s)' % (c, c) for c in cols.split(',') if c not in ('st1_tp_bar', 'st1_src'))
     db.executemany('INSERT INTO sneaky_trade_1 (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s' % (cols, ph, upd), rows)
-    print('banked %d rows  (%d taken)  %.0fs' % (len(rows), sum(1 for r in rows if r[20] == 1), time.time() - t0), flush=True)
+    print('banked %d rows  (%d taken, %d staggered)  %.0fs' % (len(rows), sum(1 for r in rows if r[21] == 1), sum(1 for r in rows if r[20] == 1), time.time() - t0), flush=True)
     db.disconnect()
 
 if __name__ == '__main__':

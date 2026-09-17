@@ -106,7 +106,7 @@ Chosen on block 1 of three time blocks, never reading blocks 2 and 3.
 
 | item | value | source |
 |---|---|---|
-| size | **22,000 coins**, fixed | Joe 0916 |
+| size | **22,000 coins**, fixed. On a staggered pair that is 22,000 EACH | Joe 0916 / 0917 |
 | drag | **0.55%** of notional, round trip | Joe 0916, his own prior calculation |
 | pyramid | **max 2** concurrent | Joe 0916, verified held-out 0917 |
 | ride ceiling | **4** | Joe 0915, verified against 5 on 0917 |
@@ -129,6 +129,7 @@ two on a 600 USDT balance.
 | 3 HELD OUT | 08-07 -> 09-04 | 91 | +12.03 | 64.8% | 1,694.83 | -12.21% |
 | **HELD OUT 2+3** | | **163** | **+8.27** | | | |
 | ALL 87 DAYS | | 255 | +7.82 | 52.2% | **2,595.12** | **-7.33%** |
+| ALL 87 DAYS, staggered | | 255 | +7.78 | 52.2% | 2,584.77 | -7.28% |
 
 **It is the only configuration tested whose held-out mean exceeds its selection block.** It ranked
 11th of 15 on block 1 — a block-1 selection would have discarded it. Every candidate block 1
@@ -158,6 +159,7 @@ Key: `(st1_tp_bar, st1_src)`.
 | `st1_close_bar`, `st1_close_utc`, `st1_close_px` | **the EXIT** |
 | `st1_mins` | open to close |
 | `st1_mae_pct`, `st1_mfe_pct`, `st1_move_pct` | pxs at EVERY 5 s bar, in the dr direction |
+| `st1_slot` | 0 = first order at this open/close pair, 1 = the second, staggered one 5 s bar at both ends |
 | `st1_taken` | the gate verdict |
 | `st1_why` | why a row was declined |
 
@@ -222,12 +224,34 @@ FROM sneaky_trade_1 WHERE st1_taken = 1
 GROUP BY st1_open_bar, st1_close_bar HAVING n > 1;
 ```
 
-**STILL OPEN AND JOE'S: is a shared bar pair ONE order or one order per signal?** The first
-reconciliation report will show what live actually did. Until it is ruled, count these separately
-and label them — do not silently collapse them, and do not log them as breaks. At 22,000 coins a
-3-way duplicate is 66,000 coins of exposure and three lots of drag.
+### SETTLED, Joe 0917 — TWO orders, staggered 5 s at BOTH ends
 
-## 8b. DEFERRED — Joe 0916, *"agreed that the others will surface as needed"*
+> *"create the entries 5 seconds apart"* / *"stagger the exits as well. I've staggered to contain
+>  slippage, so it makes sense to treat both ends"*
+
+Two taken signals can land on the same open bar AND the same close bar. It is **always exactly
+two**, always sourced by ws1 and ws2, always carrying ws4. 39 occurrences in 87 days — one every
+2.2 days. They are **TWO orders**, and the second one — whose test-point came later — opens and
+closes **one 5 s bar after the first**.
+
+`st1_slot` carries it: 0 is the first order, 1 is the second. The bars in the table are already
+staggered, so a reconciler reads them as written.
+
+| version | trades | wins | mean net | total net | maxDD |
+|---|---|---|---|---|---|
+| same bar | 255 | 52.2% | +7.82 | +1,995.12 | -7.33% |
+| entry staggered only | 255 | 52.2% | +7.80 | +1,989.66 | -7.28% |
+| exit staggered only | 255 | 52.2% | +7.80 | +1,990.23 | -7.33% |
+| **BOTH ends** | **255** | **52.2%** | **+7.78** | **+1,984.77** | **-7.28%** |
+
+Cost **-10.34 USDT over 87 days, 0.52% of the total.** That is **price drift only** — the collision
+it avoids is NOT in the 0.55% drag, which was measured on single fills. The stagger pays for itself
+if the collision costs more than **0.27 USDT per pair**.
+
+**Measure the real collision cost once fills exist.** It cannot be measured from the tape, and it
+is the number that says whether the -10.34 was worth paying.
+
+## 8b. CONFIRMED AS-IS — Joe 0917: *"the other items are confirmed"*
 
 Deferred by Joe 0916, *"agreed that the others will surface as needed"*:
 
@@ -235,7 +259,7 @@ Deferred by Joe 0916, *"agreed that the others will surface as needed"*:
 |---|---|
 | the 0.55% drag | measured at 88,000 coins, not 22,000. Joe: *"accepting it is ok"* |
 | warm-up state at session start | the lines and the dr latch must be warm before the first stretch is usable |
-| the order type that closes at a dr flip | undefined |
+| the order type that closes at a dr flip | **SETTLED, Joe 0917: an exit order.** Not a new position, not a reversal |
 | the leverage setting on the fake API | ~6.2x for one position, ~12.5x for two |
 
 ---
