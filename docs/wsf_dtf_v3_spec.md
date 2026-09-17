@@ -1444,6 +1444,35 @@ across contexts before it was even eligible.
 It did not degrade out of sample — the held-out mean is above the block it was chosen on. Block 2
 is the weak month: +1.97 per trade, barely clearing the 0.55% drag.
 
+### The ride ceiling and the concurrency limit — BANKED, Joe 0917
+
+`handoff.ride_tf_hi` stays at **4**. The pyramid limit stays at **2**. Both were tested against
+alternatives with selection on block 1 and the verdict read on blocks 2 and 3.
+
+| configuration | b1 mean (chosen on) | HELD OUT 2+3 | degradation | 87-day total | maxDD |
+|---|---|---|---|---|---|
+| **tf4 alone, cap 2** | +7.03 | **+8.27** | **+1.24** | +1,995.12 | **-7.33%** |
+| tf5 alone, cap 1 | +10.25 | +6.53 | -3.72 | +1,286.53 | -6.61% |
+| union tf4+tf5, cap 2 | +8.22 | +6.80 | -1.42 | +2,357.95 | -10.25% |
+| union tf4+tf5, cap 3 | +7.97 | +7.35 | -0.62 | +2,531.16 | -7.85% |
+
+**tf4 alone at cap 2 is the only configuration whose held-out mean EXCEEDS its selection block.**
+Every candidate block 1 preferred degraded out of sample. It ranked 11th of 15 on block 1 — a
+block-1 selection would have discarded it.
+
+Two rejected alternatives, each with its reason:
+
+| tried | why not |
+|---|---|
+| ride ceiling 5 | +7.45/trade against 4's +7.82, and -356.55 over 87 days. It moves the carrying line up wholesale: `hi ws4` falls 1,534 -> 204 as ws5 takes the top |
+| merge tf4 and tf5 on span overlap | it is a concurrency limit of 1 wearing a merge's clothes — max concurrent falls to 1 and 109 of the 240 it removes are separate positions, not duplicates. +5.47/trade, -16.83% |
+| union with a raised cap | cap 3 and 4 read better across all 87 days (+7.58, +8.10) but that was never held out. Block 1 prefers cap 1, and cap 1 degrades hardest |
+
+THE MAE AND MFE ARE THE SIGNALS. Joe 0917: *"your MAE and MFE results are baked on known-good
+causal events, so that becomes sneaky-1's entry and exit signals"*. The excursion was always
+measured between the ws1x crossing and the first rev — those two bars ARE the entry and the exit,
+not markers around them.
+
 MAE and MFE read **pxs at every 5 s bar**. Sampling that series every 30 s was a defect; reading
 raw high/low instead is a different measurement — raw runs 0.624% deeper at the median, and that
 gap is the spike content pxs exists to remove.
