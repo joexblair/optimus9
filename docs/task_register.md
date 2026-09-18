@@ -219,3 +219,46 @@ and the duplicate stands. That duplicate is what this task exists to spec.
 
 OPEN. No sizing model exists. `MAX_TRADES` = 2 is Joe 0825: *"allows pyramiding, max 2 trades"*.
 Nothing in the walk or the tables carries trade size, and slippage is not modelled anywhere.
+
+## #22 mage-cascade — PARKED 0918, rebuild dr-free before anything else
+
+Joe 0918, verbatim: *"I'm reviewing the charts and I see there is a lot more to unravel before we
+can turn mage-cascade into a reliable mech. I called on mage-cascade to solve a single trade, the
+09-01 17:26:20 signal in the 122 report. the amount of effort needed to build cascade-mage properly
+is not worth 1 trade - so let's bank what we have learnt about mage-cascade and we'll come back to
+refine it later."*
+
+BANKED IN FULL: `docs/mage_cascade_findings.md`. Scripts preserved in `docs/mage_cascade/`.
+
+THE BLOCKER, and the first thing to do on return — Joe 0918: *"this work is not calculated on dr -
+dr is only compared after the calculation has produced a decision based on the ladders direction
+(r and Mage values increasing or decreasing from top to bottom of the TF list), and its source-based
+trajectory direction. we compare dr at the end simply to decide if a main-trade signal is
+masquarading as sneaky-1 (or vice versa)"*.
+
+Every number in the findings doc was computed inside a dr frame — the event definition, the dwell,
+the episode grouping, all eleven ladder columns, and the score sign. Requiring ws1Mage's oob side to
+match dr discarded 2,818 of 14,682 entries (19%), and the dr-flip rule split single oob dwells into
+extra events. `mbump` counts raw RISING steps at dr +1 and raw FALLING steps at dr -1, so the two dr
+tables describe different raw geometries. The dr latch fires on ws1Mage >= 75 held 8 bars, so dr is
+partly a lagged restatement of the line the event tests — it agrees with the source side 81% of the
+time.
+
+NOTHING IN THE FINDINGS DOC CARRIES OVER UNTIL THE dr-FREE REBUILD IS DONE. The OOS nulls on
+ARRIVED and STARTED, the bumps >= 8 dr -1 result, and the Mage source-oob vote are all dr-framed.
+
+STATE ON PARKING:
+- the in-sample gate (`ws1 oob + mage falls > 0 + bumps <= 2`, 60m -0.853 on n=11) **reversed OOS**
+  to +0.020 on 3,145 events over 83 days.
+- OOS found the turn at 8 of 11 bumps, dr -1 only: 120m -0.478 on 127 clusters, 63% hit. A high bump
+  count is a ladder that turns over at ws4, the mid-board, not a rough cascade.
+- every r test is null: direction (+0.040 vs -0.008), ARRIVED (-0.011 vs -0.017), STARTED (+0.003 vs
+  +0.009). STARTED is flatter than ARRIVED despite being the more faithful instrument.
+- the only monotone found is the ws5..ws12 Mage source-oob vote: -0.013 -> -0.086 at 60m as the
+  threshold goes 0 -> 8. `mat = 8 of 8` gives -0.128 at 60m on 296 clusters.
+- **every figure is below the measured drag of 0.1975% per trade.** Nothing here clears costs.
+
+OPEN, in order: (1) rebuild dr-free; (2) rule the oob-entry dwell, currently 3 bars borrowed from
+`ws1mage_rev.dwell_ok`; (3) rule the source lookback, currently uncapped; (4) look at the 2,818
+excluded entries — the masquerading-signal population; (5) test the ws4 turnover against the
+blast-radius note in `wsf_setup_model.md` 3.21.2; (6) Joe has read one bar, 09-01 17:26:20.
