@@ -1,5 +1,11 @@
 """seed_v3_config — every hard-coded value in the wsf-dtf-v3 chain.
 
+V7, 0917: SIX KNOBS ADDED for the stretchy leash, section `stretchy_leash`. Joe named the mechanic
+("stretchy leash", "coil", "the lookback ... is a bolt-on, not an overwrite") and set five of the
+six values in this session. `support_min` is MINE - I used full support across the wsf and dtf
+bands from the first confluence report and Joe worked with it, but he never named a floor. No
+value moves: seeding takes them out of the scratchpad and into the bank. v1..v6 stay banked.
+
 V5, 0915: ONE KNOB ADDED - momo_expiry.return_bars. Joe: "I agree with your natural anchor, n can
 be 3 and swept (add the knob)". UNITS ARE BARS, and that is MINE: my sweep table was numbered in
 wobs, where a wob of 2 spans the 3 bars of the anchor and a wob of 3 spans 4. Naming the knob in
@@ -33,7 +39,7 @@ from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.compute.v3_config import DDL, TABLE, v3_config
 
-V = 6
+V = 7
 
 # section, key, value, type, units, owner, fitted, in_key, source, note
 ROWS = [
@@ -137,6 +143,31 @@ ROWS = [
   'at the established wsNMage oob, look BACK this far for an already-completed flat run; a hit '
   'means the test-point IS that anchor bar. 4 min = 48 bars. NO KNEE - Joe\'s choice ("idk"), not '
   'a measurement. Clipped at the dr stretch start. SWEEP CANDIDATE'),
+
+ # ── the stretchy leash, Joe 0917. Producers: stretchy_leash.py, coil_moment.py, coil_exit.py ──
+ ('stretchy_leash', 'coil_lines', '["gcws30","ws1"]', 'json', 'lines', 'joe', 0, 1,
+  'Joe 0917: "note that the lower 30 sec coil will move/reverse before the 1 minute coil"',
+  'the combined coil is the SUM of these lines\' coils, each dr-signed. coil = dr*((m+Mage)/2 - r)'),
+ ('stretchy_leash', 'support_min', '23', 'int', 'lines', 'mine', 0, 1,
+  'MINE - I used full support from the first confluence report and Joe worked with it',
+  'how many of ws{band_wsf_lo}..ws{band_dtf_hi} must carry a POSITIVE coil for a row to join a '
+  'moment. 23 = every line in the two bands. Joe named no floor. SWEEP CANDIDATE'),
+ ('stretchy_leash', 'confirm_lag_s', '180', 'int', 'seconds', 'joe', 0, 1,
+  'Joe 0917 swept it in 60 s steps, then banked the build that runs at 180: "these are good results"',
+  'the coil must stay below its peak for this long before the turn-down is a release. 36 bars at '
+  'the 5 s grid. 240 s scores +2.9 points of coil at the named bar and costs 2 confirmations'),
+ ('stretchy_leash', 'lookback_s', '240', 'int', 'seconds', 'joe', 0, 1,
+  'Joe 0917: "add a 4 minute lookback to capture ws1mage-rev when actionable fires"',
+  'anchored on `named bar`. A ws1mage-rev inside it makes the named bar the actionable time. '
+  '48 bars at the 5 s grid. NEVER applied to a confirmed release - Joe: "a bolt-on, not an overwrite"'),
+ ('stretchy_leash', 'exit_anchor', 'named_bar', 'str', None, 'joe', 0, 1,
+  'Joe 0917: "the lookback is anchored on `named bar`"',
+  'the bar the lookback centres on. For a moment with no confirmed release that is the moment\'s '
+  'end row - the last row still at support_min'),
+ ('stretchy_leash', 'gap_fill', '1', 'int', None, 'joe', 0, 1,
+  'Joe 0917: "the `events in between` are all perfect. use the first timestamp"',
+  'when the lookback misses, take the FIRST ws1mage-rev strictly after the named bar and at or '
+  'before the bar the moment\'s end becomes knowable. 0 = leave the actionable where it was'),
 
  # ── the hand-off, spec 17.2 / 19, Joe 0914 ───────────────────────────────────────────────────
  ('handoff', 'ride_tf_hi', '4', 'int', 'timeframe', 'joe', 0, 0,

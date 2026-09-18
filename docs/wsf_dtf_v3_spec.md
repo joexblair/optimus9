@@ -1717,3 +1717,218 @@ pin it down. --we'll sweep it when the o9-live loop is built"*.
 
 His unresolved doubt is recorded as his, not interpreted. Nothing here tries to name what is
 tugging at it.
+
+---
+
+## 20. THE STRETCHY LEASH — Joe 0917 named it
+
+Joe 0917, verbatim, from the session that built it:
+
+> "we know that m and Mage will lead r around the board like it's on a stretchy leash. the further
+> m and Mage are away from r, the more energy is coiled up in the stretchy leash"
+
+> "stretchy leash: m and Mage vs r, does r still have room to be pushed"
+
+### 20.1 THE COIL
+
+    coil(line, bar, dr) = dr * ((m + Mage)/2 - r)
+
+Positive = m and Mage sit ahead of r on the dr side, so r still has room to be pushed toward dr.
+Causal by construction — three `emerging` lines read at the same bar, nothing forward.
+
+The **combined coil** is the sum of the coils on the `coil_lines` knob: `gcws30` and `ws1`, the
+30 s line and the 1 min line.
+
+Producer: `optimus9/compute/stretchy_leash.py`.
+
+### 20.2 THE CONFLUENCE MOMENT
+
+A run of CONSECUTIVE `wsf_dtf_v3` rows that all carry `support_min` lines at a positive coil. The
+run ends when the next row prints below `support_min`, **or with a different `dr`**.
+
+Joe asked what defines the end — time or the coil's values. **Neither.** The rows define it, which
+is why a moment's `end` is only knowable when the next row prints. Measured over 09-01 → 09-06:
+the wait from the `end` row to the row that breaks the run is **median 300 s**, p25 160 s, p75
+492 s, max 5000 s. Only 18 of 59 (30.5%) are knowable inside 180 s.
+
+Over 09-01 → 09-06 at the banked key: 1179 rows, 269 at full support, grouping into **121 moments**
+— 61 with a span of more than 0 bars, 60 single-bar.
+
+Producer: `optimus9/compute/coil_moment.py:moments`.
+
+### 20.3 THE CONFIRMED RELEASE
+
+> Joe 0917: "the combined bar timestamp seems to need a lag during which it checks for a true
+> release of the coil. test every 60 seconds"
+
+A turn-down candidate is bar `t` where the combined coil at `t+1` is lower than at `t`; `t` is the
+peak. It is CONFIRMED only if the coil never gets back above its value at `t` within
+`confirm_lag_s`. If it does, the release was false — reject `t` and carry on walking.
+
+The confirm window may read bars past the moment's last row. That is forward in time, not
+lookahead: the verdict is only KNOWN at `t + confirm_lag_s`. The peak itself sits inside the moment.
+
+The window is clipped to the last bar on the tape, so a moment near the end reads a SHORT window
+rather than running off the end. A clipped window can only fail to disconfirm — such a release is
+confirmed on less evidence than the rest. No moment in 09-01 → 09-06 is close enough to be clipped:
+the report is byte-identical with and without the clamp.
+
+The 60 s sweep, scored at the named bar across the 61 moments with a span:
+
+| lag s | hit | coil % | unconfirmed |
+|---|---|---|---|
+| 0 | 13/61 | 68.8% | 1 |
+| 60 | 28/61 | 84.1% | 2 |
+| 120 | 28/61 | 86.9% | 6 |
+| **180** | **31/61** | **88.2%** | **8** |
+| 240 | 33/61 | 91.1% | 10 |
+| 300 | 35/61 | 90.5% | 14 |
+| 600 | 32/61 | 80.6% | 28 |
+
+The knee is at 60 s: +15.3 points on one step. `confirm_lag_s` is banked at **180**; 240 buys
++2.9 points of coil from 5 moments and costs 2 confirmations, all of them 2-row moments.
+
+Joe 0917: **"that 180s is required to provide the targeted results - it's not negotiable"**.
+
+Producer: `optimus9/compute/coil_moment.py:release`.
+
+### 20.4 THE EXIT — WHEN IT BECOMES ACTIONABLE
+
+`ACTIONABLE` is the exit bar. Joe 0917: **"the lookback and setting of actionable timestamps is a
+bolt-on, not an overwrite"**.
+
+**A moment with a confirmed release — 62 of 121.** `ACTIONABLE = release bar + confirm_lag_s`.
+The lookback never touches these rows.
+
+**A moment with no confirmed release — 59 of 121.** Its `named bar` is the moment's end row, and
+three steps run in order:
+
+1. **LOOKBACK** — a `ws1mage-rev` whose cross sits in `[named bar - lookback_s, named bar]`
+   → `ACTIONABLE = the named bar`.
+   Joe: *"when you find ws1mage-rev in the 4 minute lookback that is anchored on `named bar`,
+   `named bar`'s timestamp become the actionable time"*. **25 of 59.**
+2. **GAP** — else, a `ws1mage-rev` strictly after the named bar and at or before the bar the
+   moment's `end` becomes knowable → `ACTIONABLE = THE FIRST of them`.
+   Joe: *"the `events in between` are all perfect. use the first timestamp"*. **23 of 59.**
+3. else `ACTIONABLE` = the bar the `end` becomes knowable, unchanged. **11 of 59.**
+
+Step 2 exists because step 1 alone left a dead zone. Row 3 of the report missed the lookback by
+**20 seconds** — its event is at 02:40:20 against a window ending 02:40:00 — and the forward walk
+began at 02:42:00, skipping it and landing 4140 s later. 23 of the 34 rows the lookback missed had
+a `ws1mage-rev` sitting in that gap.
+
+**CAUSALITY.** A `ws1mage-rev` counts only when its `sig_conf` — the bar it becomes KNOWABLE — is
+at or before the bar being tested. `sig_conf = cross + boundary_xwob - 1`. The cross bar alone is
+not enough. Joe 0917: *"keep it causal"*.
+
+Producer: `optimus9/compute/coil_exit.py`. The event itself is `jig.ws1mage_rev` (spec 20.6), not
+re-implemented.
+
+### 20.5 MEASURED, 09-01 → 09-06, the banked build
+
+| | |
+|---|---|
+| moments | 121 |
+| CONFIRM, untouched by the bolt-on | 62 |
+| END — lookback hit | 25 of 59 |
+| END — gap hit | 23 of 59 |
+| END — neither | 11 of 59 |
+| exits carrying a `ws1mage-rev` at the actionable bar | 48 of 59 END rows |
+| the 48 moved rows, actionable pulled earlier | median 290 s, min 15 s, max 4970 s |
+| total pulled forward | 23150 s |
+| exits validated within 180 s of the actionable bar | 70 of 121 |
+
+The largest single pull is moment 85 at 4970 s (07:08:45 → 05:45:55). The smallest is moment 9 at
+15 s. 10 of the 23 gap hits land on a negative combined coil.
+
+**NOT MEASURED:** no forward return has been taken on any of these 121 exits. Every number above
+is line geometry and event timing. Joe's chart read — *"most of the `end knowable at` timestamps
+are well placed for profit"*, and the same for the 180 s `known at` set — stands as the only
+measurement of whether the timestamps are good, and it predates the 48 rows that later moved.
+
+### 20.6 THE KNOBS — `wsf_dtf_v3_config` v7, section `stretchy_leash`
+
+| key | value | units | owner | in key | source |
+|---|---|---|---|---|---|
+| `coil_lines` | `["gcws30","ws1"]` | lines | joe | yes | Joe 0917: "the lower 30 sec coil will move/reverse before the 1 minute coil" |
+| `support_min` | 23 | lines | **mine** | yes | I used full support from the first confluence report; Joe named no floor |
+| `confirm_lag_s` | 180 | seconds | joe | yes | swept in 60 s steps; Joe banked the 180 s build |
+| `lookback_s` | 240 | seconds | joe | yes | Joe 0917: "add a 4 minute lookback" |
+| `exit_anchor` | `named_bar` | — | joe | yes | Joe 0917: "the lookback is anchored on `named bar`" |
+| `gap_fill` | 1 | — | joe | yes | Joe 0917: "use the first timestamp" |
+
+Knobs this section reads from elsewhere, never duplicated:
+
+| key | section | used for |
+|---|---|---|
+| `band_wsf_lo` / `band_dtf_hi` | bands | the support set — ws1..ws23. `support_min` counts against it |
+| `grid_s` | wsf_chain | 5 s. Converts `confirm_lag_s` and `lookback_s` into bars |
+| `dwell`, `rev_wob`, `boundary_xwob`, `sig_line` | ws1mage_rev | the event producer's own knobs |
+| `dr_line_a` | dr | ws1Mage, the line `ws1mage-rev` dwells and reverses on |
+| `oob_hi` / `oob_lo` | dr | 85.0 / 15.0, the boundary the cross must land inside |
+
+`support_min` is the one knob here that is **mine**. It is a sweep candidate and must be
+re-declared as mine every time a result depending on it is quoted.
+
+### 20.7 THE REPORT
+
+    python3 report_coil_exit.py --from 2026-09-01 --to 2026-09-06
+
+Defaults to the newest `wdv_knobs` in `wsf_dtf_v3` and that key's own full date range. `--md`
+emits pipe-delimited rows. The script holds no values — every one is read from the config table.
+
+**PROOF OF THE MOVE:** the 121 rows the packaged producers emit are byte-identical to the
+scratchpad build Joe reviewed — 121 rows, 12 compared fields, md5 `ba4701655154a12ad57c404ca6ced440`
+on both sides, 0 differences.
+
+### 20.8 THE BANK — `wsf_leash`
+
+Joe 0917: *"carve out these 7 columns and print them to a db table"*. Joe 0918 named the exit
+stamp **`signal`**.
+
+    python3 report_coil_exit.py --from 2026-09-01 --to 2026-09-06 --bank
+
+| column | Joe's name | note |
+|---|---|---|
+| `wsl_n` | `#` | the moment's ordinal in the window |
+| `wsl_source` | `source` | CONFIRM or END |
+| `wsl_dr` | `dr` | |
+| `wsl_act_utc` / `wsl_act_ms` | `ACTIONABLE` | the exit bar |
+| `wsl_sig_utc` / `wsl_sig_ms` | **`signal`** | the exit stamp. NULL when none is found |
+| `wsl_rows` | `rows` | rows in the confluence moment |
+| `wsl_first_utc` / `wsl_first_ms` | `moment first` | |
+
+Each timestamp is stored twice — `_utc` to read, `_ms` to join on — exactly as `wsf_dtf_v3` stores
+`wdv_utc` / `wdv_ms`.
+
+**THE UNIQUE KEY** is `(wsl_knobs, wsl_v3_knobs, wsl_win, wsl_first_ms)`:
+
+    wsl_knobs     every in-key knob in the `stretchy_leash` section, prefixed with the config version
+    wsl_v3_knobs  the wsf_dtf_v3 key the moments were read from
+    wsl_win       the walk window
+
+A run at a different knob, a different source key or a different window lands BESIDE the old rows.
+Nothing is updated in place, nothing is dropped. A re-run at the same key writes nothing and says so.
+
+Banked at v7: **121 rows** — 62 CONFIRM, 59 END, 0 with a NULL `signal`. Verified field-by-field
+against the printed report: 121 rows compared, 0 mismatches.
+
+**`signal` HOLDS TWO KINDS OF BAR.** It is the stamp the exit acts on, and the route decides what
+that stamp is:
+
+| route | rows | the stamp is |
+|---|---|---|
+| confirmed | 62 | a `ws1mage_rev` sig bar |
+| lookback | 25 | the moment's END ROW — the event only QUALIFIES it (2 coincide with a sig bar) |
+| gap | 23 | a `ws1mage_rev` sig bar |
+| forward | 11 | a `ws1mage_rev` sig bar |
+
+Measured over the banked 121: **98 are a sig bar, 23 are the moment end row.** Nothing in the table
+separates them; the route is not stored.
+
+**DO NOT CONFLATE THE TWO COUNTS.** `jig.ws1mage_rev` emits **1297** sig events over 09-01 → 09-06
+(588 at dr +1, 709 at dr −1). The stretchy mech emits **121** rows, **109** distinct stamps — one per
+confluence moment, 12 moments sharing a stamp with the one before. The mech CONSUMES the producer;
+it is not the producer.
+
+Producer: `optimus9/compute/leash_bank.py`. It holds no rule — the rule is 20.4.
