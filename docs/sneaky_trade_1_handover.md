@@ -19,6 +19,54 @@ for a median 17 minutes. Every step is decidable at the bar it fires on — noth
 on known-good causal events, so that becomes sneaky-1's entry and exit signals"*. The excursion
 figures were always measured between the crossing and the rev; those two bars are the orders.
 
+### 1b. THE ROW COUNT — 255 IS NOT THE NUMBER OF TIMES THIS FIRES. 770 IS
+
+Found 0917, after this document was written. Read this before the evidence in §6.
+
+| | n over 87 days |
+|---|---|
+| times the entry rule fires — gate passes, then a ws1x crossing | **770** |
+| rows banked in `sneaky_trade_1` | **255** |
+
+**The gate is applied in BOTH numbers.** `drop` >= 50 + `src` ws1,ws2 + `hi` ws4 runs at the
+test-point, before either count. The census: 5,761 test-points reach the producer → 862 pass the
+gate → 770 of those produce a ws1x crossing → 255 got banked. The src/hi sweep settled WHICH gate;
+it did not produce the 255.
+
+The 515-row gap is four tests the builder ran by walking each dr cycle to its end, none of which is
+part of the entry rule:
+
+| test the builder applied | candidates it removed |
+|---|---|
+| the carrying line produced a test-point of its own in this dr cycle | 511 |
+| the carrying line's r crossed 17/83 before the dr flip | 4 |
+| a `gcws30mage-rev` landed after that cross, before the flip | 20 |
+| the ws1x crossing came before that rev | 72 |
+
+- on 246 of the 255 banked rows the position is ALREADY OPEN when the fence exit happens — mean
+  21.56 min earlier, max 121.08 min.
+- a live loop cannot delete a filled order, so it opens 770 times.
+
+**Consequence for §6.** The held-out +8.27 per trade was measured on the 255. It was also SELECTED
+on the 255 — the gate was chosen from the survivors and has never been tested against the
+population it would actually run against. Both have to be re-measured on 770, block 1 to select,
+blocks 2 and 3 held out.
+
+### 1c. THE CLOSE IS NOT SNEAKY-1'S — IT IS THE MAIN TRADE'S ENTRY
+
+sneaky-1 owns three events: the test-point, the gate, and the `ws1x` crossing. Everything after
+the open — the carrying line's own test-point, the fence exit, the rev — is the main trade's entry
+machinery, inherited because Joe's 0916 hypothesis measured the segment *"between `test-point` and
+`ENTRY`"* and `ENTRY` is the main trade's.
+
+That is why the four tests above cannot be checked at the crossing bar. They are not sneaky-1's.
+
+**Joe 0917 ruled the fix:** *"import it so that the events print inside the mech, so that the exit
+becomes causal"*. The exit RULE was always causal — watch the carrying line's r for the 17/83
+cross, then take the first rev after it. What was not causal was deleting the rows where it never
+fired. Computing those events forward inside the mech removes the deletion: every open gets a
+close, the rev if it comes and the dr flip if it does not.
+
 ---
 
 ## 2. THE DIRECTION — read this before anything else
@@ -65,10 +113,27 @@ of rows**. Joe 0915 asked for three picks — *"test all 3: filter, time, size"*
 one that cannot be built**. If the sandbox disagrees with the report on the exit bar, this is the
 first thing to check.
 
-### The open must not read the close
+### The open must not read the close — AND IN THE SHIPPED CODE IT STILL DOES
 
-An earlier build searched the crossing up to the close bar, which let a later close admit opens
-that should not exist. The open's only bound is the dr flip.
+`optimus9/compute/sneaky_trade_1.py:117` passes `eb`, the close bar, as `open_bar`'s `limit`:
+
+```
+ob = open_bar(x_line, dr, tp, eb, oob_lo, oob_hi)
+```
+
+The function's own docstring says `limit` is the dr flip and *"the only bound"*. The fix was made
+in a scratchpad rebuild on 0916 and never landed in the committed module. Corrected here 0917.
+
+**It does not change the banked 255.** `open_bar` returns the FIRST qualifying crossing after the
+test-point; if that crossing is before `eb` both bounds return the same bar, and if it is at or
+after `eb` the row is dropped either way — by `limit` returning None, or by the `ob` < `eb` test.
+The o9-live session's independent re-walk with the flip bound reproduced the same 255 rows, with
+72 candidates dropped on `ob` >= `eb`.
+
+**It must be corrected before a live loop reads that module**, because a live loop standing on the
+crossing has no `eb` to pass. See `docs/sneaky1_answers_to_o9live.md` Q1 — the bound is a code
+defect, but the row set's dependence on `fx`, `eb` and `mx` existing is a larger one and is Joe's
+to rule on.
 
 ---
 
@@ -166,6 +231,17 @@ Key: `(st1_tp_bar, st1_src)`.
 **EVERY signal is banked, including declined ones.** A reconciler needs to see a signal that should
 NOT have traded as much as one that should — an extra fill is as much a break as a missing one.
 
+### 7b. THE NEW SESSION BUILDS ITS OWN TABLES AND ITS OWN DOCS — Joe 0917
+
+> *"have the new session build its own tables and own docs. it gives us a reference point"*
+
+- do NOT rebuild, extend or overwrite `sneaky_trade_1`. It stays exactly as it is — 1,772 rows,
+  255 taken — as the reference point this side measured.
+- the causal rebuild described in §1b and §1c goes into a NEW table under a new name, and a new
+  document, owned by the receiving session.
+- the two tables then sit side by side: the deleted population and the full one. The difference
+  between them is the finding, and it is only visible if neither is written over the other.
+
 Prices are **pxs** = DEMA(close, len 2) on the 5 s grid, read at EVERY bar. Sampling it every 30 s
 was a defect and is fixed. Raw high/low runs 0.624% deeper at the median — that gap is the spike
 content pxs exists to remove, so **pxs is the right lens for the signal and raw is the right lens
@@ -214,14 +290,26 @@ Timestamp alignment cannot catch this, and it fires on day one.
 ```
 
 **39 of the 255 taken signals share their open and close bar with another taken signal.** Same
-timestamps, two or three separate signals — one move found by two or three timeframes. Timestamp
-alignment calls all of them a match and cannot tell you whether live should have placed 1 order or
-3.
+timestamps, always exactly two separate signals — one move found by two timeframes, always ws1 and
+ws2, always carrying ws4. Timestamp alignment calls both of them a match and cannot tell you
+whether live should have placed 1 order or 2.
+
+**THE COUNT IS PRE-STAGGER, AND THE QUERY MUST UNDO THE STAGGER.** The bars in the table are
+already staggered — the second order was moved one 5 s bar at both ends — so grouping on the
+stored bars returns **0 groups**, not 39. Corrected 0917 after the o9-live session ran it
+literally.
 
 ```sql
-SELECT st1_open_bar, st1_close_bar, COUNT(*) n, GROUP_CONCAT(st1_src) srcs
+-- the count, as the reconciler reports it every run
+SELECT COUNT(*) AS duplicate_pairs
+FROM sneaky_trade_1 WHERE st1_taken = 1 AND st1_slot > 0;                 -- 39
+
+-- the same 39, with both sides of each pair, by undoing the stagger
+SELECT st1_open_bar - st1_slot  AS ob0,
+       st1_close_bar - st1_slot AS cb0,
+       COUNT(*) n, GROUP_CONCAT(st1_src ORDER BY st1_src) srcs
 FROM sneaky_trade_1 WHERE st1_taken = 1
-GROUP BY st1_open_bar, st1_close_bar HAVING n > 1;
+GROUP BY ob0, cb0 HAVING n > 1;                                           -- 39 groups, n = 2
 ```
 
 ### SETTLED, Joe 0917 — TWO orders, staggered 5 s at BOTH ends
