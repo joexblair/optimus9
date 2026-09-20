@@ -58,7 +58,7 @@ def momo_g(r, dr, w):
     return st, f['slope'], f['r2'], f['r_at_bar']
 
 
-def momo_g_why(r, dr, w, quad='auto', gate2=True):
+def momo_g_why(r, dr, w, quad='auto', gate2=True, seam_dr=None, strip_mom_at_fence=None):
     """(state, reason, fit) - the gated verdict, its reason, and every number behind it.
 
     REFACTORED 0818. This used to call momo() for the verdict and then re-fit the SAME quadratic
@@ -69,13 +69,33 @@ def momo_g_why(r, dr, w, quad='auto', gate2=True):
     gate2=False is WSF-CURL-MODE, named by Joe 0824: "a curl-detection mode that excludes gate 2,
     so that the curl and its dr can contribute to your modelling". Gates 1 and 3 still run. The
     DEFAULT IS True, so every existing caller - build_ws_fin, build_wsf_line_bar, jig, the s46 path
-    - is untouched."""
+    - is untouched.
+
+    seam_dr overrides the fit's own seam fact before the verdict reads it. walk_mom_models measures
+    the seam in momo_seam and hands it over; it used to inline momo_fit/verdict/curl_gates to do so,
+    which forked this verdict into two copies. None leaves the fit's own value alone.
+
+    strip_mom_at_fence is STRIP-MOM-AT-FENCE, named by Joe 0920: a mode that strips the mom-true tag
+    from a line that has exited the r-momo-fence on the dr side. Joe 0919, on ws4r at 09-01 15:11:
+    "the 122 rows were built on ws4 momentum, which begins to expire when it leaves the fence".
+    Pass the fence as (lo, hi) to switch it on - momo_fence_r 17 from the wsf_dtf_v3 config gives
+    (17.0, 83.0). None is off, so every existing caller is untouched. The test is read AT BAR w, not
+    over the window - Joe 0920: "stripped at the time it is printed to the report". STRICTLY past,
+    matching flat_run_at in test_points.py. Only momo and curl are stripped; sideways and none pass
+    through, because the mode removes a TAG, it does not add a verdict."""
     f = X.momo_fit(r, dr, w, quad=quad)
+    if seam_dr is not None:
+        f['seam_dr'] = bool(seam_dr)
     st, why = X.verdict(f)
-    if st != 'curl':
-        return st, why, f
-    ok, why = curl_gates(f, gate2=gate2)
-    return ('curl' if ok else 'none'), why, f
+    if st == 'curl':
+        ok, why = curl_gates(f, gate2=gate2)
+        st = 'curl' if ok else 'none'
+    if strip_mom_at_fence is not None and st in ('momo', 'curl'):
+        lo, hi = float(strip_mom_at_fence[0]), float(strip_mom_at_fence[1])
+        v = float(np.asarray(r, float)[int(w)])
+        if (v > hi) if dr > 0 else (v < lo):
+            return 'none', 'strip-mom-at-fence: r %.2f is past the r-momo-fence %g/%g on the dr side' % (v, lo, hi), f
+    return st, why, f
 
 
 def curl_gates(f, gate2=True):

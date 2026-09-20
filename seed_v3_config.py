@@ -1,5 +1,11 @@
 """seed_v3_config — every hard-coded value in the wsf-dtf-v3 chain.
 
+V8, 0920: ONE KNOB ADDED - mom_xfer.count_min, section `mom_xfer`. Joe named the mechanic
+("mom_xfer") and set the value: "2 is arbitrary. the more TFs I see leaving the dr mom, the more
+comfortable I'll be", then "knob". The SECTION NAME and the KEY NAME are MINE - `mom_xfer` follows
+his column name, and `count_min` follows the house suffix (support_min, momo_r2_min, drop_min).
+No value moves. v1..v7 stay banked.
+
 V7, 0917: SIX KNOBS ADDED for the stretchy leash, section `stretchy_leash`. Joe named the mechanic
 ("stretchy leash", "coil", "the lookback ... is a bolt-on, not an overwrite") and set five of the
 six values in this session. `support_min` is MINE - I used full support across the wsf and dtf
@@ -39,7 +45,7 @@ from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.compute.v3_config import DDL, TABLE, v3_config
 
-V = 7
+V = 8
 
 # section, key, value, type, units, owner, fitted, in_key, source, note
 ROWS = [
@@ -174,6 +180,14 @@ ROWS = [
   'Joe 0914: "4 was chosen by eyeballing only, so we might find that 5 is \'better\' in a sweep"',
   'the highest timeframe the machine RIDES. Separate from band_subwsf and band_wsf_hi so a sweep '
   'can move it alone. EYEBALLED by Joe, not swept. Label mine. See spec 19.2'),
+
+ # ── mom_xfer, Joe 0920 ───────────────────────────────────────────────────────────────────────
+ ('mom_xfer', 'count_min', '2', 'int', 'timeframes', 'joe', 0, 1,
+  'Joe 0920: "2 or more TFs leave momtf_dr ... 2 is arbitrary. the more TFs I see leaving the dr '
+  'mom, the more comfortable I\'ll be"',
+  'timeframes from the momtf_dr set at the signal that must have left it AT THE SAME BAR. The walk '
+  'runs from the signal to the dr flip. Section and key names mine. IN_KEY, but knob_string '
+  'filters section stretchy_leash so it misses wsl_knobs'),
 ]
 
 

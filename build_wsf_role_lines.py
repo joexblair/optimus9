@@ -53,10 +53,16 @@ WANTED = {
     **{tf: ('r', 'x', 'm', 'Mage', 'b') for tf in (11, 12, 13, 14, 16, 17, 18)},
     **{tf: ('r', 'x', 'm', 'Mage', 'b') for tf in (19, 20, 21, 23)},
     **{tf: ('Mage', 'b') for tf in (6, 7, 8, 9, 10, 15)},
+    **{tf: ('x', 'Mage', 'b') for tf in (24, 25, 26, 27, 28, 29)},
 }
 # 0908 ADDED `m` at 11..14 and 16..18, and the whole role set at 19, 20, 21, 23. Joe's TF2-23
 # walk scans every timeframe in that range, and `m` is the x-cross target its terminator uses
 # (x X m). ws22 is a registry line and needs nothing here; 19, 20, 21 and 23 are not registered.
+# 0918 ADDED 24..29 at x, Mage, b ONLY. Joe: "run it up to TF30", scoped to wdv_top_backstop_utc,
+# which reads exactly those three roles and the 85/15 boundary scalar - never r, never m.
+# wdv_top_mom_tf tops out at 23 (build_wsf_dtf_v3.TFS = range(1,24)), so top_mom_tf+n needs the
+# ladder to run past it. ws30 is already built by the HTF group above and is not repeated here.
+# NOTE: wdv_top1 is `r of top_mom_tf + 1` and still stops at ws23 - r above 23 is NOT built here.
 
 
 def role_specs(db):

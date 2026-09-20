@@ -118,21 +118,28 @@ def load():
                         m13=ln(13, 'm'))
 
 
-def momentum_true(line, bank, cfg, dr, k, seam, tf):
+def momentum_true(line, bank, cfg, dr, k, seam, tf, strip_mom_at_fence=None):
     """Is `line` momentum-true at bar k under `cfg`. momo, or curl facing dr - Joe's rule.
-    DELEGATES to momo_g_why; the seam fact is measured in momo_seam and handed over."""
+    DELEGATES to momo_g_why; the seam fact is measured in momo_seam and handed over.
+
+    REFACTORED 0920. This used to inline momo_fit / verdict / curl_gates so it could set seam_dr
+    between the fit and the verdict - a second copy of momo_g_why's body, which is exactly the fork
+    momo_gated was written to prevent. momo_g_why now takes seam_dr, so there is one verdict path.
+
+    strip_mom_at_fence is STRIP-MOM-AT-FENCE, Joe 0920. Pass the r-momo-fence as (lo, hi) to strip
+    the tag from a line that has exited it on the dr side at bar k. None is off.
+    """
     b = dict(bank); b.update({q: cfg[q] for q in
                               ('momo_slope_min', 'momo_slack_ref', 'momo_r2_min',
                                'level_slack', 'momo_seam')})
     with momo_config(b), momo_window(SPAN_MIN):
-        f = X.momo_fit(line, dr, k, quad=True)
+        # idx0 MUST be read inside momo_window - it mutates X.MOMO_SAMPLES for the duration
+        # (momo_gated.py:195). Computing it outside silently uses the module default window.
         idx0 = k - (X.MOMO_SAMPLES - 1) * X.MOMO_STEP_BARS
-        f['seam_dr'] = seam_toward_dr(line, seam, idx0, k, dr)
-        st, why = X.verdict(f)
-        if st == 'curl':
-            from optimus9.compute.momo_gated import curl_gates
-            ok, why2 = curl_gates(f, gate2=True)
-            st = 'curl' if ok else 'none'
+        sd = seam_toward_dr(line, seam, idx0, k, dr)
+        from optimus9.compute.momo_gated import momo_g_why
+        st, why, f = momo_g_why(line, dr, k, quad=True, gate2=True, seam_dr=sd,
+                                strip_mom_at_fence=strip_mom_at_fence)
     return st in ('momo', 'curl'), st
 
 
