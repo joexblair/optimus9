@@ -1,0 +1,149 @@
+FENCE-OUT COUNT AT THE CANDIDATE OPEN  -  2026-09-01 -> 2026-09-06
+generated 2026-09-19 02:11:00 UTC
+
+Joe 0919: "we have almost 4 lines printing outside of the r-momo-fence at 07:22, and because
+they're hi oob, the trade should be SHORT (ie overriding dr +1 for a sneaky-trade only)"
+
+  the fence    momo_fence_r = 17  ->  band 17 / 83
+  outside      dr +1 -> value >= 83   |   dr -1 -> value <= 17
+  near         within 5 of the fence but not past it
+  the lines    ws1..ws6 x {Mage, b, r} = 18
+  sneaky-1     dr +1 = LONG, dr -1 = SHORT. An override makes it the opposite.
+  NO THRESHOLD IS SET. How many of 18 constitutes an override is Joe's call.
+
+  candidates 125
+    out == 0 :   8      out >= 0 : 125
+    out == 1 :  16      out >= 1 : 117
+    out == 2 :  28      out >= 2 : 101
+    out == 3 :  27      out >= 3 :  73
+    out == 4 :  10      out >= 4 :  46
+    out == 5 :  10      out >= 5 :  36
+    out == 6 :   8      out >= 6 :  26
+
+  #   dr CANDIDATE OPEN     out near   COIL  the lines outside the fence
+  ----------------------------------------------------------------------------------------------------------------------
+  1   -1 08-31 22:04:45    2    0   91.0  ws1Mage, ws3r
+  2   +1 09-01 00:04:50    2    0   94.8  ws1Mage, ws1b
+  3   -1 09-01 01:10:40    5    1   59.3  ws1Mage, ws1b, ws3r, ws4r, ws5r
+  4   +1 09-01 03:06:40    1    0   77.3  ws3r
+  5   +1 09-01 05:04:30    3    0   35.0  ws1Mage, ws1b, ws2Mage
+  6   -1 09-01 06:37:40    1    0   21.2  ws6r
+  7   +1 09-01 07:22:35    3    1   11.6  ws1Mage, ws1r, ws3r
+  8   -1 09-01 08:06:40   11    3  106.1  ws1Mage, ws1b, ws2b, ws3Mage, ws3b, ws4Mage, ws4b, ws5Mage, ws5b, ws6Mage, ws6b
+  9   +1 09-01 09:24:50    3    1   39.7  ws1Mage, ws1r, ws2r
+  10  -1 09-01 12:13:30    3    2  106.1  ws1Mage, ws3r, ws4r
+  11  +1 09-01 13:27:00    2    3   65.4  ws3r, ws4r
+  12  -1 09-01 14:59:35    0    1   85.8  -
+  13  -1 09-01 16:07:25    5    3  118.3  ws1Mage, ws1b, ws1r, ws2r, ws3r
+  14  +1 09-01 17:20:35    2    2   83.6  ws1Mage, ws1b
+  15  -1 09-01 17:52:35    0    2   69.7  -
+  16  +1 09-01 19:11:20    4    0  105.8  ws2r, ws3r, ws4r, ws5r
+  17  -1 09-01 19:56:35    4    1   60.4  ws1Mage, ws2r, ws3r, ws4r
+  18  +1 09-01 21:03:15    1    0  104.6  ws1Mage
+  19  -1 09-01 21:12:00   10    3   25.3  ws1Mage, ws1b, ws1r, ws2Mage, ws2b, ws3Mage, ws3b, ws4Mage, ws5Mage, ws6b
+  20  +1 09-01 22:49:20    1    1   23.4  ws1r
+  21  -1 09-01 23:18:35    0    2   62.6  -
+  22  +1 09-01 23:33:15    3    0   61.1  ws1Mage, ws1r, ws2Mage
+  23  -1 09-02 00:28:00    3    2   52.1  ws1Mage, ws1b, ws5r
+  24  +1 09-02 01:14:45    2    2   37.9  ws1Mage, ws2r
+  25  -1 09-02 01:29:05    8    5   29.2  ws2b, ws2r, ws3b, ws4Mage, ws4b, ws5Mage, ws5b, ws6Mage
+  26  +1 09-02 02:52:00    5    0   32.7  ws1Mage, ws1b, ws1r, ws5r, ws6r
+  27  -1 09-02 03:43:55    1    1   93.1  ws2r
+  28  +1 09-02 05:29:50    1    2   49.9  ws3r
+  29  -1 09-02 06:04:15    2    0   75.1  ws1Mage, ws1b
+  30  +1 09-02 06:40:55    3    2   43.4  ws1Mage, ws1b, ws1r
+  31  -1 09-02 07:18:00    1    0   34.2  ws1Mage
+  32  +1 09-02 10:19:10    3    0   52.0  ws1Mage, ws1b, ws1r
+  33  -1 09-02 10:41:10   12    1   86.4  ws1Mage, ws1b, ws2Mage, ws2b, ws2r, ws3Mage, ws3b, ws4b, ws5Mage, ws5b, ws6Mage, ws6b
+  34  +1 09-02 10:59:10    2    3   56.8  ws1r, ws2Mage
+  35  -1 09-02 11:25:55    6    6   62.5  ws2b, ws3Mage, ws3b, ws4Mage, ws5Mage, ws5b
+  36  +1 09-02 11:38:55    3    0  111.3  ws1Mage, ws1r, ws2r
+  37  -1 09-02 12:36:35    2    1   27.5  ws1Mage, ws1r
+  38  -1 09-02 13:37:45    5    6   38.6  ws1r, ws3Mage, ws4Mage, ws5b, ws6b
+  39  +1 09-02 13:45:05   14    1   28.1  ws1Mage, ws1b, ws1r, ws2Mage, ws2b, ws3Mage, ws3b, ws4Mage, ws4b, ws5Mage, ws5b, ws5r, ws6Mage, ws6b
+  40  -1 09-02 14:54:25    2    2   20.0  ws1r, ws6r
+  41  +1 09-02 16:17:50    4    2  129.8  ws1Mage, ws1b, ws2Mage, ws2r
+  42  -1 09-02 16:42:00    3    1   34.3  ws1Mage, ws1r, ws2r
+  43  +1 09-02 17:51:25    6    1   89.3  ws1Mage, ws1b, ws1r, ws2r, ws3r, ws4r
+  44  -1 09-02 18:09:30   13    0   90.6  ws1Mage, ws1b, ws2Mage, ws2b, ws2r, ws3Mage, ws3b, ws4Mage, ws4b, ws5Mage, ws5b, ws6Mage, ws6b
+  45  -1 09-02 19:21:00    2    1   26.2  ws1Mage, ws1r
+  46  +1 09-02 20:04:05    3    2   37.1  ws1Mage, ws3r, ws4r
+  47  -1 09-02 21:21:15    1    2   46.0  ws3r
+  48  +1 09-02 21:40:05    2    3   23.6  ws1Mage, ws1r
+  49  -1 09-02 22:03:20    2    1   45.2  ws1r, ws2Mage
+  50  +1 09-02 23:10:00    5    1   19.0  ws1Mage, ws1b, ws1r, ws2Mage, ws2r
+  51  -1 09-03 00:21:00    3    0   74.1  ws1Mage, ws2r, ws3r
+  52  +1 09-03 01:11:00    4    0   12.9  ws1Mage, ws1b, ws1r, ws4r
+  53  -1 09-03 03:22:05    3    0   47.5  ws1Mage, ws1b, ws3r
+  54  -1 09-03 04:15:55    6    0   76.1  ws1Mage, ws1b, ws2Mage, ws2b, ws2r, ws3Mage
+  55  +1 09-03 04:49:25    2    0   16.5  ws1Mage, ws1r
+  56  -1 09-03 05:21:05    3    0   38.0  ws1Mage, ws2r, ws3r
+  57  +1 09-03 05:49:40    1    3   77.1  ws3r
+  58  -1 09-03 07:30:55    3    1   98.0  ws1Mage, ws1b, ws2r
+  59  +1 09-03 07:39:50    6    5   55.8  ws1r, ws2Mage, ws2b, ws3Mage, ws5b, ws6b
+  60  -1 09-03 07:50:30    4    2   14.5  ws1Mage, ws1b, ws1r, ws2Mage
+  61  +1 09-03 08:07:00   13    0   48.7  ws1Mage, ws1b, ws1r, ws2Mage, ws2b, ws3Mage, ws3b, ws4Mage, ws4b, ws5Mage, ws5b, ws6Mage, ws6b
+  62  -1 09-03 08:52:30    6    3   74.0  ws1Mage, ws1b, ws3Mage, ws3b, ws4r, ws5r
+  63  +1 09-03 10:52:50    2    2  115.5  ws1Mage, ws1b
+  64  -1 09-03 13:19:25    1    3   21.3  ws1r
+  65  +1 09-03 13:27:45   13    0   47.0  ws1Mage, ws1b, ws1r, ws2Mage, ws2b, ws3Mage, ws3b, ws4Mage, ws4b, ws5Mage, ws5b, ws6Mage, ws6b
+  66  -1 09-03 13:59:35    2    1   75.1  ws1Mage, ws2r
+  67  +1 09-03 14:20:55   11    1  107.9  ws2Mage, ws2b, ws2r, ws3Mage, ws3b, ws4Mage, ws4b, ws5Mage, ws5b, ws6Mage, ws6b
+  68  -1 09-03 17:11:40    0    0  111.9  -
+  69  +1 09-03 17:16:05    3    2   53.1  ws1Mage, ws1b, ws1r
+  70  -1 09-03 19:51:35    3    1   39.6  ws1Mage, ws2r, ws3r
+  71  +1 09-03 21:14:35    2    0   42.4  ws1Mage, ws1r
+  72  -1 09-03 22:01:25    4    1   43.6  ws1Mage, ws1b, ws1r, ws3r
+  73  +1 09-03 23:35:10    4    2   69.2  ws1Mage, ws1b, ws2r, ws5r
+  74  +1 09-04 00:36:10    2    2   91.4  ws1Mage, ws1r
+  75  -1 09-04 00:57:40    2    2   46.5  ws2Mage, ws2r
+  76  +1 09-04 01:51:40    2    0   43.3  ws1Mage, ws1r
+  77  -1 09-04 03:57:00    2    2   68.7  ws5r, ws6r
+  78  +1 09-04 04:16:00    3    1   34.2  ws1Mage, ws1b, ws1r
+  79  -1 09-04 05:49:00    2    1   57.6  ws1Mage, ws3r
+  80  +1 09-04 05:59:30   11    1   -8.1  ws1r, ws2Mage, ws2b, ws3Mage, ws3b, ws4Mage, ws4b, ws5Mage, ws5b, ws6Mage, ws6b
+  81  -1 09-04 06:25:40    1    1   85.9  ws2r
+  82  +1 09-04 07:06:35    0    1   25.8  -
+  83  -1 09-04 07:52:40    3    1   72.1  ws1Mage, ws4r, ws5r
+  84  +1 09-04 07:59:10   10    2   66.4  ws1Mage, ws2Mage, ws2b, ws3Mage, ws3b, ws4Mage, ws4b, ws5Mage, ws6Mage, ws6b
+  85  -1 09-04 08:40:30    3    1   36.6  ws1Mage, ws3r, ws4r
+  86  +1 09-04 08:51:00    1    6   53.3  ws1Mage
+  87  -1 09-04 09:24:00    1    1   46.6  ws1Mage
+  88  +1 09-04 11:10:50    3    0   11.3  ws1Mage, ws1b, ws6r
+  89  -1 09-04 12:30:35    5    4  204.5  ws1Mage, ws1b, ws2Mage, ws2b, ws5r
+  90  +1 09-04 13:30:35    4    1  144.3  ws1Mage, ws2r, ws3r, ws4r
+  91  -1 09-04 14:10:10    2    3   22.1  ws1r, ws2r
+  92  +1 09-04 15:41:30    2    2  -16.6  ws4r, ws5r
+  93  -1 09-04 17:44:30    5    1   35.6  ws1Mage, ws1b, ws4r, ws5r, ws6r
+  94  +1 09-04 19:01:15    3    0   78.6  ws1Mage, ws1b, ws1r
+  95  -1 09-04 19:07:45    7    0   72.0  ws1Mage, ws1b, ws2Mage, ws2b, ws3Mage, ws3b, ws4Mage
+  96  +1 09-04 21:42:05    6    2   15.3  ws1Mage, ws1b, ws1r, ws2r, ws5r, ws6r
+  97  -1 09-04 21:54:30   13    1   17.1  ws1Mage, ws1b, ws1r, ws2Mage, ws2b, ws3Mage, ws3b, ws4Mage, ws4b, ws5Mage, ws5b, ws6Mage, ws6b
+  98  +1 09-04 22:42:35    4    0   67.3  ws1Mage, ws1b, ws1r, ws2r
+  99  -1 09-05 00:00:45    3    0  106.3  ws1Mage, ws3r, ws4r
+  100 +1 09-05 00:11:05    0    7   41.9  -
+  101 -1 09-05 00:47:05    1    1   39.7  ws1Mage
+  102 +1 09-05 01:09:45    7    6   27.4  ws1Mage, ws1r, ws2b, ws3Mage, ws5b, ws6Mage, ws6b
+  103 -1 09-05 01:48:00    1    0   -4.2  ws1r
+  104 +1 09-05 04:57:00    4    1   26.2  ws1Mage, ws1b, ws5r, ws6r
+  105 -1 09-05 05:45:20    0    1   49.9  -
+  106 +1 09-05 05:57:30    8    2   29.1  ws1Mage, ws1b, ws1r, ws2Mage, ws2b, ws3Mage, ws3b, ws4Mage
+  107 -1 09-05 07:57:55    2    0  138.9  ws1Mage, ws1b
+  108 +1 09-05 08:12:00    8    6   60.6  ws1Mage, ws1b, ws2Mage, ws2b, ws2r, ws5b, ws6Mage, ws6b
+  109 -1 09-05 08:35:40    1    4   75.0  ws2r
+  110 +1 09-05 08:56:45    2    0   19.7  ws1Mage, ws1r
+  111 -1 09-05 09:29:05    3    0   64.5  ws1Mage, ws2r, ws3r
+  112 +1 09-05 11:53:45    3    0   77.0  ws1Mage, ws1b, ws1r
+  113 -1 09-05 12:25:50    0    4   97.7  -
+  114 +1 09-05 12:35:50    6    0   87.1  ws1Mage, ws1b, ws1r, ws2Mage, ws2b, ws3Mage
+  115 -1 09-05 13:37:35    5    0   99.0  ws1Mage, ws1b, ws2r, ws4r, ws5r
+  116 +1 09-05 14:27:15    2    0   59.0  ws1Mage, ws1b
+  117 -1 09-05 15:17:10    2    1  119.5  ws1Mage, ws1b
+  118 +1 09-05 16:06:45    5    1  106.1  ws1Mage, ws1b, ws2r, ws3r, ws4r
+  119 -1 09-05 18:05:20    3    1   51.1  ws1Mage, ws1b, ws1r
+  120 +1 09-05 18:23:05    2    5   11.6  ws1r, ws6b
+  121 -1 09-05 18:42:55    6    1   76.0  ws1Mage, ws1b, ws1r, ws2Mage, ws2b, ws2r
+  122 +1 09-05 19:24:00    8    2   71.9  ws1Mage, ws1b, ws1r, ws2Mage, ws2b, ws2r, ws3Mage, ws4r
+  123 -1 09-05 20:59:45    3    0  139.7  ws1Mage, ws1b, ws4r
+  124 +1 09-05 21:25:35    7    2   44.5  ws1Mage, ws1r, ws2r, ws3r, ws5b, ws6Mage, ws6b
+  125 -1 09-05 22:08:50    5    0   39.8  ws1Mage, ws1b, ws1r, ws3r, ws4r

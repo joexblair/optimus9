@@ -1,0 +1,182 @@
+H|knobs|MAXTF 12|XRACE 2 bars = 10 s|gate oob 15/85|MAGE_DWELL 6 bars = 30 s|r-momo-fence 17/83|flat run 3 bars span <= 2|tp_lookback 48 bars = 4 min|window 2026-09-01 00:00:00 -> 2026-09-01 12:00:00
+H|opens|ws3r momentum-true, one per dr stretch
+H|
+H|OPEN #1|2026-09-01 00:04:50|dr +1|dr flip 2026-09-01 01:08:25
+H|  ws1 test-point 2026-09-01 00:18:10 (forward)|ws1Mage anchor 2026-09-01 00:05:15
+B|  bar|event|detail|fallback_tf|early r rev
+B|  2026-09-01 00:18:15|test-point|ws9 r 89.36|-|
+B|  2026-09-01 00:18:15|fallback_tf|ws9|ws9|
+B|  2026-09-01 00:20:00|exits the fence|ws4 r 92.66|ws9|
+B|  2026-09-01 00:20:10|test-point|ws4 r 92.66|ws9|
+B|  2026-09-01 00:21:10|exits the fence|ws3 r 83.75|ws9|
+B|  2026-09-01 00:21:20|test-point|ws3 r 83.75|ws9|
+B|  2026-09-01 00:21:40|returns inside the fence|ws3 r 82.98|ws9|early r rev
+B|  2026-09-01 00:22:00|exits the fence|ws3 r 83.75|ws9|
+B|  2026-09-01 00:22:00|exits the fence|ws11 r 91.00|ws9|
+B|  2026-09-01 00:22:10|test-point|ws11 r 91.00|ws9|
+B|  2026-09-01 00:22:10|fallback_tf|ws11|ws11|
+B|  2026-09-01 00:23:00|returns inside the fence|ws1 r 76.66|ws11|early r rev
+B|  2026-09-01 00:24:00|exits the fence|ws2 r 84.82|ws11|
+B|  2026-09-01 00:24:00|exits the fence|ws6 r 86.20|ws11|
+B|  2026-09-01 00:24:10|test-point|ws2 r 84.82|ws11|
+B|  2026-09-01 00:24:10|test-point|ws6 r 86.20|ws11|
+B|  2026-09-01 00:25:00|exits the fence|ws5 r 91.26|ws11|
+B|  2026-09-01 00:25:10|test-point|ws5 r 91.26|ws11|
+B|  2026-09-01 00:28:00|exits the fence|ws7 r 88.02|ws11|
+B|  2026-09-01 00:28:10|test-point|ws7 r 87.18|ws11|
+B|  2026-09-01 00:28:40|returns inside the fence|ws2 r 81.99|ws11|early r rev
+B|  2026-09-01 00:29:05|exits the fence|ws2 r 86.18|ws11|
+B|  2026-09-01 00:32:00|returns inside the fence|ws4 r 82.82|ws11|early r rev
+B|  2026-09-01 00:32:15|exits the fence|ws4 r 83.47|ws11|
+B|  2026-09-01 00:32:15|exits the fence|ws8 r 83.10|ws11|
+B|  2026-09-01 00:32:25|test-point|ws8 r 83.08|ws11|
+B|  2026-09-01 00:32:30|returns inside the fence|ws8 r 81.92|ws11|early r rev
+B|  2026-09-01 00:32:35|returns inside the fence|ws7 r 82.75|ws11|early r rev
+B|  2026-09-01 00:34:45|exits the fence|ws7 r 83.42|ws11|
+B|  2026-09-01 00:35:15|returns inside the fence|ws5 r 82.50|ws11|early r rev
+B|  2026-09-01 00:36:00|returns inside the fence|ws9 r 81.43|ws11|early r rev
+B|  2026-09-01 00:36:40|exits the fence|ws5 r 83.07|ws11|
+B|  2026-09-01 00:37:30|exits the fence|ws8 r 83.25|ws11|
+B|  2026-09-01 00:38:00|exits the fence|ws5 r 84.25|ws11|
+B|  2026-09-01 00:38:55|exits the fence|ws5 r 84.66|ws11|
+B|  2026-09-01 00:40:35|exits the fence|ws8 r 83.01|ws11|
+B|  2026-09-01 00:41:20|exits the fence|ws8 r 83.01|ws11|
+B|  2026-09-01 00:42:00|returns inside the fence|ws6 r 72.30|ws11|early r rev
+B|  2026-09-01 00:42:20|exits the fence|ws8 r 83.04|ws11|
+S|  FINAL|SIGNAL 2026-09-01 00:44:05|ws11 x-cross, XRACE 2|+39.2 min after the OPEN|early r rev on ws1, ws2, ws3, ws4, ws5, ws6, ws7, ws8, ws9
+H|
+H|OPEN #2|2026-09-01 01:10:40|dr -1|dr flip 2026-09-01 03:06:40
+H|  ws1 test-point 2026-09-01 01:13:15 (forward)|ws1Mage anchor 2026-09-01 01:12:10
+B|  bar|event|detail|fallback_tf|early r rev
+B|  2026-09-01 01:13:20|test-point|ws3 r 15.74|-|
+B|  2026-09-01 01:13:20|test-point|ws4 r 7.94|-|
+B|  2026-09-01 01:13:20|test-point|ws5 r 9.02|-|
+B|  2026-09-01 01:13:20|test-point|ws6 r 10.53|-|
+B|  2026-09-01 01:13:20|fallback_tf|ws6|ws6|
+B|  2026-09-01 01:15:05|returns inside the fence|ws3 r 17.95|ws6|early r rev
+B|  2026-09-01 01:15:10|exits the fence|ws3 r 15.74|ws6|
+B|  2026-09-01 01:15:40|returns inside the fence|ws1 r 17.72|ws6|early r rev
+B|  2026-09-01 01:15:45|exits the fence|ws1 r 15.99|ws6|
+B|  2026-09-01 01:17:00|exits the fence|ws7 r 15.45|ws6|
+B|  2026-09-01 01:17:00|fallback_tf|none - no TF from ws2 up qualifies|-|
+B|  2026-09-01 01:17:10|test-point|ws7 r 15.45|-|
+B|  2026-09-01 01:17:10|fallback_tf|ws7|ws7|
+B|  2026-09-01 01:18:05|returns inside the fence|ws7 r 17.29|ws7|early r rev
+S|  FINAL|SIGNAL 2026-09-01 01:18:15|ws7 x-cross, XRACE 2|+7.6 min after the OPEN|early r rev on ws1, ws3, ws7
+H|
+H|OPEN #3|2026-09-01 03:06:40|dr +1|dr flip 2026-09-01 04:57:40
+H|  ws1 test-point 2026-09-01 03:33:10 (forward)|ws1Mage anchor 2026-09-01 03:16:30
+B|  bar|event|detail|fallback_tf|early r rev
+B|  2026-09-01 03:33:15|test-point|ws6 r 85.56|-|
+B|  2026-09-01 03:33:15|test-point|ws7 r 85.89|-|
+B|  2026-09-01 03:33:15|fallback_tf|ws7|ws7|
+B|  2026-09-01 03:36:00|exits the fence|ws8 r 91.39|ws7|
+B|  2026-09-01 03:36:00|fallback_tf|none - no TF from ws2 up qualifies|-|
+B|  2026-09-01 03:36:10|test-point|ws8 r 91.39|-|
+B|  2026-09-01 03:36:10|fallback_tf|ws8|ws8|
+B|  2026-09-01 03:37:30|returns inside the fence|ws7 r 82.12|ws8|early r rev
+B|  2026-09-01 03:37:35|returns inside the fence|ws6 r 82.21|ws8|early r rev
+B|  2026-09-01 03:38:00|returns inside the fence|ws1 r 72.26|ws8|early r rev
+B|  2026-09-01 03:38:10|exits the fence|ws6 r 85.56|ws8|
+B|  2026-09-01 03:38:10|exits the fence|ws7 r 85.58|ws8|
+B|  2026-09-01 03:39:35|exits the fence|ws6 r 83.07|ws8|
+B|  2026-09-01 03:39:45|exits the fence|ws6 r 83.98|ws8|
+B|  2026-09-01 03:40:00|exits the fence|ws10 r 87.72|ws8|
+B|  2026-09-01 03:40:10|test-point|ws10 r 86.88|ws8|
+B|  2026-09-01 03:40:10|fallback_tf|ws10|ws10|
+B|  2026-09-01 03:40:45|exits the fence|ws6 r 83.79|ws10|
+B|  2026-09-01 03:41:45|exits the fence|ws6 r 83.61|ws10|
+B|  2026-09-01 03:42:20|exits the fence|ws6 r 83.11|ws10|
+B|  2026-09-01 03:44:00|returns inside the fence|ws8 r 82.77|ws10|early r rev
+B|  2026-09-01 03:44:10|exits the fence|ws8 r 83.18|ws10|
+S|  FINAL|SIGNAL 2026-09-01 03:45:05|ws10 x-cross, XRACE 2|+38.4 min after the OPEN|early r rev on ws1, ws6, ws7, ws8
+H|
+H|OPEN #4|2026-09-01 05:04:30|dr +1|dr flip 2026-09-01 06:24:40
+H|  ws1 test-point 2026-09-01 05:05:10 (forward)|ws1Mage anchor 2026-09-01 05:04:55
+B|  bar|event|detail|fallback_tf|early r rev
+B|  2026-09-01 05:07:10|returns inside the fence|ws1 r 81.86|-|early r rev
+B|  2026-09-01 05:30:00|exits the fence|ws1 r 89.11|-|
+B|  2026-09-01 05:36:00|exits the fence|ws2 r 86.88|-|
+B|  2026-09-01 05:36:10|test-point|ws2 r 86.88|-|
+B|  2026-09-01 05:36:10|fallback_tf|ws2|ws2|
+S|  FINAL|SIGNAL 2026-09-01 05:37:45|ws2 x-cross, XRACE 2|+33.2 min after the OPEN|early r rev on ws1
+H|
+H|OPEN #5|2026-09-01 06:37:40|dr -1|dr flip 2026-09-01 07:22:35
+H|  ws1 test-point 2026-09-01 06:52:20 (forward)|ws1Mage anchor 2026-09-01 06:51:10
+B|  bar|event|detail|fallback_tf|early r rev
+B|  2026-09-01 06:52:25|test-point|ws6 r 6.98|-|
+B|  2026-09-01 06:52:25|test-point|ws7 r 14.16|-|
+B|  2026-09-01 06:52:25|test-point|ws8 r 5.24|-|
+B|  2026-09-01 06:52:25|fallback_tf|ws8|ws8|
+B|  2026-09-01 06:53:35|returns inside the fence|ws1 r 18.57|ws8|early r rev
+B|  2026-09-01 06:54:00|exits the fence|ws9 r 11.46|ws8|
+B|  2026-09-01 06:54:00|fallback_tf|none - no TF from ws2 up qualifies|-|
+B|  2026-09-01 06:54:10|test-point|ws9 r 11.46|-|
+B|  2026-09-01 06:54:10|fallback_tf|ws9|ws9|
+B|  2026-09-01 06:55:00|exits the fence|ws1 r 15.47|ws9|
+B|  2026-09-01 06:56:00|exits the fence|ws1 r 16.31|ws9|
+B|  2026-09-01 06:58:00|exits the fence|ws2 r 9.71|ws9|
+B|  2026-09-01 06:58:10|test-point|ws2 r 9.71|ws9|
+B|  2026-09-01 07:00:00|exits the fence|ws3 r 8.81|ws9|
+B|  2026-09-01 07:00:00|exits the fence|ws10 r 6.88|ws9|
+B|  2026-09-01 07:00:00|fallback_tf|none - no TF from ws2 up qualifies|-|
+B|  2026-09-01 07:00:10|test-point|ws10 r 7.70|-|
+B|  2026-09-01 07:00:10|fallback_tf|ws10|ws10|
+B|  2026-09-01 07:00:15|test-point|ws3 r 11.57|ws10|
+B|  2026-09-01 07:01:15|returns inside the fence|ws2 r 18.15|ws10|early r rev
+B|  2026-09-01 07:02:25|returns inside the fence|ws3 r 17.29|ws10|early r rev
+B|  2026-09-01 07:06:00|returns inside the fence|ws6 r 17.68|ws10|early r rev
+B|  2026-09-01 07:06:05|exits the fence|ws6 r 16.67|ws10|
+B|  2026-09-01 07:07:00|returns inside the fence|ws7 r 17.90|ws10|early r rev
+B|  2026-09-01 07:08:05|exits the fence|ws6 r 16.28|ws10|
+B|  2026-09-01 07:08:45|exits the fence|ws6 r 16.97|ws10|
+B|  2026-09-01 07:09:15|exits the fence|ws11 r 15.03|ws10|
+B|  2026-09-01 07:09:15|fallback_tf|ws6|ws6|
+B|  2026-09-01 07:09:20|exits the fence|ws6 r 16.92|ws6|
+B|  2026-09-01 07:09:25|test-point|ws11 r 14.47|ws6|
+B|  2026-09-01 07:09:25|fallback_tf|ws11|ws11|
+B|  2026-09-01 07:10:00|exits the fence|ws7 r 16.97|ws11|
+B|  2026-09-01 07:12:00|exits the fence|ws12 r 12.32|ws11|
+B|  2026-09-01 07:12:00|fallback_tf|ws6|ws6|
+S|  FINAL|SIGNAL 2026-09-01 07:12:05|ws6 x-cross, XRACE 2|+34.4 min after the OPEN|early r rev on ws1, ws2, ws3, ws6, ws7
+H|
+H|OPEN #6|2026-09-01 07:22:35|dr +1|dr flip 2026-09-01 08:03:45
+H|  ws1 test-point 2026-09-01 07:23:00 (lookback)|ws1Mage anchor 2026-09-01 07:23:00
+B|  bar|event|detail|fallback_tf|early r rev
+B|  2026-09-01 07:23:05|test-point|ws3 r 88.85|-|
+B|  2026-09-01 07:23:05|fallback_tf|ws3|ws3|
+B|  2026-09-01 07:24:00|exits the fence|ws2 r 87.85|ws3|
+B|  2026-09-01 07:24:00|exits the fence|ws4 r 90.65|ws3|
+B|  2026-09-01 07:24:00|fallback_tf|none - no TF from ws2 up qualifies|-|
+B|  2026-09-01 07:24:10|test-point|ws2 r 87.85|-|
+B|  2026-09-01 07:24:10|test-point|ws4 r 90.65|-|
+B|  2026-09-01 07:24:10|fallback_tf|ws4|ws4|
+B|  2026-09-01 07:28:00|returns inside the fence|ws1 r 69.97|ws4|early r rev
+S|  FINAL|SIGNAL 2026-09-01 07:28:05|ws4 x-cross, XRACE 2|+5.5 min after the OPEN|early r rev on ws1
+H|
+H|OPEN #7|2026-09-01 08:06:40|dr -1|dr flip 2026-09-01 09:24:50
+H|  ws1 test-point 2026-09-01 08:11:10 (forward)|ws1Mage anchor 2026-09-01 08:07:05
+B|  bar|event|detail|fallback_tf|early r rev
+B|  2026-09-01 08:11:15|test-point|ws2 r 11.43|-|
+B|  2026-09-01 08:11:15|test-point|ws4 r 13.90|-|
+B|  2026-09-01 08:11:15|fallback_tf|ws4|ws4|
+B|  2026-09-01 08:12:00|exits the fence|ws3 r 16.37|ws4|
+B|  2026-09-01 08:12:10|returns inside the fence|ws3 r 18.32|ws4|early r rev
+B|  2026-09-01 08:12:20|returns inside the fence|ws1 r 18.50|ws4|early r rev
+B|  2026-09-01 08:12:25|exits the fence|ws1 r 15.60|ws4|
+B|  2026-09-01 08:13:05|returns inside the fence|ws4 r 17.31|ws4|early r rev
+S|  FINAL|SIGNAL 2026-09-01 08:13:20|ws4 x-cross, XRACE 2|+6.7 min after the OPEN|early r rev on ws1, ws3, ws4
+H|
+H|OPEN #8|2026-09-01 09:24:50|dr +1|dr flip 2026-09-01 12:13:30
+H|  ws1 test-point 2026-09-01 10:16:20 (forward)|ws1Mage anchor 2026-09-01 09:45:15
+B|  bar|event|detail|fallback_tf|early r rev
+B|  2026-09-01 10:16:25|test-point|ws8 r 90.37|-|
+B|  2026-09-01 10:16:25|test-point|ws9 r 90.59|-|
+B|  2026-09-01 10:16:25|test-point|ws10 r 94.97|-|
+B|  2026-09-01 10:16:25|test-point|ws11 r 94.13|-|
+B|  2026-09-01 10:16:25|test-point|ws12 r 85.03|-|
+B|  2026-09-01 10:16:25|fallback_tf|ws12|ws12|
+B|  2026-09-01 10:16:35|returns inside the fence|ws1 r 82.77|ws12|early r rev
+B|  2026-09-01 10:16:40|exits the fence|ws1 r 83.27|ws12|
+B|  2026-09-01 10:16:50|exits the fence|ws1 r 83.10|ws12|
+S|  FINAL|SIGNAL 2026-09-01 10:18:05|ws12 x-cross, XRACE 2|+53.2 min after the OPEN|early r rev on ws1
