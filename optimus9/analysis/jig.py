@@ -252,7 +252,8 @@ AF_BLOCK = 60    # KNOB. bars in ONE step-3 lookback block = 300 s = 5 minutes a
 #                  Joe 0912: "step 3 then looks back to 17:27, 17:22, etc (in one code loop)".
 
 
-def anchor_floater(r, px, dr, k, block=AF_BLOCK, mid=50.0):
+def anchor_floater(r, px, dr, k, block=AF_BLOCK, mid=50.0,
+                   xn=None, dwell_bars=None, oob=None):
     """[PRODUCER · Joe 0912] THE FOUR STEPS that choose what goes into the divergence machine.
 
     JOE'S VERBATIM SPEC, 0912:
@@ -285,16 +286,29 @@ def anchor_floater(r, px, dr, k, block=AF_BLOCK, mid=50.0):
       step 1  the anchor is bar `k`: r[k], px[k], and `dr`. Returns None when r[k] sits on the
               WRONG side of 50 for the dr, because step 2 is then self-contradictory (it asks for
               an opposing-dr extreme on the side the anchor is already on).
-      step 2  the pivot. Walk back to the most recent CONTIGUOUS run of bars on the other side of
-              50, and take that run's extreme facing the opposing dr - its min at dr +1, its max
-              at dr -1. MINE, and unruled: Joe named a timestamp (~17:32:30), not a rule. The
-              alternative - a block loop like step 3 - walks too far, past 17:26 on his example.
+      step 2  the pivot. TWO RULES LIVE HERE - see REPLACED 0921 below.
+
+              THE DWELL RULE, Joe 0921, used when `xn` is given: "instead of relying on r passing
+              50, use ws{tf+1}x dwelling in dr-opposing oob, for tf*{knob:1}". Walk back to the
+              most recent CONTIGUOUS run of `xn` bars in the dr-OPPOSING oob - at or below oob[0]
+              at dr +1, at or above oob[1] at dr -1 - that is at least `dwell_bars` long. The
+              pivot is that run's `xn` EXTREME: its min at dr +1, its max at dr -1. Joe 0921 chose
+              the extreme over the run's first or last bar. Returns None when no run qualifies.
+
+              THE 50 RULE, the original, used when `xn` is None. Walk back to the most recent
+              CONTIGUOUS run of bars on the other side of 50, and take that run's extreme facing
+              the opposing dr. MINE, and unruled: Joe named a timestamp (~17:32:30), not a rule.
       step 3  the floater. From the pivot walk BACKWARD in blocks of `block` bars. Each block
               yields its best dr-side value - the max at dr +1, the min at dr -1, counting only
               bars on the dr side of 50. Keep the running best. Stop at the first block that adds
               no new best. Block 1 is bars [pivot - block, pivot), so THE PIVOT BAR ITSELF IS
-              EXCLUDED. MINE and unruled: a tie stops the loop (strictly-better only), a block
-              holding no dr-side bar stops the loop, and a flat top keeps its EARLIEST bar.
+              EXCLUDED. The 50 filter is JOE'S, verbatim: "find the r extrema that is on the same
+              side as step 1's dr". MINE and unruled: a tie stops the loop (strictly-better only)
+              and a flat top keeps its EARLIEST bar.
+
+              A BLOCK HOLDING NO dr-SIDE BAR IS SKIPPED, not a stop. Joe 0921 - it used to end the
+              walk, which is not in his "until it has proven that it has gone past the extrema".
+              The walk now ends only at a non-improving block or the tape start.
       step 4  the comparison, which is all `divergence` does at an episode end:
                 dr +1, the anchor is a high -> bearish when px rises and r falls
                 dr -1, the anchor is a low  -> bullish when px falls and r rises
@@ -303,27 +317,57 @@ def anchor_floater(r, px, dr, k, block=AF_BLOCK, mid=50.0):
          anchor  (k, r, px)          floater (bar, r, px)
          pivot   (bar, r, px)        blocks  [(from, to, best, best_bar, new_best)] in walk order
          d_osc   r anchor minus r floater      d_px  px anchor minus px floater
-         fired   +1 bearish / -1 bullish / 0 none"""
+         fired   +1 bearish / -1 bullish / 0 none
+
+    REPLACED 0921. `xn`, `dwell_bars` and `oob` switch step 2 to the dwell rule. They default to
+    None so sideways_reversal, jig.causal.anchor_floater and stopsweep.py - none of which holds an
+    x line - keep the 50 rule and are untouched. TWO STEP-2s NOW LIVE IN ONE PRODUCER, and that is
+    a fidelity gap, not a design: Joe replaced step 2, and every caller that cannot supply `xn` is
+    still running the rule he replaced."""
     r = np.asarray(r, float); px = np.asarray(px, float)
     k = int(k); dr = int(dr); block = max(1, int(block))
     if k < 1 or not np.isfinite(r[k]):
         return None
     if (r[k] <= mid) if dr > 0 else (r[k] >= mid):
         return None
-    other = (r < mid) if dr > 0 else (r > mid)
-    j = k - 1
-    while j >= 0 and not other[j]:
-        j -= 1
-    if j < 0:
-        return None
-    e = j
-    while e >= 0 and other[e]:
-        e -= 1
-    e += 1
-    seg = r[e:j + 1]
-    if np.all(np.isnan(seg)):
-        return None
-    p = e + int(np.nanargmin(seg) if dr > 0 else np.nanargmax(seg))
+    if xn is not None:                                  # THE DWELL RULE, Joe 0921
+        x = np.asarray(xn, float)
+        need = max(1, int(dwell_bars))
+        o_lo, o_hi = float(oob[0]), float(oob[1])
+        opp = (x <= o_lo) if dr > 0 else (x >= o_hi)
+        j = k - 1
+        p = None
+        while j >= 0:
+            if not opp[j]:
+                j -= 1
+                continue
+            e = j
+            while e >= 0 and opp[e]:
+                e -= 1
+            e += 1
+            if j - e + 1 >= need:
+                seg = x[e:j + 1]
+                if not np.all(np.isnan(seg)):
+                    p = e + int(np.nanargmin(seg) if dr > 0 else np.nanargmax(seg))
+                    break
+            j = e - 1
+        if p is None:
+            return None
+    else:                                               # THE 50 RULE, the original
+        other = (r < mid) if dr > 0 else (r > mid)
+        j = k - 1
+        while j >= 0 and not other[j]:
+            j -= 1
+        if j < 0:
+            return None
+        e = j
+        while e >= 0 and other[e]:
+            e -= 1
+        e += 1
+        seg = r[e:j + 1]
+        if np.all(np.isnan(seg)):
+            return None
+        p = e + int(np.nanargmin(seg) if dr > 0 else np.nanargmax(seg))
     same = (r > mid) if dr > 0 else (r < mid)
     best = np.nan; bi = None; blocks = []; n = 0
     while True:
@@ -335,7 +379,7 @@ def anchor_floater(r, px, dr, k, block=AF_BLOCK, mid=50.0):
         cand = np.where(same[b_lo:b_hi], r[b_lo:b_hi], np.nan)
         if np.all(np.isnan(cand)):
             blocks.append((b_lo, b_hi, float('nan'), None, 0))
-            break
+            continue                                    # Joe 0921: skip, do not stop
         m = b_lo + int(np.nanargmax(cand) if dr > 0 else np.nanargmin(cand))
         new = (bi is None) or ((r[m] > best) if dr > 0 else (r[m] < best))
         if new:

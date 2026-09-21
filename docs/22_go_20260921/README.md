@@ -16,6 +16,8 @@ Banked 2026-09-20.
 | `report_x_reversal_mage.py` | ws{tf}x reversals firing while ws{tf}Mage is same-side oob |
 | `x_reversal_mage_ws12_20260921.txt` | ws12, wob 6, 09-01 → 09-02 |
 | `x_reversal_mage_ws8_20260921.txt` | ws8, wob 6, 09-01 → 09-02 |
+| `report_divergence_step2.py` | `anchor_floater` at every `wsl_sig_utc`, under the 0921 step 2 |
+| `divergence_step2_20260921.txt` | its output, ws3r and ws4r, 32 v7 signals on 09-01 |
 
 ## The wsf_leash report
 
@@ -62,6 +64,35 @@ second copy of the same verdict body, inlined only so it could set `seam_dr` bet
 verdict. `momo_g_why` now takes `seam_dr`. Verified behaviour-preserving: with the mode off, 121
 rows × 2 directions × ws2..ws12 reproduced the banked columns with 0 mismatches.
 
+## The divergence step 2, spec 12.1
+
+Joe 0921 replaced step 2 of `jig.anchor_floater`.
+
+| item | value |
+|------|-------|
+| the line | `ws{tf+1}x` — a ws1r test reads ws2x, a ws4r test reads ws5x |
+| the condition | in the dr-OPPOSING oob **15/85** |
+| the length | tf × `anchor_floater.dwell_min_per_tf` minutes, contiguous |
+| the pivot | that run's **x extreme**, chosen by Joe over the run's first or last bar |
+
+Step 1 is unchanged. Step 3 keeps its 50 filter — that filter is Joe's own 0912 verbatim, *"find
+the r extrema that is on the same side as step 1's dr"* — and drops the empty-block **stop**: a
+block with no dr-side bar is now skipped and the walk continues.
+
+On ws3r at 09-01 03:40:05 that is the whole difference: block 1 has 0 of 60 bars above 50, so the
+old rule ended with no floater and the new one walks on to 88.67 at 03:06:15, d_osc −27.98,
+**bearish +1**.
+
+Verdicts over the 32 v7 signals on 09-01:
+
+| line | bearish +1 | bullish −1 | none 0 | no result |
+|------|-----------|-----------|--------|-----------|
+| ws3r | 3 | 11 | 11 | 7 |
+| ws4r | 2 | 10 | 18 | 2 |
+
+`jig.divergence`, the episode-based machine, returned 0 on all 32 for both lines. The two mechs
+never share a bar.
+
 ## Open items
 
 - **`momo_expiry` is not wired into the momentum mech.** It exists (spec §18, Joe 0914), has three
@@ -76,6 +107,12 @@ rows × 2 directions × ws2..ws12 reproduced the banked columns with 0 mismatche
 - **The "first reversal" wob is not computed.** Raising the wob moves a confirmation later; it does
   not filter one in place. Needs a ruling on what "make that reversal the first one" means.
 - **The momTF set (10, 11, 12) is not in the config.** It lives in `report_leash_momtf.py`.
+- **Two step-2s live in one producer.** `xn`, `dwell_bars` and `oob` default to None on
+  `anchor_floater`, so `jig.sideways_reversal`, `jig.causal.anchor_floater` and
+  `docs/mage_cascade/stopsweep.py` still run the 50 rule Joe replaced. A gap to close, not a design.
+- **The floater walk has no backward horizon.** With the empty-block stop gone it ends only at a
+  non-improving block or the tape start, so a floater may sit on the previous day — two do, at
+  08-31 23:36:00 and 08-31 23:43:05.
 - **`mom_xfer.count_min` never reaches `wsl_knobs`.** `leash_bank.knob_string` filters
   `wdc_section == 'stretchy_leash'`, so a change to the knob overwrites these rows instead of
   landing beside them.

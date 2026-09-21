@@ -668,12 +668,75 @@ places:
 ### Open — not decided, not coded
 
 - the loop's termination test on a TIE (a later block equalling the running high)
-- whether a block whose highest r sits on the wrong side of 50 for the dr is skipped or stops
-  the loop
-- block 1 is bars [pivot - 60, pivot), so THE PIVOT BAR IS EXCLUDED. That is what the
-  worked example was computed with
 - which bar of a flat top is the extrema when consecutive bars hold the same r
-- 5 minutes = 60 bars is Joe's value, stated 0912. It is not yet in the config table
+
+CLOSED 0921, see 12.1: the empty-block question, and the 60 bars now banked as
+`anchor_floater.block` at config v9.
+
+---
+
+## 12.1 STEP 2 REPLACED, and step 3's empty block — Joe 0921
+
+### The ruling
+
+> *"update step2: instead of relying on r passing 50 (paraphrasing), use "ws{tf+1}x dwelling in*
+> *dr-opposing oob, for tf*{knob:1}""*
+> *"eg, for a ws1 divergence test, the ws2x dwell in dr-opposing oob is 1 minute. for ws4r , its 4*
+> *minutes"*
+
+| item | value |
+|------|-------|
+| the line | `ws{tf+1}x` — a ws1r test reads ws2x, a ws4r test reads ws5x |
+| the condition | in the dr-OPPOSING oob **15/85**: at dr +1 x <= 15, at dr −1 x >= 85 |
+| the length | tf × `anchor_floater.dwell_min_per_tf` minutes, contiguous |
+| the pivot | that run's **x extreme** — its min at dr +1, its max at dr −1. Joe 0921 chose the
+  extreme over the run's first or last bar |
+| no run qualifies | the test returns None |
+
+`dwell_min_per_tf` is banked at **1**, config v10. The key name and the per-tf units are mine.
+
+### Step 1 is unchanged
+
+Joe 0921: *"step 1, no change"*. The anchor still returns None when `r[k]` sits on the wrong side
+of 50 for the dr.
+
+### Step 3 — the 50 filter stays, the empty-block STOP goes
+
+The 50 filter is Joe's own step 3, verbatim from 0912: *"find the r extrema that is on the same
+side as step 1's dr"*. It was never mine and it stays.
+
+What was mine is what a block with **no** dr-side bar does. It used to end the walk. Joe 0921 ruled
+it is **skipped** and the walk continues. His 0912 stop condition is *"until it has proven that it
+has gone past the extrema"*, and an empty block proves nothing about the extrema.
+
+- the walk now ends only at a non-improving block, or the tape start
+- there is no backward horizon, so a floater may sit on the previous day
+
+Worked on ws3r at 09-01 03:40:05, anchor r 60.68, dr +1:
+
+| step 3 | block 1 03:22:00 → 03:27:00 | result |
+|--------|------------------------------|--------|
+| the old stop | 0 of 60 bars above 50 | walk ends, **no floater** |
+| Joe 0921, skip | 0 of 60 bars above 50 | skipped, walk continues to **88.67 at 03:06:15**, d_osc −27.98, **bearish +1** |
+
+### The fidelity gap this leaves
+
+`xn`, `dwell_bars` and `oob` default to None on `anchor_floater`, so the three callers that hold no
+x line — `jig.sideways_reversal`, `jig.causal.anchor_floater` and `docs/mage_cascade/stopsweep.py` —
+still run the 50 rule Joe replaced. TWO STEP-2s NOW LIVE IN ONE PRODUCER. That is a gap to close,
+not a design.
+
+### The 09-01 report
+
+32 v7 `wsl_sig_utc` signals, `anchor_floater` at each one:
+
+| line | bearish +1 | bullish −1 | none 0 | no result |
+|------|-----------|-----------|--------|-----------|
+| ws3r | 3 | 11 | 11 | 7 |
+| ws4r | 2 | 10 | 18 | 2 |
+
+`jig.divergence`, the episode-based machine, returned 0 on all 32 for both lines — the two mechs
+never share a bar. The full table is `docs/22_go_20260921/divergence_step2_20260921.txt`.
 
 ---
 

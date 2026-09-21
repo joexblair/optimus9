@@ -17,7 +17,7 @@ The window and the knob string default to what the wsf_dtf_v3 table itself holds
     python3 report_coil_exit.py --from 2026-09-01 --to 2026-09-06
     python3 report_coil_exit.py --md          pipe-delimited, for pasting into a report
 """
-import sys, os, argparse, datetime as dt
+import sys, os, argparse, json, datetime as dt
 import numpy as np
 
 from optimus9.config import get_db_config
@@ -115,10 +115,20 @@ def main(argv=None):
     a.add_argument('--md', action='store_true')
     a.add_argument('--bank', action='store_true',
                    help='write the seven banked columns to %s and exit' % LEASH_TABLE)
+    a.add_argument('--set', dest='sets', action='append', metavar='KEY=JSON', default=[],
+                   help='run a SECOND INSTANCE with this knob moved, e.g. '
+                        '--set coil_lines=\'["ws2","ws3"]\'. The override reaches wsl_knobs, so '
+                        'the instance banks BESIDE the existing rows instead of colliding')
     o = a.parse_args(argv)
 
     db = DatabaseManager(**get_db_config()); db.connect()
     C = v3_config(db)
+    if o.sets:
+        ov = {}
+        for kv in o.sets:
+            k, _, v = kv.partition('=')
+            ov[k] = json.loads(v) if C.meta[k]['wdc_type'] == 'json' else v
+        C = C.with_overrides(**ov)
     knobs = o.knobs or db.execute(
         f'SELECT wdv_knobs k FROM {V3} GROUP BY 1 ORDER BY MAX(wdv_ms) DESC LIMIT 1', fetch=True)[0]['k']
     rng = db.execute(f'SELECT MIN(wdv_utc) a, MAX(wdv_utc) b FROM {V3} WHERE wdv_knobs=%s',

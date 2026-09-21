@@ -1,5 +1,16 @@
 """seed_v3_config — every hard-coded value in the wsf-dtf-v3 chain.
 
+V10, 0921: ONE KNOB ADDED - anchor_floater.dwell_min_per_tf. Joe replaced step 2: "instead of
+relying on r passing 50 (paraphrasing), use ws{tf+1}x dwelling in dr-opposing oob, for
+tf*{knob:1}". He set the value at 1 and gave the worked example - ws1r needs 1 minute of ws2x,
+ws4r needs 4 minutes of ws5x. The key name and the per-tf units are mine.
+
+V9, 0921: ONE KNOB ADDED - anchor_floater.block, section `anchor_floater`. Joe: "bank AF_BLOCK as a
+knob in the db". The VALUE does not move: AF_BLOCK has been 60 bars = 300 s since 0912, read off
+Joe's own example spacing ("step 3 then looks back to 17:27, 17:22" = 5 minutes). Turning that into
+60 BARS is mine, as is the section and key name. jig.py keeps AF_BLOCK as the module default so
+every existing caller is untouched; a caller that wants the banked value passes block=C['block'].
+
 V8, 0920: ONE KNOB ADDED - mom_xfer.count_min, section `mom_xfer`. Joe named the mechanic
 ("mom_xfer") and set the value: "2 is arbitrary. the more TFs I see leaving the dr mom, the more
 comfortable I'll be", then "knob". The SECTION NAME and the KEY NAME are MINE - `mom_xfer` follows
@@ -45,7 +56,7 @@ from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.compute.v3_config import DDL, TABLE, v3_config
 
-V = 8
+V = 10
 
 # section, key, value, type, units, owner, fitted, in_key, source, note
 ROWS = [
@@ -188,6 +199,18 @@ ROWS = [
   'timeframes from the momtf_dr set at the signal that must have left it AT THE SAME BAR. The walk '
   'runs from the signal to the dr flip. Section and key names mine. IN_KEY, but knob_string '
   'filters section stretchy_leash so it misses wsl_knobs'),
+
+ # ── the anchor/floater selection, jig.anchor_floater, Joe 0912 ───────────────────────────────
+ ('anchor_floater', 'block', '60', 'int', 'bars', 'joe', 0, 1,
+  'Joe 0912: "step 3 then looks back to 17:27, 17:22, etc (in one code loop)" - 5 minutes',
+  'bars in ONE step-3 lookback block. 60 bars = 300 s. Reading his 5-minute spacing as 60 BARS is '
+  'mine, as are the section and key names. Sets what counts as one bump, not how far the walk '
+  'reaches - it stops on the first block that does not improve'),
+ ('anchor_floater', 'dwell_min_per_tf', '1', 'int', 'minutes per timeframe', 'joe', 0, 1,
+  'Joe 0921: "use ws{tf+1}x dwelling in dr-opposing oob, for tf*{knob:1}"',
+  'step 2. ws{tf+1}x must hold the dr-OPPOSING oob 15/85 for tf * this many minutes, contiguous. '
+  'ws1r needs 1 min of ws2x, ws4r needs 4 min of ws5x - Joe\'s own worked example. The pivot is '
+  'that run\'s x EXTREME. Key name and the per-tf units are mine'),
 ]
 
 

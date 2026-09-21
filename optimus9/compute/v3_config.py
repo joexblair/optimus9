@@ -68,6 +68,35 @@ class V3Config(dict):
     def mine_keys(self):
         return sorted(k for k, r in self.meta.items() if r['wdc_owner'] == 'mine')
 
+    def with_overrides(self, **kw):
+        """A SECOND INSTANCE of this config, with some knobs moved. -> a new V3Config.
+
+        Joe 0920 asked for a separate stretchy-leash instance at coil_lines ["ws2","ws3"] with every
+        other knob ported unchanged. The config is versioned globally - v3_config(db) takes
+        MAX(version) - so there was no way to run two instances at once without bumping the version
+        and moving every other producer with it.
+
+        SRP: the knobs are this object's concern, so the override lives here and not in a producer.
+        The ROW METADATA is rewritten too, not just the typed value, because leash_bank.knob_string
+        builds the unique key from meta[k]['wdc_value']. An override that moved the value but not
+        the metadata would bank the second instance UNDER THE FIRST INSTANCE'S KEY and the write
+        would be silently refused as already-banked.
+
+        Values arrive in the same shape as the caller would read them back - a list for a json
+        knob, an int for an int knob - and are re-serialised into wdc_value.
+        """
+        rows = []
+        for k, r in self.meta.items():
+            d = dict(r)
+            if k in kw:
+                v = kw[k]
+                d['wdc_value'] = json.dumps(v) if d['wdc_type'] == 'json' else str(v)
+            rows.append(d)
+        unknown = set(kw) - set(self.meta)
+        if unknown:
+            raise KeyError('no such knob: %s' % ', '.join(sorted(unknown)))
+        return V3Config(rows)
+
 
 def v3_config(db, version=None):
     """The spec's knobs at `version`, or the highest version banked."""
