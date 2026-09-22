@@ -18,6 +18,8 @@ Banked 2026-09-20.
 | `x_reversal_mage_ws8_20260921.txt` | ws8, wob 6, 09-01 → 09-02 |
 | `report_divergence_step2.py` | `anchor_floater` at every `wsl_sig_utc`, under the 0921 step 2 |
 | `divergence_step2_20260921.txt` | its output, ws3r and ws4r, 32 v7 signals on 09-01 |
+| `build_all_wsf_flatruns.py` | builds and fills the `all_wsf_flatruns` table |
+| `all_wsf_flatruns_20260922.txt` | its output, 242 rows |
 
 ## The wsf_leash report
 
@@ -92,6 +94,29 @@ Verdicts over the 32 v7 signals on 09-01:
 
 `jig.divergence`, the episode-based machine, returned 0 on all 32 for both lines. The two mechs
 never share a bar.
+
+## all_wsf_flatruns
+
+Joe 0922. One row per `wsl_sig_utc`, twelve timestamp columns.
+
+| column | content |
+|--------|---------|
+| `awf_sig_utc` / `awf_sig_ms` | the signal |
+| `awf_first_ms` | the `wsf_leash` moment it came from — the unique key, because two leash rows can share a signal bar (09-01 07:14:45 does) |
+| `awf_inst` | v7 or v8 |
+| `awf_dr` | the row's `wsl_dr`. `flat_run_at` is dr-signed, so the twelve cells cannot be read without it |
+| `awf_ws1` … `awf_ws12` | DATETIME(3), the **first** flat-run bar at or after `awf_sig_utc` − 8 min |
+
+Joe's 8-minute lookback, verbatim: *"for completeness and to ensure I don't miss any flat runs
+before sig_utc, capture any flat runs that happened in the 8 minutes before sig_utc"*. A cell
+earlier than `awf_sig_utc` is a run that fired before the signal — 744 of 2,904 cells, 25.6%.
+None are NULL.
+
+Producer: `flat_run_at(r, j, dr, r-momo-fence 17/83, samples 3, tol 2.0)`. Forward search is
+unbounded. Knobs and window are in the unique key, so a rebuild at another fence lands beside.
+
+The first attempt at this table banked every contiguous flat run — 9,406 rows at a grain Joe did
+not ask for. Joe: *"drop it and rebuild in the report shape"*. It was dropped on his word.
 
 ## Open items
 
