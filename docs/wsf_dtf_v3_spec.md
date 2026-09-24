@@ -2190,3 +2190,153 @@ The 2 minute threshold is Joe's value, said in chat, held by the caller. `block`
 | | |
 |---|---|
 | `optimus9/compute/rule2_trajectory.py` | `opposed_extrema()` and `trajectory()`. No DB, no printing, no thresholds of its own |
+
+---
+
+## 22.8 THE SPLIT AND THE HANDOFF — Joe 0924
+
+### The premise, verbatim
+
+> "here's what we need: a mech that detects that ws2 is still heading towards dr while ws1r is
+> travelling away from it. I'm allowing {knob:2 or 3, label:RULE2_TRAJ_CONTINUE} minutes to
+> detect. testing on the minute breaks is fine, detecting the split earlier through the use of
+> fancy calculations is better"
+
+and on the arithmetic:
+
+> "phase1: calculate the difference between the current bar and the previous bar individually
+> (the vertical), phase2: calculate the diff between the 2 phase1 values"
+
+### The mech
+
+| | |
+|---|---|
+| `s_lo` | the lower line now minus the lower line `w` bars ago |
+| `s_hi` | the higher line now minus the higher line `w` bars ago |
+| split at a bar | dr +1: `s_lo < 0` AND `s_hi > 0`. dr −1: the mirror |
+| it fires | on the bar a run of splits REACHES `wob` consecutive bars |
+| `w` | Joe's `RULE2_TRAJ_CONTINUE`, 2 or 3 minutes = 24 or 36 bars. **UNSET** |
+| `wob` | MINE and unruled. Every 0924 measurement used 4 bars = 20 s |
+
+### Why a window and not the bar
+
+Measured 09-03 02:49:00 → 03:02:00, 157 bars:
+
+| | |
+|---|---|
+| bar-to-bar test fires on | 4 bars, **all of them minute boundaries** |
+| intra-minute bars that fire | 0 of 153 |
+| the windowed test | holds a continuous state across them |
+
+It is **not earlier** — the bar test called that split at 02:53:00 and the 3 min window at
+02:53:05. Persistence is what it buys, not earliness.
+
+### The handoff
+
+> Joe 0924: "at 23:54:15, ws2r can see that ws3r has trajectory - we need to find the handoff from
+> ws2 to ws3 (ie the split timestamp between ws2r and ws3r)"
+
+The same producer, one rung up: `split(ws2r, ws3r, …)`. Measured on 09-02/09-03, dr +1:
+
+| event | bar | s_lo | s_hi |
+|---|---|---|---|
+| ws1 → ws2 split | 09-02 23:54:15 | −7.105e−14 | +12.47 |
+| ws2 → ws3 handoff | 09-03 00:00:15 | −14.285714285714292 | +3.3433451909617133 |
+
+6.0 min apart. Both ws2r and ws3r carried trajectory at 23:54:15, off the **same** extrema bar
+09-02 23:43:05 — ws2r 13.84, ws3r 24.71, both 11.2 min back.
+
+### 22.9 REVERSE — Joe 0924
+
+> "'reverse' = your 'A single-line reversal is trajectory() with the dr inverted'"
+
+`reverse(r, dr, …)` is `trajectory(r, −dr, …)` and nothing else. The block walk then hunts the
+dr-SIDE extreme — the line's own peak — and `travel` measures the move off it.
+
+| bar | line | its peak | travel away from dr |
+|---|---|---|---|
+| 09-03 02:54:35 | ws1r | 09-03 02:52:10, 87.90 | −19.87 |
+| 09-03 00:00:15 | ws2r | 09-02 23:56:00, 100.00 | −14.29 |
+| 09-03 00:05:05 | ws3r | 09-03 00:03:00, 99.99 | −3.81 |
+
+**THE FLAT-RUN IS DROPPED.** Joe 0924: *"gap 1 is all we need. drop gap2 (the need for a
+flat-run)"*. The reverse alone is the trigger.
+
+### 22.10 THE HIGHEST TF, AND THE TRADE SIGNAL — Joe 0924
+
+> "mage-rev fires on the highest tf. the highest tf is the tf that does not see a trajectory-tagged
+> higher-tf when it reverses"
+
+and
+
+> "waiting for the highest tf to … reverse and the ws{highest-tf}mage-rev event to print. if
+> mage-rev has already fired before … reverse, then create a trade signal on … reverse, otherwise
+> take the mage-rev print"
+
+| step | |
+|---|---|
+| 1 | a line reverses |
+| 2 | is any higher tf of {1,2,3} trajectory-tagged **at that bar**? |
+| 3 | **yes** → not the highest. The baton goes up, no mage-rev here |
+| 4 | **no** → this line IS the highest tf. Run `ws{tf}Mage`-rev on it |
+| 5 | mage-rev print already before the reverse bar → the signal is the **reverse bar** |
+| 6 | otherwise → the signal is the **mage-rev print** |
+
+The highest tf is decided **at the reverse bar**, not fixed at the handoff.
+
+**THE MAGE-REV PRINT IS `sig_conf`** — Joe 0924, asked directly. `sig_conf` = `sig` +
+`boundary_xwob` 4 − 1, so 15 s after the gcws30Mage cross, and it is the only leg that is
+live-legal. `ws1mage_rev` is already parameterised on `g1`, so the ws2 and ws3 variants Joe asked
+for on 0922 are calls with `ws2Mage` / `ws3Mage`, not a clone.
+
+### 22.11 TRAJECTORY DETECTION — the clock-start, Joe 0924
+
+> "from the moment when trajectory was detected. detected can be created by 1) a handoff from a
+> lower TF `r` or 2) a direct observation made at a sig_utc print"
+
+Each line owns its **own** detection bar, and they differ within one chain:
+
+| route | the detection bar |
+|---|---|
+| direct observation | the `wsl_sig_utc` where that line was found carrying trajectory |
+| handoff | the split bar that handed to it |
+
+The mage-rev lookback for a line runs from **that line's** detection bar. On the 09-02/09-03
+chain, ws3's detection bar is 09-03 00:00:15 and its reverse is 09-03 00:05:05.
+
+Joe 0924 withdrew his "option 2 always precedes option 1" as a rule — *"treat my option2 → option
+1 statement as a way to visualise the handoff"*. It does not hold when ws3r is the only line
+carrying trajectory. **Measured, and it does not hold on our own worked case either**: the only
+dr +1 `wsl_sig_utc` inside the stretch 09-02 23:05:20 → 09-03 00:21:00 is 09-03 00:00:35, which
+lands 20 s AFTER the handoff and 6.3 min after the ws1 → ws2 split.
+
+### 22.12 THE MAGNITUDE IS UNSET
+
+Every mechanic in §22 fires on a travel of any size, dust included.
+
+| measured 0924 | |
+|---|---|
+| 09-02 23:54:15, ws1r at the 100.00 ceiling | `travel` = −7.105427357601002e−14 — passed |
+| 09-03 00:18:20, ws2r bit-for-bit unchanged | `s_hi` = 2.220446049250313e−16 — passed |
+| real travels, same day | −19.87, −14.29, −8.79, −3.81 |
+| separation | 14 orders of magnitude |
+
+Joe 0924, asked to set it: *"I would say the true threshold is in the OOS data"*. So
+`rule2_trajectory.min_travel` exists and **defaults to 0.0**, which is exactly the behaviour every
+0924 number was measured under. Nothing is fitted.
+
+**23:54:15 IS NOT A DUST ARTEFACT.** Three of its four run bars carry real magnitude — s_lo
+−14.29, −14.29, −2.55 — and only the fire bar itself is dust. ws1r's path across them is
+100.00 → 85.71 → 85.71 → 97.45 → 100.00: a 14.29 dip and a return to the ceiling. Joe confirmed
+the timestamp.
+
+### 22.13 THE CODE
+
+| | |
+|---|---|
+| `optimus9/compute/rule2_trajectory.py` | `opposed_extrema()`, `trajectory()`, `reverse()` |
+| `optimus9/compute/rule2_split.py` | `split()`, `first_split()` |
+
+Split by SRP: trajectory reads ONE line through a block walk, split reads TWO lines through a
+fixed window. Separate reasons to change, separate modules. Neither reads the DB, prints, or holds
+a threshold of its own.

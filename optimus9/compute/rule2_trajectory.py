@@ -34,6 +34,13 @@ MEASURED, 09-03 02:52:20, dr +1, block 60 bars, threshold 2 minutes — Joe's ow
 
 CAUSAL. Every bar read is strictly before `k`. Nothing looks forward.
 
+`min_travel` GATES THE MAGNITUDE, AND IT IS UNSET. Every mechanic built on this module fires on
+a travel of any size, including floating-point dust: measured 09-02 23:54:15, ws1r sat at the
+100.00 StochRSI ceiling and `travel` read -7.105427357601002e-14, which passed. Joe 0924, asked
+to set a threshold: *"I would say the true threshold is in the OOS data"*. So the parameter exists
+and DEFAULTS TO 0.0, which is exactly the behaviour every number measured on 0924 was taken under.
+Real travels measured on the same day, for scale: -19.87, -14.29, -8.79, -3.81.
+
 NOT IN `wsf_dtf_v3_config`: the 2 minute threshold is Joe's value, said in chat. `block` is
 banked — `anchor_floater.block` 60 bars, config v9. See the wsf-dtf-v3 spec for why a new config
 version has not been written.
@@ -70,14 +77,16 @@ def opposed_extrema(r, dr, k, block):
     return bi, best, blocks
 
 
-def trajectory(r, dr, k, block, min_bars):
+def trajectory(r, dr, k, block, min_bars, min_travel=0.0):
     """Is this line travelling towards dr at bar `k`. -> a dict, never None.
 
-    r          one r line on the 5 s grid
-    dr         +1 or -1
-    block      the look-back window in bars. `anchor_floater.block` 60 bars = 300 s = 5 min
-    min_bars   how long the travel must have run. Joe 0924: "more than 2 minutes" — STRICTLY
-               more, so 24 bars at the 5 s grid is not enough
+    r           one r line on the 5 s grid
+    dr          +1 or -1
+    block       the look-back window in bars. `anchor_floater.block` 60 bars = 300 s = 5 min
+    min_bars    how long the travel must have run. Joe 0924: "more than 2 minutes" — STRICTLY
+                more, so 24 bars at the 5 s grid is not enough
+    min_travel  the smallest |travel| that counts, in r-points. UNSET — see the module docstring.
+                0.0 accepts any travel with the right sign, dust included
 
     keys: has, bar, value, bars, travel, blocks
     """
@@ -89,5 +98,22 @@ def trajectory(r, dr, k, block, min_bars):
     travel = float(r[int(k)]) - best
     bars = int(k) - bi
     towards = (travel > 0) if int(dr) > 0 else (travel < 0)
-    return {'has': bool(bars > int(min_bars) and towards), 'bar': bi, 'value': best,
+    big = abs(travel) >= float(min_travel)
+    return {'has': bool(bars > int(min_bars) and towards and big), 'bar': bi, 'value': best,
             'bars': bars, 'travel': travel, 'blocks': blocks}
+
+
+def reverse(r, dr, k, block, min_bars, min_travel=0.0):
+    """Has this line REVERSED at bar `k` — travelling AWAY from dr. -> the same dict.
+
+    Joe 0924 defined it by pointing at this module: *"'reverse' = your 'A single-line reversal is
+    trajectory() with the dr inverted'"*. So it is `trajectory` with `-dr`, and nothing else:
+    the block walk then hunts the dr-SIDE extreme, which is the line's own peak, and `travel`
+    measures the move off it.
+
+    `value` is that peak and `bar` is where it sits. Measured 0924, dr +1:
+        09-03 02:54:35  ws1r  peak 02:52:10 87.90  2.4 min  travel -19.87
+        09-03 00:00:15  ws2r  peak 23:56:00 100.00 4.2 min  travel -14.29
+        09-03 00:05:05  ws3r  peak 00:03:00 99.99  2.1 min  travel  -3.81
+    """
+    return trajectory(r, -int(dr), k, block, min_bars, min_travel)
