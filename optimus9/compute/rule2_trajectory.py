@@ -1,0 +1,93 @@
+"""rule2_trajectory — is a line still travelling towards dr. Joe 0924. THE FIRST rule#2 mechanism.
+
+ONE JOB: given one line and a bar, find that line's dr-OPPOSED extrema and say how long it has
+been travelling away from it. It owns no threshold, reads no DB, and decides no trade.
+
+RULE#2, JOE VERBATIM 0924:
+  "the general premise of #2 is this: if a signal prints when ws[1,2,3]r has not completed its
+   cycle, we walk them to completion if they are showing trajectory towards dr
+   -"trajectory" is detected when any of the 3 lines are travelling towards dr, for more than 2
+    minutes. this can be measured by looking back across the line to find its dr-opposed extrema"
+
+THE LOOK-BACK, JOE 0924: "use the same mech the divergence uses to discover an extrema - look back
+in 5 minute windows". That is `anchor_floater` step 3's block walk, and this module mirrors it:
+
+    block n covers [k - n*block, k - (n-1)*block), so the test bar itself is excluded, exactly as
+    step 3 excludes the pivot bar. Each block yields its extreme. An EMPTY block is SKIPPED, not a
+    stop — Joe 0921. The walk ends at the first block that does not improve the running best.
+
+TWO THINGS DIFFER FROM STEP 3, AND BOTH ARE JOE'S
+  the extreme    step 3 hunts the dr-SIDE extreme for a floater; this hunts the dr-OPPOSED one.
+                 dr +1 -> the block minimum, dr -1 -> the block maximum
+  no 50 filter   step 3 masks to bars on the dr side of 50. Joe 0924, asked directly: "yes: there
+                 is no 50 filter"
+
+WHY THE BAR-TO-BAR READING WAS WRONG. Measured at 09-03 02:52:20 before Joe ruled: all three of
+ws1r, ws2r, ws3r tick DOWN on that bar by 8.18, 8.63 and 9.91 r-points, so an unbroken-climb test
+returns 0 bars on every line. Travel measured extrema-to-bar does not care — Joe 0924: "gap2 might
+not be a gap if you have the correct extrema". It was not.
+
+MEASURED, 09-03 02:52:20, dr +1, block 60 bars, threshold 2 minutes — Joe's own read matches:
+    ws1r  extrema 02:42:35  11.02  117 bars =  9.8 min  travel +68.70  TRAJECTORY
+    ws2r  extrema 02:46:30  25.21   70 bars =  5.8 min  travel +19.63  TRAJECTORY
+    ws3r  extrema 02:51:20  54.72   12 bars =  1.0 min  travel  +1.69  no
+
+CAUSAL. Every bar read is strictly before `k`. Nothing looks forward.
+
+NOT IN `wsf_dtf_v3_config`: the 2 minute threshold is Joe's value, said in chat. `block` is
+banked — `anchor_floater.block` 60 bars, config v9. See the wsf-dtf-v3 spec for why a new config
+version has not been written.
+"""
+import numpy as np
+
+
+def opposed_extrema(r, dr, k, block):
+    """The dr-OPPOSED extrema behind bar `k`, by the divergence's 5 minute block walk.
+
+    -> (bar, value, blocks) or (None, nan, blocks) when no block holds a finite value.
+    `blocks` is [(from, to, block best, its bar, new_best)] in walk order, for the trace.
+    """
+    r = np.asarray(r, float)
+    k = int(k); dr = int(dr); block = max(1, int(block))
+    best, bi, blocks, n = np.nan, None, [], 0
+    while True:
+        n += 1
+        hi = k - (n - 1) * block
+        lo = max(0, k - n * block)
+        if hi <= 0 or lo >= hi:
+            break
+        cand = r[lo:hi]
+        if np.all(np.isnan(cand)):
+            blocks.append((lo, hi, float('nan'), None, 0))
+            continue                                    # Joe 0921: skip, do not stop
+        m = lo + int(np.nanargmin(cand) if dr > 0 else np.nanargmax(cand))
+        new = (bi is None) or ((r[m] < best) if dr > 0 else (r[m] > best))
+        if new:
+            best, bi = float(r[m]), m
+        blocks.append((lo, hi, float(r[m]), int(m), int(new)))
+        if not new:
+            break
+    return bi, best, blocks
+
+
+def trajectory(r, dr, k, block, min_bars):
+    """Is this line travelling towards dr at bar `k`. -> a dict, never None.
+
+    r          one r line on the 5 s grid
+    dr         +1 or -1
+    block      the look-back window in bars. `anchor_floater.block` 60 bars = 300 s = 5 min
+    min_bars   how long the travel must have run. Joe 0924: "more than 2 minutes" — STRICTLY
+               more, so 24 bars at the 5 s grid is not enough
+
+    keys: has, bar, value, bars, travel, blocks
+    """
+    r = np.asarray(r, float)
+    bi, best, blocks = opposed_extrema(r, dr, k, block)
+    if bi is None:
+        return {'has': False, 'bar': None, 'value': float('nan'), 'bars': 0,
+                'travel': float('nan'), 'blocks': blocks}
+    travel = float(r[int(k)]) - best
+    bars = int(k) - bi
+    towards = (travel > 0) if int(dr) > 0 else (travel < 0)
+    return {'has': bool(bars > int(min_bars) and towards), 'bar': bi, 'value': best,
+            'bars': bars, 'travel': travel, 'blocks': blocks}

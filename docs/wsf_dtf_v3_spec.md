@@ -2111,3 +2111,82 @@ The two divergence knobs ARE banked and are read from the config: `anchor_floate
 | `report_rule1_gate.py` | loads the lines, runs `anchor_floater`, prints. `--instance v7\|v8`, `--md` |
 | `rule1_gate_20260924.txt` | the banked output, v7, 121 rows |
 | `rule1_verdicts_FROZEN.txt` | the pre-scenario freeze, taken before Joe shared any of his own verdicts |
+
+---
+
+## 22. RULE#2 — THE TRAJECTORY WALK, Joe 0924
+
+### 22.1 THE PREMISE — Joe verbatim
+
+> "the general premise of #2 is this: if a signal prints when ws[1,2,3]r has not completed its
+> cycle, we walk them to completion if they are showing trajectory towards dr
+> -"trajectory" is detected when any of the 3 lines are travelling towards dr, for more than 2
+>  minutes. this can be measured by looking back across the line to find its dr-opposed extrema"
+
+**ONLY THE FIRST MECHANISM IS BUILT.** `trajectory` answers "is this line travelling towards dr".
+The walk to completion — what a completed cycle is, what the walk does, where it ends — is not
+built and not specified.
+
+### 22.2 THE LOOK-BACK — Joe 0924
+
+> "use the same mech the divergence uses to discover an extrema - look back in 5 minute windows"
+
+That is `anchor_floater` step 3's block walk, mirrored:
+
+| | |
+|---|---|
+| block n | `[k − n×block, k − (n−1)×block)` — the test bar itself is excluded, as step 3 excludes the pivot |
+| block size | `anchor_floater.block` 60 bars = 300 s = 5 min, banked at config v9 |
+| each block yields | its **dr-opposed** extreme. dr +1 → the block minimum, dr −1 → the maximum |
+| an empty block | SKIPPED, not a stop — Joe 0921 |
+| the walk ends | at the first block that does not improve the running best |
+| trajectory | the extrema is more than 2 min back AND the travel from it runs towards dr |
+
+**NO 50 FILTER.** Step 3 masks to bars on the dr side of 50. Joe 0924, asked directly:
+*"yes: there is no 50 filter"*.
+
+### 22.3 WHY BAR-TO-BAR WAS THE WRONG READING
+
+Measured at 09-03 02:52:20 before Joe ruled — all three lines tick DOWN on the signal bar:
+
+| line | previous bar 02:52:15 | test bar 02:52:20 | tick |
+|---|---|---|---|
+| ws1r | 87.90 | 79.72 | −8.18 |
+| ws2r | 53.47 | 44.84 | −8.63 |
+| ws3r | 66.33 | 56.42 | −9.91 |
+
+An unbroken-climb test returns **0 bars on every line**. Travel measured extrema-to-bar does not
+care. Joe 0924: *"gap2 might not be a gap if you have the correct extrema"*. It was not.
+
+### 22.4 THE TESTCASE — 09-03 02:52:20, dr +1
+
+| line | dr-opposed extrema | value | bars back | min back | travel | TRAJECTORY |
+|---|---|---|---|---|---|---|
+| ws1r | 09-03 02:42:35 | 11.02 | 117 | 9.8 | +68.70 | YES |
+| ws2r | 09-03 02:46:30 | 25.21 | 70 | 5.8 | +19.63 | YES |
+| ws3r | 09-03 02:51:20 | 54.72 | 12 | 1.0 | +1.69 | no |
+
+Joe 0924: *"your results match mine"*.
+
+ws3r fails on **time**, not direction — its extrema is 1.0 min back against a 2 min threshold.
+
+### 22.5 THE FIRST FLAT-RUN IN THE TWO LINES WITH TRAJECTORY
+
+Forward from 09-03 02:52:20, no limit. `flat_run_at` at the r-momo fence 17/83, samples 3 bars,
+tol 2.0 r-points — the same knobs `all_wsf_flatruns` is banked on:
+
+| line | first flat-run bar | min after the signal | r there | run span |
+|---|---|---|---|---|
+| ws1r | 09-03 03:54:10 | 61.8 | 92.00 | 0.00 |
+| ws2r | 09-03 03:56:10 | 63.8 | 83.43 | 0.00 |
+
+### 22.6 NOT IN `wsf_dtf_v3_config`
+
+The 2 minute threshold is Joe's value, said in chat, held by the caller. `block` is banked —
+`anchor_floater.block` 60 bars, v9. §21.6 holds the reason no new config version has been written.
+
+### 22.7 THE CODE
+
+| | |
+|---|---|
+| `optimus9/compute/rule2_trajectory.py` | `opposed_extrema()` and `trajectory()`. No DB, no printing, no thresholds of its own |
