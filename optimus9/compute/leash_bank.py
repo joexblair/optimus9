@@ -1,10 +1,13 @@
-"""leash_bank — the stretchy leash's exit timestamps, banked.
+"""leash_bank — the stretchy leash's signal timestamps, banked.
 
 Joe 0917 asked for seven columns: # | source | dr | ACTIONABLE | signal | rows | moment first.
 
-`signal` is Joe's name for the exit stamp, 0918. It is NOT always a ws1mage-rev event bar: on the
+`signal` is Joe's name for the stamp, 0918. It is NOT always a ws1mage-rev event bar: on the
 lookback route the rule prints the moment's END ROW, which the event only QUALIFIES. Measured over
 the banked 121: 98 are a ws1mage_rev sig bar, 23 are the moment end row. One column, two kinds.
+
+IT IS NOT AN EXIT STAMP. Joe 0923: "purge your view of wsl_sig_utc as an exit stamp". The column
+is a timestamp the mechanic produces; what a consumer does with it is the consumer's.
 Each timestamp is stored twice, `_utc` and `_ms`, exactly as wsf_dtf_v3 stores wdv_utc / wdv_ms —
 the UTC column is for reading, the ms column is what a walk joins on.
 
@@ -31,7 +34,7 @@ DDL = f'''CREATE TABLE IF NOT EXISTS {TABLE} (
     wsl_dr        TINYINT      NOT NULL,
     wsl_act_utc   DATETIME(3)  NOT NULL,   -- ACTIONABLE, the exit bar
     wsl_act_ms    BIGINT       NOT NULL,
-    wsl_sig_utc   DATETIME(3)  NULL,       -- `signal`: the exit stamp. sig bar OR the qualified moment end row
+    wsl_sig_utc   DATETIME(3)  NULL,       -- `signal`: the sig bar OR the qualified moment end row
     wsl_sig_ms    BIGINT       NULL,
     wsl_rows      INT          NOT NULL,   -- rows in the confluence moment
     wsl_first_utc DATETIME(3)  NOT NULL,   -- moment first

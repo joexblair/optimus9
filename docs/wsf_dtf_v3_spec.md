@@ -1957,7 +1957,7 @@ stamp **`signal`**.
 | `wsl_source` | `source` | CONFIRM or END |
 | `wsl_dr` | `dr` | |
 | `wsl_act_utc` / `wsl_act_ms` | `ACTIONABLE` | the exit bar |
-| `wsl_sig_utc` / `wsl_sig_ms` | **`signal`** | the exit stamp. NULL when none is found |
+| `wsl_sig_utc` / `wsl_sig_ms` | **`signal`** | the signal stamp. NULL when none is found. NOT an exit — Joe 0923 |
 | `wsl_rows` | `rows` | rows in the confluence moment |
 | `wsl_first_utc` / `wsl_first_ms` | `moment first` | |
 
@@ -1995,3 +1995,119 @@ confluence moment, 12 moments sharing a stamp with the one before. The mech CONS
 it is not the producer.
 
 Producer: `optimus9/compute/leash_bank.py`. It holds no rule — the rule is 20.4.
+
+---
+
+## 21. THE TRADE GATE — rule#1 and the scenario, Joe 0923/0924
+
+A `wsf_leash` signal is not a trade. This section is the filter that decides whether a signal is
+allowed to open one. It sits ON TOP of §20 and changes nothing in it.
+
+### 21.1 RULE#1 — Joe 0923, verbatim
+
+> "rule#1: a sig_utc timestamp must be qualified by ws1r and (ws2r or ws3r) exiting the same
+> fence, within {knob:4} minutes of each other. -the fence is 27:73"
+
+His rulings on the parts, each a separate answer:
+
+| | Joe |
+|---|---|
+| which edge | 0923: "exiting the same edge, on dr side" |
+| which side | 0923: "dr side" |
+| measured between | 0923: "between sig_utc and the `r` lines" |
+| the window | 0923: "within (either side)" — look back AND forward inside it |
+| the knob's name | 0923: "`rule1_tol`" |
+| the tolerance | 0924: "I was wrong about the tolerance. change it to 7 minutes" — 7 min TOTAL |
+| qualification | 0924: "the lines can be qualifed at any time they are outside of the fence" |
+| the dwell | 0924: "so far, it looks like the dwell is hurting so we'll drop it" |
+| the ws1Mage support | 0923: "disable this ws1Mage-support mech for now" — it is NOT in the build |
+
+`rule1_tol` 7 min TOTAL = ±42 bars = ±210 s at the 5 s grid.
+
+### 21.2 THE SCENARIO — Joe 0924
+
+> "how often do you see the scenario of ws1 diverging away from dr while ws2r, ws3r, and gcws30r
+> are oob on dr side? test at each wsl_sig_utc"
+
+then, on the window: *"the same 7 minute window that we've been using since last night"*, and
+*"bake it into rule#1 and recreate the gate data"*.
+
+**JOE HAS NOT NAMED THIS MECHANIC.** `scenario` is his own word for it and the code uses that
+rather than a coined one.
+
+Why it earns a place beside rule#1, Joe 0924: *"this highlights the divergence test's value-add:
+8.6 is outside of the tolerance so ws1r cannot contribute to the #1 rule's qualifiers"*. The
+divergence lets ws1r speak when its fence exit is out of the window — or absent.
+
+**"DIVERGING AWAY FROM dr" IS A NON-ZERO VERDICT.** `anchor_floater` step 4 fires bearish at
+dr +1 and bullish at dr −1, and can return nothing else. Joe 0924 on the frame: *"-1dr = low
+board = launchpad for a long postion"*.
+
+**oob IS 15/85.** 27/73 is rule#1's fence, 25/75 is the Mage fence, 17/83 is the r-momo fence.
+Four different numbers, and no producer here defaults one to another.
+
+### 21.3 MEASURED — v7, 09-01 → 09-06, 121 rows
+
+| | n |
+|---|---|
+| rule#1 alone, open | 71 |
+| scenario hits | 9 |
+| **gate open, rule#1 OR scenario** | **74** |
+| closed | 47 |
+| rows the scenario adds | 3, at 2 distinct timestamps |
+
+The two rows the scenario adds, both with ws1r at **0 bars** outside 27/73:
+
+| # | wsl_sig_utc | dr | ws2r oob | ws3r oob | g30r oob |
+|---|---|---|---|---|---|
+| 42 | 09-02 07:30:30 | −1 | 38 | 16 | 6 |
+| 87, 88 | 09-04 10:20:00 | −1 | 41 | 85 | 23 |
+
+#87 and #88 are the duplicate v7 CONFIRM pair on one bar. Joe read the same 2 differences off his
+own chart before the build was run.
+
+**MFE in the direction that opposes dr**, over the 9 scenario rows, hold = sig → next opposing-dr
+sig (the §20 baseline hold). Joe 0924 set the bar: *">=0.7% in the direction that opposes dr"*.
+
+| | |
+|---|---|
+| ≥ 0.700% | 7 of 9 rows |
+| min / median / max / mean | 0.086 / 1.561 / 4.667 / 2.053 |
+| the two misses | 09-02 07:30:30 at 0.302, 09-05 06:29:25 at 0.086 |
+
+n is 9. Nothing about reliability rests on more than 9 episodes.
+
+### 21.4 MINE, AND UNRULED BY JOE
+
+| | |
+|---|---|
+| the OR | Joe said "bake it into rule#1", not how the two legs combine. A row-level OR is what the producer does. It adds exactly the 2 differences his chart read said it should |
+| the comparison | STRICTLY outside the fence and STRICTLY outside oob, never `>=` or `<=`. Measured on the same 121 rows: switching to inclusive changes **0 rows** |
+| `dwell bars` | reports the rule#1 leg only, so a row opened by the scenario alone reads 0. A reporting field, never a gate |
+
+### 21.5 NOT CAUSAL AT THE SIGNAL BAR
+
+Joe 0924 ruled the window is "within (either side)", so the gate reads 42 bars AFTER the signal
+and is knowable 210 s late. His rule, recorded here so no caller mistakes it for a live gate.
+
+### 21.6 NOT IN `wsf_dtf_v3_config`
+
+`rule1_tol` 7 min, the 27/73 fence and the ws2r/ws3r/gcws30r line set are Joe's values, said in
+chat and held as module constants in `report_rule1_gate.py`.
+
+Banking them needs a new config version, and `leash_bank.knob_string` puts the config version
+INSIDE `wsl_knobs` — the v7/v8 in the 121-row bank IS the config version. A v11 would make the
+next leash bank write `v11_…` and split it off from the rows this report reads. **That consequence
+is Joe's to sanction, so nothing was written.**
+
+The two divergence knobs ARE banked and are read from the config: `anchor_floater.block` 60 bars
+(v9) and `anchor_floater.dwell_min_per_tf` 1 min per timeframe (v10).
+
+### 21.7 THE CODE
+
+| | |
+|---|---|
+| `optimus9/compute/rule1_gate.py` | the decision. Owns no threshold — fence, oob, window and verdict all arrive as arguments. No DB, no printing, no line building |
+| `report_rule1_gate.py` | loads the lines, runs `anchor_floater`, prints. `--instance v7\|v8`, `--md` |
+| `rule1_gate_20260924.txt` | the banked output, v7, 121 rows |
+| `rule1_verdicts_FROZEN.txt` | the pre-scenario freeze, taken before Joe shared any of his own verdicts |
