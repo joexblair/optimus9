@@ -2436,3 +2436,103 @@ ws3Mage does not hold the dr-side oob boundary for `dwell` 3 consecutive bars.
   whole window. There is no dwell to be had at any dwell value.
 - **#9 is different.** ws3Mage crossed to 85.87 and held the boundary for **2 consecutive bars**
   against a `dwell` of 3. It failed by **one bar = 5 s**.
+
+### 22.16 THE PRE-CHECK — `rule2_pre-check_lb`, Joe 0925
+
+> "we need a lookback (knob:4 minutes) to test if any of the 3 lines have reversed. if reversals
+> are found, we use the highest tf (that recently reversed) to create the ws{highest tf}mage-rev
+> event"
+
+Why it exists, Joe 0925 on 09-01 16:15:20: *"this explains a lot - we've missed the actual
+reversal and kept hunting for it far into the future"*.
+
+| | |
+|---|---|
+| `rule2_pre-check_lb` | **4 minutes = 48 bars** at the 5 s grid. Joe's name, Joe's value |
+| it is a **pre-check, not a replacement** | Joe 0925: *"not replace - it's a pre-check"*. The chain climb is the fallback |
+| the test | did a line **START** a reverse run inside `[k − lb, k]` |
+| the winner | the **highest** tf among those that did |
+| the walk that follows | `ws{tf}Mage`-rev from **`k`**, the sig_utc bar |
+
+**THE TEST IS THE RUN'S START, NOT THE STATE.** Scanning the window forward for the reverse state
+returns the window edge itself — `k − lb` — for any line already reversed on arrival, which is not
+a reversal at all. Joe 0925 caught exactly that: *"'ws1r reversed at' is almost always exactly 4
+minutes away from sig_utc. that's the lookback value - has there been conflation?"* It had.
+
+Measured on the 11 IS rows: the reverse state holds somewhere in the window on **24** line-cells,
+but only **5** of those runs START inside it. Starts range from 0.0 to 40.4 minutes back.
+
+**A LINE THAT HAS LAPSED OUT OF REVERSE BY `k` STILL QUALIFIES.** Joe 0925, asked about a "must
+still hold at the sig bar" reading: *"we wouldn't do this"*. On 09-01 16:15:20 ws3r started its run
+at 16:12:05 and was no longer reversed at the sig bar. It counts.
+
+**THE WALK STARTS AT sig_utc, NOT AT THE RUN START.** Joe 0925: *"if the lookback finds a
+reversal, then the mage-rev walk starts at sig_utc. (pro tip: the other option is lookahead)"*.
+
+#### 22.16a MEASURED — the 5 qualifying cells across 11 IS rows
+
+| # | wsl_sig_utc | line | run START | min before sig | ws{tf}mage-rev from sig_utc | min after sig | dr flip | inside |
+|---|---|---|---|---|---|---|---|---|
+| 2 | 09-01 16:15:20 | ws2r | 16:15:20 | 0.0 | 09-01 16:21:20 | 6.0 | 17:20:35 | yes |
+| 2 | 09-01 16:15:20 | ws3r | 16:12:05 | 3.2 | 09-01 16:21:20 | 6.0 | 17:20:35 | yes |
+| 8 | 09-03 06:26:55 | ws1r | 06:26:10 | 0.8 | 09-03 06:29:15 | 2.3 | 07:30:55 | yes |
+| 12 | 09-05 06:29:25 | ws1r | 06:26:35 | 2.8 | 09-05 06:36:55 | 7.5 | 07:57:55 | yes |
+| 12 | 09-05 06:29:25 | ws3r | 06:29:05 | 0.3 | 09-05 06:36:55 | 7.5 | 07:57:55 | yes |
+
+Against the chain walk:
+
+| # | pre-check tf | pre-check signal | chain signal | difference |
+|---|---|---|---|---|
+| 2 | ws3 | 09-01 16:21:20 | **NONE** | a signal where there was none |
+| 8 | ws1 | 09-03 06:29:15 | 09-03 06:41:05 | **11.8 min earlier** |
+| 12 | ws3 | 09-05 06:36:55 | 09-05 06:57:45 | **20.8 min earlier** |
+
+**THE tf DOES NOT MOVE THE BAR ON #2 OR #12.** ws2mage-rev and ws3mage-rev both return 16:21:20;
+ws1 and ws3 both return 06:36:55. `sig_conf` comes from `oob_ib_cross` on **gcws30Mage**, a single
+line. The tf only moves the `dwell_ok` and `rev` gates — when both clear before the same
+gcws30Mage cross, every tf returns the identical bar.
+
+#### 22.16b WHAT IS STILL WITHOUT A SIGNAL, AND WHY
+
+Of the four rows §22.15 listed, **#2 is solved**. Three remain: #6, #9, #11.
+
+**The mage-rev is NOT the blocker on any of them.** Walked from sig_utc, all three produce a bar
+well inside the dr flip, and `dwell_ok` is available at or within 2.7 min of the sig bar:
+
+| # | wsl_sig_utc | ws{tf}mage-rev from sig_utc | dwell_ok | dr flip | inside |
+|---|---|---|---|---|---|
+| 6 | 09-02 18:11:30 | 09-02 18:15:15 | 18:11:30 — the sig bar | 19:10:15 | yes |
+| 9 | 09-03 12:49:05 | 09-03 12:55:45 | 12:49:05 — the sig bar (ws2, ws3) | 13:19:25 | yes |
+| 11 | 09-05 04:10:00 | 09-05 04:11:50 | 04:10:00 — the sig bar | 04:53:50 | yes |
+
+**The only thing keeping them blank is the pre-check window.** Every line's reverse run started
+before it:
+
+| # | line | run START | bars before sig | shortfall vs 48 bars |
+|---|---|---|---|---|
+| 6 | ws1r | 09-02 18:06:05 | 65 | **17 bars = 85 s** |
+| 6 | ws2r | 09-02 17:10:45 | 729 | 681 bars = 3405 s |
+| 6 | ws3r | 09-02 17:11:55 | 715 | 667 bars = 3335 s |
+| 9 | ws1r | 09-03 12:39:00 | 121 | 73 bars = 365 s |
+| 9 | ws2r | 09-03 12:42:50 | 75 | **27 bars = 135 s** |
+| 9 | ws3r | 09-03 12:22:35 | 318 | 270 bars = 1350 s |
+| 11 | ws1r | 09-05 04:00:05 | 119 | 71 bars = 355 s |
+| 11 | ws2r | 09-05 04:05:40 | 52 | **4 bars = 20 s** |
+| 11 | ws3r | 09-05 04:05:15 | 57 | 9 bars = 45 s |
+
+The smallest shortfall in the set is **#11's ws2r at 4 bars = 20 s**.
+
+**CORRECTION TO §22.15.** That section says all four rows fail at `ws1mage_rev.dwell_ok`. That is
+true of the **chain** walk, which starts at the terminal line's detect bar. Walked from sig_utc,
+`dwell_ok` is available at the sig bar itself on #6, #9 and #11. The failure was the chain's start
+bar, not the rows.
+
+#### 22.16c THE CODE
+
+| | |
+|---|---|
+| `rule2_trajectory.run_start()` | the first bar of the reverse run live at or nearest before `k` |
+| `rule2_trajectory.pre_check()` | the lookback test over a set of lines, and the highest qualifying tf |
+
+Verified against all 11 IS rows: `pre_check` returns ws3 on #2, ws1 on #8, ws3 on #12 and None on
+the other eight. **0 mismatches.**

@@ -138,3 +138,61 @@ def reverse(r, dr, k, block, min_bars, min_travel=0.0, stop=None):
     told about it keeps the behaviour it was measured under.
     """
     return trajectory(r, -int(dr), k, block, min_bars, min_travel, stop)
+
+
+# ── the pre-check, Joe 0925 ────────────────────────────────────────────────────────────────────
+def run_start(r, dr, k, block, min_bars, min_travel=0.0, floor=None):
+    """The first bar of the reverse run that is live at or nearest before `k`. -> bar or None.
+
+    Walks `k` backward to the newest bar where `reverse` holds, then back again to that run's
+    first bar. `floor` bounds the backward walk; None runs to the tape start.
+    """
+    r = np.asarray(r, float)
+    k = int(k); lo = 0 if floor is None else max(0, int(floor))
+    e = next((i for i in range(k, lo - 1, -1)
+              if reverse(r, dr, i, block, min_bars, min_travel)['has']), None)
+    if e is None:
+        return None
+    s = e
+    while s - 1 >= lo and reverse(r, dr, s - 1, block, min_bars, min_travel)['has']:
+        s -= 1
+    return s
+
+
+def pre_check(lines, dr, k, block, min_bars, lb, min_travel=0.0):
+    """Did any line START a reverse run inside the lookback. -> a dict, never None.
+
+    JOE'S VERBATIM, 0925: *"we need a lookback (knob:4 minutes) to test if any of the 3 lines have
+    reversed. if reversals are found, we use the highest tf (that recently reversed) to create the
+    ws{highest tf}mage-rev event"*, and *"not replace - it's a pre-check"*.
+
+    lines   {tf: r line}, e.g. {1: ws1r, 2: ws2r, 3: ws3r}
+    lb      `rule2_pre-check_lb`, Joe's name and value: 4 minutes = 48 bars at the 5 s grid
+
+    THE TEST IS THE RUN'S START, NOT THE STATE. A line already reversed when the window opens does
+    not qualify - its reversal is older than the lookback. Measured on the 11 IS rows: the state
+    holds somewhere in the window on 24 line-cells, but only 5 of those runs START inside it, and
+    starts range from 0.0 to 40.4 minutes back. Scanning the window forward for the state returns
+    the window edge itself, which is `k - lb` and not a reversal at all - Joe 0925 caught exactly
+    that in the first report.
+
+    A LINE THAT HAS LAPSED OUT OF REVERSE BY BAR k STILL QUALIFIES. Joe 0925, asked about a
+    "must still hold at the sig bar" reading: *"we wouldn't do this"*. On 09-01 16:15:20 ws3r
+    started its run at 16:12:05 and was no longer reversed at the sig bar; it counts.
+
+    THE WALK THAT FOLLOWS STARTS AT `k`, NOT AT THE RUN START. Joe 0925: *"if the lookback finds a
+    reversal, then the mage-rev walk starts at sig_utc. (pro tip: the other option is lookahead)"*.
+
+    keys: starts {tf: bar or None}, inside {tf: bool}, tf (the highest qualifying, or None)
+
+    CAUSAL. Every bar read is at or before `k`.
+    """
+    k = int(k); lb = max(1, int(lb))
+    floor = k - lb
+    starts, inside = {}, {}
+    for tf, r in lines.items():
+        s = run_start(r, dr, k, block, min_bars, min_travel)
+        starts[tf] = s
+        inside[tf] = bool(s is not None and s >= floor)
+    hits = [tf for tf, ok in inside.items() if ok]
+    return {'starts': starts, 'inside': inside, 'tf': max(hits) if hits else None}
