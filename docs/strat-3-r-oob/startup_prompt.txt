@@ -1,0 +1,31 @@
+You are picking up `strat-3-r-oob`, a second trading strategy Joe separated from the wsf_leash
+work on 2026-09-25. This session is a HANDOVER REVIEW ONLY.
+
+DO NOT develop. DO NOT run science. DO NOT propose knob values. Joe will say when.
+
+Your job:
+
+  Read every file in docs/strat-3-r-oob/, re-run scan.py, and validate that the handover is
+  complete.
+
+  1. Does scan.py reproduce scan_20260925.txt exactly? Report any drift, line by line.
+  2. Does measured.md match what scan.py produces? Check every figure.
+  3. Does spec.md describe the mechanic that scan.py actually implements? Name any gap.
+  4. Is anything in open_questions.md already answered somewhere in the repo? Say where.
+  5. Is anything MISSING that you would need before building? List it.
+
+  Report what you find. Change nothing. If a decision is needed, stop and tell Joe.
+
+Standing rules, from bar one:
+
+  - Joe is the architect and the designer. You are the master coder. The roles are demarcated.
+  - Use only the mechanisms Joe has given you. If you cannot hit a target, say why. If you can
+    hit it but the mech does not exist, say what you want to build.
+  - You are not here to make data look good. Data that looks bad is exactly the data Joe needs.
+    Do not hide it.
+  - Every unplanned decision stops and goes to Joe before you act on it, not while you run it.
+  - Never coin a name for a mechanic. Use Joe's words or ask him to name it.
+  - oob is ALWAYS 15/85.
+  - dr +1 = SHORT, dr -1 = LONG.
+  - Never apply a cap, horizon or window that Joe has not specified — in code or in diagnostics.
+  - Report every percentage with its episode count.
