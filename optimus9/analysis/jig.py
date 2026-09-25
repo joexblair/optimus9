@@ -189,6 +189,53 @@ def ws1mage_rev(g1, sig_mage, hi, lo, dwell=WS1MR_DWELL, rev_wob=WS1MR_REV_WOB,
     return out
 
 
+def mage_rev_walk(legs, dr, frm, sig_lookback=0):
+    """[Joe 0925] The ORDERED walk over `ws1mage_rev`'s legs, in one place. -> sig_conf or None.
+
+    `legs` is one `ws1mage_rev(...)` result. `frm` is the caller's own bar.
+
+      1  the first `dwell_ok` at or after `frm`         — the arming leg
+      2  the first `rev`      at or after that          — THE ANCHOR, the Mage line reversing
+      3  the first `sig`      after the anchor          — the gcws30Mage cross, and its `sig_conf`
+
+    Joe 0925 confirmed the order: *"if 'anchor' means the Mage line reversing, and `first sig`
+    means g30, then that's the correct mech"*.
+
+    `sig_lookback` IS JOE'S LOOKBACK ALLOWANCE, 0925: *"re the lookback allowance, I agree but it
+    should be longer - make it 2 minutes"*. A `sig` may be taken from up to `sig_lookback` bars
+    BEFORE the anchor. It defaults to 0, which is the behaviour every banked figure was measured
+    under, including `report_coil_exit`'s 121 `wsf_leash` rows.
+
+    WHY IT EXISTS. Measured 09-02 18:15:00: `dwell_ok` 18:15:00, the anchor 18:15:05, and a
+    gcws30Mage `sig` at 18:15:00 — ONE BAR, 5 s, before the anchor. Under a strict "after the
+    anchor" the walk skipped it and took the next one at 18:37:30, 22.5 minutes later. At
+    `sig_lookback` 24 bars = 2 min the print is 18:15:15 instead of 18:37:45.
+
+    MINE, AND UNRULED: the `sig` must still be at or after `dwell_ok`. `dwell_ok` is the arming
+    leg and a cross taken before arming is not an event this mechanic saw. Joe set the allowance
+    against the anchor and said nothing about the arming bar.
+
+    MEASURED IMPACT at 24 bars. The 11 wsf_leash IS rows: the ws3mage-rev from each detect bar
+    moves on NONE of them. The 28 `strat-3-r-oob` episodes: 3 move, all earlier —
+    09-02 18:15:00 by -22.5 min, 09-03 16:52:00 by -1.1 min, 09-03 19:52:00 by -3.2 min.
+
+    CAUSAL. Every bar read is at or after `frm`, and `sig_conf` already carries its own hold.
+    """
+    L = legs[int(dr)]
+    d, r, s, sc = L['dwell_ok'], L['rev'], L['sig'], L['sig_conf']
+    a = d[d >= int(frm)]
+    if not len(a):
+        return None
+    a = int(a[0])
+    b = r[r >= a]
+    if not len(b):
+        return None
+    b = int(b[0])
+    lb = max(0, int(sig_lookback))
+    m = np.flatnonzero((s > b - lb) & (s >= a)) if lb else np.flatnonzero(s > b)
+    return int(sc[m[0]]) if len(m) else None
+
+
 # ── divergence (Joe 0912) ──────────────────────────────────────────────────────────────────────
 def divergence(osc, px, hi, lo, i0=0, i1=None):
     """[PRODUCER · lifted from divergence_exit.div_sig 0706, split onto the jig 0912 on Joe's word]

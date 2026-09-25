@@ -2536,3 +2536,53 @@ bar, not the rows.
 
 Verified against all 11 IS rows: `pre_check` returns ws3 on #2, ws1 on #8, ws3 on #12 and None on
 the other eight. **0 mismatches.**
+
+### 22.17 THE MAGE-REV ORDERED WALK, AND THE LOOKBACK ALLOWANCE — Joe 0925
+
+`ws1mage_rev` returns four arrays and the caller walks them. That walk is now one function,
+`jig.mage_rev_walk(legs, dr, frm, sig_lookback=0)`, so it stops being re-implemented per script.
+
+| step | leg |
+|---|---|
+| 1 | the first `dwell_ok` at or after the caller's bar — the arming leg |
+| 2 | the first `rev` at or after that — **THE ANCHOR**, the Mage line reversing |
+| 3 | the first `sig` after the anchor — the gcws30Mage cross. Its `sig_conf` is the print |
+
+Joe 0925 confirmed the order: *"if 'anchor' means the Mage line reversing, and `first sig` means
+g30, then that's the correct mech"*.
+
+**THE LOOKBACK ALLOWANCE.** Joe 0925: *"re the lookback allowance, I agree but it should be
+longer - **make it 2 minutes**"*. A `sig` may now be taken from up to `sig_lookback` bars BEFORE
+the anchor. **2 minutes = 24 bars** at the 5 s grid.
+
+**Why it exists — measured 09-02 18:15:00, dr −1:**
+
+| leg | bar |
+|---|---|
+| `dwell_ok` | 18:15:00 |
+| the anchor, ws{tf}Mage rev | 18:15:05 |
+| the gcws30Mage `sig` sitting **one bar = 5 s before the anchor** | **18:15:00** |
+| what a strict "after the anchor" took instead | 18:37:30 → `sig_conf` **18:37:45** |
+| what the allowance takes | 18:15:00 → `sig_conf` **18:15:15** |
+| the difference | **22.5 minutes, bought by 5 seconds of ordering** |
+
+Joe's target for that row is 09-02 18:15. The allowance lands **+0.25 min** from it.
+
+**MEASURED IMPACT at `sig_lookback` 24 bars:**
+
+| set | moved |
+|---|---|
+| the 11 wsf_leash IS rows, ws3mage-rev from each detect bar | **none** — all +0.0 |
+| the 28 `strat-3-r-oob` episodes | **3**, all earlier: 09-02 18:15:00 by −22.5 min, 09-03 16:52:00 by −1.1 min, 09-03 19:52:00 by −3.2 min |
+
+**IT DEFAULTS TO 0.** Every banked figure — including `report_coil_exit`'s 121 `wsf_leash` rows —
+was measured at a strict "after the anchor", and that behaviour is preserved unless a caller asks
+for the allowance. Regression: `mage_rev_walk(..., 0)` reproduces all 11 IS `sig_conf` figures
+exactly, **0 mismatches**.
+
+**MINE, AND UNRULED:** the `sig` must still be at or after `dwell_ok`. Joe set the allowance
+against the anchor and said nothing about the arming bar. A cross taken before arming is not an
+event this mechanic saw.
+
+**NOT BANKED TO `wsf_dtf_v3_config`.** `sig_lookback` 2 min is Joe's value, said in chat. §21.6
+holds the reason no new config version has been written.
