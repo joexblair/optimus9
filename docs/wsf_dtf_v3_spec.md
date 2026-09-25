@@ -2340,3 +2340,99 @@ the timestamp.
 Split by SRP: trajectory reads ONE line through a block walk, split reads TWO lines through a
 fixed window. Separate reasons to change, separate modules. Neither reads the DB, prints, or holds
 a threshold of its own.
+
+### 22.14 THE KNOBS — every value the rule#2 chain reads, and which way it moves the delay
+
+Joe 0925: *"look deeply to find if there are tuning knobs for the #2 machine that might reduce the
+final signal delay"*. This section is an INVENTORY with measured direction. **No knob has been
+moved.** The values below are the ones every 0924/0925 measurement was taken under.
+
+**WHERE THE DELAY IS SPENT** — the 7 signalled IS rows, sig_utc → SIGNAL:
+
+| # | wsl_sig_utc | sig → detect | detect → reverse | reverse → SIGNAL | TOTAL | the binding leg |
+|---|---|---|---|---|---|---|
+| 1 | 09-01 12:41:30 | 0.8 | 11.1 | 12.1 | 23.9 | mage-rev walk |
+| 4 | 09-02 01:30:25 | **22.4** | 0.5 | 0.2 | 23.1 | mage-rev walk |
+| 5 | 09-02 01:41:15 | **11.6** | 0.5 | 0.2 | 12.2 | mage-rev walk |
+| 8 | 09-03 06:26:55 | 6.4 | 7.8 | 0.0 | 14.2 | ws3r reverse |
+| 10 | 09-04 07:01:35 | **10.8** | 4.8 | 0.0 | 15.5 | ws3r reverse |
+| 12 | 09-05 06:29:25 | **17.8** | 0.0 | 10.5 | 28.3 | mage-rev walk |
+| 14 | 09-05 16:53:40 | 7.2 | 1.5 | 5.8 | 14.6 | mage-rev walk |
+
+All figures in minutes. **The chain climb is the largest single stage on 4 of the 7 rows.**
+
+**STAGE 1 — the chain climb, sig_utc → the terminal line's detect bar. 0.8 to 22.4 min.**
+
+| knob | value | owner | lower it → |
+|---|---|---|---|
+| `RULE2_TRAJ_CONTINUE`, the split window `w` | 24 bars = 2 min. Joe: "2 or 3" — **UNSET** | joe | each rung's split fires on a shorter base, so sooner |
+| the split run `wob` | 4 bars = 20 s | **mine, unruled** | each rung costs up to `wob` bars. Two rungs = up to 40 s |
+| `trajectory` `min_bars` | 24 bars = 2 min. Joe: "more than 2 minutes" | joe | more lines qualify at the sig bar, so the chain can start higher and climb fewer rungs |
+| `anchor_floater.block` | 60 bars = 300 s, config v9 | joe | a shorter block ends the backward walk sooner, moving the extrema nearer |
+
+**STAGE 2 — detect bar → the ws3r reverse. 0.0 to 11.1 min.**
+
+| knob | value | owner | lower it → |
+|---|---|---|---|
+| `reverse` `min_bars` | 24 bars = 2 min | joe | the peak may be nearer, so the reverse can print sooner |
+| `anchor_floater.block` | 60 bars | joe | as above; it also picks which peak is found |
+| `reverse` `stop` | the line's trajectory extrema, §22.9 | **mine, from Joe's dr-mismatch call** | removing it is EARLIER — measured, it moved #2 −0.9, #6 −3.7, #11 −1.4, #12 −2.8 min — but reintroduces the previous cycle's peak |
+| `rule2_trajectory.min_travel` | 0.0, **UNSET** | joe deferred to OOS | raising it can only DELAY. It cannot reduce the delay |
+
+**STAGE 3 — the ws3r reverse → SIGNAL, the mage-rev walk. 0.0 to 12.1 min.**
+
+| knob | value | owner | lower it → |
+|---|---|---|---|
+| `ws1mage_rev.dwell` | 3 bars = 15 s | **mine, unruled** | `dwell_ok` arrives sooner. **This is the binding constraint on all 4 no-signal rows** |
+| `ws1mage_rev.rev_wob` | 2 steps | joe | the ws3Mage `rev` leg prints sooner |
+| `ws1mage_rev.boundary_xwob`, the `hold` | 4 bars | joe | `sig_conf` = `sig` + `hold` − 1, so `hold` 1 moves EVERY print **15 s earlier**, a flat 0.25 min on the 5 rows whose signal is the mage-rev print |
+| `ws1mage_rev.sig_line` | `gcws30Mage` | joe | `sig_line_surgical` = `gcws15Mage` is already banked at v10 and is a faster line, so its in-bounds cross can land sooner |
+
+**WHAT CANNOT REDUCE THE DELAY**
+
+| | |
+|---|---|
+| `min_travel` | raising it only ever pushes a fire later |
+| the `stop` bound | it exists to move the reverse later, correctly |
+| the dr-flip backstop | it truncates, it does not advance |
+
+**THE IS SET — 13 rows, Joe 0925**
+
+Dropped on his word: **09-05 14:59:50** and **09-01 17:27:50**. The remaining 13 are rows 1, 2, 4,
+5, 6, 8, 9, 10, 11, 12, 14 of the column-D set plus the two that were already blank. 7 produce a
+signal, 4 do not, and the dropped 2 are out.
+
+### 22.15 THE FOUR ROWS WITHOUT A SIGNAL — Joe 0925
+
+All four fail in the same place: **`ws1mage_rev.dwell_ok` never arrives before the dr flip**, because
+ws3Mage does not hold the dr-side oob boundary for `dwell` 3 consecutive bars.
+
+| # | wsl_sig_utc | dr | detect bar | ws3r reverse | dwell_ok | ws3Mage rev | gcws30Mage sig | sig_conf | dr flip | sig_conf past the flip |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2 | 09-01 16:15:20 | −1 | 16:46:30 | 16:46:30 | 18:08:40 | 18:08:40 | 18:11:20 | 18:11:35 | 17:20:35 | **51.0 min** |
+| 6 | 09-02 18:11:30 | −1 | 18:52:30 | 18:52:30 | 19:29:40 | 19:29:40 | 19:31:20 | 19:31:35 | 19:10:15 | **21.3 min** |
+| 9 | 09-03 12:49:05 | +1 | 13:01:55 | 13:02:05 | 13:26:10 | 13:26:30 | 13:28:00 | 13:28:15 | 13:19:25 | **8.8 min** |
+| 11 | 09-05 04:10:00 | −1 | 04:29:15 | 04:29:15 | 08:48:10 | 08:48:30 | 08:50:25 | 08:50:40 | 04:53:50 | **236.8 min** |
+
+**ws3Mage inside each window, detect bar → dr flip.** The dr side is ≥ 85 at dr +1, ≤ 15 at dr −1:
+
+| # | window | bars | ws3Mage min | ws3Mage max | bars oob on the dr side | longest consecutive run | reaches dwell 3 |
+|---|---|---|---|---|---|---|---|
+| 2 | 16:46:30 → 17:20:35 | 410 | 23.10 | 47.04 | **0** | 0 | NO |
+| 6 | 18:52:30 → 19:10:15 | 214 | 33.94 | 51.25 | **0** | 0 | NO |
+| 9 | 13:01:55 → 13:19:25 | 211 | 52.81 | 85.87 | **2** | **2** | NO |
+| 11 | 04:29:15 → 04:53:50 | 296 | 22.75 | 59.81 | **0** | 0 | NO |
+
+**How far ws3Mage got from the boundary at its best bar in the window:**
+
+| # | best ws3Mage | at | boundary | short by |
+|---|---|---|---|---|
+| 2 | 23.10 | 17:17:30 | 15 | 8.10 |
+| 6 | 33.94 | 18:54:05 | 15 | 18.94 |
+| 9 | **85.87** | 13:11:55 | 85 | **−0.87 — it crossed** |
+| 11 | 22.75 | 04:37:05 | 15 | 7.75 |
+
+- **#2, #6, #11: ws3Mage never reaches oob at all.** Zero bars on the dr side of 15/85 across the
+  whole window. There is no dwell to be had at any dwell value.
+- **#9 is different.** ws3Mage crossed to 85.87 and held the boundary for **2 consecutive bars**
+  against a `dwell` of 3. It failed by **one bar = 5 s**.

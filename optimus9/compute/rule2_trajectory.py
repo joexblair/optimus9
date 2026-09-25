@@ -48,20 +48,24 @@ version has not been written.
 import numpy as np
 
 
-def opposed_extrema(r, dr, k, block):
+def opposed_extrema(r, dr, k, block, stop=None):
     """The dr-OPPOSED extrema behind bar `k`, by the divergence's 5 minute block walk.
+
+    `stop` is the EARLIEST bar the walk may read. None lets it run back to the tape start, which
+    is what `trajectory` wants. `reverse` needs it — see that function.
 
     -> (bar, value, blocks) or (None, nan, blocks) when no block holds a finite value.
     `blocks` is [(from, to, block best, its bar, new_best)] in walk order, for the trace.
     """
     r = np.asarray(r, float)
     k = int(k); dr = int(dr); block = max(1, int(block))
+    floor = 0 if stop is None else max(0, int(stop))
     best, bi, blocks, n = np.nan, None, [], 0
     while True:
         n += 1
         hi = k - (n - 1) * block
-        lo = max(0, k - n * block)
-        if hi <= 0 or lo >= hi:
+        lo = max(floor, k - n * block)
+        if hi <= floor or lo >= hi:
             break
         cand = r[lo:hi]
         if np.all(np.isnan(cand)):
@@ -77,7 +81,7 @@ def opposed_extrema(r, dr, k, block):
     return bi, best, blocks
 
 
-def trajectory(r, dr, k, block, min_bars, min_travel=0.0):
+def trajectory(r, dr, k, block, min_bars, min_travel=0.0, stop=None):
     """Is this line travelling towards dr at bar `k`. -> a dict, never None.
 
     r           one r line on the 5 s grid
@@ -87,11 +91,12 @@ def trajectory(r, dr, k, block, min_bars, min_travel=0.0):
                 more, so 24 bars at the 5 s grid is not enough
     min_travel  the smallest |travel| that counts, in r-points. UNSET — see the module docstring.
                 0.0 accepts any travel with the right sign, dust included
+    stop        the earliest bar the block walk may read. None runs back to the tape start
 
     keys: has, bar, value, bars, travel, blocks
     """
     r = np.asarray(r, float)
-    bi, best, blocks = opposed_extrema(r, dr, k, block)
+    bi, best, blocks = opposed_extrema(r, dr, k, block, stop)
     if bi is None:
         return {'has': False, 'bar': None, 'value': float('nan'), 'bars': 0,
                 'travel': float('nan'), 'blocks': blocks}
@@ -103,7 +108,7 @@ def trajectory(r, dr, k, block, min_bars, min_travel=0.0):
             'bars': bars, 'travel': travel, 'blocks': blocks}
 
 
-def reverse(r, dr, k, block, min_bars, min_travel=0.0):
+def reverse(r, dr, k, block, min_bars, min_travel=0.0, stop=None):
     """Has this line REVERSED at bar `k` — travelling AWAY from dr. -> the same dict.
 
     Joe 0924 defined it by pointing at this module: *"'reverse' = your 'A single-line reversal is
@@ -115,5 +120,21 @@ def reverse(r, dr, k, block, min_bars, min_travel=0.0):
         09-03 02:54:35  ws1r  peak 02:52:10 87.90  2.4 min  travel -19.87
         09-03 00:00:15  ws2r  peak 23:56:00 100.00 4.2 min  travel -14.29
         09-03 00:05:05  ws3r  peak 00:03:00 99.99  2.1 min  travel  -3.81
+
+    `stop` — PASS THE LINE'S OWN TRAJECTORY EXTREMA BAR. Joe 0925 diagnosed the reason from a
+    single timestamp: *"this indicates a dr mismatch in the calculations. we're working in a +dr
+    state, so ws1's trajectory is measured from -dr side. ie, the same logic that we're already
+    using"*. Unbounded, the walk runs back past the low the trajectory is measured from and
+    returns the PREVIOUS cycle's peak.
+
+    MEASURED 09-05 17:09:00, ws1r, dr +1. Trajectory low 17:05:25 at 9.90.
+        stop=None   peak 16:56:05 at 96.88 — 112 bars = 9.3 min BEFORE that low — fires at once
+        stop=low    peak 17:09:00 at 47.10, travel +0.00 — does not fire, which is correct
+    and walking on with stop=low, the reversal is 09-05 17:14:05 off a 17:12:00 peak of 82.19,
+    travel -32.8077. Joe 0925: *"the end result of 17:14 is good. bank it"*.
+
+    Across the 13 walked rows the bound moves four reverse bars — #2 +0.9, #6 +3.7, #11 +1.4,
+    #12 +2.8 min — and changes NO signal. It defaults to None so every caller that has not been
+    told about it keeps the behaviour it was measured under.
     """
-    return trajectory(r, -int(dr), k, block, min_bars, min_travel)
+    return trajectory(r, -int(dr), k, block, min_bars, min_travel, stop)
