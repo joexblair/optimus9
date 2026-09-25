@@ -42,3 +42,37 @@ Every one of these is Joe's. **None may be decided by the coder.**
 | a "did price later exceed X" grading | lookahead and not a Joe mechanism. See `history.md` correction 4 |
 | the price series | `J.px` **is** px_smooth, verified against the tape `__pxs__` to 3 dp |
 | the position frame | dr +1 = SHORT, dr −1 = LONG. Joe 0925, verbatim |
+
+## E. Added 0925, after the docs were first written
+
+### E1 — `sig_lookback`, Joe's lookback allowance
+
+Joe 0925 ruled the mage-rev walk may take a `sig` from up to **2 minutes = 24 bars BEFORE the
+anchor** (the Mage line reversing). Banked as `jig.mage_rev_walk(..., sig_lookback)`, spec §22.17.
+**It defaults to 0**, which is what `scan.py` and `scan_20260925.txt` were measured under.
+
+**Measured impact on these 28 episodes at `sig_lookback` 24 bars — 3 move, all earlier:**
+
+| episode | event bar | earliest mage-rev at lb 0 | at lb 24 | moved |
+|---|---|---|---|---|
+| 14 | 09-02 18:15:00 | 09-02 18:37:45 | **09-02 18:15:15** | **−22.5 min** |
+| 19 | 09-03 16:52:00 | 09-03 16:53:40 | 09-03 16:52:35 | −1.1 min |
+| 20 | 09-03 19:52:00 | 09-03 19:55:30 | 09-03 19:52:20 | −3.2 min |
+
+The other 25 are unchanged.
+
+**THE QUESTION: does this strategy run at `sig_lookback` 0 or 24?** Joe ruled 2 minutes for the
+wsf_leash mage-rev walk. He has not said whether it carries here. `scan.py` is still at 0, so
+**every figure in `measured.md` is the lb-0 measurement** and would need re-deriving at 24.
+
+### E2 — episode 14's event bar is Joe's own walked time
+
+`transfer/260924_strat_wsf_leash.xlsx` row 68 is `09-02 18:11:30`, column D = **09-02 18:15**,
+column E = *"walked ws3"*. Row 69 is `09-02 18:15:00`.
+
+So Joe walked 18:11:30 forward to 18:15, and the all-three-oob event bar is **09-02 18:15:00** —
+the same bar. His walk and this detector landed on the same moment by different routes. That is
+the strongest single agreement in the set and it should not be lost.
+
+It also explains why the `sig_conf` at 18:11:45 is not a missed opportunity: it belongs to a
+signal that was itself walked forward to 18:15.
