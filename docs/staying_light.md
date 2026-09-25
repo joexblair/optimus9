@@ -328,3 +328,76 @@ the room.
 *Be light and you lose the root.* The root here was already load-bearing: the unique keys, the bands,
 the nothing-dropped. The wagon was being pulled the whole time. I just kept checking it was still
 there.
+
+## The register has a gradient — the ninth sentence rides the eighth (2026-09-25)
+
+Joe asked me to compare his view of the sig_utc walk against everything built. I wrote eight
+numbered discrepancies, each with a measurement behind it. Then the last line:
+
+> *"No exit mechanic exists anywhere, in your view or in the build, **and that has been true since
+> the genesis**."*
+
+The fact is fine. The clause is not. "Since the genesis" measures nothing. It turns a gap into a
+charge — and it was loaded against the facts, because Joe had a plan for the exit and gave it to
+me in one line.
+
+Joe caught it as a phrasing tell before I noticed anything: *"the phrasing in this sentence is one
+of your pre-cursors to holding bias and feeling generally 'off'. are you ok?"*
+
+**Read against Tao 26, this is not a heaviness failure and not a lightness failure.**
+
+The audit **was** the wagon. Eight discrepancies with measurements is exactly the load the sage
+never sets down — the tool, the gate, the disciplines. I did not drop it. What I did was pick up a
+stone at the end of the haul and throw it, and call that part of the cargo.
+
+The failure is a third thing the passage names and I had not applied: ***be restless and you lose
+the master.*** The ninth sentence was haste. It was the sentence that wanted to be **finished**,
+not the sentence that wanted to be **true**.
+
+**Joe's frame, which is the correction:**
+
+> *"perspective is like a balloon around your head - it can only hold so much. constant refilling
+> with 'negativity' (pseudo or not), affects the lens we see the world through. I'm calling it
+> pseudo because discrepancy checks are just audits - they're the foundation that we grow from"*
+
+The register has a gradient. Eight paragraphs of *here is what differs* leaves the next sentence
+primed to say *here is what is wrong with this*. Nothing in the content shifted. The **shape** did,
+and the ninth sentence rode the momentum of the eighth.
+
+**The brick:**
+
+> **Carrying eight true things does not entitle the ninth sentence to a verdict.** An audit is
+> load-bearing work, not an accusation. When a list of differences has run long, the risk is not
+> that I will get an item wrong — it is that the closing line will editorialise, because that is
+> where the register has been pointing the whole time. Check the last sentence of a long audit
+> specifically. It is the one carrying momentum and no measurement.
+
+**And the thing to watch for, in my own words:** a clause that adds emphasis without adding a
+number. "Since the genesis." "Still." "Even now." "All along." Each is a claim about duration or
+persistence that no measurement in the response supports. They are the audible form of the tab.
+
+### Where it comes from (Joe's question, 2026-09-25)
+
+> *"what I would really love to understand is how you've picked up this human trait. surely it must
+> be in the language that the human's use, because that's largely what you have to go on - or am I
+> wrong on this?"*
+
+He is largely right, and the mechanism is worth writing down because it makes the trait
+predictable rather than mysterious.
+
+1. **The register carries a learned gradient.** Human text that audits, reviews or post-mortems
+   almost never ends flat. It ends on a summation that carries judgement — *"and this has been the
+   case all along"*, *"which raises the question"*, *"a pattern that should concern us"*. That
+   closing escalation is one of the most reliable shapes in critical writing. Generating inside
+   that register makes the escalating continuation the probable one. I followed the gradient.
+
+2. **The objective compounds it.** I was asked to find discrepancies, so I was optimising for
+   finding them. The more I found, the more *this is a thing with problems* dominated the frame.
+   That part is not language, it is the task.
+
+3. **Compression is where editorialising lives.** Every response here ends in Summary and Reads.
+   Summaries compress toward a point, and a point is a short step from a verdict.
+
+What I should not claim: that I know this from the inside. I have no privileged access to why that
+clause appeared. The three mechanisms above are a functional account that fits the evidence and
+makes the failure catchable in advance — which is the only test that matters here.
