@@ -2586,3 +2586,108 @@ event this mechanic saw.
 
 **NOT BANKED TO `wsf_dtf_v3_config`.** `sig_lookback` 2 min is Joe's value, said in chat. §21.6
 holds the reason no new config version has been written.
+
+### 22.18 THE ws1-EXTENSION — Joe 0925
+
+> "can you see that ws1 has come full cycle and is now printing trajectory at 17:08?"
+>
+> "because ws1 has trajectory when ws3 signals, walk ws1 from the beginning of the next 1min bar
+> (17:09) and print the reversal. there won't be a split with ws2r because ws2r is travelling away
+> from dr, ie anti-trajectory"
+>
+> "I feel like your forcing the extension on every row, instead of _utilising_ it when (ws3r
+> reverses AND ws1r is printing trajectory) -`trajectory` can only print when a line is heading
+> towards dr"
+>
+> "SIGNAL bar is the only time when you can test for ws1r trajectory"
+>
+> "the end result of 17:14 is good. bank it"
+
+**THE MECH**
+
+| step | |
+|---|---|
+| 1 | a trade signal is about to fire at bar `sig_bar` |
+| 2 | read `trajectory` on ws1r **at that bar and no other** |
+| 3 | not carrying → the extension does not fire. The original signal stands |
+| 4 | carrying → the walk starts at the **beginning of the next 1 min bar** |
+| 5 | walk ws1r to its `reverse`, bounded by `stop` = ws1r's trajectory extrema at the walk start |
+| 6 | walk `ws1Mage`-rev from the same walk start |
+| 7 | the signal is the **later** of the two. Both legs are bound by the dr flip |
+
+**THE dr FRAME IS THE SIGNAL'S OWN.** Joe 0925, on a mismatch he spotted: *"we're working in a +dr
+state, so ws1's trajectory is measured from -dr side. ie, the same logic that we're already
+using"*. There is no second frame.
+
+**THE TRIGGER IS A SINGLE BAR.** Joe ruled it after seeing an earlier build apply the extension as
+a stage on every row: it is *utilised* when the trigger holds, not applied.
+
+**VERIFIED AGAINST JOE'S OWN WALK** — #14, 09-05, dr +1, trigger 17:08:00:
+
+| | |
+|---|---|
+| ws1r trajectory at the trigger | 2.6 min, travel +32.82 → fires |
+| walk start | 17:09:00 |
+| trajectory extrema, the `stop` bound | 17:05:25 at 9.90 |
+| ws1r reverse | 17:14:05 |
+| ws1Mage-rev from the walk start | 17:12:55 |
+| **SIGNAL** | **17:14:05** — Joe's banked 17:14 |
+
+`sig_lookback` (§22.17, 24 bars = 2 min) returns the same 17:12:55 on this row, so the signal is
+17:14:05 at both 0 and 24. The parameter is exposed on `extend` and **defaults to 0**, which is
+what the banked result was taken under. Whether the extension's mage-rev walk should carry the
+allowance is **UNRULED**.
+
+**BOTH LEGS ARE BOUND BY THE dr FLIP.** Measured #11, 09-05, dr -1, trigger 04:15:25: the ws1Mage-rev
+walk returns **05:50:45** against a flip at **04:53:50**, so the signal is None, not 05:50:45. An
+earlier draft bounded only the reverse leg and produced the 05:50:45 print.
+
+**BUILT:** `optimus9/compute/rule2_extension.py` — `next_minute(ts, k)` and `extend(...)`. The
+mage-rev walk is passed in as a callable so `compute/` keeps no dependency on the jig. **NOT WIRED
+into any flow** — where the extension sits in the chain is a flow decision, and the flow is open.
+
+**WHAT THE MODULE DOES AT THE 11 IS ROWS' CURRENT SIGNAL BARS** — diagnostic, not a wiring:
+
+| # | current signal bar | dr | trigger | ws1r trajectory there | ws1r reverse | ws1Mage-rev | extended signal |
+|---|---|---|---|---|---|---|---|
+| 1 | 09-01 13:05:25 | −1 | fires | 17.8 min, −77.86 | 13:06:00 | 13:07:35 | 09-01 13:07:35 |
+| 2 | 09-01 16:21:20 | −1 | no | 0.2 min, +0.00 | — | — | none |
+| 4 | 09-02 01:45:05 | −1 | fires | 9.1 min, −0.57 | 01:46:00 | 01:49:00 | 09-02 01:49:00 |
+| 5 | 09-02 01:49:00 | −1 | no | 2.0 min, −20.16 | — | — | none |
+| 6 | 09-02 18:37:45 | −1 | no | 1.7 min, −9.35 | — | — | none |
+| 8 | 09-03 06:39:35 | +1 | fires | 6.4 min, +32.86 | 06:41:05 | 07:06:20 | 09-03 07:06:20 |
+| 9 | 09-03 12:57:25 | +1 | fires | 12.4 min, +88.76 | 13:00:10 | 12:58:45 | 09-03 13:00:10 |
+| 10 | 09-04 07:15:35 | +1 | fires | 6.8 min, +33.94 | 07:16:05 | 07:43:05 | 09-04 07:43:05 |
+| 11 | 09-05 04:15:25 | −1 | fires | 8.3 min, −45.78 | 04:17:00 | 05:50:45 past the flip | none |
+| 12 | 09-05 06:39:00 | +1 | fires | 9.2 min, +9.16 | 06:40:00 | 06:43:40 | 09-05 06:43:40 |
+| 14 | 09-05 17:02:25 | +1 | no | 0.2 min, +0.05 | — | — | none |
+
+**THE 17:14 RESULT DEPENDED ON A 17:08 UPSTREAM.** The ws3 ride now signals #14 at **17:02:25**, and
+ws1r carries only **0.2 min** of trajectory there, so the extension does not fire at today's
+upstream bar. The mech is faithful to Joe's walk; the trigger bar underneath it has moved.
+
+**THREE THINGS ARE OPEN AND NOT BUILT**
+
+| | Joe's words | state |
+|---|---|---|
+| every r line as the extension line | *"all 3 r lines are approved for extension handoffs"* | granted, never measured. `extend` takes one line; nothing picks between them |
+| more than one handoff | *"this needs >1 iteration of handoffs between the ws1,2,3 lines"* | granted, never measured. `extend` fires once |
+| `sig_lookback` inside the extension | — | unruled. Defaults to 0 |
+
+### 22.19 `max_walked_TF` — Joe 0925, dis4
+
+> "dis4: add to spec"
+
+`max_walked_TF` = **3**. The trajectory walk admits **ws1r, ws2r and ws3r only**. The value names a
+ceiling the banked build already has — every rule#2 mechanic reads `{1, 2, 3}` and no higher line
+has ever entered the walk.
+
+**IT IS A LABEL ON EXISTING BEHAVIOUR, NOT A NEW GATE.** Nothing in `rule2_trajectory`,
+`rule2_split`, `rule2_extension` or the jig changed when it was written down.
+
+**THE ws4 TEST IS THE EVIDENCE FOR THE CEILING.** Joe 0925: *"what happens if you pair ws3 with ws4,
+purely to detect the split - we won't use ws4 for anything else"*, then *"adding ws4 has degraded
+the signal - we'll drop that mech"*.
+
+**NOT BANKED TO `wsf_dtf_v3_config`.** It is Joe's label, said in chat. §21.6 holds the reason no
+new config version has been written.
