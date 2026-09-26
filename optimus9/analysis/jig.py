@@ -211,9 +211,21 @@ def mage_rev_walk(legs, dr, frm, sig_lookback=0):
     anchor" the walk skipped it and took the next one at 18:37:30, 22.5 minutes later. At
     `sig_lookback` 24 bars = 2 min the print is 18:15:15 instead of 18:37:45.
 
-    MINE, AND UNRULED: the `sig` must still be at or after `dwell_ok`. `dwell_ok` is the arming
-    leg and a cross taken before arming is not an event this mechanic saw. Joe set the allowance
-    against the anchor and said nothing about the arming bar.
+    THE `sig >= dwell_ok` FLOOR IS GONE — Joe 0926, asked directly: *"drop it"*. It was mine and
+    unruled. It made the allowance unreachable whenever the qualifying cross sat before the arming
+    bar, which is the common case: measured 09-01 03:40:05, the gcws30Mage cross at 03:38:25 was
+    rejected at EVERY lookback value while the floor stood, because `dwell_ok` was 03:40:05.
+
+    THE SELECTION IS THE EARLIEST QUALIFYING `sig`, NOT THE ONE NEAREST THE ANCHOR, and it is
+    UNRULED. Joe 0926 asked whether the choice courts lookahead. It does not: the walk fires at the
+    anchor bar and every candidate is already in the past, so both selections read history only.
+    What is true of BOTH is that the emitted `sig_conf` is stamped before the bar the decision is
+    made on — 03:38:40 decided at 03:40:35. That is a back-stamp, and the floor Joe set on 0926,
+    *"it has to be >= utc - agreed lookback"*, is what contains it.
+
+    DROPPING THE FLOOR CHANGES NOTHING AT `sig_lookback` 0. The test is `sig > anchor - lookback`,
+    and at 0 that is `sig > anchor`; the anchor is at or after `dwell_ok`, so every sig that passes
+    already passed the old floor. Every banked figure stands.
 
     MEASURED IMPACT at 24 bars. The 11 wsf_leash IS rows: the ws3mage-rev from each detect bar
     moves on NONE of them. The 28 `strat-3-r-oob` episodes: 3 move, all earlier —
@@ -232,7 +244,7 @@ def mage_rev_walk(legs, dr, frm, sig_lookback=0):
         return None
     b = int(b[0])
     lb = max(0, int(sig_lookback))
-    m = np.flatnonzero((s > b - lb) & (s >= a)) if lb else np.flatnonzero(s > b)
+    m = np.flatnonzero(s > b - lb) if lb else np.flatnonzero(s > b)
     return int(sc[m[0]]) if len(m) else None
 
 

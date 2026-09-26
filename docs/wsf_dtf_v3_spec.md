@@ -2978,3 +2978,101 @@ to write to.**
 **WHAT IS STILL NOT KNOWN.** Five rows — 42, 71, 90, 92, 94 — are mid-stretch, disagree with the
 stretch they sit in, and have no `wsf_leash` moment to appeal to. Until Joe rules, the code **reads**
 column A on those rows and never writes it.
+
+### 22.23 THE `sig >= dwell_ok` FLOOR IS DROPPED, AND THE LOOKBACK IS 3.3 MIN — Joe 0926
+
+> "drop it"
+>
+> "extend the lookback to 3.3 minutes and recreate the 09-01 table"
+
+**WHAT WAS REMOVED.** `mage_rev_walk` required the gcws30Mage `sig` to be at or after `dwell_ok` as
+well as within `sig_lookback` of the anchor. That second test was **mine and unruled** — §22.17
+recorded it as such. Joe dropped it on sight of what it cost.
+
+**WHY IT MATTERED, measured on sheet row 6, 09-01 03:40:05, dr +1:**
+
+| leg | ws2 / ws3 | ws4 |
+|---|---|---|
+| first `dwell_ok` at or after sig_utc | 03:40:05 | 03:40:55 |
+| first `rev` at or after it — the anchor | 03:40:35 | 03:41:05 |
+| the gcws30Mage `sig` Joe could see | 03:38:25, **26 bars = 130 s** before the anchor | 32 bars |
+| the next `sig` after it | 04:10:25, a **32 minute** silence | 04:10:25 |
+
+With the floor standing, 03:38:25 was rejected at **every** lookback value, because `dwell_ok` was
+03:40:05 and 03:38:25 precedes it. Measured at 24, 26, 27, 28, 37, 38 and 48 bars: all returned
+04:10:40. The lookback was never the blocker.
+
+**`sig_lookback` IS NOW 40 BARS = 3.33 MIN.** Joe said 3.3 minutes; 3.3 min is 39.6 bars on the 5 s
+grid, so 40 bars is the first whole bar count at or above it. **MINE, stated** — 39 bars = 3.25 min
+would be the first at or below.
+
+**THE SELECTION IS THE EARLIEST QUALIFYING `sig`, AND IT IS UNRULED.** Joe 0926 asked whether the
+choice between the earliest and the one nearest the anchor courts lookahead. **It does not.** The
+walk fires at the anchor bar and every candidate `sig` is already in the past, so either selection
+reads history only. What is true of both is that the emitted `sig_conf` is stamped BEFORE the bar the
+decision is made on — on row 6, 03:37:45 is decided at 03:40:35. That is a back-stamp, not a look
+forward, and the choice stays Joe's.
+
+**THE BACK-STAMP CANNOT EXCEED THE LOOKBACK, STRUCTURALLY.** The test is `sig > anchor - lb`, and
+`anchor >= dwell_ok >= frm`, so `sig > frm - lb` and `sig_conf = sig + hold - 1 > frm - lb`. A print
+can never land more than `lb` bars before the caller's own bar. Joe's 0926 floor — *"it has to be
+>= utc - agreed lookback"* — is therefore enforced by the mechanic itself, not by a separate clamp.
+
+**MEASURED, all 153 sheet rows × ws1..ws5 = 765 walks at 40 bars:**
+
+| | |
+|---|---|
+| prints landing before sig_utc | **112 of 765** |
+| the worst | **2.92 min** before |
+| breaking a 3.33 min floor | **0** |
+| breaking the old 2.00 min floor | 30 |
+
+**REGRESSION: DROPPING THE FLOOR CHANGES NOTHING AT `sig_lookback` 0.** 765 walks compared old
+against new: **0 differences**. At 0 the test is `sig > anchor`, and the anchor is at or after
+`dwell_ok`, so every sig that passes already passed the old floor. Every figure banked before 0926
+stands. At 24 bars the drop moves 129 of the 765.
+
+**09-01 REBUILT AT 40 BARS — ws2, ws3, ws4.** `*` = the print lands past the dr flip.
+
+| sheet row | wsl_sig_utc | dr | tp/sl | ws2mage-rev | ws3mage-rev | ws4mage-rev | dr flip |
+|---|---|---|---|---|---|---|---|
+| 3 | 09-01 00:27:20 | +1 | t | 00:27:35 | 00:27:35 | 00:27:35 | 01:08:25 |
+| 4 | 09-01 02:10:15 | −1 | x | 02:10:30 | 02:09:15 | 02:40:35 | 03:06:40 |
+| 5 | 09-01 02:40:20 | −1 | t | 04:59:50 * | 02:40:35 | 02:40:35 | 03:06:40 |
+| 6 | 09-01 03:40:05 | +1 | t | **03:37:45** | **03:37:45** | **03:38:40** | 04:57:40 |
+| 7 | 09-01 04:26:00 | +1 | x | 05:07:05 * | 04:24:35 | 04:24:35 | 04:57:40 |
+| 8 | 09-01 05:01:15 | −1 | x | 06:48:20 * | 06:55:50 * | 06:55:50 * | 05:04:30 |
+| 9 | 09-01 05:03:00 | −1 | t | 06:48:20 * | 06:55:50 * | 06:55:50 * | 05:04:30 |
+| 10 | 09-01 05:43:05 | +1 | t | 05:43:20 | 05:43:20 | 05:43:20 | 06:24:40 |
+| 11 | 09-01 07:14:45 | −1 | x | 07:15:00 | 07:15:00 | 07:15:00 | 07:22:35 |
+| 12 | 09-01 07:14:45 | −1 | x | 07:15:00 | 07:15:00 | 07:15:00 | 07:22:35 |
+| 13 | 09-01 07:27:00 | +1 | t | 10:13:35 * | 10:25:40 * | 10:33:50 * | 08:03:45 |
+| 14 | 09-01 08:18:00 | −1 | x | 08:18:15 | 08:18:15 | 08:18:15 | 09:24:50 |
+| 15 | 09-01 08:42:00 | −1 | x | 08:58:10 | 08:42:15 | 08:42:15 | 09:24:50 |
+| 16 | 09-01 09:02:00 | −1 | t | 09:02:15 | 09:02:15 | 09:02:15 | 09:24:50 |
+| 17 | 09-01 12:13:30 | −1 | t | 12:34:40 | 12:41:45 | 12:56:55 | 13:27:00 |
+| 18 | 09-01 12:41:29 | −1 | t | 12:41:45 | 12:56:55 | 12:56:55 | 13:27:00 |
+| 19 | 09-01 13:47:45 | +1 | x | 13:46:40 | 13:46:40 | 00:19:15 * | 14:59:35 |
+| 20 | 09-01 14:49:45 | +1 | t | 17:25:55 * | 23:51:20 * | 00:19:15 * | 14:59:35 |
+| 21 | 09-01 14:49:45 | +1 | x | 17:25:55 * | 23:51:20 * | 00:19:15 * | 14:59:35 |
+| 22 | 09-01 15:08:00 | −1 | t | 15:07:15 | 15:07:15 | 16:15:35 * | 15:49:40 |
+| 23 | 09-01 15:51:00 | +1 | t | 17:25:55 * | 23:51:20 * | 00:19:15 * | 16:07:25 |
+| 24 | 09-01 16:15:20 | −1 | t | 16:15:35 | 16:15:35 | 16:15:35 | 17:20:35 |
+| 25 | 09-01 16:37:00 | −1 | x | 16:37:15 | 16:37:15 | 16:37:15 | 17:20:35 |
+| 26 | 09-01 17:27:50 | +1 | t | 17:25:55 | 23:51:20 * | 00:19:15 * | 17:52:35 |
+| 27 | 09-01 17:59:55 | −1 | s | 17:57:15 | 18:11:35 | 18:11:35 | 19:11:20 |
+| 28 | 09-01 18:19:45 | −1 | x | 18:20:00 | 18:20:00 | 18:20:00 | 19:11:20 |
+| 29 | 09-01 18:40:30 | −1 | x | 18:40:45 | 18:40:45 | 18:40:45 | 19:11:20 |
+| 30 | 09-01 18:40:30 | −1 | x | 18:40:45 | 18:40:45 | 18:40:45 | 19:11:20 |
+| 31 | 09-01 19:32:00 | +1 | t | 23:31:10 * | 23:51:20 * | 00:19:15 * | 19:56:35 |
+| 32 | 09-01 21:18:10 | −1 | s | 21:18:25 | 21:18:25 | 21:18:25 | 22:49:20 |
+| 33 | 09-01 21:21:19 | −1 | x | 21:18:25 | 21:18:25 | 21:18:25 | 22:49:20 |
+| 34 | 09-01 21:37:20 | −1 | x | 21:36:00 | 21:36:00 | 21:36:00 | 22:49:20 |
+| 35 | 09-01 22:23:55 | −1 | x | 22:24:10 | 22:24:10 | 22:24:10 | 22:49:20 |
+| 36 | 09-01 21:57:20 | −1 | x | 22:24:10 | 22:24:10 | 21:57:35 | 22:49:20 |
+| 37 | 09-01 22:23:55 | −1 | x | 22:24:10 | 22:24:10 | 22:24:10 | 22:49:20 |
+| 38 | 09-01 23:25:00 | −1 | x | 23:24:40 | 23:22:50 | 00:32:00 * | 23:33:15 |
+| 39 | 09-01 23:47:00 | +1 | t | 23:51:20 | 23:51:20 | 00:19:15 | 00:26:15 |
+
+**NOT BANKED TO `wsf_dtf_v3_config`.** 3.3 min is Joe's value, said in chat. §21.6 holds the reason
+no new config version has been written.
