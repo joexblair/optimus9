@@ -2916,46 +2916,54 @@ outgoing trade is opened"*.
 **THE SIGN IS THE POSITION.** Joe 0925: *"+dr = SHORT position, -dr = LONG postition"*. The sheet
 colours it: **+1 red, −1 green, the colours of the trade**. Position return is −(px move) × dr.
 
-**COLUMN A OF `260924_strat_wsf_leash.xlsx` IS THE TRADE'S OWN dr, AND IT IS THE OUTGOING STRETCH'S
-SIGN** — the stretch the flip is closing, not the stretch the `wsl_sig_utc` bar sits in. Those are
-always opposite signs.
+**COLUMN A OF `260924_strat_wsf_leash.xlsx` IS THE TRADE'S OWN dr. IT CARRIES TWO DIFFERENT READINGS,
+AND THE SPLIT IS MEASURED.** Joe 0926 gave the rule for one of them: *"to validate the dr of the 17
+rows, you could use the dr of the bar before the dr-flip"*. Tested at `dr_latch_wob` LATCH_W 8 over
+all 153 sheet rows:
 
-Measured on the 17 rows that have no `wsf_leash` moment to read, at `dr_latch_wob` LATCH_W 8:
-**17 of 17 match the outgoing stretch.** Four of the 17 are not on a flip bar at all — rows 71, 90,
-92 and 94 sit 38.5, 19.1, 88.1 and 162.1 min into the next stretch — and column A still holds the
-previous stretch's sign. So the rule is not "a boundary bar belongs to the old side". It is the
-outgoing stretch, full stop.
+| what col A matches | where the `wsl_sig_utc` bar sits | in `wsf_leash` | n |
+|---|---|---|---|
+| the stretch it **sits in** | mid-stretch | in the table | 118 |
+| the stretch it **sits in** | mid-stretch | absent | 14 |
+| the **bar before the flip** | **on the flip bar** | absent | **13** |
+| the **bar before the flip** | mid-stretch | in the table | 3 |
+| the **bar before the flip** | mid-stretch | absent | 5 |
 
-| sheet row | wsl_sig_utc | col A | outgoing stretch | its dr | incoming stretch | its dr |
-|---|---|---|---|---|---|---|
-| 17 | 09-01 12:13:30 | +1 | 09-01 09:24:50 → 12:13:30 | **+1** | 12:13:30 → 13:27:00 | −1 |
-| 60 | 09-02 12:36:35 | +1 | 09-02 11:38:55 → 12:36:35 | **+1** | 12:36:35 → 13:27:25 | −1 |
-| 63 | 09-02 14:54:25 | +1 | 09-02 13:42:55 → 14:54:25 | **+1** | 14:54:25 → 16:17:50 | −1 |
-| 71 | 09-02 18:48:00 | +1 | 09-02 17:51:25 → 18:09:30 | **+1** | 18:09:30 → 19:10:15 | −1 |
-| 76 | 09-03 01:07:40 | −1 | 09-03 00:21:00 → 01:07:40 | **−1** | 01:07:40 → 03:22:05 | +1 |
-| 78 | 09-03 04:49:25 | −1 | 09-03 04:15:55 → 04:49:25 | **−1** | 04:49:25 → 05:21:05 | +1 |
-| 84 | 09-03 10:52:50 | −1 | 09-03 08:51:50 → 10:52:50 | **−1** | 10:52:50 → 13:19:25 | +1 |
-| 90 | 09-03 14:40:00 | −1 | 09-03 13:59:35 → 14:20:55 | **−1** | 14:20:55 → 17:11:40 | +1 |
-| 92 | 09-03 15:49:00 | −1 | 09-03 13:59:35 → 14:20:55 | **−1** | 14:20:55 → 17:11:40 | +1 |
-| 94 | 09-03 17:03:00 | −1 | 09-03 13:59:35 → 14:20:55 | **−1** | 14:20:55 → 17:11:40 | +1 |
-| 117 | 09-04 15:36:35 | −1 | 09-04 14:10:10 → 15:36:35 | **−1** | 15:36:35 → 17:36:55 | +1 |
-| 118 | 09-04 17:36:55 | +1 | 09-04 15:36:35 → 17:36:55 | **+1** | 17:36:55 → 19:01:15 | −1 |
-| 124 | 09-04 22:42:35 | −1 | 09-04 21:52:20 → 22:42:35 | **−1** | 22:42:35 → 00:00:45 | +1 |
-| 127 | 09-05 01:46:15 | +1 | 09-05 01:09:45 → 01:46:15 | **+1** | 01:46:15 → 04:53:50 | −1 |
-| 139 | 09-05 11:53:45 | −1 | 09-05 09:29:05 → 11:53:45 | **−1** | 11:53:45 → 12:25:50 | +1 |
-| 142 | 09-05 14:27:15 | −1 | 09-05 13:37:35 → 14:27:15 | **−1** | 14:27:15 → 15:17:10 | +1 |
-| 145 | 09-05 14:27:15 | −1 | 09-05 13:37:35 → 14:27:15 | **−1** | 14:27:15 → 15:17:10 | +1 |
+**JOE'S RULE IS THE RULE FOR THE FLIP-BAR CASE, 13 OF 13.** When the `wsl_sig_utc` bar IS the flip
+bar, the dr at that bar is genuinely two-valued and column A takes the outgoing side — the trade the
+flip is closing. The bar before the flip gives exactly that. Rows 17, 60, 63, 76, 78, 84, 117, 118,
+124, 127, 139, 142, 145.
 
-Joe's own example reads straight off the first row: 09-01 12:13:30 is a **LONG**, running in a stretch
-whose flip is **+1**, and the +1 in column A is the flip it is heading into — the backstop, not the
-bar it sits in.
+**IT IS NOT THE GENERAL RULE.** On the 132 mid-stretch rows that agree with the stretch they sit in,
+"the bar before the flip" returns the opposite sign. Applied to the whole sheet it matches 21 of 153.
 
-**COLUMN A NEEDS NO CORRECTION ANYWHERE.**
+**EIGHT MID-STRETCH ROWS DISAGREE WITH THE STRETCH THEY SIT IN.** These are the open ones:
+
+| sheet row | wsl_sig_utc | tag | col A | the stretch it sits in | its dr | min into it | in `wsf_leash` |
+|---|---|---|---|---|---|---|---|
+| 42 | 09-02 01:14:00 | t | +1 | 09-02 00:26:15 → 01:14:45 | −1 | 47.8 | no |
+| 71 | 09-02 18:48:00 | t | +1 | 09-02 18:09:30 → 19:10:15 | −1 | 38.5 | no |
+| 72 | 09-02 19:20:35 | t | −1 | 09-02 19:10:15 → 19:21:00 | +1 | 10.3 | **yes** |
+| 90 | 09-03 14:40:00 | t | −1 | 09-03 14:20:55 → 17:11:40 | +1 | 19.1 | no |
+| 92 | 09-03 15:49:00 | t | −1 | 09-03 14:20:55 → 17:11:40 | +1 | 88.1 | no |
+| 94 | 09-03 17:03:00 | t | −1 | 09-03 14:20:55 → 17:11:40 | +1 | 162.1 | no |
+| 130 | 09-05 02:41:35 | t | +1 | 09-05 01:46:15 → 04:53:50 | −1 | 55.3 | **yes** |
+| 153 | 09-05 19:20:25 | s | +1 | 09-05 18:42:55 → 19:23:05 | −1 | 37.5 | **yes** |
+
+Rows 130 and 153 are explained: their `wsf_leash` moments start at 09-05 01:16:55 and 18:22:40, both
+in the previous stretch, so column A is the moment's dr — §22.21's rule, no anomaly. Row 72 differs
+only at LATCH_W 8.
+
+Rows 42, 71, 90, 92 and 94 have no moment to read and no flip bar to appeal to. **Five rows, unruled.**
+Joe has already re-read the 09-03 14:20:55 → 17:11:40 stretch as +1, which is where 90, 92 and 94 sit.
+
+**COLUMN A NEEDS NO CORRECTION ON 148 OF 153 ROWS.**
 
 | population | check | result |
 |---|---|---|
 | the 121 sheet rows present in `wsf_leash` on the key | column A vs `wsl_dr` | **121 of 121 agree** |
-| the 17 absent rows examined | column A vs the outgoing stretch | **17 of 17 agree** |
+| the 13 flip-bar rows | column A vs the bar before the flip | **13 of 13 agree** |
+| 5 mid-stretch rows with no moment | — | **unruled** |
 
 **MY DEFECT, 0926, AND IT IS BANKED AS THE WARNING.** Asked to make the required dr adjustments to
 the absent rows, I derived a rule from the only bar I could see — the `wsl_sig_utc` bar — and wrote
@@ -2967,14 +2975,6 @@ bytes with every zip part present and all 17 cells at Joe's values.
 The rule I needed was not in the data. **A column whose meaning is not written down is not a column
 to write to.**
 
-**WHAT IS STILL NOT KNOWN, AND WHY IT MATTERS FOR THE BUILD.** The 17 rows show *what* column A holds.
-They do not show *which bar it is read at*, because none of the 17 has a `wsf_leash` moment to read.
-Two readings fit all 17 and the code cannot choose between them:
-
-| reading | can the code produce column A? |
-|---|---|
-| it is the moment's dr, and the moment's first bar falls in the stretch before the flip | yes — `dr_latch` at `wsl_first_ms`, as §22.21 proves for the other 121 |
-| it is the trade's own direction, from where Joe sees the trade open | no — the code has no trade-open bar to read |
-
-Until that is settled, the code must **read column A, not compute it**, on any row with no
-`wsf_leash` moment.
+**WHAT IS STILL NOT KNOWN.** Five rows — 42, 71, 90, 92, 94 — are mid-stretch, disagree with the
+stretch they sit in, and have no `wsf_leash` moment to appeal to. Until Joe rules, the code **reads**
+column A on those rows and never writes it.
