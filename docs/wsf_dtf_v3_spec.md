@@ -2757,14 +2757,59 @@ three, **all three lines are carrying at complete−1**, so the highest is ws3 w
 `first_event`. `optimus9/compute/rule2_walked.py` — `carrying`, `walked`. Both bars are reported
 whichever one won, so the losing terminator stays visible.
 
-**NO TRADE SIGNAL IS BUILT HERE, AND THAT IS THE OPEN QUESTION.** What fires once the walk completes
-on a 3roob bar is unruled. Diagnostic only, from the completion bar, highest carrying line = ws3:
+**THE SIGNAL AT A 3roob COMPLETION IS THE MAGE-REV — Joe 0926.** Asked directly whether it was the
+3roob bar itself or the mage-rev walked from it: *"the mage-rev"*.
 
-| # | 3roob completion | mage-rev walk, `sig_lookback` 0 | at 24 bars = 2 min | Joe's target |
-|---|---|---|---|---|
-| 6 | 09-02 18:15:00 | 18:37:45 | **18:15:15** | 09-02 18:15 |
-| 8 | 09-03 06:39:00 | 06:39:35 | 06:39:35 | 09-03 06:39 |
-| 12 | 09-05 06:35:00 | 06:36:55 | 06:36:55 | 09-05 06:39 |
+| step | |
+|---|---|
+| 1 | the walk completes on a 3roob bar |
+| 2 | the tf is §22.10's highest-tf rule read at completion − 1. All three lines carry on all three 3roob rows, so it is ws3 with no tie to break |
+| 3 | `mage_rev_walk` from the completion bar, `sig_lookback` **24 bars = 2 min** |
+| 4 | a print past the dr flip is not a signal |
+
+**WHY THE 2 MIN ALLOWANCE IS THE ONE THAT MATTERS HERE, AND NOT `rule2_pre-check_lb`.** Two different
+lookbacks, and Joe asked which was which:
+
+| | `rule2_pre-check_lb` | `sig_lookback` |
+|---|---|---|
+| value | 48 bars = 4 min | 24 bars = 2 min |
+| spec | §22.16 | §22.17 |
+| acts | at sig_utc, before the walk | inside `mage_rev_walk` |
+| asks | did any of the 3 lines START a reverse run in the window | may the gcws30Mage `sig` be taken BEFORE the ws{tf}Mage `rev` anchor |
+
+**#6 IS THE ROW THE 2 MIN WAS RAISED FOR, AND THE MARGIN IS 1 BAR.** Re-verified 0926 at the 3roob
+completion 09-02 18:15:00, dr −1, ws3Mage:
+
+| leg | first print at or after 18:15:00 | last before it |
+|---|---|---|
+| `dwell_ok` | 18:15:00 | 18:14:55 |
+| `rev`, the anchor | 18:15:05 | 18:14:40 |
+| `sig`, gcws30Mage | 18:15:00 | 18:11:30 |
+| `sig_conf` | 18:15:15 | 18:11:45 |
+
+The gcws30Mage sig at 18:15:00 sits **1 bar = 5 s** before the anchor. The previous one is 43 bars =
+215 s before it. So a strict "after the anchor" skips it and the walk lands **18:37:45**; any
+allowance of 1 bar or more lands **18:15:15**. Measured at 0, 12, 24 and 48 bars: 18:37:45, then
+18:15:15 at all three.
+
+**THE THREE 3roob ROWS, WIRED:**
+
+| # | walk complete | tf | TRADE SIGNAL | Joe's target | delta |
+|---|---|---|---|---|---|
+| 6 | 09-02 18:15:00 | ws3 | **09-02 18:15:15** | 09-02 18:15 | −0.25 min |
+| 8 | 09-03 06:39:00 | ws3 | **09-03 06:39:35** | 09-03 06:39 | −0.58 min |
+| 12 | 09-05 06:35:00 | ws3 | **09-05 06:36:55** | 09-05 06:39 | +2.08 min, earlier than the target |
+
+**BUILT:** `rule2_walked.signal(walk, dr, mage_rev, end, sig_lookback)`. `sig_lookback` has **no
+default** — the caller states it. The mage-rev walk is passed in as a callable so `compute/` keeps
+no dependency on the jig.
+
+**THE QUIET BRANCH'S tf SOURCE IS STILL OPEN.** `signal` reads the highest carrying line whatever the
+reason, and on a quiet completion exactly one line carries at completion − 1 on all 8 rows. Using it
+there is the *"`walked` should be picking qualifying line"* reading Joe floated on 0925 and has not
+ruled. Run on the 8 quiet rows at `sig_lookback` 24 it produces: #1 none (15:07:15, past the flip),
+#2 16:37:15, #4 02:23:55, #5 02:23:55, #9 none (13:28:15 past), #10 07:43:05, #11 none (08:40:45
+past), #14 17:49:00. **Not a result — the tf source underneath it is unruled.**
 
 **NOT BANKED TO `wsf_dtf_v3_config`.** The 1 min tolerance is Joe's value, said in chat. §21.6 holds
 the reason no new config version has been written.

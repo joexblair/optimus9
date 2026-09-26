@@ -31,8 +31,16 @@ THE ARM IS THE WALK'S OWN LIFE. Joe asked for an arm that resets on the dr flip 
 when the walk completes without finding 3roob. That is exactly a search bounded by [sig_utc, the
 completion bar], so the arm needs no separate state: `reason` says whether 3roob was what ended it.
 
-NO TRADE SIGNAL HERE. What fires once the walk completes on a 3roob bar — that bar itself, or the
-mage-rev step walked from it — is UNRULED. This module returns the completion and stops.
+THE SIGNAL AT A 3roob COMPLETION IS THE MAGE-REV. Joe 0926, asked directly whether it was the 3roob
+bar itself or the mage-rev walked from it: *"the mage-rev"*. `signal` does that and nothing else.
+
+THE tf COMES FROM §22.10's HIGHEST-TF RULE, read at the completion bar. On all three 3roob rows all
+three lines carry at complete - 1, so the highest is ws3 with nothing to break a tie on.
+
+`sig_lookback` HAS NO DEFAULT ON `signal`. The caller states it. Joe's banked value is 24 bars =
+2 min, §22.17, and #6 is the row it was raised for: the gcws30Mage sig at 09-02 18:15:00 sits
+1 bar = 5 s before the ws3Mage rev anchor at 18:15:05, so a strict "after the anchor" skips it and
+the walk lands 18:37:45 instead of 18:15:15.
 
 CAUSAL. `trajectory` reads bars at or before the test bar; `three_r_oob.held` reads a backward
 tolerance window. The walk visits bars in order and never reads past the bar it is on.
@@ -94,3 +102,30 @@ def walked(lines, dr, k0, end, block, min_bars, tol_bars, oob=(15.0, 85.0), min_
     return {'bar': bar, 'reason': reason,
             'carrying': carrying(lines, dr, prev, block, min_bars, min_travel),
             'quiet_bar': quiet_bar, 'oob_bar': oob_bar}
+
+
+def signal(walk, dr, mage_rev, end, sig_lookback):
+    """The trade signal at the walk's completion bar. -> a dict, never None.
+
+    Joe 0926: *"the mage-rev"*.
+
+    walk          a `walked` result
+    mage_rev      a callable (tf, dr, from_bar, sig_lookback) -> bar or None, the ws{tf}Mage-rev
+                  ordered walk. Passed in so `compute/` keeps no dependency on the jig
+    end           the dr flip bar. A print past it is not a signal
+    sig_lookback  NO DEFAULT. Joe's banked value is 24 bars = 2 min, §22.17
+
+    keys: tf, bar, raw
+      tf   the highest line carrying at the completion bar - 1, or None when none carries
+      raw  what the walk returned, unbounded, so a print past `end` stays visible
+      bar  raw, or None when it lands past `end` or no tf was available
+    """
+    tf = max(walk['carrying']) if walk['carrying'] else None
+    out = {'tf': tf, 'bar': None, 'raw': None}
+    if tf is None:
+        return out
+    b = mage_rev(tf, int(dr), int(walk['bar']), int(sig_lookback))
+    out['raw'] = b
+    if b is not None and b <= int(end):
+        out['bar'] = b
+    return out
