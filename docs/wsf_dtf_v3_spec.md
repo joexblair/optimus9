@@ -2691,3 +2691,80 @@ the signal - we'll drop that mech"*.
 
 **NOT BANKED TO `wsf_dtf_v3_config`.** It is Joe's label, said in chat. §21.6 holds the reason no
 new config version has been written.
+
+### 22.20 `walked`, AND `3roob` AS ITS SECOND TERMINATOR — Joe 0925/0926
+
+Until now `walked` had no definition anywhere. It has two terminators and both are Joe's.
+
+> **the quiet terminator, 0925:** "do we have a definition for walked is complete? it's important
+> that `walked` stops when all of the 3 lines are not printing trajectory"
+>
+> **the 3roob terminator, 0925/0926:** "this needs an arm that resets on dr-flip. we only test for
+> 3-r-oob during the `walked` mech. ie if `walked` has completed and not found 3-r-oob, the arm is
+> disabled" / "the table shows that 3-r-oob (which I shortened to 3roob) needs to be baked in so
+> that #6 is completed by the 3roob mech at 18:15"
+
+**THE MECH**
+
+| step | |
+|---|---|
+| 1 | the walk starts at the sig_utc bar and is bounded by the dr flip |
+| 2 | at each bar, is 3roob true? → the walk completes, reason `three_r_oob` |
+| 3 | at each bar, does no line of ws1r/ws2r/ws3r carry `trajectory`? → completes, reason `quiet` |
+| 4 | whichever bar is **earlier** ends the walk |
+| 5 | neither inside the stretch → completes at the dr flip, reason `dr_flip` |
+
+**`3roob` — THE EVENT, §22.20a**
+
+| | |
+|---|---|
+| fence | oob **15/85**, on the dr side. Joe's other four fences are not this one |
+| tolerance | **12 bars = 60 s**, rolling. Joe 0925: *"use a 1min tolerance instead of a dwell"* |
+| the test at bar `i` | each of ws1r, ws2r, ws3r has been oob at some bar in [`i` − 12, `i`] |
+| a line already oob | **counts**. The crossings-within-60 s reading drops #6 itself, whose ws2r crossed 09-02 18:08:00, seven minutes before ws3r at 18:15:00 |
+| the event bar | the **last bar of the earliest qualifying window** — **MINE**, stated when built. The 28-row table Joe tagged was produced under it |
+
+**THE ARM NEEDS NO SEPARATE STATE.** Joe asked for an arm that resets on the dr flip and is disabled
+when the walk completes without finding 3roob. A search bounded by [sig_utc, the completion bar] is
+exactly that, and `reason` says whether 3roob is what ended it.
+
+**THE QUIET TEST IS A SINGLE BAR, AND THAT IS JOE'S WORDING.** No confirmation window. Measured #9,
+09-03, dr +1: the walk completes at **13:06:10** on an **11 bar = 55 s** hole. ws3r lapsed because it
+fell **55.23 → 47.04** in one 5 s print at 13:06:05, which became its own dr-opposed extrema — 1 bar
+back, travel +0.00, against `min_bars` 24. ws1r carried again at 13:07:05. Joe has seen this and the
+wording stands.
+
+**VERIFIED — 11 of 11 rows match the table Joe pasted, 0 mismatches:**
+
+| # | wsl_sig_utc | dr | walk complete | reason | min after sig | carrying at complete−1 | quiet bar | 3roob bar | dr flip |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 09-01 12:41:30 | −1 | 13:10:25 | quiet | 28.9 | ws2 | 13:10:25 | none | 13:27:00 |
+| 2 | 09-01 16:15:20 | −1 | 16:22:15 | quiet | 6.9 | ws2 | 16:22:15 | none | 17:20:35 |
+| 4 | 09-02 01:30:25 | −1 | 01:58:10 | quiet | 27.8 | ws2 | 01:58:10 | none | 02:36:45 |
+| 5 | 09-02 01:41:15 | −1 | 01:58:10 | quiet | 16.9 | ws2 | 01:58:10 | none | 02:36:45 |
+| 6 | 09-02 18:11:30 | −1 | **18:15:00** | **three_r_oob** | 3.5 | ws1 ws2 ws3 | 18:46:20 | 18:15:00 | 19:10:15 |
+| 8 | 09-03 06:26:55 | +1 | **06:39:00** | **three_r_oob** | 12.1 | ws1 ws2 ws3 | 06:45:10 | 06:39:00 | 07:30:55 |
+| 9 | 09-03 12:49:05 | +1 | 13:06:10 | quiet | 17.1 | ws3 | 13:06:10 | none | 13:19:25 |
+| 10 | 09-04 07:01:35 | +1 | 07:21:05 | quiet | 19.5 | ws3 | 07:21:05 | none | 07:52:40 |
+| 11 | 09-05 04:10:00 | −1 | 04:22:00 | quiet | 12.0 | ws2 | 04:22:00 | none | 04:53:50 |
+| 12 | 09-05 06:29:25 | +1 | **06:35:00** | **three_r_oob** | 5.6 | ws1 ws2 ws3 | 06:46:00 | 06:35:00 | 07:57:55 |
+| 14 | 09-05 16:53:40 | +1 | 17:17:00 | quiet | 23.3 | ws1 | 17:17:00 | none | 18:05:20 |
+
+3roob moves 3 of 11 rows earlier: #6 by **31.3 min**, #8 by **6.2 min**, #12 by **11.0 min**. On all
+three, **all three lines are carrying at complete−1**, so the highest is ws3 with no ambiguity.
+
+**BUILT:** `optimus9/compute/three_r_oob.py` — `oob_mask`, `last_oob`, `held`, `events`,
+`first_event`. `optimus9/compute/rule2_walked.py` — `carrying`, `walked`. Both bars are reported
+whichever one won, so the losing terminator stays visible.
+
+**NO TRADE SIGNAL IS BUILT HERE, AND THAT IS THE OPEN QUESTION.** What fires once the walk completes
+on a 3roob bar is unruled. Diagnostic only, from the completion bar, highest carrying line = ws3:
+
+| # | 3roob completion | mage-rev walk, `sig_lookback` 0 | at 24 bars = 2 min | Joe's target |
+|---|---|---|---|---|
+| 6 | 09-02 18:15:00 | 18:37:45 | **18:15:15** | 09-02 18:15 |
+| 8 | 09-03 06:39:00 | 06:39:35 | 06:39:35 | 09-03 06:39 |
+| 12 | 09-05 06:35:00 | 06:36:55 | 06:36:55 | 09-05 06:39 |
+
+**NOT BANKED TO `wsf_dtf_v3_config`.** The 1 min tolerance is Joe's value, said in chat. §21.6 holds
+the reason no new config version has been written.
