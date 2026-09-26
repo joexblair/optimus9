@@ -2639,7 +2639,7 @@ what the banked result was taken under. Whether the extension's mage-rev walk sh
 allowance is **UNRULED**.
 
 **BOTH LEGS ARE BOUND BY THE dr FLIP.** Measured #11, 09-05, dr -1, trigger 04:15:25: the ws1Mage-rev
-walk returns **05:50:45** against a flip at **04:42:25**, so the signal is None, not 05:50:45. An
+walk returns **05:50:45** against a flip at **04:53:50**, so the signal is None, not 05:50:45. An
 earlier draft bounded only the reverse leg and produced the 05:50:45 print.
 
 **BUILT:** `optimus9/compute/rule2_extension.py` — `next_minute(ts, k)` and `extend(...)`. The
@@ -2738,17 +2738,17 @@ wording stands.
 
 | # | wsl_sig_utc | dr | walk complete | reason | min after sig | carrying at complete−1 | quiet bar | 3roob bar | dr flip |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | 09-01 12:41:30 | −1 | 13:10:25 | quiet | 28.9 | ws2 | 13:10:25 | none | 13:26:00 |
-| 2 | 09-01 16:15:20 | −1 | 16:22:15 | quiet | 6.9 | ws2 | 16:22:15 | none | 17:20:00 |
-| 4 | 09-02 01:30:25 | −1 | 01:58:10 | quiet | 27.8 | ws2 | 01:58:10 | none | 02:36:00 |
-| 5 | 09-02 01:41:15 | −1 | 01:58:10 | quiet | 16.9 | ws2 | 01:58:10 | none | 02:36:00 |
-| 6 | 09-02 18:11:30 | −1 | **18:15:00** | **three_r_oob** | 3.5 | ws1 ws2 ws3 | 18:46:20 | 18:15:00 | 19:09:00 |
-| 8 | 09-03 06:26:55 | +1 | **06:39:00** | **three_r_oob** | 12.1 | ws1 ws2 ws3 | 06:45:10 | 06:39:00 | 07:27:45 |
-| 9 | 09-03 12:49:05 | +1 | 13:06:10 | quiet | 17.1 | ws3 | 13:06:10 | none | 13:18:20 |
-| 10 | 09-04 07:01:35 | +1 | 07:21:05 | quiet | 19.5 | ws3 | 07:21:05 | none | 07:45:50 |
-| 11 | 09-05 04:10:00 | −1 | 04:22:00 | quiet | 12.0 | ws2 | 04:22:00 | none | 04:42:25 |
-| 12 | 09-05 06:29:25 | +1 | **06:35:00** | **three_r_oob** | 5.6 | ws1 ws2 ws3 | 06:46:00 | 06:35:00 | 07:57:20 |
-| 14 | 09-05 16:53:40 | +1 | 17:17:00 | quiet | 23.3 | ws1 | 17:17:00 | none | 18:04:00 |
+| 1 | 09-01 12:41:30 | −1 | 13:10:25 | quiet | 28.9 | ws2 | 13:10:25 | none | 13:27:00 |
+| 2 | 09-01 16:15:20 | −1 | 16:22:15 | quiet | 6.9 | ws2 | 16:22:15 | none | 17:20:35 |
+| 4 | 09-02 01:30:25 | −1 | 01:58:10 | quiet | 27.8 | ws2 | 01:58:10 | none | 02:36:45 |
+| 5 | 09-02 01:41:15 | −1 | 01:58:10 | quiet | 16.9 | ws2 | 01:58:10 | none | 02:36:45 |
+| 6 | 09-02 18:11:30 | −1 | **18:15:00** | **three_r_oob** | 3.5 | ws1 ws2 ws3 | 18:46:20 | 18:15:00 | 19:10:15 |
+| 8 | 09-03 06:26:55 | +1 | **06:39:00** | **three_r_oob** | 12.1 | ws1 ws2 ws3 | 06:45:10 | 06:39:00 | 07:30:55 |
+| 9 | 09-03 12:49:05 | +1 | 13:06:10 | quiet | 17.1 | ws3 | 13:06:10 | none | 13:19:25 |
+| 10 | 09-04 07:01:35 | +1 | 07:21:05 | quiet | 19.5 | ws3 | 07:21:05 | none | 07:52:40 |
+| 11 | 09-05 04:10:00 | −1 | 04:22:00 | quiet | 12.0 | ws2 | 04:22:00 | none | 04:53:50 |
+| 12 | 09-05 06:29:25 | +1 | **06:35:00** | **three_r_oob** | 5.6 | ws1 ws2 ws3 | 06:46:00 | 06:35:00 | 07:57:55 |
+| 14 | 09-05 16:53:40 | +1 | 17:17:00 | quiet | 23.3 | ws1 | 17:17:00 | none | 18:05:20 |
 
 3roob moves 3 of 11 rows earlier: #6 by **31.3 min**, #8 by **6.2 min**, #12 by **11.0 min**. On all
 three, **all three lines are carrying at complete−1**, so the highest is ws3 with no ambiguity.
@@ -2814,30 +2814,33 @@ past), #14 17:49:00. **Not a result — the tf source underneath it is unruled.*
 **NOT BANKED TO `wsf_dtf_v3_config`.** The 1 min tolerance is Joe's value, said in chat. §21.6 holds
 the reason no new config version has been written.
 
-### 22.21 THE dr SOURCE — Joe 0926, "no wob"
+### 22.21 THE dr SOURCE — reviewed 0926, `dr_latch_wob` LATCH_W 8 STAYS
 
-> "for the last few days I've been thinking about moving the dr-flip earlier to improve the
-> backstop, so that answers the question. no wob"
+> **Joe 0926, the review:** "the key that built that data is in the file. review the dr logic that
+> was used"
+>
+> **first ruling:** "for the last few days I've been thinking about moving the dr-flip earlier to
+> improve the backstop, so that answers the question. no wob"
+>
+> **final ruling, after seeing the cost:** "we have to stick on 8 - there's too many `t`s affected"
 
-**THE PRODUCER IS `walk_mom_models.dr_latch`.** It latches on the FIRST bar ws1Mage and ws13m are
-both oob on the same side. Its own docstring: *"VERBATIM from build_wsf_dtf_v3"*.
+**THE PRODUCER IS `docs/mage_cascade/stopsweep.py:62` `dr_latch_wob(ws1Mage, ws13m, LATCH_W 8)`** —
+8 consecutive bars = 40 s of both lines oob on the same side before the latch moves. **Joe's
+decision, taken against the alternative with the numbers in front of him.** Unchanged from every
+measurement taken 0924–0926.
 
-**THE dr IS READ LIVE AT THE BAR THE WALK STARTS FROM**, so the earlier flip becomes the backstop —
-which is what Joe asked the change for. The walk's outer bound is the end of the stretch the sig bar
-sits in.
+**IT IS NOT THE PRODUCER THAT BUILT `wsl_dr`, AND THAT IS NOW DELIBERATE.**
 
-**WHAT WAS WRONG BEFORE THIS.** Every rule#2 number taken 0924–0926 used
-`docs/mage_cascade/stopsweep.py:62` `dr_latch_wob(..., LATCH_W 8)`, which requires **8 consecutive
-bars = 40 s** of both-oob before it latches. That is a mage-cascade knob and mage-cascade has been
-PARKED since 0918. It is not what built `wsf_dtf_v3` or `wsf_leash`.
-
-| | `dr_latch` | `dr_latch_wob`, LATCH_W 8 |
+| | `walk_mom_models.dr_latch` | `dr_latch_wob`, LATCH_W 8 |
 |---|---|---|
-| stretches on the tape | **3,217** | 2,497 |
-| bars where they disagree | 112,984 of 1,632,960 = **6.92%** | |
+| rule | latches on the FIRST bar both are oob the same side | needs 8 bars = 40 s first |
+| built | `wsf_dtf_v3`, and through it `wsf_leash`.`wsl_dr` | mage-cascade's stop sweep |
+| stretches on the tape | 3,217 | **2,497** |
+| bars where they disagree | 112,984 of 1,632,960 = 6.92% | |
+| the walk uses | — | **this one** |
 
-**`wsl_dr` IS STAMPED AT THE MOMENT'S FIRST BAR, NOT THE SIGNAL BAR.** Measured over the 242
-signalled `wsf_leash` rows on key `v3_tf1.23_sp10_sl0.4_f25.75_drws1Mage.ws13m_bv1`:
+**`wsl_dr` IS STAMPED AT THE MOMENT'S FIRST BAR, NOT THE SIGNAL BAR.** Over the 242 signalled
+`wsf_leash` rows on key `v3_tf1.23_sp10_sl0.4_f25.75_drws1Mage.ws13m_bv1`:
 
 | what was tested | matches `wsl_dr` |
 |---|---|
@@ -2848,41 +2851,51 @@ signalled `wsf_leash` rows on key `v3_tf1.23_sp10_sl0.4_f25.75_drws1Mage.ws13m_b
 | `dr_latch_wob` at `wsl_act_ms` | 236 of 242 = 97.5% |
 | `dr_latch_wob` at `wsl_sig_ms` | 232 of 242 = 95.9% |
 
-So the sheet's column A is the MOMENT's sign and the walk's live dr is the SIGNAL bar's. They differ
-on **7 of 242** rows, because `wsl_sig_utc` can sit a long way after the moment's first bar — on
-09-05 it is 18:22:40 → 19:20:25, **57.8 min** and one flip later. Joe's ruling makes the walk read
-the live latch, so the two columns are not required to agree.
+`wsl_sig_utc` can sit a long way after the moment's first bar — on 09-05, 18:22:40 → 19:20:25 is
+**57.8 min** and one flip later. **So the sheet's column A and the walk's dr are different things by
+design, and are not required to agree.** The walk reads its dr live at the bar it starts from.
 
-**WHAT THE SWAP MOVED, over the 154 sig_utc rows of `260924_strat_wsf_leash.xlsx`:**
+**WHY 8 AND NOT 0.** Swapping to `dr_latch` moved walk-complete on **25 of 154** rows, median
+−0.6 min, range −24.9 to +9.4, of which **12 carry Joe's `t` tag** and 12 `x`, 1 `s`. 22 of the 25
+moved earlier, and 21 of the 25 were rows already ending at the flip. Nothing banked moved: the 11 IS
+rows were bar-identical in every column except the flip itself.
 
-| | `dr_latch_wob` | `dr_latch` |
-|---|---|---|
-| ended by 3roob | 16 | **17** |
-| ended with no line carrying | 118 | **114** |
-| ended at the dr flip | 20 | **23** |
+**WHY 8 AND NOT 6 OR 7.** The walkA/B over the 13 column-D rows is **12 of 13 bit-identical at 6, 7
+and 8**; only sheet row 154 moves, by 5 s. Across all 154 rows, 6 against 7 differ on 22 rows and
+**20 of those by a single 5 s bar**. Only two move materially: row 5 (`t`) by +2.2 min and row 132
+(`x`) by +17.7 min.
 
-Walk-complete moved on **25 of 154**, median −0.6 min, range −24.9 to +9.4. The movement is almost
-all on rows that end at the flip, which now arrives sooner.
+| wob | stretches | 3roob | no line carrying | dr flip | A/B inside 1 min |
+|---|---|---|---|---|---|
+| 0, no wob | 3,217 | 17 | 114 | 23 | 1 of 13 |
+| 6 bars = 30 s | 2,603 | 16 | 116 | 22 | 1 of 13 |
+| 7 bars = 35 s | 2,545 | 16 | 118 | 20 | 1 of 13 |
+| **8 bars = 40 s** | **2,497** | **16** | **118** | **20** | **1 of 13** |
 
-**NOTHING BANKED MOVED.** Re-measured under `dr_latch`, bar for bar:
+**A CORRECTION, 0926.** I reported that the earlier flip left 5 of the 3roob rows without a signal.
+It does not. Measured at LATCH_W 8, the **same five** rows have no signal — sheet rows 87, 93, 94,
+119, 120 — because the ws3Mage-rev walk lands 20:03:25, 17:49:40, 17:49:40, 19:12:15 and 19:12:15,
+far past the flip under either producer. The 5 are wob-independent.
 
-| | |
-|---|---|
-| the 11 IS rows' walk-complete, reason, carrying line, quiet bar, 3roob bar | **identical**. Only the dr flip column moved, all 11 earlier |
-| #6 18:15:00 → signal 18:15:15 | unchanged |
-| #8 06:39:00 → signal 06:39:35 | unchanged |
-| #12 06:35:00 → signal 06:36:55 | unchanged |
-| the ws1-extension #14, trigger 17:08:00 → 17:14:05 | unchanged |
-| #9's 55 s hole, 13:06:10 with ws1r carrying again at 13:07:05 | unchanged |
+**THE 16 3roob ROWS AT LATCH_W 8, tf ws3 on every one, `sig_lookback` 24 bars = 2 min:**
 
-**THE EARLIER FLIP COSTS SIGNALS ON 3roob ROWS.** Of the 17 rows 3roob ends, **5 have no signal**
-because the ws3Mage-rev walk lands past the flip: rows 87, 93, 94, 119 and 120 of the sheet.
+| sheet row | wsl_sig_utc | dr | tag | complete | SIGNAL | raw walk | dr flip |
+|---|---|---|---|---|---|---|---|
+| 22 | 09-01 15:08:00 | −1 | t | 15:10:10 | 15:11:15 | 15:11:15 | 15:49:40 |
+| 27 | 09-01 17:59:55 | −1 | s | 17:59:55 | 18:11:35 | 18:11:35 | 19:11:20 |
+| 46 | 09-02 03:29:00 | +1 | t | 03:29:00 | 03:29:20 | 03:29:20 | 03:43:55 |
+| 49 | 09-02 05:06:15 | −1 | t | 05:06:40 | 05:08:00 | 05:08:00 | 05:29:50 |
+| 60 | 09-02 12:36:35 | −1 | t | 12:58:00 | 13:00:25 | 13:00:25 | 13:27:25 |
+| 68 | 09-02 18:11:30 | −1 | t | 18:15:00 | **18:15:15** | 18:15:15 | 19:10:15 |
+| 69 | 09-02 18:15:00 | −1 | t | 18:15:00 | 18:15:15 | 18:15:15 | 19:10:15 |
+| 79 | 09-03 06:26:55 | +1 | t | 06:39:00 | **06:39:35** | 06:39:35 | 07:30:55 |
+| 87 | 09-03 14:04:00 | −1 | t | 14:04:00 | NONE | 20:03:25 | 14:20:55 |
+| 93 | 09-03 16:18:00 | +1 | t | 16:52:00 | NONE | 17:49:40 | 17:11:40 |
+| 94 | 09-03 16:51:25 | +1 | t | 16:52:00 | NONE | 17:49:40 | 17:11:40 |
+| 119 | 09-04 17:36:55 | −1 | t | 17:54:05 | NONE | 19:12:15 | 19:01:15 |
+| 120 | 09-04 17:53:00 | −1 | s | 17:54:05 | NONE | 19:12:15 | 19:01:15 |
+| 128 | 09-05 01:46:15 | −1 | t | 02:06:00 | 02:08:55 | 02:08:55 | 04:53:50 |
+| 129 | 09-05 02:08:40 | −1 | t | 02:08:40 | 02:08:55 | 02:08:55 | 04:53:50 |
+| 136 | 09-05 06:29:25 | +1 | s | 06:35:00 | **06:36:55** | 06:36:55 | 07:57:55 |
 
-**STILL CARRYING `dr_latch_wob` VALUES, NOT RE-MEASURED.** These tables were built before the ruling
-and their `dr flip` columns are the wob producer's. Flagged rather than silently rewritten:
-
-| section | what in it |
-|---|---|
-| §22.15 | the four no-signal rows' `dr flip` column |
-| §22.16 | the pre-check table's `dr flip` column |
-| the sig_conf / past-the-flip verdicts in both | they depend on that column |
+11 of 16 signal, 5 do not. Tags: 13 `t`, 3 `s`, **0 `x`** out of 61 `x` rows in the sheet.
