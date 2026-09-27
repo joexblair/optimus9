@@ -5,7 +5,7 @@ REBUILT 0927 IN JOE'S Sheet2 SHAPE.  Joe 0927: "I need to update all_wsf_flatrun
 need 3 more rows that provide tactical data" / "it's important that the new data is stacked under
 each existing row" / "convert the columns to string, and print the time using hh:mm".
 
-FIVE ROWS PER wsl_sig_utc, `awf_kind` says which, `awf_n` orders them:
+EIGHT ROWS PER wsl_sig_utc, `awf_kind` says which, `awf_n` orders them:
 
   1 flatrun   awf_ws1..awf_ws12 = the FIRST flat-run bar at or after sig_utc - 8 min, as `hh:mm`
   2 dir       the Mage line's incoming direction over five CONSECUTIVE bands plus a sixth
@@ -13,6 +13,9 @@ FIVE ROWS PER wsl_sig_utc, `awf_kind` says which, `awf_n` orders them:
   3 mage      ws{t}Mage at sig_utc
   4 r         ws{t}r at sig_utc
   5 xcross    the NEAREST ws{t}x cross of ws{t}r to sig_utc, looking back AND forward, as `hh:mm`
+  6 blank1    empty, a placeholder Joe notates in the xlsx
+  7 blank2    empty, the second placeholder
+  8 rtraj     the trajectory direction of ws{t}r - the last-mile band on r, 0.75 x TF -> sig_utc
 
 THE x-CROSS ROW IS JOE'S, 0927: *"the timestamp of the nearest (lookback or lookforth)
 ws{awf_ws{TF}}x-cross-r"*.
@@ -25,6 +28,30 @@ ws{awf_ws{TF}}x-cross-r"*.
   THE FORWARD HALF IS LOOKAHEAD BY CONSTRUCTION, and that is Joe's instruction - "lookforth". It is
   fine in a diagnostic table and must never reach a signal path. The cell does not say which side it
   came from; a back cross and a forward cross at the same `hh:mm` are indistinguishable in it.
+
+ROWS 6 AND 7 ARE DELIBERATELY EMPTY - Joe 0927: *"2 rows will be blank placeholders and exist under
+the xcross row - I need these because I'm notating the xls and if I need to add more rows in the
+future, they'll lose alignment"*.  They are banked as rows so every sig_utc block is the same height
+and his notation keeps its alignment when a row is added later.  Do not fill them.
+
+ROW 8 IS THE TRAJECTORY DIRECTION OF r - Joe 0927: *"the 3rd row will show the trajectory direction of
+r. eg 09-01 03:40, ws1r is DN, ws2r and ws3r are UP, ws4r is DN, and so-on"*.
+
+  the reading is the LAST-MILE BAND ON r: `sgn(ws{t}r[sig - 0.75 x TF], ws{t}r[sig])`, the same band
+  the dir row's line 5 uses, on r instead of Mage.
+
+  IDENTIFIED FROM JOE'S OWN EXAMPLE, not chosen.  At 09-01 03:40:05, dr +1, five candidate readings
+  were tested against his `ws1r DN, ws2r UP, ws3r UP, ws4r DN`:
+
+    the 0.75 x TF band on r                          DN UP UP DN   <- 4 of 4, Joe's
+    the banked `trajectory` mech's `has`             DN UP UP UP   3 of 4
+    the 1.5 x TF band                                DN UP UP UP   3 of 4
+    the 3 x TF band                                  DN UP UP UP   3 of 4
+    the sign of travel from the dr-opposed extrema   DN UP UP UP   3 of 4
+
+  ws4 IS THE ONLY DISCRIMINATING CELL.  `rule2_trajectory.trajectory` says ws4r DOES carry trajectory
+  at that bar - travel +14.95 over 126 bars - while over the last 3 minutes it fell.  If ws4 was a
+  slip in Joe's example then the banked mech is what he meant; he was told so.
 
 THE BANDS ARE A BASE SET SCALED BY TF - Joe 0927: *"let's remix the 1,2,4,8,16 logic / 1) create a
 base set of values: [0.75, 1.5, 3, 6, 12] / 2) apply the lookback using base-set * TF -- eg for ws12,
@@ -142,7 +169,8 @@ def bands(tf):
     """The five (earlier bars, later bars) pairs for one TF. 0 bars IS sig_utc."""
     e=[int(round(b*tf*12)) for b in BASE]+[0]
     return [(e[i],e[i+1]) for i in range(5)]
-KINDS=(('flatrun',1),('dir',2),('mage',3),('r',4),('xcross',5))
+KINDS=(('flatrun',1),('dir',2),('mage',3),('r',4),('xcross',5),
+       ('blank1',6),('blank2',7),('rtraj',8))
 INST={'v7':'v7_coil_lines[gcws30,ws1]_confirm_lag_s180_exit_anchornamed_bar_gap_fill1_lookback_s240_support_min23',
       'v8':'v8_coil_lines[ws2,ws3]_confirm_lag_s180_exit_anchornamed_bar_gap_fill1_lookback_s240_support_min23'}
 KNOBS='fence%g.%g_samples%d_tol%g_back%d'%(FENCE[0],FENCE[1],SAMPLES,TOL,BACK)
@@ -205,6 +233,7 @@ db.execute(DDL); print('B|created %s|knobs %s|win %s'%(TABLE,KNOBS,WIN))
 print('B|base set %s x TF minutes|labels UP DN -'%' '.join('%g'%b for b in BASE))
 print('B|ws1 bars %s|ws12 bars %s|all bands two-point'%(bands(1),bands(12)))
 pay=[]; pre=0; blank=0; ties=0; short=0; nox=0; xback=0; xfwd=0; xat=0; noanch=0; pblank=0
+rtu=rtd=rtt=0
 L1={d:None for d in (1,-1)}
 _L1=ws1mage_rev(MA[1],G,float(_C['oob_hi']),float(_C['oob_lo']),dwell=int(_C['dwell']),
                 rev_wob=int(_C['rev_wob']),hold=int(_C['boundary_xwob']))
@@ -224,7 +253,7 @@ for inst,kn in INST.items():
         _rv=_L1[d]['rev']; _b=_rv[_rv<=k]
         panch=(int(_b[-1])-PSTEP) if len(_b) else None      # line 6's anchor: rev bar - 30 s
         if panch is None: noanch+=1
-        fr=[]; dr_=[]; mg=[]; rv=[]; xc=[]
+        fr=[]; dr_=[]; mg=[]; rv=[]; xc=[]; rt=[]; nul=[None]*12
         for t in TFS:
             j=next((q for q in range(s0,len(ts)) if flat_run_at(RA[t],q,d,FENCE,SAMPLES,TOL) is not None),None)
             if j is None: fr.append(None); blank+=1
@@ -244,6 +273,11 @@ for inst,kn in INST.items():
                 ties+=sum(1 for x in v if x=='-')
                 dr_.append('\n'.join(v))
             mg.append('%.2f'%MG[t][k]); rv.append('%.2f'%RR[t][k])
+            _rt=sgn(RR[t][k-BD[-1][0]],RR[t][k]) if k-BD[-1][0]>=0 else None
+            rt.append(_rt)
+            if _rt=='UP': rtu+=1
+            elif _rt=='DN': rtd+=1
+            elif _rt=='-': rtt+=1
             b=nearest_cross(XC[(t,d)],k)
             if b is None: xc.append(None); nox+=1
             else:
@@ -252,7 +286,8 @@ for inst,kn in INST.items():
                 elif b>k: xfwd+=1
                 else: xat+=1
         for kind,n in KINDS:
-            cells={'flatrun':fr,'dir':dr_,'mage':mg,'r':rv,'xcross':xc}[kind]
+            cells={'flatrun':fr,'dir':dr_,'mage':mg,'r':rv,'xcross':xc,
+                   'blank1':nul,'blank2':nul,'rtraj':rt}[kind]
             pay.append(tuple(head+[kind,n]+tail+cells))
 n=db.execute("SELECT COUNT(*) c FROM %s WHERE awf_knobs=%%s AND awf_win=%%s"%TABLE,
              (KNOBS,WIN),fetch=True)[0]['c']
@@ -265,6 +300,8 @@ print('B|flatrun cells %d|fired before sig_utc %d|NULL %d'%(len(pay)//NK*12,pre,
 print('B|dir cells %d|ties (-) %d|rows too close to the tape start %d'%(len(pay)//NK*12,ties,short))
 print('B|line 6 (p)|anchor = ws1Mage rev - %d bars = %d s|rows with no rev %d|blank cells %d'
       %(PSTEP,PSTEP*5,noanch,pblank))
+print('B|rtraj cells %d|UP %d|DN %d|ties (-) %d'
+      %(len(pay)//NK*12,rtu,rtd,rtt))
 print('B|xcross cells %d|from the lookback %d|from the lookforth %d|at sig_utc %d|no cross on the tape %d'
       %(len(pay)//NK*12,xback,xfwd,xat,nox))
 q=db.execute("SELECT awf_inst i, awf_kind kd, COUNT(*) n FROM %s GROUP BY 1,2 ORDER BY 1,3 DESC"%TABLE,fetch=True)

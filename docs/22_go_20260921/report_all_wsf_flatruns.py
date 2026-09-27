@@ -1,7 +1,7 @@
 """report_all_wsf_flatruns - spec_label 22_go_20260921.  Joe 0927: prints `all_wsf_flatruns` in the
 shape of Sheet2 of 260924_strat_wsf_leash.xlsx.
 
-FIVE ROWS PER sig_utc.  The first carries `awf_dr` and `awf_sig_utc`; the other four leave `awf_dr`
+EIGHT ROWS PER sig_utc.  The first carries `awf_dr` and `awf_sig_utc`; the other four leave `awf_dr`
 blank and put the row's LABEL in the `awf_sig_utc` column, exactly as Joe laid it out.  The table
 keeps both columns real on all five rows - they are NOT NULL and they are how the five rows stay
 together and sort.  This module is the only place the blanking happens.
@@ -49,7 +49,12 @@ DIR_HEAD = "mage's incoming direction:"
 DIR_BANDS = ('12 x TF', '6 x TF', '3 x TF', '1.5 x TF', '0.75 x TF', '0.75 x TF (p)')
 LABEL = {'mage': 'mage val @ sig_utc',
          'r': 'r val @ sig_utc',
-         'xcross': 'nearest (lookback or lookforth) ws{TF}x-cross-r'}
+         'xcross': 'nearest (lookback or lookforth) ws{TF}x-cross-r',
+         'blank1': '',
+         'blank2': '',
+         'rtraj': 'trajectory direction of r'}
+# blank1 and blank2 carry no label and no values - Joe notates them in the xlsx and they keep every
+# sig_utc block the same height so his notation survives a future row being added.
 
 
 def blocks(rows):
@@ -85,7 +90,10 @@ def cells(b):
             (lab, ['' if v is None else v for v in k.get('dir', blank)], 1),
             (LABEL['mage'], k.get('mage', blank), 0),
             (LABEL['r'], k.get('r', blank), 0),
-            (LABEL['xcross'], ['' if v is None else v for v in k.get('xcross', blank)], 0)]
+            (LABEL['xcross'], ['' if v is None else v for v in k.get('xcross', blank)], 0),
+            (LABEL['blank1'], blank, 0),
+            (LABEL['blank2'], blank, 0),
+            (LABEL['rtraj'], ['' if v is None else v for v in k.get('rtraj', blank)], 0)]
 
 
 def main(argv=None):
@@ -130,7 +138,7 @@ def main(argv=None):
             sh.column_dimensions[get_column_letter(2 + t)].width = 11
         path = o.out or './all_wsf_flatruns_%s.xlsx' % o.inst
         wb.save(path)
-        print('%s   %s   %d sig_utc x 5 rows -> %s' % (TABLE, o.inst, len(B), path))
+        print('%s   %s   %d sig_utc x 8 rows -> %s' % (TABLE, o.inst, len(B), path))
         print('  wrapText is set on every value cell, so the stacked cells render without editing')
         return 0
 
@@ -142,12 +150,12 @@ def main(argv=None):
             for b in B:
                 for i, (lab, vals, _off) in enumerate(cells(b)):
                     w.writerow([b[0] if i == 0 else ''] + [lab] + list(vals))
-        print('%s   %s   %d sig_utc x 5 rows -> %s' % (TABLE, o.inst, len(B), path))
+        print('%s   %s   %d sig_utc x 8 rows -> %s' % (TABLE, o.inst, len(B), path))
         print('  fields are quoted, so the dir cell arrives in Excel as one alt-enter cell')
         return 0
 
     W = [6, 50] + [10] * 12
-    print('%s   %s   %d sig_utc x 5 rows' % (TABLE, o.inst, len(B)))
+    print('%s   %s   %d sig_utc x 8 rows' % (TABLE, o.inst, len(B)))
     print('  the dir cell is ONE cell holding five lines; awf_sig_utc is deduped down each stack')
     print('')
     print('  ' + ''.join(h.ljust(W[i]) for i, h in enumerate(head)))
