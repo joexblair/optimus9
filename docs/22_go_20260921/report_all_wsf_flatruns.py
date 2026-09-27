@@ -1,73 +1,130 @@
 """report_all_wsf_flatruns - spec_label 22_go_20260921.  Joe 0927: prints `all_wsf_flatruns` in the
 shape of Sheet2 of 260924_strat_wsf_leash.xlsx.
 
-FIVE ROWS PER sig_utc, stacked.  The first carries `awf_dr` and `awf_sig_utc`; the other four leave
-`awf_dr` blank and put the row's LABEL in the `awf_sig_utc` column, exactly as Joe laid it out.
-The table itself keeps both columns real on all five rows - they are NOT NULL and they are how the
-five rows stay together and sort.  This module is the only place the blanking happens.
+FIVE ROWS PER sig_utc.  The first carries `awf_dr` and `awf_sig_utc`; the other four leave `awf_dr`
+blank and put the row's LABEL in the `awf_sig_utc` column, exactly as Joe laid it out.  The table
+keeps both columns real on all five rows - they are NOT NULL and they are how the five rows stay
+together and sort.  This module is the only place the blanking happens.
+
+THE `dir` CELL IS ONE MULTILINE CELL.  Joe 0927: *"you can create multiline excel cells. for HID
+input, i use alt-enter"*, and *"stack the dir data vertically"*.  So the five band readings are one
+cell holding five lines, not five cells and not a joined string.
+
+  --csv   writes a CSV whose fields are quoted, so the embedded newlines arrive in Excel as
+          alt-enter content in a single cell.  This is the paste path.
+  default onscreen, the multiline cells laid out across physical lines.
+
+THE awf_sig_utc COLUMN IS DEDUPED.  Joe 0927: *"dedup the awf_sig_utc column"*.  A value prints once
+and is blank on the lines beneath it, so nothing repeats down a stacked cell or a sig_utc block.
 
 THE LABELS ARE JOE'S OWN WORDS, from Sheet2 and from his 0927 message:
-  dir      "mage's incoming direction: 16min ago 8min ago 4min ago 2min ago 1min ago"
+  dir      "mage's incoming direction:" then "16min ago", "8min ago", "4min ago", "2min ago",
+           "1min ago" - his six lines, matching the five bands 16->8, 8->4, 4->2, 2->1, 1->sig
   mage     "mage val @ sig_utc"
   r        "r val @ sig_utc"
   xcross   "nearest (lookback or lookforth) ws{TF}x-cross-r"   <- assembled from his sentence; he has
            not named this row, so the label is provisional and his to set.
 
-THE `dir` CELL HOLDS FIVE VALUES.  The table stores them newline-separated, which is what Excel needs
-when a cell is pasted.  This report joins them with ' / ' on one line, because a pipe-delimited row
-cannot carry a newline inside a field.  MINE, stated.
-
-  --md    pipe-delimited, for pasting
   --day   YYYY-MM-DD, one day only
   --inst  v7 or v8, default v7
+  --out   the CSV path, default ./all_wsf_flatruns_<inst>.csv
 """
-import argparse, sys
+import argparse, csv, sys
 sys.path.insert(0, '/home/joe/thecodes')
 from optimus9.db.database_manager import DatabaseManager
 from optimus9.config import get_db_config
 
 TABLE = 'all_wsf_flatruns'
 TFS = range(1, 13)
-LABEL = {'dir': "mage's incoming direction: 16min ago 8min ago 4min ago 2min ago 1min ago",
-         'mage': 'mage val @ sig_utc',
+DIR_HEAD = "mage's incoming direction:"
+DIR_BANDS = ('16min ago', '8min ago', '4min ago', '2min ago', '1min ago')
+LABEL = {'mage': 'mage val @ sig_utc',
          'r': 'r val @ sig_utc',
          'xcross': 'nearest (lookback or lookforth) ws{TF}x-cross-r'}
 
 
+def blocks(rows):
+    """-> [(dr, sig_utc, {kind: [12 cells]})], grouped on awf_first_ms.
+
+    NOT grouped by position. Two wsf_leash rows can share one wsl_sig_ms - the sheet has several -
+    and then ordering by sig_ms interleaves their kinds, so a positional group loses cells.
+    `awf_first_ms` is the moment key and is what the table's own unique key groups on.
+    """
+    seen = {}
+    out = []
+    for r in rows:
+        fm = int(r['awf_first_ms'])
+        if fm not in seen:
+            seen[fm] = ['%+d' % int(r['awf_dr']), r['awf_sig_utc'].strftime('%Y-%m-%d %H:%M:%S'), {}]
+            out.append(seen[fm])
+        seen[fm][2][r['awf_kind']] = [r['awf_ws%d' % t] for t in TFS]
+    return out
+
+
+def cells(b):
+    """One block -> the five report rows, each (label_cell, [12 value cells], onscreen_offset).
+
+    The cells are the TRUE cell contents - the dir cell holds exactly five lines. `onscreen_offset`
+    is how far down to push the value lines when laying the block out on physical lines, because the
+    dir label block carries a header line above its five band labels. It is a rendering number only
+    and never reaches the CSV.
+    """
+    dr, sig, k = b
+    lab = '\n'.join((DIR_HEAD,) + DIR_BANDS)
+    blank = [''] * 12
+    return [(sig, k.get('flatrun', blank), 0),
+            (lab, ['' if v is None else v for v in k.get('dir', blank)], 1),
+            (LABEL['mage'], k.get('mage', blank), 0),
+            (LABEL['r'], k.get('r', blank), 0),
+            (LABEL['xcross'], ['' if v is None else v for v in k.get('xcross', blank)], 0)]
+
+
 def main(argv=None):
     a = argparse.ArgumentParser()
-    a.add_argument('--md', action='store_true')
+    a.add_argument('--csv', action='store_true')
     a.add_argument('--day')
     a.add_argument('--inst', default='v7', choices=('v7', 'v8'))
+    a.add_argument('--out')
     o = a.parse_args(argv)
 
     db = DatabaseManager(**get_db_config()); db.connect()
-    q = ("SELECT awf_kind,awf_n,awf_dr,awf_sig_utc,%s FROM %s WHERE awf_inst=%%s"
+    q = ("SELECT awf_kind,awf_n,awf_dr,awf_sig_utc,awf_first_ms,%s FROM %s WHERE awf_inst=%%s"
          % (','.join('awf_ws%d' % t for t in TFS), TABLE))
     p = [o.inst]
     if o.day:
         q += " AND DATE(awf_sig_utc)=%s"; p.append(o.day)
-    q += " ORDER BY awf_sig_ms, awf_n"
+    q += " ORDER BY awf_sig_ms, awf_first_ms, awf_n"
     rows = db.execute(q, tuple(p), fetch=True)
     db.disconnect()
-
+    B = blocks(rows)
     head = ['awf_dr', 'awf_sig_utc'] + ['awf_ws%d' % t for t in TFS]
-    W = [6, 76] + [24] * 12
-    pr = ((lambda c: print('|'.join(str(v) for v in c))) if o.md else
-          (lambda c: print('  ' + ''.join(str(v).ljust(W[i]) for i, v in enumerate(c)))))
-    print('%s   %s   %d rows   %d sig_utc' % (TABLE, o.inst, len(rows), len(rows) // 5))
-    print('  five rows per sig_utc; the dir cell is one line here, newline-stacked in the table')
+
+    if o.csv:
+        path = o.out or './all_wsf_flatruns_%s.csv' % o.inst
+        with open(path, 'w', newline='') as f:
+            w = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+            w.writerow(head)
+            for b in B:
+                for i, (lab, vals, _off) in enumerate(cells(b)):
+                    w.writerow([b[0] if i == 0 else ''] + [lab] + list(vals))
+        print('%s   %s   %d sig_utc x 5 rows -> %s' % (TABLE, o.inst, len(B), path))
+        print('  fields are quoted, so the dir cell arrives in Excel as one alt-enter cell')
+        return 0
+
+    W = [6, 50] + [10] * 12
+    print('%s   %s   %d sig_utc x 5 rows' % (TABLE, o.inst, len(B)))
+    print('  the dir cell is ONE cell holding five lines; awf_sig_utc is deduped down each stack')
     print('')
-    pr(head)
-    for r in rows:
-        if r['awf_kind'] == 'flatrun':
-            c = ['%+d' % int(r['awf_dr']), r['awf_sig_utc'].strftime('%Y-%m-%d %H:%M:%S')]
-        else:
-            c = ['', LABEL[r['awf_kind']]]
-        for t in TFS:
-            v = r['awf_ws%d' % t]
-            c.append('' if v is None else v.replace('\n', ' / '))
-        pr(c)
+    print('  ' + ''.join(h.ljust(W[i]) for i, h in enumerate(head)))
+    for b in B:
+        for i, (lab, vals, off) in enumerate(cells(b)):
+            L = lab.split('\n')
+            V = [([''] * off) + str(v).split('\n') for v in vals]
+            h = max([len(L)] + [len(x) for x in V])
+            for ln in range(h):
+                c = [b[0] if (i == 0 and ln == 0) else '', L[ln] if ln < len(L) else '']
+                c += [V[t][ln] if ln < len(V[t]) else '' for t in range(12)]
+                print('  ' + ''.join(str(v).ljust(W[j]) for j, v in enumerate(c)))
     return 0
 
 
