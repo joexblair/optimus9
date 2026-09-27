@@ -23,8 +23,9 @@ THE awf_sig_utc COLUMN IS DEDUPED.  Joe 0927: *"dedup the awf_sig_utc column"*. 
 and is blank on the lines beneath it, so nothing repeats down a stacked cell or a sig_utc block.
 
 THE LABELS ARE JOE'S OWN WORDS, from Sheet2 and from his 0927 message:
-  dir      "mage's incoming direction:" then "16min ago", "8min ago", "4min ago", "2min ago",
-           "1min ago" - his six lines, matching the five bands 16->8, 8->4, 4->2, 2->1, 1->sig
+  dir      "mage's incoming direction:" then the five band multipliers, then "0.75 x TF (p)" - the
+           de-poisoned last mile, anchored 30 s before the ws1Mage reversal instead of at sig_utc.
+           Joe 0927 asked for the `(p)` suffix: *"sufix it with '(p)' so that I don't forget"*
   mage     "mage val @ sig_utc"
   r        "r val @ sig_utc"
   xcross   "nearest (lookback or lookforth) ws{TF}x-cross-r"   <- assembled from his sentence; he has
@@ -45,7 +46,7 @@ DIR_HEAD = "mage's incoming direction:"
 # the lookbacks are Joe's base set scaled by TF, so the minutes differ per column and the shared
 # label column names the MULTIPLIER instead. The bottom line is the last mile, read from its
 # dr-side extrema - build_all_wsf_flatruns has the mech.
-DIR_BANDS = ('12 x TF', '6 x TF', '3 x TF', '1.5 x TF', '0.75 x TF')
+DIR_BANDS = ('12 x TF', '6 x TF', '3 x TF', '1.5 x TF', '0.75 x TF', '0.75 x TF (p)')
 LABEL = {'mage': 'mage val @ sig_utc',
          'r': 'r val @ sig_utc',
          'xcross': 'nearest (lookback or lookforth) ws{TF}x-cross-r'}

@@ -8,8 +8,8 @@ each existing row" / "convert the columns to string, and print the time using hh
 FIVE ROWS PER wsl_sig_utc, `awf_kind` says which, `awf_n` orders them:
 
   1 flatrun   awf_ws1..awf_ws12 = the FIRST flat-run bar at or after sig_utc - 8 min, as `hh:mm`
-  2 dir       the Mage line's incoming direction over five CONSECUTIVE bands, newline-stacked,
-              the bands scaled by TF, all five two-point
+  2 dir       the Mage line's incoming direction over five CONSECUTIVE bands plus a sixth
+              de-poisoned line, newline-stacked, the bands scaled by TF, all two-point
   3 mage      ws{t}Mage at sig_utc
   4 r         ws{t}r at sig_utc
   5 xcross    the NEAREST ws{t}x cross of ws{t}r to sig_utc, looking back AND forward, as `hh:mm`
@@ -57,6 +57,33 @@ after I've reviewed, we can decide if we still need to apply the poisioning fix"
   The label had become a restatement of the row's dr.  Joe spotted it by eye: *"my eyeballing sees
   the bottom line of dir as monotonic (ws1 to ws12) for every sig_utc"*.
 
+LINE 6 IS THE DE-POISONED LAST MILE, SUFFIXED `(p)` - Joe 0927: *"I think we should add the poisioning
+fix as a 6th line in the vertical - sufix it with '(p)' so that I don't forget"*, and on the anchor:
+*"we test from 30seconds before the detected ws1Mage reversing (not the actual ws1mage-rev event, just
+the ws1 portion of it)"*.
+
+  anchor = the ws1Mage `rev` leg bar AT OR BEFORE sig_utc, minus `PSTEP` 6 bars = 30 s
+  the band is the same width as the last mile, 0.75 x TF, ending at that anchor
+  the `rev` leg is ws1Mage's and is SHARED by all twelve columns - it is the event that produced the
+  timestamp, so there is one anchor per row, not one per TF
+
+  WHY IT EXISTS. `wsl_sig_utc` is a gcws30Mage `sig` cross on 98 of 121 v7 rows, and a ws1Mage
+  reversal precedes it. So the last mile contains the turn that created the timestamp, and on ws1 it
+  was largely a restatement of that turn. Joe saw it: *"if it always reverses to create the timestamp,
+  then I'm always going to see the bottom row of the vertical as agreeing with the last minute
+  reversal that created the test-point. that means the bottom row of the vertical is poisoned."*
+
+  MEASURED, 121 v7 rows, the share of the band moving TOWARDS dr, line 5 -> line 6:
+    ws1 30.6% -> 56.2%  (+25.6 pts)   ws2 50.4% -> 67.8%   ws3 59.5% -> 76.0%
+    ws4 71.1% -> 84.3%                ws5 81.0% -> 88.4%   ws6 91.7% -> 86.8%
+    ws9 95.9% -> 92.6%                ws10 97.5% -> 91.7%  ws12 95.9% -> 94.2%
+  ws1 moves from leaning AGAINST dr to near-balanced. The high TFs barely move, which is what a 30 s
+  shift should do against a 9 minute band.
+
+  EVERY ROW HAS AN ANCHOR: 121 of 121 carry a ws1Mage rev at or before sig_utc, median 0.17 min back,
+  max 1.75 min. 18 of 121 have the rev ON the sig bar. A row with no rev, or a window running off the
+  tape start, leaves the line BLANK - not `-`, which means a tie.
+
   THE TWO-POINT READING CARRIES A TF GRADIENT, which is what the base-set scaling was for. Measured
   on the 121 v7 rows, the share of last miles moving TOWARDS dr:
 
@@ -103,12 +130,14 @@ import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),'_prelude.py'))
      .read().split("k=int(np.searchsorted")[0])
 sys.stdout=_o
+from optimus9.analysis.jig import ws1mage_rev
 from optimus9.compute.test_points import flat_run_at
 from optimus9.db.database_manager import DatabaseManager
 from optimus9.config import get_db_config
 
 TABLE='all_wsf_flatruns'; TFS=range(1,13); SAMPLES=3; TOL=2.0; BACK=96
 BASE=(12,6,3,1.5,0.75)                   # Joe's base set, DESCENDING, minutes; x TF below
+PSTEP=6                                  # line 6's step back from the rev bar, 6 bars = 30 s
 def bands(tf):
     """The five (earlier bars, later bars) pairs for one TF. 0 bars IS sig_utc."""
     e=[int(round(b*tf*12)) for b in BASE]+[0]
@@ -174,8 +203,11 @@ if '--drop' in sys.argv:
     db.execute("DROP TABLE IF EXISTS %s"%TABLE); print('B|dropped %s'%TABLE)
 db.execute(DDL); print('B|created %s|knobs %s|win %s'%(TABLE,KNOBS,WIN))
 print('B|base set %s x TF minutes|labels UP DN -'%' '.join('%g'%b for b in BASE))
-print('B|ws1 bars %s|ws12 bars %s|all five bands two-point'%(bands(1),bands(12)))
-pay=[]; pre=0; blank=0; ties=0; short=0; nox=0; xback=0; xfwd=0; xat=0
+print('B|ws1 bars %s|ws12 bars %s|all bands two-point'%(bands(1),bands(12)))
+pay=[]; pre=0; blank=0; ties=0; short=0; nox=0; xback=0; xfwd=0; xat=0; noanch=0; pblank=0
+L1={d:None for d in (1,-1)}
+_L1=ws1mage_rev(MA[1],G,float(_C['oob_hi']),float(_C['oob_lo']),dwell=int(_C['dwell']),
+                rev_wob=int(_C['rev_wob']),hold=int(_C['boundary_xwob']))
 MG={t:np.asarray(MA[t],float) for t in TFS}
 RR={t:np.asarray(RA[t],float) for t in TFS}
 XX={t:np.asarray(Ln(t,'x'),float) for t in TFS}
@@ -189,6 +221,9 @@ for inst,kn in INST.items():
         tail=[d,U(k),int(ts[k]),int(r['wsl_first_ms'])]
         for t in TFS:
             XC.setdefault((t,d), xcross_bars(XX[t],RR[t],d))
+        _rv=_L1[d]['rev']; _b=_rv[_rv<=k]
+        panch=(int(_b[-1])-PSTEP) if len(_b) else None      # line 6's anchor: rev bar - 30 s
+        if panch is None: noanch+=1
         fr=[]; dr_=[]; mg=[]; rv=[]; xc=[]
         for t in TFS:
             j=next((q for q in range(s0,len(ts)) if flat_run_at(RA[t],q,d,FENCE,SAMPLES,TOL) is not None),None)
@@ -201,6 +236,11 @@ for inst,kn in INST.items():
                 dr_.append(None); short+=1
             else:
                 v=[sgn(MG[t][k-a],MG[t][k-b]) for a,b in BD]
+                pw=BD[-1][0]                                # the last mile's width, 0.75 x TF
+                if panch is None or panch-pw<0:
+                    v.append(''); pblank+=1
+                else:
+                    v.append(sgn(MG[t][panch-pw],MG[t][panch]))
                 ties+=sum(1 for x in v if x=='-')
                 dr_.append('\n'.join(v))
             mg.append('%.2f'%MG[t][k]); rv.append('%.2f'%RR[t][k])
@@ -223,6 +263,8 @@ NK=len(KINDS)
 print('B|banked %d rows = %d sig_utc x %d kinds'%(len(pay),len(pay)//NK,NK))
 print('B|flatrun cells %d|fired before sig_utc %d|NULL %d'%(len(pay)//NK*12,pre,blank))
 print('B|dir cells %d|ties (-) %d|rows too close to the tape start %d'%(len(pay)//NK*12,ties,short))
+print('B|line 6 (p)|anchor = ws1Mage rev - %d bars = %d s|rows with no rev %d|blank cells %d'
+      %(PSTEP,PSTEP*5,noanch,pblank))
 print('B|xcross cells %d|from the lookback %d|from the lookforth %d|at sig_utc %d|no cross on the tape %d'
       %(len(pay)//NK*12,xback,xfwd,xat,nox))
 q=db.execute("SELECT awf_inst i, awf_kind kd, COUNT(*) n FROM %s GROUP BY 1,2 ORDER BY 1,3 DESC"%TABLE,fetch=True)
