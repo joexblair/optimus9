@@ -10,8 +10,13 @@ THE `dir` CELL IS ONE MULTILINE CELL.  Joe 0927: *"you can create multiline exce
 input, i use alt-enter"*, and *"stack the dir data vertically"*.  So the five band readings are one
 cell holding five lines, not five cells and not a joined string.
 
+  --xlsx  writes a real workbook with `wrapText` set on the value cells.  USE THIS ONE.  A CSV
+          carries no cell formatting, so Excel holds the newlines but renders the cell on one line
+          until you edit it - Joe 0927: *"when I refresh the dataset, it looks like a horizontal
+          string. when I double click on the cell, it rearranges to vertical"*.  That is Wrap Text
+          being off, not a missing newline.  Setting it here removes the step.
   --csv   writes a CSV whose fields are quoted, so the embedded newlines arrive in Excel as
-          alt-enter content in a single cell.  This is the paste path.
+          alt-enter content in a single cell.  The newlines are correct but unwrapped - see above.
   default onscreen, the multiline cells laid out across physical lines.
 
 THE awf_sig_utc COLUMN IS DEDUPED.  Joe 0927: *"dedup the awf_sig_utc column"*.  A value prints once
@@ -82,6 +87,7 @@ def cells(b):
 def main(argv=None):
     a = argparse.ArgumentParser()
     a.add_argument('--csv', action='store_true')
+    a.add_argument('--xlsx', action='store_true')
     a.add_argument('--day')
     a.add_argument('--inst', default='v7', choices=('v7', 'v8'))
     a.add_argument('--out')
@@ -98,6 +104,31 @@ def main(argv=None):
     db.disconnect()
     B = blocks(rows)
     head = ['awf_dr', 'awf_sig_utc'] + ['awf_ws%d' % t for t in TFS]
+
+    if o.xlsx:
+        import openpyxl
+        from openpyxl.styles import Alignment
+        from openpyxl.utils import get_column_letter
+        wb = openpyxl.Workbook(); sh = wb.active; sh.title = 'all_wsf_flatruns'
+        sh.append(head)
+        top = Alignment(vertical='top')
+        wrap = Alignment(wrapText=True, vertical='top')
+        for b in B:
+            for i, (lab, vals, _off) in enumerate(cells(b)):
+                sh.append([b[0] if i == 0 else ''] + [lab] + list(vals))
+                r = sh.max_row
+                for c in range(1, 15):
+                    sh.cell(row=r, column=c).alignment = wrap if c >= 2 else top
+        sh.freeze_panes = 'C2'
+        sh.column_dimensions['A'].width = 7
+        sh.column_dimensions['B'].width = 30
+        for t in TFS:
+            sh.column_dimensions[get_column_letter(2 + t)].width = 11
+        path = o.out or './all_wsf_flatruns_%s.xlsx' % o.inst
+        wb.save(path)
+        print('%s   %s   %d sig_utc x 5 rows -> %s' % (TABLE, o.inst, len(B), path))
+        print('  wrapText is set on every value cell, so the stacked cells render without editing')
+        return 0
 
     if o.csv:
         path = o.out or './all_wsf_flatruns_%s.csv' % o.inst
