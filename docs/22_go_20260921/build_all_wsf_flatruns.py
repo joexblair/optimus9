@@ -8,7 +8,8 @@ each existing row" / "convert the columns to string, and print the time using hh
 FIVE ROWS PER wsl_sig_utc, `awf_kind` says which, `awf_n` orders them:
 
   1 flatrun   awf_ws1..awf_ws12 = the FIRST flat-run bar at or after sig_utc - 8 min, as `hh:mm`
-  2 dir       the Mage line's incoming direction over five CONSECUTIVE bands, newline-stacked
+  2 dir       the Mage line's incoming direction over five CONSECUTIVE bands, newline-stacked,
+              the bands scaled by TF, all five two-point
   3 mage      ws{t}Mage at sig_utc
   4 r         ws{t}r at sig_utc
   5 xcross    the NEAREST ws{t}x cross of ws{t}r to sig_utc, looking back AND forward, as `hh:mm`
@@ -25,13 +26,47 @@ ws{awf_ws{TF}}x-cross-r"*.
   fine in a diagnostic table and must never reach a signal path. The cell does not say which side it
   came from; a back cross and a forward cross at the same `hh:mm` are indistinguishable in it.
 
-THE FIVE BANDS ARE JOE'S, 0927: *"for the 5 incoming directions, test using these bands: 16 to 8 /
-8 to 4 / 4 to 2 / 2 to 1 / 1 to sig_utc"*.  Each cell is `Mage[the later edge] - Mage[the earlier
-edge]`, 12 bars = 1 min at the 5 s grid.
+THE BANDS ARE A BASE SET SCALED BY TF - Joe 0927: *"let's remix the 1,2,4,8,16 logic / 1) create a
+base set of values: [0.75, 1.5, 3, 6, 12] / 2) apply the lookback using base-set * TF -- eg for ws12,
+the lookbacks will be 9, 18, 36, 72, 144"*.  He asked for it because static brackets hid what he was
+after: *"what I'm looking for in the direction row is contrast between the TFs. now I see that using
+static brackets for all TFs is unlikley to show me anything useful."*
 
-  `UP`  the later edge is higher      `DN`  lower      `-`  bit-identical
-Joe 0927 set all three labels.  Ties are real: measured 86 of 14,520 cells = 0.592%, on 10 of the
-242 rows, concentrated in the 2->1 band with 44.
+  the five edges are the base set DESCENDING, times the TF, in minutes before sig_utc
+  sig_utc closes the last band, so five edges plus sig_utc give five consecutive bands
+  the LAST MILE - `0.75 x TF -> sig_utc` - is the BOTTOM line of the stack.  Joe 0927 stated the
+  assumption and it holds.
+
+  ws1   12     6     3     1.5   0.75  minutes  ->  144  72  36  18  9     bars
+  ws12  144    72    36    18    9     minutes  ->  1728 864 432 216 108   bars
+
+EVERY EDGE LANDS ON A WHOLE BAR.  0.75 min is 9 bars exactly at the 5 s grid, so base x TF x 12 is
+always an integer.  Nothing is rounded.
+
+THE LAST MILE IS TWO-POINT, LIKE THE OTHER FOUR - Joe 0927: *"revert the last mile to two-point.
+after I've reviewed, we can decide if we still need to apply the poisioning fix"*.
+
+  THE EXTREMA VERSION IS KEPT IN `side_extrema` BUT NOT CALLED.  It was built on Joe's 0927 word
+  *"apply this mech to the last mile only (0.75 to 0)"* with the extrema dr-SIDE - *"extrema is dr
+  specific : minimum for -1dr"* - and it COLLAPSED.  The dr-side extreme is by definition the
+  furthest point in the dr direction inside the window, so extreme -> sig_utc has only one possible
+  answer: at dr -1 it reads UP or `-`, never DN; at dr +1 DN or `-`, never UP.
+
+  MEASURED over the 242 rows x 12 TFs: 0 UP at dr +1, 0 DN at dr -1, and the bottom line was
+  IDENTICAL across all twelve TFs on 224 of 242 rows, never carrying more than 2 distinct values.
+  The label had become a restatement of the row's dr.  Joe spotted it by eye: *"my eyeballing sees
+  the bottom line of dir as monotonic (ws1 to ws12) for every sig_utc"*.
+
+  THE TWO-POINT READING CARRIES A TF GRADIENT, which is what the base-set scaling was for. Measured
+  on the 121 v7 rows, the share of last miles moving TOWARDS dr:
+
+    ws1 30.6%   ws2 50.4%   ws3 59.5%   ws4 71.1%   ws5 81.0%   ws6 91.7%
+    ws7 87.6%   ws8 90.9%   ws9 95.9%   ws10 97.5%  ws11 95.9%  ws12 95.9%
+
+  ws1 leans AGAINST dr at 68.6%, which is the signature of a turn having just happened - Joe's
+  suspected poisoning, since `wsl_sig_utc` is a gcws30Mage `sig` cross on 98 of 121 rows and a
+  ws1Mage reversal precedes it. ws2 and ws3 are the only TFs whose last mile is genuinely two-way.
+  THE POISONING FIX IS NOT APPLIED - Joe is reviewing the two-point build first.
 
 THREE READINGS WERE TESTED BEFORE JOE RULED, on his own example row 09-01 00:27:20:
   nested to sig_utc      Mage[sig] - Mage[sig - N min]                 -> UP DN DN DN DN
@@ -73,8 +108,11 @@ from optimus9.db.database_manager import DatabaseManager
 from optimus9.config import get_db_config
 
 TABLE='all_wsf_flatruns'; TFS=range(1,13); SAMPLES=3; TOL=2.0; BACK=96
-EDGE=(16,8,4,2,1,0)                      # minutes before sig_utc; 0 IS sig_utc
-BAND=[(int(EDGE[i]*12),int(EDGE[i+1]*12)) for i in range(5)]     # (earlier bars, later bars)
+BASE=(12,6,3,1.5,0.75)                   # Joe's base set, DESCENDING, minutes; x TF below
+def bands(tf):
+    """The five (earlier bars, later bars) pairs for one TF. 0 bars IS sig_utc."""
+    e=[int(round(b*tf*12)) for b in BASE]+[0]
+    return [(e[i],e[i+1]) for i in range(5)]
 KINDS=(('flatrun',1),('dir',2),('mage',3),('r',4),('xcross',5))
 INST={'v7':'v7_coil_lines[gcws30,ws1]_confirm_lag_s180_exit_anchornamed_bar_gap_fill1_lookback_s240_support_min23',
       'v8':'v8_coil_lines[ws2,ws3]_confirm_lag_s180_exit_anchornamed_bar_gap_fill1_lookback_s240_support_min23'}
@@ -102,6 +140,15 @@ def sgn(a,b):
     d=float(b)-float(a)
     return 'UP' if d>0 else ('DN' if d<0 else '-')
 
+def side_extrema(v,k,back,dr):
+    """The dr-SIDE extreme of `v` over the closed window [k-back, k]. dr -1 -> the minimum,
+    dr +1 -> the maximum. A tie goes to the EARLIEST bar, where the line first turned.
+
+    NOT CALLED - see the docstring. Kept because Joe may return to the poisoning fix."""
+    a=max(0,int(k)-int(back)); seg=np.asarray(v[a:int(k)+1],float)
+    i=int(np.argmin(seg)) if int(dr)<0 else int(np.argmax(seg))
+    return a+i, float(seg[i])
+
 def xcross_bars(x,r,dr):
     """Bars where ws{t}x crosses ws{t}r on the dr side. dr +1 -> x goes from at/above r to below.
     dr -1 -> from at/below r to above. The landing bar is the cross."""
@@ -126,7 +173,8 @@ db=DatabaseManager(**get_db_config()); db.connect()
 if '--drop' in sys.argv:
     db.execute("DROP TABLE IF EXISTS %s"%TABLE); print('B|dropped %s'%TABLE)
 db.execute(DDL); print('B|created %s|knobs %s|win %s'%(TABLE,KNOBS,WIN))
-print('B|bands %s|labels UP DN -'%' '.join('%d->%d'%(EDGE[i],EDGE[i+1]) for i in range(5)))
+print('B|base set %s x TF minutes|labels UP DN -'%' '.join('%g'%b for b in BASE))
+print('B|ws1 bars %s|ws12 bars %s|all five bands two-point'%(bands(1),bands(12)))
 pay=[]; pre=0; blank=0; ties=0; short=0; nox=0; xback=0; xfwd=0; xat=0
 MG={t:np.asarray(MA[t],float) for t in TFS}
 RR={t:np.asarray(RA[t],float) for t in TFS}
@@ -148,10 +196,11 @@ for inst,kn in INST.items():
             else:
                 fr.append(hhmm(j))
                 if j<k: pre+=1
-            if k-BAND[0][0]<0:
+            BD=bands(t)
+            if k-BD[0][0]<0:
                 dr_.append(None); short+=1
             else:
-                v=[sgn(MG[t][k-a],MG[t][k-b]) for a,b in BAND]
+                v=[sgn(MG[t][k-a],MG[t][k-b]) for a,b in BD]
                 ties+=sum(1 for x in v if x=='-')
                 dr_.append('\n'.join(v))
             mg.append('%.2f'%MG[t][k]); rv.append('%.2f'%RR[t][k])
