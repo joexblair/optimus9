@@ -12,10 +12,13 @@ EIGHT ROWS PER wsl_sig_utc, `awf_kind` says which, `awf_n` orders them:
               de-poisoned line, newline-stacked, the bands scaled by TF, all two-point
   3 mage      ws{t}Mage at sig_utc
   4 r         ws{t}r at sig_utc
-  5 xcross    the NEAREST ws{t}x cross of ws{t}r to sig_utc, looking back AND forward, as `hh:mm`
-  6 blank1    empty, a placeholder Joe notates in the xlsx
-  7 blank2    empty, the second placeholder
-  8 rtraj     the trajectory direction of ws{t}r - the last-mile band on r, 0.75 x TF -> sig_utc
+  5 rtraj     the trajectory direction of ws{t}r - the last-mile band on r, 0.75 x TF -> sig_utc
+  6 xcross    the NEAREST ws{t}x cross of ws{t}r to sig_utc, looking back AND forward, as `hh:mm`
+  7 blank1    empty, a placeholder Joe notates in the xlsx
+  8 blank2    empty, the second placeholder
+
+Joe 0928 moved rtraj: *"place the rtraj row between the r and xcross rows"*. The two blanks stay at
+the bottom, under xcross.
 
 THE x-CROSS ROW IS JOE'S, 0927: *"the timestamp of the nearest (lookback or lookforth)
 ws{awf_ws{TF}}x-cross-r"*.
@@ -169,8 +172,8 @@ def bands(tf):
     """The five (earlier bars, later bars) pairs for one TF. 0 bars IS sig_utc."""
     e=[int(round(b*tf*12)) for b in BASE]+[0]
     return [(e[i],e[i+1]) for i in range(5)]
-KINDS=(('flatrun',1),('dir',2),('mage',3),('r',4),('xcross',5),
-       ('blank1',6),('blank2',7),('rtraj',8))
+KINDS=(('flatrun',1),('dir',2),('mage',3),('r',4),('rtraj',5),('xcross',6),
+       ('blank1',7),('blank2',8))
 INST={'v7':'v7_coil_lines[gcws30,ws1]_confirm_lag_s180_exit_anchornamed_bar_gap_fill1_lookback_s240_support_min23',
       'v8':'v8_coil_lines[ws2,ws3]_confirm_lag_s180_exit_anchornamed_bar_gap_fill1_lookback_s240_support_min23'}
 KNOBS='fence%g.%g_samples%d_tol%g_back%d'%(FENCE[0],FENCE[1],SAMPLES,TOL,BACK)

@@ -90,10 +90,10 @@ def cells(b):
             (lab, ['' if v is None else v for v in k.get('dir', blank)], 1),
             (LABEL['mage'], k.get('mage', blank), 0),
             (LABEL['r'], k.get('r', blank), 0),
+            (LABEL['rtraj'], ['' if v is None else v for v in k.get('rtraj', blank)], 0),
             (LABEL['xcross'], ['' if v is None else v for v in k.get('xcross', blank)], 0),
             (LABEL['blank1'], blank, 0),
-            (LABEL['blank2'], blank, 0),
-            (LABEL['rtraj'], ['' if v is None else v for v in k.get('rtraj', blank)], 0)]
+            (LABEL['blank2'], blank, 0)]
 
 
 def main(argv=None):
