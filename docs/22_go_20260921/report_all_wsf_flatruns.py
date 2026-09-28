@@ -43,10 +43,10 @@ from optimus9.config import get_db_config
 TABLE = 'all_wsf_flatruns'
 TFS = range(1, 13)
 DIR_HEAD = "mage's incoming direction:"
-# the lookbacks are Joe's base set scaled by TF, so the minutes differ per column and the shared
+# the lookbacks are Joe's base set scaled by TF/3, so the minutes differ per column and the shared
 # label column names the MULTIPLIER instead. The bottom line is the last mile, read from its
 # dr-side extrema - build_all_wsf_flatruns has the mech.
-DIR_BANDS = ('12 x TF', '6 x TF', '3 x TF', '1.5 x TF', '0.75 x TF', '0.75 x TF (p)')
+DIR_BANDS = ('12 x TF/3', '6 x TF/3', '3 x TF/3', '1.5 x TF/3', '0.75 x TF/3', '0.75 x TF/3 (p)')
 LABEL = {'mage': 'mage val @ sig_utc',
          'r': 'r val @ sig_utc',
          'xcross': 'nearest (lookback or lookforth) ws{TF}x-cross-r',

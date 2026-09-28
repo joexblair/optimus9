@@ -62,16 +62,16 @@ the lookbacks will be 9, 18, 36, 72, 144"*.  He asked for it because static brac
 after: *"what I'm looking for in the direction row is contrast between the TFs. now I see that using
 static brackets for all TFs is unlikley to show me anything useful."*
 
-  the five edges are the base set DESCENDING, times the TF, in minutes before sig_utc
+  the five edges are the base set DESCENDING, times TF/3, in minutes before sig_utc
   sig_utc closes the last band, so five edges plus sig_utc give five consecutive bands
   the LAST MILE - `0.75 x TF -> sig_utc` - is the BOTTOM line of the stack.  Joe 0927 stated the
   assumption and it holds.
 
-  ws1   12     6     3     1.5   0.75  minutes  ->  144  72  36  18  9     bars
-  ws12  144    72    36    18    9     minutes  ->  1728 864 432 216 108   bars
+  ws1   4      2     1     0.5   0.25  minutes  ->  48   24  12  6   3     bars
+  ws12  48     24    12    6     3     minutes  ->  576  288 144 72  36    bars
 
-EVERY EDGE LANDS ON A WHOLE BAR.  0.75 min is 9 bars exactly at the 5 s grid, so base x TF x 12 is
-always an integer.  Nothing is rounded.
+EVERY EDGE LANDS ON A WHOLE BAR.  base x TF / 3 x 12 = base x TF x 4, and the smallest base 0.75 x 4
+is 3, so the product is always an integer.  Nothing is rounded.
 
 THE LAST MILE IS TWO-POINT, LIKE THE OTHER FOUR - Joe 0927: *"revert the last mile to two-point.
 after I've reviewed, we can decide if we still need to apply the poisioning fix"*.
@@ -169,8 +169,13 @@ TABLE='all_wsf_flatruns'; TFS=range(1,13); SAMPLES=3; TOL=2.0; BACK=96
 BASE=(12,6,3,1.5,0.75)                   # Joe's base set, DESCENDING, minutes; x TF below
 PSTEP=6                                  # line 6's step back from the rev bar, 6 bars = 30 s
 def bands(tf):
-    """The five (earlier bars, later bars) pairs for one TF. 0 bars IS sig_utc."""
-    e=[int(round(b*tf*12)) for b in BASE]+[0]
+    """The five (earlier bars, later bars) pairs for one TF. 0 bars IS sig_utc.
+
+    Joe 0928: *"instead of ({base mult} * TF), use ({base mult} * (TF/3))"*. So the lookback in
+    minutes is base x TF / 3, and in bars base x TF / 3 x 12 = base x TF x 4. Every edge still lands
+    on a whole bar, because the smallest base 0.75 x 4 = 3.
+    """
+    e=[int(round(b*tf*4)) for b in BASE]+[0]
     return [(e[i],e[i+1]) for i in range(5)]
 KINDS=(('flatrun',1),('dir',2),('mage',3),('r',4),('rtraj',5),('xcross',6),
        ('blank1',7),('blank2',8))
@@ -233,7 +238,7 @@ db=DatabaseManager(**get_db_config()); db.connect()
 if '--drop' in sys.argv:
     db.execute("DROP TABLE IF EXISTS %s"%TABLE); print('B|dropped %s'%TABLE)
 db.execute(DDL); print('B|created %s|knobs %s|win %s'%(TABLE,KNOBS,WIN))
-print('B|base set %s x TF minutes|labels UP DN -'%' '.join('%g'%b for b in BASE))
+print('B|base set %s x TF/3 minutes|labels UP DN -'%' '.join('%g'%b for b in BASE))
 print('B|ws1 bars %s|ws12 bars %s|all bands two-point'%(bands(1),bands(12)))
 pay=[]; pre=0; blank=0; ties=0; short=0; nox=0; xback=0; xfwd=0; xat=0; noanch=0; pblank=0
 rtu=rtd=rtt=0
