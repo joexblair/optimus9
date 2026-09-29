@@ -21,7 +21,7 @@
 | **the dr-flip backstop CLOSES but never OPENS** | Joe 0929-late: *"now we have the data I can see that dr-flip as an open is not helpful. the cost is accceptable - it gives us space to apply other mechs (lazy-g for example)"*. It still closes, or a trade would run to the next opposing signal whatever happened |
 | **the MAE cap is 0.70%, and the stop is IN THE WALK** | Joe specified 0.9 on 0929, ruled 0.70 on the first ladder, then re-ruled it on the ladder re-walked with the stop live: *"retain 0.7% as the stop"*. `MFE-MAE` prints `-0.70` on a stopped trade |
 | **the stop RACES the other exits** | Joe 0929-late: *"research how a stop is applied in trading - you'll learn that it's both: (at its signal or flip bar) OR (at the stop bar)"*. Three live exits, first to fire wins |
-| **the cap goes in the KEY, not in `wsf_trade_config`** | Joe 0929-late chose this over a config row and a version bump. `wtc_v2_v7_rule1_gateopen_mae0.70` |
+| **the cap goes in the KEY *and* in `wsf_trade_config`** | Joe 0929-late: *"put the cap in the key"*, then *"move MAE_CAP to the DB"*. Config **v3**, row `mae_cap` = 0.70, key `wtc_v3_v7_rule1_gateopen_mae0.70`. There is no hard-coded cap left in the code |
 | **only the MAE-capped mech is handed over** | Joe 0929-late: *"you should be handing over only the mech that the MAE cap was applied to"*. Anything measured without the cap - `docs/sweeps/`, every row in `wsf_trades`, every variant - is a **different mech**. It is not a baseline and not a comparison |
 | **the 0929 knob sweep is out** | Joe 0929-late: *"ok, the sweep is definitely poisoned. let's go back to baseline"*. It ran before the cap and before the flip-open ruling. Do not use `docs/sweeps/` |
 | the gate window | **backward-only, 7 min**. Joe 0929: *"the -3.5 and + 3.5 logic is what's making it non-causal, so let's drop the forward"* |
@@ -129,14 +129,17 @@
 8. ~~**This mech has no banked trade table.**~~ **CLOSED 0929-late.** `trade_walk.walk` carries the
    stop, so `build_wsf_trades.py` produces and banks this mech.
 
-   Joe chose the key over a config row: **`wtc_v2_v7_rule1_gateopen_mae0.70`**. A capped run can
-   never land on the 332 uncapped rows. On those rows: *"they exist in a historical key so it
-   shouldn't matter"* — they are left exactly as they are.
+   The key is **`wtc_v3_v7_rule1_gateopen_mae0.70`** and the cap is **also** a config row — Joe
+   asked for both. A capped run can never land on the 332 uncapped rows. On those rows: *"they
+   exist in a historical key so it shouldn't matter"* — they are left exactly as they are.
 
-   **ONE THING IS STILL OPEN AND IT IS SMALL.** Putting the cap in the key rather than in
-   `wsf_trade_config` leaves `MAE_CAP = 0.70` as a literal in `optimus9/compute/trade_walk.py`. It
-   is the only value in the mech that does not live in the DB, against Joe's standing rule. His
-   choice put it there; he has not been asked whether he also wants it as a config row.
+   **`wsf_trade_config` v3 = 18 rows**: v2's 16, plus `mae_cap` 0.70 and `stop_same_bar_priority`.
+   It is a new version rather than an edit of v2 because the module's own contract says so —
+   *"A knob change writes a new version and the trades land BESIDE the old ones, never over them."*
+   v2's 16 rows stay as the knob set the historical rows were written under.
+
+   **There is no hard-coded cap left in the code.** `trade_walk.walk`'s `mae_cap` is a required
+   argument with no default; a caller that forgets it gets a `TypeError`.
 
 9. ~~**Same-bar priority between the stop and an opposing sig_utc.**~~ **RULED 0929-late — Joe:
    *"use stop"*.** The stop wins, and it is in `trade_walk.walk`.
@@ -206,10 +209,10 @@ rows. §22.21 and §22.22. This is intended, not a bug to fix.
 them carrying the stop. Do not compare o9-live against any of them and do not quote their numbers.
 See item 8.
 
-**The cap and the close rules are not knobs and they are not in the key.** `wsf_trade_config` v2 is
-16 rows; `mae_cap` is not one of them. `trade_config.key()` is
-`wtc_v%d_%s_%s % (version, leash_instance, gate)`, so a capped and an uncapped run land on the
-**same key**. See item 8.
+**The two close rules are still not knobs.** `wsf_trade_config` v3 holds `mae_cap` and
+`stop_same_bar_priority`, but the opposing-dr close and the flip-never-opens rule are in the walk's
+code, not in the table. The **version** is what discriminates them: v3 means both rules plus the
+stop. A v2 run and a v3 run cannot share a key.
 
 **o9-live's `StrategyLoop` runs `v2_walk_ad` today.** Not this strategy, and `ops/run_o9live.py:28`
 labels that producer *"'ad'=v2_walk_ad (look-ahead arm-delay)"*. See `CODE_MAP.md`.

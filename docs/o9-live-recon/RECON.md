@@ -17,7 +17,7 @@ they are a suggestion not a ruling:
 | reason | `sig_utc`, `dr-flip` or `stop` — the thing that fired |
 | order type | **market**, both legs. Joe 0929-late. Limit placement is `MVP2.md` |
 | the bar it believes it acted on | so a bar-vs-wall-clock gap is visible without inference |
-| the config key | **`wtc_v2_v7_rule1_gateopen_mae0.70`** - the cap is in the key, so a capped run can never be confused with the 332 uncapped rows already in `wsf_trades` |
+| the config key | **`wtc_v3_v7_rule1_gateopen_mae0.70`** - the cap is in the key, so a capped run can never be confused with the 332 uncapped rows already in `wsf_trades` |
 | `led_id` | to join to `o9_live.o9_ledger` |
 
 **The monitor.** A shell loop that tails the dump and, on a new line, wakes a Claude session. The

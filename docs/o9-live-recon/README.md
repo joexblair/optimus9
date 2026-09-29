@@ -63,7 +63,7 @@ Three more rulings landed 0929-late, after the above:
     entry       the sig bar - the bar the signal NAMES
     stop        MAE cap 0.70% of entry, IN THE WALK. Joe specified 0.9 on 0929, ruled 0.70 on the
                 first ladder, then re-ruled it on the re-walked ladder: "retain 0.7% as the stop"
-    key         wtc_v2_v7_rule1_gateopen_mae0.70 - the cap is IN the key, Joe 0929-late
+    key         wtc_v3_v7_rule1_gateopen_mae0.70 - the cap is IN the key, Joe 0929-late
     score       MAE/MFE percentages of entry. NO P&L - Joe 0917
 
 **THE NUMBERS, 90 days of line cache, 2026-06-10 .. 2026-09-08:**
@@ -122,7 +122,7 @@ python3 report_realtime_replay.py # the causality proof: 121 of 121, zero revisi
 python3 build_wsf_trades.py       # the same mech, banked. IT WRITES - read OPEN.md first
 ```
 
-`build_wsf_trades.py` banks under `wtc_v2_v7_rule1_gateopen_mae0.70`. The 332 rows already in
+`build_wsf_trades.py` banks under `wtc_v3_v7_rule1_gateopen_mae0.70`. The 332 rows already in
 `wsf_trades` under the bare keys are an **uncapped** mech - history, not a comparison.
 
 Both must come out of the tape and the DB alone. A mismatch is a finding, not a nuisance — see

@@ -15,8 +15,8 @@ that path. Anyone reading `run_o9live.py` and assuming it already trades this st
 |---|---|
 | `optimus9/compute/dr_latch.py` | `latch` (no wob, the wsf_dtf_v3 producer) and `latch_wob` (Joe's 8). Lifted out of the parked `docs/mage_cascade/stopsweep.py` |
 | `optimus9/compute/trade_walk.py` | the rules, pure — `walk()` and `mae_mfe()`. `backstop()` is **deleted**, do not expect it. No DB, no lines, no printing |
-| `optimus9/compute/trade_config.py` | `wsf_trade_config`, **16 knobs at version 2 — the only version**. Each row carries Joe's own words as its source |
-| **`build_wsf_trades.py`** | **PRODUCES AND BANKS THIS MECH.** Loads the tape and lines, runs the gate, walks with the stop live, writes `wsf_trades` under `wtc_v2_v7_rule1_gateopen_mae0.70`. `--day`, `--drop`, `--md` |
+| `optimus9/compute/trade_config.py` | `wsf_trade_config`, **18 knobs at version 3**. v2's 16 plus `mae_cap` 0.70 and `stop_same_bar_priority`. v2's rows stay as the uncapped mech's knob set. Each row carries Joe's own words |
+| **`build_wsf_trades.py`** | **PRODUCES AND BANKS THIS MECH.** Loads the tape and lines, runs the gate, walks with the stop live, writes `wsf_trades` under `wtc_v3_v7_rule1_gateopen_mae0.70`. `--day`, `--drop`, `--md` |
 | `optimus9/compute/rule1_gate.py` | the gate. Pre-existing, unchanged |
 | **`sweep_live_stop.py`** | the cap ladder, all 80 rungs re-walked from the tape with the stop live. The 0.70 rung is 894 trades / +0.3911 per trade. Prints, does not bank |
 | `measure_live_stop.py` | what the stop being live changes: the freed windows, the signals inside them, and the same-bar collision counts |

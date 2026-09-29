@@ -54,7 +54,7 @@ from optimus9.compute import trade_config as TC                            # noq
 from optimus9.compute.dr_latch import latch_wob                            # noqa: E402
 from optimus9.compute.line_config import mech_lines, override              # noqa: E402
 from optimus9.compute.rule1_gate import gate                               # noqa: E402
-from optimus9.compute.trade_walk import MAE_CAP, mae_mfe, walk             # noqa: E402
+from optimus9.compute.trade_walk import mae_mfe, walk                      # noqa: E402
 from optimus9.compute.v3_config import v3_config                           # noqa: E402
 from optimus9.config import get_db_config                                  # noqa: E402
 from optimus9.db.database_manager import DatabaseManager                   # noqa: E402
@@ -146,7 +146,8 @@ def main(argv=None):
     TC.seed(db, o.cfg)
     C = TC.load(db, o.cfg)
     V3 = v3_config(db)
-    KEY = TC.key(C, MAE_CAP)      # the stop is IN the key - Joe 0929-late. See trade_config.key
+    KEY = TC.key(C)               # the cap is in the key AND in the table - Joe 0929-late
+    MAE_CAP = float(C['mae_cap'])  # wsf_trade_config v3. NEVER hard-code it here
     if o.drop:
         db.execute("DROP TABLE IF EXISTS %s" % TABLE)
     db.execute(DDL)

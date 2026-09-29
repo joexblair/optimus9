@@ -186,7 +186,12 @@ fixed trade set of 753 at every rung, because the cap was applied after the walk
 
 ## The knobs
 
-All in `wsf_trade_config`, **version 2, the only version**. Each row carries Joe's own words.
+All in `wsf_trade_config`, **version 3 — 18 rows**. Each row carries Joe's own words.
+
+| version | rows | the mech it describes |
+|---|---|---|
+| **v3** | **18** | **this mech** — v2's 16 plus `mae_cap` and `stop_same_bar_priority` |
+| v2 | 16 | the uncapped mech. Kept as the knob set the 332 historical rows were written under |
 
 | name | value | source |
 |---|---|---|
@@ -204,17 +209,21 @@ All in `wsf_trade_config`, **version 2, the only version**. Each row carries Joe
 | `div_tf` | 1 — the divergence runs on ws1r | Joe 0924 |
 | `scenario_lines` | ws2r, ws3r, gcws30r | Joe 0924 |
 
-**THE CAP IS NOT A KNOB ROW — IT IS IN THE KEY.** Joe 0929-late chose that over making it a
-`wsf_trade_config` row and bumping the version. `trade_config.key(cfg, mae_cap)` now returns
+**THE CAP IS IN THE TABLE AND IN THE KEY.** Joe 0929-late asked for both — first *"put the cap in
+the key"*, then *"move MAE_CAP to the DB"*.
 
-    wtc_v2_v7_rule1_gateopen_mae0.70
+| where | what it is |
+|---|---|
+| `wsf_trade_config` v3, row `mae_cap` | **0.70** — the only source of the value |
+| `trade_config.key(cfg)` | `wtc_v3_v7_rule1_gateopen_mae0.70` — readable without joining |
+| `trade_walk.walk(..., mae_cap)` | a **required** argument. No default, no module constant |
 
-so a capped run can never land on the 332 uncapped rows already in `wsf_trades`. `MAE_CAP = 0.70`
-lives as a literal in `optimus9/compute/trade_walk.py`.
+**There is no hard-coded cap anywhere in the mech.** `trade_walk.py` is pure — no DB — so it takes
+the value rather than owning it, and `build_wsf_trades.py` reads `C['mae_cap']` and passes it. A
+caller that forgets the argument gets a `TypeError`, not a silent default.
 
-**FLAGGED:** that literal is the one value in the mech that does not live in the DB, against Joe's
-standing rule. It is where his key-not-config-row choice puts it. Raise it with him before adding
-a second one.
+`stop_same_bar_priority` = `stop` is the second new row — Joe's *"use stop"*, recorded as a knob so
+the rule is in the DB with the value it governs.
 
 **The knobs are NOT in `wsf_dtf_v3_config`, deliberately.** Spec §21.6: `leash_bank.knob_string` puts
 the v3 config version inside `wsl_knobs`, so a bump would split the next leash write off from the
@@ -222,7 +231,7 @@ the v3 config version inside `wsl_knobs`, so a bump would split the next leash w
 
 ## Banking it
 
-`build_wsf_trades.py` produces this mech and banks it under `wtc_v2_v7_rule1_gateopen_mae0.70`.
+`build_wsf_trades.py` produces this mech and banks it under `wtc_v3_v7_rule1_gateopen_mae0.70`.
 `trade_walk.walk` carries the stop, so there is one walk and one shape.
 
 **The 332 rows already in `wsf_trades` are an UNCAPPED mech** — written before the stop and before
@@ -231,7 +240,7 @@ and do not quote their numbers.
 
 | key | what it holds |
 |---|---|
-| `wtc_v2_v7_rule1_gateopen_mae0.70` | **this mech** |
+| `wtc_v3_v7_rule1_gateopen_mae0.70` | **this mech** |
 | `wtc_v2_v7_rule1_gateopen` and its two `_entry_emit` variants | uncapped. History |
 
 ## What the recon must prove

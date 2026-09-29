@@ -25,7 +25,7 @@ DDL = '''CREATE TABLE IF NOT EXISTS %s (
     wtc_source  VARCHAR(200) NOT NULL,
     UNIQUE KEY uq_wtc (wtc_version, wtc_name))''' % TABLE
 
-V = 2
+V = 3
 
 SEED = [
     ('rule1_fence_lo', '27.0', 'r points', 'Joe 0923: "the fence is 27:73"'),
@@ -46,6 +46,10 @@ SEED = [
      'Joe 0929: "using the gate that you validated in our shared sheet, col L"'),
     ('same_bar_priority', 'dr-flip', 'which fires when a sig_utc lands on a flip bar',
      'Joe 0929: "same bar priority: dr-flip"'),
+    ('mae_cap', '0.70', 'PERCENT of the entry price. The adverse excursion that ends the trade',
+     'Joe 0929: "confirming 0.7% stop", then "retain 0.7% as the stop" on the re-walked ladder'),
+    ('stop_same_bar_priority', 'stop', 'which fires when the stop lands on an opposing sig_utc bar',
+     'Joe 0929: "use stop"'),
 ]
 
 # THE GATE WINDOW IS BACKWARD-ONLY. Joe 0929: "the -3.5 and + 3.5 logic is what's making it
@@ -63,21 +67,28 @@ _GATE_WINDOW = [
 SEED = SEED + _GATE_WINDOW
 
 
-def key(cfg, mae_cap=None):
+def key(cfg):
     """The stable key string for a config version. Goes in every banked trade row.
 
-    THE STOP IS IN THE KEY. Joe 0929-late chose this over making the cap a config row and bumping
-    the version. Without it a capped run and an uncapped run compute the SAME string and land on the
-    same rows - `wsf_trades` already holds 332 uncapped rows under the bare keys.
+    THE STOP IS IN THE KEY AS WELL AS IN THE TABLE. Joe 0929-late asked for both - first *"put the
+    cap in the key"*, then *"move MAE_CAP to the DB"*. The key makes the cap readable without
+    joining to the config table; `wtc_version` is what actually guarantees the knob set.
 
-    mae_cap=None gives the bare key, which is the UNCAPPED mech. Every capped run must pass the cap.
+    A config with no `mae_cap` row gives the bare key, which is the UNCAPPED mech - v2 and earlier.
     """
     k = 'wtc_v%d_%s_%s' % (cfg['_version'], cfg['leash_instance'], cfg['gate'].replace('.', ''))
-    return k if mae_cap is None else '%s_mae%.2f' % (k, mae_cap)
+    cap = cfg.get('mae_cap')
+    return k if cap is None else '%s_mae%.2f' % (k, float(cap))
 
 
 def seed(db, version=V):
-    """Write `version` if it is not there. -> rows written."""
+    """Write `version` if it is not there. -> rows written.
+
+    v3 ADDS `mae_cap` AND `stop_same_bar_priority` TO v2's 16 ROWS. It is a new version and not an
+    edit of v2 because this module's own contract says so: *"A knob change writes a new version and
+    the trades land BESIDE the old ones, never over them."* v2's rows stay in the table as the
+    uncapped mech's knob set; `load(db, 2)` still reads them.
+    """
     if version != V:
         raise ValueError('%s holds one version, %d. Joe 0929 dropped v1.' % (TABLE, V))
     db.execute(DDL)

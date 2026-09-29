@@ -66,8 +66,12 @@ signal or flip bar) OR (at the stop bar)"*. That is the OCO mechanic - every exi
 entry fills and the first to fire cancels the rest.
 
 So an open trade carries THREE live exits: an opposing-dr sig_utc, the dr-flip backstop, and the
-MAE_CAP stop. Whichever comes first ends it. `mae_cap=None` removes the stop entirely and gives the
+stop. Whichever comes first ends it. `mae_cap=None` removes the stop entirely and gives the
 uncapped mech - a DIFFERENT mech, and not the one that is handed over.
+
+THE CAP'S VALUE IS NOT IN THIS FILE. Joe 0929-late: *"move MAE_CAP to the DB"*. It is
+`wsf_trade_config` v3 row `mae_cap`, 0.70. `mae_cap` is a REQUIRED argument here so that no caller
+can pick up a default this module has no authority to set.
 
 WHAT THE STOP CHANGES, MEASURED OVER 90 DAYS. No trade re-scores: a stopped trade is -cap either
 way. What moves is its CLOSE BAR, and therefore when the book frees up. The book used to be held a
@@ -107,18 +111,7 @@ window as it stands closes 119 trades and leaves the 120th open at the 2026-09-0
 """
 
 
-MAE_CAP = 0.70
-"""The stop, as a percentage of the entry price. Joe specified 0.9 on 0929, was shown the 0.05-step
-ladder over 90 days, ruled 0.70, then re-ruled it after the ladder was re-walked with the stop LIVE:
-*"retain 0.7% as the stop"*.
-
-IT IS NOT A `wsf_trade_config` ROW. Joe 0929-late chose to put the cap in the KEY rather than make
-it a config row and bump the version. So this literal is the one hard-coded value in the mech that
-does not live in the DB - flagged, not hidden.
-"""
-
-
-def walk(opens, dr, px, start, end, mae_cap=MAE_CAP):
+def walk(opens, dr, px, start, end, mae_cap):
     """-> ([trade], open_trade or None). Bar by bar, reading only `dr[k]` and `dr[k-1]`.
 
     opens    the bars that may open a trade. Already gated - this walk does not gate
@@ -126,7 +119,8 @@ def walk(opens, dr, px, start, end, mae_cap=MAE_CAP):
     px       the price series the stop reads. `pxs` = DEMA(close, 2) on the event tape
     start    the first bar to walk. Must be >= 1, because the backstop test reads `dr[k-1]`
     end      the last bar to walk
-    mae_cap  the stop, % of entry. MAE_CAP 0.70 - Joe. None removes it and gives a DIFFERENT mech
+    mae_cap  the stop, % of entry. REQUIRED - read it from `wsf_trade_config`, never
+             hard-code it. None removes the stop and gives a DIFFERENT mech
 
     A trade is a dict: open, close, dr, opened_by, closed_by. `opened_by` is 'sig_utc';
     `closed_by` is 'sig_utc', 'dr-flip' or 'stop'.
