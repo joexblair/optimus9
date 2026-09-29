@@ -253,6 +253,21 @@ GRIDS = {
                for sp in (8, 10, 12)
                for sl in (0.02, 0.03)
                for f in (0.25, 0.5, 1.0, 1.5, 2.0, 2.5)]),
+    # tfband, CORRECTED. The first attempt held support_min at 23 while narrowing the band below 23
+    # lines, so the support test was unsatisfiable and nothing fired. support_min 23 means "every
+    # line supports", so the equivalent for a narrower band is the band's own size.
+    'tfband2': ([dict(BASE, tf_lo=1, tf_hi=h, support_min=h) for h in (6, 8, 10, 12, 16, 20, 23)]
+                + [dict(BASE, tf_lo=l, tf_hi=23, support_min=23 - l + 1) for l in (2, 3, 5, 7, 9, 13)]
+                + [dict(BASE, tf_lo=1, tf_hi=h, support_min=max(1, int(round(h * 0.8))))
+                   for h in (8, 12, 16, 23)]),
+    # the three-way: every knob with a measured monotone effect, together. All three point the same
+    # way - fewer, stronger rows - so they may be partly the same effect. slope+fence already proved
+    # super-additive; this asks whether samples adds on top.
+    'triple': ([dict(BASE, span=sp, slope=sl, fence_lo=f, fence_hi=100.0 - f, samples=sm)
+                for sp in (10, 12)
+                for sl in (0.02, 0.40)
+                for f in (2.5, 25.0)
+                for sm in (9, 21)]),
     'wide': [dict(BASE, span=sp, slope=sl)
              for sp in (5, 6, 7, 8, 9, 10, 12, 14)
              for sl in (0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.60, 0.80)],

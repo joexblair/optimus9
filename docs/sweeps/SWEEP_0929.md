@@ -598,3 +598,62 @@ which is inside noise on 2,000 trades.
 
 Only the control config completed; the tf_lo/tf_hi variants produced no trades or errored. **Not
 measured.** Re-run needed if the TF band matters.
+
+## RESULT 10 — the three-way. `momo_fixed_samples` does NOT stack, and the TF band is a new axis.
+
+### TRIPLE: span x slope x fence x samples, at span 10
+
+| span | slope | fence | samples | trades | pooled% | worst | net/trade |
+|---|---|---|---|---|---|---|---|
+| **10** | **0.02** | **2.5** | **21** | 1,204 | **66.20** | **65.2** | **+0.4110** |
+| 10 | 0.02 | 2.5 | 9 | 1,165 | 65.49 | 63.5 | +0.3581 |
+| 10 | 0.40 | 2.5 | 21 | 1,262 | 63.39 | 56.2 | +0.3355 |
+| 10 | 0.02 | 25.0 | 21 | 1,690 | 58.40 | 52.3 | +0.2401 |
+| 10 | 0.40 | 25.0 | 9 | 1,856 | 55.77 | 55.5 | +0.2119 |
+| **10** | **0.40** | **25.0** | **21** | 2,042 | **54.16** | 52.9 | **+0.1840** ← ALL BANKED |
+
+**Decomposition at span 10, from all-banked:**
+
+| change | pooled% | delta |
+|---|---|---|
+| all banked | 54.16 | — |
+| slope alone 0.40 → 0.02 | 58.40 | +4.24 |
+| **fence alone 25 → 2.5** | 63.39 | **+9.23** |
+| slope + fence | **66.20** | **+12.04** |
+| slope + fence + samples 9 | 65.49 | **+11.33** — *worse* |
+
+**CORRECTION TO MY OWN SPECULATION.** I wrote that `momo_fixed_samples` 9 "stacks on the same side"
+and was worth one more grid. It does not stack. At the BANKED slope and fence, samples 9 helps
+(55.77 vs 54.16). At the OPTIMISED slope and fence it **hurts** (65.49 vs 66.20, worst window 63.5
+vs 65.2). The three knobs were partly measuring the same thing — all of them filter toward a
+flatter fit at a more extreme `r` — and once the slope and fence do that work, the lattice density
+has nothing left to add and starts costing.
+
+**The fence is the dominant knob, not the slope.** +9.23 alone against the slope's +4.24.
+
+### TFBAND, corrected — the HIGH timeframes carry the signal
+
+The first attempt was my bug: `support_min` stayed at 23 while the band narrowed below 23 lines,
+so the test was unsatisfiable and nothing fired. `support_min` 23 means "every line supports", so
+the equivalent for a narrower band is the band's own size.
+
+| tf_lo | tf_hi | support_min | trades | pooled% | worst | net/trade |
+|---|---|---|---|---|---|---|
+| **9** | **23** | **15** | 1,650 | **58.00** | **54.3** | **+0.2466** |
+| 7 | 23 | 17 | 1,701 | 56.91 | 52.4 | +0.2570 |
+| 5 | 23 | 19 | 1,808 | 56.42 | 53.5 | +0.2118 |
+| 13 | 23 | 11 | 1,498 | 57.81 | 51.3 | +0.1802 |
+| 2 | 23 | 22 | 1,999 | 54.53 | 53.3 | +0.1917 |
+| **1** | **23** | **23** | 2,042 | **54.16** | 52.9 | **+0.1840** ← BANKED |
+| 1 | 16 | 16 | 1,971 | 55.15 | 52.5 | +0.1823 |
+| 1 | 12 | 12 | 1,876 | 55.65 | 50.7 | +0.1724 |
+| 1 | 8 | 8 | 1,745 | 56.56 | 49.7 | +0.1600 |
+| 1 | 6 | 6 | 1,668 | 55.64 | 48.0 | +0.1495 |
+
+- **raising `tf_lo` helps, up to ws9.** Dropping ws1..ws8 from the support set takes the book from
+  54.16% to 58.00% and net/trade from +0.1840 to +0.2466, on 19% fewer trades.
+- **lowering `tf_hi` hurts on worst-window.** 1..8 and 1..6 post good pooled numbers (56.56, 55.64)
+  but the worst windows collapse to 49.7 and 48.0 — below the banked 52.9.
+- reading: the high timeframes carry the signal and the low ones dilute it, but you cannot drop the
+  high end without losing stability.
+- this is a NEW axis — a band, not a threshold — and it has not been combined with slope and fence.
