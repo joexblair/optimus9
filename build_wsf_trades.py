@@ -54,7 +54,8 @@ from optimus9.orchestration.rpl_cache import LINE_DIR, TAPE_DIR, _line_key, _tap
 
 TABLE = 'wsf_trades'
 WIN = '2026-09-01..2026-09-06'
-WIN_MS = (1788220800000, 1788652800000)      # the leash bank's own window
+WIN_MS = (1788220800000, 1788652800000)      # 2026-09-01 00:00 .. 2026-09-06 00:00, the leash
+                                             # bank's own window. THE WALK ENDS HERE.
 INST = {'v7': 'v7_coil_lines[gcws30,ws1]_confirm_lag_s180_exit_anchornamed_bar_gap_fill1'
               '_lookback_s240_support_min23',
         'v8': 'v8_coil_lines[ws2,ws3]_confirm_lag_s180_exit_anchornamed_bar_gap_fill1'
@@ -179,7 +180,12 @@ def main(argv=None):
     nrow_open, nrow_gate = len(opens), len(gated)
     opens = sorted(set(opens)); gated = sorted(set(gated))
 
-    hi = n - 1
+    # THE WALK ENDS AT THE DECLARED WINDOW.  It used to end at `n - 1`, the end of the tape, while
+    # the banked rows still claimed `2026-09-01..2026-09-06` - so the reference ran two days past its
+    # own label and picked up 25 trades that open AFTER the last v7 signal (2026-09-05 21:28:05),
+    # every one of them a dr-flip backstop open. Caught by the 0929 cold review of the handover.
+    # A trade still open at the window edge is reported as still open, which is what `walk` returns.
+    hi = int(np.searchsorted(ts, WIN_MS[1]))
     if o.day:
         import datetime as _dt
         d0 = _dt.datetime.strptime(o.day, '%Y-%m-%d').replace(tzinfo=_dt.timezone.utc)
