@@ -3,6 +3,14 @@
 ONE ROW PER TRADE.  Every knob comes from `wsf_trade_config`; nothing is a module constant. The
 mechanics are `trade_walk`, `rule1_gate` and `dr_latch` - this file loads, walks, banks and prints.
 
+CAUSALITY, AND THE ONE PART THAT IS NOT.  `trade_walk.walk` is a strictly causal bar-by-bar loop
+reading only `dr[k]` and `dr[k-1]`; `dr_latch` and `anchor_floater` read nothing above `k`.
+
+**`rule1_gate` READS FORWARD.** Its window is `[k - tol_bars, k + tol_bars]` - 42 bars = 210 s of
+FUTURE - and `longest_outside` additionally extends a run forward with no bound at all. So the gate
+verdict at a signal bar is not knowable at that bar. See that module's docstring for the measured
+cost of every causal alternative. Joe has not ruled it and nothing here works around it.
+
 THE RULES ARE JOE'S, 0929, and `trade_walk`'s docstring carries them verbatim:
   - every UNGATED sig_utc is a reversal: closes the open trade and opens a new one, and opens one
     when nothing is open
@@ -37,7 +45,6 @@ from optimus9.compute import trade_config as TC                            # noq
 from optimus9.compute.dr_latch import latch_wob                            # noqa: E402
 from optimus9.compute.line_config import mech_lines, override              # noqa: E402
 from optimus9.compute.rule1_gate import gate                               # noqa: E402
-from optimus9.compute.test_points import stretches                         # noqa: E402
 from optimus9.compute.trade_walk import mae_mfe, walk                      # noqa: E402
 from optimus9.compute.v3_config import v3_config                           # noqa: E402
 from optimus9.config import get_db_config                                  # noqa: E402
@@ -137,10 +144,8 @@ def main(argv=None):
     U = lambda i: __import__('datetime').datetime.fromtimestamp(                    # noqa: E731
         int(ts[i]) / 1000, __import__('datetime').timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
-    iw = int(np.searchsorted(ts, WIN_MS[0]))
     dr = latch_wob(m1, mx, 0, n - 1, wob=int(C['latch_wob']),
                    hi=float(C['mage_fence_hi']), lo=float(C['mage_fence_lo']))
-    CY = stretches(dr, iw, n)
 
     sql = ("SELECT wsl_sig_ms FROM wsf_leash WHERE wsl_knobs=%s AND wsl_sig_ms IS NOT NULL")
     args = [INST[C['leash_instance']]]
@@ -170,13 +175,12 @@ def main(argv=None):
     nrow_open, nrow_gate = len(opens), len(gated)
     opens = sorted(set(opens)); gated = sorted(set(gated))
 
-    lo = int(np.searchsorted(ts, WIN_MS[0])) if not o.day else min(opens + gated)
-    hi = n - 1 if not o.day else int(np.searchsorted(ts, max(opens + gated))) + 1
+    hi = n - 1
     if o.day:
         import datetime as _dt
         d0 = _dt.datetime.strptime(o.day, '%Y-%m-%d').replace(tzinfo=_dt.timezone.utc)
         hi = int(np.searchsorted(ts, int((d0 + _dt.timedelta(days=1)).timestamp() * 1000)))
-    trades, still = walk(opens, CY, dr, hi)
+    trades, still = walk(opens, dr, min(opens) if opens else 1, hi)
 
     win = o.day or WIN
     p = ((lambda *c: print('|'.join(str(v) for v in c))) if o.md else

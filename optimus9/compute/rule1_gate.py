@@ -43,6 +43,36 @@ MINE, AND UNRULED BY JOE
 NOT CAUSAL AT THE SIGNAL BAR. Joe 0924 ruled the window is "either side" of sig_utc, so the gate
 reads up to `tol_bars` AFTER the signal and is only knowable that far past it. At tol_bars 42 the
 verdict lands 210 s late. That is his rule, stated here so no caller mistakes it for a live gate.
+
+NOT CAUSAL, AND THAT IS THE ONE THING TO KNOW BEFORE THIS GOES NEAR o9-live.
+
+TWO FORWARD READS:
+  1  the window is `[k - tol_bars, k + tol_bars]`, so at `rule1_tol` 7 min TOTAL it reads 42 bars =
+     210 s AFTER the signal bar. Both `longest_outside` and `bars_oob` use it.
+  2  `longest_outside` measures a run WHOLE, walking `e` forward with `while e + 1 < len(out) and
+     out[e + 1]` - and that walk has NO upper bound. A run still going at the tape end is counted to
+     the tape end.
+
+So a verdict at bar `k` is not knowable at bar `k`. A live consumer has three choices and every one
+of them is JOE'S, not this module's:
+
+  keep it          the verdict becomes knowable at `k + tol_bars`, the `sig_conf` pattern this
+                   codebase already uses. Verdicts unchanged, every trade opens 3.5 min later
+  [k - 2*tol, k]   the same 7 min, all behind. CAUSAL
+  [k - tol, k]     3.5 min behind. CAUSAL
+
+MEASURED over the 109 distinct v7 sig bars, 2026-09-01..09-06, with the forward run-extension clamped
+at `k` in both causal variants:
+
+    banked   [k-42, k+42]   gate open 64   closed 45     NOT causal
+    [k-84, k]               gate open 68   closed 41     18 verdicts change: 7 open->closed,
+                                                          11 closed->open
+    [k-42, k]               gate open 56   closed 53      8 verdicts change: 8 open->closed,
+                                                          0 closed->open
+
+The verdict changes are not cosmetic - each one adds or removes a trade. Joe 0929 asked for
+everything causal; this is the piece that cannot be made causal without changing what trades, so it
+is escalated rather than quietly rewritten.
 """
 import numpy as np
 

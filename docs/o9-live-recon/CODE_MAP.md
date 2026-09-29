@@ -57,10 +57,28 @@ closed_ms`. A recon must not treat those 988 as this strategy's trades.
 The new producer must follow that shape. It is the single strongest defence against the lookahead
 Joe wants exposed, and it already exists as a pattern in this codebase.
 
-**One thing that must NOT be copied from the backtest.** `trade_walk.backstop()` returns a bar that
-is in the **future** when the trade opens. The backtest does not act on it early — it waits for the
-bar to arrive. In o9-live that has to be a **standing order**, not knowledge. A live implementation
-that "knows" its backstop bar in advance is lookahead even though the backtest is clean.
+## The causality audit, 0929
+
+Every module in the chain was swept for reads above `k` and the walk was hand-walked bar by bar.
+
+| module | verdict |
+|---|---|
+| `optimus9/compute/dr_latch.py` | **causal** — forward loops, each bar reads only itself |
+| `optimus9/analysis/jig.py` `anchor_floater` | **causal** — all four steps walk backward, 0 reads above `k` |
+| `optimus9/compute/test_points.py` | **causal** — `r[lo:k+1]` is inclusive of `k` and backward |
+| `optimus9/compute/trade_walk.py` `walk` | **causal as of 0929** — bar-by-bar, reads `dr[k]` and `dr[k-1]` only |
+| `optimus9/compute/trade_walk.py` `mae_mfe` | causal **at the close bar** — the whole span is past by then |
+| `optimus9/compute/rule1_gate.py` | **NOT CAUSAL** — see `OPEN.md` item 0 |
+
+Hand-walk, 09-01 trade 3, SHORT opened 03:40:05 at dr +1:
+
+| bar | dr[k−1] | dr[k] | change | == −D | left after | == D and change | decision |
+|---|---|---|---|---|---|---|---|
+| 04:57:40 | +1 | −1 | yes | yes | True | . | carry on |
+| 05:04:30 | −1 | +1 | yes | . | True | yes | **backstop — close and open** |
+
+Two bars decide it, both read as `dr[k]` against `dr[k-1]` plus the carried flag. The banked trade 3
+closes at 05:04:30 by dr-flip. Match.
 
 ## NOT built — the five things
 

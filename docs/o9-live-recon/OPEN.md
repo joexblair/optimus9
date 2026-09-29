@@ -17,6 +17,22 @@
 
 ## Not ruled — will need him
 
+0. **`rule1_gate` IS NOT CAUSAL, and it is the blocker.** Its window is `[k - tol, k + tol]`, so at
+   `rule1_tol` 7 min total it reads **42 bars = 210 s after the signal bar**, and `longest_outside`
+   extends a run forward with **no bound**. A verdict at bar `k` is not knowable at bar `k`.
+   Measured over the 109 distinct v7 sig bars:
+
+   | window | gate open | closed | verdict changes vs banked |
+   |---|---|---|---|
+   | `[k-42, k+42]` — banked, NOT causal | 64 | 45 | — |
+   | `[k-84, k]` — same 7 min, all behind | 68 | 41 | **18** — 7 open→closed, 11 closed→open |
+   | `[k-42, k]` — 3.5 min behind | 56 | 53 | **8** — 8 open→closed, 0 closed→open |
+
+   Every changed verdict adds or removes a trade, so this is a strategy change, not a refactor.
+   A fourth option changes nothing: keep the window and treat the verdict as knowable at `k + 42`,
+   the `sig_conf` pattern this codebase already uses — same trades, each opening 3.5 min later.
+   `rule1_gate.py`'s docstring carries all of it. **Nothing has been changed.**
+
 1. **Where realtime `sig_utc` comes from.** `wsf_leash.wsl_sig_utc` is produced by
    `report_coil_exit.py` from banked confluence moments, and a moment's end is *"only knowable when
    the next row prints"* (§20.2, median 300 s, max 5000 s). That latency is inherent to the mech, not
@@ -33,9 +49,12 @@
 
 ## Traps
 
-**The backstop is a standing order, not knowledge.** `trade_walk.backstop()` returns a future bar. The
-backtest waits for it. A live implementation that acts on knowing it is lookahead — and it would be
-lookahead the recon *cannot* see, because both sides would agree.
+**The backstop trap is CLOSED.** It used to be real: `trade_walk.backstop()` computed the closing bar
+at open time from the stretch list, which is a future bar. Joe 0929: *"make this causal before we
+handover to a new session. ie, IF this bar has dr-flip THEN"*. `walk()` is now a bar-by-bar loop
+carrying `dr` and a `left` flag and reading only `dr[k]` and `dr[k-1]`. `backstop()` is deleted.
+Same 142 trades, and provably so — the latch alternates strictly, so the first bar back at D after
+being −D IS the end of the −D stretch. Do not reintroduce the old shape.
 
 **`wsl_sig_utc` is not a `sig_conf`.** It is the `sig` CROSS bar on 98 of 121 v7 rows, and the
 moment's END ROW on the other 23 (the LOOKBACK path in §20.4). `sig_conf = sig + boundary_xwob − 1 =

@@ -25,6 +25,11 @@ A trade opened at dr **D** is working while the dr sits at **−D**. The backsto
 −D stretch — **two flips forward** from the open, not one. The inverted reading gave 37 trades on
 09-01 against 22.
 
+**The walk is strictly causal.** `trade_walk.walk()` is a bar-by-bar loop carrying the trade's own dr
+and a `left` flag, reading only `dr[k]` and `dr[k-1]`. At each bar: if `dr[k] == -D` set `left`; if
+`left and dr[k] == D and dr[k] != dr[k-1]` this bar is the backstop; otherwise if the bar is an
+ungated sig_utc, reverse. The flip is tested first, which is Joe's same-bar priority.
+
 **A consequence, and it is the rule not a choice:** at a backstop the dr is D again, so the trade the
 flip opens carries the **same direction** as the one it just closed. Joe has been shown this.
 

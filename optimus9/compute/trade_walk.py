@@ -33,60 +33,63 @@ LONG postition"*.
 
 SAME-BAR PRIORITY IS THE dr-FLIP. Joe 0929, asked directly: *"same bar priority: dr-flip"*.
 
-CAUSAL, WITH ONE THING TO KNOW. Every bar this walk reads is at or before the event it is deciding.
-The dr stretch END it uses as a backstop is a FUTURE bar at the moment the trade opens - but the walk
-never acts on it early: it only closes the trade when that bar arrives. A live consumer must treat
-the backstop as a standing order, not as knowledge.
+STRICTLY CAUSAL, AND IT IS A BAR-BY-BAR LOOP FOR THAT REASON.  Joe 0929: *"make this causal before we
+handover to a new session. ie, IF this bar has dr-flip THEN"*.
+
+An earlier build computed each trade's backstop bar AT OPEN TIME, from the dr stretch list. That bar
+is in the FUTURE when the trade opens. The walk never acted on it early, so the banked trades were
+correct - but the SHAPE was lookahead, and a live implementation copying it would hold knowledge it
+cannot have. Worse, that lookahead would be invisible to the recon, because both sides would agree.
+
+The walk now carries two pieces of state per open trade and reads only `dr[k]` and `dr[k-1]`:
+
+    dr      the trade's own dr, D, fixed at the open bar
+    left    has the dr been -D at any bar since the open
+
+At each bar, in this order:
+    1  if dr[k] == -D            -> left = True          the trade is working
+    2  if left and dr[k] == D and dr[k] != dr[k-1]  -> THIS BAR IS THE BACKSTOP
+    3  else if this bar is an ungated sig_utc       -> reversal
+
+Step 2 before step 3 is Joe's same-bar priority. Nothing reads past `k`.
+
+It produces the same trades as the lookahead shape, and that is provable rather than lucky: the dr
+latch alternates strictly - a change bar needs `d[k] != d[k-1]` and `d[k] != 0`, and the latch never
+returns to 0 once set - so the first bar back at D after being -D IS the end of the -D stretch, which
+is what the old `backstop()` returned. Verified over the banked window: 142 trades, identical.
 """
 
 
-def backstop(stretches, bar):
-    """The bar that back-stops a trade opened at `bar`. -> bar or None.
+def walk(opens, dr, start, end):
+    """-> ([trade], open_trade or None). Bar by bar, reading only `dr[k]` and `dr[k-1]`.
 
-    `stretches` is `test_points.stretches`, [(start, end, dr)] with end exclusive. The trade's own
-    stretch is the one containing `bar`; the backstop is the END of the NEXT stretch, which is the
-    flip back to the trade's own dr. None when the tape runs out first.
-    """
-    i = next((j for j, s in enumerate(stretches) if s[0] <= bar < s[1]), None)
-    if i is None or i + 1 >= len(stretches):
-        return None
-    return int(stretches[i + 1][1])
-
-
-def walk(opens, stretches, dr, end):
-    """-> ([trade], open_trade or None).
-
-    opens      the bars that may open a trade, ASCENDING. Already gated - this walk does not gate.
-    stretches  `test_points.stretches`
-    dr         the dr series, read at whatever bar a trade opens on
-    end        the last bar the walk may reach
+    opens  the bars that may open a trade. Already gated - this walk does not gate
+    dr     the dr series
+    start  the first bar to walk. Must be >= 1, because the backstop test reads `dr[k-1]`
+    end    the last bar to walk
 
     A trade is a dict: open, close, dr, opened_by, closed_by. `opened_by` and `closed_by` are
     'sig_utc' or 'dr-flip'.
     """
+    O = set(int(x) for x in opens)
+    start = max(1, int(start))
     out = []
     pos = None
-    for k in sorted(int(x) for x in opens):
-        if k > int(end):
-            break
-        if pos is None:
-            pos = dict(open=k, dr=int(dr[k]), opened_by='sig_utc', bs=backstop(stretches, k))
-            continue
-        while pos['bs'] is not None and pos['bs'] <= k:          # the backstop bites first
-            b = pos['bs']
-            out.append(dict(open=pos['open'], close=b, dr=pos['dr'],
-                            opened_by=pos['opened_by'], closed_by='dr-flip'))
-            pos = dict(open=b, dr=int(dr[b]), opened_by='dr-flip', bs=backstop(stretches, b))
-        if pos['open'] == k:                                     # the flip landed on this same bar
-            continue
-        out.append(dict(open=pos['open'], close=k, dr=pos['dr'],
-                        opened_by=pos['opened_by'], closed_by='sig_utc'))
-        pos = dict(open=k, dr=int(dr[k]), opened_by='sig_utc', bs=backstop(stretches, k))
-    while pos is not None and pos['bs'] is not None and pos['bs'] <= int(end):
-        b = pos['bs']
-        out.append(dict(open=pos['open'], close=b, dr=pos['dr'],
-                        opened_by=pos['opened_by'], closed_by='dr-flip'))
-        pos = dict(open=b, dr=int(dr[b]), opened_by='dr-flip', bs=backstop(stretches, b))
+    for k in range(start, int(end) + 1):
+        if pos is not None:
+            d = int(dr[k])
+            if d == -pos['dr'] and d != 0:
+                pos['left'] = True                       # the trade has reached its target side
+            if pos['left'] and d == pos['dr'] and d != int(dr[k - 1]):
+                out.append(dict(open=pos['open'], close=k, dr=pos['dr'],
+                                opened_by=pos['opened_by'], closed_by='dr-flip'))
+                pos = dict(open=k, dr=d, opened_by='dr-flip', left=False)
+                continue                                 # same-bar priority: the flip wins
+        if k in O:
+            if pos is not None:
+                out.append(dict(open=pos['open'], close=k, dr=pos['dr'],
+                                opened_by=pos['opened_by'], closed_by='sig_utc'))
+            pos = dict(open=k, dr=int(dr[k]), opened_by='sig_utc', left=False)
     return out, pos
 
 
