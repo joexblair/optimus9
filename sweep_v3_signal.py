@@ -268,6 +268,14 @@ GRIDS = {
                 for sl in (0.02, 0.40)
                 for f in (2.5, 25.0)
                 for sm in (9, 21)]),
+    # The fourth axis against the other two. `samples` looked good alone and INVERTED in combination,
+    # so a knob measured alone proves nothing about the combination. support_min tracks the band
+    # size, which is what "every line supports" means for a narrower band.
+    'quad': ([dict(BASE, span=10, slope=sl, fence_lo=f, fence_hi=100.0 - f,
+                   tf_lo=lo, tf_hi=23, support_min=23 - lo + 1)
+              for sl in (0.02, 0.40)
+              for f in (2.5, 25.0)
+              for lo in (1, 5, 7, 9, 13)]),
     'wide': [dict(BASE, span=sp, slope=sl)
              for sp in (5, 6, 7, 8, 9, 10, 12, 14)
              for sl in (0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.60, 0.80)],

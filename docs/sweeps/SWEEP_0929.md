@@ -657,3 +657,78 @@ the equivalent for a narrower band is the band's own size.
 - reading: the high timeframes carry the signal and the low ones dilute it, but you cannot drop the
   high end without losing stability.
 - this is a NEW axis — a band, not a threshold — and it has not been combined with slope and fence.
+
+## RESULT 11 — CLOSING. The band inverts too. Exactly TWO knobs change; everything else is right.
+
+`quad` grid: slope x fence x tf_lo at span 10, three windows, 20 configs.
+
+| slope | fence | tf_lo | trades | pooled% | worst | net/trade | per-window |
+|---|---|---|---|---|---|---|---|
+| **0.02** | **2.5** | **1** | 1,204 | **66.20** | **65.2** | **+0.4110** | 65.2 / 66.7 / 68.7 |
+| 0.02 | 2.5 | 7 | 1,177 | 64.66 | 64.0 | +0.3480 | 64.0 / 65.3 / 64.2 |
+| 0.02 | 2.5 | 5 | 1,186 | 65.26 | 63.4 | +0.3677 | 63.4 / 67.1 / 64.6 |
+| 0.02 | 2.5 | 9 | 1,148 | 64.29 | 62.4 | +0.3720 | 63.5 / 65.4 / 62.4 |
+| 0.40 | 2.5 | 1 | 1,262 | 63.39 | 56.2 | +0.3355 | 64.8 / 63.6 / 56.2 |
+| 0.40 | 25.0 | 9 | 1,650 | 58.00 | 54.3 | +0.2466 | 56.7 / 60.2 / 54.3 |
+| **0.40** | **25.0** | **1** | 2,042 | **54.16** | 52.9 | **+0.1840** | 52.9 / 55.1 / 55.5 ← ALL BANKED |
+
+### The band effect inverts, exactly as `momo_fixed_samples` did
+
+| tf band | at BANKED slope+fence | at OPTIMISED slope+fence |
+|---|---|---|
+| **1..23** (banked) | 54.16% | **66.20%** |
+| 5..23 | 56.42% | 65.26% |
+| 7..23 | 56.91% | 64.66% |
+| 9..23 | **58.00%** | 64.29% |
+| 13..23 | 57.81% | 64.58% |
+
+- narrowing the band is worth **+3.84 points** at the banked slope and fence.
+- at the optimised slope and fence it is worth **−1.91**. The full band 1..23 is best.
+- **Joe's `tf_lo` 1 / `tf_hi` 23 is correct.** So is `momo_fixed_samples` 21.
+
+### The pattern, now confirmed twice
+
+| knob | alone | in combination |
+|---|---|---|
+| `momo_fixed_samples` 21 → 9 | +1.61 | **−0.71** |
+| tf band 1..23 → 9..23 | +3.84 | **−1.91** |
+
+Both were measuring the same underlying thing as slope and fence — every one of them filters
+toward fewer, stronger rows. Once the slope and fence do that filtering properly, any **additional**
+filter starts removing good signal instead of bad.
+
+**This strengthens the slope/fence result rather than weakening it.** It is not that "any filter
+helps". Slope and fence are specifically better filters than the alternatives, and they subsume
+them. Two knobs that looked live in isolation are dead once those two are set correctly.
+
+## THE FINAL ANSWER — two knobs change, thirteen stay
+
+| knob | banked | verdict |
+|---|---|---|
+| **`momo_slope_min`** | **0.40** | **→ 0.02** — monotone over 12k+ trades per level, knee at 0.02–0.05 |
+| **`v3_report.fence_lo/hi`** | **25.0 / 75.0** | **→ 2.5 / 97.5** — monotone from 40 down, knee at 2.0–2.5 |
+| `momo_span_min` | 10 | KEEP — spans 6–12 within ~1 point |
+| `momo_fixed_samples` | 21 | KEEP — inverts in combination |
+| `tf_lo` / `tf_hi` | 1 / 23 | KEEP — inverts in combination |
+| `support_min` | 23 | KEEP — best swept AND the maximum possible |
+| `boundary_xwob` | 4 | KEEP — best of nine values |
+| `dwell` | 3 | KEEP — best of seven values |
+| `rev_wob` | 2 | KEEP — 8 is +0.5, inside noise |
+| `confirm_lag_s` | 180 | KEEP — flat across 60..600 s |
+| `lookback_s` | 240 | KEEP — flat across 0..720 s |
+| `gap_fill` | 1 | KEEP — 54.53 vs 54.16, noise |
+| `curl_arc_min` | 4.0 | KEEP — flat, including disabled |
+| `level_slack` | 13.9 | KEEP — provably inert at the banked fence |
+| `momo_slack_ref` | = slope | KEEP — provably inert |
+
+| | banked | the two-knob change |
+|---|---|---|
+| trades (3 windows, 90 days) | 2,042 | 1,204 |
+| pooled MFE > MAE | 54.16% | **66.20%** |
+| worst window | 52.9% | **65.2%** |
+| net / trade | +0.1840 | **+0.4110** |
+
+**Caveat that survives everything above:** `level_slack` and `momo_slack_ref` are inert *at the
+banked fence*. At fence 2.5 the level gate arithmetic changes — `r` outside 2.5/97.5 still clears
+any slack, so they stay inert — but that has not been re-swept at the new fence and should be
+before anything is banked.
