@@ -108,30 +108,14 @@ and the sig_utc chain was replayed in realtime on 0929 - 121 of 121 moments, zer
 
 o9-live and fakeAPI **exist and run**, but on a different strategy. The bridge is the work.
 
-**THE 0929 KNOB SWEEP IS VOID.** ~240 configs were swept before the dr-flip-never-opens ruling, so
-the swept population was dominated by dr-flip OPENS. Re-derived from
-`docs/sweeps/results_postfix*.jsonl`, summed over the three windows:
+**THE 0929 KNOB SWEEP IS VOID AND ITS NUMBERS ARE NOT IN THIS PACKAGE.** ~240 configs were swept
+before the dr-flip-never-opens ruling, so the swept trade population was dominated by dr-flip OPENS
+and a knob "gain" was the flip share moving, not the signal. Joe 0929-late: *"ok, the sweep is
+definitely poisoned. let's go back to baseline"*.
 
-| config | flip-opens | flip share | trades once flips are removed | win% | net/trade |
-|---|---|---|---|---|---|
-| span 10, slope 0.40, fence 25/75 **(banked)** | 623 | 37.2-49.4% | **747** | 61.18% | +0.1261 |
-| span 6, slope 0.03, fence 25/75 | 702 | 42.4-53.3% | 652 | 58.74% | +0.1522 |
-| span 8, slope 0.10, fence 25/75 | 695 | 42.4-53.0% | 653 | 61.26% | +0.1545 |
-| span 12, slope 0.05, fence 25/75 | 838 | 52.6-68.4% | 463 | 61.77% | +0.1794 |
-| span 10, slope 0.02, fence 25/75 | 819 | 55.6-66.0% | 473 | 60.89% | +0.2164 |
-| span 10, slope 0.40, fence 2.5/97.5 | 1,052 | 87.8-90.5% | **129** | 61.24% | +0.3661 |
-| span 10, slope 0.02, fence 2.5/97.5 | 1,083 | 92.9-94.3% | **74** | 68.92% | +0.6134 |
-
-**The two configs that look best have 74 and 129 trades against the banked config's 747.** The
-"gain" is the trade population collapsing, not the signal improving. `net/trade` rises monotonically
-as the trade count falls, across all seven rows.
-
-**Do not act on `docs/sweeps/`.** It is kept as the record of a wrong turn, not as a recommendation.
-
-**A CORRECTION TO AN EARLIER VERSION OF THIS FILE.** It said the flip count was "near-constant at
-~1,100 whatever the knobs" and that "six of seven configs sit within +/-0.6 points". Neither holds:
-the flip count runs 623 to 1,083, and on win% five of seven sit within +/-0.6. The VOID verdict is
-unchanged and the evidence above is stronger than the evidence it replaces.
+**Do not act on `docs/sweeps/`, and do not quote it.** Not its knob values, not its rankings, not
+its per-config counts. It is kept as the record of a wrong turn. The baseline this package hands
+over is the banked configuration, not anything that sweep produced.
 
 ## Reproduce it before you trust it
 
