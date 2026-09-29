@@ -411,3 +411,48 @@ none has been checked:
 2. that a 10/90 fence is a mechanic Joe wants, not an artefact of demanding near-saturated `r`;
 3. that MFE > MAE and net/trade are the objectives he is optimising, rather than something the
    excursion aggregate only proxies.
+
+## RESULT 7 — the fence keeps paying to 2.5/97.5, and that is where I start doubting it
+
+`edge` grid: span 7-10 x slope 0.02/0.03/0.05 x fence 2.5/5/7.5/10, three windows, 44 complete.
+
+### Fence effect pooled across the edge grid
+
+| fence | configs | trades | pooled win% | net/trade |
+|---|---|---|---|---|
+| **2.5 / 97.5** | 11 | 13,432 | **63.45** | **+0.3043** |
+| 5.0 / 95.0 | 11 | 14,241 | 62.64 | +0.2853 |
+| 7.5 / 92.5 | 11 | 15,097 | 60.76 | +0.2725 |
+| 10.0 / 90.0 | 11 | 15,877 | 61.00 | +0.2686 |
+
+### Top by worst window
+
+| span | slope | fence | trades | pooled% | worst | net/trade | per-window |
+|---|---|---|---|---|---|---|---|
+| **10** | **0.02** | **2.5** | **1,204** | **66.20** | **65.2** | **+0.4110** | **65.2 / 66.7 / 68.7** |
+| 10 | 0.03 | 2.5 | 1,204 | 64.87 | 62.0 | +0.3774 | 62.0 / 66.7 / 70.0 |
+| 9 | 0.05 | 2.5 | 1,194 | 63.23 | 60.7 | +0.2898 | 61.5 / 65.3 / 60.7 |
+| 8 | 0.03 | 10.0 | 1,444 | 61.57 | 60.3 | +0.2948 | 60.3 / 63.0 / 60.4 |
+| 10 | 0.03 | 5.0 | 1,286 | 63.22 | 60.1 | +0.2920 | 60.1 / 65.7 / 65.6 |
+
+**`span 10 / slope 0.02 / fence 2.5-97.5`: pooled 66.20%, worst window 65.2%, net/trade +0.4110,
+per-window 65.2 / 66.7 / 68.7, on 1,204 trades.** Against the banked 54.16% / +0.1840 / 2,042 that
+is +12.0 points, +123% net per trade, on 41% fewer trades.
+
+### WHY I DO NOT BELIEVE THIS IS A KNOB SETTING
+
+The numbers are real — 1,204 trades, all three windows above 65%, about 8 standard errors from the
+banked. What I doubt is that it is still **Joe's mechanic**.
+
+- the v3 row rule is *"the FIRST bar in that dr run where the line's r is `sideways` AND outside the
+  fence"*, and Joe set that fence to 25/75 on 0910, raising it from 30/70.
+- at **2.5 / 97.5** the test is no longer "outside the fence". It is "`r` is pinned at the extreme
+  of its own 0-100 range". A StochRSI below 2.5 is saturated, not merely out of bounds.
+- so this may not be a better setting of the fence. It may be a **different mechanic wearing the
+  fence's name** — exhaustion at saturation rather than a fence exit.
+- **oob is 15/85 everywhere else in this system.** 2.5 is not near any fence Joe has named.
+- trade count falls 41%, from 2,042 to 1,204. Whatever this selects, there is much less of it.
+
+A `limit` grid at fence 0.25 .. 2.5 is running. If win% keeps climbing as the fence approaches zero
+while the trade count collapses, that confirms the reading above: it is finding saturation, not
+tuning a fence. **That is a question for Joe to name, not for me to bank.**
