@@ -307,3 +307,61 @@ banked 0.40 on a like-for-like pooled basis**. The monotone fall from 0.05 to 0.
 
 Top by worst window is unchanged: **span 6 / slope 0.03**, pooled 57.58%, worst 56.3%,
 net/trade +0.2588, per-window 56.3 / 58.8 / 57.6, on 1,912 trades against the banked 2,042.
+
+## RESULT 5 — a SECOND monotone knob: the v3 row fence. And `support_min` is already at its ceiling.
+
+Nine knob families re-run on the three-window protocol, one variable at a time from the banked
+point. Pooled over the three windows.
+
+### `fence_lo` / `fence_hi` — banked 25.0 / 75.0 — MONOTONE, tighter is better
+
+| fence | trades | win% | worst window | net/trade | per-window |
+|---|---|---|---|---|---|
+| **10.0 / 90.0** | 1,559 | **60.23** | 54.8 | **+0.2790** | 59.2 / 62.5 / 54.8 |
+| 12.5 / 87.5 | 1,661 | 58.10 | 51.6 | +0.1954 | 58.2 / 59.7 / 51.6 |
+| 15.0 / 85.0 | 1,740 | 56.38 | 49.2 | +0.1746 | 56.0 / 58.5 / 49.2 |
+| 20.0 / 80.0 | 1,903 | 55.07 | 50.9 | +0.1953 | 53.6 / 57.5 / 50.9 |
+| 22.5 / 77.5 | 1,981 | 54.47 | 52.3 | +0.1803 | 53.1 / 56.4 / 52.3 |
+| **25.0 / 75.0** | 2,042 | **54.16** | 52.9 | **+0.1840** | 52.9 / 55.1 / 55.5 ← BANKED |
+| 30.0 / 70.0 | 2,139 | 53.53 | 52.1 | +0.1276 | 52.1 / 54.9 / 53.6 |
+| 35.0 / 65.0 | 2,214 | 52.57 | 50.7 | +0.1324 | 50.7 / 54.8 / 50.8 |
+| 40.0 / 60.0 | 2,276 | 52.02 | 47.3 | +0.1315 | 52.0 / 53.3 / 47.3 |
+
+- pooled win% falls monotonically from 60.2 at 10/90 to 52.0 at 40/60. **+6.1 points over the
+  banked 25/75**, on 24% FEWER trades (1,559 vs 2,042).
+- mechanically obvious in hindsight: a tighter fence demands the line's `r` be further out of
+  bounds before the row fires, so it admits fewer and stronger rows.
+- **CAVEAT, and it matters:** on WORST window the picture is not monotone. 10/90 reads 54.8 but
+  12.5 reads 51.6 and 15.0 reads 49.2, both BELOW the banked 52.9. The per-window spread at 10/90
+  is wide (59.2 / 62.5 / 54.8). Pooled it is clean; per-window it is not.
+
+### `support_min` — mine, banked 23 — ALREADY AT ITS CEILING
+
+| support_min | trades | win% | net/trade |
+|---|---|---|---|
+| **23** | 2,042 | **54.16** | **+0.1840** ← BANKED, and the best |
+| 22 | 2,115 | 53.62 | +0.1569 |
+| 21 | 2,187 | 53.45 | +0.1342 |
+| 20 | 2,231 | 52.44 | +0.1138 |
+| 15 | 2,212 | 52.22 | +0.0505 |
+
+Every value below 23 is worse, monotonically in net/trade. **23 is the maximum possible** — the
+band is ws1..ws23, so 23 means every line must support. The knob is pinned at its strictest setting
+and cannot go higher without widening the band.
+
+### The leash knobs — FLAT, nothing to find
+
+| knob | range swept | win% range |
+|---|---|---|
+| `confirm_lag_s` | 60 .. 600 s | 54.2 – 55.2 |
+| `lookback_s` | 0 .. 720 s | 53.7 – 54.6 |
+| `gap_fill` | 0 or 1 | 54.53 vs 54.16 |
+
+All inside noise on ~2,000 trades. **Joe's 0917 "that 180s is required ... it's not negotiable"
+costs nothing and gains nothing measurable** — the mech is insensitive to it across a 10x range.
+
+### Do slope and fence compound?
+
+Both findings cut trade count and lift win rate. They may be the same signal counted twice. A
+`combo` grid — span 6/8 x slope 0.03/0.05/0.40 x fence 10/15/20/25, with BASE as control — is
+running.

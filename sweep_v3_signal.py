@@ -236,6 +236,12 @@ GRIDS = {
     'final': [dict(BASE, span=6, slope=0.03), dict(BASE, span=7, slope=0.04),
               dict(BASE, span=8, slope=0.10), dict(BASE, span=12, slope=0.05),
               dict(BASE)],
+    # Two independent monotone findings - slope low, fence tight - both reduce trade count. Do they
+    # compound, or are they the same signal counted twice? BASE is included as the control.
+    'combo': ([dict(BASE, span=sp, slope=sl, fence_lo=f, fence_hi=100.0 - f)
+               for sp in (6, 8)
+               for sl in (0.03, 0.05, 0.40)
+               for f in (10.0, 15.0, 20.0, 25.0)]),
     'wide': [dict(BASE, span=sp, slope=sl)
              for sp in (5, 6, 7, 8, 9, 10, 12, 14)
              for sl in (0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.60, 0.80)],
