@@ -17,7 +17,7 @@ they are a suggestion not a ruling:
 | reason | `sig_utc`, `dr-flip` or `stop` — the thing that fired |
 | order type | **market**, both legs. Joe 0929-late. Limit placement is `MVP2.md` |
 | the bar it believes it acted on | so a bar-vs-wall-clock gap is visible without inference |
-| the config key | `wtc_v2_v7_rule1_gateopen` - **v2 is the only version**. Note that none of the three 0929-late rulings is in this key, so it does NOT discriminate a pre-ruling run from a ruled one. See `OPEN.md` item 8 |
+| the config key | `wtc_v2_v7_rule1_gateopen` - **v2 is the only version**. The cap is not in this key, so it does not tell a capped run from an uncapped one. See `OPEN.md` item 8 |
 | `led_id` | to join to `o9_live.o9_ledger` |
 
 **The monitor.** A shell loop that tails the dump and, on a new line, wakes a Claude session. The

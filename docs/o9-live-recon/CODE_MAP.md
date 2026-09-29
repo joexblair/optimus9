@@ -16,13 +16,15 @@ that path. Anyone reading `run_o9live.py` and assuming it already trades this st
 | `optimus9/compute/dr_latch.py` | `latch` (no wob, the wsf_dtf_v3 producer) and `latch_wob` (Joe's 8). Lifted out of the parked `docs/mage_cascade/stopsweep.py` |
 | `optimus9/compute/trade_walk.py` | the rules, pure — `walk()` and `mae_mfe()`. `backstop()` is **deleted**, do not expect it. No DB, no lines, no printing |
 | `optimus9/compute/trade_config.py` | `wsf_trade_config`, **16 knobs at version 2 — the only version**. Each row carries Joe's own words as its source |
-| `build_wsf_trades.py` | loads the tape and lines, runs the gate, walks, banks to `wsf_trades`, prints. `--day`, `--drop`, `--md` |
+| `build_wsf_trades.py` | the only banker - loads the tape and lines, runs the gate, walks, writes `wsf_trades`. **It has NO STOP in it, so it does not produce this mech.** `--day`, `--drop`, `--md` |
 | `optimus9/compute/rule1_gate.py` | the gate. Pre-existing, unchanged |
-| `sweep_mae_cap.py` | the MAE-cap sweep. 753 trades over 90 days, peak 0.70 at +0.3776/trade. Carries BOTH 0929-late rulings in its own walk |
-| `sweep_v3_signal.py` | the knob-sweep harness. **Its results are VOID** - see OPEN.md. Kept because it reproduces the signal chain in memory. **It defaults to `NO_FLIP_OPEN = False`** and calls the canonical `trade_walk.walk`, so a default run is neither the banked shape nor the ruled one. Pass `--no-flip-open`. **Its docstring carries a baseline figure from the void sweep - ignore it, and do not quote it** |
+| **`sweep_mae_cap.py`** | **THE ONLY THING THAT PRODUCES THIS MECH.** 753 trades over 90 days, peak cap 0.70 at +0.3776/trade. Carries both 0929-late close rulings and the cap. **Zero DB writes - it prints, it does not bank** |
 | `fastverdict.py` | vectorised `sideways`, proven 0 mismatches against `momo_g_why` over 8 TFs x 86,400 bars |
-| `bank_emit_entry.py` | banks the emit-entry variants into `wsf_trades`. Its walk carries the **no-flip-open** ruling only - **not** the opposing-dr close, and **not** the stop. It runs `DELETE FROM wsf_trades WHERE wt_key=... AND wt_win=...` under `--write` |
 | `report_realtime_replay.py` | replays the sig_utc chain in realtime and reports revisions + latency. 0929: 121 of 121, zero revisions |
+
+**Other scripts in the repo measure mechs WITHOUT the cap.** `sweep_v3_signal.py`,
+`bank_emit_entry.py` and everything under `docs/sweeps/` are not this mech. They are not part of
+this handover and their numbers do not belong in a report about it.
 
 Reproducibility, and run these before trusting anything:
 
@@ -31,11 +33,11 @@ python3 sweep_mae_cap.py            # 753 trades over 90 days, peak cap 0.70 at 
 python3 report_realtime_replay.py   # the causality proof: 121 of 121, zero revisions
 ```
 
-**`build_wsf_trades.py` no longer reproduces its own bank.** It imports `trade_walk.walk`, which now
-carries both 0929-late rulings; the banked rows do not. The old expectations - `--day 2026-09-01` =
-25 trades / MFE > MAE 13, and the full window = 119 closed / MFE > MAE 68 - are the **PRE-RULING**
-numbers and will not come back. 43 of 67 sig closes are now inert and 52 flip opens are gone. See
-`OPEN.md` item 8 before you run it; it banks.
+**Nothing in this repo banks this mech.** `sweep_mae_cap.py` produces it and prints it;
+`build_wsf_trades.py` banks, and what it banks has no stop. Every row already in `wsf_trades` was
+written before the cap and before the two close rules. **Do not run `build_wsf_trades.py` expecting
+this mech, and do not compare o9-live against `wsf_trades`.** Building the banker for this mech is
+the first thing the recon needs - see `OPEN.md`.
 
 ## Existing live infrastructure — read before building
 

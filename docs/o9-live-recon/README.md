@@ -42,6 +42,9 @@ still present in this package.** Three rulings from Joe and one defect he caught
 | the dr-flip backstop CLOSES but never OPENS | the book goes flat instead |
 | MAE is capped at **0.70%** and the cap is a STOP | `MFE-MAE` prints `-0.70` when hit |
 
+**ANYTHING MEASURED WITHOUT THE CAP IS A DIFFERENT MECH** and is not in this package. Joe 0929-late:
+*"you should be handing over only the mech that the MAE cap was applied to"*.
+
 Three more rulings landed 0929-late, after the above:
 
 | | |
@@ -55,12 +58,13 @@ Three more rulings landed 0929-late, after the above:
     signal      wsf_leash v7 `wsl_sig_utc`, from the banked wsf_dtf_v3 knobs
                 span 10, slope 0.40, fence 25/75, samples 21, tf 1..23, support_min 23
     gate        rule1_gate config v2 - backward-only [k-84 bars, k], run clamped at the edge
-    walk        trade_walk.walk - opposing-dr close, dr-flip closes only. BOTH rulings are in
-                the code as of 0929-late; the banked wsf_trades rows are NOT - see OPEN.md item 8
+    walk        trade_walk.walk - opposing-dr close, dr-flip closes only. Both rulings are in
+                the code as of 0929-late
+    entry       the sig bar - the bar the signal NAMES. This is a CEILING; o9-live cannot know
+                that bar for a median 165 s
     stop        MAE cap 0.70%, at the first bar the adverse excursion reaches it. Joe specified
-                0.9 on 0929, saw the 0.05 sweep, and ruled 0.70. IT IS APPLIED IN SCORING ONLY -
-                sweep_mae_cap.py, not trade_walk.walk - because "does a stop free the book" is
-                unruled. See OPEN.md item 10
+                0.9 on 0929, saw the 0.05 sweep, and ruled 0.70. It lives in sweep_mae_cap.py's
+                scoring, not in trade_walk.walk, because "does a stop end the trade" is unruled
     score       MAE/MFE percentages of entry. NO P&L - Joe 0917
 
 **THE NUMBERS, 90 days of line cache, 2026-06-10 .. 2026-09-08:**
@@ -108,24 +112,20 @@ and the sig_utc chain was replayed in realtime on 0929 - 121 of 121 moments, zer
 
 o9-live and fakeAPI **exist and run**, but on a different strategy. The bridge is the work.
 
-**THE 0929 KNOB SWEEP IS VOID AND ITS NUMBERS ARE NOT IN THIS PACKAGE.** ~240 configs were swept
-before the dr-flip-never-opens ruling, so the swept trade population was dominated by dr-flip OPENS
-and a knob "gain" was the flip share moving, not the signal. Joe 0929-late: *"ok, the sweep is
-definitely poisoned. let's go back to baseline"*.
-
-**Do not act on `docs/sweeps/`, and do not quote it.** Not its knob values, not its rankings, not
-its per-config counts. It is kept as the record of a wrong turn. The baseline this package hands
-over is the banked configuration, not anything that sweep produced.
+**`docs/sweeps/` measures a mech without the MAE cap. It is not this mech. Do not use it.** Joe
+0929-late: *"ok, the sweep is definitely poisoned. let's go back to baseline"* and *"you should be
+handing over only the mech that the MAE cap was applied to"*.
 
 ## Reproduce it before you trust it
 
 ```
 python3 sweep_mae_cap.py          # 753 trades over 90 days, peak cap 0.70 at +0.3776/trade
 python3 report_realtime_replay.py # the causality proof: 121 of 121, zero revisions
-
-# build_wsf_trades.py no longer reproduces its own banked rows - trade_walk.walk carries both
-# 0929-late rulings and the bank does not. See OPEN.md item 8 before running it.
 ```
+
+**`sweep_mae_cap.py` is the ONLY thing that produces this mech, and it does not bank.** Zero DB
+writes. Every row in `wsf_trades` is a mech without the cap - see `SPEC.md`, *this mech has no
+banked trade table*.
 
 Both must come out of the tape and the DB alone. A mismatch is a finding, not a nuisance — see
 `RECON.md`.

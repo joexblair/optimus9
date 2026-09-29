@@ -66,39 +66,38 @@ Step 2 before step 3 is Joe's same-bar priority. `backstop()` is deleted. **Do n
 
 It is provably the same output, not luckily: the latch alternates strictly — a change needs
 `d[k] != d[k-1]` and `d[k] != 0`, and it never returns to 0 once set — so the first bar back at `D`
-after being `-D` IS the end of the `-D` stretch. Verified: 119 closed trades over the window, 25 on
-09-01, every MAE/MFE unchanged. **Those counts are the PRE-RULING shape** — see `OPEN.md` item 8.
+after being `-D` IS the end of the `-D` stretch. Verified against the walk at the time: identical output, every MAE/MFE unchanged. The causality
+argument stands on its own — it is about the SHAPE of the loop, not about a trade count.
 
-## The hand-walk
+## The hand-walk — it proves the SHAPE, not a trade count
 
-**CORRECTED 0929-late.** An earlier version of this section said "09-01 trade 3" and then walked the
-bars that decide **trade 4**. The banked rows, key `wtc_v2_v7_rule1_gateopen`, window `2026-09-01`:
+**This walk is not checked against `wsf_trades`.** Every row there is a mech without the cap, so a
+match would prove nothing about this mech. What the walk proves is that the decision at each bar
+reads only `dr[k]` and `dr[k-1]` plus a carried flag — which is what makes it reproducible live.
 
-| # | dr | open | opened_by | close | closed_by |
-|---|---|---|---|---|---|
-| 3 | +1 SHORT | 03:40:05 | sig_utc | **04:26:00** | **sig_utc** |
-| 4 | +1 SHORT | 04:26:00 | sig_utc | 05:04:30 | dr-flip |
-
-Trade 3 closes on a **same-dr sig_utc** — that exact row is what Joe read on 0929-late to issue the
-opposing-dr-close ruling. Under the ruling that close is INERT.
-
-The backstop walk below is **trade 4**, SHORT opened 04:26:00 at dr +1:
+A SHORT opened at dr +1 on 09-01 at 04:26:00:
 
 | bar | dr[k−1] | dr[k] | change | == −D | left after | == D and change | decision |
 |---|---|---|---|---|---|---|---|
 | 04:57:40 | +1 | −1 | yes | yes | True | . | carry on |
-| 05:04:30 | −1 | +1 | yes | . | True | yes | **backstop — CLOSE ONLY** |
+| 05:04:30 | −1 | +1 | yes | . | True | yes | **backstop — CLOSE ONLY, book goes flat** |
 
-Two bars decide it, both read as `dr[k]` against `dr[k-1]` plus the carried flag. The banked trade 4
-closes at 05:04:30 by dr-flip. Match. **The bank then opens a new trade on that bar; the code no
-longer does** — the flip-open ruling landed after the bank was written.
+Two bars decide it. Neither reads a bar above `k`. **No stop is applied here** — the cap lives in
+`sweep_mae_cap.py`'s scoring, so in this mech the trade would end earlier if its adverse excursion
+reached 0.70% before 05:04:30. That is `OPEN.md`, *does a stop end the trade*.
+
+**A correction to an earlier version of this section:** it walked these bars and labelled them
+"09-01 trade 3". They are the bars that decide the trade opened at 04:26:00.
 
 ## What a new session should re-run before trusting any of this
 
 ```
-python3 build_wsf_trades.py --day 2026-09-01        # 25 trades, MFE > MAE 13
-python3 build_wsf_trades.py                          # 119 closed, MFE > MAE 68
+python3 sweep_mae_cap.py            # 753 trades over 90 days, peak cap 0.70 at +0.3776/trade
+python3 report_realtime_replay.py   # 121 of 121 moments, zero revisions
 ```
+
+**Do NOT run `build_wsf_trades.py` to check this.** It has no stop in it, so it produces a mech
+without the cap, and it banks. See `SPEC.md`, *this mech has no banked trade table*.
 
 Both must reproduce from the tape and the DB alone. If they do not, something in the cache moved and
 that is itself a finding — see `RECON.md`'s three mismatch classes.

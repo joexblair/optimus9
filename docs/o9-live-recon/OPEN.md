@@ -20,7 +20,8 @@
 | **a sig_utc closes ONLY on an opposing dr** | Joe 0929-late, after spotting 09-01 03:40:05 (a SHORT) being closed by the 04:26:00 sig_utc (also a SHORT): *"trades must be first closed by an opposing dr signal, and secondly by a dr-flip if there is not opposing dr signal"*. A same-dr sig_utc is INERT - *"for now, it's inert"* |
 | **the dr-flip backstop CLOSES but never OPENS** | Joe 0929-late: *"now we have the data I can see that dr-flip as an open is not helpful. the cost is accceptable - it gives us space to apply other mechs (lazy-g for example)"*. It still closes, or a trade would run to the next opposing signal whatever happened |
 | **the MAE cap is 0.70%, applied as a STOP** | Joe specified 0.9 on 0929, was shown the 0.05-step sweep over 90 days, and ruled **0.70** - the peak at +0.3776 per trade. `MFE-MAE` prints `-0.70` on a stopped trade |
-| **the 0929 knob sweep is VOID** | Joe 0929-late: *"ok, the sweep is definitely poisoned. let's go back to baseline"*. It was run before the flip-open ruling, so the swept population was dominated by dr-flip OPENS. **Do not act on `docs/sweeps/` and do not quote its numbers** - not even as evidence for the void verdict |
+| **only the MAE-capped mech is handed over** | Joe 0929-late: *"you should be handing over only the mech that the MAE cap was applied to"*. Anything measured without the cap - `docs/sweeps/`, every row in `wsf_trades`, every variant - is a **different mech**. It is not a baseline and not a comparison |
+| **the 0929 knob sweep is out** | Joe 0929-late: *"ok, the sweep is definitely poisoned. let's go back to baseline"*. It ran before the cap and before the flip-open ruling. Do not use `docs/sweeps/` |
 | the gate window | **backward-only, 7 min**. Joe 0929: *"the -3.5 and + 3.5 logic is what's making it non-causal, so let's drop the forward"* |
 | the config | **v2 only**. Joe 0929 dropped v1 and its 166 rows after the A/B |
 | a forward WAIT on a rejected sig bar | **rejected**. Joe 0929: *"no V3, just v2"*. It was causal and recovered all 7 lost opens, but 5 of 7 additions lose |
@@ -39,10 +40,10 @@
 | 5 | ~~should wsl_sig_utc carry sig_conf~~ | RULED — it must |
 | 6 | ~~may the book go flat~~ | SETTLED by the flip-open ruling — it does |
 | 7 | re-bank the 121 leash rows at sig_conf | the leash bank |
-| 8 | re-bank wsf_trades under the rulings | **every reproduce command in this package** |
+| 8 | **build a banker for this mech, and under what key** | **the recon has nothing to compare against** |
 | 9 | ~~stop vs opposing sig_utc on the same bar~~ | RULED — the stop wins |
 | 10 | **does a stop END the trade, or does the position carry?** | **the first recon job** |
-| 11 | entry bar: the sig bar or the emit bar | what number the strategy is worth |
+| 11 | accept the ceiling entry bar, or re-measure at the bar o9-live can act on | what this mech is actually worth |
 
 1. ~~**Whether the sig_utc producer chain can run forward.**~~ **ANSWERED 0929 — IT RUNS IN
    REALTIME.** Joe corrected the framing first: *"your 'run forward on a bounded window' sounds like
@@ -114,8 +115,8 @@
 6. **~~Whether the book may ever go flat.~~ IT NOW DOES.** This item used to say the book cannot go
    flat after the first trade, because every event is a reversal. **That was true before the
    dr-flip-never-opens ruling and is false now.** Under the ruling the book sits FLAT for 43.8 h of
-   the 119.5 h 09-01..09-06 window — **36.6%** — measured by `bank_emit_entry.py`. Nothing is open
-   for Joe here; the entry is kept so the old statement is not read as current.
+   the 119.5 h 09-01..09-06 window — **36.6%**. Nothing is open for Joe here; the entry is kept so
+   the old statement is not read as current.
 
 7. **Re-banking the 121 `wsf_leash` rows at `sig_conf`.** `coil_exit.py` now emits the conf bar, but
    the 121 banked v7 rows still hold the **old cross bars**. `wsl_knobs` does not encode the change,
@@ -123,20 +124,23 @@
    mix them. Joe's call: re-bank in place, bank alongside under a new knob-string, or leave the bank
    as the historical record and note the offset.
 
-8. **`build_wsf_trades.py` still writes the OLD shape.** It imports `trade_walk.walk`, which now
-   carries both 0929-late rulings, so a fresh run no longer reproduces the bank. **All three banked
-   `wsf_trades` keys are pre-ruling.** Measured on `wtc_v2_v7_rule1_gateopen` /
-   `2026-09-01..2026-09-06`, 120 rows:
+8. **THIS MECH HAS NO BANKED TRADE TABLE, AND THE RECON NEEDS ONE.**
 
-   | measure | banked | under the rulings |
+   | script | produces the capped mech | banks |
    |---|---|---|
-   | sig_utc closes, same-dr | **43** of 67 | all 43 become INERT |
-   | sig_utc closes, opposing-dr | 24 | survive |
-   | dr-flip OPENS | **52** | all 52 deleted |
-   | dr-flip closes | 52 | survive |
+   | `sweep_mae_cap.py` | **yes** | **no** - zero DB writes |
+   | `build_wsf_trades.py` | no - it has no stop | yes |
 
-   Joe's call: re-bank, and whether the key gains a ruling discriminator so the two shapes cannot
-   land on the same key.
+   Every row already in `wsf_trades` was written before the cap and before the two close rules, so
+   **o9-live must not be compared against it.**
+
+   Two things for Joe:
+   - **the key.** `trade_config.key()` is `wtc_v%d_%s_%s % (version, leash_instance, gate)`. The
+     cap is not a knob and neither close rule is, so a capped and an uncapped run land on the
+     **same key**. Either the cap becomes a `wsf_trade_config` row, or the key gains a
+     discriminator, or the two shapes overwrite each other.
+   - **the old rows.** 332 rows across 4 key/window groups, all uncapped. Leave them, rename them,
+     or drop them. Do not silently mix.
 
 9. ~~**Same-bar priority between the stop and an opposing sig_utc.**~~ **RULED 0929-late — Joe:
    *"use stop"*.** The stop wins. It is not yet in `trade_walk.walk` — see item 10.
@@ -151,10 +155,12 @@
     **Selection diverges by construction, and the recon will report it as a selection fault when it
     is a bookkeeping difference.** Until Joe rules it, the stop stays out of `trade_walk.walk`.
 
-11. **The entry bar for the ruled strategy.** `sweep_mae_cap.py` enters on the **sig bar** — that is
-    where +0.3776 comes from. `bank_emit_entry.py` calls the sig bar **the CEILING, not
-    achievable**, because `report_realtime_replay.py` measures it a median 165 s before o9-live can
-    know it. The two have never been reconciled into one ruled entry bar.
+11. **The entry bar. This mech enters where o9-live cannot.** `sweep_mae_cap.py` enters on the bar
+    the signal NAMES, and +0.3776 per trade comes from there. `report_realtime_replay.py` measures
+    o9-live's earliest possible entry at a **median 165 s later**, max 4955 s.
+
+    So +0.3776 is a ceiling, not a forecast. Joe's call: accept it as the spec and let the recon
+    measure the shortfall, or re-measure the whole mech at the bar o9-live can act on.
 
 ## Traps
 
@@ -182,21 +188,13 @@ The per-branch split of which rows are the moment's END ROW is **unreconciled �
 242 of 242. The walk's dr is `latch_wob` read live at the bar it starts from. They differ on 7 of 242
 rows. §22.21 and §22.22. This is intended, not a bug to fix.
 
-**`wsf_trades` holds four key/window groups, 332 rows. The package describes one.**
+**EVERY ROW IN `wsf_trades` IS A MECH WITHOUT THE CAP.** 332 rows, 4 key/window groups, none of
+them carrying the stop. Do not compare o9-live against any of them and do not quote their numbers.
+See item 8.
 
-| `wt_key` | `wt_win` | rows | still open | dr-flip opens |
-|---|---|---|---|---|
-| `wtc_v2_v7_rule1_gateopen` | 2026-09-01 | 26 | 1 | 7 |
-| `wtc_v2_v7_rule1_gateopen` | 2026-09-01..2026-09-06 | 120 | 1 | 52 |
-| `wtc_v2_v7_rule1_gateopen_entry_emit` | 2026-09-01..2026-09-06 | 119 | 1 | 52 |
-| `wtc_v2_v7_rule1_gateopen_entry_emit_noflipopen` | 2026-09-01..2026-09-06 | 67 | 1 | 0 |
-
-All four are **pre-ruling**. The last one carries the no-flip-open ruling only; it does not carry the
-opposing-dr close and it does not carry the stop. See item 8.
-
-**The rulings are not knobs and they are not in the key.** `wsf_trade_config` v2 is 16 rows and none
-of them is `mae_cap`, a close-rule or a flip-open rule. `trade_config.key()` is
-`wtc_v%d_%s_%s % (version, leash_instance, gate)`, so a pre-ruling and a post-ruling run land on the
+**The cap and the close rules are not knobs and they are not in the key.** `wsf_trade_config` v2 is
+16 rows; `mae_cap` is not one of them. `trade_config.key()` is
+`wtc_v%d_%s_%s % (version, leash_instance, gate)`, so a capped and an uncapped run land on the
 **same key**. See item 8.
 
 **o9-live's `StrategyLoop` runs `v2_walk_ad` today.** Not this strategy, and `ops/run_o9live.py:28`
