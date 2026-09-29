@@ -732,3 +732,60 @@ them. Two knobs that looked live in isolation are dead once those two are set co
 banked fence*. At fence 2.5 the level gate arithmetic changes — `r` outside 2.5/97.5 still clears
 any slack, so they stay inert — but that has not been re-swept at the new fence and should be
 before anything is banked.
+
+## RESULT 12 — the last open caveat, cleared.
+
+At the close I flagged that `level_slack` and `momo_slack_ref` were proven inert *at the banked
+fence* and had not been re-checked at fence 2.5. Re-run at span 10 / slope 0.02 / fence 2.5-97.5:
+
+| level_slack | slack_ref | trades | win% | net/trade |
+|---|---|---|---|---|
+| 0.0 | — | 1,204 | 66.20 | +0.4110 |
+| 13.9 | — | 1,204 | 66.20 | +0.4110 |
+| 13.9 | 0.05 | 1,204 | 66.20 | +0.4110 |
+| 13.9 | 0.40 | 1,204 | 66.20 | +0.4110 |
+| 13.9 | 1.20 | 1,204 | 66.20 | +0.4110 |
+| 28.0 | — | 1,204 | 66.20 | +0.4110 |
+| 40.0 | — | 1,204 | 66.20 | +0.4110 |
+| 46.0 | — | 1,204 | 66.20 | +0.4110 |
+| 49.0 | — | 1,204 | 66.20 | +0.4110 |
+
+**All nine byte-identical.** They stay inert at the new fence, and more completely than at the old
+one — at fence 25 the knob came alive at `level_slack` 28; at fence 2.5 even 49.0 changes nothing.
+The reason tightens: a tighter fence pushes `r` further from 50, so the level gate is cleared by an
+even wider margin. **Caveat cleared. Nothing in the two-knob change depends on either of them.**
+
+---
+
+# END OF SWEEP — the complete picture
+
+| | |
+|---|---|
+| configs measured | ~240 |
+| trades scored | ~300,000 |
+| tape | 94.5 days, 2026-06-05 .. 2026-09-07 |
+| windows | three independent: 40d / 40d / 10d |
+| knob families | 12 |
+| written to any table | **nothing** |
+
+**Two knobs change. Thirteen keep their banked value, each for a measured reason.**
+
+| | banked | proposed |
+|---|---|---|
+| `momo_slope_min` | 0.40 | **0.02** |
+| fence | 25.0 / 75.0 | **2.5 / 97.5** |
+| trades (90 days) | 2,042 | 1,204 |
+| pooled MFE > MAE | 54.16% | **66.20%** |
+| worst window | 52.9% | **65.2%** |
+| net / trade | +0.1840 | **+0.4110** |
+
+**What is NOT established, and gates everything:**
+
+1. **the eyeball.** `momo_slope_min` 0.4 was fitted by sweeping until ws7r read `sideways` at Joe's
+   own ~05:36 on 08-25. Whether 0.02 reproduces that reading is unchecked and outranks this sweep.
+2. **the fence is Joe's number** — 25/75, raised from 30/70 on 0910. `oob` is 15/85 everywhere else
+   in this system and 2.5 is near nothing he has named. Whether a 2.5 fence is the mechanic he
+   means is his to rule.
+3. **MFE/MAE is excursion, not capture.** `net/trade` is summed MFE minus summed MAE.
+4. **the K and BB line knobs were never reached.** They sit beneath every knob swept here — the
+   lines themselves — and could move all of it. Reaching them needs a line-cache rebuild.

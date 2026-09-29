@@ -276,6 +276,12 @@ GRIDS = {
               for sl in (0.02, 0.40)
               for f in (2.5, 25.0)
               for lo in (1, 5, 7, 9, 13)]),
+    # The one caveat left open at the close: level_slack and momo_slack_ref are provably inert at the
+    # BANKED fence, because r outside 25/75 always clears the level gate. Re-check at fence 2.5.
+    'inert2': ([dict(BASE, span=10, slope=0.02, fence_lo=2.5, fence_hi=97.5, level_slack=v)
+                for v in (0.0, 13.9, 28.0, 40.0, 46.0, 49.0)]
+               + [dict(BASE, span=10, slope=0.02, fence_lo=2.5, fence_hi=97.5, slack_ref=v)
+                  for v in (0.05, 0.4, 1.2)]),
     'wide': [dict(BASE, span=sp, slope=sl)
              for sp in (5, 6, 7, 8, 9, 10, 12, 14)
              for sl in (0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.60, 0.80)],
