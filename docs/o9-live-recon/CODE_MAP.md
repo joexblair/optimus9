@@ -68,7 +68,7 @@ Every module in the chain was swept for reads above `k` and the walk was hand-wa
 | `optimus9/compute/test_points.py` | **causal** — `r[lo:k+1]` is inclusive of `k` and backward |
 | `optimus9/compute/trade_walk.py` `walk` | **causal as of 0929** — bar-by-bar, reads `dr[k]` and `dr[k-1]` only |
 | `optimus9/compute/trade_walk.py` `mae_mfe` | causal **at the close bar** — the whole span is past by then |
-| `optimus9/compute/rule1_gate.py` | **NOT CAUSAL** — see `OPEN.md` item 0 |
+| `optimus9/compute/rule1_gate.py` | **causal at config v2** — Joe dropped the forward half on 0929. v1 keeps the old window so its banked trades reproduce |
 
 Hand-walk, 09-01 trade 3, SHORT opened 03:40:05 at dr +1:
 

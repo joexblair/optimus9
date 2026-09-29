@@ -14,24 +14,9 @@
 | the backstop | the flip **back to** the trade's own dr, two flips forward |
 | scratchpad | moved into the codebase, knobs in the DB. Done |
 | P&L | closed since 0917. MAE/MFE only |
+| the gate window | **backward-only, 7 min**. Joe 0929: *"the -3.5 and + 3.5 logic is what's making it non-causal, so let's drop the forward"*. Config **v2** is the live one |
 
 ## Not ruled — will need him
-
-0. **`rule1_gate` IS NOT CAUSAL, and it is the blocker.** Its window is `[k - tol, k + tol]`, so at
-   `rule1_tol` 7 min total it reads **42 bars = 210 s after the signal bar**, and `longest_outside`
-   extends a run forward with **no bound**. A verdict at bar `k` is not knowable at bar `k`.
-   Measured over the 109 distinct v7 sig bars:
-
-   | window | gate open | closed | verdict changes vs banked |
-   |---|---|---|---|
-   | `[k-42, k+42]` — banked, NOT causal | 64 | 45 | — |
-   | `[k-84, k]` — same 7 min, all behind | 68 | 41 | **18** — 7 open→closed, 11 closed→open |
-   | `[k-42, k]` — 3.5 min behind | 56 | 53 | **8** — 8 open→closed, 0 closed→open |
-
-   Every changed verdict adds or removes a trade, so this is a strategy change, not a refactor.
-   A fourth option changes nothing: keep the window and treat the verdict as knowable at `k + 42`,
-   the `sig_conf` pattern this codebase already uses — same trades, each opening 3.5 min later.
-   `rule1_gate.py`'s docstring carries all of it. **Nothing has been changed.**
 
 1. **Where realtime `sig_utc` comes from.** `wsf_leash.wsl_sig_utc` is produced by
    `report_coil_exit.py` from banked confluence moments, and a moment's end is *"only knowable when
@@ -48,6 +33,11 @@
    in the background"*. Do not redesign it.
 
 ## Traps
+
+**The gate trap is CLOSED too.** `rule1_gate` used to read `[k - tol, k + tol]` - 210 s of future -
+and extend a run forward unbounded. Joe 0929 dropped the forward half: the window is now
+`[k - 84 bars, k]`, 7 minutes back, and a run stops at the window edge. Config v1 keeps the old shape
+so its banked trades stay reproducible; **v2 is the live one**. Do not reintroduce a forward read.
 
 **The backstop trap is CLOSED.** It used to be real: `trade_walk.backstop()` computed the closing bar
 at open time from the stretch list, which is a future bar. Joe 0929: *"make this causal before we

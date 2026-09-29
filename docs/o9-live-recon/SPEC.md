@@ -42,7 +42,9 @@ flip opens carries the **same direction** as the one it just closed. Joe has bee
 | `leash_instance` | v7 | Joe 0929: *"v7"* |
 | `gate` | `rule1_gate.open` — the rule#1 leg OR the scenario leg | Joe 0929: *"using the gate that you validated in our shared sheet, col L"* |
 | `same_bar_priority` | dr-flip | Joe 0929: *"same bar priority: dr-flip"* |
-| `rule1_tol_min` | 7.0 total, so 42 bars each side | Joe 0924 |
+| `rule1_back_min` | **7.0 — minutes BACK, 84 bars** | Joe 0929: *"inside of the last {knob:7} minutes"* |
+| `rule1_fwd_min` | **0 — causal** | Joe 0929: *"let's drop the forward"* |
+| `rule1_run_clamp` | **window — a run stops at the window edge** | Joe 0929 |
 | `rule1_fence_lo/hi` | 27.0 / 73.0 | Joe 0923 |
 | `oob_lo/hi` | 15.0 / 85.0 | Joe 0913: *"oob is alwasy 15/85"* |
 | `latch_tf` | 13 | Joe 0925 |
@@ -58,21 +60,24 @@ table for exactly that reason.
 
 ## The reference backtest, banked
 
-`build_wsf_trades.py` → table `wsf_trades`, key `wtc_v1_v7_rule1_gateopen`, window
-`2026-09-01..2026-09-06`.
+`build_wsf_trades.py` → table `wsf_trades`, window `2026-09-01..2026-09-06`. **Both config versions
+are banked**, keyed apart, so the A/B stays live.
 
-| | |
-|---|---|
-| trades | 142 closed, 1 still open |
-| opened by sig_utc / dr-flip | 64 / 78 |
-| closed by sig_utc / dr-flip | 63 / 79 |
-| MFE > MAE | 76 of 142 |
-| MAE mean / median / max | 0.809 / 0.425 / 5.811 |
-| MFE mean / median / max | 1.062 / 0.739 / 4.987 |
-| SHORT, n 81 | MAE mean 0.865, MFE mean 1.178, MFE > MAE 47 |
-| LONG, n 61 | MAE mean 0.735, MFE mean 0.908, MFE > MAE 29 |
+| | v1 `wtc_v1_v7_rule1_gateopen` NOT causal | **v2 `wtc_v2_v7_rule1_gateopen` — the live one** |
+|---|---|---|
+| gate window | back 3.5 min, fwd 3.5 min, run unbounded | **back 7.0 min, fwd 0, run clamped** |
+| sig bars gated out of 109 | 45 | **41** |
+| trades | 142 | **144** |
+| MFE > MAE | 76 of 142 = 53.5% | **83 of 144 = 57.6%** |
+| MAE mean / max | 0.809 / 5.811 | **0.783 / 5.811** |
+| MFE mean / max | 1.062 / 4.987 | **1.111 / 6.517** |
+| SHORT | n 81, MFE > MAE 47 | n 80, MFE > MAE 49 |
+| LONG | n 61, MFE > MAE 29 | n 64, MFE > MAE 34 |
 
-09-01 alone: 22 closed, 15 opened by sig_utc and 7 by dr-flip, MFE > MAE 11 of 22.
+11 opens exist only in v2 and 9 only in v1.
+
+09-01 alone: v1 22 trades with MFE > MAE 11; **v2 25 trades with MFE > MAE 13**, and the three extra
+opens are 04:26:00, 08:18:00 and 21:21:20 — all previously gated out by the forward half.
 
 **No P&L.** Joe 0917 closed P&L and kept MAE/MFE. Do not reintroduce it.
 

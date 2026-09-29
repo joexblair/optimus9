@@ -128,11 +128,13 @@ def main(argv=None):
     a.add_argument('--day')
     a.add_argument('--drop', action='store_true')
     a.add_argument('--md', action='store_true')
+    a.add_argument('--cfg', type=int, default=TC.V, help='trade config version. 1 = the original '
+                                                         'non-causal gate window, 2 = Joe 0929')
     o = a.parse_args(argv)
 
     db = DatabaseManager(**get_db_config()); db.connect()
-    TC.seed(db)
-    C = TC.load(db)
+    TC.seed(db, o.cfg)
+    C = TC.load(db, o.cfg)
     V3 = v3_config(db)
     KEY = TC.key(C)
     if o.drop:
@@ -156,7 +158,9 @@ def main(argv=None):
 
     fence = (float(C['rule1_fence_lo']), float(C['rule1_fence_hi']))
     oob = (float(C['oob_lo']), float(C['oob_hi']))
-    tol = int(float(C['rule1_tol_min']) * 60 / 5 / 2)
+    back = int(float(C['rule1_back_min']) * 60 / 5)
+    fwd = int(float(C['rule1_fwd_min']) * 60 / 5)
+    clamp = C['rule1_run_clamp']
     dwell_bars = int(C['div_tf']) * int(V3['dwell_min_per_tf']) * 12
     blk = int(V3['block'])
 
@@ -166,8 +170,8 @@ def main(argv=None):
         k = int(np.searchsorted(ts, int(s_['wsl_sig_ms'])))
         res = anchor_floater(r1, px, int(dr[k]), k, block=blk, mid=50.0, xn=xn,
                              dwell_bars=dwell_bars, oob=oob)
-        g = gate(r1, r2, r3, g30r, int(dr[k]), k, tol, fence, oob,
-                 0 if res is None else int(res['fired']))
+        g = gate(r1, r2, r3, g30r, int(dr[k]), k, back, fence, oob,
+                 0 if res is None else int(res['fired']), fwd_bars=fwd, run_clamp=clamp)
         (opens if g['open'] else gated).append(k)
     # wsf_leash can hold several rows on one sig bar - the sheet has a dozen. The walk dedupes
     # anyway (a repeat bar hits the `pos['open'] == k` guard), but the printed count must be the
@@ -187,6 +191,8 @@ def main(argv=None):
          (lambda *c: print('  ' + ''.join(str(v).ljust(w) for v, w in
           zip(c, (4, 21, 6, 9, 21, 9, 7, 11, 11, 8, 8, 4))))))
     print('%s   %s   win %s   %d trades' % (TABLE, KEY, win, len(trades)))
+    print('  gate window  back %s min  fwd %s min  run_clamp %s'
+          % (C['rule1_back_min'], C['rule1_fwd_min'], C['rule1_run_clamp']))
     print('  sig_utc  %d distinct bars from %d leash rows   gated out %d bars (%d rows)'
           % (len(opens) + len(gated), nrow_open + nrow_gate, len(gated), nrow_gate))
     print('')

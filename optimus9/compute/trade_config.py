@@ -25,10 +25,9 @@ DDL = '''CREATE TABLE IF NOT EXISTS %s (
     wtc_source  VARCHAR(200) NOT NULL,
     UNIQUE KEY uq_wtc (wtc_version, wtc_name))''' % TABLE
 
-V = 1
-SEED = [
-    ('rule1_tol_min', '7.0', 'minutes TOTAL, both sides -> 42 bars each side',
-     'Joe 0924: "change it to 7 minutes"'),
+V = 2                       # the live version. v1 is kept so its banked trades stay reproducible
+
+_COMMON = [
     ('rule1_fence_lo', '27.0', 'r points', 'Joe 0923: "the fence is 27:73"'),
     ('rule1_fence_hi', '73.0', 'r points', 'Joe 0923: "the fence is 27:73"'),
     ('oob_lo', '15.0', 'r points', 'Joe 0913: "oob is alwasy 15/85"'),
@@ -49,22 +48,42 @@ SEED = [
      'Joe 0929: "same bar priority: dr-flip"'),
 ]
 
+# THE ONLY DIFFERENCE BETWEEN THE TWO VERSIONS IS THE GATE WINDOW.
+#   v1  the original: 3.5 min each side, and a run measured forward with no bound. NOT causal
+#   v2  Joe 0929: "drop the forward and simply say: if I see the `r` lines correctly positioned (or
+#       the #1 mode that allows for divergence), inside of the last {knob:7} minutes, then rule#1 is
+#       qualified"
+_BY_VERSION = {
+    1: [('rule1_back_min', '3.5', 'minutes BACK -> 42 bars', 'the original half-window'),
+        ('rule1_fwd_min', '3.5', 'minutes FORWARD -> 42 bars. NOT CAUSAL', 'the original half-window'),
+        ('rule1_run_clamp', 'none', 'a run walks forward unbounded. NOT CAUSAL', 'the v1 build')],
+    2: [('rule1_back_min', '7.0', 'minutes BACK -> 84 bars',
+         'Joe 0929: "inside of the last {knob:7} minutes"'),
+        ('rule1_fwd_min', '0', 'minutes FORWARD. causal',
+         'Joe 0929: "let us drop the forward"'),
+        ('rule1_run_clamp', 'window', 'a run stops at the window edge. causal',
+         'Joe 0929: everything causal')],
+}
+SEED = _COMMON + _BY_VERSION[V]
+
 
 def key(cfg):
     """The stable key string for a config version. Goes in every banked trade row."""
     return 'wtc_v%d_%s_%s' % (cfg['_version'], cfg['leash_instance'], cfg['gate'].replace('.', ''))
 
 
-def seed(db):
-    """Write version V if it is not there. -> rows written."""
+def seed(db, version=V):
+    """Write `version` if it is not there. -> rows written."""
     db.execute(DDL)
-    n = db.execute("SELECT COUNT(*) c FROM %s WHERE wtc_version=%%s" % TABLE, (V,), fetch=True)[0]['c']
+    n = db.execute("SELECT COUNT(*) c FROM %s WHERE wtc_version=%%s" % TABLE,
+                   (version,), fetch=True)[0]['c']
     if n:
         return 0
+    rows = _COMMON + _BY_VERSION[version]
     db.executemany("INSERT INTO %s (wtc_version,wtc_name,wtc_value,wtc_units,wtc_source) "
                    "VALUES (%%s,%%s,%%s,%%s,%%s)" % TABLE,
-                   [(V, a, b, c, d) for a, b, c, d in SEED])
-    return len(SEED)
+                   [(version, a, b, c, d) for a, b, c, d in rows])
+    return len(rows)
 
 
 def load(db, version=V):
