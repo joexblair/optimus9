@@ -49,17 +49,23 @@ BASE = dict(span=10, slope=0.4, samples=21, fence_lo=25.0, fence_hi=75.0,
 
 
 class Rig:
-    """Everything that does not change between configs, loaded once."""
+    """Everything that does not change between configs, loaded once.
 
-    def __init__(self):
+    `win` overrides the scoring window. The sweep is fitted on 2026-09-01..09-06, the leash bank's
+    own window; a holdout on earlier tape is the only way to tell a real knob from the best of 182
+    noisy draws.
+    """
+
+    def __init__(self, win=None):
         db = DatabaseManager(**get_db_config()); db.connect()
         TC.seed(db, TC.V); self.Ct = TC.load(db, TC.V); self.C = v3_config(db)
         self.ts, self.lines, self.hi, self.lo, self.tfs = RCE.load(db, self.C)
         self.BK = {tf: momo_bank(db, tf, version=1) for tf in self.tfs}
         db.disconnect()
         ts = self.ts; n = len(ts); self.n = n
-        self.A = int(np.searchsorted(ts, BWT.WIN_MS[0]))
-        self.B = int(np.searchsorted(ts, BWT.WIN_MS[1]))
+        w = win or BWT.WIN_MS
+        self.A = int(np.searchsorted(ts, w[0]))
+        self.B = int(np.searchsorted(ts, w[1]))
         G1 = np.asarray(self.lines['ws1']['Mage'], float)
         M13 = np.asarray(self.lines['ws13']['m'], float)
         DR = np.zeros(n, np.int8); cur = 0
@@ -207,6 +213,16 @@ GRIDS = {
     'span_slope': [dict(BASE, span=s, slope=sl)
                    for s in (4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 20, 25, 30)
                    for sl in (0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 1.0)],
+    # Joe 0929: "always small steps". span 8 / slope 0.10 dominated the first grid and 0.10 was
+    # the grid edge, so this walks the neighbourhood in fine steps to find the knee.
+    'refine': [dict(BASE, span=s, slope=sl)
+               for s in (6, 7, 8, 9, 10)
+               for sl in (0.01, 0.02, 0.03, 0.05, 0.07, 0.09, 0.10, 0.12, 0.14, 0.16, 0.18, 0.20,
+                          0.22, 0.25)],
+    'holdout': ([dict(BASE, span=8, slope=sl) for sl in (0.05, 0.08, 0.10, 0.12, 0.15, 0.20)]
+                + [dict(BASE, span=s, slope=0.10) for s in (6, 7, 9, 10)]
+                + [dict(BASE, span=5, slope=0.45), dict(BASE, span=4, slope=0.35),
+                   dict(BASE)]),
     'samples': [dict(BASE, samples=s) for s in (3, 5, 7, 9, 11, 13, 16, 21, 26, 31, 41, 61, 121)],
     'fence': [dict(BASE, fence_lo=f, fence_hi=100.0 - f)
               for f in (10.0, 12.5, 15.0, 17.5, 20.0, 22.5, 25.0, 27.5, 30.0, 32.5, 35.0, 40.0)],
@@ -229,8 +245,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--grid', required=True)
     ap.add_argument('--out', default='/home/joe/thecodes/docs/sweeps/results.jsonl')
+    ap.add_argument('--from-ms', type=int); ap.add_argument('--to-ms', type=int)
     o = ap.parse_args()
-    rig = Rig()
+    win = (o.from_ms, o.to_ms) if o.from_ms and o.to_ms else None
+    rig = Rig(win)
+    if win: print('G|WINDOW OVERRIDE|%d..%d|bars %d..%d' % (win[0], win[1], rig.A, rig.B), flush=True)
     g = GRIDS[o.grid]
     print('G|%s|%d configs' % (o.grid, len(g)), flush=True)
     print('G|n|span|slope|samples|fenceLo|supMin|tfLo|tfHi|lag_s|lookback|xwob|sigbars|gated|'
@@ -244,7 +263,8 @@ def main():
                 print('G|%d|ERROR %s' % (i, ex), flush=True); continue
             if res is None:
                 print('G|%d|%s|no trades' % (i, cfg['span']), flush=True); continue
-            fh.write(json.dumps({'grid': o.grid, **{k: cfg[k] for k in BASE}, **res}) + '\n')
+            fh.write(json.dumps({'grid': o.grid, 'win_from': rig.A, 'win_to': rig.B,
+                                 **{k: cfg[k] for k in BASE}, **res}) + '\n')
             fh.flush()
             print('G|%d|%d|%.2f|%d|%.1f|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d (%.1f%%)|%.3f|%.3f|%+.3f|%.1f|%.1f'
                   % (i, cfg['span'], cfg['slope'], cfg['samples'], cfg['fence_lo'],
