@@ -26,6 +26,17 @@ Joe 0929, asked whether it should touch the trade at all - reset `left`, extend,
    creates a trade reversal (closes and opens). dr-flip can only open a new trade if dr-flip needed
    to close an incoming (back-stopped) trade"
 
+THE dr-FLIP BACKSTOP CLOSES BUT NEVER OPENS. Joe 0929-late, SUPERSEDING the "closes and opens" half
+of the rule he wrote above, after being shown that up to 94% of a swept config's trades were flip
+opens:
+
+  "now we have the data I can see that dr-flip as an open is not helpful. the cost is accceptable -
+   it gives us space to apply other mechs (lazy-g for example)"
+
+So at a backstop the position is closed and THE BOOK GOES FLAT. It still closes, or a trade would
+run to the next opposing signal whatever happened. Over 09-01..09-06 the book is flat 43.8 h of
+119.5 h - 36.6%.
+
 THE BACKSTOP IS THE FLIP **BACK TO** THE TRADE'S OWN dr, NOT THE FLIP OUT OF IT.  Joe 0929 corrected
 an earlier build that had it inverted:
 
@@ -38,13 +49,22 @@ So a trade opened at dr D is WORKING while the dr sits at -D, and the backstop i
 - the END of the -D stretch that follows, two flips forward from the open. The inverted version
 closed every trade at the flip INTO its target side and produced 37 trades on 09-01 against 22 here.
 
-A CONSEQUENCE, AND IT IS JOE'S RULE NOT MY CHOICE: at a backstop the dr is D again, so the trade the
-flip opens carries the SAME direction as the one it just closed. Joe was shown this.
+THAT CONSEQUENCE IS GONE. It used to read: at a backstop the dr is D again, so the trade the flip
+opens carries the SAME direction as the one it just closed. Joe was shown exactly that, and it is
+what he ruled out - see the flip-open ruling above. Nothing opens at a backstop.
 
 dr +1 = SHORT, dr -1 = LONG. Joe 0925: *"here's the rule for trading: +dr = SHORT position, -dr =
 LONG postition"*.
 
-SAME-BAR PRIORITY IS THE dr-FLIP. Joe 0929, asked directly: *"same bar priority: dr-flip"*.
+SAME-BAR PRIORITY IS THE dr-FLIP. Joe 0929, asked directly: *"same bar priority: dr-flip"*. The
+flip is tested first and the bar is then DONE - a sig_utc on a backstop bar does not open. That is
+what `sweep_mae_cap.py` measured, and it is where Joe's 753 trades / +0.3776 per trade come from.
+
+THE STOP IS NOT IN THIS FUNCTION. Joe ruled a 0.70% MAE cap applied as a stop, and ruled 0929-late
+that the stop wins a same-bar tie with an opposing sig_utc - *"use stop"*. It is applied in SCORING
+(`sweep_mae_cap.py`), never here, because "does a stop free the book" is UNRULED: if a stopped trade
+goes flat, a later same-dr sig_utc - inert today - opens a trade the backtest never has. See
+docs/o9-live-recon/OPEN.md item 10. Do not add the stop here until Joe rules that.
 
 STRICTLY CAUSAL, AND IT IS A BAR-BY-BAR LOOP FOR THAT REASON.  Joe 0929: *"make this causal before we
 handover to a new session. ie, IF this bar has dr-flip THEN"*.
@@ -97,7 +117,7 @@ def walk(opens, dr, start, end):
             if pos['left'] and d == pos['dr'] and d != int(dr[k - 1]):
                 out.append(dict(open=pos['open'], close=k, dr=pos['dr'],
                                 opened_by=pos['opened_by'], closed_by='dr-flip'))
-                pos = dict(open=k, dr=d, opened_by='dr-flip', left=False)
+                pos = None                               # the flip CLOSES but never OPENS - Joe 0929
                 continue                                 # same-bar priority: the flip wins
         if k in O:
             d = int(dr[k])

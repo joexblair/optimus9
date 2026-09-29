@@ -1,3 +1,18 @@
+> # ⛔ VOID — DO NOT ACT ON ANYTHING IN THIS FILE
+>
+> Joe ruled this sweep VOID on 0929-late. It was run BEFORE the dr-flip-never-opens ruling, so the
+> swept trade population was dominated by dr-flip OPENS — **37% to 94% of a config's trades**
+> depending on the config. A knob "gain" here is the flip share moving, not the signal improving.
+>
+> The two configs this file recommends have **74 and 129 trades** once the flips are removed,
+> against the banked config's **747**. `net/trade` rises monotonically as the trade count falls,
+> across all seven re-derived rows.
+>
+> **The "FINAL ANSWER" section near the end of this file is a recommendation that Joe rejected.**
+> The knob values in it — `momo_slope_min` 0.40→0.02, fence 25/75→2.5/97.5 — must not be applied.
+>
+> This file is kept as the record of a wrong turn. See `docs/o9-live-recon/OPEN.md` and `README.md`.
+
 # Sweep log — 0929, improving the causal baseline
 
 Joe 0929: *"sweep everything that touches, especially the span and slope_min"*, *"be granular with

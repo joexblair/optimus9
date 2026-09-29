@@ -14,28 +14,34 @@ that path. Anyone reading `run_o9live.py` and assuming it already trades this st
 | file | what it is |
 |---|---|
 | `optimus9/compute/dr_latch.py` | `latch` (no wob, the wsf_dtf_v3 producer) and `latch_wob` (Joe's 8). Lifted out of the parked `docs/mage_cascade/stopsweep.py` |
-| `optimus9/compute/trade_walk.py` | the rules, pure — `backstop()`, `walk()`, `mae_mfe()`. No DB, no lines, no printing |
+| `optimus9/compute/trade_walk.py` | the rules, pure — `walk()` and `mae_mfe()`. `backstop()` is **deleted**, do not expect it. No DB, no lines, no printing |
 | `optimus9/compute/trade_config.py` | `wsf_trade_config`, **16 knobs at version 2 — the only version**. Each row carries Joe's own words as its source |
 | `build_wsf_trades.py` | loads the tape and lines, runs the gate, walks, banks to `wsf_trades`, prints. `--day`, `--drop`, `--md` |
 | `optimus9/compute/rule1_gate.py` | the gate. Pre-existing, unchanged |
 | `sweep_mae_cap.py` | the MAE-cap sweep. 753 trades over 90 days, peak 0.70 at +0.3776/trade. Carries BOTH 0929-late rulings in its own walk |
-| `sweep_v3_signal.py` | the knob-sweep harness. **Its results are VOID** - see OPEN.md. Kept because it reproduces the signal chain in memory and is useful for any future A/B |
+| `sweep_v3_signal.py` | the knob-sweep harness. **Its results are VOID** - see OPEN.md. Kept because it reproduces the signal chain in memory. **It defaults to `NO_FLIP_OPEN = False`** and calls the canonical `trade_walk.walk`, so a default run is neither the banked shape nor the ruled one. Pass `--no-flip-open`, and treat its docstring baseline (118 trades / 65) as pre-ruling |
 | `fastverdict.py` | vectorised `sideways`, proven 0 mismatches against `momo_g_why` over 8 TFs x 86,400 bars |
-| `bank_emit_entry.py` | banks the emit-entry variants into `wsf_trades`. **Pre-ruling - does not apply the stop** |
+| `bank_emit_entry.py` | banks the emit-entry variants into `wsf_trades`. Its walk carries the **no-flip-open** ruling only - **not** the opposing-dr close, and **not** the stop. It runs `DELETE FROM wsf_trades WHERE wt_key=... AND wt_win=...` under `--write` |
 | `report_realtime_replay.py` | replays the sig_utc chain in realtime and reports revisions + latency. 0929: 121 of 121, zero revisions |
 
 Reproducibility, and run these before trusting anything:
 
 ```
-python3 build_wsf_trades.py --day 2026-09-01        # 25 trades, MFE > MAE 13 of 25
-python3 build_wsf_trades.py                          # 119 closed, MFE > MAE 68 of 119
+python3 sweep_mae_cap.py            # 753 trades over 90 days, peak cap 0.70 at +0.3776/trade
+python3 report_realtime_replay.py   # the causality proof: 121 of 121, zero revisions
 ```
+
+**`build_wsf_trades.py` no longer reproduces its own bank.** It imports `trade_walk.walk`, which now
+carries both 0929-late rulings; the banked rows do not. The old expectations - `--day 2026-09-01` =
+25 trades / MFE > MAE 13, and the full window = 119 closed / MFE > MAE 68 - are the **PRE-RULING**
+numbers and will not come back. 43 of 67 sig closes are now inert and 52 flip opens are gone. See
+`OPEN.md` item 8 before you run it; it banks.
 
 ## Existing live infrastructure — read before building
 
 | file | what it is |
 |---|---|
-| `ops/run_o9live.py` | the realtime entry point. Wires driver, app, adapter, fakeAPI |
+| `ops/run_o9live.py` | the realtime entry point. Wires driver, app, adapter, fakeAPI. Its own line 28 labels the producer it runs *"'ad'=v2_walk_ad (look-ahead arm-delay)"* |
 | `ops/e2e_o9live.py` | end-to-end: app → adapter → real HTTP → running fakeAPI → book-walk fill → `fx_position` |
 | `ops/provision_o9live.py` | provisioning |
 | `optimus9/live/strategy.py` | `StrategyLoop`. **Pluggable via `producer=`** |
@@ -54,17 +60,6 @@ Logs sit at the repo root: `o9live_run.log`, `o9live_arm.log`, `o9live_ad.log`, 
 `o9_live.o9_ledger` holds **988 rows from the old strategy**. Columns: `led_id, symbol, side, qty,
 entry_px, exit_px, entry_order_id, exit_order_id, gross, net, fee, mae, reason, status, opened_ms,
 closed_ms`. A recon must not treat those 988 as this strategy's trades.
-
-## The architecture that keeps it causal — already written down
-
-`StrategyLoop`'s own docstring:
-
-> "Stateless by design: each closed 5s bar, run the SAME backtest producer on a bounded window ending
-> at now, and read ONLY the latest bar. Window-ending-at-now == the backtest window → live == backtest
-> by construction; no latch state to desync, self-healing every bar."
-
-The new producer must follow that shape. It is the single strongest defence against the lookahead
-Joe wants exposed, and it already exists as a pattern in this codebase.
 
 ## Causality
 
@@ -86,6 +81,10 @@ plus the hand-walk. Two things from it that belong here:
 
 The new producer must follow that shape. It is the single strongest defence against the lookahead
 Joe wants exposed, and it already exists as a pattern in this codebase.
+
+**THE SIGN CONVENTIONS ARE INVERTED.** `optimus9/live/strategy.py:5-6` says *"bd +1 = Buy/long,
+bd -1 = Sell/short"*. This strategy is **`dr +1 = SHORT, dr -1 = LONG`**. A producer written for
+`StrategyLoop` must flip the sign, and nothing in the live code says so.
 
 ## NOT built — the five things
 

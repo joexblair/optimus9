@@ -1,6 +1,22 @@
 # The strategy, and what the recon must prove
 
-## The rules, Joe 0929 verbatim
+> **READ THIS FIRST. THE RULES BELOW WERE SUPERSEDED ON 0929-late.**
+>
+> The verbatim quotes in the next two sections are Joe's words from 0929-EARLY and they are kept
+> because they are the origin of the mech. **They are not what the code does.** Three rulings landed
+> after them:
+>
+> | | |
+> |---|---|
+> | a sig_utc closes ONLY on an opposing dr | a same-dr sig_utc is INERT |
+> | the dr-flip backstop CLOSES but never OPENS | the book goes flat instead |
+> | the MAE cap is 0.70%, applied as a STOP | `MFE-MAE` prints `-0.70` when hit |
+>
+> Plus, same day: **the stop wins a same-bar tie with an opposing sig_utc**, and **order type is
+> market**. `OPEN.md`'s **Ruled** table is the current statement. Everything in *The reference
+> backtest, banked* below is the **PRE-RULING** shape — see `OPEN.md` item 8.
+
+## The rules, Joe 0929-EARLY verbatim — SUPERSEDED, kept as the origin
 
 > "every ungated sig_utc timestamps create a trade reversal - ie it closes the existing trade and
 > opens a new trade. it also opens a trade if there is no incoming trade, in contrast to the dr-flip
@@ -30,12 +46,19 @@ and a `left` flag, reading only `dr[k]` and `dr[k-1]`. At each bar: if `dr[k] ==
 `left and dr[k] == D and dr[k] != dr[k-1]` this bar is the backstop; otherwise if the bar is an
 ungated sig_utc, reverse. The flip is tested first, which is Joe's same-bar priority.
 
-**A consequence, and it is the rule not a choice:** at a backstop the dr is D again, so the trade the
-flip opens carries the **same direction** as the one it just closed. Joe has been shown this.
+**~~A consequence, and it is the rule not a choice:~~ SUPERSEDED 0929-late.** It used to read: at a
+backstop the dr is D again, so the trade the flip opens carries the same direction as the one it just
+closed. Joe was shown exactly that and ruled it out: *"now we have the data I can see that dr-flip as
+an open is not helpful"*. **The flip CLOSES and the book goes flat.**
 
 `dr +1 = SHORT, dr -1 = LONG`. Joe 0925: *"+dr = SHORT position, -dr = LONG postition"*.
 
-## The knobs — all in `wsf_trade_config`, version 1
+## The knobs — all in `wsf_trade_config`, **version 2, the only version**
+
+**None of the three 0929-late rulings is a knob, and none is in the key.** `trade_config.key()` is
+`wtc_v%d_%s_%s % (version, leash_instance, gate)`, so a pre-ruling and a post-ruling run land on the
+**same key**. `mae_cap` is not a row in the table; 0.70 emerges at runtime in `sweep_mae_cap.py`.
+See `OPEN.md` item 8.
 
 | name | value | source |
 |---|---|---|
@@ -58,7 +81,13 @@ the v3 config version inside `wsl_knobs`, so a bump would split the next leash w
 121-row bank. That consequence is Joe's to sanction and he has not. `wsf_trade_config` is a separate
 table for exactly that reason.
 
-## The reference backtest, banked
+## The reference backtest, banked — **PRE-RULING. DO NOT USE AS A TARGET.**
+
+**Every figure in this section reproduces exactly against `wsf_trades`, and `wsf_trades` is the
+superseded shape.** Of the 120 banked rows: **43 of 67 sig_utc closes are same-dr** (now INERT) and
+**52 opens are dr-flip opens** (now deleted). `trade_walk.walk` carries both rulings as of 0929-late,
+so `build_wsf_trades.py` **no longer reproduces the numbers below**. They are the historical record.
+See `OPEN.md` item 8.
 
 `build_wsf_trades.py` → table `wsf_trades`, window `2026-09-01..2026-09-06`. Key `wtc_v2_v7_rule1_gateopen` —
 **one config version only**. Joe 0929 dropped v1 and its 166 rows once he had the A/B.
@@ -106,6 +135,8 @@ Do not rebuild either without Joe asking.
    real-time kline collection in sync)"*.
 
 **Price is out of scope for MVP1.** Joe 0929: *"no need to recon price yet, that will be MVP2"*.
+See `MVP2.md` for the full MVP1/MVP2 line, including the exchange-resident stop backstop and limit
+order placement.
 
 ## The timestamp gap is the point
 

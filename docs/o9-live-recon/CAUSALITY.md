@@ -59,7 +59,7 @@ lookahead would be **invisible to the recon**, because both sides would agree.
 | step | test | action |
 |---|---|---|
 | 1 | `dr[k] == -D` | `left = True` — the trade has reached its target side |
-| 2 | `left and dr[k] == D and dr[k] != dr[k-1]` | **this bar is the backstop** — close and open |
+| 2 | `left and dr[k] == D and dr[k] != dr[k-1]` | **this bar is the backstop** — **CLOSE ONLY.** The flip has never opened since Joe's 0929-late ruling; the book goes flat |
 | 3 | else, this bar is an ungated sig_utc | reversal |
 
 Step 2 before step 3 is Joe's same-bar priority. `backstop()` is deleted. **Do not reintroduce it.**
@@ -67,19 +67,31 @@ Step 2 before step 3 is Joe's same-bar priority. `backstop()` is deleted. **Do n
 It is provably the same output, not luckily: the latch alternates strictly — a change needs
 `d[k] != d[k-1]` and `d[k] != 0`, and it never returns to 0 once set — so the first bar back at `D`
 after being `-D` IS the end of the `-D` stretch. Verified: 119 closed trades over the window, 25 on
-09-01, every MAE/MFE unchanged.
+09-01, every MAE/MFE unchanged. **Those counts are the PRE-RULING shape** — see `OPEN.md` item 8.
 
 ## The hand-walk
 
-09-01 trade 3, SHORT opened 03:40:05 at dr +1:
+**CORRECTED 0929-late.** An earlier version of this section said "09-01 trade 3" and then walked the
+bars that decide **trade 4**. The banked rows, key `wtc_v2_v7_rule1_gateopen`, window `2026-09-01`:
+
+| # | dr | open | opened_by | close | closed_by |
+|---|---|---|---|---|---|
+| 3 | +1 SHORT | 03:40:05 | sig_utc | **04:26:00** | **sig_utc** |
+| 4 | +1 SHORT | 04:26:00 | sig_utc | 05:04:30 | dr-flip |
+
+Trade 3 closes on a **same-dr sig_utc** — that exact row is what Joe read on 0929-late to issue the
+opposing-dr-close ruling. Under the ruling that close is INERT.
+
+The backstop walk below is **trade 4**, SHORT opened 04:26:00 at dr +1:
 
 | bar | dr[k−1] | dr[k] | change | == −D | left after | == D and change | decision |
 |---|---|---|---|---|---|---|---|
 | 04:57:40 | +1 | −1 | yes | yes | True | . | carry on |
-| 05:04:30 | −1 | +1 | yes | . | True | yes | **backstop — close and open** |
+| 05:04:30 | −1 | +1 | yes | . | True | yes | **backstop — CLOSE ONLY** |
 
-Two bars decide it, both read as `dr[k]` against `dr[k-1]` plus the carried flag. The banked trade
-closes at 05:04:30 by dr-flip. Match.
+Two bars decide it, both read as `dr[k]` against `dr[k-1]` plus the carried flag. The banked trade 4
+closes at 05:04:30 by dr-flip. Match. **The bank then opens a new trade on that bar; the code no
+longer does** — the flip-open ruling landed after the bank was written.
 
 ## What a new session should re-run before trusting any of this
 

@@ -14,9 +14,10 @@ they are a suggestion not a ruling:
 | wall-clock ms | what o9-live has. Joe 0929: *"o9-live has no choice - it must use wall-clock"* |
 | action | `open` or `close` |
 | side | `Buy` or `Sell` |
-| reason | `sig_utc` or `dr-flip` — the thing that fired |
+| reason | `sig_utc`, `dr-flip` or `stop` — the thing that fired |
+| order type | **market**, both legs. Joe 0929-late. Limit placement is `MVP2.md` |
 | the bar it believes it acted on | so a bar-vs-wall-clock gap is visible without inference |
-| the config key | `wtc_v1_v7_rule1_gateopen`, so a knob change is never silently mixed in |
+| the config key | `wtc_v2_v7_rule1_gateopen` - **v2 is the only version**. Note that none of the three 0929-late rulings is in this key, so it does NOT discriminate a pre-ruling run from a ruled one. See `OPEN.md` item 8 |
 | `led_id` | to join to `o9_live.o9_ledger` |
 
 **The monitor.** A shell loop that tails the dump and, on a new line, wakes a Claude session. The
@@ -33,7 +34,8 @@ session accumulates context and the point of the job is a clean comparison each 
    reason** (`sig_utc` vs `dr-flip`) → **same open/close role**.
 5. Report every mismatch with both sides' numbers. A mismatch is the deliverable, not a failure.
 
-Price is **out of scope** until MVP2. Joe 0929.
+Price is **out of scope** until MVP2. Joe 0929. `MVP2.md` carries the full MVP1/MVP2 line - price
+recon, the exchange-resident stop backstop, limit orders and position size are all there.
 
 ## The latency the recon job must carry
 
@@ -46,7 +48,8 @@ EMITTED:
 | eager | 121 | 0 s | 165 s | 440 s | 860 s | 4955 s | 405 s |
 | settled | 121 | 0 s | 180 s | 440 s | 890 s | 4955 s | 416 s |
 
-**It is bimodal and the median alone misleads.** 41 of 121 rows emit at **exactly 0 s** — the moment
+**It is bimodal and the median alone misleads.** A cold re-run on 0929-late returned **42**, not 41 -
+re-run it and take your own number, do not quote either without running it. 41 of 121 rows emit at **exactly 0 s** — the moment
 had already ended and the sig bar is the last event in the chain. All 11 `forward` rows and 30 of 62
 `confirmed` rows sit there. The other 80 bind on the moment's END ROW and run a median 340 s; every
 `lookback` and `gap` row is in that group by construction.
@@ -104,10 +107,23 @@ Every recon job must check, per stopped trade:
 2. is the level 0.70% of the ENTRY price, not of a later mark
 3. the trigger bar in the backtest vs the bar o9-live acted on - they should be the SAME bar
 4. did the engine act on the pxs bar, or rest an order at the exchange and fill elsewhere
-5. whether a stop and an opposing sig_utc landed on the same bar - **the priority is UNRULED**
+5. whether a stop and an opposing sig_utc landed on the same bar - **RULED 0929-late: the STOP
+   wins.** Joe, asked directly: *"use stop"*. If o9-live takes the signal instead, that is a stop
+   mismatch, not a selection mismatch
 
 A stop divergence is its own class. Do NOT fold it into `selection` - the signal was right and the
 exit was not, which is a different fault with a different owner.
+
+**TWO THINGS THE BACKTEST DOES NOT DO, AND YOU WILL SEE BOTH.**
+
+1. **The stop is applied in SCORING, not in the walk.** `sweep_mae_cap.py` computes the trades once
+   and scores them at every cap; the trade count is **753 at every cap from 0.05 to 4.00 and at no
+   cap**. `trade_walk.walk` has no stop in it. The value 0.70 is not a knob in `wsf_trade_config` -
+   it emerges at runtime as the peak of the sweep.
+2. **A stopped trade does not free the book in the backtest.** If o9-live exits at the stop and is
+   then flat, a later same-dr sig_utc - INERT in the backtest because a position is open - opens a
+   trade the backtest never has. **Selection diverges by construction.** This is UNRULED and it is
+   `OPEN.md` item 10. Raise it before the first recon job, not after.
 
 ## Four mismatch classes, reported separately
 
