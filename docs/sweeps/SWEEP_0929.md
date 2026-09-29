@@ -108,3 +108,54 @@ CAVEAT ON `NET`: it is summed MFE minus summed MAE, an excursion aggregate. MFE 
 excursion, not a captured return. It is not P&L and must not be read as one. Trade count matters
 independently: each trade pays a 0.1975% round-trip at 22,000 coins, so 104 trades pays 20.5 pp
 against 118 trades' 23.3 pp.
+
+## RESULT 2 — THE HOLDOUT KILLS IT. The span/slope sweep does not generalise.
+
+The sweep is fitted on 2026-09-01..09-06. The holdout re-scores the same configs on
+**2026-08-26..09-01** — six days of tape the sweep never saw. Same harness, same code, only the
+window moves.
+
+| span | slope | IS trades | IS win% | IS NET | OOS trades | OOS win% | OOS NET | win% drop |
+|---|---|---|---|---|---|---|---|---|
+| 7 | 0.10 | 114 | 50.0 | +9.445 | 123 | **57.7** | +37.499 | **+7.7** |
+| 6 | 0.10 | 118 | 53.4 | +13.603 | 128 | **55.5** | +50.011 | **+2.1** |
+| **8** | **0.10** | 104 | **64.4** | +37.514 | 118 | 54.2 | +10.268 | **−10.2** |
+| 8 | 0.05 | 102 | 55.9 | +32.598 | 112 | 52.7 | +31.798 | −3.2 |
+| 9 | 0.10 | 107 | 56.1 | +24.668 | 113 | 51.3 | +2.287 | −4.7 |
+| 8 | 0.12 | 104 | 59.6 | +41.363 | 121 | 51.2 | +7.799 | −8.4 |
+| 10 | 0.10 | 102 | 54.9 | +13.064 | 117 | 49.6 | +11.244 | −5.3 |
+| **10** | **0.40** (banked) | 118 | 55.1 | +22.349 | 130 | 48.5 | +13.961 | −6.6 |
+| 8 | 0.15 | 111 | 58.6 | +27.087 | 123 | 48.0 | +7.963 | −10.6 |
+| 5 | 0.45 | 127 | 51.2 | +41.806 | 136 | 47.8 | +19.105 | −3.4 |
+| 4 | 0.35 | 135 | 51.1 | +36.469 | 144 | 46.5 | −5.099 | −4.6 |
+| 8 | 0.20 | 115 | 59.1 | +27.754 | 132 | 46.2 | +8.932 | −12.9 |
+
+**The correlation between in-sample and out-of-sample is zero.**
+
+| measure | value |
+|---|---|
+| paired configs | 12 |
+| mean IS win% | 55.8 |
+| mean OOS win% | 50.8 |
+| mean drop | −5.0 |
+| **Pearson r (IS win%, OOS win%)** | **−0.037** |
+| **Spearman rho** | **−0.056** |
+| Pearson r (IS net per trade, OOS net per trade) | **−0.442** |
+| OOS rank of the in-sample winner | **3 of 12** |
+
+READ IT PLAINLY:
+
+- **span 8 / slope 0.10 was the best of 182 in-sample and is mid-pack out of sample.** 64.4% → 54.2%.
+- the two best OOS configs, 7/0.10 and 6/0.10, were unremarkable in-sample at 50.0% and 53.4%.
+- every config loses about 5 points moving to the earlier window — that part is regime, not
+  overfitting; the banked config drops 6.6 too. The in-sample winner drops **twice** the average,
+  which is the selection on top of the regime.
+- a Pearson r of −0.037 means picking the in-sample best is **no better than picking at random**.
+  The per-trade net correlation is outright negative.
+
+**CONCLUSION: re-fitting `momo_span_min` and `momo_slope_min` on a 5-day window does not find a
+better knob. It finds the noisiest cell in the grid.** Joe's banked 10 / 0.4 is not shown to be
+wrong by this work — it is also not shown to be right. Nothing here is a reason to change it.
+
+**PROTOCOL CHANGE, applied to everything that follows:** no config is reported as an improvement
+unless it improves on BOTH windows. Every remaining grid is run twice and joined.
