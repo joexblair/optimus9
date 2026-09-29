@@ -66,12 +66,20 @@ table for exactly that reason.
 | | |
 |---|---|
 | sig bars gated out of 109 | 41 |
-| trades | **144 closed, 1 still open** |
-| MFE > MAE | **83 of 144 = 57.6%** |
-| MAE mean / max | 0.783 / 5.811 |
-| MFE mean / max | 1.111 / 6.517 |
-| SHORT | n 80, MAE mean 0.863, MFE mean 1.262, MFE > MAE 49 |
-| LONG | n 64, MAE mean 0.683, MFE mean 0.923, MFE > MAE 34 |
+| trades | **119 closed, 1 still open** — 120 banked rows |
+| opened by / closed by | sig_utc 67, dr-flip 52 — the same split both ways |
+| MFE > MAE | **68 of 119 = 57.1%** |
+| MAE mean / median / max | 0.698 / 0.348 / 3.359 |
+| MFE mean / median / max | 0.991 / 0.738 / 6.517 |
+| SHORT (dr +1) | n 55, MAE mean 0.716, MFE mean 1.070, MFE > MAE 34 |
+| LONG (dr −1) | n 64, MAE mean 0.683, MFE mean 0.923, MFE > MAE 34 |
+
+**THE WALK ENDS AT THE WINDOW EDGE, 2026-09-06 00:00.** It used to end at the last bar of the tape,
+two days past the label the rows carry. That added 25 trades: 24 opening after the edge, all dr +1,
+all dr-flip-to-dr-flip with no signal left on the tape to close them, plus the trade opened by the
+last v7 signal (09-05 21:28:05) which is now reported STILL OPEN instead of closed on the 09-06
+00:17:15 flip. Anything quoting **144 trades / MFE > MAE 83 / MAE 0.783 / MFE 1.111** is the old
+end-of-tape number: 119 + those 25 reconciles it exactly.
 
 09-01 alone: **25 closed, 18 opened by sig_utc and 7 by dr-flip, MFE > MAE 13 of 25.**
 
@@ -79,8 +87,8 @@ table for exactly that reason.
 
 | variant | what it was | why it went |
 |---|---|---|
-| the old gate window, `[k-42, k+42]` | 142 trades, MFE > MAE 76 of 142 = 53.5% | **not causal** — read 210 s of future. Joe 0929 dropped the forward half. v2 also scores better on all four headline measures, but that was a bonus, not the reason |
-| a 3-minute forward WAIT on a rejected sig bar | 151 trades, MFE > MAE 84 of 151 = 55.6% | causal, and it recovered all 7 sig_utc opens the old window was catching — but 5 of the 7 additions lose, and 5 have MFE under 0.4%, inside the 0.1975% round-trip banked at 22,000 coins. Joe 0929: *"no V3, just v2"* |
+| the old gate window, `[k-42, k+42]` | 142 trades, MFE > MAE 76 of 142 = 53.5% — measured end-of-tape, before the window fix | **not causal** — read 210 s of future. Joe 0929 dropped the forward half. v2 also scores better on all four headline measures, but that was a bonus, not the reason |
+| a 3-minute forward WAIT on a rejected sig bar | 151 trades, MFE > MAE 84 of 151 = 55.6% — measured end-of-tape, before the window fix | causal, and it recovered all 7 sig_utc opens the old window was catching — but 5 of the 7 additions lose, and 5 have MFE under 0.4%, inside the 0.1975% round-trip banked at 22,000 coins. Joe 0929: *"no V3, just v2"* |
 
 Do not rebuild either without Joe asking.
 

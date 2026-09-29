@@ -23,7 +23,7 @@ Reproducibility, and run these before trusting anything:
 
 ```
 python3 build_wsf_trades.py --day 2026-09-01        # 25 trades, MFE > MAE 13 of 25
-python3 build_wsf_trades.py                          # 144 trades, MFE > MAE 83 of 144
+python3 build_wsf_trades.py                          # 119 closed, MFE > MAE 68 of 119
 ```
 
 ## Existing live infrastructure — read before building

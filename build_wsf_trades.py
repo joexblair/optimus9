@@ -6,10 +6,19 @@ mechanics are `trade_walk`, `rule1_gate` and `dr_latch` - this file loads, walks
 CAUSALITY, AND THE ONE PART THAT IS NOT.  `trade_walk.walk` is a strictly causal bar-by-bar loop
 reading only `dr[k]` and `dr[k-1]`; `dr_latch` and `anchor_floater` read nothing above `k`.
 
-**`rule1_gate` READS FORWARD.** Its window is `[k - tol_bars, k + tol_bars]` - 42 bars = 210 s of
-FUTURE - and `longest_outside` additionally extends a run forward with no bound at all. So the gate
-verdict at a signal bar is not knowable at that bar. See that module's docstring for the measured
-cost of every causal alternative. Joe has not ruled it and nothing here works around it.
+`rule1_gate` IS CAUSAL NOW. It used to read `[k - tol_bars, k + tol_bars]` - 42 bars = 210 s of
+FUTURE - and `longest_outside` extended a run forward with no bound at all, so a verdict at bar `k`
+was not knowable at `k`. Joe 0929 dropped the forward half: *"let's drop the forward and simply say:
+if I see the `r` lines correctly positioned (or the #1 mode that allows for divergence), inside of
+the last {knob:7} minutes, then rule#1 is qualified"*. The window is `[k - 84 bars, k]` and a run
+stops at the window edge. Config v1, which carried the old shape, was dropped with its 166 rows.
+
+THE ONE THING THAT IS STILL NOT KNOWABLE AT ITS OWN BAR is `wsl_sig_utc`. It is the `sig` CROSS bar
+on 98 of 121 v7 rows, and the cross is only confirmed `boundary_xwob - 1` = 3 bars = 15 s later, at
+`sig_conf`. `coil_exit.first_forward` and `resolve`'s GAP branch both return the cross bar. Joe 0929
+read it as *"sig has already qualified the wob in code, but the wrong field was presented"* and has
+not yet ruled the change. Measured cost of moving to `sig_conf`: 119 trades either way, MFE > MAE 68
+either way, MAE mean 0.698 -> 0.720, MFE mean 0.991 -> 0.969.
 
 THE RULES ARE JOE'S, 0929, and `trade_walk`'s docstring carries them verbatim:
   - every UNGATED sig_utc is a reversal: closes the open trade and opens a new one, and opens one

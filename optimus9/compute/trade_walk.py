@@ -56,7 +56,8 @@ Step 2 before step 3 is Joe's same-bar priority. Nothing reads past `k`.
 It produces the same trades as the lookahead shape, and that is provable rather than lucky: the dr
 latch alternates strictly - a change bar needs `d[k] != d[k-1]` and `d[k] != 0`, and the latch never
 returns to 0 once set - so the first bar back at D after being -D IS the end of the -D stretch, which
-is what the old `backstop()` returned. Verified over the banked window: 142 trades, identical.
+is what the old `backstop()` returned. Verified over the banked window, identical every time; the
+window as it stands closes 119 trades and leaves the 120th open at the 2026-09-06 00:00 edge.
 """
 
 

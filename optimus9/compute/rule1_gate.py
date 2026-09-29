@@ -40,10 +40,6 @@ MINE, AND UNRULED BY JOE
   `dwell_bars`      reports the rule#1 leg only, so a row opened by the scenario alone reads 0.
                     It is a reporting field, never a gate — Joe dropped dwell as a gate on 0924
 
-NOT CAUSAL AT THE SIGNAL BAR. Joe 0924 ruled the window is "either side" of sig_utc, so the gate
-reads up to `tol_bars` AFTER the signal and is only knowable that far past it. At tol_bars 42 the
-verdict lands 210 s late. That is his rule, stated here so no caller mistakes it for a live gate.
-
 THE WINDOW IS BACKWARD-ONLY NOW - Joe 0929: *"the -3.5 and + 3.5 logic is what's making it
 non-causal, so let's drop the forward and simply say: if I see the `r` lines correctly positioned (or
 the #1 mode that allows for divergence), inside of the last {knob:7} minutes, then rule#1 is
@@ -58,9 +54,11 @@ read 42 bars = 210 s AFTER the signal bar, and `longest_outside` walked a run fo
 at all. A verdict at bar `k` was not knowable at bar `k`. Joe 0929 asked for everything causal, was
 shown the cost, and dropped the forward half.
 
-BOTH SHAPES STILL RUN, because the v1 trades are banked and must stay reproducible:
-    config v1   back 3.5 min, fwd 3.5 min, run_clamp 'none'    the original, NOT causal
-    config v2   back 7.0 min, fwd 0,       run_clamp 'window'  Joe's rule, causal
+ONLY THE CAUSAL SHAPE RUNS. Joe 0929 dropped config v1 and its 166 banked rows once he had the A/B,
+so there is no caller left on the forward window:
+    config v2   back 7.0 min, fwd 0, run_clamp 'window'   Joe's rule, causal, the only version
+`fwd_bars` and `run_clamp='none'` survive as parameters so the v1 A/B below stays reproducible from
+the tape. Nothing passes them. Do not reintroduce a forward read.
 
 MEASURED over the 109 distinct v7 sig bars, 2026-09-01..09-06:
     v1  gate open 64   closed 45

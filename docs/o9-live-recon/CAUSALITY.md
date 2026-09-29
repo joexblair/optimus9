@@ -66,8 +66,8 @@ Step 2 before step 3 is Joe's same-bar priority. `backstop()` is deleted. **Do n
 
 It is provably the same output, not luckily: the latch alternates strictly — a change needs
 `d[k] != d[k-1]` and `d[k] != 0`, and it never returns to 0 once set — so the first bar back at `D`
-after being `-D` IS the end of the `-D` stretch. Verified: 144 trades over the window, 25 on 09-01,
-every MAE/MFE unchanged.
+after being `-D` IS the end of the `-D` stretch. Verified: 119 closed trades over the window, 25 on
+09-01, every MAE/MFE unchanged.
 
 ## The hand-walk
 
@@ -85,7 +85,7 @@ closes at 05:04:30 by dr-flip. Match.
 
 ```
 python3 build_wsf_trades.py --day 2026-09-01        # 25 trades, MFE > MAE 13
-python3 build_wsf_trades.py                          # 144 trades, MFE > MAE 83
+python3 build_wsf_trades.py                          # 119 closed, MFE > MAE 68
 ```
 
 Both must reproduce from the tape and the DB alone. If they do not, something in the cache moved and

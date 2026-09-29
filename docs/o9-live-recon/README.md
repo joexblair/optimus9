@@ -32,7 +32,7 @@ going 'online-live'. fakeAPI is our test-bed which o9-live connects to"*.
 ## The one-line state
 
 The reference backtest is **built, banked and causal** — `build_wsf_trades.py` → `wsf_trades`,
-**144 trades** over 2026-09-01..09-06 at config v2. Every module from `build_wsf_dtf_v3` down to
+**119 closed trades (120 rows, the last still open)** over 2026-09-01..09-06 at config v2. Every module from `build_wsf_dtf_v3` down to
 `wsf_trades` has been walked for causality. o9-live and fakeAPI **exist and run**, but on a different
 strategy. The bridge between them is the work.
 
@@ -40,7 +40,7 @@ strategy. The bridge between them is the work.
 
 ```
 python3 build_wsf_trades.py --day 2026-09-01        # 25 trades, MFE > MAE 13 of 25
-python3 build_wsf_trades.py                          # 144 trades, MFE > MAE 83 of 144
+python3 build_wsf_trades.py                          # 119 closed, MFE > MAE 68 of 119
 ```
 
 Both must come out of the tape and the DB alone. A mismatch is a finding, not a nuisance — see
