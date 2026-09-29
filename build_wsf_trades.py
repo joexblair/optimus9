@@ -182,8 +182,11 @@ def main(argv=None):
 
     # THE WALK ENDS AT THE DECLARED WINDOW.  It used to end at `n - 1`, the end of the tape, while
     # the banked rows still claimed `2026-09-01..2026-09-06` - so the reference ran two days past its
-    # own label and picked up 25 trades that open AFTER the last v7 signal (2026-09-05 21:28:05),
-    # every one of them a dr-flip backstop open. Caught by the 0929 cold review of the handover.
+    # own label and picked up 25 trades: 24 that OPEN after the window edge, all of them dr-flip
+    # backstop opens daisy-chained flip to flip with no signal left on the tape to close them, plus
+    # the trade opened by the last v7 signal (2026-09-05 21:28:05), which this file now reports as
+    # STILL OPEN at the edge instead of closing it on the 09-06 00:17:15 flip.
+    # Every one of the 25 is dr +1. Caught by the 0929 cold review of the handover.
     # A trade still open at the window edge is reported as still open, which is what `walk` returns.
     hi = int(np.searchsorted(ts, WIN_MS[1]))
     if o.day:
