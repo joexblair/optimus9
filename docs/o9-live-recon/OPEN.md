@@ -28,7 +28,21 @@
 
 ## Not ruled — will need him
 
-**The numbering below is contiguous and stable. Cite an item by its number.**
+**Find an item by its name, not its number.** The numbers are stable but they are hard to search.
+
+| # | the question, in one line | blocks |
+|---|---|---|
+| 1 | ~~can the signal chain run forward~~ | ANSWERED — it runs in realtime |
+| 2 | what fields go in the trade-signal dump | the dump, the monitor |
+| 3 | position size for this strategy | MVP2 only |
+| 4 | what happens to the 988 old ledger rows | nothing — housekeeping |
+| 5 | ~~should wsl_sig_utc carry sig_conf~~ | RULED — it must |
+| 6 | ~~may the book go flat~~ | SETTLED by the flip-open ruling — it does |
+| 7 | re-bank the 121 leash rows at sig_conf | the leash bank |
+| 8 | re-bank wsf_trades under the rulings | **every reproduce command in this package** |
+| 9 | ~~stop vs opposing sig_utc on the same bar~~ | RULED — the stop wins |
+| 10 | **does a stop END the trade, or does the position carry?** | **the first recon job** |
+| 11 | entry bar: the sig bar or the emit bar | what number the strategy is worth |
 
 1. ~~**Whether the sig_utc producer chain can run forward.**~~ **ANSWERED 0929 — IT RUNS IN
    REALTIME.** Joe corrected the framing first: *"your 'run forward on a bounded window' sounds like
