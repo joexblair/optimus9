@@ -138,9 +138,9 @@
     is a bookkeeping difference.** Until Joe rules it, the stop stays out of `trade_walk.walk`.
 
 11. **The entry bar for the ruled strategy.** `sweep_mae_cap.py` enters on the **sig bar** — that is
-    where +0.3776 comes from. `bank_emit_entry.py` and `docs/sweeps/SWEEP_0929.md` both call the sig
-    bar **the CEILING, not achievable**, because it is a median 165 s before o9-live can know it.
-    The two have never been reconciled into one ruled entry bar.
+    where +0.3776 comes from. `bank_emit_entry.py` calls the sig bar **the CEILING, not
+    achievable**, because `report_realtime_replay.py` measures it a median 165 s before o9-live can
+    know it. The two have never been reconciled into one ruled entry bar.
 
 ## Traps
 

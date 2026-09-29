@@ -19,7 +19,7 @@ that path. Anyone reading `run_o9live.py` and assuming it already trades this st
 | `build_wsf_trades.py` | loads the tape and lines, runs the gate, walks, banks to `wsf_trades`, prints. `--day`, `--drop`, `--md` |
 | `optimus9/compute/rule1_gate.py` | the gate. Pre-existing, unchanged |
 | `sweep_mae_cap.py` | the MAE-cap sweep. 753 trades over 90 days, peak 0.70 at +0.3776/trade. Carries BOTH 0929-late rulings in its own walk |
-| `sweep_v3_signal.py` | the knob-sweep harness. **Its results are VOID** - see OPEN.md. Kept because it reproduces the signal chain in memory. **It defaults to `NO_FLIP_OPEN = False`** and calls the canonical `trade_walk.walk`, so a default run is neither the banked shape nor the ruled one. Pass `--no-flip-open`, and treat its docstring baseline (118 trades / 65) as pre-ruling |
+| `sweep_v3_signal.py` | the knob-sweep harness. **Its results are VOID** - see OPEN.md. Kept because it reproduces the signal chain in memory. **It defaults to `NO_FLIP_OPEN = False`** and calls the canonical `trade_walk.walk`, so a default run is neither the banked shape nor the ruled one. Pass `--no-flip-open`. **Its docstring carries a baseline figure from the void sweep - ignore it, and do not quote it** |
 | `fastverdict.py` | vectorised `sideways`, proven 0 mismatches against `momo_g_why` over 8 TFs x 86,400 bars |
 | `bank_emit_entry.py` | banks the emit-entry variants into `wsf_trades`. Its walk carries the **no-flip-open** ruling only - **not** the opposing-dr close, and **not** the stop. It runs `DELETE FROM wsf_trades WHERE wt_key=... AND wt_win=...` under `--write` |
 | `report_realtime_replay.py` | replays the sig_utc chain in realtime and reports revisions + latency. 0929: 121 of 121, zero revisions |
