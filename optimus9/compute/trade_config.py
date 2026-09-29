@@ -63,9 +63,17 @@ _GATE_WINDOW = [
 SEED = SEED + _GATE_WINDOW
 
 
-def key(cfg):
-    """The stable key string for a config version. Goes in every banked trade row."""
-    return 'wtc_v%d_%s_%s' % (cfg['_version'], cfg['leash_instance'], cfg['gate'].replace('.', ''))
+def key(cfg, mae_cap=None):
+    """The stable key string for a config version. Goes in every banked trade row.
+
+    THE STOP IS IN THE KEY. Joe 0929-late chose this over making the cap a config row and bumping
+    the version. Without it a capped run and an uncapped run compute the SAME string and land on the
+    same rows - `wsf_trades` already holds 332 uncapped rows under the bare keys.
+
+    mae_cap=None gives the bare key, which is the UNCAPPED mech. Every capped run must pass the cap.
+    """
+    k = 'wtc_v%d_%s_%s' % (cfg['_version'], cfg['leash_instance'], cfg['gate'].replace('.', ''))
+    return k if mae_cap is None else '%s_mae%.2f' % (k, mae_cap)
 
 
 def seed(db, version=V):

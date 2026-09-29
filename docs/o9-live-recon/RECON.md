@@ -17,7 +17,7 @@ they are a suggestion not a ruling:
 | reason | `sig_utc`, `dr-flip` or `stop` — the thing that fired |
 | order type | **market**, both legs. Joe 0929-late. Limit placement is `MVP2.md` |
 | the bar it believes it acted on | so a bar-vs-wall-clock gap is visible without inference |
-| the config key | `wtc_v2_v7_rule1_gateopen` - **v2 is the only version**. The cap is not in this key, so it does not tell a capped run from an uncapped one. See `OPEN.md` item 8 |
+| the config key | **`wtc_v2_v7_rule1_gateopen_mae0.70`** - the cap is in the key, so a capped run can never be confused with the 332 uncapped rows already in `wsf_trades` |
 | `led_id` | to join to `o9_live.o9_ledger` |
 
 **The monitor.** A shell loop that tails the dump and, on a new line, wakes a Claude session. The
@@ -92,7 +92,7 @@ disagreeing. Report it as its own category, not as a selection gap.
 
 ## The stop-loss check - Joe 0929
 
-The strategy now carries a **0.70% MAE cap applied as a stop**, and it fires on **41.3% of trades**.
+The strategy carries a **0.70% MAE cap applied as a stop**, and it fires on **381 of 894 trades = 42.6%**.
 Joe: *"o9-live has a trading engine that might show faults in applying the stop-loss"*.
 
 **The backtest's fill is the SPEC, not an idealisation.** Joe 0929: *"pxs is designed to handle
@@ -114,16 +114,18 @@ Every recon job must check, per stopped trade:
 A stop divergence is its own class. Do NOT fold it into `selection` - the signal was right and the
 exit was not, which is a different fault with a different owner.
 
-**TWO THINGS THE BACKTEST DOES NOT DO, AND YOU WILL SEE BOTH.**
+**THE STOP IS A LIVE EXIT IN THE BACKTEST AND IT MUST BE ONE IN o9-live.** `trade_walk.walk`
+carries it: an open trade has three live exits - an opposing-dr sig_utc, the dr-flip backstop, and
+the 0.70% stop - and ends at whichever fires FIRST. The others are cancelled. That is the OCO
+mechanic, and it has a consequence for the engine:
 
-1. **The stop is applied in SCORING, not in the walk.** `sweep_mae_cap.py` computes the trades once
-   and scores them at every cap; the trade count is **753 at every cap from 0.05 to 4.00 and at no
-   cap**. `trade_walk.walk` has no stop in it. The value 0.70 is not a knob in `wsf_trade_config` -
-   it emerges at runtime as the peak of the sweep.
-2. **A stopped trade does not free the book in the backtest.** If o9-live exits at the stop and is
-   then flat, a later same-dr sig_utc - INERT in the backtest because a position is open - opens a
-   trade the backtest never has. **Selection diverges by construction.** This is UNRULED and it is
-   `OPEN.md` item 10. Raise it before the first recon job, not after.
+**when a signal exit fills, o9-live must CANCEL the resting stop, and when the stop fills it must
+cancel nothing but must go FLAT.** An orphaned stop left at the exchange will fire on a position
+that no longer exists, or block the next entry. Check for orphans every recon job.
+
+**After a stop the book is FLAT**, and a later sig_utc opens a new trade - 381 of 894 trades end on
+the stop, so this path is exercised 42.6% of the time. The value 0.70 is not a `wsf_trade_config`
+row; it is `MAE_CAP` in `optimus9/compute/trade_walk.py` and it is in the trade key.
 
 ## Four mismatch classes, reported separately
 

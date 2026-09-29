@@ -54,7 +54,7 @@ from optimus9.compute import trade_config as TC                            # noq
 from optimus9.compute.dr_latch import latch_wob                            # noqa: E402
 from optimus9.compute.line_config import mech_lines, override              # noqa: E402
 from optimus9.compute.rule1_gate import gate                               # noqa: E402
-from optimus9.compute.trade_walk import mae_mfe, walk                      # noqa: E402
+from optimus9.compute.trade_walk import MAE_CAP, mae_mfe, walk             # noqa: E402
 from optimus9.compute.v3_config import v3_config                           # noqa: E402
 from optimus9.config import get_db_config                                  # noqa: E402
 from optimus9.db.database_manager import DatabaseManager                   # noqa: E402
@@ -146,7 +146,7 @@ def main(argv=None):
     TC.seed(db, o.cfg)
     C = TC.load(db, o.cfg)
     V3 = v3_config(db)
-    KEY = TC.key(C)
+    KEY = TC.key(C, MAE_CAP)      # the stop is IN the key - Joe 0929-late. See trade_config.key
     if o.drop:
         db.execute("DROP TABLE IF EXISTS %s" % TABLE)
     db.execute(DDL)
@@ -202,7 +202,7 @@ def main(argv=None):
         import datetime as _dt
         d0 = _dt.datetime.strptime(o.day, '%Y-%m-%d').replace(tzinfo=_dt.timezone.utc)
         hi = int(np.searchsorted(ts, int((d0 + _dt.timedelta(days=1)).timestamp() * 1000)))
-    trades, still = walk(opens, dr, min(opens) if opens else 1, hi)
+    trades, still = walk(opens, dr, px, min(opens) if opens else 1, hi, MAE_CAP)
 
     win = o.day or WIN
     p = ((lambda *c: print('|'.join(str(v) for v in c))) if o.md else
@@ -247,11 +247,11 @@ def main(argv=None):
 
     mm = [mae_mfe(px, t['open'], t['close'], t['dr']) for t in trades]
     print('')
-    print('  closed %d   opened by sig_utc %d  dr-flip %d   closed by sig_utc %d  dr-flip %d'
-          % (len(trades), sum(1 for t in trades if t['opened_by'] == 'sig_utc'),
-             sum(1 for t in trades if t['opened_by'] == 'dr-flip'),
-             sum(1 for t in trades if t['closed_by'] == 'sig_utc'),
-             sum(1 for t in trades if t['closed_by'] == 'dr-flip')))
+    print('  closed %d   all opened by sig_utc (the dr-flip never opens - Joe 0929)' % len(trades))
+    print('  closed by   sig_utc %d   dr-flip %d   stop %d   (stop = MAE cap %.2f%%)'
+          % (sum(1 for t in trades if t['closed_by'] == 'sig_utc'),
+             sum(1 for t in trades if t['closed_by'] == 'dr-flip'),
+             sum(1 for t in trades if t['closed_by'] == 'stop'), MAE_CAP))
     if mm:
         print('  MFE > MAE  %d of %d' % (sum(1 for a, b in mm if b > a), len(mm)))
         print('  MAE mean %.3f  median %.3f  max %.3f'

@@ -60,11 +60,24 @@ SAME-BAR PRIORITY IS THE dr-FLIP. Joe 0929, asked directly: *"same bar priority:
 flip is tested first and the bar is then DONE - a sig_utc on a backstop bar does not open. That is
 what `sweep_mae_cap.py` measured, and it is where Joe's 753 trades / +0.3776 per trade come from.
 
-THE STOP IS NOT IN THIS FUNCTION. Joe ruled a 0.70% MAE cap applied as a stop, and ruled 0929-late
-that the stop wins a same-bar tie with an opposing sig_utc - *"use stop"*. It is applied in SCORING
-(`sweep_mae_cap.py`), never here, because "does a stop free the book" is UNRULED: if a stopped trade
-goes flat, a later same-dr sig_utc - inert today - opens a trade the backtest never has. See
-docs/o9-live-recon/OPEN.md item 10. Do not add the stop here until Joe rules that.
+THE STOP IS A THIRD EXIT AND IT RACES THE OTHER TWO. Joe 0929-late, correcting a build that had it
+replacing them: *"research how a stop is applied in trading - you'll learn that it's both: (at its
+signal or flip bar) OR (at the stop bar)"*. That is the OCO mechanic - every exit goes live when the
+entry fills and the first to fire cancels the rest.
+
+So an open trade carries THREE live exits: an opposing-dr sig_utc, the dr-flip backstop, and the
+MAE_CAP stop. Whichever comes first ends it. `mae_cap=None` removes the stop entirely and gives the
+uncapped mech - a DIFFERENT mech, and not the one that is handed over.
+
+WHAT THE STOP CHANGES, MEASURED OVER 90 DAYS. No trade re-scores: a stopped trade is -cap either
+way. What moves is its CLOSE BAR, and therefore when the book frees up. The book used to be held a
+median 1177 bars - 98 minutes - past the stop bar; 216 ungated sig_utc bars sat inside those
+windows, INERT because a position was open. Freeing them takes 753 trades to 894 and +0.3776 to
++0.3911 per trade.
+
+SAME-BAR TIES: THE STOP WINS. Joe 0929-late, asked directly: *"use stop"*. Measured over the 90-day
+window the tie never occurs - 0 stop-and-flip and 0 stop-and-sig_utc collisions across all 381
+stops - so the rule is written for a window that does collide, not for this one.
 
 STRICTLY CAUSAL, AND IT IS A BAR-BY-BAR LOOP FOR THAT REASON.  Joe 0929: *"make this causal before we
 handover to a new session. ie, IF this bar has dr-flip THEN"*.
@@ -94,16 +107,29 @@ window as it stands closes 119 trades and leaves the 120th open at the 2026-09-0
 """
 
 
-def walk(opens, dr, start, end):
+MAE_CAP = 0.70
+"""The stop, as a percentage of the entry price. Joe specified 0.9 on 0929, was shown the 0.05-step
+ladder over 90 days, ruled 0.70, then re-ruled it after the ladder was re-walked with the stop LIVE:
+*"retain 0.7% as the stop"*.
+
+IT IS NOT A `wsf_trade_config` ROW. Joe 0929-late chose to put the cap in the KEY rather than make
+it a config row and bump the version. So this literal is the one hard-coded value in the mech that
+does not live in the DB - flagged, not hidden.
+"""
+
+
+def walk(opens, dr, px, start, end, mae_cap=MAE_CAP):
     """-> ([trade], open_trade or None). Bar by bar, reading only `dr[k]` and `dr[k-1]`.
 
-    opens  the bars that may open a trade. Already gated - this walk does not gate
-    dr     the dr series
-    start  the first bar to walk. Must be >= 1, because the backstop test reads `dr[k-1]`
-    end    the last bar to walk
+    opens    the bars that may open a trade. Already gated - this walk does not gate
+    dr       the dr series
+    px       the price series the stop reads. `pxs` = DEMA(close, 2) on the event tape
+    start    the first bar to walk. Must be >= 1, because the backstop test reads `dr[k-1]`
+    end      the last bar to walk
+    mae_cap  the stop, % of entry. MAE_CAP 0.70 - Joe. None removes it and gives a DIFFERENT mech
 
-    A trade is a dict: open, close, dr, opened_by, closed_by. `opened_by` and `closed_by` are
-    'sig_utc' or 'dr-flip'.
+    A trade is a dict: open, close, dr, opened_by, closed_by. `opened_by` is 'sig_utc';
+    `closed_by` is 'sig_utc', 'dr-flip' or 'stop'.
     """
     O = set(int(x) for x in opens)
     start = max(1, int(start))
@@ -112,6 +138,14 @@ def walk(opens, dr, start, end):
     for k in range(start, int(end) + 1):
         if pos is not None:
             d = int(dr[k])
+            if mae_cap is not None:
+                e = float(px[pos['open']])
+                adv = -((float(px[k]) - e) / e * 100.0) * pos['dr']
+                if -adv >= mae_cap:
+                    out.append(dict(open=pos['open'], close=k, dr=pos['dr'],
+                                    opened_by=pos['opened_by'], closed_by='stop'))
+                    pos = None
+                    continue                             # Joe 0929: the STOP wins the bar
             if d == -pos['dr'] and d != 0:
                 pos['left'] = True                       # the trade has reached its target side
             if pos['left'] and d == pos['dr'] and d != int(dr[k - 1]):

@@ -22,7 +22,7 @@ window, `coil_exit.first_forward`, and the dr-flip backstop. One mech was a genu
 | `optimus9/compute/dr_latch.py` | **causal** | both `latch` and `latch_wob` are forward loops; each bar reads only itself. 0 forward-read shapes |
 | `optimus9/analysis/jig.py` `anchor_floater` | **causal** | all four steps walk backward. 0 reads above `k`, and its own docstring says so |
 | `optimus9/compute/test_points.py` | **causal** | `flat_run_at` window is `r[k - samples + 1 : k + 1]`, ending at `k`. `stretches` builds a list but nothing in the walk consumes it any more |
-| `optimus9/compute/trade_walk.py` `walk` | **causal since 0929** | bar-by-bar, reads `dr[k]` and `dr[k-1]` only |
+| `optimus9/compute/trade_walk.py` `walk` | **causal** | bar-by-bar. Reads `dr[k]`, `dr[k-1]`, and - for the stop - `px[k]` against the entry bar's own price. Nothing above `k` |
 | `optimus9/compute/trade_walk.py` `mae_mfe` | causal **at the close bar** | the span `[o, c]` is entirely past once `c` has printed |
 | `optimus9/compute/rule1_gate.py` | **causal at config v2** | the window was `[k - tol, k + tol]`. Joe dropped the forward half |
 
@@ -58,11 +58,14 @@ lookahead would be **invisible to the recon**, because both sides would agree.
 
 | step | test | action |
 |---|---|---|
+| 0 | `-((px[k] - px[open]) / px[open] * 100) * D <= -0.70` | **the STOP** — close, book flat. Joe: *"use stop"* |
 | 1 | `dr[k] == -D` | `left = True` — the trade has reached its target side |
-| 2 | `left and dr[k] == D and dr[k] != dr[k-1]` | **this bar is the backstop** — **CLOSE ONLY.** The flip has never opened since Joe's 0929-late ruling; the book goes flat |
+| 2 | `left and dr[k] == D and dr[k] != dr[k-1]` | **the backstop** — **CLOSE ONLY.** The flip has never opened since Joe's 0929-late ruling; the book goes flat |
 | 3 | else, this bar is an ungated sig_utc | reversal |
 
-Step 2 before step 3 is Joe's same-bar priority. `backstop()` is deleted. **Do not reintroduce it.**
+Step 0 reads `px[k]` and the entry bar's price. Both are at or before `k`, so the stop is causal.
+Step 0 before 2 before 3 is Joe's same-bar priority. Measured over the 90-day window the ties never
+fire: **0 stop-and-flip and 0 stop-and-sig_utc collisions across 381 stops.** `backstop()` is deleted. **Do not reintroduce it.**
 
 It is provably the same output, not luckily: the latch alternates strictly — a change needs
 `d[k] != d[k-1]` and `d[k] != 0`, and it never returns to 0 once set — so the first bar back at `D`
@@ -92,12 +95,10 @@ reached 0.70% before 05:04:30. That is `OPEN.md`, *does a stop end the trade*.
 ## What a new session should re-run before trusting any of this
 
 ```
-python3 sweep_mae_cap.py            # 753 trades over 90 days, peak cap 0.70 at +0.3776/trade
+python3 sweep_live_stop.py          # the cap ladder, 81 rungs. The 0.70 rung is 894 / +0.3911
 python3 report_realtime_replay.py   # 121 of 121 moments, zero revisions
+python3 build_wsf_trades.py         # the same mech, banked. IT WRITES - read OPEN.md first
 ```
-
-**Do NOT run `build_wsf_trades.py` to check this.** It has no stop in it, so it produces a mech
-without the cap, and it banks. See `SPEC.md`, *this mech has no banked trade table*.
 
 Both must reproduce from the tape and the DB alone. If they do not, something in the cache moved and
 that is itself a finding — see `RECON.md`'s three mismatch classes.

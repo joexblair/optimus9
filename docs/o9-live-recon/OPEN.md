@@ -19,7 +19,9 @@
 | P&L | closed since 0917. MAE/MFE only |
 | **a sig_utc closes ONLY on an opposing dr** | Joe 0929-late, after spotting 09-01 03:40:05 (a SHORT) being closed by the 04:26:00 sig_utc (also a SHORT): *"trades must be first closed by an opposing dr signal, and secondly by a dr-flip if there is not opposing dr signal"*. A same-dr sig_utc is INERT - *"for now, it's inert"* |
 | **the dr-flip backstop CLOSES but never OPENS** | Joe 0929-late: *"now we have the data I can see that dr-flip as an open is not helpful. the cost is accceptable - it gives us space to apply other mechs (lazy-g for example)"*. It still closes, or a trade would run to the next opposing signal whatever happened |
-| **the MAE cap is 0.70%, applied as a STOP** | Joe specified 0.9 on 0929, was shown the 0.05-step sweep over 90 days, and ruled **0.70** - the peak at +0.3776 per trade. `MFE-MAE` prints `-0.70` on a stopped trade |
+| **the MAE cap is 0.70%, and the stop is IN THE WALK** | Joe specified 0.9 on 0929, ruled 0.70 on the first ladder, then re-ruled it on the ladder re-walked with the stop live: *"retain 0.7% as the stop"*. `MFE-MAE` prints `-0.70` on a stopped trade |
+| **the stop RACES the other exits** | Joe 0929-late: *"research how a stop is applied in trading - you'll learn that it's both: (at its signal or flip bar) OR (at the stop bar)"*. Three live exits, first to fire wins |
+| **the cap goes in the KEY, not in `wsf_trade_config`** | Joe 0929-late chose this over a config row and a version bump. `wtc_v2_v7_rule1_gateopen_mae0.70` |
 | **only the MAE-capped mech is handed over** | Joe 0929-late: *"you should be handing over only the mech that the MAE cap was applied to"*. Anything measured without the cap - `docs/sweeps/`, every row in `wsf_trades`, every variant - is a **different mech**. It is not a baseline and not a comparison |
 | **the 0929 knob sweep is out** | Joe 0929-late: *"ok, the sweep is definitely poisoned. let's go back to baseline"*. It ran before the cap and before the flip-open ruling. Do not use `docs/sweeps/` |
 | the gate window | **backward-only, 7 min**. Joe 0929: *"the -3.5 and + 3.5 logic is what's making it non-causal, so let's drop the forward"* |
@@ -40,9 +42,9 @@
 | 5 | ~~should wsl_sig_utc carry sig_conf~~ | RULED — it must |
 | 6 | ~~may the book go flat~~ | SETTLED by the flip-open ruling — it does |
 | 7 | re-bank the 121 leash rows at sig_conf | the leash bank |
-| 8 | **build a banker for this mech, and under what key** | **the recon has nothing to compare against** |
-| 9 | ~~stop vs opposing sig_utc on the same bar~~ | RULED — the stop wins |
-| 10 | **does a stop END the trade, or does the position carry?** | **the first recon job** |
+| 8 | ~~build a banker for this mech~~ | CLOSED - `build_wsf_trades.py`, key `..._mae0.70` |
+| 9 | ~~stop vs opposing sig_utc on the same bar~~ | RULED — the stop wins. Measured: never occurs |
+| 10 | ~~does a stop END the trade~~ | CLOSED - it does, and it RACES the other two exits |
 | 11 | ~~entry bar~~ | CLOSED - the mech enters on the sig bar. See the note under item 1 |
 
 1. ~~**Whether the sig_utc producer chain can run forward.**~~ **ANSWERED 0929 — IT RUNS IN
@@ -124,38 +126,47 @@
    mix them. Joe's call: re-bank in place, bank alongside under a new knob-string, or leave the bank
    as the historical record and note the offset.
 
-8. **THIS MECH HAS NO BANKED TRADE TABLE, AND THE RECON NEEDS ONE.**
+8. ~~**This mech has no banked trade table.**~~ **CLOSED 0929-late.** `trade_walk.walk` carries the
+   stop, so `build_wsf_trades.py` produces and banks this mech.
 
-   | script | produces the capped mech | banks |
-   |---|---|---|
-   | `sweep_mae_cap.py` | **yes** | **no** - zero DB writes |
-   | `build_wsf_trades.py` | no - it has no stop | yes |
+   Joe chose the key over a config row: **`wtc_v2_v7_rule1_gateopen_mae0.70`**. A capped run can
+   never land on the 332 uncapped rows. On those rows: *"they exist in a historical key so it
+   shouldn't matter"* — they are left exactly as they are.
 
-   Every row already in `wsf_trades` was written before the cap and before the two close rules, so
-   **o9-live must not be compared against it.**
-
-   Two things for Joe:
-   - **the key.** `trade_config.key()` is `wtc_v%d_%s_%s % (version, leash_instance, gate)`. The
-     cap is not a knob and neither close rule is, so a capped and an uncapped run land on the
-     **same key**. Either the cap becomes a `wsf_trade_config` row, or the key gains a
-     discriminator, or the two shapes overwrite each other.
-   - **the old rows.** 332 rows across 4 key/window groups, all uncapped. Leave them, rename them,
-     or drop them. Do not silently mix.
+   **ONE THING IS STILL OPEN AND IT IS SMALL.** Putting the cap in the key rather than in
+   `wsf_trade_config` leaves `MAE_CAP = 0.70` as a literal in `optimus9/compute/trade_walk.py`. It
+   is the only value in the mech that does not live in the DB, against Joe's standing rule. His
+   choice put it there; he has not been asked whether he also wants it as a config row.
 
 9. ~~**Same-bar priority between the stop and an opposing sig_utc.**~~ **RULED 0929-late — Joe:
-   *"use stop"*.** The stop wins. It is not yet in `trade_walk.walk` — see item 10.
+   *"use stop"*.** The stop wins, and it is in `trade_walk.walk`.
 
-10. **Does a stop FREE the book?** This one changes selection and it is in MVP1's path.
+   **Measured over the 90-day window the tie never occurs:** 0 stop-and-flip and 0 stop-and-sig_utc
+   collisions across all 381 stops. Both variants of the walk — stop bar closed to opens, and open
+   allowed on the stop bar — produce identical output. The rule exists for a window that does
+   collide, not for this one.
 
-    In the backtest a stopped trade does not release the position: the cap is applied in **scoring**
-    (`sweep_mae_cap.py`), never in the walk, and the trade count is **753 at every cap from 0.05 to
-    4.00 and at no cap**. If o9-live exits at the stop and is then flat, a later same-dr sig_utc —
-    currently INERT because a position is open — opens a trade the backtest never has.
+10. ~~**Does a stop END the trade?**~~ **RULED 0929-late. IT DOES, AND IT RACES THE OTHER TWO.**
 
-    **Selection diverges by construction, and the recon will report it as a selection fault when it
-    is a bookkeeping difference.** Until Joe rules it, the stop stays out of `trade_walk.walk`.
+    Joe corrected the framing first: *"research how a stop is applied in trading - you'll learn that
+    it's both: (at its signal or flip bar) OR (at the stop bar)"*. A stop does not replace the other
+    exits — an open trade carries three live exits and ends at whichever fires first.
 
-11. ~~**The entry bar.**~~ **CLOSED 0929-late. The mech enters on the sig bar and +0.3776 stands.**
+    The cap used to be applied in scoring, so a stopped trade still ran to its signal/flip bar and
+    the book stayed occupied. **No trade re-scores now** — a stopped trade is −0.70 either way — but
+    its close bar moves earlier and the book frees up.
+
+    | | measured over the 90 days |
+    |---|---|
+    | the book was held past the stop bar | median 1,177 bars = 98 min, max 4,421 bars = 6.1 h |
+    | ungated sig_utc bars inside those windows | 216, across 158 of 311 |
+    | trades | 753 → **894** |
+    | net per trade | +0.3776 → **+0.3911** |
+
+    The cap was then re-swept against the re-walked ladder and Joe re-ruled it: *"retain 0.7% as the
+    stop"*. `SPEC.md` carries all 81 rungs.
+
+11. ~~**The entry bar.**~~ **CLOSED 0929-late. The mech enters on the sig bar and its number stands.**
 
     An earlier version of this file called that number a "ceiling" and said it was not achievable.
     **That claim was imported from a measurement of a DIFFERENT mech** — `bank_emit_entry.py`, which
@@ -163,7 +174,7 @@
     there was no basis for the word. Removed.
 
     The 165 s emission latency is real, is measured, and is a **recon** number — see item 1 and
-    `RECON.md`. Joe ruled it: *"latency is ok for now"*. It does not discount +0.3776.
+    `RECON.md`. Joe ruled it: *"latency is ok for now"*. It does not discount the mech's number.
 
 ## Traps
 

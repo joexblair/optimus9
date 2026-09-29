@@ -16,9 +16,11 @@ that path. Anyone reading `run_o9live.py` and assuming it already trades this st
 | `optimus9/compute/dr_latch.py` | `latch` (no wob, the wsf_dtf_v3 producer) and `latch_wob` (Joe's 8). Lifted out of the parked `docs/mage_cascade/stopsweep.py` |
 | `optimus9/compute/trade_walk.py` | the rules, pure — `walk()` and `mae_mfe()`. `backstop()` is **deleted**, do not expect it. No DB, no lines, no printing |
 | `optimus9/compute/trade_config.py` | `wsf_trade_config`, **16 knobs at version 2 — the only version**. Each row carries Joe's own words as its source |
-| `build_wsf_trades.py` | the only banker - loads the tape and lines, runs the gate, walks, writes `wsf_trades`. **It has NO STOP in it, so it does not produce this mech.** `--day`, `--drop`, `--md` |
+| **`build_wsf_trades.py`** | **PRODUCES AND BANKS THIS MECH.** Loads the tape and lines, runs the gate, walks with the stop live, writes `wsf_trades` under `wtc_v2_v7_rule1_gateopen_mae0.70`. `--day`, `--drop`, `--md` |
 | `optimus9/compute/rule1_gate.py` | the gate. Pre-existing, unchanged |
-| **`sweep_mae_cap.py`** | **THE ONLY THING THAT PRODUCES THIS MECH.** 753 trades over 90 days, peak cap 0.70 at +0.3776/trade. Carries both 0929-late close rulings and the cap. **Zero DB writes - it prints, it does not bank** |
+| **`sweep_live_stop.py`** | the cap ladder, all 80 rungs re-walked from the tape with the stop live. The 0.70 rung is 894 trades / +0.3911 per trade. Prints, does not bank |
+| `measure_live_stop.py` | what the stop being live changes: the freed windows, the signals inside them, and the same-bar collision counts |
+| `sweep_mae_cap.py` | the FIRST cap ladder - the cap applied in scoring over one fixed trade set of 753. **Superseded by `sweep_live_stop.py`.** Kept because it is where the 0.70 ruling was first made |
 | `fastverdict.py` | vectorised `sideways`, proven 0 mismatches against `momo_g_why` over 8 TFs x 86,400 bars |
 | `report_realtime_replay.py` | replays the sig_utc chain in realtime and reports revisions + latency. 0929: 121 of 121, zero revisions |
 
@@ -29,15 +31,14 @@ this handover and their numbers do not belong in a report about it.
 Reproducibility, and run these before trusting anything:
 
 ```
-python3 sweep_mae_cap.py            # 753 trades over 90 days, peak cap 0.70 at +0.3776/trade
+python3 sweep_live_stop.py          # the cap ladder, 81 rungs. The 0.70 rung is 894 / +0.3911
 python3 report_realtime_replay.py   # the causality proof: 121 of 121, zero revisions
+python3 build_wsf_trades.py         # the same mech, banked. IT WRITES - read OPEN.md first
 ```
 
-**Nothing in this repo banks this mech.** `sweep_mae_cap.py` produces it and prints it;
-`build_wsf_trades.py` banks, and what it banks has no stop. Every row already in `wsf_trades` was
-written before the cap and before the two close rules. **Do not run `build_wsf_trades.py` expecting
-this mech, and do not compare o9-live against `wsf_trades`.** Building the banker for this mech is
-the first thing the recon needs - see `OPEN.md`.
+**`build_wsf_trades.py` banks this mech under its own key**, so it cannot collide with the 332
+uncapped rows already in `wsf_trades`. Those rows were written before the stop and before the two
+close rules; they are history and o9-live must not be compared against them.
 
 ## Existing live infrastructure — read before building
 

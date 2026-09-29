@@ -58,12 +58,12 @@ Three more rulings landed 0929-late, after the above:
     signal      wsf_leash v7 `wsl_sig_utc`, from the banked wsf_dtf_v3 knobs
                 span 10, slope 0.40, fence 25/75, samples 21, tf 1..23, support_min 23
     gate        rule1_gate config v2 - backward-only [k-84 bars, k], run clamped at the edge
-    walk        trade_walk.walk - opposing-dr close, dr-flip closes only. Both rulings are in
-                the code as of 0929-late
+    walk        trade_walk.walk - THREE live exits racing each other, first to fire wins:
+                an opposing-dr sig_utc, the dr-flip backstop, and the stop. The flip never opens
     entry       the sig bar - the bar the signal NAMES
-    stop        MAE cap 0.70%, at the first bar the adverse excursion reaches it. Joe specified
-                0.9 on 0929, saw the 0.05 sweep, and ruled 0.70. It lives in sweep_mae_cap.py's
-                scoring, not in trade_walk.walk, because "does a stop end the trade" is unruled
+    stop        MAE cap 0.70% of entry, IN THE WALK. Joe specified 0.9 on 0929, ruled 0.70 on the
+                first ladder, then re-ruled it on the re-walked ladder: "retain 0.7% as the stop"
+    key         wtc_v2_v7_rule1_gateopen_mae0.70 - the cap is IN the key, Joe 0929-late
     score       MAE/MFE percentages of entry. NO P&L - Joe 0917
 
 **THE NUMBERS, 90 days of line cache, 2026-06-10 .. 2026-09-08:**
@@ -72,36 +72,37 @@ Three more rulings landed 0929-late, after the above:
 |---|---|
 | sig bars | 1,863 |
 | pass rule#1 | 1,045 |
-| **trades** | **753** |
-| net > 0 | 409 (54.3%) |
-| stopped at the cap | 311 (41.3%) |
-| MAE sum | 334.677 |
-| net sum | +284.313 |
-| **net per trade** | **+0.3776** |
+| **trades** | **894** |
+| net > 0 | 479 (53.6%) |
+| stopped at the cap | 381 (42.6%) |
+| MAE sum | 403.022 |
+| net sum | +349.638 |
+| **net per trade** | **+0.3911** |
+
+| closed by | n | of 894 |
+|---|---|---|
+| stop | 381 | 42.6% |
+| dr-flip | 362 | 40.5% |
+| sig_utc | 151 | 16.9% |
 
 **Entry is the sig bar — the bar the signal NAMES.** That is the spec and it is what these numbers
 measure.
 
-The cap is worth **+0.1464 -> +0.3776 per trade** against no cap - the largest single effect found
-on 0929. It is the PEAK of a 0.05-step sweep from 0.05 to 4.00, and 0.55 to 0.95 is a plateau where
-every value is within 0.04 per trade of the peak, so the choice is not knife-edge. Every cap tested
-from 0.15 up beats no cap.
+**The stop RACES the other two exits; it does not replace them.** No trade re-scores because of it -
+a stopped trade is -0.70 either way. What moves is its CLOSE BAR, and therefore when the book frees
+up. The book used to be held a median 98 minutes past the stop bar, with 216 ungated sig_utc bars
+sitting inside those windows, INERT because a position was open. Freeing them is worth 753 -> 894
+trades and +0.3776 -> +0.3911 per trade.
 
-| cap % | trades | net > 0 | stopped | net per trade |
-|---|---|---|---|---|
-| 0.40 | 753 | 321 (42.6%) | 425 (56.4%) | +0.3037 |
-| 0.60 | 753 | 382 (50.7%) | 350 (46.5%) | +0.3553 |
-| **0.70** | **753** | **409 (54.3%)** | **311 (41.3%)** | **+0.3776** |
-| 0.80 | 753 | 418 (55.5%) | 291 (38.6%) | +0.3689 |
-| 0.90 | 753 | 426 (56.6%) | 266 (35.3%) | +0.3585 |
-| 1.10 | 753 | 445 (59.1%) | 219 (29.1%) | +0.3655 |
-| 2.20 | 753 | 464 (61.6%) | 102 (13.5%) | +0.2794 |
-| no cap | 753 | 468 (62.2%) | 0 | +0.1464 |
+**The cap was re-ruled against a re-walked ladder.** The first ladder scored one fixed trade set of
+753 at every rung; with the stop live every rung has its own trade population, so all 80 rungs were
+re-walked from the tape. Joe: *"retain 0.7% as the stop"*. `SPEC.md` carries all 81 rungs.
 
-`net > 0 %` and `net per trade` disagree across the whole ladder - the win count climbs
-monotonically to 62.2% at no cap while the per-trade peaks at 0.70. A tighter cap turns would-be
-winners into -cap losses but kills the big losers faster. **Rank on net per trade; Joe ruled 0.70
-on that basis.**
+- net per trade peaks at cap 1.25, +0.3928 on 843 trades. **0.70 sits 0.4% below it.**
+- net sum peaks at cap **0.70**, +349.638. It is the best rung on that measure.
+- the band 0.70 to 1.30 spreads only 0.012 per trade. There is no knee in it.
+- `net > 0 %` rises monotonically to 62.2% with no stop, where net per trade is worst.
+  **Ranking on win% picks the worst mech on the board.**
 
 Causality is unchanged and still holds: every module from `build_wsf_dtf_v3` down has been walked,
 and the sig_utc chain was replayed in realtime on 0929 - 121 of 121 moments, zero revisions, median
@@ -116,13 +117,13 @@ handing over only the mech that the MAE cap was applied to"*.
 ## Reproduce it before you trust it
 
 ```
-python3 sweep_mae_cap.py          # 753 trades over 90 days, peak cap 0.70 at +0.3776/trade
+python3 sweep_live_stop.py        # the cap ladder, 81 rungs. The 0.70 rung is 894 / +0.3911
 python3 report_realtime_replay.py # the causality proof: 121 of 121, zero revisions
+python3 build_wsf_trades.py       # the same mech, banked. IT WRITES - read OPEN.md first
 ```
 
-**`sweep_mae_cap.py` is the ONLY thing that produces this mech, and it does not bank.** Zero DB
-writes. Every row in `wsf_trades` is a mech without the cap - see `SPEC.md`, *this mech has no
-banked trade table*.
+`build_wsf_trades.py` banks under `wtc_v2_v7_rule1_gateopen_mae0.70`. The 332 rows already in
+`wsf_trades` under the bare keys are an **uncapped** mech - history, not a comparison.
 
 Both must come out of the tape and the DB alone. A mismatch is a finding, not a nuisance — see
 `RECON.md`.
