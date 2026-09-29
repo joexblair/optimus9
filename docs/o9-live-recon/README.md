@@ -9,8 +9,14 @@ going 'online-live'. fakeAPI is our test-bed which o9-live connects to"*.
 
 ## The startup prompt
 
-> Read every file in `docs/o9-live-recon/`. Then read `SPEC.md`'s rule list back to me in your own
-> words, and tell me which of the five build steps in `CODE_MAP.md` you would do first and why.
+> Read every file in `docs/o9-live-recon/`, then `.claude/joes-convo-style.md` and
+> `docs/staying_light.md`. Run the two commands under "Reproduce it before you trust it" in
+> `README.md` and tell me whether they match the stated numbers.
+>
+> Then, in your own words: read back the four trade rules from `SPEC.md`, state the difference
+> between a forward read and a deferred decision as `CAUSALITY.md` draws it, and tell me which of
+> the five build steps in `CODE_MAP.md` you would do first and why.
+>
 > Do not write code until I answer.
 
 ## The files
@@ -19,11 +25,23 @@ going 'online-live'. fakeAPI is our test-bed which o9-live connects to"*.
 |---|---|
 | `SPEC.md` | the strategy, the knobs, and what a recon has to prove |
 | `CODE_MAP.md` | what already exists, what is new, and the five things that are NOT built |
+| `CAUSALITY.md` | the full audit, module by module, and the one trap that is still live |
 | `RECON.md` | the recon procedure, the wake mechanism, and the 24-hour re-validation |
 | `OPEN.md` | what Joe has ruled, what he has not, and the traps |
 
 ## The one-line state
 
-The reference backtest is **built and banked** — `build_wsf_trades.py` → `wsf_trades`, 142 trades
-over 2026-09-01..09-06. o9-live and fakeAPI **exist and run**, but on a different strategy. The
-bridge between them is the work.
+The reference backtest is **built, banked and causal** — `build_wsf_trades.py` → `wsf_trades`,
+**144 trades** over 2026-09-01..09-06 at config v2. Every module from `build_wsf_dtf_v3` down to
+`wsf_trades` has been walked for causality. o9-live and fakeAPI **exist and run**, but on a different
+strategy. The bridge between them is the work.
+
+## Reproduce it before you trust it
+
+```
+python3 build_wsf_trades.py --day 2026-09-01        # 25 trades, MFE > MAE 13 of 25
+python3 build_wsf_trades.py                          # 144 trades, MFE > MAE 83 of 144
+```
+
+Both must come out of the tape and the DB alone. A mismatch is a finding, not a nuisance — see
+`RECON.md`.

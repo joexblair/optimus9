@@ -15,12 +15,16 @@ that path. Anyone reading `run_o9live.py` and assuming it already trades this st
 |---|---|
 | `optimus9/compute/dr_latch.py` | `latch` (no wob, the wsf_dtf_v3 producer) and `latch_wob` (Joe's 8). Lifted out of the parked `docs/mage_cascade/stopsweep.py` |
 | `optimus9/compute/trade_walk.py` | the rules, pure — `backstop()`, `walk()`, `mae_mfe()`. No DB, no lines, no printing |
-| `optimus9/compute/trade_config.py` | `wsf_trade_config`, 14 knobs, each row carrying Joe's own words as its source |
+| `optimus9/compute/trade_config.py` | `wsf_trade_config`, **16 knobs at version 2 — the only version**. Each row carries Joe's own words as its source |
 | `build_wsf_trades.py` | loads the tape and lines, runs the gate, walks, banks to `wsf_trades`, prints. `--day`, `--drop`, `--md` |
 | `optimus9/compute/rule1_gate.py` | the gate. Pre-existing, unchanged |
 
-Reproducibility: `build_wsf_trades.py --day 2026-09-01` reproduces the hand-walked 09-01 trade for
-trade, every MAE/MFE to 3 decimals.
+Reproducibility, and run these before trusting anything:
+
+```
+python3 build_wsf_trades.py --day 2026-09-01        # 25 trades, MFE > MAE 13 of 25
+python3 build_wsf_trades.py                          # 144 trades, MFE > MAE 83 of 144
+```
 
 ## Existing live infrastructure — read before building
 
@@ -57,37 +61,37 @@ closed_ms`. A recon must not treat those 988 as this strategy's trades.
 The new producer must follow that shape. It is the single strongest defence against the lookahead
 Joe wants exposed, and it already exists as a pattern in this codebase.
 
-## The causality audit, 0929
+## Causality
 
-Every module in the chain was swept for reads above `k` and the walk was hand-walked bar by bar.
+`CAUSALITY.md` carries the full audit — every module from `build_wsf_dtf_v3` down to `wsf_trades`,
+plus the hand-walk. Two things from it that belong here:
 
-| module | verdict |
-|---|---|
-| `optimus9/compute/dr_latch.py` | **causal** — forward loops, each bar reads only itself |
-| `optimus9/analysis/jig.py` `anchor_floater` | **causal** — all four steps walk backward, 0 reads above `k` |
-| `optimus9/compute/test_points.py` | **causal** — `r[lo:k+1]` is inclusive of `k` and backward |
-| `optimus9/compute/trade_walk.py` `walk` | **causal as of 0929** — bar-by-bar, reads `dr[k]` and `dr[k-1]` only |
-| `optimus9/compute/trade_walk.py` `mae_mfe` | causal **at the close bar** — the whole span is past by then |
-| `optimus9/compute/rule1_gate.py` | **causal at config v2** — Joe dropped the forward half on 0929. v1 keeps the old window so its banked trades reproduce |
+- **`trade_walk.backstop()` is deleted.** It computed a trade's closing bar at open time from the
+  stretch list — a future bar. `walk()` is a bar-by-bar loop now. Do not reintroduce the old shape.
+- **`wsf_dtf_v3.wdv_run_bars` is forward-looking and has no consumer.** Anything that starts reading
+  it inherits lookahead silently.
 
-Hand-walk, 09-01 trade 3, SHORT opened 03:40:05 at dr +1:
+## The architecture that keeps it causal — already written down
 
-| bar | dr[k−1] | dr[k] | change | == −D | left after | == D and change | decision |
-|---|---|---|---|---|---|---|---|
-| 04:57:40 | +1 | −1 | yes | yes | True | . | carry on |
-| 05:04:30 | −1 | +1 | yes | . | True | yes | **backstop — close and open** |
+`StrategyLoop`'s own docstring:
 
-Two bars decide it, both read as `dr[k]` against `dr[k-1]` plus the carried flag. The banked trade 3
-closes at 05:04:30 by dr-flip. Match.
+> "Stateless by design: each closed 5s bar, run the SAME backtest producer on a bounded window ending
+> at now, and read ONLY the latest bar. Window-ending-at-now == the backtest window → live == backtest
+> by construction; no latch state to desync, self-healing every bar."
+
+The new producer must follow that shape. It is the single strongest defence against the lookahead
+Joe wants exposed, and it already exists as a pattern in this codebase.
 
 ## NOT built — the five things
 
 1. **A wsf_leash producer for `StrategyLoop`.** A callable with the same contract as `v2_walk_ad`
    that, over a bounded window ending at now, returns this strategy's action for the latest bar.
    It has to reach `wsf_leash` signals, `rule1_gate`, `dr_latch.latch_wob` and `trade_walk`.
-2. **The sig_utc source in realtime.** `wsf_leash.wsl_sig_utc` is produced by `report_coil_exit.py`
-   from banked moments. Whether o9-live recomputes the leash live or reads the table as it fills is
-   unanswered and is the biggest unknown in the whole job.
+2. **The sig_utc producer chain running forward.** Joe 0929 named the chain:
+   `build_wsf_dtf_v3` → `report_coil_exit` → `coil_exit.resolve` → `leash_bank`. The question is
+   whether steps 1 and 2 run forward on a bounded window ending at now. §20.2's latency sits in
+   step 2 — median 300 s, max 5000 s — and Joe 0929 ruled it acceptable for now: *"latency is ok
+   for now. eventually we'll cherry-pick what we need from the classes and optimise"*.
 3. **The trade-signal dump.** Joe 0929: *"I would build a o9-live trade-signal dump to log and consume
    via a shell monitor"*. Nothing writes one today.
 4. **The shell monitor** that wakes a Claude session on each trade action.

@@ -14,7 +14,10 @@
 | the backstop | the flip **back to** the trade's own dr, two flips forward |
 | scratchpad | moved into the codebase, knobs in the DB. Done |
 | P&L | closed since 0917. MAE/MFE only |
-| the gate window | **backward-only, 7 min**. Joe 0929: *"the -3.5 and + 3.5 logic is what's making it non-causal, so let's drop the forward"*. Config **v2** is the live one |
+| the gate window | **backward-only, 7 min**. Joe 0929: *"the -3.5 and + 3.5 logic is what's making it non-causal, so let's drop the forward"* |
+| the config | **v2 only**. Joe 0929 dropped v1 and its 166 rows after the A/B |
+| a forward WAIT on a rejected sig bar | **rejected**. Joe 0929: *"no V3, just v2"*. It was causal and recovered all 7 lost opens, but 5 of 7 additions lose |
+| the §20.2 latency | **accepted for now**. Joe 0929: *"latency is ok for now. eventually we'll cherry-pick what we need from the classes and optimise"* |
 
 ## Not ruled — will need him
 

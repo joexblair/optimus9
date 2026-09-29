@@ -60,24 +60,29 @@ table for exactly that reason.
 
 ## The reference backtest, banked
 
-`build_wsf_trades.py` → table `wsf_trades`, window `2026-09-01..2026-09-06`. **Both config versions
-are banked**, keyed apart, so the A/B stays live.
+`build_wsf_trades.py` → table `wsf_trades`, window `2026-09-01..2026-09-06`. Key `wtc_v2_v7_rule1_gateopen` —
+**one config version only**. Joe 0929 dropped v1 and its 166 rows once he had the A/B.
 
-| | v1 `wtc_v1_v7_rule1_gateopen` NOT causal | **v2 `wtc_v2_v7_rule1_gateopen` — the live one** |
+| | |
+|---|---|
+| sig bars gated out of 109 | 41 |
+| trades | **144 closed, 1 still open** |
+| MFE > MAE | **83 of 144 = 57.6%** |
+| MAE mean / max | 0.783 / 5.811 |
+| MFE mean / max | 1.111 / 6.517 |
+| SHORT | n 80, MAE mean 0.863, MFE mean 1.262, MFE > MAE 49 |
+| LONG | n 64, MAE mean 0.683, MFE mean 0.923, MFE > MAE 34 |
+
+09-01 alone: **25 closed, 18 opened by sig_utc and 7 by dr-flip, MFE > MAE 13 of 25.**
+
+### Two variants that were measured and rejected
+
+| variant | what it was | why it went |
 |---|---|---|
-| gate window | back 3.5 min, fwd 3.5 min, run unbounded | **back 7.0 min, fwd 0, run clamped** |
-| sig bars gated out of 109 | 45 | **41** |
-| trades | 142 | **144** |
-| MFE > MAE | 76 of 142 = 53.5% | **83 of 144 = 57.6%** |
-| MAE mean / max | 0.809 / 5.811 | **0.783 / 5.811** |
-| MFE mean / max | 1.062 / 4.987 | **1.111 / 6.517** |
-| SHORT | n 81, MFE > MAE 47 | n 80, MFE > MAE 49 |
-| LONG | n 61, MFE > MAE 29 | n 64, MFE > MAE 34 |
+| the old gate window, `[k-42, k+42]` | 142 trades, MFE > MAE 76 of 142 = 53.5% | **not causal** — read 210 s of future. Joe 0929 dropped the forward half. v2 also scores better on all four headline measures, but that was a bonus, not the reason |
+| a 3-minute forward WAIT on a rejected sig bar | 151 trades, MFE > MAE 84 of 151 = 55.6% | causal, and it recovered all 7 sig_utc opens the old window was catching — but 5 of the 7 additions lose, and 5 have MFE under 0.4%, inside the 0.1975% round-trip banked at 22,000 coins. Joe 0929: *"no V3, just v2"* |
 
-11 opens exist only in v2 and 9 only in v1.
-
-09-01 alone: v1 22 trades with MFE > MAE 11; **v2 25 trades with MFE > MAE 13**, and the three extra
-opens are 04:26:00, 08:18:00 and 21:21:20 — all previously gated out by the forward half.
+Do not rebuild either without Joe asking.
 
 **No P&L.** Joe 0917 closed P&L and kept MAE/MFE. Do not reintroduce it.
 
