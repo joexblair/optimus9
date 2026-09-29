@@ -275,3 +275,35 @@ NOT ESTABLISHED, AND NOT TO BE READ AS A RECOMMENDATION:
   trade and is not a captured return.
 - the whole sweep assumes the rest of the chain is held at the banked values. Interactions with
   `support_min`, the fence, the leash lags and the ws1mage_rev wobs are unswept on the full tape.
+
+## RESULT 4a — the complete set, 85 configs. Conclusion unchanged; one figure corrected.
+
+The `wide` grid finished after the Result 4 write-up (85 configs complete, was 71). The banked
+config's own numbers are identical — pooled 54.16%, worst window 52.9%, net/trade +0.1840 — but the
+comparison set grew, so:
+
+**CORRECTION: the banked span 10 / slope 0.40 ranks 29 of 85, not 47 of 71.** The extra configs
+were mostly high-slope cells that rank below it. Its measured performance did not change.
+
+The slope effect on the complete set, pooled across all spans:
+
+| `momo_slope_min` | configs | trades | win% | MAE mean | net/trade |
+|---|---|---|---|---|---|
+| 0.002 | 3 | 5,092 | 57.40 | 0.771 | +0.2246 |
+| 0.010 | 3 | 5,414 | 55.87 | 0.765 | +0.1769 |
+| 0.030 | 3 | 5,589 | 56.99 | 0.723 | +0.2432 |
+| 0.040 | 3 | 5,661 | 56.63 | 0.715 | +0.2427 |
+| **0.050** | 8 | **14,589** | **57.33** | 0.734 | **+0.2362** |
+| 0.100 | 8 | 15,149 | 55.96 | 0.728 | +0.2055 |
+| 0.150 | 8 | 15,569 | 55.55 | 0.714 | +0.2025 |
+| 0.200 | 8 | 15,924 | 54.59 | 0.706 | +0.1915 |
+| 0.300 | 8 | 16,423 | 53.99 | 0.698 | +0.1742 |
+| **0.400** | 8 | 16,719 | **53.87** | 0.684 | **+0.1812** ← BANKED |
+| 0.600 | 8 | 17,091 | 53.33 | 0.672 | +0.1803 |
+| 0.800 | 8 | 17,370 | 53.28 | 0.667 | +0.1726 |
+
+Slope 0.05 now carries 14,589 trades across 8 spans and reads 57.33% — **+3.5 points over the
+banked 0.40 on a like-for-like pooled basis**. The monotone fall from 0.05 to 0.80 is intact.
+
+Top by worst window is unchanged: **span 6 / slope 0.03**, pooled 57.58%, worst 56.3%,
+net/trade +0.2588, per-window 56.3 / 58.8 / 57.6, on 1,912 trades against the banked 2,042.
