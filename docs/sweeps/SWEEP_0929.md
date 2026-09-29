@@ -76,3 +76,35 @@ ladders for four of them:
 ## RESULTS
 
 (appended as each sweep lands)
+
+## RESULT 1 — span x slope, interim at 57 of 182 configs
+
+The harness reproduces the baseline EXACTLY at the banked config (span 10, slope 0.4):
+118 trades, 65 (55.1%), MAE 0.724, MFE 0.914, NET +22.349. Every row below is scored the same
+way — whole book, entry at the emit bar.
+
+**`momo_span_min` 8 with `momo_slope_min` 0.10 beats the baseline on every measure at once**, and
+on fewer trades:
+
+| config | trades | MFE > MAE | MAE mean | MFE mean | NET | per trade |
+|---|---|---|---|---|---|---|
+| **baseline — span 10, slope 0.40** | 118 | 65 (55.1%) | 0.724 | 0.914 | +22.349 | +0.189 |
+| **span 8, slope 0.10** | **104** | **67 (64.4%)** | **0.689** | **1.049** | **+37.514** | **+0.361** |
+| span 8, slope 0.15 | 111 | 65 (58.6%) | 0.710 | 0.954 | +27.087 | +0.244 |
+| span 8, slope 0.20 | 115 | 68 (59.1%) | 0.710 | 0.951 | +27.754 | +0.241 |
+| span 5, slope 0.45 | 127 | 65 (51.2%) | 0.608 | 0.938 | +41.806 | +0.329 |
+| span 4, slope 0.35 | 135 | 69 (51.1%) | 0.604 | 0.874 | +36.469 | +0.270 |
+
+TWO DIFFERENT SHAPES IN THE DATA, and they are not the same trade:
+  - **short span, mid slope** (4-5 / 0.35-0.50) — fires MORE (127-135 trades), MAE collapses to
+    0.60, win rate FALLS to ~51%. The highest raw NET, paid for with 9-17 extra round-trips.
+  - **span 8, low slope** (0.10-0.20) — fires LESS (104-115 trades), MAE holds near the baseline,
+    MFE rises, win rate climbs to 58-64%. Dominant, not a trade-off.
+
+slope 0.10 is the EDGE of the grid, so span 8 may not be the knee. A refinement grid around
+span 6-9 x slope 0.02-0.25 in small steps is queued.
+
+CAVEAT ON `NET`: it is summed MFE minus summed MAE, an excursion aggregate. MFE is the best
+excursion, not a captured return. It is not P&L and must not be read as one. Trade count matters
+independently: each trade pays a 0.1975% round-trip at 22,000 coins, so 104 trades pays 20.5 pp
+against 118 trades' 23.3 pp.
