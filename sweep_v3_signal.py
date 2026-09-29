@@ -228,6 +228,11 @@ WINDOWS = [('W1 06-10..07-20', 1781049600000, 1784505600000),
            ('W3 08-29..09-08', 1787961600000, 1788825600000)]
 
 GRIDS = {
+    # slope 0.05 was best at EVERY span in the 3-window grid and 0.05 was the grid edge. This walks
+    # below it in small steps to find where the effect stops. Joe 0929: "always small steps".
+    'lowslope': [dict(BASE, span=sp, slope=sl)
+                 for sp in (6, 7, 8)
+                 for sl in (0.002, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.07)],
     'wide': [dict(BASE, span=sp, slope=sl)
              for sp in (5, 6, 7, 8, 9, 10, 12, 14)
              for sl in (0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.60, 0.80)],

@@ -159,3 +159,40 @@ wrong by this work — it is also not shown to be right. Nothing here is a reaso
 
 **PROTOCOL CHANGE, applied to everything that follows:** no config is reported as an improvement
 unless it improves on BOTH windows. Every remaining grid is run twice and joined.
+
+## RESULT 3 — the full tape changes the answer. `momo_slope_min` wants to be LOW.
+
+The line cache holds **94.5 days**, 2026-06-05 to 2026-09-07. The 5-day window was the leash
+bank's, not the data's. Re-run on three independent windows — W1 06-10..07-20 (40d),
+W2 07-20..08-29 (40d), W3 08-29..09-08 (10d) — every config now scores **~2,000 trades** instead
+of 118.
+
+| span | slope | W1 % | W2 % | W3 % | mean | sd | net/trade | trades |
+|---|---|---|---|---|---|---|---|---|
+| **6** | **0.05** | 55.7 | 58.2 | 55.2 | **56.4** | 1.3 | **+0.215** | 1967 |
+| **7** | **0.05** | 56.4 | 58.2 | 53.5 | **56.0** | 2.0 | **+0.230** | 1963 |
+| 7 | 0.15 | 54.2 | 56.9 | 52.6 | 54.6 | 1.8 | +0.204 | 2055 |
+| 5 | 0.05 | 52.4 | 59.4 | 51.1 | 54.3 | 3.6 | +0.196 | 2032 |
+| 6 | 0.15 | 54.1 | 55.7 | 51.9 | 53.9 | 1.6 | +0.197 | 2076 |
+| 6 | 0.10 | 55.0 | 55.3 | 51.3 | 53.9 | 1.8 | +0.187 | 2027 |
+| 7 | 0.10 | 54.0 | 55.3 | 51.8 | 53.7 | 1.4 | +0.194 | 2013 |
+| 5 | 0.10 | 51.9 | 58.8 | 50.0 | 53.5 | 3.8 | +0.186 | 2080 |
+| 7 | 0.40 | 52.3 | 54.4 | 48.4 | 51.7 | 2.5 | +0.141 | 2181 |
+| 6 | 0.40 | 52.2 | 53.9 | 48.6 | 51.6 | 2.2 | +0.141 | 2192 |
+| 5 | 0.40 | 51.8 | 51.9 | 47.9 | 50.5 | 1.9 | +0.154 | 2232 |
+
+**THIS IS A DIFFERENT KIND OF RESULT FROM RESULT 1.** That was one cell winning on one window.
+This is a **monotone trend holding in three independent windows at three different spans**:
+
+- at span 5, 6 AND 7, win% falls as `momo_slope_min` rises, from ~0.05 up to 0.80.
+- the banked 0.40 sits near the bottom of its span's column every time.
+- slope 0.05 beats slope 0.40 by **+5.9 points at span 6** (56.4 vs 50.5 at span 5, 56.4 vs 51.6
+  at span 6, 56.0 vs 51.7 at span 7) and by **+0.07 net per trade**.
+- the standard error on a proportion at ~2,000 trades is 1.1 points, so a 5-point gap is ~5 SE.
+  Result 1's 9-point gap sat on 104 trades where the SE was 4.9 points.
+
+0.05 is the EDGE of this grid, so the knee is not yet located. A `lowslope` grid at
+0.002 .. 0.07 across spans 6, 7, 8 is running.
+
+NOT YET A RECOMMENDATION. `momo_slope_min` is Joe's, flagged `wdc_fitted`, and was tuned against
+his own eyeballed ws7r reading at ~05:36 on 08-25. Nothing here is banked or changed.
