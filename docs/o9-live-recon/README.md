@@ -33,8 +33,14 @@ going 'online-live'. fakeAPI is our test-bed which o9-live connects to"*.
 
 The reference backtest is **built, banked and causal** — `build_wsf_trades.py` → `wsf_trades`,
 **119 closed trades (120 rows, the last still open)** over 2026-09-01..09-06 at config v2. Every module from `build_wsf_dtf_v3` down to
-`wsf_trades` has been walked for causality. o9-live and fakeAPI **exist and run**, but on a different
-strategy. The bridge between them is the work.
+`wsf_trades` has been walked for causality, and 0929 the whole sig_utc chain was **replayed in
+realtime**: 121 of 121 moments, zero revisions, at a median 325 s emission latency that is in the
+mech. o9-live and fakeAPI **exist and run**, but on a different strategy. The bridge between them is
+the work.
+
+Two things are open before the first recon job — `OPEN.md` items 2 and 8. Item 8 is the live one:
+`coil_exit` emits `sig_conf` now (Joe ruled it 0929) but the 121 banked leash rows still hold the old
+cross bars, so the reference below has not moved yet.
 
 ## Reproduce it before you trust it
 

@@ -35,6 +35,23 @@ session accumulates context and the point of the job is a clean comparison each 
 
 Price is **out of scope** until MVP2. Joe 0929.
 
+## The latency the recon job must carry
+
+`report_realtime_replay.py`, 0929: the chain runs in realtime, 121 of 121 moments, **zero
+revisions**. What it costs is delay between the bar a `sig_utc` NAMES and the bar it can first be
+EMITTED:
+
+| rule | n | median | p75 | p90 | max |
+|---|---|---|---|---|---|
+| eager | 121 | 325 s | 600 s | 1385 s | 4955 s |
+| settled | 121 | 345 s | 760 s | 1425 s | 4955 s |
+
+**This is in the mech, not the implementation.** o9-live will name the right bar, minutes after that
+bar. Step 2 of the recon job records the wall-clock-to-bar gap; compare it against THIS table, not
+against zero. A gap inside this distribution is the mech working. A gap outside it is a finding.
+
+Re-run the replay whenever a producer in the chain changes.
+
 ## The 24-hour re-validation — the lookahead test
 
 Joe 0929: *"it every recon job, review the backtest's last 24 hours and re-validate all validated

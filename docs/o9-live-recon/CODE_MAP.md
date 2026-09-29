@@ -18,6 +18,7 @@ that path. Anyone reading `run_o9live.py` and assuming it already trades this st
 | `optimus9/compute/trade_config.py` | `wsf_trade_config`, **16 knobs at version 2 — the only version**. Each row carries Joe's own words as its source |
 | `build_wsf_trades.py` | loads the tape and lines, runs the gate, walks, banks to `wsf_trades`, prints. `--day`, `--drop`, `--md` |
 | `optimus9/compute/rule1_gate.py` | the gate. Pre-existing, unchanged |
+| `report_realtime_replay.py` | replays the sig_utc chain in realtime and reports revisions + latency. 0929: 121 of 121, zero revisions |
 
 Reproducibility, and run these before trusting anything:
 
