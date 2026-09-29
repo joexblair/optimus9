@@ -97,8 +97,10 @@ reached 0.70% before 05:04:30. That is `OPEN.md`, *does a stop end the trade*.
 ```
 python3 sweep_live_stop.py          # the cap ladder, 81 rungs. The 0.70 rung is 894 / +0.3911
 python3 report_realtime_replay.py   # 121 of 121 moments, zero revisions
-python3 build_wsf_trades.py         # the same mech, banked. IT WRITES - read OPEN.md first
 ```
+
+**Not `build_wsf_trades.py`.** It reads signal bars from `wsf_leash`, which still holds the
+pre-`sig_conf` cross bars, so it does not reproduce these numbers until the re-bank lands.
 
 Both must reproduce from the tape and the DB alone. If they do not, something in the cache moved and
 that is itself a finding — see `RECON.md`'s three mismatch classes.

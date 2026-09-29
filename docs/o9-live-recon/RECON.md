@@ -6,8 +6,10 @@ Joe 0929: *"they will need to wake on every trade signal - I would build a o9-li
 to log and consume via a shell monitor"*.
 
 **The dump.** o9-live appends one line per trade action to a dedicated log — not `o9live_run.log`,
-which carries everything. One line, one action, append-only, never rewritten. Suggested fields, and
-they are a suggestion not a ruling:
+which carries everything. One line, one action, append-only, never rewritten.
+
+**THE FIELDS ARE RULED.** Joe 0929-late: *"I'm confirming the list so that the recon-loop can
+start"*. Five fields, no more:
 
 | field | why |
 |---|---|
@@ -15,10 +17,17 @@ they are a suggestion not a ruling:
 | action | `open` or `close` |
 | side | `Buy` or `Sell` |
 | reason | `sig_utc`, `dr-flip` or `stop` — the thing that fired |
-| order type | **market**, both legs. Joe 0929-late. Limit placement is `MVP2.md` |
 | the bar it believes it acted on | so a bar-vs-wall-clock gap is visible without inference |
-| the config key | **`wtc_v3_v7_rule1_gateopen_mae0.70`** - the cap is in the key, so a capped run can never be confused with the 332 uncapped rows already in `wsf_trades` |
-| `led_id` | to join to `o9_live.o9_ledger` |
+
+**Dropped, and why:**
+
+| field | Joe 0929-late |
+|---|---|
+| the config key | *"this is too fringe to worry about. organically, we're going to reset o9-live on any change as a matter of course"* |
+| the order id | it would let a log line be matched to the order o9-live actually sent to the exchange. *"maybe you just need to let it run without any further consideration... and handle it if it comes up"* |
+
+Order type is **market** on both legs — Joe 0929-late. It is not a dump field because it cannot
+vary in MVP1. Limit placement is `MVP2.md`.
 
 **The monitor.** A shell loop that tails the dump and, on a new line, wakes a Claude session. The
 session does one recon job and exits. Do not hold a session open across signals — a long-lived

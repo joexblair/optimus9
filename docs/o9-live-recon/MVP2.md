@@ -32,6 +32,19 @@ compare entry price, exit price, fill price or slippage. `RECON.md`'s four misma
 **What MVP2 adds:** a fifth class. Entry/exit price divergence between o9-live's fills and the
 backtest's `pxs` reads, reported separately from selection, exactly as the other four are.
 
+**ONE CHECK IN PARTICULAR, AND IT IS NOT IN MVP1's LIST.** The stop is a percentage of the ENTRY
+price, and the two sides do not agree on what the entry price is:
+
+| | what "entry" is |
+|---|---|
+| the backtest | `pxs` at the sig bar - `DEMA(close, 2)` on the event tape. A smoothed value, not a traded price |
+| o9-live | the actual fill of a market order |
+
+Different starting numbers give different stop PRICES from the same 0.70%. `RECON.md`'s stop check
+#2 verifies o9-live uses its own entry rather than a later mark; **nothing compares o9-live's entry
+against the backtest's.** That comparison is a price comparison, so it is MVP2 — but it was absent
+rather than deferred until this was written down.
+
 ### 2. The exchange-resident stop backstop
 
 Joe 0929-late, on the finding that a client-side-only stop leaves a position naked through a

@@ -119,11 +119,12 @@ handing over only the mech that the MAE cap was applied to"*.
 ```
 python3 sweep_live_stop.py        # the cap ladder, 81 rungs. The 0.70 rung is 894 / +0.3911
 python3 report_realtime_replay.py # the causality proof: 121 of 121, zero revisions
-python3 build_wsf_trades.py       # the same mech, banked. IT WRITES - read OPEN.md first
 ```
 
-`build_wsf_trades.py` banks under `wtc_v3_v7_rule1_gateopen_mae0.70`. The 332 rows already in
-`wsf_trades` under the bare keys are an **uncapped** mech - history, not a comparison.
+**`build_wsf_trades.py` is NOT in that list.** It reads its signal bars from `wsf_leash`, and those
+121 rows still hold the pre-`sig_conf` cross bars - 15 s early - and cover 09-01..09-06 only. Joe
+ruled the fix: re-bank in place. Until then the banker is on stale bars and the sweep is not.
+See `SPEC.md`, *Banking it*.
 
 Both must come out of the tape and the DB alone. A mismatch is a finding, not a nuisance — see
 `RECON.md`.

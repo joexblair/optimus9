@@ -25,8 +25,8 @@ a comparison. If a number in this package is not from the capped mech, it is a m
 
 ## The numbers — 90 days of line cache, 2026-06-10 .. 2026-09-08
 
-Produced by `python3 build_wsf_trades.py`, and independently by `sweep_live_stop.py` at the 0.70
-rung. The two agree exactly.
+Produced by `sweep_live_stop.py` at the 0.70 rung, and independently by the canonical
+`trade_walk.walk` run over the same pipeline. The two agree exactly.
 
 | | |
 |---|---|
@@ -231,7 +231,26 @@ the v3 config version inside `wsl_knobs`, so a bump would split the next leash w
 
 ## Banking it
 
-`build_wsf_trades.py` produces this mech and banks it under `wtc_v3_v7_rule1_gateopen_mae0.70`.
+**`build_wsf_trades.py` DOES NOT PRODUCE THIS MECH YET, AND IT IS NOT THE ONE THAT MEASURED IT.**
+It reads its signal bars FROM the bank - `build_wsf_trades.py:163`:
+
+    SELECT wsl_sig_ms FROM wsf_leash WHERE wsl_knobs=%s AND wsl_sig_ms IS NOT NULL
+
+so it inherits two limits the sweep does not have:
+
+| limit | consequence |
+|---|---|
+| the 121 banked rows still hold the OLD cross bars | every row that moved is 15 s early |
+| the bank covers 2026-09-01..09-06 only | it cannot run the 90-day window at all |
+
+Joe 0929-late ruled the fix: **re-bank the 121 rows in place** - *"rebank in place - the old 121
+rows are incorrect"*. Until that is done, `build_wsf_trades.py` is on stale bars.
+
+**The numbers in this file come from `sweep_live_stop.py`**, which recomputes the whole chain in
+memory through `coil_exit.resolve` and therefore uses the CORRECTED confirmed bars. The stale bank
+is never read by it.
+
+Once the re-bank lands, `build_wsf_trades.py` banks under `wtc_v3_v7_rule1_gateopen_mae0.70`.
 `trade_walk.walk` carries the stop, so there is one walk and one shape.
 
 **The 332 rows already in `wsf_trades` are an UNCAPPED mech** — written before the stop and before
