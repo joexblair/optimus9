@@ -521,3 +521,80 @@ trade count. `momo_span_min` is NOT one of them — 10 is as good as anything.
 
 NOTHING IS BANKED. No table written, no config changed, no production file touched. The harness
 writes to `docs/sweeps/*.jsonl` only.
+
+## RESULT 9 — the remaining knob families. A third monotone knob, and two provably inert ones.
+
+All nine families complete on three windows. Banked reference: 2,042 trades, 54.16%, net +0.1840.
+
+### `momo_fixed_samples` — banked 21 — MONOTONE, and it runs AGAINST the "full dataset" intuition
+
+The lattice is `samples` points spanning `momo_span_min`. At span 10 (120 bars): 21 samples = a
+point every 6 bars; **121 samples = every bar, i.e. the full dataset**; 3 samples = every 60 bars.
+
+| samples | step | trades | win% | worst window | net/trade |
+|---|---|---|---|---|---|
+| 3 | 60 bars | 1,767 | **57.50** | 48.7 | +0.2419 |
+| 5 | 30 bars | 1,790 | 56.65 | 51.7 | +0.1911 |
+| 7 | 20 bars | 1,819 | 57.06 | 51.2 | +0.2232 |
+| **9** | **15 bars** | 1,856 | 55.77 | **55.5** | +0.2119 |
+| 13 | 10 bars | 1,920 | 55.10 | 51.2 | +0.2077 |
+| **21** | **6 bars** | 2,042 | **54.16** | 52.9 | **+0.1840** ← BANKED |
+| 41 | 3 bars | 2,127 | 53.74 | 52.2 | +0.1891 |
+| 61 | 2 bars | 2,210 | 51.36 | 50.4 | +0.1521 |
+| **121** | **1 bar — every bar** | 2,304 | **51.09** | 46.7 | +0.1373 |
+
+**Joe 0929 asked for "full datasets (as opposed to sampling)". On this knob the data says the
+opposite.** Reading every bar — samples 121 — is the WORST setting in the family at 51.09%, and
+win% falls monotonically as the lattice gets denser. The sparse lattice is not a shortcut; it is
+doing work. A 3-point fit over 120 bars measures the window's overall tilt; a 121-point fit chases
+every wiggle in it.
+
+The honest pick in this family is **samples 9**, not 3: highest worst-window in the family at 55.5
+(against the banked 52.9), while samples 3 has the family's WORST worst-window at 48.7 despite the
+top pooled figure.
+
+### `level_slack` (banked 13.9) and `momo_slack_ref` (banked = slope) — PROVABLY INERT
+
+| level_slack | trades | win% | net/trade |
+|---|---|---|---|
+| 0.0, 5.0, 10.0, **13.9**, 18.0, 22.0 | 2,042 | 54.16 | +0.1840 |
+| 28.0 | 2,046 | 54.20 | +0.1840 |
+| 34.0 | 2,070 | 53.67 | +0.1733 |
+| 40.0 | 2,112 | 52.98 | +0.1676 |
+
+`momo_slack_ref` at 0.05, 0.1, 0.2, 0.3, 0.4, 0.6, 0.8, 1.0, 1.2 — **all nine byte-identical** at
+2,042 / 54.16% / +0.1840.
+
+**Why, read from the code and confirmed by where it breaks.** The level gate is
+`r >= 50 - slack` at dr +1, and `slack = level_slack * trk`. But the v3 row ALSO requires `r`
+outside the 25/75 fence. At dr +1 an `r` below 25 fails the level gate outright (25 < 50 − 22), so
+only `r > 75` can ever produce a row — and `r > 75` clears the level gate for **any** slack up to
+22. The fence dominates the level gate, so neither knob can move a verdict.
+
+It starts to bite at exactly the predicted point: `level_slack` 28 gives `50 − 28 = 22`, so an `r`
+between 22 and 25 now passes both tests and new rows appear — 2,046 instead of 2,042. The
+explanation predicts the break point and the data lands on it.
+
+**Consequence: `level_slack` and `momo_slack_ref` are dead knobs at the banked fence.** They would
+only come alive if the fence moved above 50 − level_slack.
+
+### `curl_arc_min` (banked 4.0) — FLAT
+
+0.5 reads 54.94, banked 4.0 reads 54.16, and disabling the curl test entirely reads 54.23. The
+whole family spans 53.5 – 54.9 on ~2,000 trades. Nothing to find.
+
+### the `ws1mage_rev` wobs — Joe's values are at or near the best
+
+| knob | banked | best swept | delta |
+|---|---|---|---|
+| `boundary_xwob` | 4 | 4 | none — 4 is the best of 1,2,3,4,5,6,8,10,12 |
+| `rev_wob` | 2 | 8 (54.64 vs 54.16) | +0.5 pts, inside noise |
+| `dwell` | 3 | 3 | none — 3 is the best of 1,2,3,4,6,8,12 |
+
+`boundary_xwob` 4 and `dwell` 3 are already optimal. `rev_wob` 8 is half a point better than 2,
+which is inside noise on 2,000 trades.
+
+### `tfband` — INCOMPLETE
+
+Only the control config completed; the tf_lo/tf_hi variants produced no trades or errored. **Not
+measured.** Re-run needed if the TF band matters.
