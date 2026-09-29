@@ -38,9 +38,13 @@ Produced by `python3 sweep_mae_cap.py`.
 | net sum | +284.313 |
 | **net per trade** | **+0.3776** |
 
-**These are CEILING numbers.** Entry is the bar the signal NAMES, and o9-live cannot know that bar
-for a median 165 s. The mech as specified enters there; o9-live will enter later. The gap is
-measured in `RECON.md` and it is in the mech, not the implementation.
+Entry is the bar the signal NAMES. That is the spec, it is what these numbers measure, and the
+measurement is sound.
+
+**Separately**, `report_realtime_replay.py` measures how long after that bar the chain can first
+EMIT the timestamp — a median 165 s. Joe 0929 read that and ruled: *"latency is ok for now"*. It is
+a **recon** number: it tells the recon job what wall-clock-to-bar gap is normal so a normal gap is
+not read as a fault. `RECON.md` carries it. **It is not a discount on the figures above.**
 
 ## The cap is 0.70 and the choice is not knife-edge
 

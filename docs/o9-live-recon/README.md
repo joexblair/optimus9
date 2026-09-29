@@ -60,8 +60,7 @@ Three more rulings landed 0929-late, after the above:
     gate        rule1_gate config v2 - backward-only [k-84 bars, k], run clamped at the edge
     walk        trade_walk.walk - opposing-dr close, dr-flip closes only. Both rulings are in
                 the code as of 0929-late
-    entry       the sig bar - the bar the signal NAMES. This is a CEILING; o9-live cannot know
-                that bar for a median 165 s
+    entry       the sig bar - the bar the signal NAMES
     stop        MAE cap 0.70%, at the first bar the adverse excursion reaches it. Joe specified
                 0.9 on 0929, saw the 0.05 sweep, and ruled 0.70. It lives in sweep_mae_cap.py's
                 scoring, not in trade_walk.walk, because "does a stop end the trade" is unruled
@@ -80,10 +79,8 @@ Three more rulings landed 0929-late, after the above:
 | net sum | +284.313 |
 | **net per trade** | **+0.3776** |
 
-**ENTRY IS THE sig BAR, which is the CEILING and not achievable.** `sweep_mae_cap.py` enters on the
-bar the signal NAMES; o9-live cannot know that bar for a median 165 s. The emit-bar variant is a
-separate axis and Joe has not ruled which one the strategy is — see `OPEN.md` item 11. Every number
-in this table is the ceiling.
+**Entry is the sig bar — the bar the signal NAMES.** That is the spec and it is what these numbers
+measure.
 
 The cap is worth **+0.1464 -> +0.3776 per trade** against no cap - the largest single effect found
 on 0929. It is the PEAK of a 0.05-step sweep from 0.05 to 4.00, and 0.55 to 0.95 is a plateau where

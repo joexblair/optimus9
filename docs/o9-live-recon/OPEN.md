@@ -43,7 +43,7 @@
 | 8 | **build a banker for this mech, and under what key** | **the recon has nothing to compare against** |
 | 9 | ~~stop vs opposing sig_utc on the same bar~~ | RULED — the stop wins |
 | 10 | **does a stop END the trade, or does the position carry?** | **the first recon job** |
-| 11 | accept the ceiling entry bar, or re-measure at the bar o9-live can act on | what this mech is actually worth |
+| 11 | ~~entry bar~~ | CLOSED - the mech enters on the sig bar. See the note under item 1 |
 
 1. ~~**Whether the sig_utc producer chain can run forward.**~~ **ANSWERED 0929 — IT RUNS IN
    REALTIME.** Joe corrected the framing first: *"your 'run forward on a bounded window' sounds like
@@ -155,12 +155,15 @@
     **Selection diverges by construction, and the recon will report it as a selection fault when it
     is a bookkeeping difference.** Until Joe rules it, the stop stays out of `trade_walk.walk`.
 
-11. **The entry bar. This mech enters where o9-live cannot.** `sweep_mae_cap.py` enters on the bar
-    the signal NAMES, and +0.3776 per trade comes from there. `report_realtime_replay.py` measures
-    o9-live's earliest possible entry at a **median 165 s later**, max 4955 s.
+11. ~~**The entry bar.**~~ **CLOSED 0929-late. The mech enters on the sig bar and +0.3776 stands.**
 
-    So +0.3776 is a ceiling, not a forecast. Joe's call: accept it as the spec and let the recon
-    measure the shortfall, or re-measure the whole mech at the bar o9-live can act on.
+    An earlier version of this file called that number a "ceiling" and said it was not achievable.
+    **That claim was imported from a measurement of a DIFFERENT mech** — `bank_emit_entry.py`, which
+    has no cap. The capped mech has never been measured at any entry bar other than the sig bar, so
+    there was no basis for the word. Removed.
+
+    The 165 s emission latency is real, is measured, and is a **recon** number — see item 1 and
+    `RECON.md`. Joe ruled it: *"latency is ok for now"*. It does not discount +0.3776.
 
 ## Traps
 
