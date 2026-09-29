@@ -196,3 +196,82 @@ This is a **monotone trend holding in three independent windows at three differe
 
 NOT YET A RECOMMENDATION. `momo_slope_min` is Joe's, flagged `wdc_fitted`, and was tuned against
 his own eyeballed ws7r reading at ~05:36 on 08-25. Nothing here is banked or changed.
+
+## RESULT 4 — FINAL. `momo_slope_min` has a real, monotone effect. The banked 0.4 is too high.
+
+71 configs complete on all three windows. Pooled over the three windows — one trade counts once,
+about 1,700–2,000 trades per config, 5,000–13,500 per slope level.
+
+### The slope effect, pooled across ALL spans — the cleanest statement in the whole sweep
+
+| `momo_slope_min` | configs | trades | win% | MAE mean | net/trade |
+|---|---|---|---|---|---|
+| 0.002 | 3 | 5,092 | 57.40 | 0.771 | +0.2246 |
+| 0.005 | 3 | 5,285 | 57.12 | 0.767 | +0.1979 |
+| 0.010 | 3 | 5,414 | 55.87 | 0.765 | +0.1769 |
+| 0.020 | 3 | 5,484 | 56.55 | 0.743 | +0.2114 |
+| **0.030** | 3 | 5,589 | **56.99** | 0.723 | **+0.2432** |
+| **0.040** | 3 | 5,661 | 56.63 | 0.715 | **+0.2427** |
+| 0.050 | 7 | 12,986 | 56.77 | 0.728 | +0.2303 |
+| 0.070 | 3 | 5,821 | 55.20 | 0.714 | +0.2168 |
+| 0.100 | 7 | 13,472 | 55.74 | 0.720 | +0.2053 |
+| 0.150 | 6 | 12,054 | 54.96 | 0.699 | +0.2025 |
+| 0.200 | 6 | 12,280 | 54.05 | 0.694 | +0.1909 |
+| 0.300 | 6 | 12,647 | 53.25 | 0.691 | +0.1638 |
+| **0.400** | 6 | 12,849 | **53.26** | 0.678 | **+0.1706** ← BANKED |
+| 0.600 | 6 | 13,083 | 52.92 | 0.665 | +0.1741 |
+| 0.800 | 6 | 13,208 | 52.96 | 0.663 | +0.1651 |
+
+**Monotone from 0.03 to 0.80.** Win rate falls 57.0 → 53.0 and net/trade falls +0.243 → +0.165 as
+the knob rises. Below 0.03 it flattens and gets noisier — 0.010 dips to 55.87 — so the knee sits at
+**0.03–0.05**. The banked 0.40 sits in the lower third.
+
+### Ranked by WORST window, so nothing is picked on a lucky sample
+
+| span | slope | trades | pooled win% | worst window | net/trade | per-window |
+|---|---|---|---|---|---|---|
+| **6** | **0.03** | 1,912 | **57.58** | **56.3** | **+0.2588** | 56.3 / 58.8 / 57.6 |
+| 8 | 0.10 | 1,905 | 57.17 | 55.8 | +0.2122 | 55.8 / 58.4 / 57.8 |
+| 9 | 0.10 | 1,877 | 56.63 | 55.8 | +0.2020 | 56.2 / 57.2 / 55.8 |
+| 12 | 0.05 | 1,646 | 59.42 | 55.6 | +0.2451 | 57.4 / 62.3 / 55.6 |
+| 10 | 0.05 | 1,746 | 56.76 | 55.5 | +0.2126 | 56.0 / 57.8 / 55.5 |
+| 6 | 0.05 | 1,967 | 56.79 | 55.2 | +0.2306 | 55.7 / 58.2 / 55.2 |
+| **10** | **0.40** | 2,042 | **54.16** | **52.9** | **+0.1840** | 52.9 / 55.1 / 55.5 ← BANKED, **rank 47 of 71** |
+
+`span 6 / slope 0.03` is the pick: highest worst-window, highest net/trade, and the tightest
+per-window spread of any leader. On **fewer** trades than the banked config, 1,912 vs 2,042.
+
+### The same configs on the 5-day baseline window, for continuity
+
+| config | trades | MFE > MAE | MAE mean | MFE mean | NET |
+|---|---|---|---|---|---|
+| **banked — span 10, slope 0.40** | 118 | 65 (55.1%) | 0.724 | 0.914 | +22.349 |
+| span 6, slope 0.03 | 102 | 59 (57.8%) | 0.766 | 1.023 | +26.184 |
+| span 7, slope 0.04 | 106 | 56 (52.8%) | 0.799 | 0.972 | +18.416 |
+| span 8, slope 0.10 | 104 | 67 (**64.4%**) | 0.689 | 1.049 | +37.514 |
+| span 12, slope 0.05 | 94 | 55 (58.5%) | 0.856 | 0.994 | +12.905 |
+
+**And there is the lesson in one row.** span 8 / 0.10 reads 64.4% on the 5-day window and 57.17%
+pooled — the 5-day number was inflated by 7 points. span 6 / 0.03 reads 57.8% on 5 days and 57.58%
+pooled — it says the same thing on every sample. That is the difference between a fitted cell and
+a real effect.
+
+## WHAT IS AND IS NOT ESTABLISHED
+
+ESTABLISHED:
+- `momo_slope_min` has a monotone effect on signal quality over 12,000+ trades per level, in the
+  same direction on three independent windows and at every span from 5 to 14.
+- the banked 0.40 is on the wrong side of it. Moving to 0.03–0.05 is worth about **+3.4 points of
+  MFE > MAE and +0.075 net per trade, on fewer trades.**
+- `momo_span_min` matters far less than the slope. Spans 6 to 12 are within ~1 point of each other
+  at a fixed low slope; span 5 is slightly worse.
+
+NOT ESTABLISHED, AND NOT TO BE READ AS A RECOMMENDATION:
+- nothing is banked. `momo_slope_min` is Joe's knob, flagged `wdc_fitted`, and was set by sweeping
+  until ws7r read `sideways` at his own eyeballed ~05:36 on 08-25. **That eyeball is a measurement
+  and this sweep does not overrule it** — a lower slope may break the reading the knob was fitted
+  to. That has not been checked.
+- every number here is MAE/MFE excursion, not P&L. `net/trade` is summed MFE minus summed MAE per
+  trade and is not a captured return.
+- the whole sweep assumes the rest of the chain is held at the banked values. Interactions with
+  `support_min`, the fence, the leash lags and the ws1mage_rev wobs are unswept on the full tape.

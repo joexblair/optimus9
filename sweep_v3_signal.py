@@ -233,6 +233,9 @@ GRIDS = {
     'lowslope': [dict(BASE, span=sp, slope=sl)
                  for sp in (6, 7, 8)
                  for sl in (0.002, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.07)],
+    'final': [dict(BASE, span=6, slope=0.03), dict(BASE, span=7, slope=0.04),
+              dict(BASE, span=8, slope=0.10), dict(BASE, span=12, slope=0.05),
+              dict(BASE)],
     'wide': [dict(BASE, span=sp, slope=sl)
              for sp in (5, 6, 7, 8, 9, 10, 12, 14)
              for sl in (0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.60, 0.80)],
