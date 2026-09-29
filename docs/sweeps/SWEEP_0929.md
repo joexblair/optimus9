@@ -456,3 +456,68 @@ banked. What I doubt is that it is still **Joe's mechanic**.
 A `limit` grid at fence 0.25 .. 2.5 is running. If win% keeps climbing as the fence approaches zero
 while the trade count collapses, that confirms the reading above: it is finding saturation, not
 tuning a fence. **That is a question for Joe to name, not for me to bank.**
+
+## RESULT 8 — FINAL. The fence has a real knee at 2.0–2.5. My saturation doubt is refuted.
+
+`limit` grid: span 8/10/12 x slope 0.02/0.03 x fence 0.25 .. 2.5, three windows, 36 configs.
+
+| fence | configs | trades | pooled win% | net/trade | trades per config |
+|---|---|---|---|---|---|
+| 0.25 | 6 | 6,836 | 64.83 | +0.3026 | 1,139 |
+| 0.50 | 6 | 6,895 | 64.99 | +0.3087 | 1,149 |
+| 1.00 | 6 | 6,955 | 63.93 | +0.3313 | 1,159 |
+| 1.50 | 6 | 6,981 | 64.80 | +0.3505 | 1,163 |
+| **2.00** | 6 | 7,158 | 64.85 | **+0.3663** | 1,193 |
+| 2.50 | 6 | 7,244 | 64.76 | +0.3473 | 1,207 |
+
+**I predicted that if this were saturation-chasing, win% would keep climbing toward fence 0 while
+the trade count collapsed. Neither happened.**
+
+- win% is **FLAT** at 64–65% across the whole range 0.25 .. 2.5. It stopped improving at ~2.5.
+- net/trade **peaks at fence 2.00** (+0.3663) and falls either side.
+- the trade count barely moves — 1,139 to 1,207 per config, a 6% spread. It does not collapse.
+
+That is a genuine knee, not an asymptote. **The fence effect runs from 40 down to about 2.5 and
+then stops.** A knob with a measured knee is a knob; my saturation objection is answered and
+withdrawn.
+
+### Top by worst window, across everything measured (109+ configs)
+
+| span | slope | fence | trades | pooled% | worst | net/trade | per-window |
+|---|---|---|---|---|---|---|---|
+| **10** | **0.02** | **2.50** | 1,204 | 66.20 | **65.2** | **+0.4110** | 65.2 / 66.7 / 68.7 |
+| 12 | 0.03 | 2.50 | 1,193 | **66.39** | 64.0 | +0.4067 | 64.0 / 68.3 / 68.1 |
+| 10 | 0.03 | 1.50 | 1,138 | 65.82 | 63.5 | +0.4006 | 63.5 / 67.9 / 67.3 |
+| 12 | 0.02 | 2.50 | 1,182 | 65.74 | 63.4 | +0.3493 | 63.4 / 67.8 / 66.7 |
+| 10 | 0.02 | 0.50 | 1,157 | 65.86 | 62.8 | +0.2927 | 63.8 / 68.4 / 62.8 |
+| **10** | **0.40** | **25.0** | 2,042 | 54.16 | 52.9 | +0.1840 | 52.9 / 55.1 / 55.5 ← BANKED |
+
+## THE BOTTOM LINE OF THE WHOLE SWEEP
+
+| | banked | best measured | delta |
+|---|---|---|---|
+| `momo_span_min` | 10 | 10 | unchanged |
+| `momo_slope_min` | **0.40** | **0.02** | |
+| fence | **25.0 / 75.0** | **2.5 / 97.5** | |
+| trades (3 windows) | 2,042 | 1,204 | −41% |
+| pooled MFE > MAE | 54.16% | **66.20%** | **+12.0 pts** |
+| worst window | 52.9% | **65.2%** | **+12.3 pts** |
+| net / trade | +0.1840 | **+0.4110** | **+123%** |
+
+Two knobs, both with measured knees, both reproducing on three independent windows, both cutting
+trade count. `momo_span_min` is NOT one of them — 10 is as good as anything.
+
+## WHAT JOE HAS TO RULE BEFORE ANY OF IT MOVES
+
+1. **the eyeball.** `momo_slope_min` 0.4 and `momo_span_min` 10 were fitted by sweeping until ws7r
+   read `sideways` at Joe's own ~05:36 on 08-25. **Does slope 0.02 still reproduce that reading?**
+   Unchecked, and his eye outranks this sweep.
+2. **the fence is his number.** He set 25/75 on 0910, raising it from 30/70. 2.5/97.5 is a
+   different order of thing and `oob` is 15/85 everywhere else in this system. Whether a 2.5 fence
+   is the mechanic he means is his to name.
+3. **trade count falls 41%.** 1,204 against 2,042 over 90 days. Fewer, better signals — but he may
+   want the coverage.
+4. **MFE/MAE is not P&L.** `net/trade` is summed MFE minus summed MAE. It is excursion, not capture.
+
+NOTHING IS BANKED. No table written, no config changed, no production file touched. The harness
+writes to `docs/sweeps/*.jsonl` only.
