@@ -6,12 +6,25 @@ THE RESULT, 2026-09-29, over 2026-09-01..09-06 at the banked v7 knobs: 121 of 12
 emitted, ZERO revisions under either emission rule, ZERO historical moments never reached. The chain
 can run live. What it costs is LATENCY, and that is in the mech, not the implementation:
 
-    eager    median 325 s   p75 600 s   p90 1385 s   max 4955 s
-    settled  median 345 s   p75 760 s   p90 1425 s   max 4955 s
+    eager    p25 0 s   median 165 s   p75 440 s   p90 860 s   max 4955 s   mean 405 s
+    settled  p25 0 s   median 180 s   p75 440 s   p90 890 s   max 4955 s   mean 416 s
 
 measured as (the bar the answer could first be emitted) - (the sig bar it names). o9-live will know
 the timestamp, correctly, that far after the bar it points at. Any recon that does not carry this
 number will read the delay as a fault.
+
+IT IS BIMODAL, AND THE MEDIAN ALONE MISLEADS. 41 of 121 rows emit at EXACTLY 0 s - the moment had
+already ended and the sig bar is the last event in the chain; all 11 `forward` rows and 30 of 62
+`confirmed` rows are in that group. The other 80 bind on the moment's END ROW, which is not knowable
+until the breaking v3 row prints, and those run a median 340 s. Every `lookback` and `gap` row is in
+the second group by construction.
+
+THE LADDER IS NOT THE EMIT BAR. The revision test below steps a ladder of v3 row bars, which is the
+right stepping for "did an answer change" - answers only change when a row prints. It is the WRONG
+stepping for latency: a moment's end is always a v3 row, but `rev` and `actionable` are ordinary tape
+bars and can fall between two rows, so the ladder rounds those UP. `emit_bar()` computes the true bar
+and the latency block reports from that. Reporting the rung gave a median of 325 s, which is 160 s
+too high.
 
 
 Joe 0929: *"your 'run forward on a bounded window' sounds like lookahead, but you could just be
@@ -81,6 +94,17 @@ def legs_at(d, k):
     return {'dwell_ok': L['dwell_ok'][L['dwell_ok'] <= k], 'rev': L['rev'][L['rev'] <= k],
             'sig': s[m], 'sig_conf': sc[m]}
 
+def emit_bar(m, ex, lag_bars, settled):
+    """The true bar this moment's answer can first be emitted. Not the ladder rung - see above.
+
+    The moment is known-ended at its breaking row; the answer needs `rev` and `actionable` to have
+    passed; `settled` additionally waits for the confirm window to be unclipped.
+    """
+    brk = m['brk'] if m['brk'] is not None else m['i1']
+    b = max(brk, ex['rev'], ex['actionable'])
+    return max(b, m['i1'] + lag_bars) if settled else b
+
+
 FIRST = {'eager': {}, 'settled': {}}
 REV   = {'eager': [], 'settled': []}
 LATENCY = {'eager': [], 'settled': []}
@@ -101,7 +125,8 @@ for j in range(len(ann)):
             F = FIRST[mode]
             if m['i0'] not in F:
                 F[m['i0']] = (k, ansr)
-                LATENCY[mode].append(int(ts[k]) - int(ts[ex['rev']]))
+                LATENCY[mode].append(int(ts[emit_bar(m, ex, lag, mode == 'settled')])
+                                     - int(ts[ex['rev']]))
             elif F[m['i0']][1] != ansr:
                 REV[mode].append((m['i0'], F[m['i0']], (k, ansr)))
                 F[m['i0']] = (F[m['i0']][0], ansr)      # carry the new one so repeats aren't re-counted
@@ -120,9 +145,12 @@ print()
 for mode in ('eager', 'settled'):
     L = sorted(LATENCY[mode])
     if not L: continue
-    print('L|%s emission latency (emit bar - sig bar)|n %d|median %d s|p75 %d s|p90 %d s|max %d s'
-          % (mode, len(L), L[len(L)//2]//1000, L[int(len(L)*.75)]//1000,
-             L[int(len(L)*.90)]//1000, L[-1]//1000))
+    print('L|%s emission latency (emit bar - sig bar)|n %d|p25 %d s|median %d s|p75 %d s|p90 %d s'
+          '|max %d s|mean %.0f s'
+          % (mode, len(L), L[int(len(L)*.25)]//1000, L[len(L)//2]//1000, L[int(len(L)*.75)]//1000,
+             L[int(len(L)*.90)]//1000, L[-1]//1000, np.mean(L)/1000.0))
+    z = sum(1 for v in L if v == 0)
+    print('L|%s|exactly 0 s|%d of %d (%.1f%%)' % (mode, z, len(L), 100.0*z/len(L)))
 print()
 for mode in ('eager', 'settled'):
     if not REV[mode]:

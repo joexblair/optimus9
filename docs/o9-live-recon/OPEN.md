@@ -43,10 +43,13 @@
    **The cost is latency, and it is in the mech.** Measured as (first emittable bar) − (the sig bar
    it names):
 
-   | rule | n | median | p75 | p90 | max |
-   |---|---|---|---|---|---|
-   | eager | 121 | 325 s | 600 s | 1385 s | 4955 s |
-   | settled | 121 | 345 s | 760 s | 1425 s | 4955 s |
+   | rule | n | p25 | median | p75 | p90 | max | mean |
+   |---|---|---|---|---|---|---|---|
+   | eager | 121 | 0 s | 165 s | 440 s | 860 s | 4955 s | 405 s |
+   | settled | 121 | 0 s | 180 s | 440 s | 890 s | 4955 s | 416 s |
+
+   Bimodal: 41 of 121 emit at **exactly 0 s** (the sig bar is the last event — all 11 `forward` and
+   30 of 62 `confirmed`); the other 80 bind on the moment's end row at a median 340 s.
 
    o9-live will know each timestamp correctly, that far after the bar it points at. **A recon that
    does not carry this number will read the delay as a fault.** Re-run the replay whenever a

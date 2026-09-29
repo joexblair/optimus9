@@ -41,10 +41,20 @@ Price is **out of scope** until MVP2. Joe 0929.
 revisions**. What it costs is delay between the bar a `sig_utc` NAMES and the bar it can first be
 EMITTED:
 
-| rule | n | median | p75 | p90 | max |
-|---|---|---|---|---|---|
-| eager | 121 | 325 s | 600 s | 1385 s | 4955 s |
-| settled | 121 | 345 s | 760 s | 1425 s | 4955 s |
+| rule | n | p25 | median | p75 | p90 | max | mean |
+|---|---|---|---|---|---|---|---|
+| eager | 121 | 0 s | 165 s | 440 s | 860 s | 4955 s | 405 s |
+| settled | 121 | 0 s | 180 s | 440 s | 890 s | 4955 s | 416 s |
+
+**It is bimodal and the median alone misleads.** 41 of 121 rows emit at **exactly 0 s** — the moment
+had already ended and the sig bar is the last event in the chain. All 11 `forward` rows and 30 of 62
+`confirmed` rows sit there. The other 80 bind on the moment's END ROW and run a median 340 s; every
+`lookback` and `gap` row is in that group by construction.
+
+| what binds the emit bar | rows | median eager lag |
+|---|---|---|
+| the sig bar itself | 41 | 0 s |
+| the moment end row | 80 | 340 s |
 
 **This is in the mech, not the implementation.** o9-live will name the right bar, minutes after that
 bar. Step 2 of the recon job records the wall-clock-to-bar gap; compare it against THIS table, not
