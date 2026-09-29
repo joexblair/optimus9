@@ -25,9 +25,9 @@ DDL = '''CREATE TABLE IF NOT EXISTS %s (
     wtc_source  VARCHAR(200) NOT NULL,
     UNIQUE KEY uq_wtc (wtc_version, wtc_name))''' % TABLE
 
-V = 2                       # the live version. v1 is kept so its banked trades stay reproducible
+V = 2
 
-_COMMON = [
+SEED = [
     ('rule1_fence_lo', '27.0', 'r points', 'Joe 0923: "the fence is 27:73"'),
     ('rule1_fence_hi', '73.0', 'r points', 'Joe 0923: "the fence is 27:73"'),
     ('oob_lo', '15.0', 'r points', 'Joe 0913: "oob is alwasy 15/85"'),
@@ -48,23 +48,19 @@ _COMMON = [
      'Joe 0929: "same bar priority: dr-flip"'),
 ]
 
-# THE ONLY DIFFERENCE BETWEEN THE TWO VERSIONS IS THE GATE WINDOW.
-#   v1  the original: 3.5 min each side, and a run measured forward with no bound. NOT causal
-#   v2  Joe 0929: "drop the forward and simply say: if I see the `r` lines correctly positioned (or
-#       the #1 mode that allows for divergence), inside of the last {knob:7} minutes, then rule#1 is
-#       qualified"
-_BY_VERSION = {
-    1: [('rule1_back_min', '3.5', 'minutes BACK -> 42 bars', 'the original half-window'),
-        ('rule1_fwd_min', '3.5', 'minutes FORWARD -> 42 bars. NOT CAUSAL', 'the original half-window'),
-        ('rule1_run_clamp', 'none', 'a run walks forward unbounded. NOT CAUSAL', 'the v1 build')],
-    2: [('rule1_back_min', '7.0', 'minutes BACK -> 84 bars',
-         'Joe 0929: "inside of the last {knob:7} minutes"'),
-        ('rule1_fwd_min', '0', 'minutes FORWARD. causal',
-         'Joe 0929: "let us drop the forward"'),
-        ('rule1_run_clamp', 'window', 'a run stops at the window edge. causal',
-         'Joe 0929: everything causal')],
-}
-SEED = _COMMON + _BY_VERSION[V]
+# THE GATE WINDOW IS BACKWARD-ONLY. Joe 0929: "the -3.5 and + 3.5 logic is what's making it
+# non-causal, so let's drop the forward and simply say: if I see the `r` lines correctly positioned
+# (or the #1 mode that allows for divergence), inside of the last {knob:7} minutes, then rule#1 is
+# qualified". There WAS a v1 carrying the old 3.5/3.5 window for the A/B; Joe 0929 dropped it once
+# he had the numbers - "no V3, just v2", then "drop v1 config and its 166 rows".
+_GATE_WINDOW = [
+    ('rule1_back_min', '7.0', 'minutes BACK -> 84 bars',
+     'Joe 0929: "inside of the last {knob:7} minutes"'),
+    ('rule1_fwd_min', '0', 'minutes FORWARD. causal', 'Joe 0929: "let us drop the forward"'),
+    ('rule1_run_clamp', 'window', 'a run stops at the window edge. causal',
+     'Joe 0929: everything causal'),
+]
+SEED = SEED + _GATE_WINDOW
 
 
 def key(cfg):
@@ -74,16 +70,17 @@ def key(cfg):
 
 def seed(db, version=V):
     """Write `version` if it is not there. -> rows written."""
+    if version != V:
+        raise ValueError('%s holds one version, %d. Joe 0929 dropped v1.' % (TABLE, V))
     db.execute(DDL)
     n = db.execute("SELECT COUNT(*) c FROM %s WHERE wtc_version=%%s" % TABLE,
                    (version,), fetch=True)[0]['c']
     if n:
         return 0
-    rows = _COMMON + _BY_VERSION[version]
     db.executemany("INSERT INTO %s (wtc_version,wtc_name,wtc_value,wtc_units,wtc_source) "
                    "VALUES (%%s,%%s,%%s,%%s,%%s)" % TABLE,
-                   [(version, a, b, c, d) for a, b, c, d in rows])
-    return len(rows)
+                   [(version, a, b, c, d) for a, b, c, d in SEED])
+    return len(SEED)
 
 
 def load(db, version=V):

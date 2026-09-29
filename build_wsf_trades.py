@@ -128,8 +128,8 @@ def main(argv=None):
     a.add_argument('--day')
     a.add_argument('--drop', action='store_true')
     a.add_argument('--md', action='store_true')
-    a.add_argument('--cfg', type=int, default=TC.V, help='trade config version. 1 = the original '
-                                                         'non-causal gate window, 2 = Joe 0929')
+    a.add_argument('--cfg', type=int, default=TC.V, help='trade config version. Only %d exists - '
+                                                         'Joe 0929 dropped v1' % TC.V)
     o = a.parse_args(argv)
 
     db = DatabaseManager(**get_db_config()); db.connect()

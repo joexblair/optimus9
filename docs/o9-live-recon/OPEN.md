@@ -18,11 +18,26 @@
 
 ## Not ruled — will need him
 
-1. **Where realtime `sig_utc` comes from.** `wsf_leash.wsl_sig_utc` is produced by
-   `report_coil_exit.py` from banked confluence moments, and a moment's end is *"only knowable when
-   the next row prints"* (§20.2, median 300 s, max 5000 s). That latency is inherent to the mech, not
-   an implementation detail. Whether o9-live recomputes the leash live, reads the table as it fills,
-   or something else, is **the biggest open question in the job**.
+1. **Whether the sig_utc producer chain can run forward.** Joe 0929 corrected an earlier framing of
+   this — they are not a banked-moments mystery: *"they may seem to be banked confluence, but their
+   source is ultimately the wsf_dtf_v3 report being consumed by the wsf_leash `coil` report"*.
+
+   The chain, top to bottom:
+
+   | step | producer | what it emits |
+   |---|---|---|
+   | 1 | `build_wsf_dtf_v3.py` | `wsf_dtf_v3` — one row per (line, dr run): the first bar in that run where the line's r is sideways AND outside the 25/75 fence, ws1..ws23 |
+   | 2 | `report_coil_exit.py` | reads `wdv_ms, wdv_dr` from `wsf_dtf_v3`, builds the coil, the confluence moments and the confirmed release |
+   | 3 | `optimus9/compute/coil_exit.py` `resolve` | the ACTIONABLE bar and the validating `rev` |
+   | 4 | `leash_bank.py` | banks it — `wsl_sig_utc` is `resolve`'s `rev` field |
+
+   So the live question is concrete: **can steps 1 and 2 run forward on a bounded window ending at
+   now**, the way `StrategyLoop` already does for `v2_walk_ad`. Step 1 is per dr run and step 2 walks
+   rows, so neither is obviously blocked — but §20.2's latency is real and sits in step 2: a
+   moment's end is only knowable when the next row prints, median 300 s, p75 492 s, max 5000 s.
+   That latency is in the mech, not the implementation, and it sets the floor on how late a live
+   `sig_utc` can be.
+
 2. **The dump's exact fields.** `RECON.md` suggests a set. It is a suggestion.
 3. **Position size.** 22,000 coins is banked for sneaky-1. Nothing is set for this strategy. Not
    needed for MVP1 selection recon, needed the moment price enters.
