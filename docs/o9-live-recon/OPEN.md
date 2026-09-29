@@ -86,6 +86,39 @@
    does not carry this number will read the delay as a fault.** Re-run the replay whenever a
    producer in the chain changes.
 
+   **TWO DIFFERENT THINGS, AND ONLY ONE IS SETTLED.**
+
+   | | status |
+   |---|---|
+   | does the answer ever CHANGE | **SETTLED** - 121 of 121, zero revisions. No lookahead |
+   | does the answer arrive LATE | **NOT settled** - Joe read the number and parked it |
+
+   **WHAT CREATES THE LAG.** A v3 row prints when a sideways run reaches its sample count on a
+   timeframe. Consecutive same-dr rows form a MOMENT. **You cannot know a moment has ended until a
+   row prints that BREAKS it**, and that breaking row can be minutes after the moment's last row.
+   The signal names a bar inside the moment, but the moment does not exist as an object until it
+   is broken. `report_realtime_replay.emit_bar()` is `max(breaking row, rev, actionable)`.
+
+   Two smaller contributors: `rev` needs its own confirmation, **+15 s**; and `actionable` on a
+   confirmed release is the release bar **+180 s**, which is Joe's own `confirm_lag_s`.
+
+   **WHAT HAS BEEN DONE TO CURTAIL IT: one thing.** Eager and settled emission were replayed side
+   by side and gave **zero revisions and identical answers on all 121**, so the faster rule is
+   proven safe. Nothing else. The `sig_conf` change ADDED 15 s - it was a correctness fix, not a
+   speed one - and the backward-only gate window was a causality fix with no effect on lag.
+
+   **WHAT IT COSTS, measured over 90 days** (`measure_emit_entry.py`, 1,973 moments):
+
+   | entry bar | rule#1 open | trades | net > 0 | stopped | net sum | net per trade |
+   |---|---|---|---|---|---|---|
+   | NAMED - the spec | 1,045 | 894 | 479 (53.6%) | 381 (42.6%) | +349.638 | **+0.3911** |
+   | EAGER emit | 901 | 788 | 409 (51.9%) | 344 (43.7%) | +264.174 | **+0.3352** |
+   | SETTLED emit | 900 | 785 | 408 (52.0%) | 339 (43.2%) | +274.443 | **+0.3496** |
+
+   **The spec's number is measured at a bar o9-live cannot act on.** The gap is 0.056 to 0.071 per
+   trade - 14% to 18% - plus 144 of 1,045 gated opens, because moving the bar moves what rule#1
+   sees. Joe has NOT ruled the entry bar changed, so `SPEC.md` still states the named bar.
+
 2. **The dump's exact fields.** `RECON.md` suggests a set. It is a suggestion.
 
 3. **Position size.** 22,000 coins is banked for sneaky-1. Nothing is set for this strategy. Not
