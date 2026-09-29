@@ -14,6 +14,10 @@
 | the backstop | the flip **back to** the trade's own dr, two flips forward |
 | scratchpad | moved into the codebase, knobs in the DB. Done |
 | P&L | closed since 0917. MAE/MFE only |
+| **a sig_utc closes ONLY on an opposing dr** | Joe 0929-late, after spotting 09-01 03:40:05 (a SHORT) being closed by the 04:26:00 sig_utc (also a SHORT): *"trades must be first closed by an opposing dr signal, and secondly by a dr-flip if there is not opposing dr signal"*. A same-dr sig_utc is INERT - *"for now, it's inert"* |
+| **the dr-flip backstop CLOSES but never OPENS** | Joe 0929-late: *"now we have the data I can see that dr-flip as an open is not helpful. the cost is accceptable - it gives us space to apply other mechs (lazy-g for example)"*. It still closes, or a trade would run to the next opposing signal whatever happened |
+| **the MAE cap is 0.70%, applied as a STOP** | Joe specified 0.9 on 0929, was shown the 0.05-step sweep over 90 days, and ruled **0.70** - the peak at +0.3776 per trade. `MFE-MAE` prints `-0.70` on a stopped trade |
+| **the 0929 knob sweep is VOID** | up to 93% of a config's trades were dr-flip OPENS and the flip count is ~1,100 whatever the knobs, so every knob "gain" was the flip share rising. Do not act on `docs/sweeps/` |
 | the gate window | **backward-only, 7 min**. Joe 0929: *"the -3.5 and + 3.5 logic is what's making it non-causal, so let's drop the forward"* |
 | the config | **v2 only**. Joe 0929 dropped v1 and its 166 rows after the A/B |
 | a forward WAIT on a rejected sig bar | **rejected**. Joe 0929: *"no V3, just v2"*. It was causal and recovered all 7 lost opens, but 5 of 7 additions lose |

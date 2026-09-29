@@ -31,22 +31,78 @@ going 'online-live'. fakeAPI is our test-bed which o9-live connects to"*.
 
 ## The one-line state
 
-The reference backtest is **built, banked and causal** — `build_wsf_trades.py` → `wsf_trades`,
-**119 closed trades (120 rows, the last still open)** over 2026-09-01..09-06 at config v2. Every module from `build_wsf_dtf_v3` down to
-`wsf_trades` has been walked for causality, and 0929 the whole sig_utc chain was **replayed in
-realtime**: 121 of 121 moments, zero revisions, at a median 165 s emission latency that is in the
-mech — 0 s on 41 rows, a median 340 s on the 80 that wait for a moment's end row. o9-live and fakeAPI **exist and run**, but on a different strategy. The bridge between them is
-the work.
+**THE STRATEGY CHANGED SUBSTANTIALLY ON 0929-late. Everything below supersedes the older numbers
+still present in this package.** Three rulings from Joe and one defect he caught:
 
-Two things are open before the first recon job — `OPEN.md` items 2 and 8. Item 8 is the live one:
-`coil_exit` emits `sig_conf` now (Joe ruled it 0929) but the 121 banked leash rows still hold the old
-cross bars, so the reference below has not moved yet.
+| | |
+|---|---|
+| a sig_utc closes ONLY on an opposing dr | a same-dr sig_utc is INERT |
+| the dr-flip backstop CLOSES but never OPENS | the book goes flat instead |
+| MAE is capped at **0.70%** and the cap is a STOP | `MFE-MAE` prints `-0.70` when hit |
+
+**THE MACHINE, as handed over:**
+
+    signal      wsf_leash v7 `wsl_sig_utc`, from the banked wsf_dtf_v3 knobs
+                span 10, slope 0.40, fence 25/75, samples 21, tf 1..23, support_min 23
+    gate        rule1_gate config v2 - backward-only [k-84 bars, k], run clamped at the edge
+    walk        trade_walk.walk - opposing-dr close, dr-flip closes only
+    stop        MAE cap 0.70%, applied as a stop at the first bar the adverse excursion reaches it
+                Joe specified 0.9 on 0929, saw the 0.05 sweep, and ruled 0.70
+    score       MAE/MFE percentages of entry. NO P&L - Joe 0917
+
+**THE NUMBERS, 90 days of line cache, 2026-06-10 .. 2026-09-08:**
+
+| | |
+|---|---|
+| sig bars | 1,863 |
+| pass rule#1 | 1,045 |
+| **trades** | **753** |
+| net > 0 | 409 (54.3%) |
+| stopped at the cap | 311 (41.3%) |
+| MAE sum | 334.677 |
+| net sum | +284.313 |
+| **net per trade** | **+0.3776** |
+
+The cap is worth **+0.1464 -> +0.3776 per trade** against no cap - the largest single effect found
+on 0929. It is the PEAK of a 0.05-step sweep from 0.05 to 4.00, and 0.55 to 0.95 is a plateau where
+every value is within 0.04 per trade of the peak, so the choice is not knife-edge. Every cap tested
+from 0.15 up beats no cap.
+
+| cap % | trades | net > 0 | stopped | net per trade |
+|---|---|---|---|---|
+| 0.40 | 753 | 321 (42.6%) | 425 (56.4%) | +0.3037 |
+| 0.60 | 753 | 382 (50.7%) | 350 (46.5%) | +0.3553 |
+| **0.70** | **753** | **409 (54.3%)** | **311 (41.3%)** | **+0.3776** |
+| 0.80 | 753 | 418 (55.5%) | 291 (38.6%) | +0.3689 |
+| 0.90 | 753 | 426 (56.6%) | 266 (35.3%) | +0.3585 |
+| 1.10 | 753 | 445 (59.1%) | 219 (29.1%) | +0.3655 |
+| 2.20 | 753 | 464 (61.6%) | 102 (13.5%) | +0.2794 |
+| no cap | 753 | 468 (62.2%) | 0 | +0.1464 |
+
+`net > 0 %` and `net per trade` disagree across the whole ladder - the win count climbs
+monotonically to 62.2% at no cap while the per-trade peaks at 0.70. A tighter cap turns would-be
+winners into -cap losses but kills the big losers faster. **Rank on net per trade; Joe ruled 0.70
+on that basis.**
+
+Causality is unchanged and still holds: every module from `build_wsf_dtf_v3` down has been walked,
+and the sig_utc chain was replayed in realtime on 0929 - 121 of 121 moments, zero revisions, median
+165 s emission latency that is in the mech.
+
+o9-live and fakeAPI **exist and run**, but on a different strategy. The bridge is the work.
+
+**THE 0929 KNOB SWEEP IS VOID.** ~240 configs were swept and the result was an artifact: up to 93%
+of the trades in a config were dr-flip OPENS, and the dr-flip count is near-constant at ~1,100
+whatever the knobs, so tightening a knob only raised the flip share. Once the flips are removed six
+of seven configs sit within +/-0.6 points of the banked one. **Do not act on `docs/sweeps/`.** It is
+kept as the record of a wrong turn, not as a recommendation.
 
 ## Reproduce it before you trust it
 
 ```
-python3 build_wsf_trades.py --day 2026-09-01        # 25 trades, MFE > MAE 13 of 25
-python3 build_wsf_trades.py                          # 119 closed, MFE > MAE 68 of 119
+python3 sweep_mae_cap.py          # 753 trades over 90 days, peak cap 0.70 at +0.3776/trade
+python3 report_realtime_replay.py # the causality proof: 121 of 121, zero revisions
+
+# build_wsf_trades.py still writes the OLD shape - see OPEN.md item 9
 ```
 
 Both must come out of the tape and the DB alone. A mismatch is a finding, not a nuisance — see

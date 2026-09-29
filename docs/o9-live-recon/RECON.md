@@ -87,12 +87,29 @@ us another test-point (ie, is cache and real-time kline collection in sync)"*.
 So a third class of mismatch exists and is wanted: the cache and the realtime kline collection
 disagreeing. Report it as its own category, not as a selection gap.
 
-## Three mismatch classes, reported separately
+## The stop-loss check - Joe 0929
+
+The strategy now carries a **0.70% MAE cap applied as a stop**, and it fires on **41.3% of trades**.
+Joe: *"o9-live has a trading engine that might show faults in applying the stop-loss"*.
+
+Every recon job must check, per stopped trade:
+
+1. did o9-live place a stop at all, and at what level
+2. the trigger bar in the backtest vs the fill time o9-live reports
+3. the fill PRICE against the 0.70% level - the backtest books exactly -0.70 every time
+4. whether price reached 0.70% intrabar and recovered, which the 5 s bar close cannot see
+5. whether a stop and an opposing sig_utc landed on the same bar - **the priority is UNRULED**
+
+A stop divergence is its own class. Do NOT fold it into `selection` - the signal was right and the
+exit was not, which is a different fault with a different owner.
+
+## Four mismatch classes, reported separately
 
 | class | what it means |
 |---|---|
 | selection | o9-live and the backtest disagree about whether to trade a bar |
 | causality | a backtest verdict changed on re-run over the same bars |
 | cache | the line cache and realtime collection disagree about the bar's values |
+| **stop** | the signal matched and the EXIT did not - level, timing, fill or priority |
 
 Collapsing them into one "mismatch" number destroys the information the job exists to produce.
