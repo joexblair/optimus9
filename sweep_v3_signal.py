@@ -242,6 +242,12 @@ GRIDS = {
                for sp in (6, 8)
                for sl in (0.03, 0.05, 0.40)
                for f in (10.0, 15.0, 20.0, 25.0)]),
+    # fence 10 was the grid EDGE and slope+fence compound super-additively. Push both further and
+    # widen the span, to find where it stops.
+    'edge': ([dict(BASE, span=sp, slope=sl, fence_lo=f, fence_hi=100.0 - f)
+              for sp in (7, 8, 9, 10)
+              for sl in (0.02, 0.03, 0.05)
+              for f in (2.5, 5.0, 7.5, 10.0)]),
     'wide': [dict(BASE, span=sp, slope=sl)
              for sp in (5, 6, 7, 8, 9, 10, 12, 14)
              for sl in (0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.60, 0.80)],

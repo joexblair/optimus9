@@ -365,3 +365,49 @@ costs nothing and gains nothing measurable** — the mech is insensitive to it a
 Both findings cut trade count and lift win rate. They may be the same signal counted twice. A
 `combo` grid — span 6/8 x slope 0.03/0.05/0.40 x fence 10/15/20/25, with BASE as control — is
 running.
+
+## RESULT 6 — SLOPE AND FENCE COMPOUND. The strongest configuration measured.
+
+`combo` grid: span 6/8 x slope 0.03/0.05/0.40 x fence 10/15/20/25, all on three windows.
+
+| span | slope | fence | trades | pooled win% | worst window | net/trade | per-window |
+|---|---|---|---|---|---|---|---|
+| 8 | 0.05 | 10.0 | 1,457 | **61.84** | 59.2 | +0.2816 | 59.5 / 64.6 / 59.2 |
+| **8** | **0.03** | **10.0** | **1,444** | **61.57** | **60.3** | **+0.2948** | **60.3 / 63.0 / 60.4** |
+| 6 | 0.03 | 10.0 | 1,493 | 59.48 | 51.2 | +0.2454 | 58.2 / 62.6 / 51.2 |
+| 8 | 0.03 | 15.0 | 1,570 | 58.79 | 53.7 | +0.2395 | 57.0 / 61.7 / 53.7 |
+| 8 | 0.40 | 10.0 | 1,611 | 57.98 | 53.6 | +0.1991 | 58.6 / 58.5 / 53.6 |
+| 8 | 0.03 | 25.0 | 1,777 | 56.44 | 51.8 | +0.2210 | 54.7 / 59.3 / 51.8 |
+| **8** | **0.40** | **25.0** | 2,109 | **54.77** | 52.6 | **+0.1960** | 54.6 / 55.4 / 52.6 |
+| 6 | 0.40 | 25.0 | 2,192 | 52.55 | 48.6 | +0.1588 | 52.2 / 53.9 / 48.6 |
+
+**The decomposition, from span 8 at the banked slope and fence:**
+
+| change | pooled win% | delta |
+|---|---|---|
+| span 8, slope 0.40, fence 25 (banked knobs) | 54.77 | — |
+| slope alone → 0.03 | 56.44 | **+1.67** |
+| fence alone → 10 | 57.98 | **+3.21** |
+| **both** | **61.57** | **+6.80** |
+
++1.67 and +3.21 sum to 4.88; together they deliver **6.80**. They do not merely stack, they are
+**super-additive**. Whatever each knob is filtering, the intersection is cleaner than either alone.
+
+**`span 8 / slope 0.03 / fence 10-90` is the strongest thing measured in this sweep:**
+
+- pooled **61.57%** MFE > MAE against the banked **54.16%** — **+7.4 points**
+- **worst window 60.3%** — the highest worst-window of any of the 109 configs tested
+- per-window **60.3 / 63.0 / 60.4** — the tightest spread of any leader, and all three above 60
+- net/trade **+0.2948** against the banked **+0.1840** — **+60%**
+- on **1,444 trades against 2,042** — 29% fewer, so 29% less round-trip cost as well
+
+fence 10 was the EDGE of the combo grid. An `edge` grid at fence 2.5 / 5.0 / 7.5 / 10.0 x
+slope 0.02 / 0.03 / 0.05 x span 7 / 8 / 9 / 10 is running to find where it stops.
+
+STILL NOT A RECOMMENDATION. Three things have to be true before any of this is worth banking, and
+none has been checked:
+1. that `momo_slope_min` at 0.03 still reproduces the ws7r `sideways` reading at ~05:36 on 08-25
+   that the knob was fitted to — Joe's eyeball, and it outranks this sweep;
+2. that a 10/90 fence is a mechanic Joe wants, not an artefact of demanding near-saturated `r`;
+3. that MFE > MAE and net/trade are the objectives he is optimising, rather than something the
+   excursion aggregate only proxies.
