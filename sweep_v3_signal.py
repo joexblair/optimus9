@@ -37,6 +37,34 @@ from optimus9.compute.dr_latch import latch_wob
 from optimus9.compute.momo_config import momo_bank
 from optimus9.compute.rule1_gate import gate
 from optimus9.compute.trade_walk import walk as twalk, mae_mfe
+
+NO_FLIP_OPEN = False                       # set by --no-flip-open; Joe 0929 ruled the backstop out
+                                           # as an OPENER after seeing the measurement
+
+
+def walk_no_flip_open(opens, dr, start, end):
+    """trade_walk.walk with the dr-flip's OPEN removed. The close is untouched, and so is the
+    opposing-dr rule on sig_utc. Joe 0929: "dr-flip as an open is not helpful"."""
+    O = set(int(x) for x in opens); start = max(1, int(start)); out = []; pos = None
+    for k in range(start, int(end) + 1):
+        if pos is not None:
+            d = int(dr[k])
+            if d == -pos['dr'] and d != 0:
+                pos['left'] = True
+            if pos['left'] and d == pos['dr'] and d != int(dr[k - 1]):
+                out.append(dict(open=pos['open'], close=k, dr=pos['dr'],
+                                opened_by=pos['opened_by'], closed_by='dr-flip'))
+                pos = None
+                continue
+        if k in O:
+            d = int(dr[k])
+            if pos is not None and not (d == -pos['dr'] and d != 0):
+                continue                   # same-dr sig_utc is INERT - Joe 0929
+            if pos is not None:
+                out.append(dict(open=pos['open'], close=k, dr=pos['dr'],
+                                opened_by=pos['opened_by'], closed_by='sig_utc'))
+            pos = dict(open=k, dr=d, opened_by='sig_utc', left=False)
+    return out, pos
 from optimus9.analysis.jig import anchor_floater, ws1mage_rev
 from optimus9.db.database_manager import DatabaseManager
 from optimus9.config import get_db_config
@@ -198,7 +226,7 @@ def run(rig, cfg, A=None, B=None):
     # --- step 5 + 6 ---
     opens = sorted(k for k in EMIT if rig.gate_open(k))
     if not opens: return None
-    T, _ = twalk(opens, rig.DRW, min(opens), B)
+    T, _ = (walk_no_flip_open if NO_FLIP_OPEN else twalk)(opens, rig.DRW, min(opens), B)
     if not T: return None
     # --- step 7: score at the emit bar ---
     keep, miss = [], 0
@@ -282,6 +310,12 @@ GRIDS = {
                 for v in (0.0, 13.9, 28.0, 40.0, 46.0, 49.0)]
                + [dict(BASE, span=10, slope=0.02, fence_lo=2.5, fence_hi=97.5, slack_ref=v)
                   for v in (0.05, 0.4, 1.2)]),
+    # the post-fix cheap test: the banked config, the old sweep's winner, and the fence axis
+    'cheap': ([dict(BASE), dict(BASE, span=6, slope=0.03), dict(BASE, span=8, slope=0.10),
+               dict(BASE, span=12, slope=0.05),
+               dict(BASE, span=10, slope=0.02, fence_lo=2.5, fence_hi=97.5),
+               dict(BASE, span=10, slope=0.40, fence_lo=2.5, fence_hi=97.5),
+               dict(BASE, span=10, slope=0.02)]),
     'wide': [dict(BASE, span=sp, slope=sl)
              for sp in (5, 6, 7, 8, 9, 10, 12, 14)
              for sl in (0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.60, 0.80)],
@@ -322,9 +356,13 @@ def main():
     ap.add_argument('--grid', required=True)
     ap.add_argument('--out', default='/home/joe/thecodes/docs/sweeps/results.jsonl')
     ap.add_argument('--from-ms', type=int); ap.add_argument('--to-ms', type=int)
+    ap.add_argument('--no-flip-open', action='store_true',
+                    help='the dr-flip backstop closes but never opens - Joe 0929')
     ap.add_argument('--multiwin', action='store_true',
                     help='score every config on all three WINDOWS instead of one')
     o = ap.parse_args()
+    global NO_FLIP_OPEN
+    NO_FLIP_OPEN = bool(o.no_flip_open)
     win = (o.from_ms, o.to_ms) if o.from_ms and o.to_ms else None
     rig = Rig(win)
     if win: print('G|WINDOW OVERRIDE|%d..%d|bars %d..%d' % (win[0], win[1], rig.A, rig.B), flush=True)

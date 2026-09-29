@@ -92,12 +92,18 @@ disagreeing. Report it as its own category, not as a selection gap.
 The strategy now carries a **0.70% MAE cap applied as a stop**, and it fires on **41.3% of trades**.
 Joe: *"o9-live has a trading engine that might show faults in applying the stop-loss"*.
 
+**The backtest's fill is the SPEC, not an idealisation.** Joe 0929: *"pxs is designed to handle
+this well in advance of the trading machine -- this means that the stop does not increase to 0.85 -
+it fills immediately on hitting the bar"*. `pxs` is DEMA(close, 2) on the EVENT tape - a bar exists
+where volume occurred, a filler bar carries the previous value forward - so intrabar movement is
+already resolved at the 5 s grid. **Do NOT model slippage. Measure divergence FROM the spec.**
+
 Every recon job must check, per stopped trade:
 
 1. did o9-live place a stop at all, and at what level
-2. the trigger bar in the backtest vs the fill time o9-live reports
-3. the fill PRICE against the 0.70% level - the backtest books exactly -0.70 every time
-4. whether price reached 0.70% intrabar and recovered, which the 5 s bar close cannot see
+2. is the level 0.70% of the ENTRY price, not of a later mark
+3. the trigger bar in the backtest vs the bar o9-live acted on - they should be the SAME bar
+4. did the engine act on the pxs bar, or rest an order at the exchange and fill elsewhere
 5. whether a stop and an opposing sig_utc landed on the same bar - **the priority is UNRULED**
 
 A stop divergence is its own class. Do NOT fold it into `selection` - the signal was right and the

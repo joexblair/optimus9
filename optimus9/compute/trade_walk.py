@@ -9,6 +9,19 @@ JOE'S RULES, VERBATIM 0929:
    opens a new trade. it also opens a trade if there is no incoming trade, in contrast to the dr-flip
    mech"
   "rule#1 is applied to gate the non-trade sig_utc's"
+
+A sig_utc CLOSES ONLY ON AN OPPOSING dr. Joe 0929, after spotting 09-01 03:40:05 - a SHORT - being
+closed by the 04:26:00 sig_utc, which was ALSO a SHORT:
+
+  "trades must be first closed by an opposing dr signal, and secondly by a dr-flip if there is not
+   opposing dr signal"
+
+So "reversal" in his rule above means a REVERSAL OF dr, not merely the next signal. This walk used
+to close on any bar in `opens` with no dr comparison at all, and on the banked window that was 43 of
+67 sig_utc closes - 64% of them - closing a trade into a signal of its own direction. A same-dr
+sig_utc is now INERT: it cannot close (not opposing) and cannot open (one already runs that way).
+Joe 0929, asked whether it should touch the trade at all - reset `left`, extend, anything:
+*"for now, it's inert"*.
   "dr-flip is the backstop - if a open trade did not reach a sig_utc before dr-flip, then dr_flip
    creates a trade reversal (closes and opens). dr-flip can only open a new trade if dr-flip needed
    to close an incoming (back-stopped) trade"
@@ -87,10 +100,13 @@ def walk(opens, dr, start, end):
                 pos = dict(open=k, dr=d, opened_by='dr-flip', left=False)
                 continue                                 # same-bar priority: the flip wins
         if k in O:
+            d = int(dr[k])
+            if pos is not None and not (d == -pos['dr'] and d != 0):
+                continue                                 # same-dr sig_utc is INERT - Joe 0929
             if pos is not None:
                 out.append(dict(open=pos['open'], close=k, dr=pos['dr'],
                                 opened_by=pos['opened_by'], closed_by='sig_utc'))
-            pos = dict(open=k, dr=int(dr[k]), opened_by='sig_utc', left=False)
+            pos = dict(open=k, dr=d, opened_by='sig_utc', left=False)
     return out, pos
 
 
