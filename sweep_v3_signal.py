@@ -65,7 +65,7 @@ class Rig:
         ts = self.ts; n = len(ts); self.n = n
         w = win or BWT.WIN_MS
         self.A = int(np.searchsorted(ts, w[0]))
-        self.B = int(np.searchsorted(ts, w[1]))
+        self.B = min(int(np.searchsorted(ts, w[1])), n - 1)   # to_ms past the tape end clamps here
         G1 = np.asarray(self.lines['ws1']['Mage'], float)
         M13 = np.asarray(self.lines['ws13']['m'], float)
         DR = np.zeros(n, np.int8); cur = 0
@@ -100,6 +100,14 @@ class Rig:
                   - np.asarray(self.lines['ws%d' % tf]['r'], float) for tf in self.tfs}
         self._gate = {}
         self._sw = {}
+
+    def segs_for(self, A, B):
+        """The dr runs inside [A, B], verbatim from build_wsf_dtf_v3's own segment loop."""
+        DR = self.DR; out = []; s = A
+        for k in range(A + 1, B + 1):
+            if DR[k] != DR[k - 1]: out.append((s, k - 1, int(DR[s]))); s = k
+        out.append((s, B, int(DR[s])))
+        return out
 
     def sideways(self, tf, cfg):
         """Cached per (tf, span, slope, samples, level_slack, slack_ref, curl knobs).
@@ -139,8 +147,11 @@ class Rig:
         return self._gate[k]
 
 
-def run(rig, cfg):
+def run(rig, cfg, A=None, B=None):
     """One config, end to end. -> dict of results, or None when it produces no trade."""
+    A = rig.A if A is None else A
+    B = rig.B if B is None else B
+    segs = rig.segs_for(A, B)
     tfs = [t for t in rig.tfs if cfg['tf_lo'] <= t <= cfg['tf_hi']]
     FL, FH = cfg['fence_lo'], cfg['fence_hi']
     # --- step 2: the v3 rows ---
@@ -149,7 +160,7 @@ def run(rig, cfg):
         sw = rig.sideways(tf, cfg)
         r = rig.R[tf]
         q = sw & np.isfinite(r) & ((r < FL) | (r > FH))
-        for (a_, b_, d) in rig.segs:
+        for (a_, b_, d) in segs:
             if not d: continue
             seg = q[a_:b_ + 1]
             j = int(np.argmax(seg)) if seg.any() else None
@@ -178,7 +189,7 @@ def run(rig, cfg):
         cc = (lambda i, _d=d: float(rig.CC[i] * _d))
         p, conf = release(cc, m['i0'], m['i1'], lag, last_bar=rig.n - 1)
         ex = coil_exit.resolve(m, p, conf, LEGS[d], lag, look, bool(cfg['gap_fill']))
-        if ex['rev'] is None or not (rig.A <= int(ex['rev']) <= rig.B): continue
+        if ex['rev'] is None or not (A <= int(ex['rev']) <= B): continue
         brk = m['brk'] if m['brk'] is not None else m['i1']
         e = max(brk, int(ex['rev']), int(ex['actionable']))
         k = int(ex['rev'])
@@ -187,7 +198,7 @@ def run(rig, cfg):
     # --- step 5 + 6 ---
     opens = sorted(k for k in EMIT if rig.gate_open(k))
     if not opens: return None
-    T, _ = twalk(opens, rig.DRW, min(opens), rig.B)
+    T, _ = twalk(opens, rig.DRW, min(opens), B)
     if not T: return None
     # --- step 7: score at the emit bar ---
     keep, miss = [], 0
@@ -208,7 +219,18 @@ def run(rig, cfg):
                 lag_med=lagm[len(lagm) // 2], lag_max=lagm[-1])
 
 
+# THREE INDEPENDENT WINDOWS over the 94.5 days of tape the line cache holds. The 5-day leash
+# window was never a data limit - this harness reads the line cache, not the leash bank - and a
+# 5-day sample is what let the span/slope grid produce a winner with ZERO out-of-sample
+# correlation. Joe 0929: "read from full datasets (as opposed to sampling)".
+WINDOWS = [('W1 06-10..07-20', 1781049600000, 1784505600000),
+           ('W2 07-20..08-29', 1784505600000, 1787961600000),
+           ('W3 08-29..09-08', 1787961600000, 1788825600000)]
+
 GRIDS = {
+    'wide': [dict(BASE, span=sp, slope=sl)
+             for sp in (5, 6, 7, 8, 9, 10, 12, 14)
+             for sl in (0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.60, 0.80)],
     'base': [dict(BASE)],
     'span_slope': [dict(BASE, span=s, slope=sl)
                    for s in (4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 20, 25, 30)
@@ -246,6 +268,8 @@ def main():
     ap.add_argument('--grid', required=True)
     ap.add_argument('--out', default='/home/joe/thecodes/docs/sweeps/results.jsonl')
     ap.add_argument('--from-ms', type=int); ap.add_argument('--to-ms', type=int)
+    ap.add_argument('--multiwin', action='store_true',
+                    help='score every config on all three WINDOWS instead of one')
     o = ap.parse_args()
     win = (o.from_ms, o.to_ms) if o.from_ms and o.to_ms else None
     rig = Rig(win)
@@ -257,21 +281,27 @@ def main():
     t0 = time.time()
     with open(o.out, 'a') as fh:
         for i, cfg in enumerate(g, 1):
-            try:
-                res = run(rig, cfg)
-            except Exception as ex:
-                print('G|%d|ERROR %s' % (i, ex), flush=True); continue
-            if res is None:
-                print('G|%d|%s|no trades' % (i, cfg['span']), flush=True); continue
-            fh.write(json.dumps({'grid': o.grid, 'win_from': rig.A, 'win_to': rig.B,
-                                 **{k: cfg[k] for k in BASE}, **res}) + '\n')
-            fh.flush()
-            print('G|%d|%d|%.2f|%d|%.1f|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d (%.1f%%)|%.3f|%.3f|%+.3f|%.1f|%.1f'
-                  % (i, cfg['span'], cfg['slope'], cfg['samples'], cfg['fence_lo'],
-                     cfg['support_min'], cfg['tf_lo'], cfg['tf_hi'], cfg['confirm_lag_s'],
-                     cfg['lookback_s'], cfg['boundary_xwob'], res['sig_bars'], res['gated_out'],
-                     res['trades'], res['win'], res['pct'], res['mae'], res['mfe'], res['net'],
-                     res['lag_med'], res['lag_max']), flush=True)
+            wins = WINDOWS if o.multiwin else [(None, None, None)]
+            for wname, wa, wb in wins:
+                A = None if wa is None else int(np.searchsorted(rig.ts, wa))
+                B = None if wb is None else min(int(np.searchsorted(rig.ts, wb)), rig.n - 1)
+                try:
+                    res = run(rig, cfg, A, B)
+                except Exception as ex:
+                    print('G|%d|%s|ERROR %s' % (i, wname, ex), flush=True); continue
+                if res is None:
+                    print('G|%d|%s|no trades' % (i, wname), flush=True); continue
+                fh.write(json.dumps({'grid': o.grid, 'window': wname or 'default',
+                                     'win_from': A if A is not None else rig.A,
+                                     'win_to': B if B is not None else rig.B,
+                                     **{k: cfg[k] for k in BASE}, **res}) + '\n')
+                fh.flush()
+                print('W|%3d|%-16s|span %2d slope %.2f samp %2d fnc %.0f sup %2d|%4d tr|%3d (%.1f%%)'
+                      '|MAE %.3f|MFE %.3f|NET %+.3f|lag %.1f'
+                      % (i, wname or 'default', cfg['span'], cfg['slope'], cfg['samples'],
+                         cfg['fence_lo'], cfg['support_min'], res['trades'], res['win'],
+                         res['pct'], res['mae'], res['mfe'], res['net'], res['lag_med']),
+                      flush=True)
     print('G|done|%.0fs' % (time.time() - t0), flush=True)
 
 
