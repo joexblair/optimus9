@@ -53,8 +53,9 @@ for m in coil_moments(ann):
     sig = int(ex['rev'])
     if not (A <= sig <= B): continue
     brk = int(m['brk'] if m['brk'] is not None else m['i1'])
-    withb = max(brk, sig, int(ex['actionable']))
-    without = max(sig, int(ex['actionable']))
+    act = int(coil_exit.fired(ex)[1])
+    withb = max(brk, sig, act)
+    without = max(sig, act)
     # LEGITIMATE: drop brk ONLY where resolve never reads the moment's end. On CONFIRMED it reads
     # only the release bar and the legs. On LOOKBACK rev IS i1 and on GAP named IS i1, so those
     # cannot be emitted before the break - you would be claiming to know the moment ended.

@@ -101,7 +101,7 @@ def emit_bar(m, ex, lag_bars, settled):
     passed; `settled` additionally waits for the confirm window to be unclipped.
     """
     brk = m['brk'] if m['brk'] is not None else m['i1']
-    b = max(brk, ex['rev'], ex['actionable'])
+    b = max(brk, ex['rev'], coil_exit.fired(ex)[1])
     return max(b, m['i1'] + lag_bars) if settled else b
 
 
@@ -116,9 +116,9 @@ for j in range(len(ann)):
         d = m['dr']
         p, conf = release(mkcc(d), m['i0'], m['i1'], lag, last_bar=k)
         ex = coil_exit.resolve(m, p, conf, legs_at(d, k), lag, look, bool(C['gap_fill']))
-        if ex['rev'] is None or ex['rev'] > k or ex['actionable'] > k:
+        if ex['rev'] is None or ex['rev'] > k or coil_exit.fired(ex)[1] > k:
             continue                                   # not resolvable yet - this is latency
-        ansr = (ex['rev'], ex['actionable'], ex['via'])
+        ansr = (ex['rev'], coil_exit.fired(ex)[1], ex['via'])
         for mode in ('eager', 'settled'):
             if mode == 'settled' and k < m['i1'] + lag:
                 continue
@@ -133,7 +133,7 @@ for j in range(len(ann)):
 
 # the historical full-window answer, for coverage
 _t, hist = RCE.walk(db, C, knobs, w0, w1)
-H = {r['mo']['i0']: (r['rev'], r['actionable'], r['via']) for r in hist}
+H = {r['mo']['i0']: (r['rev'], coil_exit.fired(r)[1], r['via']) for r in hist}
 print()
 print('S|mode|moments emitted|of %d historical|REVISIONS|matches history|differs from history' % len(H))
 for mode in ('eager', 'settled'):

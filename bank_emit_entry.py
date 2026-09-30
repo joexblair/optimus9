@@ -84,7 +84,7 @@ EMIT = {}
 for h in hist:
     if h['rev'] is None: continue
     m = h['mo']; brk = m['brk'] if m['brk'] is not None else m['i1']
-    e = max(brk, int(h['rev']), int(h['actionable'])); k = int(h['rev'])
+    e = max(brk, int(h['rev']), int(coil_exit.fired(h)[1])); k = int(h['rev'])
     if k not in EMIT or e < EMIT[k]: EMIT[k] = e
 fence = (float(Ct['rule1_fence_lo']), float(Ct['rule1_fence_hi']))
 oob = (float(Ct['oob_lo']), float(Ct['oob_hi']))

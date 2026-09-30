@@ -141,7 +141,7 @@ def main(argv=None):
         kn = knob_string(C); win = '%s..%s' % (w0, w1)
         payload = [dict(n=r['n'], source=('CONFIRM' if r['via'] == coil_exit.CONFIRMED else 'END'),
                         dr=r['mo']['dr'],
-                        act_utc=U(r['actionable']), act_ms=int(ts[r['actionable']]),
+                        act_utc=U(coil_exit.fired(r)[1]), act_ms=int(ts[coil_exit.fired(r)[1]]),
                         sig_utc=(U(r['rev']) if r['rev'] is not None else None),
                         sig_ms=(int(ts[r['rev']]) if r['rev'] is not None else None),
                         rows=r['mo']['rows'],
@@ -178,10 +178,11 @@ def main(argv=None):
         tally[r['via']] = tally.get(r['via'], 0) + 1
         src = 'CONFIRM' if r['via'] == coil_exit.CONFIRMED else 'END'
         rev = T(r['rev']) if r['rev'] is not None else '-'
-        gap = str((r['rev'] - r['actionable']) * C['grid_s']) if r['rev'] is not None else '-'
-        vals = (r['n'], src, '%+d' % mo['dr'], T(r['actionable']), rev, mo['rows'], T(mo['i0']),
+        act = coil_exit.fired(r)[1]
+        gap = str((r['rev'] - act) * C['grid_s']) if r['rev'] is not None else '-'
+        vals = (r['n'], src, '%+d' % mo['dr'], T(act), rev, mo['rows'], T(mo['i0']),
                 T(r['named']), '%.1f' % cc(r['named']), gap, T(r['base']),
-                (r['base'] - r['actionable']) * C['grid_s'], '%.1f' % cc(r['actionable']))
+                (r['base'] - act) * C['grid_s'], '%.1f' % cc(act))
         print('|'.join(str(v) for v in vals) if o.md else
               '  %-4d %-8s %4s %-19s %-19s %5d %-19s %-19s %9s %9s %-19s %11d %9s' % vals)
     if not o.md:

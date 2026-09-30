@@ -52,7 +52,7 @@ def build_pairs(rig):
         # at its BREAKING row, and `rev` and `actionable` must both have passed. `settled` waits
         # for the confirm window to be unclipped as well.
         brk = m['brk'] if m['brk'] is not None else m['i1']
-        eager = max(brk, int(ex['rev']), int(ex['actionable']))
+        eager = max(brk, int(ex['rev']), int(coil_exit.fired(ex)[1]))
         settled = max(eager, int(m['i1']) + lag)
         out.append((named, eager, settled))
     return out

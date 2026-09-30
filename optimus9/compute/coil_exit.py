@@ -50,6 +50,39 @@ import numpy as np
 
 LOOKBACK, GAP, FORWARD, CONFIRMED = 'lookback', 'gap', 'forward', 'confirmed'
 
+ACT = ('actionable_confirmed', 'actionable_lookback', 'actionable_gap', 'actionable_forward')
+"""THE FOUR ACTIONABLE FIELDS. Joe 0930, after ten turns of questions about `actionable` each having
+four correct answers: *"it needs to be split. I'd retain `actionable_` as a prefix and tack the mech's
+usage as the suffix"*.
+
+There used to be ONE `actionable` key carrying four unrelated events - a release bar + confirm_lag_s,
+a v3 row, a cross + boundary_xwob, and a different v3 row. Any statement about it was true on one
+branch and false on three, and the branch was never in the sentence.
+
+Now each branch writes its OWN field and the other three are None, so a reader cannot take the value
+without taking the mech with it:
+
+    actionable_confirmed   the coil release bar + confirm_lag_s 180 s.  THE ONLY ONE WITH THE 180 s
+    actionable_lookback    the moment's end row - a v3 row
+    actionable_gap         a ws1mage-rev `sig_conf` = its cross + boundary_xwob - 1 = +15 s
+    actionable_forward     the bar the moment's end becomes knowable - a v3 row
+
+`fired(ex)` returns (field_name, bar) for whichever one this moment set. A caller that wants the bar
+takes the name with it.
+"""
+
+
+def fired(ex):
+    """-> (field name, bar) for the one `actionable_*` this moment set. Never a bare number."""
+    for k in ACT:
+        if ex.get(k) is not None:
+            return k, int(ex[k])
+    raise ValueError('no actionable_* field set: %r' % (ex,))
+
+
+def _blank():
+    return {k: None for k in ACT}
+
 
 def _knowable(legs, lo, hi, by):
     """ws1mage-rev events whose CROSS sits in [lo, hi] and whose sig_conf is at or before `by`.
@@ -84,12 +117,13 @@ def resolve(moment, pick, confirmed, legs, lag_bars, lookback_bars, gap_fill=Tru
 
     `pick`/`confirmed` come from coil_moment.release. `legs` is jig.ws1mage_rev()[dr].
     -> dict: named (the bar the rule anchors on), base (the actionable before the bolt-on),
-             actionable, rev (the validating bar, or None), via.
+             ONE of the four `actionable_*` fields with the other three None, rev (the validating
+             bar, or None), via. Use `fired(ex)` to get (field name, bar) together.
     """
     if confirmed:
         named = pick
         base = pick + lag_bars
-        return dict(named=named, base=base, actionable=base,
+        return dict(_blank(), named=named, base=base, actionable_confirmed=base,
                     rev=first_forward(legs, base), via=CONFIRMED)
 
     named = moment['i1']
@@ -97,13 +131,15 @@ def resolve(moment, pick, confirmed, legs, lag_bars, lookback_bars, gap_fill=Tru
 
     hit = _knowable(legs, named - lookback_bars, named, named)
     if hit:
-        return dict(named=named, base=base, actionable=named, rev=named, via=LOOKBACK)
+        return dict(_blank(), named=named, base=base, actionable_lookback=named,
+                    rev=named, via=LOOKBACK)
 
     if gap_fill:
         inside = _knowable(legs, named + 1, base, base)
         if inside:
             first = inside[0][1]              # the FIRST cross after `named`, at ITS conf bar
-            return dict(named=named, base=base, actionable=first, rev=first, via=GAP)
+            return dict(_blank(), named=named, base=base, actionable_gap=first,
+                        rev=first, via=GAP)
 
-    return dict(named=named, base=base, actionable=base,
+    return dict(_blank(), named=named, base=base, actionable_forward=base,
                 rev=first_forward(legs, base), via=FORWARD)

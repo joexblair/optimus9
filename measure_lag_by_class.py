@@ -54,7 +54,7 @@ def main():
         named = int(ex['rev'])
         if not (A <= named <= B): continue
         brk = m['brk'] if m['brk'] is not None else m['i1']
-        emit = max(brk, int(ex['rev']), int(ex['actionable']))
+        emit = max(brk, int(ex['rev']), int(coil_exit.fired(ex)[1]))
         by.setdefault(ex['via'], []).append((named, emit))
         named_all.append(named); emit_all.append(emit)
 

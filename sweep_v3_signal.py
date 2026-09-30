@@ -219,7 +219,7 @@ def run(rig, cfg, A=None, B=None):
         ex = coil_exit.resolve(m, p, conf, LEGS[d], lag, look, bool(cfg['gap_fill']))
         if ex['rev'] is None or not (A <= int(ex['rev']) <= B): continue
         brk = m['brk'] if m['brk'] is not None else m['i1']
-        e = max(brk, int(ex['rev']), int(ex['actionable']))
+        e = max(brk, int(ex['rev']), int(coil_exit.fired(ex)[1]))
         k = int(ex['rev'])
         if k not in EMIT or e < EMIT[k]: EMIT[k] = e
     if not EMIT: return None

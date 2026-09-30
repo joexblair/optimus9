@@ -89,7 +89,7 @@ def run(rig, cfg, ann, LEGS, lag, look, unbounded):
         sig = int(ex['rev'])
         if not (A <= sig <= B): continue
         brk = m['brk'] if m['brk'] is not None else m['i1']
-        emit = max(int(brk), sig, int(ex['actionable']))
+        emit = max(int(brk), sig, int(coil_exit.fired(ex)[1]))
         out.append((sig, emit, ex['via']))
     return len(ms), out
 
