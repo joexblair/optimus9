@@ -20,6 +20,9 @@ Banked 2026-09-20.
 | `divergence_step2_20260921.txt` | its output, ws3r and ws4r, 32 v7 signals on 09-01 |
 | `build_all_wsf_flatruns.py` | builds and fills the `all_wsf_flatruns` table |
 | `all_wsf_flatruns_20260922.txt` | its output, 242 rows |
+| `build_all_wsf_flatrun_grid.py` | the same `flatrun` cell on an 8-minute grid — `all_wsf_flatrun_grid`, 180 anchors x ws4r..ws23r, Joe 0930 |
+| `build_ws5mage_sig_backing.py` | which banked signals sit on a ws5Mage oob run — `ws5mage_sig_backing`, 68 rows, 09-01 → 09-03, Joe 0930 |
+| `update_ws5mage_sig_backing_latch.py` | adds the ARM LATCH columns to that table — set on dwell, cancelled by a ws5Mage 50-cross, Joe 0930 |
 
 ## The wsf_leash report
 
