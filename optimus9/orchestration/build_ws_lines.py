@@ -72,7 +72,25 @@ from optimus9.orchestration.rpl_cache import cache_jig_perline
 # THE FRONT SLIDES, as documented above: the window becomes 2026-06-05 12:00 -> 2026-09-07 23:59:55,
 # still 29 days inside kline_collection's 2026-05-07 start. HOURS 40 and WARMUP 1114 unchanged, so
 # the tape stays 1,632,960 bars.
-TAPE_END = dt.datetime(2026, 9, 8, 0, 0, tzinfo=timezone.utc)
+# TAPE_END MOVED AGAIN 0930, Joe: *"and you could build forward to today"* / *"3. both. I'm about
+# done for today so however long it takes to build is fine"*, after asking for a true OOS of
+# confirm_lag_s 165 and the unbounded-release change. WAS 2026-09-08 00:00.
+# WHY. 165 was chosen on 2026-06-10 -> 2026-09-08, which is essentially the whole 06-05 cache. There
+# was no held-out data in it. kline_collection runs 2026-05-07 -> today at 17,280 bars/day, so 55
+# days are unseen: 05-07 -> 06-10 at the front and 09-08 -> 09-29 at the back.
+# THE TAPE IS A FIXED 94.5-DAY WIDTH, so 145 days cannot be one tape. Two windows are used:
+#     END_MS 2026-08-09 12:00  ->  2026-05-07 00:00 -> 2026-08-09 11:59   ALREADY BUILT, 69/69 lines
+#     END_MS 2026-09-30 00:00  ->  2026-06-27 12:00 -> 2026-09-29 23:59   this move builds it
+# 00:00 AND NOT 12:00, for the same reason as 0908: kline_collection's 09-30 is still collecting -
+# 3,437 bars, to about 04:46 - so 09-30 12:00 is not available. The last bar is 2026-09-29 23:59:55,
+# so 09-29 holds 17,280 rows, one short of a full day's 17,281. 09-28 is the last complete day.
+# DATA CHECKED BEFORE THE MOVE: 09-08 00:00 -> 09-30 00:00 holds 380,160 rows against 380,160
+# expected at the 5 s grid, 0 non-5 s steps. And the whole 05-07 -> 09-30 span holds 2,522,880
+# against 2,522,880 - zero gaps anywhere in 146 days.
+# REVERSIBLE: cache files are keyed on END_MS, so the 06-05, 05-17 and 05-07 windows all stay on
+# disk. Moving this constant only changes which one the 26 importers read; moving it back restores
+# every number banked against the 06-05 window, including the 894 trades / +0.3911.
+TAPE_END = dt.datetime(2026, 9, 30, 0, 0, tzinfo=timezone.utc)
 END_MS = int(TAPE_END.timestamp() * 1000)
 HOURS = 40
 WARMUP = 1114
