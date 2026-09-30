@@ -110,6 +110,18 @@ class Rig:
         db = DatabaseManager(**get_db_config()); db.connect()
         _t, r1, r2, r3, g30r, xn, px, m1, mx = BWT.load(db, self.Ct)
         db.disconnect()
+        # THE TWO LOADERS MUST BE ON THE SAME BAR GRID. gate_open() indexes r1/r2/r3/g30r/px with a
+        # bar number derived from self.ts, which came from RCE.load. build_wsf_trades binds END_MS
+        # BY VALUE at import, so a process that walks more than one window and does not reload it
+        # gets a different tape here and rule#1 reads the r lines at the wrong bars - silently.
+        # 0930: oos_confirm_lag and score_5day_windows both did exactly that.
+        _t = np.asarray(_t, np.int64)
+        if len(_t) != n or not np.array_equal(_t, np.asarray(ts, np.int64)):
+            raise RuntimeError(
+                'Rig tape mismatch: report_coil_exit gave %d bars %d..%d, build_wsf_trades gave '
+                '%d bars %d..%d. Reload build_wsf_trades after changing END_MS.'
+                % (n, int(ts[0]), int(ts[-1]), len(_t),
+                   int(_t[0]) if len(_t) else -1, int(_t[-1]) if len(_t) else -1))
         self.r1, self.r2, self.r3, self.g30r, self.xn, self.px = r1, r2, r3, g30r, xn, px
         self.R = {tf: np.asarray(self.lines['ws%d' % tf]['r'], float) for tf in self.tfs}
         # the dr runs inside the window, verbatim from build_wsf_dtf_v3
