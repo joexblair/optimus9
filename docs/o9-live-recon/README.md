@@ -41,9 +41,15 @@ section describes the **pre-0929** scoring-cap mech and says MVP1 is blocked on 
 
 ## The one-line state
 
-### 1001 — THE MACHINE CHANGED. READ THIS BEFORE ANYTHING ELSE IN THIS PACKAGE
+### 1001 — THE MACHINE IS `octo-freedom`. READ THIS BEFORE ANYTHING ELSE IN THIS PACKAGE
 
-**THE SIGNAL IS `WALK FIRES FROM`, FROM `optimus9/compute/leash_walk.py`. IT IS NOT THE v7
+**THE MACHINE HAS A NAME AND IT IS JOE'S.** 1001: *"octo-freedom / it's now, it's the goal, and it's
+got a little bit of chinese numerology sneaked in the back pocket"*. Use it. The module names
+(`leash_walk`, `arm_state`) and the config key (`wtc_v4_v7_...`) predate the name and still carry
+the old wording — the key is not renamed because changing it moves what every banked row is written
+under, which is Joe's call, not a tidy-up.
+
+**`octo-freedom` EMITS `WALK FIRES FROM`, FROM `optimus9/compute/leash_walk.py`. IT IS NOT THE v7
 `wsl_sig_utc` CHAIN ANY MORE.** Joe 1001: *"there is no surviving mech that relies on `brk`, because
 our verified strategy uses `WALK FIRES FROM` as our one and only signal"* and *"the Joe has validated
 every row in this report, and has derived profit only from the `WALK FIRES FROM` timestamps,
