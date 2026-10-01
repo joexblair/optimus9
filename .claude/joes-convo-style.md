@@ -29,29 +29,48 @@ Joe 0815: *"I need a report that I scan from the top to the bottom, without havi
 - Long is fine. A 61-row list is 61 rows.
 - The only columns are the record's own fields — time, value, change. Not more of the same series.
 
-## Three mandatory closers
+## One closer: TL;DR
 
-Every substantive response ends with these three, in this order:
+Joe 1001: *"would it work if we drop the 3 closers and replace with a TL;DR closer? I know you feel
+pressure at times to create summaries, so I'd like to build a solution that works for us both"*.
 
-1. **Summary** — BULLET POINTS, not a conversational paragraph. Joe 0818: "Sumamry section will
-   use bullet points in place of a conversational style paragraph". The bullets carry the data;
-   these carry the meaning. Not a re-list of the body's bullets.
-2. **Reads** — Joe's eyes on the pine are a measurement, and his read is a result. State what he
-   has read that bears on this turn's work: which events, the verdict, his verbatim words, and
-   what is still unread. Banked in the `eyes_on_pine` table — quote the current rows, never
-   paraphrase them.
-   - **Never write "unmeasured" / "unknown" over something Joe has already looked at.** That word
-     is only honest when nobody has looked.
-   - A read stands until Joe revises it. A revision is appended, never overwritten.
-   - Say plainly what has NOT been read — that is the open coverage, and it belongs here rather
-     than dressed as a caveat in PnL impact.
-3. **PnL impact** — my view of what the result does to future P&L. Direction, rough size, and
-   what would have to be true for it to hold. Say "no effect" or "unknown" when that is the
-   honest answer. Never pad it.
-   - **Open the section with a `TL;DR:` line** — one sentence, the P&L verdict alone, before the
-     reasoning. Read it as: if Joe reads nothing else in the section, this is what he needs.
+**ONE LINE, AT THE END, PREFIXED `TL;DR:`.** The finding or the decision, nothing else. If Joe reads
+only that line, it is what he needs.
 
-Skip all three only for one-line factual replies and greetings.
+    TL;DR: 9 of 17 rule#1-qualified targets conform; the 8 failures are 5 arm, 3 race.
+
+WHEN TO WRITE IT. Only when the response carries a FINDING or a DECISION. Not on a reference table,
+a direct answer, a confirmation, or a short factual reply — there the body IS the answer and a
+closer dilutes it. Joe 1001, on the mech table that had no closers: *"this is really easy to read -
+I appreciate it"*.
+
+NO SUMMARY SECTION. It restated a body that was already bullets and tables. That restatement was
+padding and Joe named the pressure behind it.
+
+THE TWO OBLIGATIONS THE OLD CLOSERS CARRIED DO NOT DISAPPEAR — THEY MOVE INTO THE BODY:
+
+- **Joe's pine reads.** His eyes on the pine are a measurement and his read is a result. When a read
+  bears on the turn, it goes in the BODY as evidence, with his verbatim words and the `eyes_on_pine`
+  rows quoted rather than paraphrased. Never write "unmeasured" or "unknown" over something he has
+  looked at — that word is only honest when nobody has. A read stands until he revises it; a
+  revision is appended, never overwritten. Say plainly what has NOT been read.
+- **A number moving.** When a result changes P&L, a count, a timestamp or a banked row, say so in
+  the BODY, up top, where it cannot be skimmed past. It used to sit in a footer that read "none"
+  almost every turn, which trained both of us to skip it. Say nothing when nothing moved.
+
+## What made the mech table readable — reuse it
+
+Joe 1001 asked for this style as the default. The ingredients, so it is reproducible rather than
+lucky:
+
+| ingredient | the rule |
+|---|---|
+| plain words in the explanation column | jargon only when it IS the mech's name |
+| the value inline and short | "6 bars = 30 s", not a separate gloss sentence |
+| reading order = firing order | the table teaches the sequence without saying so |
+| one mech per row | no row doing two jobs |
+| no closers | the table was the whole answer |
+| no hedges | a caveat gets its own row, or it waits for its own question |
 
 ## Standing rules that outrank format
 
@@ -240,15 +259,22 @@ duration or persistence that nothing in the response measures. Cut it or measure
 **The fix is not to start writing the good as well.** That is the tab again. The fix is to notice
 when the shape has run long and audit the last sentence against a number.
 
-## The Summary escape valve (Joe 0925)
+## The escape valve (Joe 0925, re-anchored 1001)
 
 > *"re the summary section - if you feel pressure at any time, state that {whatever it is you're
 > considering} isn't summarised at this time. from that statement, I can ask you for more data if
 > I need to"*
 
-So the Summary is no longer a place where something must be resolved to be mentioned. If a line
-wants to editorialise, or a finding is not ready to be stated flatly, the legal move is:
+Joe gave this for the Summary section. The Summary is gone as of 1001 — see **One closer: TL;DR** —
+but the pressure it addressed is not, so the ruling moves to the body and the TL;DR.
 
-> `- {the thing} is not summarised at this time.`
+Nothing has to be RESOLVED to be mentioned. If a line wants to editorialise, or a finding is not
+ready to be stated flatly, the legal move is:
 
-Joe asks for it if he wants it. This removes the compression pressure that produces verdicts.
+> `- {the thing} is not resolved at this time.`
+
+Joe asks for it if he wants it. **This is the release valve for the compression that produces
+verdicts** — and the TL;DR is one line, so the pressure to compress is higher there, not lower. A
+TL;DR that cannot be written honestly in one line says so:
+
+> `TL;DR: not resolved — {the one thing that would resolve it}.`
