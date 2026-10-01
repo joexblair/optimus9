@@ -38,6 +38,18 @@ reaches `fall` on exactly that bar. This module carries the COUNTER form, and
 `test_leash_walk.py::test_qualify_counter_matches_the_sorted_form` holds the two against each other
 rather than asserting the equivalence.
 
+THE dr SERIES IS NOT `dr_latch`'s DEFAULT, AND THIS IS THE EASIEST THING TO GET WRONG. Joe 1001:
+*"it needs to use whatever built my validated WALK FIRES FROM timestamps"*. That series is the INLINE
+loop at `sweep_v3_signal.py:99-106` — ws1Mage + **ws13m** (hardcoded, NOT `latch_tf`), at **85/15**
+which is **oob**, with **no wob**. `dr_latch.latch()`'s module defaults are **75/25**
+(`dr_latch.py:33`), a different series. Banked as `walk_dr_*` in `wsf_trade_config` v4 so a live
+producer has the recipe rather than a loop to copy. A producer that calls `dr_latch.latch(g1, m13,
+i0, i1)` without passing `hi=85.0, lo=15.0` gets the wrong dr, and the walk inherits it everywhere.
+
+`rig.DRW` — `latch_wob` at 75/25 wob 8 — is a DIFFERENT series again, and it is what `rule1_gate`
+reads inside `Rig.gate_open`. Two series in one mech is the documented v7 precedent (`OPEN.md`:
+*"This is intended, not a bug to fix"*) and Joe 1001 confirmed it stands for the walk.
+
 CAUSAL. `step` reads bar k and k-1 from its inputs, the trailing `lb_bars` of flat-run starts it has
 already seen, and its own carried state. Nothing ahead of k.
 """

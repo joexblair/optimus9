@@ -107,6 +107,16 @@ _WALK = [
      'Joe 0930: "allow for flat-runs that have completed their race in a {knob:4 minute} lookback"'),
     ('walk_ladder_lo', '4', 'ws4. the walk ladder, ascending', 'Joe 0930, the mech-dev ladder'),
     ('walk_ladder_hi', '23', 'ws23', 'Joe 0930, the mech-dev ladder'),
+    ('walk_dr_line_a', 'ws1Mage', 'the dr latch pair, first line',
+     'Joe 1001: "it needs to use whatever built my validated WALK FIRES FROM timestamps"'),
+    ('walk_dr_line_b', 'ws13m', 'the dr latch pair, second line. HARDCODED as ws13 in Rig, NOT '
+     'read from latch_tf', 'Joe 1001, same ruling. sweep_v3_signal.py:98'),
+    ('walk_dr_fence_lo', '15.0', 'r points. THIS IS oob 15/85, NOT the Mage fence 25/75',
+     'Joe 1001, same ruling. sweep_v3_signal.py:103 - hardcoded 15.0'),
+    ('walk_dr_fence_hi', '85.0', 'r points. oob, not the Mage fence',
+     'Joe 1001, same ruling. sweep_v3_signal.py:102 - hardcoded 85.0'),
+    ('walk_dr_wob', '0', 'bars. NO wob - it latches on the FIRST bar both lines agree',
+     'Joe 1001, same ruling. sweep_v3_signal.py:99-106 has no wob'),
     ('walk_rule1_back_min', '5.0', 'minutes BACK -> 60 bars. the walk only, NOT rule1_back_min',
      'Joe 1001, asked 5 or 7 for this row: "5". Overrides 7.0 for the walk. NEVER OOS d'),
 ]

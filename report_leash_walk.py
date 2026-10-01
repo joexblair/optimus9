@@ -49,6 +49,7 @@ sys.stderr = _e
 import walk_mom_models as W  # noqa: E402
 from optimus9.analysis.jig import ws1mage_rev  # noqa: E402
 from optimus9.compute import trade_config as TC  # noqa: E402
+from optimus9.compute.dr_latch import latch as dr_latch  # noqa: E402
 from optimus9.compute.leash_walk import rev_lookback_mask, walk  # noqa: E402
 from optimus9.compute.momo_seam import seam_mask  # noqa: E402
 from optimus9.compute.test_points import flat_run_at  # noqa: E402
@@ -120,6 +121,25 @@ def main():
           % (knobs['rev_lookback'], rig.C['lookback_s'], r1_back, cfg['walk_rule1_back_min']))
     print('K|tape END_MS %s|day %s|bars %d..%d'
           % (VALIDATION_END.strftime('%Y-%m-%d %H:%M'), a.day, k0, k1))
+
+    # --- THE dr RECIPE PROVES ITSELF -------------------------------------------------------------
+    # Joe 1001: "it needs to use whatever built my validated WALK FIRES FROM timestamps". That is
+    # the INLINE loop at sweep_v3_signal.py:99-106, not dr_latch's 75/25 defaults. v4 banks the
+    # recipe as walk_dr_*; this rebuilds it from those rows and asserts it reproduces rig.DR, so a
+    # live producer can follow the config instead of copying a loop. Without this the recipe is a
+    # claim, which is the fastverdict.verify() failure again.
+    _la, _ra = cfg['walk_dr_line_a'][:-4], 'Mage'
+    _lb, _rb = cfg['walk_dr_line_b'][:-1], 'm'
+    _dr = dr_latch(np.asarray(rig.lines[_la][_ra], float),
+                   np.asarray(rig.lines[_lb][_rb], float), 0, rig.n - 1,
+                   hi=float(cfg['walk_dr_fence_hi']), lo=float(cfg['walk_dr_fence_lo']))
+    _diff = int((np.asarray(_dr, np.int8) != np.asarray(rig.DR, np.int8)).sum())
+    print('D|dr recipe %s + %s at %s/%s wob %s|rebuilt vs rig.DR: %d of %d bars differ'
+          % (cfg['walk_dr_line_a'], cfg['walk_dr_line_b'], cfg['walk_dr_fence_lo'],
+             cfg['walk_dr_fence_hi'], cfg['walk_dr_wob'], _diff, rig.n))
+    if _diff:
+        print('M|FAIL|the v4 dr recipe does not reproduce the dr the walk uses')
+        return 1
 
     mfr = float(rig.C['momo_fence_r'])
     fence = (mfr, 100.0 - mfr)
