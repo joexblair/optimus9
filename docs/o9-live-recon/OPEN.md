@@ -44,6 +44,28 @@
 | **the walk's rule#1 lookback is 5.0 min** | Joe 1001, asked 5 or 7 for the config row: *"5"*. `walk_rule1_back_min` in v4. `rule1_back_min` stays 7.0 for the v7 chain. The 5-min value is load-bearing — it changes the gate on 4 of 17 sampled bars — and has **never been OOS d** |
 | **`TC.V` STAYS 3** | bumping it to 4 would move `key()` for `sweep_v3_signal`, `measure_live_stop` and `build_wsf_trades`. Joe 1001 accepted this as stated. The walk loads `TC.WALK_V` explicitly |
 | **MVP1's one job** | Joe 1001: *"MVP1 for o9-live is ensuring the backtest signals matches the live signal"*. Not edge, not size, not fills |
+| **THE DRAG IS MEASURED LIVE AND ASSUMED IN THE BACKTEST. DO NOT COMPARE THE TWO NETS WITHOUT THIS ROW.** | Joe 1001: *"the good thing about o9-live is the drag becomes accurate - bybit's fees are set, slippage is measured by the orderbook's bps"*. The backtest's 0.1975% per trade is TWO different kinds of number and only one of them is real: |
+
+| drag component | the BACKTEST | o9-live |
+|---|---|---|
+| taker fee | **2 x 5.50 bps = 11.0 bps**, a set rate (`docs/mage_cascade_findings.md:307`) | **the same set rate.** Identical, nothing to reconcile |
+| slippage | **8.75 bps round trip** — ONE measurement, taken at 22,000 coins, applied FLAT to every trade regardless of size or book depth | **measured per fill from the orderbook, in bps, at the actual size** |
+| total | 19.75 bps = **0.1975%** | fee + whatever the book gave, per trade |
+
+**WHAT THAT MEANS WHEN P&L IS REPORTED ON BOTH SIDES.** A backtest net carries an assumed slippage;
+an o9-live net carries a measured one. They are not the same quantity and a divergence between them
+is not automatically a defect — it may be the book. **Report the two separately and say which drag
+each carries.** The fee half is identical on both sides, so any drag divergence is slippage.
+
+**THIS DOES NOT REOPEN SLIPPAGE MODELLING IN THE BACKTEST.** Joe 0929 ruled *"Do NOT model
+slippage. Measure divergence FROM the spec"*, and `RECON.md` carries it. The two rulings are
+consistent: do not invent a slippage model offline, DO read the real thing live. The backtest keeps
+the flat 8.75 bps.
+
+**AND IT IS NOT AN EXPLANATION.** A measured orderbook bps is evidence. Reaching for slippage to
+explain a result nobody measured is the bias the P&L ban existed to stop — it locates failure
+outside the mechanics instead of inside them.
+
 | **signals become TRADE ACTIONS** | Joe 1001, asked whether MVP1's producer runs the three exits or emits signals only: *"yes - signals become trade actions, so that we see the o9-live mechs simulating real trading and real pnl results"*. So the producer feeds `trade_walk.walk()` and o9-live reports P&L. **Nothing in the repo connects `WALK FIRES FROM` bars to `trade_walk` yet** - the 09-01 MAE/MFE came from a scratch `mae.py` that no longer exists |
 | **the live walk re-walks a BOUNDED WINDOW every bar** | Joe 1001, on whether to carry state live instead: *"if it's dr related and one option has an inability to sync backtest to live, then we must take the other option (so that recon can be accurate)"*. MEASURED, and it makes the choice free: the longest unbroken dr stretch across the whole 94.5-day tape is **7.2 h** (5,175 bars) against **2,487** dr changes, median 0.7 h, p90 1.9 h, and **0 of 2,487** reach even 24 h. `StrategyLoop`'s 104-hour window therefore ALWAYS contains a dr change - 14x the longest stretch - so the bounded re-walk converges to the backtest's dr and keeps its self-healing property. Joe 1001: *"there will never be a 4 day stretch on an unbroken dr. prove me wrong"* - 0 of 2,487 reach 4 days |
 

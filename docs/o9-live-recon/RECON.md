@@ -147,6 +147,13 @@ Both series are causal, so this is not a lookahead. It matters because the event
 licensed "intrabar movement is already resolved at the 5 s grid". **Do NOT model slippage — Joe
 0929 ruled it — but do not justify that with a series the stop does not read.**
 
+**DO NOT MODEL IT OFFLINE; DO MEASURE IT LIVE.** Joe 1001: *"the good thing about o9-live is the
+drag becomes accurate - bybit's fees are set, slippage is measured by the orderbook's bps"*. The two
+rulings are consistent — no invented slippage model in the backtest, which keeps its flat 8.75 bps
+round trip from one 22,000-coin measurement; the real thing read from the book live. The taker fee,
+2 x 5.50 bps, is a set rate and identical on both sides, so any drag divergence is slippage. See
+`OPEN.md`'s drag demarcation row before comparing a backtest net to an o9-live net.
+
 Every recon job must check, per stopped trade:
 
 1. did o9-live place a stop at all, and at what level

@@ -32,6 +32,14 @@ compare entry price, exit price, fill price or slippage. `RECON.md`'s four misma
 **What MVP2 adds:** a fifth class. Entry/exit price divergence between o9-live's fills and the
 backtest's `pxs` reads, reported separately from selection, exactly as the other four are.
 
+**AND THE SLIPPAGE HALF OF THE DRAG BECOMES MEASURED, WHICH IS THE POINT OF PRICE RECON.** Joe 1001:
+*"the good thing about o9-live is the drag becomes accurate - bybit's fees are set, slippage is
+measured by the orderbook's bps"*. The backtest's 0.1975% per trade is 2 x 5.50 bps taker fee (a set
+rate, identical on both sides) plus **8.75 bps round-trip slippage taken from ONE measurement at
+22,000 coins and applied flat to every trade** (`docs/mage_cascade_findings.md:307`). Price recon
+replaces that flat figure with the book's own bps, per fill, at the actual size. Until then a
+backtest net and an o9-live net are not the same quantity — see `OPEN.md`'s drag demarcation row.
+
 **ONE CHECK IN PARTICULAR, AND IT IS NOT IN MVP1's LIST.** The stop is a percentage of the ENTRY
 price, and the two sides do not agree on what the entry price is:
 
