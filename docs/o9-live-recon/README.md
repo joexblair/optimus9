@@ -117,9 +117,15 @@ that produced its reported numbers live in a job-scoped scratch directory that w
 those numbers are a written record, not a checkable result. The record is
 `docs/22_go_20260921/NOTES_momtf_mechdev.md`.
 
-**rule#1's lookback for the recon is `rule1_back_min` 7.0, read from `wsf_trade_config` v3.** A
+**SUPERSEDED 1001. Every clause below is now false and it is struck rather than deleted so a reader
+who saw it knows it moved.** `octo-freedom` reads `walk_rule1_back_min` **5.0 min = 60 bars** from
+`wsf_trade_config` **v4** (`trade_config.py:120`), Joe 1001 asked 5 or 7 and ruled *"5"*. It IS in
+the config. Writing it did NOT void the bank — `TC.V` stays 3 and v4 lands beside it, which is the
+whole point of `WALK_V`. It is still **never OOS'd**, and that part stands.
+
+~~rule#1's lookback for the recon is `rule1_back_min` 7.0, read from `wsf_trade_config` v3. A
 5-minute override was used in mech-dev only. It is not in the config, not in `trade_config.key()`,
-and has **never been OOS'd**. The recon reads the config.
+and has never been OOS'd. The recon reads the config.~~
 
 ### 0929-late
 

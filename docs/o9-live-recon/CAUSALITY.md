@@ -1,5 +1,52 @@
 # The causality audit
 
+> **1001 — THE MACHINE IS `octo-freedom`, AND ITS AUDIT IS THE SECTION DIRECTLY BELOW.**
+> Everything after that section is the **v7 `wsl_sig_utc` chain's** audit. It is the historical
+> record. In particular its *"THE ENTRY BAR IS THE ONE LOOKAHEAD IN THE HEADLINE NUMBER"* section is
+> about `measure_live_stop`'s entry bar on the v7 chain — **not** about `octo-freedom`, which has no
+> such bar. Do not carry that verdict across.
+
+## 1001 — `octo-freedom`'s causality audit
+
+The machine is `optimus9/compute/arm_state.py` + `leash_walk.py`. Every read in both modules'
+`step()`, enumerated from source and re-derived independently twice by the port validation:
+
+| module | what it reads | verdict |
+|---|---|---|
+| `arm_state.ArmState.step` | `mage[k]`, `mage[k-1]`, `dr[k]`, `dr[k-1]`, carried `_run`/`live`/`arm`/`arm_dr` | **CAUSAL** |
+| `arm_state.warmup_from` | `m[j]`, `m[j-1]` walking BACK from k | **CAUSAL** |
+| `leash_walk` the turn | `cc[k]`, `cc[k-1]`, `arm_dr`, `arm_bar` | **CAUSAL** |
+| `leash_walk` the qualify | `mom(t)` at k, carried `_seen_mom`/`_departed`/`_ndep` | **CAUSAL** |
+| `leash_walk` the race | `fr(t)` at k, carried `_fr_prev`/`_fr_starts`, the window `[k - lb_bars, k]` | **CAUSAL** |
+| `leash_walk` the emit test | carried `_turn`/`_qual`, `_fr_starts`, `rev_ok` at k | **CAUSAL** |
+| `leash_walk.walk` | `m[k]`, `m[k-1]`, `d[k]`, `d[k-1]`, `c[k]`, `c[k-1]`, `rev_mask[dr][k]` | **CAUSAL** |
+
+**NO LOOKAHEAD IN EITHER MODULE.** Both steppers also raise on a skipped bar, so a caller cannot
+silently carry stale state across a gap.
+
+ONE DEFERRED CONSTRUCT, and it is the same discipline this file audits for the v7 chain:
+
+| construct | what it reads past the event | why DEFERRED, not LOOKAHEAD |
+|---|---|---|
+| `leash_walk.rev_lookback_mask` | a ws1mage-rev cross stamped at `sig` is only decidable at `sig_conf = sig + boundary_xwob - 1` = 3 bars = 15 s | the mask is False until `conf <= k` — `a = max(conf, sig)`. It is exactly `coil_exit._knowable(legs, k - lookback, k, k)`, and `tests/test_leash_walk.py::Q2` holds the two against each other bar for bar: **3,000 bars, 0 disagree** |
+
+**THE ARM'S WARMUP IS BOUNDED, AND THAT IS WHAT MAKES IT LIVE-SAFE.** A MID cross resets every field,
+so the state at bar k is determined by the bars since the last MID cross. `warmup_from` returns that
+bar. Measured: `warmup_from(12:00:00)` on 09-01 = 1,187 bars = 98.9 min, and seeding 3 h earlier
+gives a bit-identical day. **Stated honestly:** `tests/test_arm_state.py::P1` checks that whatever
+`warmup_from` returns is SUFFICIENT — it does not prove the bound is tight, and its fixture has 0 of
+50 MID crosses landing out of bounds, so the reset line is not exercised by it. `warmup_from` also
+has no caller in the mech yet; the acceptance test starts the arm cold at midnight.
+
+**THE dr SERIES IS THE EASIEST THING TO GET WRONG.** `octo-freedom` reads the oob **85/15 no-wob**
+latch built inline at `sweep_v3_signal.py:99-106` — ws1Mage + ws13m, `'ws13'` hardcoded. rule#1 reads
+`rig.DRW`, the Mage **75/25 wob 8** `latch_wob` series. Two series in one mech, which is the
+documented v7 precedent and which Joe 1001 confirmed stands. `dr_latch.latch()`'s module defaults are
+75/25 — a producer that calls it without `hi=85.0, lo=15.0` gets the wrong dr. Banked as `walk_dr_*`
+in `wsf_trade_config` v4, and `report_leash_walk.py` rebuilds the series from those rows and asserts
+it: **0 of 1,632,960 bars differ**.
+
+
 Joe 0929: *"make sure everything is causal. meticulously review the code for non-causal behaviour,
 and walk the code by hand to confirm"*, then *"have you walked the producers for causality?"* — the
 honest answer at that moment was no, only the trade chain. Both halves are walked now.

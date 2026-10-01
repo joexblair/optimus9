@@ -112,9 +112,9 @@ _WALK = [
     ('walk_dr_line_b', 'ws13m', 'the dr latch pair, second line. HARDCODED as ws13 in Rig, NOT '
      'read from latch_tf', 'Joe 1001, same ruling. sweep_v3_signal.py:98'),
     ('walk_dr_fence_lo', '15.0', 'r points. THIS IS oob 15/85, NOT the Mage fence 25/75',
-     'Joe 1001, same ruling. sweep_v3_signal.py:103 - hardcoded 15.0'),
+     'Joe 1001, same ruling. sweep_v3_signal.py:104 - hardcoded 15.0'),
     ('walk_dr_fence_hi', '85.0', 'r points. oob, not the Mage fence',
-     'Joe 1001, same ruling. sweep_v3_signal.py:102 - hardcoded 85.0'),
+     'Joe 1001, same ruling. sweep_v3_signal.py:103 - hardcoded 85.0'),
     ('walk_dr_wob', '0', 'bars. NO wob - it latches on the FIRST bar both lines agree',
      'Joe 1001, same ruling. sweep_v3_signal.py:99-106 has no wob'),
     ('walk_rule1_back_min', '5.0', 'minutes BACK -> 60 bars. the walk only, NOT rule1_back_min',

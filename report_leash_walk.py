@@ -133,6 +133,14 @@ def main():
     _dr = dr_latch(np.asarray(rig.lines[_la][_ra], float),
                    np.asarray(rig.lines[_lb][_rb], float), 0, rig.n - 1,
                    hi=float(cfg['walk_dr_fence_hi']), lo=float(cfg['walk_dr_fence_lo']))
+    # `latch` HAS NO wob PARAMETER, so a non-zero walk_dr_wob cannot be honoured. Before this
+    # check the row was PRINTED and never read, so setting it to 8 printed "wob 8" while the code
+    # ran no-wob. An ignored row is inert; a row that prints a false statement about the code is
+    # worse. Found by the 1001 re-validation.
+    if int(cfg['walk_dr_wob']) != 0:
+        print('M|FAIL|walk_dr_wob is %s but dr_latch.latch takes no wob - use latch_wob or set it '
+              'back to 0' % cfg['walk_dr_wob'])
+        return 1
     _diff = int((np.asarray(_dr, np.int8) != np.asarray(rig.DR, np.int8)).sum())
     print('D|dr recipe %s + %s at %s/%s wob %s|rebuilt vs rig.DR: %d of %d bars differ'
           % (cfg['walk_dr_line_a'], cfg['walk_dr_line_b'], cfg['walk_dr_fence_lo'],

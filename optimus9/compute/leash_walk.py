@@ -18,7 +18,12 @@ THE CHAIN, per bar k, reading only bars <= k:
               A timeframe leaves when it has been momentum-true since the arm and then is not; only
               its FIRST departure in an episode counts
     race      `race` flat-run STARTS, from timeframes at or above `frmin`, inside a trailing
-              `lb_bars` window, at or after scan = max(turn, qualify)
+              `lb_bars` window. THE EMIT BAR is at or after both the turn and the qualify; the
+              STARTS THEMSELVES ARE NOT RESTRICTED TO THAT — they are filtered only by the trailing
+              window [k - lb_bars, k]. DO NOT "FIX" THIS: a 1001 mutation that also required the
+              starts to be at or after the scan dropped 2 of Joe's 9 validated bars (03:38:00 and
+              17:59:25) and moved the day to mech 2706 / cut 1663 / emitted 1043 / runs 21. The
+              implemented reading is the one that reproduces his bars
     rev       a ws1mage-rev cross in [k - rev_lookback, k] whose `sig_conf` is at or before k —
               `coil_exit.resolve`'s LOOKBACK leg, with the mech's own bar as `named`. Joe 1001:
               *"it has to be re-inserted in the same way it was before"*
