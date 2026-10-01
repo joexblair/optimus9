@@ -70,12 +70,17 @@ def latch(k, fen):
         o = (Mg[i] >= hi_) if d > 0 else (Mg[i] <= lo_)
         if o and (run == 0 or int(rig.DR[i - 1]) == d): run += 1
         else: run = 0
-        if run >= DW: arm = i
+        if run >= DW:
+            arm = i; break         # the FIRST bar the dwell completes - Joe 0930 caught the last-bar bug
     if arm is None: return None
     return arm, int((int(rig.ts[k]) - int(rig.ts[arm])) / 1000)
 
 
-rows = db.execute('SELECT wsb_pk, wsb_sig_ms FROM %s ORDER BY wsb_sig_ms' % TABLE, fetch=True)
+# SCOPED TO THE UN-WOBBED ROWS. Joe 0930 caught this running unscoped and overwriting the
+# wob build's fence-specific latch (2 and 6 bars) with this script's shared DW=9.
+NOWOB = "wsb_knobs NOT LIKE '%%wob%%' AND wsb_kind='signal'"
+rows = db.execute('SELECT wsb_pk, wsb_sig_ms FROM %s WHERE %s ORDER BY wsb_sig_ms'
+                  % (TABLE, NOWOB), fetch=True)
 pay = []; n15 = n25 = 0
 for r in rows:
     k = int(np.searchsorted(tsa, int(r['wsb_sig_ms'])))
@@ -94,7 +99,7 @@ q = ('SELECT SUM(wsb_oob_2575=0 AND wsb_latch2575=1) recovered, '
      'SUM(wsb_oob_1585=0 AND wsb_oob_2575=0 AND wsb_latch2575=1) of17_25, '
      'SUM(wsb_oob_1585=0 AND wsb_oob_2575=0 AND wsb_latch1585=1) of17_15, '
      'SUM(wsb_oob_1585=0 AND wsb_oob_2575=0 AND wsb_latch2575=0 AND wsb_latch1585=0) still_out '
-     'FROM %s' % TABLE)
+     'FROM %s WHERE %s' % (TABLE, NOWOB))
 x = db.execute(q, fetch=True)[0]
 print('U|snapshot-miss but latch-live at 25/75: %s' % x['recovered'])
 print('U|of the 17 unbacked: latch covers %s at 25/75, %s at 15/85, still uncovered %s'

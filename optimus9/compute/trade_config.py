@@ -67,6 +67,53 @@ _GATE_WINDOW = [
 SEED = SEED + _GATE_WINDOW
 
 
+WALK_V = 4
+"""THE `leash_walk` MECH'S OWN VERSION. `V` STAYS 3 AND NOTHING ON THE v7 CHAIN MOVES.
+
+Joe 1001 ruled the walk is the strategy — *"there is no surviving mech that relies on `brk`, because
+our verified strategy uses `WALK FIRES FROM` as our one and only signal"*. It is a DIFFERENT mech, so
+by this module's own contract it gets its own version and its rows land beside v3's rather than over
+them.
+
+`V` is deliberately NOT bumped. `key()` reads `cfg['_version']`, so bumping it would move the key
+every existing caller banks under — `sweep_v3_signal`, `measure_live_stop`, `build_wsf_trades` all
+load `TC.V`. MINE, AND STATED: bumping `V` to 4 when the walk REPLACES the v7 chain as the default is
+Joe's call, not a side effect of adding knobs. Until he makes it, `load(db, TC.WALK_V)` is explicit.
+
+v4 CARRIES v3's ROWS PLUS THE WALK'S OWN. The walk still reads `rule1_*`, `oob_*`, `latch_*`,
+`mage_fence_*` and `mae_cap` — it shares the gate, the dr latch and the stop with v3 — so v4 is v3
+plus `_WALK`, not a replacement set.
+"""
+
+_WALK = [
+    ('arm_line', 'ws5Mage', 'the line the arm watches',
+     'Joe 0930: "I think that trigger is ws5Mage + dwell"'),
+    ('arm_fence_lo', '25.0', 'Mage points. NOT oob, which is 15/85',
+     'Joe 0930, on the wob sweep that selected it over 15/85'),
+    ('arm_fence_hi', '75.0', 'Mage points', 'Joe 0930, same sweep'),
+    ('arm_wob', '6', 'bars = 30 s at the 5 s grid. CONSECUTIVE bars oob on the dr side',
+     'Joe 0930: "great. apply the suggested wobs and rebuild the table"'),
+    ('arm_same_dr', '1', 'the arm dr MUST equal the signal dr',
+     'Joe 1001: "you were right to require same dr. update the mech"'),
+    ('walk_min_tf', '7', 'ws7. the lowest TF whose DEPARTURE counts toward `fall`',
+     'Joe 1001: "those settings are good for now"'),
+    ('walk_fall', '3', 'distinct departures from the momTF bucket needed to qualify the race',
+     'Joe 0930: "Requiring three makes the race wait until the bucket has genuinely turned over"'),
+    ('walk_race', '1', 'flat-run STARTS needed inside the lookback',
+     'Joe 1001: "those settings are good for now"'),
+    ('walk_frmin', '4', 'ws4. the lowest TF whose FLAT-RUN enters the race pool',
+     'Joe 1001: "no need to sweep - those settings are good for now"'),
+    ('walk_lb_bars', '48', 'bars = 4 min. the race lookback, TRAILING and inclusive of k',
+     'Joe 0930: "allow for flat-runs that have completed their race in a {knob:4 minute} lookback"'),
+    ('walk_ladder_lo', '4', 'ws4. the walk ladder, ascending', 'Joe 0930, the mech-dev ladder'),
+    ('walk_ladder_hi', '23', 'ws23', 'Joe 0930, the mech-dev ladder'),
+    ('walk_rule1_back_min', '5.0', 'minutes BACK -> 60 bars. the walk only, NOT rule1_back_min',
+     'Joe 1001, asked 5 or 7 for this row: "5". Overrides 7.0 for the walk. NEVER OOS d'),
+]
+
+SEED_V4 = SEED + _WALK
+
+
 def key(cfg):
     """The stable key string for a config version. Goes in every banked trade row.
 
@@ -89,8 +136,13 @@ def seed(db, version=V):
     the trades land BESIDE the old ones, never over them."* v2's rows stay in the table as the
     uncapped mech's knob set; `load(db, 2)` still reads them.
     """
-    if version != V:
-        raise ValueError('%s holds one version, %d. Joe 0929 dropped v1.' % (TABLE, V))
+    if version == V:
+        rows = SEED
+    elif version == WALK_V:
+        rows = SEED_V4                    # the leash_walk mech - see WALK_V's note
+    else:
+        raise ValueError('%s holds versions %d and %d. Joe 0929 dropped v1.'
+                         % (TABLE, V, WALK_V))
     db.execute(DDL)
     n = db.execute("SELECT COUNT(*) c FROM %s WHERE wtc_version=%%s" % TABLE,
                    (version,), fetch=True)[0]['c']
@@ -98,8 +150,8 @@ def seed(db, version=V):
         return 0
     db.executemany("INSERT INTO %s (wtc_version,wtc_name,wtc_value,wtc_units,wtc_source) "
                    "VALUES (%%s,%%s,%%s,%%s,%%s)" % TABLE,
-                   [(version, a, b, c, d) for a, b, c, d in SEED])
-    return len(SEED)
+                   [(version, a, b, c, d) for a, b, c, d in rows])
+    return len(rows)
 
 
 def load(db, version=V):

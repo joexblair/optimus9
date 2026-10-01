@@ -84,6 +84,17 @@ plus the hand-walk. Two things from it that belong here:
 > at now, and read ONLY the latest bar. Window-ending-at-now == the backtest window → live == backtest
 > by construction; no latch state to desync, self-healing every bar."
 
+**THAT QUOTED CLAIM IS FALSE FOR `latch_wob`, AND `latch_wob` IS THE WALK'S dr. Flagged 1001.**
+`dr_latch.latch_wob` is PATH-DEPENDENT from its `i0`: `cur`, `up` and `dn` start at 0 and only move
+when a run reaches `wob` 8 bars = 40 s, so `dr[k]` is a function of all history since `i0`. The
+backtest calls it over the whole 94.5-day tape (`sweep_v3_signal.py:106-109`). Live,
+`StrategyLoop.window()` builds a `BiasWindow(lookback=24, warmup=80)` = a **104-hour** tape
+(`strategy.py:23, 39`). Whenever the most recent latching run predates the live window's start, the
+two sides carry a different `dr` with **both sides causal** — and the recon would class it as
+`selection`. `strategy.py:28`'s own comment already says *"bounded window; must reproduce the
+backtest line values (pin by measure)"*. It has not been measured for this strategy. **Measure it
+before the first recon job.**
+
 The new producer must follow that shape. It is the single strongest defence against the lookahead
 Joe wants exposed, and it already exists as a pattern in this codebase.
 

@@ -47,13 +47,34 @@ Produced by `sweep_live_stop.py` at the 0.70 rung, and independently by the cano
 
 Every trade is opened by a `sig_utc`. The dr-flip has never opened one since Joe's 0929-late ruling.
 
-Entry is the bar the signal NAMES. That is the spec, it is what these numbers measure, and the
-measurement is sound.
+Entry is the bar the signal NAMES. That is the spec and it is what these numbers measure.
+
+**QUALIFIED 1001. The sentence is true on the majority of moments and false on a minority, so it is
+qualified rather than struck** — an earlier 1001 edit struck it outright on an overstated figure and
+that edit is withdrawn. Measured per branch over the 32 moments on 09-01:
+
+| via | moments | entry at `rev` is causal |
+|---|---|---|
+| CONFIRMED | 15 | **YES, 15 of 15** |
+| FORWARD | 1 | **YES** |
+| GAP | 9 | no, 8 of 9 |
+| LOOKBACK | 7 | no, 7 of 7 |
+| **total** | **32** | **17 causal, 15 not** |
+
+The 15 non-causal entries are on the branches reached only by deciding the moment did NOT confirm —
+which needs the breaking row — while their `rev` sits at or before it. `CAUSALITY.md` carries the
+full derivation. `OPEN.md:207`'s *"measured at a bar o9-live cannot act on"* is right about those 15
+and wrong as a blanket statement.
 
 **Separately**, `report_realtime_replay.py` measures how long after that bar the chain can first
 EMIT the timestamp — a median 165 s. Joe 0929 read that and ruled: *"latency is ok for now"*. It is
 a **recon** number: it tells the recon job what wall-clock-to-bar gap is normal so a normal gap is
-not read as a fault. `RECON.md` carries it. **It is not a discount on the figures above.**
+not read as a fault. `RECON.md` carries it.
+
+**CORRECTED 1001 — this used to end "It is not a discount on the figures above." Strike that too.**
+It is not a *recon-only* number: the gap is exactly the distance between the bar the figures are
+measured at and the first bar o9-live can act on. `OPEN.md`'s emit-bar table prices it at
++0.3911 -> +0.3352 eager / +0.3495 settled, with 1,045 -> 901/900 gated opens.
 
 ## The stop races the other exits — it does not replace them
 
@@ -181,8 +202,24 @@ fixed trade set of 753 at every rung, because the cap was applied after the walk
 - **net per trade** peaks at cap **1.25**, +0.3928 on 843 trades. 0.70 sits **0.0017 below it — 0.4%**.
 - **net sum** peaks at cap **0.70**, +349.638. It is the best rung on that measure, not merely acceptable.
 - the band 0.70 -> 1.30 runs +0.3809 to +0.3928 on net per trade. Spread 0.012. **There is no knee in it.**
-- trades fall monotonically, 1,027 at cap 0.05 to 753 with no stop. `net > 0 %` rises monotonically
-  9.2% -> 62.2%, and peaks where net per trade is worst. **Ranking on win% picks the worst mech here.**
+- trades fall monotonically, 1,027 at cap 0.05 to 753 with no stop.
+- **CORRECTED 1001.** This bullet used to read *"`net > 0 %` rises monotonically 9.2% -> 62.2%, and
+  peaks where net per trade is worst. Ranking on win% picks the worst mech here."* Recomputed from
+  the 79 cap rows in the table below:
+
+| measurement | value |
+|---|---|
+| `net > 0 %` monotonic | **no** — 13 decreasing steps of 78 |
+| first decrease | cap 1.70 62.2% -> cap 1.75 62.0% |
+| `net > 0 %` maximum | **62.5%**, at caps 2.60, 3.40 and 3.45 |
+| the no-stop row's `net > 0 %` | 62.2% |
+| net per trade at the win% maximum, cap 2.60 | +0.2941 |
+| net per trade minimum | +0.1027, at cap 0.05 where win% is 9.2% |
+| net per trade with no stop | +0.1464 |
+
+  So ranking on win% picks cap **2.60** at +0.2941 — neither the worst rung nor the no-stop rung.
+  It still does not pick 0.70, and it costs 0.097 per trade against it. Whether win% is a ranking
+  measure at all is Joe's call; the old bullet's arithmetic was wrong and is not a basis for it.
 
 ## The knobs
 

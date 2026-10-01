@@ -169,22 +169,31 @@ class Rig:
                                           cfg['curl_arc_min'])
         return self._sw[key]
 
-    def gate_open(self, k):
-        if k not in self._gate:
-            Ct = self.Ct; d = int(self.DRW[k])
+    def gate_open(self, k, back_bars=None):
+        """rule#1 at bar `k`. -> bool.
+
+        `back_bars` None reads `rule1_back_min` from the config — 7.0 min = 84 bars, Joe 0929, and
+        every existing caller gets exactly that. `leash_walk` passes 60 bars = 5 min from
+        `walk_rule1_back_min`, Joe 1001 asked 5 or 7 for that row: *"5"*. The cache is keyed on the
+        lookback so the two cannot be confused for each other.
+        """
+        Ct = self.Ct
+        bb = int(float(Ct['rule1_back_min']) * 60 / 5) if back_bars is None else int(back_bars)
+        ck = (int(k), bb)
+        if ck not in self._gate:
+            d = int(self.DRW[k])
             res = anchor_floater(self.r1, self.px, d, k, block=int(self.C['block']), mid=50.0,
                                  xn=self.xn,
                                  dwell_bars=int(Ct['div_tf']) * int(self.C['dwell_min_per_tf']) * 12,
                                  oob=(float(Ct['oob_lo']), float(Ct['oob_hi'])))
-            self._gate[k] = bool(gate(
-                self.r1, self.r2, self.r3, self.g30r, d, k,
-                int(float(Ct['rule1_back_min']) * 60 / 5),
+            self._gate[ck] = bool(gate(
+                self.r1, self.r2, self.r3, self.g30r, d, k, bb,
                 (float(Ct['rule1_fence_lo']), float(Ct['rule1_fence_hi'])),
                 (float(Ct['oob_lo']), float(Ct['oob_hi'])),
                 0 if res is None else int(res['fired']),
                 fwd_bars=int(float(Ct['rule1_fwd_min']) * 60 / 5),
                 run_clamp=Ct['rule1_run_clamp'])['open'])
-        return self._gate[k]
+        return self._gate[ck]
 
 
 def run(rig, cfg, A=None, B=None):

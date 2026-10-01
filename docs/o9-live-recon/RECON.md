@@ -38,7 +38,25 @@ session accumulates context and the point of the job is a clean comparison each 
 1. Read the new dump lines.
 2. Map each wall-clock stamp to a tape bar. **Record the gap.** That mapping is the test, not
    housekeeping.
-3. Run `build_wsf_trades.py` over the window containing those bars.
+3. **CORRECTED 1001 — this step used to say "Run `build_wsf_trades.py` over the window containing
+   those bars", and `README.md`, `CAUSALITY.md:144` and `SPEC.md:234` all forbid that file.** It is a
+   BANKER: it reads already-banked bars out of `wsf_leash` (15 s early, and `WIN_MS` pins it to
+   09-01..09-06), so it cannot cover a recon window and it does not rebuild the chain.
+
+   **The reference is `measure_live_stop.build(rig)`** — the chain rebuilt from the tape, sideways →
+   v3 rows → moments → `release` → `resolve`, which is what produced 1,863 / 1,045 / 894 / +0.3911.
+   Joe 1001, on what "reference" means: *"I'm assuming that 'reference' = the code that o9-live will
+   adopt"*. It is, and these four are it:
+
+   | step | the code o9-live adopts |
+   |---|---|
+   | the chain | `measure_live_stop.build(rig)` |
+   | rule#1 | `sweep_v3_signal.Rig.gate_open(k)` |
+   | the three racing exits | `optimus9/compute/trade_walk.walk()` |
+   | the MAE/MFE rule | `measure_live_stop.score()` |
+
+   **Adopting `measure_live_stop.build` adopts `fastverdict`**, because `Rig.sideways` calls
+   `fastverdict.sideways_mask`. See `OPEN.md`'s trap on it — its own verifier does not exist.
 4. Compare, in this order: **does a backtest trade exist on that bar** → **same side** → **same
    reason** (`sig_utc` vs `dr-flip`) → **same open/close role**.
 5. Report every mismatch with both sides' numbers. A mismatch is the deliverable, not a failure.
@@ -106,9 +124,18 @@ Joe: *"o9-live has a trading engine that might show faults in applying the stop-
 
 **The backtest's fill is the SPEC, not an idealisation.** Joe 0929: *"pxs is designed to handle
 this well in advance of the trading machine -- this means that the stop does not increase to 0.85 -
-it fills immediately on hitting the bar"*. `pxs` is DEMA(close, 2) on the EVENT tape - a bar exists
-where volume occurred, a filler bar carries the previous value forward - so intrabar movement is
-already resolved at the 5 s grid. **Do NOT model slippage. Measure divergence FROM the spec.**
+it fills immediately on hitting the bar"*. **CORRECTED 1001 — this used to say `pxs` is DEMA(close, 2) on the EVENT tape. It is not.** The
+series the stop and every MAE/MFE actually read traces as `Rig.px` -> `build_wsf_trades.load:123`
+`np.asarray(J.px)` -> `jig.py:1387` `self.W.px` -> `BiasWindow.px` -> `bl_detect._setup:261`
+`IC.dema(IC.build_source(base, 'close'), 2)` — **DEMA over the FULL 5 s base, filler bars
+included**. The event-tape series DOES exist, as `__pxs__` in the rpl_cache npz
+(`rpl_cache.py:59-69`, `_px_smooth_evt`), and three other scripts read it — but neither
+`build_wsf_trades` nor the `Rig` does. `filler_invisible` 1 governs LINES
+(`BiasWindow._lbase`), not `px`.
+
+Both series are causal, so this is not a lookahead. It matters because the event-tape claim is what
+licensed "intrabar movement is already resolved at the 5 s grid". **Do NOT model slippage — Joe
+0929 ruled it — but do not justify that with a series the stop does not read.**
 
 Every recon job must check, per stopped trade:
 
@@ -133,8 +160,15 @@ cancel nothing but must go FLAT.** An orphaned stop left at the exchange will fi
 that no longer exists, or block the next entry. Check for orphans every recon job.
 
 **After a stop the book is FLAT**, and a later sig_utc opens a new trade - 381 of 894 trades end on
-the stop, so this path is exercised 42.6% of the time. The value 0.70 is not a `wsf_trade_config`
-row; it is `MAE_CAP` in `optimus9/compute/trade_walk.py` and it is in the trade key.
+the stop, so this path is exercised 42.6% of the time.
+
+**CORRECTED 1001 — this paragraph used to state the opposite, and the opposite is false.** The value
+0.70 **IS** a `wsf_trade_config` row: config **v3**, row `mae_cap` = 0.70, and it is also in the
+trade key `wtc_v3_v7_rule1_gateopen_mae0.70`. There is **no** `MAE_CAP` constant in
+`optimus9/compute/trade_walk.py` — line 72 of that file says so outright: *"THE CAP'S VALUE IS NOT
+IN THIS FILE. Joe 0929-late: move MAE_CAP to the DB"*. `trade_walk.walk(..., mae_cap)` takes it as a
+**required positional with no default** (`trade_walk.py:114`), so a caller that forgets it gets a
+`TypeError`. Do not reintroduce the literal.
 
 ## Four mismatch classes, reported separately
 
