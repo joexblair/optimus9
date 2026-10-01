@@ -57,6 +57,18 @@ from optimus9.compute.test_points import flat_run_at  # noqa: E402
 VALIDATED_09_01 = ['00:27:35', '02:40:35', '03:38:00', '09:02:15', '14:50:00',
                    '17:59:25', '18:20:00', '22:24:10', '23:18:50']
 
+SHAPE_09_01 = dict(mech=2768, cut=1673, emitted=1095, runs=23)
+"""THE WHOLE SHAPE OF THE DAY, ASSERTED — not just the 9 bars.
+
+Added 1001 after the port validation found the test one-sided: *"Loosening the arm by one bar keeps
+all 9 and the test still exits 0, while MECH moves 2768 -> 2777 and EMITTED 1095 -> 1104."* It
+mutated `arm_wob` 6 -> 5 and the test passed. These four numbers were printed and never checked,
+while the commit message cited them AS the acceptance.
+
+A KNOB CHANGE WILL NOW FAIL THIS TEST. That is the intent: these numbers are the validated day, and
+moving them means the day has to be re-validated by Joe before they are edited here.
+"""
+
 MOMO_SAMPLES = 3     # flat_run_at's sample count, as the validated run used it
 MOMO_TOL = 2.0       # flat_run_at's tolerance, r points
 
@@ -76,7 +88,15 @@ def main():
     k0 = int(np.searchsorted(ts, ms0))
     k1 = min(int(np.searchsorted(ts, ms1)) - 1, rig.n - 1)
 
-    cfg = TC.load(rig.db if hasattr(rig, 'db') else _db(), TC.WALK_V)
+    db = _db()
+    # SEED BEFORE LOAD. `TC.load` RAISES on a missing version, and `Rig.__init__` seeds v3 only, so
+    # a clean DB died here. `seed()` returns 0 when the rows are already present - it never
+    # overwrites. Found by the 1001 port validation: "the one finding that stops the recon session
+    # dead rather than pointing it the wrong way".
+    wrote = TC.seed(db, TC.WALK_V)
+    if wrote:
+        print('K|wsf_trade_config v%d was absent - seeded %d rows' % (TC.WALK_V, wrote))
+    cfg = TC.load(db, TC.WALK_V)
     lad = list(range(int(cfg['walk_ladder_lo']), int(cfg['walk_ladder_hi']) + 1))
     knobs = dict(
         arm_fence=(float(cfg['arm_fence_lo']), float(cfg['arm_fence_hi'])),
@@ -175,10 +195,20 @@ def main():
           % (len(want), len(want) - len(miss), len(miss)))
     print('M|run first bars the walk emits that are NOT validated bars|%d%s'
           % (len(extra), ('  ' + ', '.join(U(x) for x in extra)) if extra else ''))
-    if miss:
-        print('M|FAIL|missing %s' % ', '.join(miss))
+    got = dict(mech=len(mech), cut=len(mech) - len(emit), emitted=len(emit), runs=len(runs))
+    shape = [(k, SHAPE_09_01[k], got[k]) for k in ('mech', 'cut', 'emitted', 'runs')
+             if SHAPE_09_01[k] != got[k]]
+    print('S|the day\'s shape|field|validated|this run|match')
+    for k in ('mech', 'cut', 'emitted', 'runs'):
+        print('S|%s|%d|%d|%s' % (k, SHAPE_09_01[k], got[k],
+                                 'YES' if SHAPE_09_01[k] == got[k] else 'NO'))
+    if miss or shape:
+        if miss:
+            print('M|FAIL|missing %s' % ', '.join(miss))
+        for k, exp, g in shape:
+            print('M|FAIL|%s moved: validated %d, this run %d' % (k, exp, g))
         return 1
-    print('M|PASS|all %d validated bars reproduced from repo code' % len(want))
+    print('M|PASS|all %d validated bars reproduced, and the day\'s shape is unchanged' % len(want))
     return 0
 
 

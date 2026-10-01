@@ -73,7 +73,14 @@ class ArmState:
             self.arm_dr = 0
             self._run = 0
         d = int(dr_k)
-        oob = (mage_k >= self.hi) if d > 0 else (mage_k <= self.lo)
+        # dr 0 HAS NO SIDE, SO IT CANNOT ARM. `dr_latch` returns 0 until both lines first agree,
+        # so a live walk on a cold window carries 0 for its opening bars. Without this the `else`
+        # branch below reads 0 as the LOW side and the arm fires SHORT on no direction, carrying
+        # arm_dr 0 into momentum_true and flat_run_at. Measured before the guard: dr 0 with the
+        # Mage pinned at 20 armed at bar 6 with arm_dr 0. MINE, and structural - the mech's own
+        # rule is "oob on the dr SIDE", and 0 has none. It never fired on the 09-01 tape because
+        # DR is 0 only before the first latch.
+        oob = False if d == 0 else ((mage_k >= self.hi) if d > 0 else (mage_k <= self.lo))
         if oob and (self._run == 0 or dr_prev is None or int(dr_prev) == d):
             self._run += 1
         else:

@@ -91,15 +91,20 @@ its day count from the `FROM_MS`/`TO_MS` constants rather than from the tape, so
 **Set `TAPE_END` back to 2026-09-08 before running either command.** The 09-08 cache is still on disk.
 | **a defect in the OOS path was found and fixed on 0930** | `Rig` loads two tapes and discards one's timestamps, and `build_wsf_trades` binds `END_MS` **by value** at import — so a process that walked more than one window read rule#1's `r` lines off the wrong tape. `oos_confirm_lag.py` and `score_5day_windows.py` both did it. Fixed, guarded with a hard `RuntimeError` on a tape mismatch, committed. IS rule#1 open is **unchanged**; both OOS windows' rule#1 open roughly **doubled**; IS reproduces **+0.3911 exactly**. See `CAUSALITY.md`. |
 | **`confirm_lag_s` 165 is REJECTED; 180 stands** | 165 loses both OOS windows, **−0.0058** and **−0.0239** per trade. The 180 s throughout this package is the right number. |
-| **the recon fires the BANKED v7 CHAIN, and the arm is NOT a recon gate** | Joe 1001: *"so that we have more traffic to recon, the offline o9-live can fire on non-armed signals"* and *"it has to be the banked v7 chain - the new mech's bars can't be reproduced"*. |
+| ~~the recon fires the BANKED v7 CHAIN~~ **SUPERSEDED 1001 — SEE THE MACHINE SECTION AT THE TOP** | Joe ruled this EARLIER on 1001, on the premise *"it has to be the banked v7 chain - the new mech's bars can't be reproduced"*. **The port falsified that premise**: the walk is `optimus9/compute/leash_walk.py` and `report_leash_walk.py` reproduces its bars from repo code. He then ruled the walk IS the machine. His *"the offline o9-live can fire on non-armed signals"* had the v7 chain as its subject and has no referent in the walk, which requires an arm by construction — **open, and his to re-rule if he wants the traffic** |
 
 **THE OOS PERCENTAGES ARE NOT PUBLISHED WITH THEIR COUNTS, SO THEY ARE NOT QUOTED HERE.**
 `oos_confirm_lag.py:126-146` prints `sig bars` and `rule#1 open` as integers and never a
 percentage. Re-deriving them needs `TAPE_END` back at 2026-09-08 — see the row above. Until that run
 is done, the direction is the finding and the rates are not.
 
-**A NEWER SIGNAL MECH IS IN DEVELOPMENT. IT IS NOT PART OF THIS HANDOVER AND IT IS NOT A RECON
-GATE.** It is an arm / flat-run-race / `ws1mage-rev` chain, walked over **09-01 only**. Its DB
+**CORRECTED 1001 — the paragraph below was written BEFORE the port and every claim in it is now
+false. The walk IS in the repo, its numbers ARE checkable, and its rule#1 lookback IS in the config
+(`wsf_trade_config` v4, `walk_rule1_back_min` 5.0). Kept only so a reader who saw the old text knows
+it moved. THE MACHINE SECTION AT THE TOP OF THIS FILE IS AUTHORITATIVE.**
+
+~~A NEWER SIGNAL MECH IS IN DEVELOPMENT. IT IS NOT PART OF THIS HANDOVER AND IT IS NOT A RECON
+GATE.~~ It is an arm / flat-run-race / `ws1mage-rev` chain, walked over **09-01 only**. Its DB
 builders ARE committed — `docs/22_go_20260921/build_ws5mage_sig_backing.py`,
 `update_ws5mage_sig_backing_latch.py`, `build_all_wsf_flatrun_grid.py` — but the **walk** scripts
 that produced its reported numbers live in a job-scoped scratch directory that will be deleted, so

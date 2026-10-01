@@ -150,11 +150,41 @@ def test_step_refuses_non_consecutive_bars():
     raise AssertionError('step accepted a skipped bar')
 
 
+def test_p5_dr_zero_cannot_arm():
+    """dr 0 has no side, so the arm must not fire on it — from EITHER side of the fence.
+
+    `dr_latch` returns 0 until both lines first agree, so a live walk on a cold window carries 0 for
+    its opening bars. Before the 1001 guard, `oob = (mage >= hi) if d > 0 else (mage <= lo)` read 0
+    as the LOW side: dr 0 with the Mage pinned at 20 armed at bar 6 carrying arm_dr 0, which then
+    flowed into momentum_true and flat_run_at as a direction.
+    """
+    for pin, label in ((20.0, 'low side'), (80.0, 'high side'), (50.0, 'at MID')):
+        n = 30
+        mage = np.full(n, float(pin))
+        mage[0] = 50.5
+        dr = np.zeros(n, np.int8)
+        live, arm, adr = run(mage, dr, 0, n - 1, FENCE, WOB)
+        assert not live.any(), 'P5 %s: armed on dr 0 at bar %d' % (label, int(np.argmax(live)))
+        assert set(int(x) for x in arm) == {-1}, 'P5 %s: an arm bar was set on dr 0' % label
+        assert set(int(x) for x in adr) == {0}, 'P5 %s: a non-zero arm_dr on dr 0' % label
+    # and a dr that ARRIVES after a cold start still arms normally
+    n = 30
+    mage = np.full(n, 80.0)
+    mage[0] = 60.0
+    dr = np.zeros(n, np.int8)
+    dr[3:] = 1                      # dr arrives at bar 3
+    live, arm, _ = run(mage, dr, 0, n - 1, FENCE, WOB)
+    assert live[3 + WOB - 1], 'P5: did not arm %d bars after the dr arrived' % WOB
+    assert not live[3 + WOB - 2], 'P5: armed before the run reached wob'
+    return int(arm[3 + WOB - 1])
+
+
 if __name__ == '__main__':
     n1 = test_p1_warmup_is_bounded()
     print('P1 warmup is bounded                     OK  %d bars checked' % n1)
     print('P2 arm = first bar the run reaches wob   OK  arm at bar %d' % test_p2_arm_is_the_first_bar_the_run_reaches_wob())
     print('P3 MID cross cancels either direction    OK' if test_p3_mid_cross_cancels_from_either_direction() else 'P3 FAIL')
     print('P4 dr change restarts the run            OK  re-arm at bar %d' % test_p4_dr_change_restarts_the_run())
+    print('P5 dr 0 cannot arm                       OK  arm at bar %d once dr arrives' % test_p5_dr_zero_cannot_arm())
     print('episodes match the live array            OK  %d episodes' % test_episodes_match_the_live_array())
     print('step refuses non-consecutive bars        OK' if test_step_refuses_non_consecutive_bars() else 'FAIL')

@@ -1,5 +1,15 @@
 # What exists, what is new, and what is NOT built
 
+> **1001 — THE MACHINE CHANGED. READ `README.md`'s MACHINE SECTION BEFORE THIS FILE.**
+> The signal is `WALK FIRES FROM`, from `optimus9/compute/leash_walk.py` + `arm_state.py`, knobs in
+> `wsf_trade_config` **v4**, acceptance test `report_leash_walk.py`. Joe 1001: *"it is the only
+> outcome that is stamped as ready for live trading"*.
+>
+> **THIS FILE WAS WRITTEN FOR THE v7 `wsl_sig_utc` CHAIN AND HAS NOT BEEN REWRITTEN.** Everything in
+> it about the v7 producer, its five build steps, its numbers and its entry bar is the HISTORICAL
+> RECORD. Where it tells you to build something, check it against the machine section first.
+
+
 ## The headline
 
 **o9-live and fakeAPI exist and run. They run a DIFFERENT strategy.**
