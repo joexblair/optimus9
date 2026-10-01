@@ -53,22 +53,41 @@ session accumulates context and the point of the job is a clean comparison each 
    BANKER: it reads already-banked bars out of `wsf_leash` (15 s early, and `WIN_MS` pins it to
    09-01..09-06), so it cannot cover a recon window and it does not rebuild the chain.
 
-   **The reference is `measure_live_stop.build(rig)`** — the chain rebuilt from the tape, sideways →
-   v3 rows → moments → `release` → `resolve`, which is what produced 1,863 / 1,045 / 894 / +0.3911.
+   **RULED 1001 BY JOE — THE CHAIN IS `WALK FIRES FROM`, NOT THE v7 CHAIN.** This step used to name
+   `measure_live_stop.build(rig)` as the chain. Joe, shown both options side by side: *"A is the only
+   choice - causal all the way"*. The banner at the top of this file already said so; the table below
+   had not been moved.
+
    Joe 1001, on what "reference" means: *"I'm assuming that 'reference' = the code that o9-live will
-   adopt"*. It is, and these four are it:
+   adopt"*. These four are it:
 
    | step | the code o9-live adopts |
    |---|---|
-   | the chain | `measure_live_stop.build(rig)` |
-   | rule#1 | `sweep_v3_signal.Rig.gate_open(k)` |
-   | the three racing exits | `optimus9/compute/trade_walk.walk()` |
-   | the MAE/MFE rule | `measure_live_stop.score()` |
+   | the chain | **`optimus9/compute/leash_walk.py` + `arm_state.py`** — inputs assembled as `report_leash_walk.py:150-181` does it |
+   | rule#1 | `sweep_v3_signal.Rig.gate_open(k, r1_back)` — **`r1_back` = 60 bars = 5 min, NOT the default.** `gate_open(k)` with no second argument reads `rule1_back_min` **7.0 min = 84 bars** from config v3 (`sweep_v3_signal.py:175-181`). `octo-freedom` passes `walk_rule1_back_min` **5.0 min = 60 bars** from v4 (`report_leash_walk.py:113, 182`), Joe 1001 asked 5 or 7 and said *"5"*. Writing the bare call silently builds the 7 min gate |
+   | the three racing exits | `optimus9/compute/trade_walk.walk()` — unchanged |
+   | the MAE/MFE rule | `measure_live_stop.score()` — unchanged |
 
-   **Adopting `measure_live_stop.build` adopts `fastverdict`**, because `Rig.sideways` calls
-   `fastverdict.sideways_mask`. See `OPEN.md`'s trap on it — its own verifier does not exist.
+   **WHAT THE SWAP COSTS AND WHAT IT CLOSES.** Only the chain row moved; the gate, the exits and the
+   scoring were already shared.
+
+   | consequence | detail |
+   |---|---|
+   | the signal bar | **CORRECTED 1001.** This row claimed the v7 chain's `ex['rev']` is the CROSS bar, 15 s early on 98 of 121 rows. **It is not.** `coil_exit.first_forward:112` returns `sc[k]`, the `sig_conf` — its own docstring: *"the bar RETURNED is that cross's `sig_conf`"* — and CONFIRMED `:127`, GAP `:142` and FORWARD `:145` all take `rev` from there. The 15-s-early cross bars are the 121 **BANKED** `wsl_sig_utc` rows, which `measure_live_stop.build` never reads. Found by the o9-live recon session. **The v7 chain's real lookahead is the LOOKBACK branch's `rev = named = moment['i1']` — the moment's END — which is why `octo-freedom` has no `i1`** |
+   | **`fastverdict` leaves the adopted path** | the paragraph below says adopting `build` adopts `fastverdict`, via `Rig.sideways`. `octo-freedom` never calls `.sideways()` — `grep -rn "\.sideways("` returns 19 sites, none in `leash_walk.py`, `arm_state.py` or `report_leash_walk.py`. So `OPEN.md`'s trap on its missing `verify()` no longer sits on the live path |
+   | `moments`, `release`, `coil_exit.resolve`, `i1`, `brk`, `actionable_*` all leave with it | `leash_walk.py:34-36` — *"WHAT IS NOT HERE, AND WHY"* |
+   | the v7 numbers 1,863 / 1,045 / 894 / +0.3911 | **historical record.** They are the v7 chain's and no longer describe what o9-live adopts |
+
+   ~~**Adopting `measure_live_stop.build` adopts `fastverdict`**, because `Rig.sideways` calls
+   `fastverdict.sideways_mask`.~~ **STRUCK 1001** with the ruling above: `build` is no longer adopted,
+   and `octo-freedom` never calls `.sideways()`, so `fastverdict` is off the live path. `OPEN.md`'s
+   trap on its missing `verify()` stands as a fact about `fastverdict` and no longer as a live risk.
 4. Compare, in this order: **does a backtest trade exist on that bar** → **same side** → **same
-   reason** (`sig_utc` vs `dr-flip`) → **same open/close role**.
+   reason** (`octo-sig` vs `dr-flip` vs `stop`) → **same open/close role**.
+
+   **CHANGED 1001:** this step used to read *"(`sig_utc` vs `dr-flip`)"*. `sig_utc` is the v7 chain's
+   opener; `octo-freedom`'s is `octo-sig` (Joe 1001), and the stop is a third closer that races the
+   other two (`trade_walk.py:134-137`), so it belongs in the comparison.
 5. Report every mismatch with both sides' numbers. A mismatch is the deliverable, not a failure.
 
 Price is **out of scope** until MVP2. Joe 0929. `MVP2.md` carries the full MVP1/MVP2 line - price

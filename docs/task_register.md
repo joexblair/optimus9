@@ -262,3 +262,40 @@ OPEN, in order: (1) rebuild dr-free; (2) rule the oob-entry dwell, currently 3 b
 `ws1mage_rev.dwell_ok`; (3) rule the source lookback, currently uncapped; (4) look at the 2,818
 excluded entries — the masquerading-signal population; (5) test the ws4 turnover against the
 blast-radius note in `wsf_setup_model.md` 3.21.2; (6) Joe has read one bar, 09-01 17:26:20.
+
+## #69 refactor the lookahead out of sight — Joe 1001
+
+Joe 1001: *"add a refactor job to remove `brk` and any other lookahead from the leash code so that
+it's out of sight, out of mind"*. Raised after `brk` re-entered a live argument for the second time
+in one session (`docs/octo-freedom/1001_rewalk_on_ruled_dr.md`).
+
+- **#69** [pending] Put the ruled-out lookahead beyond reach of the leash code. **MEASURED FIRST, and
+  the finding changes the job: there is no lookahead CODE in the leash module.** Every hit is a
+  docstring saying so.
+
+| file | hits | what they actually are |
+|---|---|---|
+| `leash_walk.py:34-36` | `release`, `moments`, `coil_exit.resolve`, `i1`, `brk`, `actionable_*` | the *"WHAT IS NOT HERE, AND WHY"* block — the record of Joe's ruling |
+| `leash_walk.py:4` | `brk` | Joe quoted: *"because our verified strategy uses `WALK FIRES FROM` as our one and only signal"* |
+| `leash_walk.py:28`, `:193` | `coil_exit` | **LOAD-BEARING.** `rev_lookback_mask` is held against `coil_exit._knowable` by `test_leash_walk.py` Q2 — 3,000 bars, 0 disagree |
+| `arm_state.py:143` | `actionable` | why Joe 0930 split `coil_exit`'s single `actionable` key into four |
+| `leash_walk.py:207, 208, 226` | `i1` | the walk's own bar-range parameter. Nothing to do with a moment's end |
+
+**SO THE TENSION, AND IT IS JOE'S TO RESOLVE:** "out of sight, out of mind" applied literally would
+delete (a) the written record of his own ruling and (b) a test's reference implementation. Neither is
+lookahead; both are the proof that lookahead is absent.
+
+**WHERE THE RESIDUE ACTUALLY IS** — files that still COMPUTE a `brk`-based emit bar:
+
+| file | lines | note |
+|---|---|---|
+| `sweep_v3_signal.py` | `:16`, `:242-243` | `brk = m['brk'] if m['brk'] is not None else m['i1']` then `max(brk, rev, fired)`. **This module provides `Rig` to `report_leash_walk.py`** — not on the walk's path, which takes only `rig.DR`, `rig.CC`, `rig.lines`, `rig.gate_open` |
+| `bank_emit_entry.py` | `:5`, `:86-87` | the banker. Also the only copy missing the same-dr-inert clause |
+| `compare_rowfree.py` | `:91-92` | same formula |
+| `measure_no_brk.py` | throughout | **LEAVE IT.** It is the script that measured the drop; removing `brk` destroys the evidence for dropping it |
+| `tide_wireframe.py:155,163`, `lr_exit_test.py:32` | — | unrelated: an `anchor='brk'` string and a local variable |
+
+**The job, as scoped by the above:** quarantine the emit-bar formula so the leash side cannot reach
+it, rather than deleting text. The candidate is a single owner for `max(brk, rev, fired)` that the v7
+chain imports and the leash code does not, which also fixes the three-way duplication of that formula.
+Not started. Joe rules on the docstring question before any edit.

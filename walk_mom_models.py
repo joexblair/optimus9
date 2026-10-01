@@ -173,7 +173,7 @@ def dr_latch(m1, m13, i0, i1):
     The previous dr holds until both agree on a side.
 
     CORRECTED 1001. This docstring said *"VERBATIM from build_wsf_dtf_v3: ws1Mage AND ws13m both
-    oob"*. BOTH CLAIMS WERE WRONG and `optimus9/compute/dl_latch.py` inherited them:
+    oob"*. BOTH CLAIMS WERE WRONG and `optimus9/compute/dr_latch.py` inherited them:
 
       `build_wsf_dtf_v3.py:317-318` latches on `HI, LO = float(sy['hi']), float(sy['lo'])`, read
       from `optimus9_system.hi_boundary` / `lo_boundary` (`:217`), which are **85.0 / 15.0**.

@@ -46,7 +46,7 @@ build, which has its own prompt at `docs/o9-live-recon/README.md` under `## The 
 | **P&L** | **REOPENED 1001** for backtest reporting AND o9-live. Percentage only — absolute needs a position size and none is set |
 | the drag demarcation | written into `OPEN.md`, `MVP2.md` item 1 and `RECON.md`. Fee identical both sides, slippage assumed offline and measured live |
 | `all_wsf_flatrun_grid` | re-gridded to 4-min anchors, 720 rows, both halves populated |
-| task #24 | in_progress, and it is this work |
+| task numbering | **CORRECTED 1001.** This row said "task #24 \| in_progress, and it is this work". Wrong: `docs/task_register.md:53` has **#24 = "BL re-engage revive BB-twitch-faked exit"**, completed 0706. The #24 I meant is the SESSION's own task list (the harness one), a different number space from the register's. Caught by the recon session. **The register has no entry for any of the 9 open items above, and its newest section is dated 0918** — and #7 and #22 are each doubled in it too |
 
 ## WHAT IS OPEN, ON MY SIDE
 

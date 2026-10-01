@@ -235,3 +235,41 @@ def walk(ladder, mage, dr, cc, mom_at, fr_at, rev_mask, i0, i1, **knobs):
             out.append(int(k))
             states[int(k)] = dict(w.state)
     return out, states
+
+
+def walk_fires_from(emit):
+    """Joe's `WALK FIRES FROM`: the FIRST bar of each run of CONSECUTIVE emitted bars.
+
+    -> [(first, last)] in bar order, one tuple per run. `first` IS the `WALK FIRES FROM` bar and the
+    bar an `octo-sig` trade opens on; `last` is the run's final emitted bar and opens nothing.
+
+    MOVED HERE 1001 FROM `report_leash_walk.py`'s main(). Joe, on the finding that the rule defining
+    his own signal lived in a report rather than in the mech: *"I'm taking your recommendation - clean
+    the house before we handover"*. It was the next divergent copy waiting to happen - the same shape
+    as `bank_emit_entry.walk_no_flip_open` losing a ruled clause (`docs/octo-freedom/1001_rewalk_on_ruled_dr.md`).
+
+    WHY IT IS NOT INSIDE `walk()`. `walk()` returns the MECH bars; rule#1 is the CALLER's, because it
+    needs the r lines this module never sees. The run grouping has to happen AFTER that gate, so it
+    cannot live in the stepper. On 09-01 the three populations are 2,768 MECH -> 1,095 EMITTED -> 23
+    runs, and only the 23 are signals.
+
+    FEEDING THE EMITTED BARS STRAIGHT TO `trade_walk.walk` IS THE MISTAKE THIS GUARDS. 1,095 bars
+    would be offered as opens where 23 are signals.
+
+    `emit` must be STRICTLY ASCENDING - it is `[k for k in mech if gate_open(k)]` and `walk()` emits
+    in bar order. A duplicate or an out-of-order bar silently merges or splits runs, so it raises
+    instead, the same discipline as `LeashWalk.step`'s consecutive-bar guard.
+    """
+    e = [int(x) for x in emit]
+    for a, b in zip(e, e[1:]):
+        if b <= a:
+            raise ValueError('walk_fires_from needs STRICTLY ASCENDING bars: %d then %d' % (a, b))
+    runs = []
+    st = None
+    for i, k in enumerate(e):
+        if st is None:
+            st = k
+        if i + 1 == len(e) or e[i + 1] != k + 1:
+            runs.append((st, k))
+            st = None
+    return runs

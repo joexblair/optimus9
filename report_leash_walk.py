@@ -50,7 +50,8 @@ import walk_mom_models as W  # noqa: E402
 from optimus9.analysis.jig import ws1mage_rev  # noqa: E402
 from optimus9.compute import trade_config as TC  # noqa: E402
 from optimus9.compute.dr_latch import latch as dr_latch  # noqa: E402
-from optimus9.compute.leash_walk import rev_lookback_mask, walk  # noqa: E402
+from optimus9.compute.leash_walk import (rev_lookback_mask, walk,  # noqa: E402
+                                         walk_fires_from)
 from optimus9.compute.momo_seam import seam_mask  # noqa: E402
 from optimus9.compute.test_points import flat_run_at  # noqa: E402
 
@@ -182,14 +183,10 @@ def main():
     print('W|MECH bars %d|rule#1 cut %d|EMITTED %d|momentum_true calls %d|flat_run_at calls %d'
           % (len(mech), len(mech) - len(emit), len(emit), len(_mom), len(_fr)))
 
-    runs = []
-    st = None
-    for i, k in enumerate(emit):
-        if st is None:
-            st = k
-        if i + 1 == len(emit) or emit[i + 1] != k + 1:
-            runs.append((st, k))
-            st = None
+    # MOVED 1001 — this loop WAS here, and it is the definition of Joe's `WALK FIRES FROM`. A rule
+    # that defines the signal does not belong in a report; `leash_walk.walk_fires_from` owns it now
+    # and `tests/test_leash_walk.py` Q5 holds it against a stateless groupby reference.
+    runs = walk_fires_from(emit)
     print('R|run|WALK FIRES FROM|last emitted bar|bars|dr|arm bar')
     byfirst = {s: None for s, _ in runs}
     for q, (s, e) in enumerate(runs, 1):

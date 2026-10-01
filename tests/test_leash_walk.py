@@ -12,6 +12,9 @@ Two more, because they are the rules a port is most likely to get wrong:
     Q3  no per-episode state crosses an arm. A departure or a flat-run start from episode 1 must
         not count toward episode 2
     Q4  the race lookback is TRAILING and inclusive of k
+    Q5  `walk_fires_from` matches an independent groupby form. The mech's own signal definition
+        moved into the module 1001; this holds the carried-state loop against a stateless
+        reference that shares none of its logic
 
     python3 -m pytest tests/test_leash_walk.py -q
     python3 tests/test_leash_walk.py
@@ -19,12 +22,15 @@ Two more, because they are the rules a port is most likely to get wrong:
 import os
 import sys
 
+import itertools
+
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from optimus9.compute.coil_exit import _knowable  # noqa: E402
-from optimus9.compute.leash_walk import LeashWalk, rev_lookback_mask  # noqa: E402
+from optimus9.compute.leash_walk import (LeashWalk, rev_lookback_mask,  # noqa: E402
+                                         walk_fires_from)
 
 LADDER = list(range(4, 24))          # ws4..ws23, the mech's ladder
 KNOBS = dict(arm_fence=(25.0, 75.0), arm_wob=6, min_tf=7, fall=3, race=1, frmin=4,
@@ -140,6 +146,48 @@ def test_q4_race_lookback_is_trailing_and_inclusive():
     return len(fires)
 
 
+def _runs_reference(emit):
+    """INDEPENDENT form, sharing no logic with the module's carried-state loop: consecutive integers
+    share (value - position), so a groupby on that key partitions the runs with no state at all."""
+    out = []
+    for _, g in itertools.groupby(enumerate(emit), key=lambda p: p[1] - p[0]):
+        grp = [k for _, k in g]
+        out.append((grp[0], grp[-1]))
+    return out
+
+
+def test_q5_walk_fires_from_matches_the_groupby_form():
+    """Q5 — `walk_fires_from` == the stateless groupby reference, on random emitted-bar sets."""
+    rng = np.random.default_rng(1001)
+    trials = 0
+    for _ in range(400):
+        n = int(rng.integers(0, 60))
+        bars = sorted(set(int(x) for x in rng.integers(0, 120, size=n)))
+        got = walk_fires_from(bars)
+        want = _runs_reference(bars)
+        assert got == want, 'Q5: %r -> %r != %r' % (bars, got, want)
+        # every first bar is emitted, and no bar before it is adjacent-and-emitted
+        B = set(bars)
+        for a, b in got:
+            assert a in B and b in B, 'Q5: a run edge is not an emitted bar'
+            assert a - 1 not in B, 'Q5: %d is a run start but %d is also emitted' % (a, a - 1)
+            assert b + 1 not in B, 'Q5: %d is a run end but %d is also emitted' % (b, b + 1)
+        assert sum(b - a + 1 for a, b in got) == len(bars), 'Q5: the runs do not cover every bar once'
+        trials += 1
+    return trials
+
+
+def test_q5_guard_refuses_unsorted_and_duplicate_bars():
+    for bad in ([5, 5], [5, 4], [1, 2, 2, 3], [9, 1]):
+        try:
+            walk_fires_from(bad)
+        except ValueError:
+            continue
+        raise AssertionError('walk_fires_from accepted %r' % (bad,))
+    assert walk_fires_from([]) == [], 'the empty case must give no runs'
+    return True
+
+
 def test_step_refuses_non_consecutive_bars():
     w = LeashWalk(LADDER, **KNOBS)
     w.step(10, 80.0, None, 1, None, 0.0, None, lambda t: False, lambda t: False, False)
@@ -155,4 +203,6 @@ if __name__ == '__main__':
     print('Q2 rev mask == coil_exit._knowable       OK  %d bars, 0 disagree' % test_q2_rev_mask_matches_knowable())
     print('Q3 no state crosses an arm               OK  episode 2 arm at bar %d' % test_q3_no_state_crosses_an_arm())
     print('Q4 race lookback trailing + inclusive    OK  %d fires' % test_q4_race_lookback_is_trailing_and_inclusive())
+    print('Q5 walk_fires_from == groupby form        OK  %d trials' % test_q5_walk_fires_from_matches_the_groupby_form())
+    print('Q5 guard refuses unsorted / duplicate     OK' if test_q5_guard_refuses_unsorted_and_duplicate_bars() else 'FAIL')
     print('step refuses non-consecutive bars        OK' if test_step_refuses_non_consecutive_bars() else 'FAIL')

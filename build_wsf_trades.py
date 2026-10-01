@@ -15,7 +15,14 @@ stops at the window edge. Config v1, which carried the old shape, was dropped wi
 
 THE ONE THING THAT IS STILL NOT KNOWABLE AT ITS OWN BAR is `wsl_sig_utc`. It is the `sig` CROSS bar
 on 98 of 121 v7 rows, and the cross is only confirmed `boundary_xwob - 1` = 3 bars = 15 s later, at
-`sig_conf`. `coil_exit.first_forward` and `resolve`'s GAP branch both return the cross bar. Joe 0929
+`sig_conf`. ~~`coil_exit.first_forward` and `resolve`'s GAP branch both return the cross bar.~~
+**STRUCK 1001 — FALSE, AND IT MISLED A READER.** `first_forward:112` returns `sc[k]`, the
+`sig_conf`; its own docstring says *"the bar RETURNED is that cross's `sig_conf`"*, and the GAP
+branch's `inside[0][1]` is commented *"the FIRST cross after `named`, at ITS conf bar"*.
+CONFIRMED `:127`, GAP `:142` and FORWARD `:145` all give a conf bar; LOOKBACK `:135` gives
+`moment['i1']`. **The 15 s early bars are the BANKED `wsl_sig_utc` rows only** — the rebuilt
+chain is not 15 s early. Caught by the o9-live recon session 1001 after this sentence was cited
+as authority for a non-existent defect in `measure_live_stop.build`. Joe 0929
 read it as *"sig has already qualified the wob in code, but the wrong field was presented"* and has
 not yet ruled the change. Measured cost of moving to `sig_conf`: 119 trades either way, MFE > MAE 68
 either way, MAE mean 0.698 -> 0.720, MFE mean 0.991 -> 0.969.
