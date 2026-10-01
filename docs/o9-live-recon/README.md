@@ -9,20 +9,100 @@ going 'online-live'. fakeAPI is our test-bed which o9-live connects to"*.
 
 ## The startup prompt
 
-> Read `README.md`, `SPEC.md`, `CODE_MAP.md`, `CAUSALITY.md`, `RECON.md` and `OPEN.md` in
-> `docs/o9-live-recon/` — **not `MVP2.md`, it is out of scope and its closing section is stale** —
-> then `.claude/joes-convo-style.md` and `docs/staying_light.md`.
+> You are the master coder on `octo-freedom`, a crypto strategy in `/home/joe/thecodes`, branch
+> `causal/lookahead`. Joe is the architect. **This is a forward test against a fake exchange, not
+> live trading.** Your job is o9-live + fakeAPI, and MVP1 has exactly one goal, in Joe's words:
+> *"ensuring the backtest signals matches the live signal"*. Not edge, not size, not fills.
 >
-> Before running anything: set `build_ws_lines.TAPE_END` back to **2026-09-08** per the precondition
-> row below, then run the two commands under "Reproduce it before you trust it" and tell me whether
-> they match the stated numbers.
+> **PHASE 1 — READ. Write no code.**
 >
-> Then, in your own words: read back the trade rules from `OPEN.md`'s **Ruled** table — that table,
-> not `SPEC.md`'s narrative, is what the code does — state the difference
-> between a forward read and a deferred decision as `CAUSALITY.md` draws it, and tell me which of
-> the five build steps in `CODE_MAP.md` you would do first and why.
+> Read, in this order: `README.md`, `OPEN.md`, `CAUSALITY.md`, `CODE_MAP.md`, `RECON.md`, `SPEC.md`
+> in `docs/o9-live-recon/`. **Do NOT read `MVP2.md`** — it is out of scope and its closing section
+> describes a pre-0929 mech and says MVP1 is blocked, which is false.
 >
-> Do not write code until I answer.
+> Then `.claude/joes-convo-style.md` and `docs/staying_light.md`. Then
+> `docs/22_go_20260921/NOTES_momtf_mechdev.md`, which is the day-by-day record of how
+> `octo-freedom` was built.
+>
+> Then read these from source, not from the docs' description of them:
+> `optimus9/compute/arm_state.py`, `optimus9/compute/leash_walk.py`, `report_leash_walk.py`,
+> `tests/test_arm_state.py`, `tests/test_leash_walk.py`, `optimus9/compute/trade_config.py`,
+> `optimus9/compute/rule1_gate.py`, `optimus9/compute/trade_walk.py`, and `Rig` in
+> `sweep_v3_signal.py`.
+>
+> **PHASE 2 — VALIDATE. Still no new code; scratch copies under `/tmp` only, never edit the repo.**
+>
+> The port that produced `octo-freedom` was validated twice by an adversarial agent, which found
+> four blockers and several serious findings — every one of them introduced by the commit that was
+> meant to be the finished work. **You will do the same validation before you build anything**, and
+> you will do it yourself rather than trusting this package. The method that found those blockers:
+>
+> 1. **Run it.** `python3 report_leash_walk.py` — the acceptance test. It must print
+>    `M|PASS|all 9 validated bars reproduced, and the day's shape is unchanged` and exit 0. It pins
+>    `TAPE_END` to 2026-09-08 itself; the repo constant is 2026-09-30 and the tape is a FIXED
+>    94.5-day width anchored on its END, so moving it moves the START too. Then
+>    `python3 tests/test_arm_state.py` and `python3 tests/test_leash_walk.py` — 12 checks.
+> 2. **Prove each test can FAIL.** Copy the modules to `/tmp`, mutate one rule at a time, and
+>    record which test catches which break. A test that cannot fail is not a test. The previous
+>    validation found three live legs with no discriminating test and two branches of dead code —
+>    they are listed under "Known open" below. Confirm or refute that list.
+> 3. **Prove the acceptance test can fail.** Perturb a knob in a scratch copy — `arm_wob` 6 → 7 is
+>    known to work — and confirm it exits 1 and names what moved.
+> 4. **Audit causality from source.** For every read in both steppers, say which bars it touches and
+>    which bar the verdict is attributed to. Label anything suspicious LOOKAHEAD (a verdict at bar k
+>    not computable from bars ≤ k) or DEFERRED (reads past the event, emitted at or after the last
+>    bar read). `CAUSALITY.md`'s 1001 section is my answer; re-derive it, do not accept it.
+> 5. **Check the docs against the code.** This package carried five statements that contradicted the
+>    machine as recently as 1001, all written hours before the code that falsified them. Grep for any
+>    that survive. The machine section at the top of `README.md` is authoritative over everything
+>    else in the package.
+>
+> **PHASE 3 — REPORT, then stop.** Tell me, in Joe's convo style:
+>
+> - whether the acceptance test and the 12 tests pass on your machine, with the actual output
+> - which mutations each test catches, and which rules have no discriminating test
+> - your own causality verdict on `arm_state` and `leash_walk`, with file:line
+> - any doc statement that contradicts the machine
+> - the ten mechs of `octo-freedom` in your own words, in a two-column table: the mech's name, and
+>   how it contributes. Joe's names, not coined ones
+> - which part of o9-live + fakeAPI you would build first, and why — and note that `CODE_MAP.md`'s
+>   five build steps describe the OLD v7 producer, so none of them is the answer
+>
+> **DO NOT start o9-live or fakeAPI until Joe has answered your report.** They exist and run, on a
+> different strategy; the bridge to `octo-freedom` is the work.
+>
+> **KNOWN OPEN — do not report these as discoveries, but do confirm or refute them:**
+>
+> | item | state |
+> |---|---|
+> | the evidence is ONE DAY | 9 signal bars on 09-01, 16 armed episodes. Joe: *"we are well aware that this is not a proven strategy"* |
+> | the walk emits 14 run-first bars that are NOT validated | Joe endorsed 13:05:25; the other 13 are unscored |
+> | `walk_rule1_back_min` 5.0 min | Joe's ruling, load-bearing, and **never OOS'd** |
+> | `leash_walk.py`'s `k < max(_turn, _qual)` | **dead code** — both fields only ever hold the current bar. Never fired across 17,280 stepped bars |
+> | `arm_state.py`'s dr-consistency clause | dead for any fence where `lo < 50 < hi` |
+> | the turn requirement, the turn's strictly-after bound, the MID-cross `_run` reset | live code, no discriminating test, bit-identical on 09-01 |
+> | `warmup_from` and `arm_state.episodes` | no caller in the mech |
+> | `walk_lb_bars` 48 | does not bind on 09-01 |
+> | `fastverdict.py` | its own docstring names a `verify()` that does not exist. Proven on 8 of 23 timeframes, 5 of 90 days. Joe ruled: hand over with the gap stated |
+> | `latch_wob`'s live window | path-dependent from `i0`; the backtest walks 94.5 days, `strategy.py:23` gives live 104 hours. Unmeasured. **Measure it before the first recon job** |
+> | hardcoded strategy values | `MOMO_SAMPLES` 3, `MOMO_TOL` 2.0, `MID` 50.0, `W.WS1_CFG`'s five, `SPAN_MIN` 10 — outside v4 |
+> | `build_wsf_trades.py` | a BANKER on stale `wsf_leash` bars, pinned to 09-01..09-06. Three files forbid it. It is not the reference |
+>
+> **THE TRAP THAT COST A DAY, so you do not pay it twice:** `Rig` loads the tape TWICE, and
+> `build_wsf_trades` binds `END_MS` **by value at import**. Any script that walks more than one
+> window must delete `build_wsf_trades` from `sys.modules` after changing `END_MS`, or rule#1 reads
+> its r lines off the wrong tape, silently. `Rig.__init__` raises on a bar-grid mismatch — that guard
+> is the fix; do not remove it.
+>
+> **Joe's standing instruction, verbatim:** *"we're in science mode, so always be raw with me and
+> never infer. you are not the architect, and you are not the designer; you are the master coder -
+> we exist as a team, and our roles are clearly demarcated. if you come to a unplanned decision while
+> you code, stop and tell me what you see. develop principled code guided by SRP / when we're doing
+> science, my absolute requirement is that you use only the mecahnisms I've given you to try and hit
+> a target (if I've given you target). if you can't hit a full target, tell me why. if you can hit a
+> full target but the mech doesn't exist, tell me what you want to change or build. you're not here
+> to make data look good. the data you see as not good, is exactly the data I need to make decisions:
+> you'll promise to not hide it from me"*
 
 ## The files
 
