@@ -18,7 +18,7 @@ strategy in the background while o9-live is under review"*.
 | position size | not needed — selection does not price | required |
 | scoring | MAE/MFE percentages of entry. NO P&L — Joe 0917 | unchanged until Joe reopens P&L |
 
-## The four MVP2 items
+## The five MVP2 items
 
 ### 1. Price recon
 
@@ -88,6 +88,41 @@ else. A resting limit that does not fill would be indistinguishable from a signa
 `OPEN.md` item 3. 22,000 coins is banked for **sneaky-1**. **Nothing is set for this strategy.**
 
 Not needed for MVP1 — selection does not price. Needed the moment price enters, which is item 1.
+
+### 5. The dr fence + wob sweep
+
+**Joe 1001:** *"no changes for now. fix the docstrings to suit, and add 'dr fence + wob' sweep to
+MVP2"*. Added on his instruction, after he asked *"my view of dr is ws1Mage + ws13m oob. was that
+dropped?"* and the trace found three fences in use and a wob ruled on one of them.
+
+WHAT THE SWEEP IS. Two knobs, swept together, scored on `octo-freedom`'s own output:
+
+| knob | current values in play |
+|---|---|
+| the dr fence | **85 / 15** (oob — the original, and what the walk reads) and **75 / 25** (the Mage fence — what `dr_latch`'s defaults and rule#1 use) |
+| the dr wob | **0** (the walk's series) and **8** bars = 40 s (`LATCH_W`, what rule#1's series uses) |
+
+WHY IT IS WORTH A SWEEP RATHER THAN A RULING. `oob` is always 15/85 and Joe's stated view of dr is
+the oob pair, which is also what `build_wsf_dtf_v3.py:317-318` latches on — it reads
+`optimus9_system.hi_boundary`/`lo_boundary`, 85.0/15.0. Two docstrings in the chain claimed 75/25
+was "verbatim" from that and "oob"; both were wrong and were corrected 1001. **Nothing was dropped
+and nothing was changed.** What is open is that the 0926 measurement behind *"we have to stick on
+8"* was taken on the **75/25** series, so the wob has never been measured against the fence Joe
+describes as his dr.
+
+| measured, on the whole tape | value |
+|---|---|
+| `latch` stretches at 75/25 | 3,217 |
+| `latch_wob` stretches at 75/25, wob 8 | 2,497 |
+| bars where the two disagree | 112,984 = **6.92%** |
+| `rig.DR` (85/15, no wob) vs `rig.DRW` (75/25, wob 8) on 09-01 | differ on 717 of 17,280 bars = 4.1%, and on **44 of 2,768** MECH bars |
+
+WHAT IT MUST NOT DO. The four combinations are not four implementations — `dr_latch.latch` and
+`latch_wob` already take `hi`, `lo` and `wob` as arguments, so the sweep passes values and changes
+no code. Score each on `octo-freedom`'s acceptance set, not on the v7 chain's net.
+
+**NOT MVP1 WORK.** `octo-freedom`'s validated bars were produced on 85/15 no-wob for the signal and
+75/25 wob 8 for rule#1. That pairing is what MVP1 reproduces and it is not in question here.
 
 ## What MVP2 inherits and must not re-litigate
 

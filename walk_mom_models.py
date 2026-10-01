@@ -35,7 +35,8 @@ WALK        = 5                        # walks 1-4 stay; 5 adds the 35 min reach
 #                                        20/80 exit fence and the ws3 fallback
 START_UTC   = '2026-08-25 01:51:00'   # Joe 0912: "starting point: dr 1, 08-25 01:51"
 START_DR    = +1                      # Joe 0912
-MAGE_HI, MAGE_LO = 75.0, 25.0         # the 25/75 fence, build_wsf_dtf_v3
+MAGE_HI, MAGE_LO = 75.0, 25.0         # the 25/75 Mage fence. CORRECTED 1001: this is NOT what
+#                                       build_wsf_dtf_v3 latches dr on - see dr_latch() below
 MAGE_DWELL  = 6                       # Joe: "the next walk begins at the opposing dr's ws1Mage oob
 #                                       cross (oob-dwell=6)". 6 bars = 30 s
 FENCE_HI, FENCE_LO = 83.0, 17.0       # THE SPENT TEST'S fence. Joe 0912 fixed it at 17/83 and
@@ -168,8 +169,24 @@ def gate_ok(name, L, dr, k, banks, seams, tf):
 
 
 def dr_latch(m1, m13, i0, i1):
-    """The dr series, VERBATIM from build_wsf_dtf_v3: ws1Mage AND ws13m both oob, SAME side,
-    latched. The previous dr holds until both agree on a side."""
+    """The dr series: ws1Mage AND ws13m both beyond `MAGE_HI`/`MAGE_LO` 75/25, SAME side, latched.
+    The previous dr holds until both agree on a side.
+
+    CORRECTED 1001. This docstring said *"VERBATIM from build_wsf_dtf_v3: ws1Mage AND ws13m both
+    oob"*. BOTH CLAIMS WERE WRONG and `optimus9/compute/dl_latch.py` inherited them:
+
+      `build_wsf_dtf_v3.py:317-318` latches on `HI, LO = float(sy['hi']), float(sy['lo'])`, read
+      from `optimus9_system.hi_boundary` / `lo_boundary` (`:217`), which are **85.0 / 15.0**.
+
+    So the original dr is at **oob 15/85**, not the Mage fence, and this function is NOT verbatim
+    from it - it substituted 75/25. "oob" in Joe's vocabulary is ALWAYS 15/85, so the old docstring
+    described the right mech at the wrong fence.
+
+    NOTHING IS CHANGED HERE. Joe 1001, shown the divergence: *"no changes for now. fix the
+    docstrings to suit, and add 'dr fence + wob' sweep to MVP2"*. Callers that want the original
+    series pass `hi=85.0, lo=15.0` explicitly, which is what `sweep_v3_signal.Rig` does inline at
+    `:99-106` for `octo-freedom`'s walk.
+    """
     out = np.zeros(len(m1), np.int8); cur = 0
     for k in range(int(i0), int(i1) + 1):
         a, b = float(m1[k]), float(m13[k])

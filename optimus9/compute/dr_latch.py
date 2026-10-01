@@ -8,9 +8,9 @@ latch. there's only one global source for dr"*.
 
 TWO PRODUCERS, AND THEY ARE NOT THE SAME SERIES.
 
-  `latch`      the ORIGINAL, lifted verbatim from `walk_mom_models.dr_latch`, whose own docstring
-               says "VERBATIM from build_wsf_dtf_v3". It latches on the FIRST bar both lines are oob
-               on the same side. This is what built `wsf_dtf_v3` and, through it, `wsf_leash.wsl_dr`.
+  `latch`      lifted from `walk_mom_models.dr_latch`. It latches on the FIRST bar both lines are
+               beyond the fence on the same side. This is what built `wsf_dtf_v3` and, through it,
+               `wsf_leash.wsl_dr` - BUT NOT AT THIS MODULE'S DEFAULT FENCE. See the correction below.
   `latch_wob`  the same with a `wob`: both lines must hold the same side for `wob` CONSECUTIVE bars
                before the latch moves. Lifted from `docs/mage_cascade/stopsweep.py:62`.
 
@@ -26,11 +26,35 @@ moving the dr-flip earlier to improve the backstop... no wob"* - and he reversed
 it reproduces `wsf_leash.wsl_dr` on 242 of 242 rows. The walk's dr is `latch_wob` read live at the bar
 it starts from. Joe 0926 knows and intends the difference; spec §22.21 and §22.22 carry it.
 
+CORRECTED 1001 - THE FENCE LINEAGE. This module's defaults are the Mage fence **75/25**. Joe's own
+view of dr, stated 1001: *"my view of dr is ws1Mage + ws13m oob"* - and `oob` is ALWAYS 15/85. He is
+right, and the original agrees with him:
+
+| what | fence | where the fence comes from |
+|---|---|---|
+| `build_wsf_dtf_v3.py:317-318` - THE ORIGINAL | **85 / 15** | `optimus9_system.hi_boundary`/`lo_boundary`, read from the DB at `:217` |
+| `sweep_v3_signal.Rig.DR` - what `octo-freedom`'s walk reads | **85 / 15** | hardcoded inline at `:99-106`, same values |
+| `walk_mom_models.dr_latch` | 75 / 25 | its own `MAGE_HI/LO` constant |
+| THIS MODULE's defaults | 75 / 25 | inherited from the line above |
+| `Rig.DRW` - what rule#1 reads, via `latch_wob` | 75 / 25, wob 8 | `trade_config.mage_fence_*` |
+
+The chain of docstrings claiming "verbatim" and "oob" was wrong at two links, and this module
+inherited it. **Joe's oob dr was never dropped** - it is the original and it is live in the walk.
+
+WHAT THIS MEANS FOR THE wob RULING, STATED AND NOT RESOLVED. The 0926 measurement behind Joe's
+*"we have to stick on 8"* was taken on THIS module's 75/25 series. If he was ruling on his oob view,
+the wob was ruled against a series he was not looking at. He has seen this and ruled: *"no changes
+for now. fix the docstrings to suit, and add 'dr fence + wob' sweep to MVP2"*. The sweep is MVP2
+item 5.
+
 CAUSAL. Both walk forward bar by bar and read nothing ahead.
 """
 import numpy as np
 
-MAGE_HI, MAGE_LO = 75.0, 25.0     # the Mage fence, build_wsf_dtf_v3. NOT oob, which is 15/85
+MAGE_HI, MAGE_LO = 75.0, 25.0     # the Mage fence. CORRECTED 1001 - this comment used to read
+#                                   "the Mage fence, build_wsf_dtf_v3. NOT oob, which is 15/85",
+#                                   which asserts the OPPOSITE of what build_wsf_dtf_v3 does. See
+#                                   the module docstring
 LATCH_TF = 13                     # the second line is ws13m
 LATCH_W = 8                       # Joe 0926: "we have to stick on 8". 8 bars = 40 s at the 5 s grid
 
