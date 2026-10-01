@@ -57,7 +57,14 @@ going 'online-live'. fakeAPI is our test-bed which o9-live connects to"*.
 >    that survive. The machine section at the top of `README.md` is authoritative over everything
 >    else in the package.
 >
-> **PHASE 3 — REPORT, then stop.** Tell me, in Joe's convo style:
+> **PHASE 3 — REPORT, then stop.**
+
+> **WRITE THE REPORT AS A FILE IN THIS REPO: `docs/octo-freedom/MMDD_<what-it-is>.md`.** Joe 1001:
+> *"guide it to store reports locally. create a docs/octo-freedom/"*. Read
+> `docs/octo-freedom/README.md` first — it carries the naming, what a report must carry, and the
+> three things already lost this session to numbers that lived outside the repo. A Claude Docs page
+> is fine as a VIEW of the file; it is not where the report lives. Then tell Joe in chat, in his
+> convo style:
 >
 > - whether the acceptance test and the 12 tests pass on your machine, with the actual output
 > - which mutations each test catches, and which rules have no discriminating test
