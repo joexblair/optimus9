@@ -13,7 +13,7 @@
 | price recon | out of scope, MVP2 |
 | lookahead test | re-run from the tape, not a diff against stored verdicts |
 | tape vs line at recon | the line-cache, deliberately, as a second test-point |
-| dr producer | `latch_wob` at `LATCH_W` 8. He reversed his own "no wob" instinct on the numbers |
+| dr producer | `latch_wob` at `LATCH_W` 8. He reversed his own "no wob" instinct on the numbers. **THE v7 CHAIN'S.** `octo-freedom`'s walk and its trade book read `rig.DR`, oob 85/15 no wob (see *the trade book reads `rig.DR`* below); its rule#1 reads `latch_wob` |
 | the backstop | the flip **back to** the trade's own dr, two flips forward |
 | scratchpad | moved into the codebase, knobs in the DB. Done |
 | ~~P&L~~ **REOPENED 1001** | Joe, asked whether "real pnl results" for o9-live extended to backtest reporting: *"both. the machine is now developed enough (ie we can make full loops of our mechs) to accurately interpret our results through the reality lens of P&L"*. `octo-freedom` closes the circuit - signal, gate, three exits, stop - so a P&L number prices a complete mech. **PERCENTAGE P&L per trade is reportable now; ABSOLUTE P&L needs a position size and `MVP2.md` item 4 says none is set.** Already-banked P&L (`docs/sneaky_trade_1_handover.md`, spec 17.3, the `sneaky_trade_1` table) is a completed record - do not restate it as current | ~~closed since 0917. MAE/MFE only~~ |
@@ -21,10 +21,10 @@
 | **the dr-flip backstop CLOSES but never OPENS** | Joe 0929-late: *"now we have the data I can see that dr-flip as an open is not helpful. the cost is accceptable - it gives us space to apply other mechs (lazy-g for example)"*. It still closes, or a trade would run to the next opposing signal whatever happened |
 | **the MAE cap is 0.70%, and the stop is IN THE WALK** | Joe specified 0.9 on 0929, ruled 0.70 on the first ladder, then re-ruled it on the ladder re-walked with the stop live: *"retain 0.7% as the stop"*. `MFE-MAE` prints `-0.70` on a stopped trade |
 | **the stop RACES the other exits** | Joe 0929-late: *"research how a stop is applied in trading - you'll learn that it's both: (at its signal or flip bar) OR (at the stop bar)"*. Three live exits, first to fire wins |
-| **the cap goes in the KEY *and* in `wsf_trade_config`** | Joe 0929-late: *"put the cap in the key"*, then *"move MAE_CAP to the DB"*. Config **v3**, row `mae_cap` = 0.70, key `wtc_v3_v7_rule1_gateopen_mae0.70`. There is no hard-coded cap left in the code |
+| **the cap goes in the KEY *and* in `wsf_trade_config`** | Joe 0929-late: *"put the cap in the key"*, then *"move MAE_CAP to the DB"*. Config **v3**, row `mae_cap` = 0.70, key `wtc_v3_v7_rule1_gateopen_mae0.70`. There is no hard-coded cap left in the code. **The v7 chain's key; `octo-freedom` loads v4, key `wtc_v4_v7_rule1_gateopen_mae0.70`, same `mae_cap` 0.70** |
 | **only the MAE-capped mech is handed over** | Joe 0929-late: *"you should be handing over only the mech that the MAE cap was applied to"*. Anything measured without the cap - `docs/sweeps/`, every row in `wsf_trades`, every variant - is a **different mech**. It is not a baseline and not a comparison |
 | **the 0929 knob sweep is out** | Joe 0929-late: *"ok, the sweep is definitely poisoned. let's go back to baseline"*. It ran before the cap and before the flip-open ruling. Do not use `docs/sweeps/` |
-| the gate window | **backward-only, 7 min**. Joe 0929: *"the -3.5 and + 3.5 logic is what's making it non-causal, so let's drop the forward"* |
+| the gate window | **backward-only. 7 min for the v7 chain; `octo-freedom`'s rule#1 is 5 min = 60 bars** (see *the walk's rule#1 lookback is 5.0 min*). Joe 0929: *"the -3.5 and + 3.5 logic is what's making it non-causal, so let's drop the forward"* |
 | **`rule1_gate`'s WINDOW SHAPE is "v2"** | DISAMBIGUATED 1001 — this row used to read "the config \| v2 only" and collided with the `wsf_trade_config` **v3** row above it. They are two different things. "v2" here is `rule1_gate`'s backward-only window, which exists only as a docstring label (`rule1_gate.py:59`) — there is no code switch and no DB row for it. Joe 0929 dropped the v1 forward-window shape and its 166 banked rows after the A/B |
 | ~~`wsf_trade_config` is v3, and ONLY v3~~ **SUPERSEDED 1001 — the machine is `octo-freedom`. See the machine section at the top of `README.md`.** The DB holds v2 (16 rows), v3 (18) and **v4 (36)**. `octo-freedom` loads v4; the v7 chain still loads v3. What stands: a bare `wtc_v2_...` key is the uncapped mech and is still forbidden. | the config object the code loads is `trade_config.load(db, TC.V)` with `V` = 3, 18 rows, key `wtc_v3_v7_rule1_gateopen_mae0.70`. A v2 config returns the bare `wtc_v2_v7_rule1_gateopen` — **the uncapped mech this package forbids**. If any doc says "config v2" without saying `rule1_gate`, it means the window shape, not this |
 | a forward WAIT on a rejected sig bar | **rejected**. Joe 0929: *"no V3, just v2"*. It was causal and recovered all 7 lost opens, but 5 of 7 additions lose |
@@ -66,8 +66,22 @@ the flat 8.75 bps.
 explain a result nobody measured is the bias the P&L ban existed to stop — it locates failure
 outside the mechanics instead of inside them.
 
-| **signals become TRADE ACTIONS** | Joe 1001, asked whether MVP1's producer runs the three exits or emits signals only: *"yes - signals become trade actions, so that we see the o9-live mechs simulating real trading and real pnl results"*. So the producer feeds `trade_walk.walk()` and o9-live reports P&L. **Nothing in the repo connects `WALK FIRES FROM` bars to `trade_walk` yet** - the 09-01 MAE/MFE came from a scratch `mae.py` that no longer exists |
-| **the live walk re-walks a BOUNDED WINDOW every bar** | Joe 1001, on whether to carry state live instead: *"if it's dr related and one option has an inability to sync backtest to live, then we must take the other option (so that recon can be accurate)"*. MEASURED, and it makes the choice free: the longest unbroken dr stretch across the whole 94.5-day tape is **7.2 h** (5,175 bars) against **2,487** dr changes, median 0.7 h, p90 1.9 h, and **0 of 2,487** reach even 24 h. `StrategyLoop`'s 104-hour window therefore ALWAYS contains a dr change - 14x the longest stretch - so the bounded re-walk converges to the backtest's dr and keeps its self-healing property. Joe 1001: *"there will never be a 4 day stretch on an unbroken dr. prove me wrong"* - 0 of 2,487 reach 4 days |
+| ruled 1001-1002, the live producer | |
+|---|---|
+| **signals become TRADE ACTIONS** | Joe 1001, asked whether MVP1's producer runs the three exits or emits signals only: *"yes - signals become trade actions, so that we see the o9-live mechs simulating real trading and real pnl results"*. **CONNECTED 1002:** `optimus9/live/octo_freedom.py` steps `trade_walk.TradeBook` bar by bar (`docs/octo-freedom/1002_live_producer.md`) |
+| ~~the live walk re-walks a BOUNDED WINDOW every bar~~ **SUPERSEDED 1002 by shape B, the next row** | Joe 1001, on whether to carry state live instead: *"if it's dr related and one option has an inability to sync backtest to live, then we must take the other option (so that recon can be accurate)"*. MEASURED, and it makes the choice free: the longest unbroken dr stretch across the whole 94.5-day tape is **7.2 h** (5,175 bars) against **2,487** dr changes, median 0.7 h, p90 1.9 h, and **0 of 2,487** reach even 24 h. `StrategyLoop`'s 104-hour window therefore ALWAYS contains a dr change - 14x the longest stretch - so the bounded re-walk converges to the backtest's dr and keeps its self-healing property. Joe 1001: *"there will never be a 4 day stretch on an unbroken dr. prove me wrong"* - 0 of 2,487 reach 4 days |
+| **shape B: carry the arm / walk / trade-book state from bar to bar; rebuild the lines every bar** | Joe 1002: *"B"*. Measured: a full 104 h rebuild ≈ 80 s per bar against a 5 s budget; the lines alone 1.27-1.45 s (`docs/octo-freedom/1001_rebuild_timing.md`). `optimus9/live/octo_freedom.py` |
+| **the live window is 104 h** - 24 h lookback + 80 h warmup | Joe 1001: *"#3 window is approved"*. Minimum measured 72.47 h (`docs/octo-freedom/1001_warmup.md`). NOT `run_o9live.py`'s 8 + 6 h, which was sized for v2's lines |
+| **the open label is `octo-sig`** | Joe 1001 (`docs/octo-freedom/1001_rewalk_on_ruled_dr.md`) |
+| **the trade book reads `rig.DR`** - oob 85/15, no wob | Joe 1001: *"it's the dr in this report"* |
+| **a trade opens on the ARM's dr** | Joe 1001: *"I think we do the same for dr"* |
+| **a same-dr octo-sig while a trade is open: no pyramid** | Joe 1002: *"for this first MVP, no pyramid trades. note the signal for recon and keep walking"*. Dumped as `non-trading octo-sig` |
+| **`non-trading octo-sig`** in the trade-signal dump | Joe 1002: *"technically it's an open without a close. can you notate (in the log) in a way that steers you towards reconcilling the non-trading octo-sig?"* An `open` line with that reason; no order, no close line follows |
+| **startup: stay flat** | Joe 1002: *"stay flat. I'm assuming that you'll be walking the bars until a octo-sig prints. that's when the first trade will opened"*. The walk is rebuilt over the first window; the trade book starts empty at the first live bar |
+| **a feed gap** | Joe 1002: opens inside a gap under 5 min are placed late, 5 min or more none - *"if the gap is less than 5 minutes, yes - place the trade"*, applied to the whole gap; closes fire as soon as known whatever the gap - *"if a close event fires in the gap, it needs to fire as soon as the event is known (after the gap)"* |
+| **the recon's backtest trade list starts 24 h before o9-live's start bar** | Joe 1002: *"24 hours before"*, with *"the constant re-reviewing is to ensure that an established octo-sig doesn't move"* - the 24-hour re-validation, `RECON.md` |
+| **PARKED TO MVP2: bars rewritten after the walk used them, the blip-triggered reset, the 1-minute octo-sig dwell** | Joe 1002: *"let's park the rewritten bars until MVP2. the critcal MVP1 task is recon - if we have tick or kline issues in that time, then we have real data to make decsions on"*; asked whether that covers the reset and the dwell: *"yes, create an errors log for fakeAPI and shell monitor the log"*. MVP1 RECORDS tick and kline issues in `o9live_errors.log` (`optimus9/live/feed_errors.py`) and acts on none. `MVP2.md` item 6 |
+| **fresh ledger, 1002** | Joe 1002: *"flatten it, fresh ledger, start it now"*. The July Buy 66,000 was flattened, seven tables copied to `*_archive_1002`, then `/api/reset`. `docs/octo-freedom/1002_live_producer.md` |
 
 ## Not ruled — will need him
 
@@ -76,9 +90,9 @@ outside the mechanics instead of inside them.
 | # | the question, in one line | blocks |
 |---|---|---|
 | 1 | ~~can the signal chain run forward~~ | ANSWERED — it runs in realtime |
-| 2 | what fields go in the trade-signal dump | the dump, the monitor |
+| 2 | ~~what fields go in the trade-signal dump~~ | **RULED 0929-late** - five fields, `RECON.md`'s wake mechanism. The reason values grew in 1002 (Ruled table) |
 | 3 | position size for this strategy | MVP2 only |
-| 4 | what happens to the 988 old ledger rows | nothing — housekeeping |
+| 4 | ~~what happens to the 988 old ledger rows~~ | **RULED 1002** - fresh ledger; the rows are in `o9_ledger_archive_1002` |
 | 5 | ~~should wsl_sig_utc carry sig_conf~~ | RULED — it must |
 | 6 | ~~may the book go flat~~ | SETTLED by the flip-open ruling — it does |
 | 7 | re-bank the 121 leash rows at sig_conf | the leash bank |
@@ -258,13 +272,14 @@ no end-of-run to wait for. See `docs/22_go_20260921/NOTES_momtf_mechdev.md`.
    trade - 14% to 18% - plus 144 of 1,045 gated opens, because moving the bar moves what rule#1
    sees. Joe has NOT ruled the entry bar changed, so `SPEC.md` still states the named bar.
 
-2. **The dump's exact fields.** `RECON.md` suggests a set. It is a suggestion.
+2. ~~**The dump's exact fields.** `RECON.md` suggests a set. It is a suggestion.~~ **RULED 0929-late** -
+   `RECON.md` carries the five fields and Joe's words.
 
 3. **Position size.** 22,000 coins is banked for sneaky-1. Nothing is set for this strategy. Not
    needed for MVP1 selection recon, needed the moment price enters. See `MVP2.md`.
 
-4. **What happens to the 988 old `o9_ledger` rows.** Filter by time, by symbol, or start a fresh
-   ledger.
+4. ~~**What happens to the 988 old `o9_ledger` rows.**~~ **RULED 1002: fresh ledger.** The 988 rows are in
+   `o9_live.o9_ledger_archive_1002`.
 
 5. ~~**Whether `wsl_sig_utc` should carry `sig_conf`.**~~ **RULED 0929 — Joe: *"sig_conf is
    unconditional - it has to happen"*.** `coil_exit.py` now emits the conf bar on every branch that
@@ -444,6 +459,6 @@ producer written for `StrategyLoop` must flip the sign. Nothing in the live code
 
 Also: no caps, windows or truncations he did not ask for; every hard-coded value belongs in the DB;
 every figure goes in a table, never inline in a bullet; no percentage without its episode count; and
-three closers on every substantive response — Summary as bullets, Reads, PnL impact.
+one `TL;DR:` line, only when there is a finding or a decision — the three closers were dropped 1001.
 
 `.claude/joes-convo-style.md` is the full format contract. `docs/staying_light.md` is the other half.

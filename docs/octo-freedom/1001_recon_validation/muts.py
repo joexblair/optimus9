@@ -115,8 +115,8 @@ MUTS = [
     ('L23', 'leash_walk', "b = min(int(n) - 1, int(s_) + int(lookback))",
      "b = min(int(n) - 1, int(c_) + int(lookback))",
      'rev lookback anchored on sig_conf instead of the cross bar'),
-    ('L24', 'leash_walk', "        adr = w.arm.arm_dr if w.arm.live else int(d[k])",
-     "        adr = int(d[k])",
+    ('L24', 'leash_walk', "    adr = w.arm.arm_dr if w.arm.live else int(d_k)",
+     "    adr = int(d_k)",
      'walk(): mom/fr/rev read on the bar dr, not the arm dr'),
 ]
 

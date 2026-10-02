@@ -21,7 +21,8 @@ vectorised helper that silently started at the caller's window edge would give a
 live than in the backtest — the same hazard `dr_latch.latch_wob` carries, flagged in
 `docs/o9-live-recon/CODE_MAP.md`.
 
-THE WARMUP IS BOUNDED, AND THAT IS WHAT MAKES IT LIVE-SAFE. A MID cross resets every field to its
+THE ARM'S OWN WARMUP IS BOUNDED. (Qualified 1002: the dr series fed in is a separate path-dependent
+input, seeded at its tape's first bar - see docs/octo-freedom/1001_warmup.md.) A MID cross resets every field to its
 initial value, so the state at bar k is fully determined by the bars since the last MID cross. A
 live walk that seeds at or before the most recent MID cross reproduces the backtest exactly.
 `warmup_from` returns that bar. `test_arm_state.py` proves the property rather than asserting it.

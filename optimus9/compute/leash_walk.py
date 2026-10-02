@@ -204,6 +204,25 @@ def rev_lookback_mask(sig, sig_conf, n, lookback):
     return ok
 
 
+def step_bar(w, k, m_k, m_prev, d_k, d_prev, c_k, c_prev, mom_at, fr_at, rev_ok):
+    """ONE bar of the walk, with the dr routed the way the mech requires. -> True to EMIT at `k`.
+
+    While the arm is live, momentum, flat-run and the rev leg are read on the ARM'S dr; otherwise on
+    the bar's own dr. That routing used to be inline in `walk()`. It moved here 1002 so `walk()` (the
+    backtest) and `optimus9/live/octo_freedom.py` (the live producer, which steps one bar per 5 s
+    across windows) run the SAME lines - Joe ruled the evolving cache, and a copied routing is the
+    next divergent copy.
+
+    mom_at(tf, dr) / fr_at(tf, dr)   the caller's readers AT THIS BAR
+    rev_ok(dr)                       the rev mask at this bar on `dr`; a dr it has no mask for -> False
+    """
+    adr = w.arm.arm_dr if w.arm.live else int(d_k)
+    return w.step(k, m_k, m_prev, d_k, d_prev, c_k, c_prev,
+                  (lambda t, _d=adr: mom_at(t, _d)),
+                  (lambda t, _d=adr: fr_at(t, _d)),
+                  bool(rev_ok(adr)))
+
+
 def walk(ladder, mage, dr, cc, mom_at, fr_at, rev_mask, i0, i1, **knobs):
     """Drive `LeashWalk` over [i0, i1]. -> (bars, {bar: episode state at that bar}).
 
@@ -214,7 +233,7 @@ def walk(ladder, mage, dr, cc, mom_at, fr_at, rev_mask, i0, i1, **knobs):
 
     The BACKTEST's convenience, running the identical `step` a live walk runs — there is no second
     implementation. `mom_at(tf, k, dr)` and `fr_at(tf, k, dr)` are the caller's data source;
-    `rev_mask` is {dr: bool array} from `rev_lookback_mask`.
+    `rev_mask` is {dr: bool array} from `rev_lookback_mask`. Each bar goes through `step_bar`.
     """
     m = np.asarray(mage, float)
     d = np.asarray(dr, np.int8)
@@ -224,13 +243,12 @@ def walk(ladder, mage, dr, cc, mom_at, fr_at, rev_mask, i0, i1, **knobs):
     states = {}
     i0 = int(i0)
     for k in range(i0, int(i1) + 1):
-        adr = w.arm.arm_dr if w.arm.live else int(d[k])
-        hit = w.step(k, float(m[k]), None if k == i0 else float(m[k - 1]),
-                     int(d[k]), None if k == i0 else int(d[k - 1]),
-                     float(c[k]), None if k == i0 else float(c[k - 1]),
-                     (lambda t, _k=k, _d=adr: mom_at(t, _k, _d)),
-                     (lambda t, _k=k, _d=adr: fr_at(t, _k, _d)),
-                     bool(rev_mask[adr][k]) if adr in rev_mask else False)
+        hit = step_bar(w, k, float(m[k]), None if k == i0 else float(m[k - 1]),
+                       int(d[k]), None if k == i0 else int(d[k - 1]),
+                       float(c[k]), None if k == i0 else float(c[k - 1]),
+                       (lambda t, a, _k=k: mom_at(t, _k, a)),
+                       (lambda t, a, _k=k: fr_at(t, _k, a)),
+                       (lambda a, _k=k: bool(rev_mask[a][_k]) if a in rev_mask else False))
         if hit:
             out.append(int(k))
             states[int(k)] = dict(w.state)

@@ -71,6 +71,11 @@ python3 eps.py                                       # armed episodes touching 0
 any string does not occur exactly once. An edit to either module will stop the harness rather than
 mutate the wrong line.
 
+UPDATED 1002: the per-bar dr routing moved from `leash_walk.walk()` into `leash_walk.step_bar()`
+(`1002_live_producer.md`), so L24's target line is now `adr = w.arm.arm_dr if w.arm.live else
+int(d_k)`. Same rule, same break; all 37 mutation strings and the 3 probes re-checked against the
+current source.
+
 DB checks, run inline:
 
 ```
@@ -359,7 +364,7 @@ The three decisions it asked for, and what `OPEN.md` says now:
 
 | # | decision | `OPEN.md` after 1001 |
 |---|---|---|
-| 1 | re-walk a bounded window every bar vs carry state live | ruled: bounded re-walk |
+| 1 | re-walk a bounded window every bar vs carry state live | ruled: bounded re-walk; **re-ruled 1002: shape B** — carry the state, rebuild the lines (`1001_rebuild_timing.md`) |
 | 2 | the window length | not ruled. Measured on `rig.DR`: longest stretch 7.2 h, 0 of 2,487 reach 24 h, against the 104 h window. `rig.DRW` not measured |
 | 3 | signals only vs run the three exits | ruled: signals become trade actions; P&L as a percentage |
 

@@ -2,7 +2,8 @@
 
 ONE JOB: given the bars that may open a trade and the dr stretches, say where every trade opens and
 closes. It computes no gate, reads no line, touches no DB and prints nothing. The gate is
-`rule1_gate.gate`, the dr is `dr_latch`, the signals are `wsf_leash.wsl_sig_utc`.
+`rule1_gate.gate`, the dr is `dr_latch`. The signals were `wsf_leash.wsl_sig_utc` (v7); since 1002
+`octo-freedom`'s live producer steps `TradeBook` on its `WALK FIRES FROM` bars, opened as `octo-sig`.
 
 JOE'S RULES, VERBATIM 0929:
   "every ungated sig_utc timestamps create a trade reversal - ie it closes the existing trade and
@@ -111,51 +112,116 @@ window as it stands closes 119 trades and leaves the 120th open at the 2026-09-0
 """
 
 
-def walk(opens, dr, px, start, end, mae_cap):
+class TradeBook:
+    """The trade rules above as CARRIED STATE, one bar per `step`. `walk()` drives it over a range; a
+    live producer drives it bar by bar. There is no second implementation of the rules.
+
+    Added 1002 for `octo-freedom`'s live producer. Joe ruled the evolving cache (shape B in
+    `docs/octo-freedom/1001_rebuild_timing.md`): the arm, the walk and the trade book are carried
+    from bar to bar, so the book needs a stepper the way `ArmState` and `LeashWalk` already have one.
+
+    `label`  what opens a trade, and what an opposing one closes it as. `walk()` defaults it to
+             'sig_utc' so every v7 caller is unchanged. octo-freedom passes 'octo-sig' - Joe 1001.
+    """
+
+    __slots__ = ('mae_cap', 'label', 'pos', '_px_open', '_k')
+
+    def __init__(self, mae_cap, label='sig_utc'):
+        self.mae_cap = mae_cap
+        self.label = label
+        self.pos = None
+        self._px_open = None
+        self._k = None
+
+    def step(self, k, d_k, d_prev, px_k, signal=False, signal_dr=None):
+        """Advance to bar `k`. -> list of events at `k`, in order, each one of:
+
+            ('close', trade)   trade = dict(open, close, dr, opened_by, closed_by)
+            ('open', pos)      pos   = dict(open, dr, opened_by, left)
+            ('inert', k, dr)   a signal at `k` that the book did not act on - a same-dr signal while a
+                               trade is open. Joe 1002 for octo-freedom: *"no pyramid trades. note the
+                               signal for recon and keep walking"*
+
+        d_k / d_prev   the dr series at `k` and `k-1`. The dr-flip close reads these
+        px_k           the stop's price at `k`. The entry price is `px` at the open bar, kept on open
+        signal         True when `k` may open a trade (already gated - this book does not gate)
+        signal_dr      the signal's own dr. None reads `d_k`, which is what every v7 caller gets.
+                       octo-freedom passes the ARM's dr - Joe 1001: *"I think we do the same for dr"*
+        """
+        if self._k is not None and k != self._k + 1:
+            raise ValueError('TradeBook.step must be called on consecutive bars: last %r, got %r'
+                             % (self._k, k))
+        self._k = int(k)
+        ev = []
+        pos = self.pos
+        if pos is not None:
+            d = int(d_k)
+            if self.mae_cap is not None:
+                e = self._px_open
+                adv = -((float(px_k) - e) / e * 100.0) * pos['dr']
+                if -adv >= self.mae_cap:
+                    ev.append(('close', dict(open=pos['open'], close=int(k), dr=pos['dr'],
+                                             opened_by=pos['opened_by'], closed_by='stop')))
+                    self.pos = None
+                    return ev                            # Joe 0929: the STOP wins the bar
+            if d == -pos['dr'] and d != 0:
+                pos['left'] = True                       # the trade has reached its target side
+            if pos['left'] and d == pos['dr'] and d != int(d_prev):
+                ev.append(('close', dict(open=pos['open'], close=int(k), dr=pos['dr'],
+                                         opened_by=pos['opened_by'], closed_by='dr-flip')))
+                self.pos = None                          # the flip CLOSES but never OPENS - Joe 0929
+                return ev                                # same-bar priority: the flip wins
+        if signal:
+            d = int(d_k) if signal_dr is None else int(signal_dr)
+            if pos is not None and not (d == -pos['dr'] and d != 0):
+                ev.append(('inert', int(k), d))          # same-dr signal is INERT - Joe 0929
+                return ev
+            if pos is not None:
+                ev.append(('close', dict(open=pos['open'], close=int(k), dr=pos['dr'],
+                                         opened_by=pos['opened_by'], closed_by=self.label)))
+            self.pos = dict(open=int(k), dr=d, opened_by=self.label, left=False)
+            self._px_open = None if px_k is None else float(px_k)
+            ev.append(('open', dict(self.pos)))
+        return ev
+
+
+def walk(opens, dr, px, start, end, mae_cap, label='sig_utc', open_dr=None, noted=None):
     """-> ([trade], open_trade or None). Bar by bar, reading only `dr[k]` and `dr[k-1]`.
 
     opens    the bars that may open a trade. Already gated - this walk does not gate
     dr       the dr series
-    px       the price series the stop reads. `pxs` = DEMA(close, 2) on the event tape
+    px       the price series the stop reads: DEMA(close, 2) over the FULL 5 s base
+             (`bl_detect.py:260-261`; corrected 1002 - this line used to say "on the event tape")
     start    the first bar to walk. Must be >= 1, because the backstop test reads `dr[k-1]`
     end      the last bar to walk
     mae_cap  the stop, % of entry. REQUIRED - read it from `wsf_trade_config`, never
              hard-code it. None removes the stop and gives a DIFFERENT mech
+    label    what opens a trade and what an opposing one closes it as. Default 'sig_utc', the v7
+             chain's. octo-freedom passes 'octo-sig'
+    open_dr  {bar: dr} - each open bar's OWN dr. None reads `dr[k]`, the v7 behaviour. octo-freedom
+             passes the arm's dr, Joe 1001
+    noted    a list to append (bar, dr) to for every signal the book did not act on, or None
 
-    A trade is a dict: open, close, dr, opened_by, closed_by. `opened_by` is 'sig_utc';
-    `closed_by` is 'sig_utc', 'dr-flip' or 'stop'.
+    A trade is a dict: open, close, dr, opened_by, closed_by. `opened_by` is `label`;
+    `closed_by` is `label`, 'dr-flip' or 'stop'.
+
+    `TradeBook` holds the rules; this drives it. The defaults reproduce the pre-1002 `walk` exactly -
+    `docs/octo-freedom/1002_live_producer.md` carries the regression check.
     """
     O = set(int(x) for x in opens)
     start = max(1, int(start))
+    book = TradeBook(mae_cap, label)
     out = []
-    pos = None
     for k in range(start, int(end) + 1):
-        if pos is not None:
-            d = int(dr[k])
-            if mae_cap is not None:
-                e = float(px[pos['open']])
-                adv = -((float(px[k]) - e) / e * 100.0) * pos['dr']
-                if -adv >= mae_cap:
-                    out.append(dict(open=pos['open'], close=k, dr=pos['dr'],
-                                    opened_by=pos['opened_by'], closed_by='stop'))
-                    pos = None
-                    continue                             # Joe 0929: the STOP wins the bar
-            if d == -pos['dr'] and d != 0:
-                pos['left'] = True                       # the trade has reached its target side
-            if pos['left'] and d == pos['dr'] and d != int(dr[k - 1]):
-                out.append(dict(open=pos['open'], close=k, dr=pos['dr'],
-                                opened_by=pos['opened_by'], closed_by='dr-flip'))
-                pos = None                               # the flip CLOSES but never OPENS - Joe 0929
-                continue                                 # same-bar priority: the flip wins
-        if k in O:
-            d = int(dr[k])
-            if pos is not None and not (d == -pos['dr'] and d != 0):
-                continue                                 # same-dr sig_utc is INERT - Joe 0929
-            if pos is not None:
-                out.append(dict(open=pos['open'], close=k, dr=pos['dr'],
-                                opened_by=pos['opened_by'], closed_by='sig_utc'))
-            pos = dict(open=k, dr=d, opened_by='sig_utc', left=False)
-    return out, pos
+        sig = k in O
+        for ev in book.step(k, int(dr[k]), int(dr[k - 1]),
+                            None if px is None else float(px[k]), sig,
+                            None if (open_dr is None or not sig) else open_dr.get(k)):
+            if ev[0] == 'close':
+                out.append(ev[1])
+            elif ev[0] == 'inert' and noted is not None:
+                noted.append((ev[1], ev[2]))
+    return out, book.pos
 
 
 def mae_mfe(px, o, c, dr):

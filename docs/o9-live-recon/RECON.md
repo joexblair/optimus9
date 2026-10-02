@@ -26,7 +26,7 @@ start"*. Five fields, no more:
 | wall-clock ms | what o9-live has. Joe 0929: *"o9-live has no choice - it must use wall-clock"* |
 | action | `open` or `close` |
 | side | `Buy` or `Sell` |
-| reason | `sig_utc`, `dr-flip` or `stop` — the thing that fired |
+| reason | `octo-sig`, `dr-flip`, `stop`, or `non-trading octo-sig` — the thing that fired. `octo-sig` replaced the v7 chain's `sig_utc` (Joe 1001). `non-trading octo-sig` is an open with no order and no close line (Joe 1002, `OPEN.md`) |
 | the bar it believes it acted on | so a bar-vs-wall-clock gap is visible without inference |
 
 **Dropped, and why:**
@@ -42,6 +42,16 @@ vary in MVP1. Limit placement is `MVP2.md`.
 **The monitor.** A shell loop that tails the dump and, on a new line, wakes a Claude session. The
 session does one recon job and exits. Do not hold a session open across signals — a long-lived
 session accumulates context and the point of the job is a clean comparison each time.
+
+**BUILT 1002:** the dump is `o9live_trade_signal_dump.log` (`optimus9/live/trade_signal_dump.py`). The
+session-per-line recon monitor is NOT built; the o9-live session watches the dump itself until it is.
+
+**The errors log, 1002.** Tick and kline issues are RECORDED for the recon, not acted on (Joe 1002,
+`OPEN.md`'s park row): `o9live_errors.log`, written by `optimus9/live/feed_errors.py` from
+`kline_audit`'s non-`live`/`match` verdicts, `klinecollect.service`'s WARNING/ERROR/CRITICAL and
+backfill lines, and ERROR/Traceback lines in `fakeapi.log` and `o9live_octo.log`. A recon job reads
+it beside the dump: a mismatch on a bar the errors log names is a `cache` candidate before it is a
+`selection` one.
 
 ## The recon job, per trade action
 
@@ -190,6 +200,10 @@ exit was not, which is a different fault with a different owner.
 carries it: an open trade has three live exits - an opposing-dr sig_utc, the dr-flip backstop, and
 the 0.70% stop - and ends at whichever fires FIRST. The others are cancelled. That is the OCO
 mechanic, and it has a consequence for the engine:
+
+**MVP1 HAS NO RESTING STOP.** The stop is client-side (`OPEN.md`, Joe 0929-late): `TradeBook` fires it
+on the bar and o9-live sends a market close. The two paragraphs below, and checks 1 and 4 above, are
+about MVP2's exchange-resident backstop.
 
 **when a signal exit fills, o9-live must CANCEL the resting stop, and when the stop fills it must
 cancel nothing but must go FLAT.** An orphaned stop left at the exchange will fire on a position

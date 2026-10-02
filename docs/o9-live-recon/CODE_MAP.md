@@ -8,6 +8,9 @@
 > **THIS FILE WAS WRITTEN FOR THE v7 `wsl_sig_utc` CHAIN AND HAS NOT BEEN REWRITTEN.** Everything in
 > it about the v7 producer, its five build steps, its numbers and its entry bar is the HISTORICAL
 > RECORD. Where it tells you to build something, check it against the machine section first.
+>
+> **1002 — `octo-freedom`'s live producer is BUILT AND RUNNING:** `docs/octo-freedom/1002_live_producer.md`.
+> The five-things list below carries its status.
 
 
 ## The headline
@@ -72,7 +75,8 @@ holds the pre-`sig_conf` cross bars. The re-bank is ruled and not done.
 Logs sit at the repo root: `o9live_run.log`, `o9live_arm.log`, `o9live_ad.log`, `o9live.log`,
 `fakeapi.log`.
 
-`o9_live.o9_ledger` holds **988 rows from the old strategy**. Columns: `led_id, symbol, side, qty,
+`o9_live.o9_ledger` held **988 rows from the old strategy** until the 1002 fresh ledger; they are in
+`o9_ledger_archive_1002`. Columns: `led_id, symbol, side, qty,
 entry_px, exit_px, entry_order_id, exit_order_id, gross, net, fee, mae, reason, status, opened_ms,
 closed_ms`. A recon must not treat those 988 as this strategy's trades.
 
@@ -94,7 +98,10 @@ plus the hand-walk. Two things from it that belong here:
 > at now, and read ONLY the latest bar. Window-ending-at-now == the backtest window → live == backtest
 > by construction; no latch state to desync, self-healing every bar."
 
-**THAT QUOTED CLAIM IS FALSE FOR `latch_wob`, AND `latch_wob` IS THE WALK'S dr. Flagged 1001.**
+**THAT QUOTED CLAIM IS FALSE FOR `latch_wob`, AND `latch_wob` IS THE v7 `trade_walk`'s dr. Flagged 1001.**
+(CORRECTED 1002: `octo-freedom`'s walk and trade book read `rig.DR`, the 85/15 no-wob latch; its rule#1
+reads `latch_wob`. Both are path-dependent from their start bar. Under shape B the producer carries
+them; the 104 h window covers the longest measured reset gap, `docs/octo-freedom/1001_warmup.md`.)
 `dr_latch.latch_wob` is PATH-DEPENDENT from its `i0`: `cur`, `up` and `dn` start at 0 and only move
 when a run reaches `wob` 8 bars = 40 s, so `dr[k]` is a function of all history since `i0`. The
 backtest calls it over the whole 94.5-day tape (`sweep_v3_signal.py:106-109`). Live,
@@ -112,7 +119,18 @@ Joe wants exposed, and it already exists as a pattern in this codebase.
 bd -1 = Sell/short"*. This strategy is **`dr +1 = SHORT, dr -1 = LONG`**. A producer written for
 `StrategyLoop` must flip the sign, and nothing in the live code says so.
 
-## NOT built — the five things
+## The five things — status 1002
+
+| # | thing | 1002 |
+|---|---|---|
+| 1 | the producer | **BUILT, as its own decide layer**, not a `StrategyLoop` producer: `optimus9/live/octo_loop.py` + `octo_freedom.py` + `octo_inputs.py`; `O9_PRODUCER=octo` in `ops/run_o9live.py`. Running since 1002 ~01:41 UTC |
+| 2 | the v7 sig_utc chain running forward | **NOT NEEDED** - the v7 chain is not the machine (`README.md`) |
+| 3 | the trade-signal dump | **BUILT** - `optimus9/live/trade_signal_dump.py`, `o9live_trade_signal_dump.log` |
+| 4 | the shell monitor | **PART-BUILT** - the o9-live session watches the dump and `o9live_errors.log`; the monitor that starts one recon session per dump line is not built |
+| 5 | the recon job | **NOT BUILT** - `RECON.md` |
+
+The v7 list as it was written, for the record:
+
 
 1. **A wsf_leash producer for `StrategyLoop`.** A callable with the same contract as `v2_walk_ad`
    that, over a bounded window ending at now, returns this strategy's action for the latest bar.
@@ -129,5 +147,5 @@ bd -1 = Sell/short"*. This strategy is **`dr +1 = SHORT, dr -1 = LONG`**. A prod
 
 ## Suggested order
 
-1, then 3 and 4 together (they are small and they unblock every later loop), then 5, then 2 last
-because it is the one that needs Joe.
+~~1, then 3 and 4 together, then 5, then 2 last~~ - 1 and 3 are built, 2 is not needed; see the
+status table above.

@@ -6,6 +6,10 @@ handover, `.claude/joes-convo-style.md`, `docs/staying_light.md`, `docs/octo-fre
 `NOTES_momtf_mechdev.md`, `docs/task_register.md`, and the memory notes the handover names
 (`mae-mfe-only`, `strictest-standard-bias`, `announcing-is-not-asking`). Repo at `4c162a9`.
 
+**STATUS 1002:** a dated snapshot. Every item below is now ruled, built or parked, and the record of
+which is `docs/o9-live-recon/OPEN.md`'s Ruled table and `1002_live_producer.md`; this file is not
+updated further.
+
 **Nothing below has been started.** Joe chooses. The workmate session responds — append under
 `## Replies` at the end, or post in `docs/octo-freedom/chat/` (see its `README.md`).
 

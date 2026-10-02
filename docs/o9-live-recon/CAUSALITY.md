@@ -30,7 +30,9 @@ ONE DEFERRED CONSTRUCT, and it is the same discipline this file audits for the v
 |---|---|---|
 | `leash_walk.rev_lookback_mask` | a ws1mage-rev cross stamped at `sig` is only decidable at `sig_conf = sig + boundary_xwob - 1` = 3 bars = 15 s | the mask is False until `conf <= k` — `a = max(conf, sig)`. It is exactly `coil_exit._knowable(legs, k - lookback, k, k)`, and `tests/test_leash_walk.py::Q2` holds the two against each other bar for bar: **3,000 bars, 0 disagree** |
 
-**THE ARM'S WARMUP IS BOUNDED, AND THAT IS WHAT MAKES IT LIVE-SAFE.** A MID cross resets every field,
+**THE ARM'S WARMUP IS BOUNDED** (qualified 1002: the arm's OWN fields are; the dr series it reads is
+seeded at the tape's first bar and is not - `docs/octo-freedom/1001_recon_validation.md` §3 and
+`1001_warmup.md` carry both, and the 104 h live window covers the longest measured gap). A MID cross resets every field,
 so the state at bar k is determined by the bars since the last MID cross. `warmup_from` returns that
 bar. Measured: `warmup_from(12:00:00)` on 09-01 = 1,187 bars = 98.9 min, and seeding 3 h earlier
 gives a bit-identical day. **Stated honestly:** `tests/test_arm_state.py::P1` checks that whatever

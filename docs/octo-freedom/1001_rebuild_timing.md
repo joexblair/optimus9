@@ -1,5 +1,7 @@
 # 1001 — what one 104 h rebuild costs, per 5 s bar
 
+**RULED 1002: shape B** (Joe: *"B"*), from these numbers. Built: `1002_live_producer.md`.
+
 Joe 1001: *"go for it"* — time one 104 h rebuild before choosing between `OPEN.md`'s bounded re-walk
 (rebuild everything every bar) and an evolving cache. He added: *"I'm more thinking we should have an
 evolving cache, updated per 5s"*.

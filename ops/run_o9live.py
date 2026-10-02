@@ -25,7 +25,7 @@ from optimus9.live.driver import RealtimeDriver
 FAKEAPI = os.environ.get("O9_FAKEAPI_URL", "http://127.0.0.1:8098")
 SYM = os.environ.get("O9_SYMBOL", "FARTCOINUSDT")
 MODE = os.environ.get("O9_SIZE_MODE", "dynamic5x")               # ramp to the 66k-coin cap via leverage
-PRODUCER = os.environ.get("O9_PRODUCER", "ad")                   # 'ad'=v2_walk_ad (look-ahead arm-delay) · 'gf'=greenfield CAUSAL entry (0708) · 'diag'=free-fire #54 probe · 'arm'=arm-triggered only, no gate/finishers (0709 overnight arm recon)
+PRODUCER = os.environ.get("O9_PRODUCER", "ad")                   # 'ad'=v2_walk_ad (look-ahead arm-delay) · 'gf'=greenfield CAUSAL entry (0708) · 'diag'=free-fire #54 probe · 'arm'=arm-triggered only, no gate/finishers (0709 overnight arm recon) · 'octo'=octo-freedom (1002, its own decide layer - see below)
 _PRODUCERS = {"ad": v2_walk_ad, "gf": greenfield_cascade, "diag": v2_walk_diag, "arm": v2_walk_arm}
 
 dev = DatabaseManager(**get_db_config()); dev.connect()          # live tape (own o9_live collector = later)
@@ -34,8 +34,15 @@ o9 = DatabaseManager(**o9cfg); o9.connect()
 tp = dev.execute("SELECT tp_pk FROM trading_pairs WHERE tp_symbol_bybit=%s", (SYM,), fetch=True)[0]["tp_pk"]
 
 bcfg = bm.BiasConfig(**BASE_BIAS)
-strat = StrategyLoop(dev, bcfg, lr_config(dev), SYM, buffer_hours=8, warmup_hours=6,   # sweep-measured floors lb=6h/wm=4h (+margin); reproduces 12/24 exactly. TODO DB-source
-                     producer=_PRODUCERS[PRODUCER])
+if PRODUCER == "octo":
+    # octo-freedom (Joe 1001/1002): its own decide layer, NOT a StrategyLoop producer - StrategyLoop runs two
+    # books with pyramids and v2's exits. 104 h window (24 h + 80 h, Joe "#3 window is approved"), NOT the
+    # 8 h + 6 h below, which was sized for v2's lines. docs/octo-freedom/1002_live_producer.md
+    from optimus9.live.octo_loop import OctoLoop
+    strat = OctoLoop(dev, bcfg)
+else:
+    strat = StrategyLoop(dev, bcfg, lr_config(dev), SYM, buffer_hours=8, warmup_hours=6,   # sweep-measured floors lb=6h/wm=4h (+margin); reproduces 12/24 exactly. TODO DB-source
+                         producer=_PRODUCERS[PRODUCER])
 adapter = BybitAdapter(BybitV5Client(FAKEAPI, HmacSigner("o9-fake-key", "o9-fake-secret")), SYM)
 ledger = O9Ledger(o9, SYM, start_equity=float(os.environ.get("O9_START_EQUITY", "500")))
 control = O9Control(o9)

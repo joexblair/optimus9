@@ -16,9 +16,9 @@ strategy in the background while o9-live is under review"*.
 | order type | **market** | limit placement |
 | the 0.70% stop | **client-side, in the engine** | plus a LARGER exchange-resident backstop |
 | position size | not needed — selection does not price | required |
-| scoring | MAE/MFE percentages of entry. NO P&L — Joe 0917 | unchanged until Joe reopens P&L |
+| scoring | MAE/MFE, and PERCENTAGE P&L — P&L reopened 1001 (`OPEN.md`) | absolute P&L, once a position size is set |
 
-## The five MVP2 items
+## The MVP2 items
 
 ### 1. Price recon
 
@@ -45,7 +45,7 @@ price, and the two sides do not agree on what the entry price is:
 
 | | what "entry" is |
 |---|---|
-| the backtest | `pxs` at the sig bar - `DEMA(close, 2)` on the event tape. A smoothed value, not a traded price |
+| the backtest | `px` at the open bar - `DEMA(close, 2)` over the FULL 5 s base (`bl_detect.py:260-261`; corrected 1002, this row said "event tape"). A smoothed value, not a traded price. octo-freedom's live stop reads the same `px` (`trade_walk.TradeBook`) |
 | o9-live | the actual fill of a market order |
 
 Different starting numbers give different stop PRICES from the same 0.70%. `RECON.md`'s stop check
@@ -132,6 +132,19 @@ no code. Score each on `octo-freedom`'s acceptance set, not on the v7 chain's ne
 **NOT MVP1 WORK.** `octo-freedom`'s validated bars were produced on 85/15 no-wob for the signal and
 75/25 wob 8 for rule#1. That pairing is what MVP1 reproduces and it is not in question here.
 
+### 6. Rewritten bars, the blip-triggered reset, the 1-minute octo-sig dwell — PARKED 1002
+
+Joe 1002: *"let's park the rewritten bars until MVP2. the critcal MVP1 task is recon - if we have tick
+or kline issues in that time, then we have real data to make decsions on"*; asked whether the park
+also covers the reset and the dwell: *"yes"*. MVP1 records tick and kline issues in
+`o9live_errors.log` and acts on none. The errors log is the data these three get decided on.
+
+| item | the fact that raised it | what is already ruled for when it is built |
+|---|---|---|
+| bars rewritten after the walk used them | the bar builder rewrites each bar for its next 3 cycles (`bar_builder.py:50, 99-112`); o9-live reads at seam + 700 ms. The lines heal on the 4th decision; the arm / walk / trade-book state stepped on the early values does not | - |
+| the blip-triggered reset | carried state needs a check that does not run on a clock | Joe 1002: *"fire on blips"*, from the existing machines - *"the kline_auditor.service is likely the best source, but I would look at all 3"*; and *"the reset needs to retain open positions"* |
+| the 1-minute octo-sig dwell | Joe 1002: *"I'm wondering if octa-sig prints for 1 minute, instead of a single print on a single bar ... the mech will need to allow only one trade inside the octa-sig dwell"* | open: which bar opens inside the dwell, when it ends, whether a run starting inside it is the same octo-sig |
+
 ## What MVP2 inherits and must not re-litigate
 
 These are ruled. They do not reopen because price enters.
@@ -144,9 +157,12 @@ These are ruled. They do not reopen because price enters.
 | same-bar, dr-flip vs sig_utc | **the dr-flip wins** |
 | same-bar, stop vs opposing sig_utc | **the STOP wins** — Joe 0929-late |
 | the backtest's fill is the SPEC | `pxs` resolves intrabar. Do NOT model slippage |
-| P&L | closed since 0917. MAE/MFE only |
+| P&L | reopened 1001, percentage only until a size is set (`OPEN.md`) |
 
-## The one thing that must be settled BEFORE MVP1 runs, not in MVP2
+## ~~The one thing that must be settled BEFORE MVP1 runs~~ — RULED 0929-late
+
+**Does a stop free the book? YES** - the stop races the other two exits inside `trade_walk` and the
+book goes flat (`OPEN.md` item 10). The text below is the question as it stood before the ruling.
 
 **Does a stop free the book?**
 

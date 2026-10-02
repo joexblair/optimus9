@@ -116,7 +116,7 @@ going 'online-live'. fakeAPI is our test-bed which o9-live connects to"*.
 | | |
 |---|---|
 | `SPEC.md` | the strategy, the knobs, and what a recon has to prove |
-| `CODE_MAP.md` | what already exists, what is new, and the five things that are NOT built |
+| `CODE_MAP.md` | what already exists, what is new, and the status of the five build items (1002: the producer and the dump are built) |
 | `CAUSALITY.md` | the full audit, module by module, and the one trap that is still live |
 | `RECON.md` | the recon procedure, the wake mechanism, and the 24-hour re-validation |
 | `OPEN.md` | what Joe has ruled, what he has not, and the traps |
@@ -127,6 +127,11 @@ section describes the **pre-0929** scoring-cap mech and says MVP1 is blocked on 
 `OPEN.md`'s Ruled table has since closed. Reading it will mislead you.
 
 ## The one-line state
+
+### 1002 — o9-live RUNS `octo-freedom` against fakeAPI
+
+Since 2026-10-02 ~01:41 UTC, `O9_PRODUCER=octo`. Build, proofs and state:
+`docs/octo-freedom/1002_live_producer.md`. Rulings: `OPEN.md`'s Ruled table, 1002 rows.
 
 ### 1001 — THE MACHINE IS `octo-freedom`. READ THIS BEFORE ANYTHING ELSE IN THIS PACKAGE
 
@@ -146,9 +151,9 @@ therefore it is the only outcome that is stamped as ready for live trading"*.
 |---|---|
 | the arm, as carried state | `optimus9/compute/arm_state.py` |
 | the walk that emits the signal | `optimus9/compute/leash_walk.py` |
-| the knobs | `wsf_trade_config` **v4**, key `wtc_v4_v7_rule1_gateopen_mae0.70` |
+| the knobs | `wsf_trade_config` **v4**, key `wtc_v4_v7_rule1_gateopen_mae0.70` - the walk's rows. rule#1's fence/oob/`div_tf` and `rig.DRW`'s latch come from v3 via `Rig.Ct`, and the rev lookback, momentum fence, `sig_line` and `coil_lines` from `wsf_dtf_v3_config`; v3 and v4 agree on all 18 shared rows (`docs/octo-freedom/1001_recon_validation.md` §5) |
 | the acceptance test and the recon's reference | `report_leash_walk.py` |
-| the exits and the stop | `optimus9/compute/trade_walk.py`, `mae_cap` 0.70 — unchanged |
+| the exits and the stop | `optimus9/compute/trade_walk.py`, `mae_cap` 0.70. Since 1002 `trade_walk.TradeBook` is stepped bar by bar by the live producer, `optimus9/live/octo_freedom.py`; `walk()` drives the same book and is unchanged for every v7 caller |
 | the gate | `rule1_gate.gate` at `walk_rule1_back_min` **5.0 min = 60 bars** — NOT the 7.0 in v3 |
 
     python3 report_leash_walk.py        # rebuilds Joe's 9 validated 09-01 bars and ASSERTS them
