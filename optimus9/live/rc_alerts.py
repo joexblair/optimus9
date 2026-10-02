@@ -11,6 +11,11 @@ writes nothing and judges nothing - what counts as a problem is the writer's def
     pfsense_alerts.log   posts to /alert (pfSense: ping 1.1.1.1 no reply). Other paths are records
                          (e.g. /gateway status every minute), not alerts
 
+5 s FROZEN, Joe 1002: *"5s frozen alert doen't need to be so twitchy now"*. Every verdict is still in the
+errors log; the ALERT prints only when `FROZEN_RUN_BARS` consecutive bars are frozen - 12 bars = 60 s, the
+tick sockets' auto-restart threshold, so it means a freeze the restart did not clear. Since 09-25: 40
+single frozen bars, one 3-bar run, one 201-bar run (05:08) - only the last reaches 12.
+
 REPEATS. The 1002 outage wrote a `5s frozen` line every 5 s for 17 min (202 lines). The first line of
 each (source, kind) prints at once; while the same (source, kind) keeps arriving, ONE line per
 `REPEAT_S` prints with the count since the last print. Every line stays in the source files.
@@ -29,6 +34,7 @@ ERRORS = os.environ.get('O9_ERRORS_LOG', '/home/joe/thecodes/o9live_errors.log')
 PFSENSE = os.environ.get('PFSENSE_ALERTS_LOG', '/home/joe/thecodes/pfsense_alerts.log')
 STATE = os.environ.get('O9_RC_ALERTS_STATE', '/home/joe/thecodes/rc_alerts.state.json')
 REPEAT_S = 60.0                     # one summary line per minute while one (source, kind) repeats
+FROZEN_RUN_BARS = 12                # 60 s of consecutive 5 s frozen bars before the alert (Joe 1002)
 POLL_S = 0.5
 
 
@@ -70,6 +76,7 @@ def main():
         st = {}
     fe, fp = Follow(ERRORS, st.get(ERRORS)), Follow(PFSENSE, st.get(PFSENSE))
     seen = {}                       # (source, kind) -> [last print time, count since]
+    frozen = dict(n=0, last=None, first=None)   # the current run of consecutive 5 s frozen bars
     print('rc_alerts following %s and %s' % (ERRORS, PFSENSE), flush=True)
     while True:
         now = time.time()
@@ -80,6 +87,13 @@ def main():
                 print('ALERT errors-log unparsed: %s' % line[:160], flush=True)
                 continue
             key = (r.get('source'), r.get('kind'))
+            if key == ('kline_audit', '5s frozen'):
+                b = r.get('bar_ms')
+                run = frozen['n'] + 1 if (b and frozen['last'] and int(b) - frozen['last'] == 5000) else 1
+                frozen.update(n=run, last=int(b) if b else None, first=frozen['first'] if run > 1 else b)
+                if run < FROZEN_RUN_BARS:
+                    continue
+                r = dict(r, detail='%d bars in a row since %s | %s' % (run, _hms(frozen['first']), r.get('detail')))
             s = seen.get(key)
             if s is None or now - s[0] >= REPEAT_S:
                 extra = ' (+%d more since %s)' % (s[1], time.strftime('%H:%M:%S', time.gmtime(s[0]))) \
