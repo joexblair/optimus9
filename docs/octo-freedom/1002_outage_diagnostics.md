@@ -145,4 +145,15 @@ then we have infra issues to troubleshoot"*.
 | code | `optimus9/live/wan_reload.py`; rule tests W1-W5 `tests/test_wan_reload.py` |
 | SNMP | not used: pfSense's SNMP page sets a read community only; a write community needs a hand-edited bsnmpd config the GUI regenerates, sent in clear text |
 
-- 22:28 pfSense's SSH port 22 did not answer from this box (connect timed out): SSH is off or blocked.
+- SSH on pfSense: key in the admin user with the forced command; Secure Shell enabled 1002 ~22:58; host key
+  ED25519 `SHA256:PqCCHJpmCF7CIX1g9kuBnLgZ2mTqTQistpGMuzTjPBU` pinned in `~/.ssh/known_hosts`.
+
+| test reload, Joe 1002 (*"test"*) | value |
+|---|---|
+| sent | 22:59:38.232, ssh rc 0, pfSctl answered `OK` in 0.07 s |
+| probes failing (1.1.1.1, DNS, every TCP target) | one 5 s round: 22:59:43; all back 22:59:48 |
+| pfSense LAN (192.168.1.1) | never failed |
+| WAN_PPPOE after it | online, 0.0% loss, public source address unchanged (210.54.34.214) |
+| both tick sockets, 100 s after | kept flowing: 42 messages / 53 trades each, longest silence 19.2 s, no restart, no error |
+| fakeAPI book socket | kept flowing, longest silence 4.2 s |
+| banked | `o9_live.diag_wan_reload`, outcome `manual test` |
