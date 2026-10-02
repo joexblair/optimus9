@@ -56,7 +56,9 @@ def main(once=False):
     for sub in ('processed', 'failed'):
         os.makedirs(os.path.join(WATCH, sub), exist_ok=True)
     db = DatabaseManager(**get_db_config()); db.connect()
-    sanitiser = KlineSanitiser(db, tp_pk=1)
+    # Joe 1002: "yes to the volume overwrite" - answers the 0804 escalation (kline_sanitiser.py). A TV CSV
+    # now writes its own volume over an existing row's, so filler_invisible sees TV's trade bars
+    sanitiser = KlineSanitiser(db, tp_pk=1, write_tv_volume=True)
     log.info(f'watching {WATCH} (poll {POLL_SECONDS}s){" — one-shot" if once else ""}')
     if once:
         scan_once(sanitiser, log); db.disconnect(); return

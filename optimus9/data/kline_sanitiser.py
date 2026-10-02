@@ -19,7 +19,8 @@ Design (agreed):
     Now: a `flat` carry-forward bar is by definition a NO-TRADE bar, so it is written with
     kc_volume = 0. A `tv` bar carries the CSV's own Volume on INSERT. Overwriting an EXISTING
     row's volume from TV stays OFF by default (write_tv_volume=False) — that is a behaviour change
-    to a live service and is Joe's call; TV and collector volume measured identical to the unit on
+    to a live service and is Joe's call [RULED 1002: "yes to the volume overwrite" - the SERVICE passes
+    write_tv_volume=True; the class default stays False]; TV and collector volume measured identical to the unit on
     07-30/31, so it is low-risk if he wants it on.
   • Both TV and klinecollect are OPEN-labeled, so TV time*1000 == kc_timestamp directly.
   • klinecollect is 5s: a 5s CSV maps row-for-row; 1s aggregates to 5s; coarser is rejected (can't refine).
