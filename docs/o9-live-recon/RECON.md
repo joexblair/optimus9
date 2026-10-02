@@ -57,6 +57,12 @@ backfill lines, and ERROR/Traceback lines in `fakeapi.log` and `o9live_octo.log`
 it beside the dump: a mismatch on a bar the errors log names is a `cache` candidate before it is a
 `selection` one.
 
+**Section D, the tape, 1002.** Sections A-C recompute from the SAME tape o9-live read, so a tape that
+stays wrong is invisible to them (the 05:08:35-05:25:35 frozen span showed 0 mismatches). Each run now
+also holds the tape against `kline_audit`'s REST price (`optimus9/live/tape_check.py`) and prints
+`TAPE` lines: the spans the auditor did not call `live`, with the dump lines inside each. Rows in
+`o9_live.octo_recon_tape`. `docs/octo-freedom/1002_outage_diagnostics.md`.
+
 ## The recon job, per trade action
 
 1. Read the new dump lines.

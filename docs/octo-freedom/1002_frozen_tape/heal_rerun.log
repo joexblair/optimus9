@@ -1,0 +1,55 @@
+live start 10-02 01:42:35 | book start 10-01 01:42:35 | last bar 10-02 20:35:35
+spliced 205 slots, 197 with a TV row
+A stored done 73 s
+B healed done 65 s
+--- live-start book: A 49 events | B 51 events
+   B only 10-02 05:33:15 ('inert', 'Sell', '')
+   A only 10-02 05:36:10 ('inert', 'Sell', '')
+   B only 10-02 05:37:25 ('inert', 'Sell', '')
+   B only 10-02 05:39:20 ('inert', 'Sell', '')
+--- live-start book vs the dump (A should equal the live dump lines <= last bar)
+   dump lines <= last bar 49
+--- walk field hit      bars differing    118 | first 10-02 05:33:15 | last 10-02 06:39:10
+--- walk field emitted  bars differing     49 | first 10-02 05:33:15 | last 10-02 05:42:00
+--- walk field fires    bars differing      4 | first 10-02 05:33:15 | last 10-02 05:39:20
+--- walk field arm      bars differing    341 | first 10-02 05:33:15 | last 10-02 09:00:35
+--- walk field arm_dr   bars differing    118 | first 10-02 05:33:15 | last 10-02 06:39:10
+--- WALK FIRES FROM bars: A 55 | B 57
+   B only 10-02 05:33:15 arm 10-02 02:33:45 arm_dr 1
+   A only 10-02 05:36:10 arm 10-02 02:33:45 arm_dr 1
+   B only 10-02 05:37:25 arm 10-02 02:33:45 arm_dr 1
+   B only 10-02 05:39:20 arm 10-02 02:33:45 arm_dr 1
+--- DR   bars differing     29 | first 10-02 06:17:00 | last 10-02 06:19:20
+--- DRW  bars differing     22 | first 10-02 06:18:55 | last 10-02 06:20:40
+--- lines: bars differing (|A-B| > 1e-9) and the last such bar
+   ws1r          1626 bars | max 51.3015 | first 10-02 05:08:35 | last 10-02 07:24:40 | at the last bar A 52.8613 B 52.8613
+   ws2r          2938 bars | max 36.6634 | first 10-02 05:08:35 | last 10-02 09:17:45 | at the last bar A 61.9466 B 61.9466
+   ws3r          3979 bars | max 43.7134 | first 10-02 05:09:00 | last 10-02 10:41:55 | at the last bar A 56.7088 B 56.7088
+   ws4r          5291 bars | max 35.2435 | first 10-02 05:08:35 | last 10-02 12:42:20 | at the last bar A 57.8306 B 57.8306
+   ws5r          6384 bars | max 51.2703 | first 10-02 05:08:35 | last 10-02 14:04:55 | at the last bar A 68.9773 B 68.9773
+   ws6r          8495 bars | max 26.8756 | first 10-02 05:09:15 | last 10-02 16:59:55 | at the last bar A 74.2612 B 74.2612
+   ws7r          8579 bars | max 23.2766 | first 10-02 05:08:35 | last 10-02 17:13:00 | at the last bar A 90.1927 B 90.1927
+   ws8r         10505 bars | max 29.8467 | first 10-02 05:08:35 | last 10-02 19:51:55 | at the last bar A 97.4339 B 97.4339
+   ws9r         10881 bars | max 29.9778 | first 10-02 05:08:35 | last 10-02 20:28:50 | at the last bar A 92.9205 B 92.9205
+   ws10r        11124 bars | max 29.1688 | first 10-02 05:08:35 | last 10-02 20:35:35 | at the last bar A 98.0555 B 98.0555
+   ws11r        10664 bars | max 5.9195 | first 10-02 05:08:35 | last 10-02 20:35:35 | at the last bar A 97.4707 B 97.4707
+   ws12r        10433 bars | max 17.0801 | first 10-02 05:08:35 | last 10-02 20:35:35 | at the last bar A 98.8648 B 98.8648
+   ws13r        11124 bars | max 19.1390 | first 10-02 05:08:35 | last 10-02 20:35:35 | at the last bar A 99.1187 B 99.1187
+   ws14r        11125 bars | max 6.2576 | first 10-02 05:08:35 | last 10-02 20:35:35 | at the last bar A 93.4986 B 93.4986
+   ws15r        11125 bars | max 4.4575 | first 10-02 05:08:35 | last 10-02 20:35:35 | at the last bar A 90.5156 B 90.5156
+   ws16r        10891 bars | max 13.7047 | first 10-02 05:08:35 | last 10-02 20:35:35 | at the last bar A 93.7860 B 93.7857
+   ws17r        10646 bars | max 5.4936 | first 10-02 05:08:35 | last 10-02 20:35:35 | at the last bar A 73.5727 B 73.5727
+   ws18r        10948 bars | max 13.2698 | first 10-02 05:08:35 | last 10-02 20:35:35 | at the last bar A 71.1770 B 71.1770
+   ws19r        11125 bars | max 5.7186 | first 10-02 05:08:35 | last 10-02 20:35:35 | at the last bar A 69.9864 B 69.9864
+   ws20r        11125 bars | max 6.2049 | first 10-02 05:08:35 | last 10-02 20:35:35 | at the last bar A 67.9595 B 67.9591
+   ws21r        10750 bars | max 10.1190 | first 10-02 05:08:35 | last 10-02 20:35:35 | at the last bar A 56.6556 B 56.6556
+   ws22r          184 bars | max 4.3967 | first 10-02 05:10:00 | last 10-02 05:25:35 | at the last bar A 63.3410 B 63.3410
+   ws23r        11017 bars | max 9.6283 | first 10-02 05:08:35 | last 10-02 20:35:35 | at the last bar A 52.5441 B 52.5379
+   ws5Mage       2417 bars | max 13.9338 | first 10-02 05:08:35 | last 10-02 08:29:55 | at the last bar A 45.9347 B 45.9347
+   ws1Mage        936 bars | max 35.6233 | first 10-02 05:08:35 | last 10-02 20:25:55 | at the last bar A 75.2805 B 75.2805
+   ws13m         1796 bars | max 38.7690 | first 10-02 05:08:35 | last 10-02 20:34:55 | at the last bar A 103.8002 B 103.8002
+   ws2x          2241 bars | max 112.0327 | first 10-02 05:08:35 | last 10-02 20:33:55 | at the last bar A 47.3186 B 47.3186
+   gcws30m        233 bars | max 117.0020 | first 10-02 05:08:35 | last 10-02 05:27:55 | at the last bar A -20.9666 B -20.9666
+   gcws30Mage    1884 bars | max 70.2850 | first 10-02 05:08:35 | last 10-02 20:31:40 | at the last bar A 61.8913 B 61.8913
+   gcws30r        905 bars | max 51.2725 | first 10-02 05:08:35 | last 10-02 06:23:55 | at the last bar A 51.1227 B 51.1227
+   ws1m          3474 bars | max 103.7848 | first 10-02 05:08:35 | last 10-02 20:34:50 | at the last bar A 20.2824 B 20.2824

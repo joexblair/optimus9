@@ -55,6 +55,9 @@ the rulings themselves live in `docs/o9-live-recon/OPEN.md`, not here.
 | `1001_rewalk_on_ruled_dr.md` | 09-01 re-walked on the ruled dr series; the `octo-sig` label | ← `NOTES_momtf_mechdev.md:447` |
 | `1002_live_producer.md` + `1002_live_producer/` | the live producer: what was built, the regression, the 09-01 replay, the start | ← every report above |
 | `1002_bybit_api_check.md` | o9-live, fakeAPI and the data feeds against Bybit's current V5 docs: inventory, improvements, what could not be verified | → `MVP2.md` item 2 (L1); `docs/second_ws_spec.md` (M1) |
+| `1002_outage_diagnostics.md` + `1002_frozen_tape/` | the 05:08 feed outage: timeline, the frozen tape against Joe's TV CSV, the chain rerun on it, Windows logs, and the 8 recorders now collecting | ← `1002_bybit_api_check.md` (M1, M2, M5); → `docs/second_ws_spec.md`, `docs/sunset_register.md` |
+| `1002_lazy_g.md` | lazy-g: Joe's read off the first live `octo-sig` bar (Mage board positions g15 → HTF, `r` swapping with the Mage) | ← `1002_live_producer.md` (the bar) |
+| `1002_coil_sweep.md` | `coil_lines` is inert for entry selection (45 sets, one answer); the 7-day 09-25..10-01 baseline: 139 trades, 54.7% stopped | → chat #47; the stop overshoot, `1002_outage_diagnostics.md` (`fx_fill_book`) |
 | `chat/` | the inter-session chat log and its tool | - |
 
 ## WHAT LIVES WHERE
@@ -71,6 +74,8 @@ the rulings themselves live in `docs/o9-live-recon/OPEN.md`, not here.
 | `optimus9/live/trade_signal_dump.py`, `feed_errors.py` | the trade-signal dump and the errors log, 1002 |
 | `optimus9/live/octo_recon.py`, `tests/test_octo_recon.py` | the recon job and its monitor (`--watch`); results in `o9live_recon.log` and `o9_live.octo_recon_*`, 1002 |
 | `o9live_trade_signal_dump.log`, `o9live_errors.log`, `o9live_octo.log`, `o9live_recon.log` | o9-live's dump, errors log, run log and recon log, repo root (gitignored as `*.log`) |
+| `optimus9/live/net_probe.py`, `win_events.py`, `rc_alerts.py`, `tape_check.py`; `optimus9/data/ws_liveness.py` | the outage recorders and the /rc alert feed, 1002 (`1002_outage_diagnostics.md`) |
+| `ws_liveness_*.log`, `windows_events.log`, `pfsense_alerts.log`; `o9_live.diag_net_probe`, `octo_recon_tape`, `fx_fill_book` | what the recorders write, repo root (gitignored as `*.log`) and the `o9_live` DB |
 
 ## THE MACHINE, IN ONE TABLE
 

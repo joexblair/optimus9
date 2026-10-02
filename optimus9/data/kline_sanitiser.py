@@ -137,8 +137,12 @@ class KlineSanitiser:
             old = existing.get(t)
             # a flat row is only a no-op if its volume is ALREADY 0 — otherwise filler_invisible
             # cannot see it, which is the whole defect this fixes.
+            # with write_tv_volume on, a TV bar whose VOLUME differs is a change even when its OHLC already
+            # matches (Joe 1002: "sanitiser must not be geared up to pick the volume discrepancy and update
+            # the row" - the frozen spans had their OHLC repaired first, so the volume pass saw no-ops)
+            vol_differs = self.write_tv_volume and kind == 'tv' and old is not None and abs(old[4] - v) > 1e-9
             if old is not None and max(abs(old[0] - o), abs(old[1] - h), abs(old[2] - l), abs(old[3] - c)) < 1e-9 \
-                    and not (kind == 'flat' and old[4] != 0.0):
+                    and not (kind == 'flat' and old[4] != 0.0) and not vol_differs:
                 counts['noop'] += 1; continue
             action = 'insert' if old is None else kind
             isyn = int(((t // 60000) * 60000) in synth_mins)

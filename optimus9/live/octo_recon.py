@@ -88,6 +88,16 @@ DDL = [
         arm_dr   TINYINT NULL,
         events   VARCHAR(255) NOT NULL,
         PRIMARY KEY (run_id, bar_ms))""",
+    """CREATE TABLE IF NOT EXISTS octo_recon_tape (
+        run_id      INT NOT NULL,
+        first_ms    BIGINT NOT NULL,
+        last_ms     BIGINT NOT NULL,
+        bars        INT NOT NULL,
+        verdicts    VARCHAR(255) NOT NULL,
+        max_ticks   INT NULL,
+        dump_lines  VARCHAR(255) NULL,
+        KEY k_run (run_id)
+    )""",
     """CREATE TABLE IF NOT EXISTS octo_recon_mismatch (
         run_id   BIGINT NOT NULL,
         bar_ms   BIGINT NOT NULL,
@@ -252,6 +262,15 @@ def run(live_start=None, out=REPORT):
     if rows:
         o9.executemany('INSERT INTO octo_recon_verdict (run_id, bar_ms, hit, emitted, fires, arm_ms, arm_dr, '
                        'events) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)', [(run_id,) + r for r in rows])
+    # D. TAPE - the tape o9-live read vs kline_audit's REST price (outage item #2, Joe 1002). Sections
+    # A-C recompute from the same tape, so a tape that stays wrong is invisible to them
+    from optimus9.live.tape_check import check as tape_check
+    tc = tape_check(dev, 1, live_start, last_bar, dump)
+    for s_ in tc['spans']:
+        o9.execute('INSERT INTO octo_recon_tape (run_id, first_ms, last_ms, bars, verdicts, max_ticks, dump_lines) '
+                   'VALUES (%s,%s,%s,%s,%s,%s,%s)',
+                   (run_id, s_['first'], s_['last'], s_['bars'], json.dumps(s_['verdicts'])[:255], s_['max_ticks'],
+                    json.dumps([[_hms(d['bar_ms']), d['action'], d['side'], d['reason']] for d in s_['dump']])[:255]))
     for m in mism + moved:
         o9.execute('INSERT INTO octo_recon_mismatch (run_id, bar_ms, cls, ref, live, detail) '
                    'VALUES (%s,%s,%s,%s,%s,%s)', (run_id,) + tuple(str(x)[:255] for x in m))
@@ -266,6 +285,12 @@ def run(live_start=None, out=REPORT):
         lines.append('MOVED %s | %s | now %s | before %s' % (_hms(b), d, nv, ov))
     for b, why in pre:
         lines.append('PRE-START %s | %s' % (_hms(b), why))
+    lines.append('TAPE %d bars since live start, %d audited to %s | kline_audit flagged %d bars in %d span(s)'
+                 % (tc['bars'], tc['audited'], _hms(tc['audit_last']), len(tc['flagged']), len(tc['spans'])))
+    for s_ in tc['spans']:
+        lines.append('TAPE SPAN %s -> %s | %d bars | %s | max %s ticks vs REST | dump lines inside: %s'
+                     % (_hms(s_['first']), _hms(s_['last']), s_['bars'], s_['verdicts'], s_['max_ticks'],
+                        [(_hms(d['bar_ms']), d['action'], d['side'], d['reason']) for d in s_['dump']] or 'none'))
     with open(out, 'a') as fh:
         fh.write('\n'.join(lines) + '\n')
     print('\n'.join(lines), flush=True)

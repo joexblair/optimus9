@@ -1,0 +1,166 @@
+00:00:00  bars 1  mech 0  emitted 0  fires 0  38.16 s/bar
+00:10:00  bars 121  mech 0  emitted 0  fires 0  1.85 s/bar
+00:20:00  bars 241  mech 0  emitted 0  fires 0  1.71 s/bar
+00:30:00  bars 361  mech 30  emitted 30  fires 1  1.67 s/bar
+00:40:00  bars 481  mech 46  emitted 46  fires 1  1.65 s/bar
+00:50:00  bars 601  mech 46  emitted 46  fires 1  1.65 s/bar
+01:00:00  bars 721  mech 46  emitted 46  fires 1  1.62 s/bar
+01:10:00  bars 841  mech 46  emitted 46  fires 1  1.60 s/bar
+01:20:00  bars 961  mech 46  emitted 46  fires 1  1.58 s/bar
+01:30:00  bars 1081  mech 46  emitted 46  fires 1  1.57 s/bar
+01:40:00  bars 1201  mech 46  emitted 46  fires 1  1.56 s/bar
+01:50:00  bars 1321  mech 46  emitted 46  fires 1  1.56 s/bar
+02:00:00  bars 1441  mech 46  emitted 46  fires 1  1.55 s/bar
+02:10:00  bars 1561  mech 46  emitted 46  fires 1  1.54 s/bar
+02:20:00  bars 1681  mech 46  emitted 46  fires 1  1.53 s/bar
+02:30:00  bars 1801  mech 46  emitted 46  fires 1  1.54 s/bar
+02:40:00  bars 1921  mech 46  emitted 46  fires 1  1.55 s/bar
+02:50:00  bars 2041  mech 92  emitted 92  fires 2  1.57 s/bar
+03:00:00  bars 2161  mech 92  emitted 92  fires 2  1.60 s/bar
+03:10:00  bars 2281  mech 103  emitted 92  fires 2  1.61 s/bar
+03:20:00  bars 2401  mech 156  emitted 92  fires 2  1.61 s/bar
+03:30:00  bars 2521  mech 192  emitted 92  fires 2  1.62 s/bar
+03:40:00  bars 2641  mech 219  emitted 117  fires 3  1.61 s/bar
+03:50:00  bars 2761  mech 248  emitted 146  fires 3  1.61 s/bar
+04:00:00  bars 2881  mech 248  emitted 146  fires 3  1.63 s/bar
+04:10:00  bars 3001  mech 248  emitted 146  fires 3  1.63 s/bar
+04:20:00  bars 3121  mech 248  emitted 146  fires 3  1.65 s/bar
+04:30:00  bars 3241  mech 248  emitted 146  fires 3  1.65 s/bar
+04:40:00  bars 3361  mech 248  emitted 146  fires 3  1.66 s/bar
+04:50:00  bars 3481  mech 248  emitted 146  fires 3  1.67 s/bar
+05:00:00  bars 3601  mech 248  emitted 146  fires 3  1.67 s/bar
+05:10:00  bars 3721  mech 248  emitted 146  fires 3  1.68 s/bar
+05:20:00  bars 3841  mech 248  emitted 146  fires 3  1.69 s/bar
+05:30:00  bars 3961  mech 248  emitted 146  fires 3  1.70 s/bar
+05:40:00  bars 4081  mech 248  emitted 146  fires 3  1.70 s/bar
+05:50:00  bars 4201  mech 284  emitted 182  fires 4  1.71 s/bar
+06:00:00  bars 4321  mech 284  emitted 182  fires 4  1.71 s/bar
+06:10:00  bars 4441  mech 284  emitted 182  fires 4  1.72 s/bar
+06:20:00  bars 4561  mech 284  emitted 182  fires 4  1.72 s/bar
+06:30:00  bars 4681  mech 284  emitted 182  fires 4  1.73 s/bar
+06:40:00  bars 4801  mech 284  emitted 182  fires 4  1.73 s/bar
+06:50:00  bars 4921  mech 284  emitted 182  fires 4  1.73 s/bar
+07:00:00  bars 5041  mech 284  emitted 182  fires 4  1.74 s/bar
+07:10:00  bars 5161  mech 330  emitted 228  fires 5  1.74 s/bar
+07:20:00  bars 5281  mech 376  emitted 228  fires 5  1.75 s/bar
+07:30:00  bars 5401  mech 376  emitted 228  fires 5  1.75 s/bar
+07:40:00  bars 5521  mech 376  emitted 228  fires 5  1.75 s/bar
+07:50:00  bars 5641  mech 376  emitted 228  fires 5  1.76 s/bar
+08:00:00  bars 5761  mech 376  emitted 228  fires 5  1.76 s/bar
+08:10:00  bars 5881  mech 380  emitted 232  fires 6  1.76 s/bar
+08:20:00  bars 6001  mech 448  emitted 278  fires 7  1.76 s/bar
+08:30:00  bars 6121  mech 483  emitted 278  fires 7  1.77 s/bar
+08:40:00  bars 6241  mech 535  emitted 278  fires 7  1.77 s/bar
+08:50:00  bars 6361  mech 586  emitted 278  fires 7  1.78 s/bar
+09:00:00  bars 6481  mech 677  emitted 278  fires 7  1.77 s/bar
+09:10:00  bars 6601  mech 752  emitted 330  fires 8  1.77 s/bar
+09:20:00  bars 6721  mech 752  emitted 330  fires 8  1.77 s/bar
+09:30:00  bars 6841  mech 752  emitted 330  fires 8  1.77 s/bar
+09:40:00  bars 6961  mech 752  emitted 330  fires 8  1.77 s/bar
+09:50:00  bars 7081  mech 752  emitted 330  fires 8  1.77 s/bar
+10:00:00  bars 7201  mech 752  emitted 330  fires 8  1.77 s/bar
+10:10:00  bars 7321  mech 752  emitted 330  fires 8  1.78 s/bar
+10:20:00  bars 7441  mech 752  emitted 330  fires 8  1.77 s/bar
+10:30:00  bars 7561  mech 752  emitted 330  fires 8  1.77 s/bar
+10:40:00  bars 7681  mech 766  emitted 330  fires 8  1.78 s/bar
+10:50:00  bars 7801  mech 818  emitted 330  fires 8  1.78 s/bar
+11:00:00  bars 7921  mech 818  emitted 330  fires 8  1.79 s/bar
+11:10:00  bars 8041  mech 872  emitted 330  fires 8  1.79 s/bar
+11:20:00  bars 8161  mech 883  emitted 330  fires 8  1.80 s/bar
+11:30:00  bars 8281  mech 883  emitted 330  fires 8  1.80 s/bar
+11:40:00  bars 8401  mech 999  emitted 422  fires 11  1.80 s/bar
+11:50:00  bars 8521  mech 1053  emitted 452  fires 11  1.80 s/bar
+12:00:00  bars 8641  mech 1075  emitted 452  fires 11  1.81 s/bar
+12:10:00  bars 8761  mech 1075  emitted 452  fires 11  1.81 s/bar
+12:20:00  bars 8881  mech 1075  emitted 452  fires 11  1.81 s/bar
+12:30:00  bars 9001  mech 1098  emitted 452  fires 11  1.82 s/bar
+12:40:00  bars 9121  mech 1098  emitted 452  fires 11  1.82 s/bar
+12:50:00  bars 9241  mech 1098  emitted 452  fires 11  1.82 s/bar
+13:00:00  bars 9361  mech 1098  emitted 452  fires 11  1.83 s/bar
+13:10:00  bars 9481  mech 1154  emitted 508  fires 12  1.83 s/bar
+13:20:00  bars 9601  mech 1170  emitted 524  fires 12  1.83 s/bar
+13:30:00  bars 9721  mech 1170  emitted 524  fires 12  1.83 s/bar
+13:40:00  bars 9841  mech 1170  emitted 524  fires 12  1.83 s/bar
+13:50:00  bars 9961  mech 1170  emitted 524  fires 12  1.84 s/bar
+14:00:00  bars 10081  mech 1216  emitted 544  fires 13  1.84 s/bar
+14:10:00  bars 10201  mech 1277  emitted 544  fires 13  1.84 s/bar
+14:20:00  bars 10321  mech 1327  emitted 544  fires 13  1.85 s/bar
+14:30:00  bars 10441  mech 1327  emitted 544  fires 13  1.85 s/bar
+14:40:00  bars 10561  mech 1327  emitted 544  fires 13  1.85 s/bar
+14:50:00  bars 10681  mech 1328  emitted 545  fires 14  1.85 s/bar
+15:00:00  bars 10801  mech 1373  emitted 590  fires 14  1.85 s/bar
+15:10:00  bars 10921  mech 1373  emitted 590  fires 14  1.84 s/bar
+15:20:00  bars 11041  mech 1398  emitted 615  fires 15  1.84 s/bar
+15:30:00  bars 11161  mech 1398  emitted 615  fires 15  1.84 s/bar
+15:40:00  bars 11281  mech 1398  emitted 615  fires 15  1.84 s/bar
+15:50:00  bars 11401  mech 1398  emitted 615  fires 15  1.84 s/bar
+16:00:00  bars 11521  mech 1398  emitted 615  fires 15  1.83 s/bar
+16:10:00  bars 11641  mech 1398  emitted 615  fires 15  1.83 s/bar
+16:20:00  bars 11761  mech 1437  emitted 654  fires 16  1.83 s/bar
+16:30:00  bars 11881  mech 1494  emitted 711  fires 17  1.83 s/bar
+16:40:00  bars 12001  mech 1528  emitted 711  fires 17  1.83 s/bar
+16:50:00  bars 12121  mech 1540  emitted 711  fires 17  1.83 s/bar
+17:00:00  bars 12241  mech 1540  emitted 711  fires 17  1.83 s/bar
+17:10:00  bars 12361  mech 1575  emitted 711  fires 17  1.83 s/bar
+17:20:00  bars 12481  mech 1651  emitted 711  fires 17  1.83 s/bar
+17:30:00  bars 12601  mech 1673  emitted 711  fires 17  1.83 s/bar
+17:40:00  bars 12721  mech 1673  emitted 711  fires 17  1.82 s/bar
+17:50:00  bars 12841  mech 1673  emitted 711  fires 17  1.82 s/bar
+18:00:00  bars 12961  mech 1681  emitted 719  fires 18  1.82 s/bar
+18:10:00  bars 13081  mech 1728  emitted 766  fires 18  1.82 s/bar
+18:20:00  bars 13201  mech 1807  emitted 845  fires 20  1.82 s/bar
+18:30:00  bars 13321  mech 1927  emitted 901  fires 20  1.82 s/bar
+18:40:00  bars 13441  mech 2024  emitted 901  fires 20  1.82 s/bar
+18:50:00  bars 13561  mech 2070  emitted 901  fires 20  1.81 s/bar
+19:00:00  bars 13681  mech 2070  emitted 901  fires 20  1.81 s/bar
+19:10:00  bars 13801  mech 2070  emitted 901  fires 20  1.81 s/bar
+19:20:00  bars 13921  mech 2070  emitted 901  fires 20  1.81 s/bar
+19:30:00  bars 14041  mech 2070  emitted 901  fires 20  1.81 s/bar
+19:40:00  bars 14161  mech 2070  emitted 901  fires 20  1.81 s/bar
+19:50:00  bars 14281  mech 2070  emitted 901  fires 20  1.81 s/bar
+20:00:00  bars 14401  mech 2070  emitted 901  fires 20  1.81 s/bar
+20:10:00  bars 14521  mech 2070  emitted 901  fires 20  1.80 s/bar
+20:20:00  bars 14641  mech 2070  emitted 901  fires 20  1.80 s/bar
+20:30:00  bars 14761  mech 2070  emitted 901  fires 20  1.80 s/bar
+20:40:00  bars 14881  mech 2070  emitted 901  fires 20  1.80 s/bar
+20:50:00  bars 15001  mech 2070  emitted 901  fires 20  1.80 s/bar
+21:00:00  bars 15121  mech 2070  emitted 901  fires 20  1.80 s/bar
+21:10:00  bars 15241  mech 2070  emitted 901  fires 20  1.80 s/bar
+21:20:00  bars 15361  mech 2070  emitted 901  fires 20  1.80 s/bar
+21:30:00  bars 15481  mech 2081  emitted 901  fires 20  1.80 s/bar
+21:40:00  bars 15601  mech 2154  emitted 901  fires 20  1.80 s/bar
+21:50:00  bars 15721  mech 2194  emitted 901  fires 20  1.80 s/bar
+22:00:00  bars 15841  mech 2224  emitted 901  fires 20  1.80 s/bar
+22:10:00  bars 15961  mech 2344  emitted 901  fires 20  1.79 s/bar
+22:20:00  bars 16081  mech 2359  emitted 901  fires 20  1.79 s/bar
+22:30:00  bars 16201  mech 2405  emitted 947  fires 21  1.79 s/bar
+22:40:00  bars 16321  mech 2405  emitted 947  fires 21  1.79 s/bar
+22:50:00  bars 16441  mech 2464  emitted 947  fires 21  1.79 s/bar
+23:00:00  bars 16561  mech 2464  emitted 947  fires 21  1.79 s/bar
+23:10:00  bars 16681  mech 2529  emitted 947  fires 21  1.79 s/bar
+23:20:00  bars 16801  mech 2635  emitted 962  fires 22  1.79 s/bar
+23:30:00  bars 16921  mech 2754  emitted 1081  fires 23  1.79 s/bar
+23:40:00  bars 17041  mech 2768  emitted 1095  fires 23  1.78 s/bar
+23:50:00  bars 17161  mech 2768  emitted 1095  fires 23  1.78 s/bar
+RESULT|bars 17280|mech 2768|emitted 1095|runs 23|secs 30787
+FIRES|replay|00:27:35 arm 00:19:20 +1, 02:40:35 arm 02:38:10 -1, 03:38:00 arm 03:36:55 +1, 05:44:10 arm 05:30:05 +1, 07:00:40 arm 06:57:25 -1, 08:09:15 arm 08:06:20 -1, 08:12:45 arm 08:06:20 -1, 09:02:15 arm 08:06:20 -1, 11:30:20 arm 10:32:30 +1, 11:34:15 arm 10:32:30 +1, 11:37:00 arm 10:32:30 +1, 13:05:25 arm 13:01:55 -1, 13:54:20 arm 13:49:15 +1, 14:50:00 arm 14:48:00 +1, 15:13:00 arm 15:10:50 -1, 16:16:10 arm 16:08:45 -1, 16:21:20 arm 16:08:45 -1, 17:59:25 arm 17:58:30 -1, 18:11:35 arm 17:58:30 -1, 18:20:00 arm 17:58:30 -1, 22:24:10 arm 21:10:15 -1, 23:18:50 arm 21:10:15 -1, 23:27:20 arm 21:10:15 -1
+FIRES|accept|00:27:35 arm 00:19:20 +1, 02:40:35 arm 02:38:10 -1, 03:38:00 arm 03:36:55 +1, 05:44:10 arm 05:30:05 +1, 07:00:40 arm 06:57:25 -1, 08:09:15 arm 08:06:20 -1, 08:12:45 arm 08:06:20 -1, 09:02:15 arm 08:06:20 -1, 11:30:20 arm 10:32:30 +1, 11:34:15 arm 10:32:30 +1, 11:37:00 arm 10:32:30 +1, 13:05:25 arm 13:01:55 -1, 13:54:20 arm 13:49:15 +1, 14:50:00 arm 14:48:00 +1, 15:13:00 arm 15:10:50 -1, 16:16:10 arm 16:08:45 -1, 16:21:20 arm 16:08:45 -1, 17:59:25 arm 17:58:30 -1, 18:11:35 arm 17:58:30 -1, 18:20:00 arm 17:58:30 -1, 22:24:10 arm 21:10:15 -1, 23:18:50 arm 21:10:15 -1, 23:27:20 arm 21:10:15 -1
+TRADES|closed 17|noted same-dr 5|open at end {'open': 357660946, 'dr': -1, 'opened_by': 'octo-sig', 'left': True}
+TRADE|00:27:35|02:40:35|+1|octo-sig|octo-sig
+TRADE|02:40:35|03:25:20|-1|octo-sig|dr-flip
+TRADE|03:38:00|05:04:00|+1|octo-sig|dr-flip
+TRADE|05:44:10|07:00:40|+1|octo-sig|octo-sig
+TRADE|07:00:40|08:05:55|-1|octo-sig|dr-flip
+TRADE|08:09:15|08:24:20|-1|octo-sig|stop
+TRADE|09:02:15|11:30:20|-1|octo-sig|octo-sig
+TRADE|11:30:20|11:37:05|+1|octo-sig|stop
+TRADE|13:05:25|13:54:20|-1|octo-sig|octo-sig
+TRADE|13:54:20|14:09:15|+1|octo-sig|stop
+TRADE|14:50:00|15:13:00|+1|octo-sig|octo-sig
+TRADE|15:13:00|16:07:00|-1|octo-sig|dr-flip
+TRADE|16:16:10|16:19:20|-1|octo-sig|stop
+TRADE|16:21:20|17:53:35|-1|octo-sig|dr-flip
+TRADE|17:59:25|18:15:55|-1|octo-sig|stop
+TRADE|18:20:00|18:28:00|-1|octo-sig|stop
+TRADE|22:24:10|23:18:00|-1|octo-sig|dr-flip
+M|PASS|the live path reproduces the acceptance test on 09-01

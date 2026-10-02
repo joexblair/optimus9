@@ -59,6 +59,23 @@ class FxStore:
             (new_size, realized_add, fee_add, "closed" if closed else "open",
              self._now() if closed else None, position_id))
 
+    # ── book age at each fill: a SIDE table, fx_fill unchanged (outage item #7, Joe 1002) ──
+    _BOOK_DDL = ("CREATE TABLE IF NOT EXISTS fx_fill_book (order_id VARCHAR(40) PRIMARY KEY, symbol VARCHAR(20), "
+                 "side VARCHAR(4), fill_ms BIGINT, book_recv_ms BIGINT NULL, book_ts BIGINT NULL, "
+                 "book_cts BIGINT NULL, age_recv_ms BIGINT NULL, age_cts_ms BIGINT NULL)")
+
+    def insert_fill_book(self, order_id, symbol, side, book):
+        """How old the book a fill walked was: now - its arrival, and now - Bybit's matching-engine time."""
+        b = book or {}
+        now = self._now()
+        rv, ts, cts = b.get("recv_ms"), b.get("ts"), b.get("cts")
+        self._db.execute(self._BOOK_DDL)
+        self._db.execute(
+            "INSERT INTO fx_fill_book (order_id, symbol, side, fill_ms, book_recv_ms, book_ts, book_cts, "
+            "age_recv_ms, age_cts_ms) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            (order_id, symbol, side, now, rv, ts, cts, None if rv is None else now - int(rv),
+             None if cts is None else now - int(cts)))
+
     # ── fills ──
     def insert_fill(self, order_id, position_id, symbol, side, fill, closed_qty=0.0):
         self._db.execute(

@@ -41,6 +41,8 @@ class MatchingEngine:
 
         order_id = self._store.insert_order(symbol, side, order_type, fill.filled_qty,
                                             order_link_id=order_link_id, reduce_only=reduce_only)
+        if hasattr(self._store, "insert_fill_book"):     # outage item #7: the book's age at this fill
+            self._store.insert_fill_book(order_id, symbol, side, book)
         pos = self._store.open_leg(symbol, position_idx)
         realized = 0.0
 

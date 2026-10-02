@@ -1,5 +1,7 @@
 # Redundant websocket (N-socket collector) — spec (Joe 0708)
 
+**STATUS 1002: BUILT on Joe's ruling** (*"Witness writes ticks"*): `TickCollector` runs the sockets in `O9_TICK_ENDPOINTS` (default `stream.bybit.com` + `stream.bytick.com`), one thread + DB connection each, merged by INSERT IGNORE on the trade id, the first socket the sole pruner; each auto-restarts after 60 s without trades, 10 s apart. `docs/octo-freedom/1002_outage_diagnostics.md`.
+
 **Goal.** Reduce tick loss + client-side arrival stalls by ingesting the Bybit public-trade stream over **≥2 independent
 websocket connections** and taking the union. Attacks the *client/connection* half of the desync (per-socket stalls,
 reconnect gaps, dropped frames) — complementary to the SG box (network floor) and the finalization-read (timing race).
@@ -43,12 +45,11 @@ Now `tk_received_ms` automatically holds the **earliest arrival across all socke
 `receipt_lag_report`, run before vs after enabling the 2nd socket, **measures exactly how much the race recovered** — no
 bespoke A/B harness. That before/after delta is the go/no-go evidence.
 
-## Decision gate — do NOT ship the 2nd socket blind
-Sequence, so the add is data-backed not hopeful:
-1. Instrument (1 socket) → read the `receipt_lag` tail shape.
-2. **Fat, variable tail** (client stalls) → the 2nd socket races them out → ship it, confirm via the before/after delta.
-3. **Tight distribution** → the 2nd socket buys only drop/reconnect *redundancy* — still worth it for robustness, but it
-   won't move the desync, and we say so rather than claiming a win we didn't measure.
+## Decision gate — met another way, 1002
+The gate asked for the receipt-lag tail before shipping. The 1002 outages answered the question it was
+guarding: on 22:06 all sockets went silent together, and the first 40 s on two sockets matched message for
+message (23 / 33 trades each). The second socket shipped on Joe's 1002 ruling; each socket's per-second
+record (`ws_liveness_<label>.log`) is the measurement now. `tk_received_ms` below is still unbuilt.
 
 ## Cost
 - 2× WS connections + heartbeats + threads — trivial CPU/RAM.

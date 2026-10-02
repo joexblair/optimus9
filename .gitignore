@@ -31,3 +31,8 @@ optimus9/orchestration/.rpl_cache/
 *.npz
 *.npy
 .tf_walk_cache/
+sidegigs/
+
+# 1002 runtime state and nohup output of the o9-live diagnostics (repo root)
+*.out
+rc_alerts.state.json

@@ -60,7 +60,7 @@ on none of them.
 | run | bars | result |
 |---|---|---|
 | slice 00:20:00 → 00:35:00 | 181 | WALK FIRES FROM **00:27:35, arm 00:19:20, dr +1** — the acceptance test's run 1, exactly. 46 bars passed the walk and rule#1 = run 1's 46 bars. Trade book opened `octo-sig` at 00:27:35, dr +1. Startup bar 37.4 s (window + 104 h walk rebuild); then ~1.6 s per bar. 5 min 16 s wall |
-| the whole day, 00:00:00 → 23:59:55 | 17,280 | RUNNING since 2026-10-02, PID 1570404, log `1002_live_producer/replay_0901.full.log`, rows `replay_0901.000000-235955.jsonl`. ~7.7 h at the slice's pace. Asserts MECH 2768 / cut 1673 / EMITTED 1095 / runs 23, the 23 WALK FIRES FROM bars with their arm bar and dr, and the 9 validated bars |
+| the whole day, 00:00:00 → 23:59:55 | 17,280 | **PASS** (`M|PASS`, ended 2026-10-02 09:30 UTC). MECH 2768 / cut 1673 / EMITTED 1095 / runs 23, equal to the acceptance test. The 23 WALK FIRES FROM bars, each with its arm bar and dr, equal the acceptance test's list. The 9 validated bars are among them. Trade book: 17 closed, 5 same-dr signals noted, 1 open at the day's end. 30,787 s wall = 1.78 s per bar. Log `1002_live_producer/replay_0901.full.log`, rows `replay_0901.000000-235955.jsonl` |
 
 ```
 cd /home/joe/thecodes/docs/octo-freedom/1002_live_producer
@@ -92,7 +92,6 @@ cd /home/joe/thecodes && python3 tests/test_trade_walk.py && python3 report_leas
 
 | not measured | why it matters |
 |---|---|
-| the whole-day replay | running; this file is updated when it ends |
 | trades on the live path vs the backtest's, 09-01 | the replay records them; the backtest side (trade_walk on `Rig` arrays, `octo-sig`, arm dr, `rig.DR`) is not run yet |
 | the producer inside o9-live's app loop | the decide layer that turns records into orders is not built; it waits on held items 1 and 4 |
 | a v7 real-data regression of `trade_walk` | the random-case regression covers the code paths; the 90-day v7 run (894 / +0.3911) was not re-run |
