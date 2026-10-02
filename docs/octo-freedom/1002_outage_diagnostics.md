@@ -152,6 +152,7 @@ then we have infra issues to troubleshoot"*.
 |---|---|
 | sent | 22:59:38.232, ssh rc 0, pfSctl answered `OK` in 0.07 s |
 | probes failing (1.1.1.1, DNS, every TCP target) | one 5 s round: 22:59:43; all back 22:59:48 |
+| down, Joe 1002 watching it | *"down for ~6 seconds"* - inside the probes' bound (one failed 5 s round = under 10 s) |
 | pfSense LAN (192.168.1.1) | never failed |
 | WAN_PPPOE after it | online, 0.0% loss, public source address unchanged (210.54.34.214) |
 | both tick sockets, 100 s after | kept flowing: 42 messages / 53 trades each, longest silence 19.2 s, no restart, no error |
