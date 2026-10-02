@@ -54,6 +54,7 @@ the rulings themselves live in `docs/o9-live-recon/OPEN.md`, not here.
 | `1001_rebuild_timing.md` + `1001_rebuild_timing/` | what a 104 h rebuild costs per bar: lines 1.27-1.45 s, walk + rule#1 79 s; shapes A/B/C | ← `1001_warmup.md`; → shape B, `1002_live_producer.md` |
 | `1001_rewalk_on_ruled_dr.md` | 09-01 re-walked on the ruled dr series; the `octo-sig` label | ← `NOTES_momtf_mechdev.md:447` |
 | `1002_live_producer.md` + `1002_live_producer/` | the live producer: what was built, the regression, the 09-01 replay, the start | ← every report above |
+| `1002_bybit_api_check.md` | o9-live, fakeAPI and the data feeds against Bybit's current V5 docs: inventory, improvements, what could not be verified | → `MVP2.md` item 2 (L1); `docs/second_ws_spec.md` (M1) |
 | `chat/` | the inter-session chat log and its tool | - |
 
 ## WHAT LIVES WHERE

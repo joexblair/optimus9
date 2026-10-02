@@ -55,6 +55,9 @@ rather than deferred until this was written down.
 
 ### 2. The exchange-resident stop backstop
 
+**1002:** the adapter's `set_backstop` sends neither `tpslMode` nor `positionIdx`, both required by
+Bybit's `/v5/position/trading-stop` — `docs/octo-freedom/1002_bybit_api_check.md` L1.
+
 Joe 0929-late, on the finding that a client-side-only stop leaves a position naked through a
 disconnect: *"yes. that's MVP2 - we'll apply a larger stop with the exchange as a backstop"*.
 
