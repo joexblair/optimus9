@@ -44,7 +44,11 @@ session does one recon job and exits. Do not hold a session open across signals 
 session accumulates context and the point of the job is a clean comparison each time.
 
 **BUILT 1002:** the dump is `o9live_trade_signal_dump.log` (`optimus9/live/trade_signal_dump.py`). The
-session-per-line recon monitor is NOT built; the o9-live session watches the dump itself until it is.
+monitor is `python3 -m optimus9.live.octo_recon --watch`: it runs one recon job per new dump line
+and appends the result to `o9live_recon.log`. The job is code, not a session; a session watches
+`o9live_recon.log` and wakes on a MISMATCH, MOVED or RECON ERROR line. Built this way so each
+comparison is the same deterministic pass, and a session only holds context when there is a
+difference to read. `docs/octo-freedom/1002_live_producer.md` has the job's design.
 
 **The errors log, 1002.** Tick and kline issues are RECORDED for the recon, not acted on (Joe 1002,
 `OPEN.md`'s park row): `o9live_errors.log`, written by `optimus9/live/feed_errors.py` from
@@ -148,6 +152,11 @@ verdicts stored at the previous recon.
 **Store every verdict** with the config key and the tape/line cache key it was computed under. Without
 the cache key, a changed line and a changed verdict are indistinguishable.
 
+**BUILT 1002:** `o9_live.octo_recon_run` (one row per job: config key, the tape's SHA-1 and bar count,
+the counts), `octo_recon_verdict` (every bar the walk passed or the book acted on), and
+`octo_recon_mismatch`. Each job compares its verdicts with the previous job's over the overlapping
+bars; a moved verdict is written as class `causality`.
+
 ## The cache is deliberately the source
 
 Joe 0929: *"tape vs line at recon time. I'm going to say the line-cache because that organically gives
@@ -155,6 +164,12 @@ us another test-point (ie, is cache and real-time kline collection in sync)"*.
 
 So a third class of mismatch exists and is wanted: the cache and the realtime kline collection
 disagreeing. Report it as its own category, not as a selection gap.
+
+**1002 — RAISED TO JOE, NOT RESOLVED.** The line cache ends at `build_ws_lines.TAPE_END`
+2026-09-30, so it holds no o9-live bar. `octo_recon` recomputes the lines from the DB tape at
+recon time with the cache's own recipe (`octo_inputs.line_overrides`) - the same comparison of
+stored tape against what o9-live saw, without a new 94.5-day cache per job. Whether that meets
+this ruling is Joe's.
 
 ## The stop-loss check - Joe 0929
 
@@ -226,7 +241,7 @@ IN THIS FILE. Joe 0929-late: move MAE_CAP to the DB"*. `trade_walk.walk(..., mae
 |---|---|
 | selection | o9-live and the backtest disagree about whether to trade a bar |
 | causality | a backtest verdict changed on re-run over the same bars |
-| cache | the line cache and realtime collection disagree about the bar's values |
+| cache | the line cache and realtime collection disagree about the bar's values. **1002: not measured** - o9-live does not record the values it decided on, so there is nothing to hold the recomputed lines against |
 | **stop** | the signal matched and the EXIT did not - level, timing, fill or priority |
 
 Collapsing them into one "mismatch" number destroys the information the job exists to produce.

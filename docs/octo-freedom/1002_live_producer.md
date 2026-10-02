@@ -112,3 +112,28 @@ cd /home/joe/thecodes && python3 tests/test_trade_walk.py && python3 report_leas
 
 The portal's top-right mech-state table reads the v2 cascade grid; `OctoLoop.state_mask` returns an
 empty grid, so that table shows nothing for octo-freedom (Joe 1002 expected this).
+
+## THE RECON JOB, built 1002 — Joe: *"yes thanks"*
+
+`optimus9/live/octo_recon.py`; monitor `python3 -m optimus9.live.octo_recon --watch` (detached, one job
+per new dump line); results `o9live_recon.log` and `o9_live.octo_recon_run` / `_verdict` / `_mismatch`.
+
+| part | what it compares |
+|---|---|
+| reference | the octo-freedom chain (`OctoFreedom`, the live producer's own code) over ONE window: trade book from 24 h before o9-live's first live bar (Joe 1002), 104 h warmup behind that, to the newest closed bar. Lines from the DB tape at recon time, the cache's recipe |
+| A. signals | every reference WALK FIRES FROM bar vs every bar with a live `open` dump line |
+| B. actions | the live dump vs the book o9-live SHOULD have run: empty at its first live bar (stay flat), the reference's signals, the same rules |
+| C. pre-start | Joe's 24-h-earlier list vs that live-start book; differences are the stay-flat ruling at work, labelled |
+| causality | each job's verdicts vs the previous job's on the same bars; a moved verdict is written, flagged when it sits within 3 bars of the previous job's end (a bar rewrite is possible there) |
+| cache | NOT MEASURED: o9-live does not record the values it decided on |
+
+**First run, 2026-10-02 02:20 UTC:** live start 01:42:35, book start 10-01 01:42:35, tape 92,613 bars,
+75 s. Signals 0 mismatches. Actions 3 matched (open Buy 01:45:05; close Buy + open Sell 02:11:35),
+0 mismatched. Pre-start 1: at 01:45:05 Joe's 24-h-earlier list was already holding a dr -1 trade, so
+the octo-sig there was same-dr and opened nothing; the live book, empty at start, opened it.
+
+`tests/test_octo_recon.py` R1-R3 hold the expectation rules.
+
+**RAISED TO JOE:** `OPEN.md` / `RECON.md` rule the line cache as the recon's source (Joe 0929). The
+cache ends 09-30; the job recomputes from the DB tape at recon time instead. Whether that meets the
+ruling is his.

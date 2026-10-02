@@ -126,8 +126,8 @@ bd -1 = Sell/short"*. This strategy is **`dr +1 = SHORT, dr -1 = LONG`**. A prod
 | 1 | the producer | **BUILT, as its own decide layer**, not a `StrategyLoop` producer: `optimus9/live/octo_loop.py` + `octo_freedom.py` + `octo_inputs.py`; `O9_PRODUCER=octo` in `ops/run_o9live.py`. Running since 1002 ~01:41 UTC |
 | 2 | the v7 sig_utc chain running forward | **NOT NEEDED** - the v7 chain is not the machine (`README.md`) |
 | 3 | the trade-signal dump | **BUILT** - `optimus9/live/trade_signal_dump.py`, `o9live_trade_signal_dump.log` |
-| 4 | the shell monitor | **PART-BUILT** - the o9-live session watches the dump and `o9live_errors.log`; the monitor that starts one recon session per dump line is not built |
-| 5 | the recon job | **NOT BUILT** - `RECON.md` |
+| 4 | the shell monitor | **BUILT** - `octo_recon --watch` runs a job per dump line; a session watches `o9live_recon.log` and `o9live_errors.log` |
+| 5 | the recon job | **BUILT** - `optimus9/live/octo_recon.py`; first run 1002 02:20 UTC: 0 mismatches, 3 actions matched |
 
 The v7 list as it was written, for the record:
 

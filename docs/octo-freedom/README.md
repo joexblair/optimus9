@@ -69,7 +69,8 @@ the rulings themselves live in `docs/o9-live-recon/OPEN.md`, not here.
 | `tests/test_trade_walk.py`, `tests/test_octo_loop.py` | the trade book's stepper (T1-T5) and the live decide layer (L1-L6), 1002 |
 | `optimus9/live/octo_inputs.py`, `octo_freedom.py`, `octo_loop.py` | the live producer, shape B, 1002 |
 | `optimus9/live/trade_signal_dump.py`, `feed_errors.py` | the trade-signal dump and the errors log, 1002 |
-| `o9live_trade_signal_dump.log`, `o9live_errors.log`, `o9live_octo.log` | o9-live's dump, errors log and run log, repo root (gitignored as `*.log`) |
+| `optimus9/live/octo_recon.py`, `tests/test_octo_recon.py` | the recon job and its monitor (`--watch`); results in `o9live_recon.log` and `o9_live.octo_recon_*`, 1002 |
+| `o9live_trade_signal_dump.log`, `o9live_errors.log`, `o9live_octo.log`, `o9live_recon.log` | o9-live's dump, errors log, run log and recon log, repo root (gitignored as `*.log`) |
 
 ## THE MACHINE, IN ONE TABLE
 
