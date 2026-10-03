@@ -19,8 +19,9 @@ ONE JOB: probe and record. It changes nothing on the box and reconnects nothing.
     stream.bytick.com:443 tcp    the same for Bybit's mirror host (the witness socket's host)
     api.bybit.com:443     tcp    the REST host kline_audit and the gap-fill read
 
-Every probe of every round is one row in `o9_live.diag_net_probe`. A target whose result flips
-(ok -> fail or fail -> ok) also writes one line to the errors log, which the /rc alert feed follows.
+Every probe of every round is one row in `o9_live.diag_net_probe`. A target that fails writes one FAILED
+line to the errors log (the /rc alert feed follows it) - after `FAIL_ROUNDS` failed rounds in a row, 1 by
+default, 2 for hop 3 - and one RECOVERED line when it answers again.
 Timeouts: ping 1 s, DNS 4 s, TCP 3 s. Round every `EVERY_S` seconds.
 
     python3 -m optimus9.live.net_probe
@@ -88,6 +89,32 @@ def probe_tcp(hostport):
 
 _FN = dict(ping=probe_ping, dns=probe_dns, tcp=probe_tcp)
 
+# Failed rounds in a row before a target's FAILED line. Joe 10-03: "increase the tolerance to 2 pings for
+# that hop" - hop 3 drops single pings (1 in 72 rounds when added) while the hops beyond it answer.
+FAIL_ROUNDS = {('222.152.41.165', 'ping'): 2}
+
+
+class Alarm:
+    """FAILED after FAIL_ROUNDS failed rounds in a row (default 1); RECOVERED only after a FAILED."""
+
+    def __init__(self, fail_rounds=None):
+        self.need = FAIL_ROUNDS if fail_rounds is None else fail_rounds
+        self.fails = {}
+        self.down = set()
+
+    def step(self, key, ok):
+        if ok:
+            self.fails[key] = 0
+            if key in self.down:
+                self.down.discard(key)
+                return ['RECOVERED']
+            return []
+        self.fails[key] = self.fails.get(key, 0) + 1
+        if key not in self.down and self.fails[key] >= self.need.get(key, 1):
+            self.down.add(key)
+            return ['FAILED (%d round%s in a row)' % (self.fails[key], '' if self.fails[key] == 1 else 's')]
+        return []
+
 
 def one_round():
     res = {}
@@ -112,7 +139,7 @@ def main():
     c = get_db_config(); c['database'] = 'o9_live'
     db = DatabaseManager(**c); db.connect()
     db.execute(DDL)
-    state = {}
+    alarm = Alarm()
     print('net_probe: %d probes every %.0f s -> o9_live.diag_net_probe' % (len(PROBES), EVERY_S), flush=True)
     nxt = time.time()
     while True:
@@ -122,10 +149,8 @@ def main():
         for (tg, kind) in PROBES:
             ok, ms, err = res.get((tg, kind), (False, None, 'no result'))
             rows.append((rnd, tg, kind, int(ok), ms, err))
-            if state.get((tg, kind)) is not None and state[(tg, kind)] != ok:
-                write('net_probe', '%s %s %s' % (kind, tg, 'RECOVERED' if ok else 'FAILED'),
-                      err or ('%.1f ms' % ms if ms is not None else ''))
-            state[(tg, kind)] = ok
+            for line in alarm.step((tg, kind), ok):
+                write('net_probe', '%s %s %s' % (kind, tg, line), err or ('%.1f ms' % ms if ms is not None else ''))
         try:
             for r in rows:
                 db.execute('INSERT INTO diag_net_probe (np_round_ms, np_target, np_kind, np_ok, np_ms, np_err) '
