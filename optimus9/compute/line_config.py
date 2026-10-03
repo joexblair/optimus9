@@ -156,8 +156,40 @@ def from_mech_row(c) -> tuple:
                  src=c['mlc_src']).as_tuple()
 
 
+def _tf_seconds(c):
+    """The timeframe seconds ONE `mech_line_config` row covers. -> sorted list of ints.
+
+    `mlc_tf_list` is an explicit CSV of seconds and OVERRIDES the band when set. Joe 1003 asked for
+    it after spotting the duplication the band could not absorb: *"allow an explicit TF list in
+    mech_line_config (e.g. an mlc_tf_list column) alongside the band, and move the non-conforming
+    lines into mech line config so we're optimised and consistent"*.
+
+    WHY A LIST AND NOT A WIDER BAND. The band is a uniform arithmetic sequence, and the wsf mech's
+    real timeframe set is not one: {5, 15, 30, 60..480, 540, 600, 900, 1320}. `range(5, 1321, 5)`
+    would also build 10, 20, 25 and every other multiple of 5 - 265 lines for the 15 that are used.
+
+    THE CONVENTIONS, so a row is readable without this function:
+      - tf_lo / tf_hi stay the list's MIN and MAX. `uq_mlc` keeps working and a band-only reader
+        sees a truthful range rather than a lie.
+      - tf_step 0 is the sentinel for list-only. An un-updated reader doing `range(lo, hi+1, 0)`
+        RAISES rather than silently building the wrong lines - the failure is loud by design.
+    """
+    raw = (c.get('mlc_tf_list') or '').strip()
+    if raw:
+        tfs = sorted({int(x) for x in raw.replace(' ', '').split(',') if x})
+        if not tfs:
+            raise ValueError('mlc_tf_list is set but parses to nothing: %r' % raw)
+        return tfs
+    lo, hi, step = int(c['mlc_tf_lo']), int(c['mlc_tf_hi']), int(c['mlc_tf_step'])
+    if step <= 0:
+        raise ValueError('mech_line_config pk=%s has tf_step %d and no mlc_tf_list, so it covers '
+                         'no timeframe at all' % (c.get('mlc_pk'), step))
+    return list(range(lo, hi + 1, step))
+
+
 def mech_lines(db, mech, version=None):
-    """[PRODUCER · Joe 0819] Every line one mechanic needs, spread across its timeframe band.
+    """[PRODUCER · Joe 0819] Every line one mechanic needs, across its timeframe band OR its
+    explicit `mlc_tf_list` (added 1003 - see `_tf_seconds`).
 
         db       a DatabaseManager.
         mech     'wsf' or 'domtf'.
@@ -184,9 +216,8 @@ def mech_lines(db, mech, version=None):
     out = []
     for c in rows:
         cfg = from_mech_row(c)
-        lo, hi, step = int(c['mlc_tf_lo']), int(c['mlc_tf_hi']), int(c['mlc_tf_step'])
         off = float(c['mlc_boundary_offset'])
-        for tfs in range(lo, hi + 1, step):
+        for tfs in _tf_seconds(c):          # `mlc_tf_list` when set, else the band. See _tf_seconds
             out.append({'role': c['mlc_role'], 'tf_seconds': tfs,
                         'override': override(tfs, cfg, c['mlc_value_mode']),
                         'hi': float(c['mlc_hi_boundary']) - off,

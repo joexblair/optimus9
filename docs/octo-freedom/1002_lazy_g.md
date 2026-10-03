@@ -41,7 +41,7 @@ the **crossover timeframe** — the TF where the ordering flips.
 
 | # | the question |
 |---|---|
-| 1 | **which line is `g15Mage`?** It does not resolve in either registry. `g` prefixes are `gca`, `gcb`, `gcs`, `gcws`; there is no `g15`. The candidates named `15` are `s15M` at itf **15 s**, and `ws15Mage` / `hs15m` at itf **900 s = 15 min**. His ladder runs fast -> slow with ws4 (240 s) ABOVE it, which points at the 15-SECOND line — but that is my inference from direction, not his word, so it is his to confirm |
+| 1 | ~~**which line is `g15Mage`?**~~ **ANSWERED 1003 by Joe's own next instruction** — *"the next job requires Mage and r from gcws15 and gcws5 built into the line cache. 15sec and 5sec"*. So `g15Mage` is **`gcws15Mage`, itf 15 SECONDS**, which is registered in `vw_indicator_configs_live` with `bb_len` 38 / `bb_mult` 0.93 / src close / emerging — the wsf Mage role's spec exactly. My inference from the ladder's direction was right, and it is now his word, not my inference. ORIGINAL NOTE: It does not resolve in either registry. `g` prefixes are `gca`, `gcb`, `gcs`, `gcws`; there is no `g15`. The candidates named `15` are `s15M` at itf **15 s**, and `ws15Mage` / `hs15m` at itf **900 s = 15 min**. His ladder runs fast -> slow with ws4 (240 s) ABOVE it, which points at the 15-SECOND line — but that is my inference from direction, not his word, so it is his to confirm |
 | 2 | is the **crossover TIMEFRAME** load-bearing, or only the PRESENCE of a flip anywhere in the ladder? A flip between g15 and ws4 is a different mech from a flip anywhere in ws1..ws23 |
 
 ## THE SPEC QUESTION THIS BAR RAISES, AND IT IS NEW
