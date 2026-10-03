@@ -158,3 +158,10 @@ then we have infra issues to troubleshoot"*.
 | both tick sockets, 100 s after | kept flowing: 42 messages / 53 trades each, longest silence 19.2 s, no restart, no error |
 | fakeAPI book socket | kept flowing, longest silence 4.2 s |
 | banked | `o9_live.diag_wan_reload`, outcome `manual test` |
+
+## Live events after the build
+
+| when (UTC) | event | outcome |
+|---|---|---|
+| 10-03 10:49:08 | `net_probe` lost one ping to 1.1.1.1; every other probe ok | back at 10:49:13; sockets unaffected |
+| 10-03 12:03:30 → 12:04:29 | fakeAPI's book socket silent 60 s, its pings unanswered (4 sent, 1 reply); tick sockets and probes fine (10/10 replies, 0 failures) | auto-restart 12:04:29, reconnected 12:04:30; 0 orders during it. The first live auto-restart; a single-socket stall, not the network |
