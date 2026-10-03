@@ -45,7 +45,11 @@ def _closed(o9):
 
 
 def _price(dev):
-    k = dev.execute("SELECT kc_timestamp t, kc_close c FROM kline_collection ORDER BY kc_timestamp DESC LIMIT 1", fetch=True)
+    # filtered to the symbol (1003): unfiltered, this sorted all 2.57 M rows of kline_collection - 1.6 s a
+    # poll - and slowed o9-live's decisions from ~1.7 s to 5-6 s. Filtered it uses uq_kc_tp_ts: 0.007 s
+    k = dev.execute("SELECT kc_timestamp t, kc_close c FROM kline_collection WHERE kc_tp_pk="
+                    "(SELECT tp_pk FROM trading_pairs WHERE tp_symbol_bybit=%s) "
+                    "ORDER BY kc_timestamp DESC LIMIT 1", (SYMBOL,), fetch=True)
     return (float(k[0]["c"]), int(k[0]["t"])) if k else (0.0, None)
 
 
