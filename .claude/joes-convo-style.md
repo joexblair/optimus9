@@ -29,6 +29,14 @@ Joe 0815: *"I need a report that I scan from the top to the bottom, without havi
 - Long is fine. A 61-row list is 61 rows.
 - The only columns are the record's own fields — time, value, change. Not more of the same series.
 
+## NAME A TRADE BY ITS TIMESTAMP
+
+Joe 1003: *"refer to trades by their timestamps, instead of led"*.
+
+- a trade is **18:28**, not `led 18`. The row id means nothing to him and changes between runs.
+- use the octo-sig / signal time, to the minute, unless the seconds disambiguate two on one minute.
+- the same goes for any event with a bar: say the time, not the index.
+
 ## PLAIN ENGLISH FIRST
 
 Joe 1003, after a report he called too technical: *"this is a great way to share technical data with

@@ -78,7 +78,17 @@ from datetime import timezone
 
 sys.path.insert(0, '/home/joe/thecodes')
 import optimus9.orchestration.build_ws_lines as BWL
-BWL.TAPE_END = dt.datetime(2026, 9, 8, 0, 0, tzinfo=timezone.utc)
+def _arg(flag, default):
+    """`--flag VALUE` from argv, else `default`. Added 1003 so the day and the tape are ARGUMENTS
+    instead of constants - Joe asked for 10-02 and 10-03 rows, and editing two module constants per
+    run is how a builder stops being reproducible."""
+    return sys.argv[sys.argv.index(flag) + 1] if flag in sys.argv else default
+
+
+# 1003: `--tape-end` defaults to the 09-08 window the banked 09-01 rows were built on, so a run with
+# no flags behaves exactly as before. A later day needs a tape that COVERS it: the tape is a fixed
+# span anchored on its END, so 10-03 data needs an end at or after 10-04.
+BWL.TAPE_END = dt.datetime.strptime(_arg('--tape-end', '2026-09-08'), '%Y-%m-%d').replace(tzinfo=timezone.utc)
 BWL.END_MS = int(BWL.TAPE_END.timestamp() * 1000)
 
 import numpy as np
@@ -97,7 +107,7 @@ TFS = range(4, 24)                       # Joe 0930: "use ws4r to ws23r"
 SAMPLES = 3; TOL = 2.0; BACK = 96        # 96 bars = 8 min, the banked lookback. Joe 1001 kept
 #                                          it at 8 min when the grid went to 4 - the windows OVERLAP
 STEP = 48                                # 48 bars = 4 min, Joe 1001: "4 minute spaced rows"
-DAY = '2026-09-01'
+DAY = _arg('--day', '2026-09-01')     # 1003: an argument, not a constant
 KNOBS = ('fence%g.%g_samples%d_tol%g_back%d_step%d'
          % (FENCE[0], FENCE[1], SAMPLES, TOL, BACK, STEP))
 
