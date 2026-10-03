@@ -1,5 +1,26 @@
 # 1003 — optimisation hunt, found while adding `mlc_tf_list`
 
+## IN PLAIN ENGLISH, AND WHAT I RECOMMEND
+
+Joe 1003: *"your notes are too technical for me. simplify, and provide your recommendations"*. Read
+this table; the detail is underneath if you need it.
+
+| # | what I found | how big | recommendation | state |
+|---|---|---|---|---|
+| 1 | the same line settings written out over and over | the Mage setting appears **14 times**; 175 lines from only **62** real recipes | done | **DONE 1003** — 5 rows now describe 75 lines |
+| 2 | we copied line files into memory when we could just point at them | loading was **68x slower** than needed and used **513 MB** where it can use 0 | do it | **DONE 1003** — acceptance test unchanged |
+| 3 | the line cache could never be cleaned up | **19.6 GB**, grows **1.2 GB** per date-window move, nothing ever deleted | do the cheap half | **DONE 1003** — builds are now labelled; nothing deleted |
+| 4 | that config table has no "home" in the code | why 1003's change needed a one-off script | later | open — fold into the next change there |
+| 5 | 101 more lines could be moved in, across 16 families | needs 16 mechanics named | **don't bother** | closed, see below |
+
+**On 5, the recommendation is to STOP.** The big family (`s`, 42 lines) has **23 different recipes
+across 12 timeframes** — its repetition is in the RECIPES, not the timeframes, so the new list column
+would not collapse it. The other 15 families are 1-7 lines each; a config row to save 3 lines is not
+a saving. The case that mattered — one recipe repeated across 15 timeframes — is the one now fixed.
+
+---
+
+
 Joe: *"while you work, hunt for optimisations and provide ideas if you find anything"*. Each item
 below is measured, not guessed. Nothing here is applied except item 1, which he asked for.
 
@@ -18,7 +39,7 @@ below is measured, not guessed. Nothing here is applied except item 1, which he 
   specs sitting outside the band** (gcws15/30 below it, ws9/10/15/22 above) and **0 had a different
   spec** — so they migrate with no new mech name. The rest need names, which is Joe's (below).
 
-## 2 — IDEA, MEASURED: `mmap_mode='r'` on the line cache
+## 2 — DONE 1003: `mmap_mode='r'` on the line cache
 
 `np.load` without `mmap_mode` parses and COPIES each 13 MB line file into RSS. The arrays are
 read-only in every consumer.
@@ -40,7 +61,7 @@ nearly reported as a difference; it is `NaN != NaN` over the 12,240 warmup NaNs.
   a feature here - the lines should never be mutated - but it has to be checked per consumer before
   the flag goes in.
 
-## 3 — IDEA: the line cache cannot be garbage-collected
+## 3 — DONE 1003 (the cheap half): the line cache could not be garbage-collected
 
 | | |
 |---|---|

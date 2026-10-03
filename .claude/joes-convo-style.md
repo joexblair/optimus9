@@ -29,6 +29,27 @@ Joe 0815: *"I need a report that I scan from the top to the bottom, without havi
 - Long is fine. A 61-row list is 61 rows.
 - The only columns are the record's own fields — time, value, change. Not more of the same series.
 
+## PLAIN ENGLISH FIRST
+
+Joe 1003, after a report he called too technical: *"this is a great way to share technical data with
+me. if I need more tech detail, I can ask. bank this `plain-english first` style for us"*.
+
+**Lead with what it means and what I recommend. Put the technical detail underneath, or leave it out
+until he asks.** He is the architect and the designer; he does not read the code.
+
+- **a findings table gets a `my recommendation` column**, and the recommendation is a verb: do it,
+  don't bother, later. Not a description of the options.
+- **say the size in a unit he can judge** - seconds saved, GB, "appears 14 times", "68x slower than
+  it needs to be". Not function names or line counts.
+- **name a file or symbol only when he needs it to act.** `mlc_tf_list` yes, when he asked for that
+  column. `np.load(mmap_mode='r')` no - "we copy the files into memory when we could point at them".
+- **a recommendation to STOP is a real recommendation.** 1003: the remaining 101 lines were not worth
+  migrating, and saying so saved the work.
+- **the banked report gets the plain-English summary at the TOP**, detail below. The next session
+  reads the summary; whoever implements reads the rest.
+- this does NOT loosen anything else in this file - numbers still go in tables, still one record per
+  row, still one `TL;DR:` line. It changes what leads, not the rigour.
+
 ## One closer: TL;DR
 
 Joe 1001: *"would it work if we drop the 3 closers and replace with a TL;DR closer? I know you feel

@@ -47,8 +47,10 @@ def _line_specs(db):
 
 
 def _cached(spec, tf, role):
+    # mmap: point at the file, do not copy it. 68x faster, 0 resident. Joe 1003
     return np.load(os.path.join(LINE_DIR, _line_key(END_MS, HOURS, WARMUP,
-                                                    override(tf * 60, *spec[role])) + '.npy'))
+                                                    override(tf * 60, *spec[role])) + '.npy'),
+                   mmap_mode='r')
 
 
 def load(db, C):
