@@ -6,7 +6,13 @@ The 1002 05:08:30 outage left no record of whether the LAN, the WAN, DNS or Bybi
 ONE JOB: probe and record. It changes nothing on the box and reconnects nothing.
 
     target                kind   what a failure isolates
-    192.168.1.1           ping   pfSense LAN: WSL -> Windows NAT -> LAN
+    192.168.1.1           ping   pfSense LAN: WSL -> Windows NAT -> LAN (hop 1 to Bybit)
+    222.152.41.165        ping   the ISP router at hop 3, the last hop that answers before Bybit's edge
+                                 (hops 4-6 are silent): halfway to Bybit (Joe 1002). tracert 10-03 17:10:
+                                 192.168.1.1 -> 125.236.192.9 (ISP gateway, pfSense's WAN monitor) ->
+                                 222.152.41.165 -> * * * -> CloudFront edge, 7 hops, ~1-2 ms
+    api.bybit.com         ping   Bybit's API host - a CloudFront edge that answers ICMP (Joe 1002). The
+                                 edge-to-origin leg inside AWS is not visible to any probe here
     1.1.1.1               ping   the internet past pfSense (the same address pfSense's cron pings)
     stream.bybit.com      dns    name resolution of the collector's websocket host
     stream.bybit.com:443  tcp    a TCP connect to the collector's websocket host
@@ -30,7 +36,8 @@ EVERY_S = 5.0
 PING_W_S = 1
 DNS_S = 4.0
 TCP_S = 3.0
-PROBES = [('192.168.1.1', 'ping'), ('1.1.1.1', 'ping'), ('stream.bybit.com', 'dns'),
+PROBES = [('192.168.1.1', 'ping'), ('222.152.41.165', 'ping'), ('api.bybit.com', 'ping'),
+          ('1.1.1.1', 'ping'), ('stream.bybit.com', 'dns'),
           ('stream.bybit.com:443', 'tcp'), ('stream.bytick.com:443', 'tcp'), ('api.bybit.com:443', 'tcp')]
 
 DDL = """CREATE TABLE IF NOT EXISTS diag_net_probe (
