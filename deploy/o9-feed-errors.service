@@ -1,0 +1,17 @@
+[Unit]
+Description=o9 feed errors: fakeAPI/o9-live/kline_audit issues into o9live_errors.log (optimus9/live/feed_errors.py)
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=joe
+WorkingDirectory=/home/joe/thecodes
+ExecStart=/usr/bin/python3 -m optimus9.live.feed_errors run --fakeapi-log /home/joe/thecodes/fakeapi.log --o9live-log /home/joe/thecodes/o9live_octo.log
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/joe/thecodes/feed_errors.log
+StandardError=append:/home/joe/thecodes/feed_errors.log
+
+[Install]
+WantedBy=multi-user.target

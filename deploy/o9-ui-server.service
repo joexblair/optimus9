@@ -1,0 +1,18 @@
+[Unit]
+Description=o9 UI on :8099 (optimus9/live/ui_server.py)
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=joe
+WorkingDirectory=/home/joe/thecodes
+Environment=O9_BOOK_LIVENESS_LOG=/home/joe/thecodes/ws_liveness_ui_book.log
+ExecStart=/usr/bin/python3 -m uvicorn optimus9.live.ui_server:app --host 0.0.0.0 --port 8099
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/joe/thecodes/ui_server.log
+StandardError=append:/home/joe/thecodes/ui_server.log
+
+[Install]
+WantedBy=multi-user.target

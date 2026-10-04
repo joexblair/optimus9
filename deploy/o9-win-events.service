@@ -1,0 +1,17 @@
+[Unit]
+Description=o9 Windows event reader: System/TCPIP/... every 60 s into windows_events.log (optimus9/live/win_events.py)
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=joe
+WorkingDirectory=/home/joe/thecodes
+ExecStart=/usr/bin/python3 -u -m optimus9.live.win_events
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/joe/thecodes/win_events.out
+StandardError=append:/home/joe/thecodes/win_events.out
+
+[Install]
+WantedBy=multi-user.target

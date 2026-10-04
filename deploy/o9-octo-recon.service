@@ -1,0 +1,17 @@
+[Unit]
+Description=o9 recon watcher: one recon job per new dump line (optimus9/live/octo_recon.py --watch)
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=joe
+WorkingDirectory=/home/joe/thecodes
+ExecStart=/usr/bin/python3 -u -m optimus9.live.octo_recon --watch
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/joe/thecodes/octo_recon_watch.log
+StandardError=append:/home/joe/thecodes/octo_recon_watch.log
+
+[Install]
+WantedBy=multi-user.target

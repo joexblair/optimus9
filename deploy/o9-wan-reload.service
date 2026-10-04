@@ -1,0 +1,17 @@
+[Unit]
+Description=o9 WAN reload: socket restart with no trades for 50 s -> pfSense WAN reload (optimus9/live/wan_reload.py)
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=joe
+WorkingDirectory=/home/joe/thecodes
+ExecStart=/usr/bin/python3 -u -m optimus9.live.wan_reload
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/joe/thecodes/wan_reload.out
+StandardError=append:/home/joe/thecodes/wan_reload.out
+
+[Install]
+WantedBy=multi-user.target

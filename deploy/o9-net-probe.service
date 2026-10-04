@@ -1,0 +1,17 @@
+[Unit]
+Description=o9 net probe: pings/dns/tcp every 5 s into o9_live.diag_net_probe (optimus9/live/net_probe.py)
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=joe
+WorkingDirectory=/home/joe/thecodes
+ExecStart=/usr/bin/python3 -u -m optimus9.live.net_probe
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/joe/thecodes/net_probe.log
+StandardError=append:/home/joe/thecodes/net_probe.log
+
+[Install]
+WantedBy=multi-user.target
