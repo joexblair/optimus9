@@ -311,3 +311,43 @@ Joe's words, verbatim, locked at his instruction *"lock this in for me"*:
   observation and it holds exactly as he described it.
 - **OPEN, his:** whether "the baton" means the highest mom-true TF (how it is measured above) or
   something else. ws16 holding it at 00:13 depends entirely on that definition.
+
+## THE BATON WALK ON 09-25 00:00..12:00 — THE CHAIN BREAK BRACKETS THE LOW
+
+Joe 1004 asked for the stall + baton report with the octo-sig interleaved. dr +1, ws3..ws23,
+`STALL_N` 6, 63 batons, 19 octo-sig rows. Built by `baton.py` from the rpl line cache; the octo-sig
+rows come from `report_leash_walk.py --day 2026-09-25 --tape-end 2026-10-04` (v4 knobs, dr recipe
+reproduced rig.DR on 0 of 1,630,780 bars differing).
+
+| what | bar | pxs |
+|---|---|---|
+| window start | 00:00:00 | 0.184926 |
+| pxs LOW | **07:13:45** | **0.181817** |
+| pxs high | 11:35:40 | 0.199407 |
+
+**THE RESULT.** The chain broke for ~37 minutes straight across the low:
+
+| measure | value |
+|---|---|
+| broken span | rows 21-50, **06:45:10 .. 07:22:35** |
+| rows in it with `mom-true` = 0 (nothing to pass the baton to) | **21 of 30** |
+| rides in it | 0.1-0.8 min flickers, none longer than 3.5 min |
+| the pxs low sits INSIDE it | row 44, 07:09:05, reads exactly 0.181817 |
+| deepest stall | **20 of 21** at 07:18:25, +0.51% above the low |
+
+**THE OCTO-SIG DOES NOT OVERLAP IT.** Last signal before the break: 03:32:35. First after: 07:59:20,
+36 min after the chain recovered. Zero octo-sig inside the 37-minute break.
+
+**THE OCTO-SIG CLUSTER FIRES AT THE OPPOSITE CONDITION.**
+
+| | the chain break 06:45-07:22 | the octo-sig cluster 08:26-08:40 |
+|---|---|---|
+| stalled | 10 -> 20 of 21 | **1 -> 4 of 21** |
+| mom-true | 0 on 21 of 30 rows | **14 -> 16 of 21** |
+| pxs after | turned up from 0.181817 | ran to 0.199407 |
+
+- **READING, mine:** on this window the chain break marks the TURN and the octo-sig cluster marks the
+  RUN that follows it. They are ~70 min apart and never co-occur. One window.
+- this is the 3rd leg walked (10-02 down, 10-01 round trip, 09-25 morning). The chain break has now
+  bracketed or near-missed the turn on 10-02 (inside, dr +1), 10-01 (local low inside, dr +1) and
+  09-25 (inside, dr +1). **The dr frame is still unruled** - see the correction note above.
