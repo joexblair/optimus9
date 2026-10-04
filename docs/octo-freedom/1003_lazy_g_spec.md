@@ -351,3 +351,116 @@ reproduced rig.DR on 0 of 1,630,780 bars differing).
 - this is the 3rd leg walked (10-02 down, 10-01 round trip, 09-25 morning). The chain break has now
   bracketed or near-missed the turn on 10-02 (inside, dr +1), 10-01 (local low inside, dr +1) and
   09-25 (inside, dr +1). **The dr frame is still unruled** - see the correction note above.
+
+## WHAT A STALL CLUSTER MEANS — Joe's wording, 1004
+
+My phrasing was *"11 of 21 TFs stalled at some point in that 45-minute interval"*, which is a count
+with no mech behind it. Joe tightened it:
+
+> *"most of the wsf lines are stalling, indicating that the whip-end of the matryoshka line is
+> reversing and attempting to pull the dtf lines around"*
+
+**USE THIS WORDING.** The count is the evidence; the sentence is the mechanic.
+
+Measured at the 09-25 03:30:05 octo-sig, which is what he read it off:
+
+| measure | value |
+|---|---|
+| stall ONSETS since the prior row (02:45:10, 45 min back) | **58** |
+| distinct TFs producing them | **11 of 21** — ws3, ws4, ws5, ws6, ws7, ws9, ws10, ws11, ws13, ws14, ws16 |
+| stalled STATE at the signal bar | 5 of 21 |
+| mom-true at the signal bar | 13 of 21 |
+
+- the 5-of-21 state is a one-bar snapshot and is NOT the confluence. The 58 onsets across 11 TFs is.
+- **COMING:** Joe 1004 — *"I'll be introducing a new `mtd` mech soon that confluences the 03:32:20
+  `ws1mage-rev + r oob` event"*. Not specified, not built. 03:32:20 is event 4 of the 15 qualifying
+  off-book events on 09-25 (dr -1, ws1r 14.78 EX lo, ws1Mage 24.81, gcws30Mage 26.04).
+
+## BRANCH D — THE r-CASCADE, with the mage-cascade as a trend grade. Joe 1004
+
+Joe named it D. Introduced off the 09-25 02:12 and 03:30 octo-sigs.
+
+### D.1 THE PREMISE — Joe verbatim, 1004
+
+> *"02:12 introduces a new mech/branch, for which you will need to interogate ws1 and ws2. you can
+> see that at 02:12, ws2r and ws3r are hi oob, while each higher ws{wsf-TF}r 'falls' away from hi oob
+> in a cascade. ie ws3r was the last TF to have enough momentum to exit the oob fence, and the TFs
+> above ws3 lack the strength"*
+> *"this is a known pattern, and represents the same action as the mage cascade"*
+> *"the mage-cascade prints in the higher wsf TFs to confirm that higher lines want to travel
+> downward"*
+
+On 03:30, same branch:
+> *"03:30 is confluenced, for the same r-cascade reason as 02:12. the r-cascade begins with ws3r
+> lifting. there is no mage-cascade lifting away at 03:30, telling us that we are trading against a
+> trend"*
+
+### D.2 WHAT FIRES IT
+
+| | |
+|---|---|
+| the firing condition | **the r-cascade.** 03:30 has no mage-cascade and Joe still called it confluenced |
+| the mage-cascade | **a grade, not a gate** - present = with-trend, absent = against-trend |
+| branch D's verdict | **confluence.** Joe called both 02:12 and 03:30 confluenced. Unlike B and C, D has a direction |
+| against-trend consequence | *"should create a smaller sized position to handled slippage costs"* - **MVP2**, not this build |
+| magnitude thresholds | **none.** Joe 1004: *"unlikely. the mech needs lines to be under or over the starting block"* - the test is positional, not magnitude |
+
+### D.3 THE SIX RULINGS, Joe 1004
+
+| # | question | his ruling |
+|---|---|---|
+| 1 | must the ex-fence block be contiguous? | **no.** But the gap must be meaningful: *"the gap between 2 and 10 is too large to be meaningful. 'meaningful' means has a voice to the mech's outcome ... if the gap was 2 (eg ws2 jumps to ws5) then I'll want to look at it and make a call based on the wider picture of that particular bar. I don't know the gap's minimum yet, so I'm choosing 4 as an arbitrary knob"* |
+| 2 | is ws1 in the ladder? | **yes, most definitely.** *"on lookback, you'll find that ws1 is leading ws2 (blast radius, matryoshka) when it returns to ib at ~02:07. the mech needs to check for this scenario using a divergence test, and a lookback test. if either are true, then ws1 is accepted. if ws1r is found in the lookback or div then the mech needs to claim the ws1r extrema value, not the 02:12 value"* |
+| 3 | can the cascade lift again at the top? | *"I don't know yet. my current view to be strawmanned: so long as the higher TFs are not printing a value that's between ws1 and the weak r, then the higher TFs have no claim"* |
+| 4 | which mage-cascade definition? | **no-op.** *"I was concise: there should be no task attached"* - the 1003 "failed mech" remark carries no block, and task #22 is not a gate on this |
+| 5 | magnitude thresholds? | see D.2 - none |
+| 6 | the name | **D** |
+
+**WHICH ws1r EXTREMA** - Joe 1004, asked directly between the floater, the pivot and the 02:12 value:
+> *"the floater, ie the moment when ws1r completed its purpose"*
+
+### D.4 KNOBS
+
+| knob | value | status |
+|---|---|---|
+| **`LAZY_G_D_GAP_MAX`** | **4** | Joe's, explicitly arbitrary: *"I'm choosing 4 as an arbitrary knob (add to spec for sweeping)"*. **SWEEP IT** |
+| the fence | oob 15/85 | from the r ex-fence reading. Not separately ruled for D |
+| divergence producer | `jig.anchor_floater` + `jig.divergence` | existing, Joe 0912. `AF_BLOCK` 60 bars = 5 min |
+| the lookback test | **NOT DEFINED BY JOE** | see D.6 |
+
+### D.5 MEASURED AT 02:12:10, dr +1 - every ruling checked
+
+| ruling | measured |
+|---|---|
+| ws2r and ws3r hi oob | **ws2 98.22, ws3 91.06, and ws4 86.59** - three TFs ex-fence, not two. The last to exit is **ws4**, not ws3 |
+| the r-cascade falls above it | ws4 86.59 -> ws5 79.43 -> ws6 64.11 -> ws7 46.69 -> ws9 30.40, a **-56.19** fall over five rungs |
+| the mage-cascade confirms downward | **Mage net ws1->ws12 -39.23**, biggest step ws6->ws7 **-22.0**. dr +1, so -39.23 is AWAY from dr |
+| ws1 leads ws2 on the ib return | **CONFIRMED.** ws1r's last ex-fence bar is 02:08:45 (85.81), back IB at **02:08:50** (83.05). ws2, ws3, ws4 are STILL ex-fence at 02:12:10 |
+| Joe said ~02:07 | actual **02:08:50**, 1.8 min out |
+| the divergence test on ws1r | **FIRES.** `anchor_floater` -> `fired: 1` |
+| the anchor | bar 1479026 = **02:12:10**, ws1r 62.92, px 0.187556 |
+| the pivot (dr-opposed extreme) | bar 1479017 = **02:11:25**, ws1r 49.06, 0.8 min back |
+| **the floater (Joe's claimed value)** | bar 1478929 = **02:04:05**, ws1r **93.52**, px 0.186817, **8.1 min back** |
+| `d_osc` / `d_px` / blocks | **-30.60** / **+0.000739** / 3 blocks walked |
+| the independent `divergence` producer | bearish **+1 confirmed at 02:08:45** - the same bar ws1r last left the fence |
+
+**Q3's STRAWMAN SURVIVES.** Band = [ws1r, weakest ex-fence] = [62.92, 86.59] at the 02:12 value:
+
+| TF | r | inside the band | claim |
+|---|---|---|---|
+| ws5 | 79.43 | INSIDE | has a claim |
+| ws6 | 64.11 | INSIDE | has a claim |
+| ws7..ws12 | 46.69, 47.28, 30.40, 42.04, 42.27, 50.99 | all outside, all BELOW | no claim |
+
+- the **ws9->ws12 lift (30.40 -> 50.99) stays below 62.92**, so it is outside the band and has no
+  claim. **The top-end lift does NOT break the cascade** under his rule.
+- **under the ruled floater value 93.52** the band becomes [86.59, 93.52] and the only TF inside is
+  ws3 (91.06), which is already in the ex-fence block. So at 02:12 **no higher TF has a claim at all**.
+
+### D.6 STILL OPEN
+
+| open | detail |
+|---|---|
+| **the "lookback test"** | Joe named *"a divergence test, and a lookback test"* with an OR. The divergence test is `anchor_floater`/`divergence`. The lookback test is NOT defined. **MY READING, not his**: it is the ib-return lead - ws1r returns in-fence before the ex-fence block members do, which is exactly the scenario his own sentence describes and which measured true at 02:08:50. Needs his word before it goes in code |
+| gap measurement | `LAZY_G_D_GAP_MAX` 4 - is the gap the COUNT OF SKIPPED TFs (ws2->ws5 = 2 skipped) or the TF-number difference (ws2->ws5 = 3)? His example *"if the gap was 2 (eg ws2 jumps to ws5)"* says **skipped count**, which is my reading of his arithmetic, not a separate ruling |
+| ws2's role | Joe said *"interogate ws1 and ws2"*. ws1's role is ruled (D.3 #2). **ws2 has no separate rule** - it is currently just the bottom of the ex-fence block |
