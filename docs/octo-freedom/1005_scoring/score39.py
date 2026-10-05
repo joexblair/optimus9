@@ -1,0 +1,318 @@
+"""The 39 octo-sig of 09-25: mtd route -> branch D -> swing_detect MAE/MFE. Joe 1005.
+
+Joe: "you can decide if the status is correct based on swing_detect + MAE/MFE. your choice on the
+swing size - measure for effect. let's say that any signal which creates >0.7 MAE% (or maybe 0.8%
+- your call) should be blocked".
+
+THE SCORING CONVENTION is the banked one, not a new one. docs/linelab_spec.md s0, "Locked by Joe:
+swing_detect 1%, swing-to-pivot, no stops":
+  entry   = the octo-sig bar, px = __pxs__ at that bar
+  side    = the dr-bias trade. dr +1 = SHORT, dr -1 = LONG
+  segment = entry -> the next FAVOURABLE pivot (SHORT: the next 'L'; LONG: the next 'H')
+  MFE     = max favourable excursion over the segment, %
+  MAE     = max adverse excursion over the segment, % -- max(0, ...), so a clean favourable-side
+            entry scores 0. A pre-entry adverse move belongs to a different leg.
+  no stop. Identical arithmetic to score_shorts.score and siglab.Lab.score.
+
+MY TWO CHOICES, both delegated by Joe this turn, both measured below not preferred:
+  swing pct      swept 0.4 .. 2.0
+  MAE% threshold 0.7 vs 0.8
+"""
+import os as _os
+_HERE = _os.path.dirname(_os.path.abspath(__file__))
+import datetime as dt, io, os, sys
+import numpy as np
+sys.path.insert(0, '/home/joe/thecodes')
+_e = sys.stderr; sys.stderr = io.StringIO()
+from optimus9.compute.line_config import override, mech_lines
+from optimus9.orchestration.build_ws_lines import HOURS, WARMUP
+from optimus9.orchestration.rpl_cache import LINE_DIR, TAPE_DIR, _line_key, _tape_key
+from optimus9.compute.swing_detect import find_pivots
+from optimus9.analysis.lr_v2 import _mage_rev
+from optimus9.analysis.jig import anchor_floater, AF_BLOCK
+from optimus9.db.database_manager import DatabaseManager
+from optimus9.config import get_db_config
+sys.stderr = _e
+EM = int(dt.datetime(2026, 10, 4, tzinfo=dt.timezone.utc).timestamp() * 1000)
+HI, LO, REV_WOB, GAP_MAX = 85.0, 15.0, 2, 4
+LOOKBACK_BARS = 48
+TOL = {'g5': 0, 'g15': 3, 'g30': 6, 'ws1': 0}
+db = DatabaseManager(**get_db_config()); db.connect()
+spec = {}
+for g in mech_lines(db, 'wsf'):
+    if g['role'] not in spec: _t, s_, m_ = g['override']; spec[g['role']] = (s_, m_)
+sy = db.execute('SELECT pxsmooth_dema_src s, pxsmooth_dema_len l FROM optimus9_system WHERE sys_pk=1', fetch=True)[0]
+db.disconnect()
+tp = np.load(os.path.join(TAPE_DIR, _tape_key(EM, HOURS, WARMUP, {'src': sy['s'], 'len': sy['l']}) + '.npz'))
+ts = tp['__ts__']; PX = np.asarray(tp['__pxs__'], float)
+LD = lambda tfs, role: np.asarray(np.load(os.path.join(LINE_DIR, _line_key(EM, HOURS, WARMUP, override(tfs, *spec[role])) + '.npy'), mmap_mode='r'), float)
+MTD = {'g5': LD(5, 'Mage'), 'g15': LD(15, 'Mage'), 'g30': LD(30, 'Mage'), 'ws1': LD(60, 'Mage')}
+TF = list(range(1, 13))
+Rl = {t: LD(t * 60, 'r') for t in TF}
+Mg = {t: (MTD['ws1'] if t == 1 else LD(t * 60, 'Mage')) for t in TF}
+M13 = LD(13 * 60, 'm'); G1 = MTD['ws1']
+DRv = np.zeros(len(ts), np.int8); cur = 0
+for k in range(min(len(ts), len(G1), len(M13))):
+    a, b = G1[k], M13[k]
+    if a == a and b == b:
+        if a >= 85.0 and b >= 85.0: cur = +1
+        elif a <= 15.0 and b <= 15.0: cur = -1
+    DRv[k] = cur
+REV = _mage_rev(MTD['g5'], REV_WOB)
+TAPE_LAST = len(ts) - 1
+U = lambda k: dt.datetime.fromtimestamp(int(ts[k]) / 1000, dt.timezone.utc).strftime('%H:%M:%S')
+K = lambda s: int(np.searchsorted(ts, int(dt.datetime.strptime(s, '%Y-%m-%d %H:%M:%S').replace(tzinfo=dt.timezone.utc).timestamp() * 1000)))
+
+# ---------------- mtd, verbatim from mtd_lens.py
+def mtd(k):
+    d = int(DRv[k])
+    if d == 0: return {'route': 'no dr', 'src': '-', 'ex': None, 'd': 0}
+    same = (lambda v: v >= HI) if d > 0 else (lambda v: v <= LO)
+    a = max(0, k - LOOKBACK_BARS)
+    hits = [i for i in range(a, k + 1) if np.isfinite(MTD['g5'][i]) and same(MTD['g5'][i])]
+    if hits:
+        ex = max(hits, key=lambda i: MTD['g5'][i]) if d > 0 else min(hits, key=lambda i: MTD['g5'][i])
+        src = 'lookback'
+    else:
+        j = k
+        while j < TAPE_LAST and not (np.isfinite(MTD['g5'][j]) and same(MTD['g5'][j])): j += 1
+        if not (np.isfinite(MTD['g5'][j]) and same(MTD['g5'][j])):
+            return {'route': 'NO-FIND oob', 'src': 'fwd', 'ex': None, 'd': d}
+        want = -1 if d > 0 else +1
+        nxt = [i for i in range(j, TAPE_LAST + 1) if REV[i] == want]
+        if not nxt: return {'route': 'NO-FIND rev', 'src': 'fwd', 'ex': None, 'd': d}
+        ex = nxt[0]; src = 'fwd'
+    base = ex
+    v, vbar = {}, {}
+    for n in ('g5', 'g15', 'g30', 'ws1'):
+        w = TOL[n]
+        if w == 0:
+            v[n], vbar[n] = MTD[n][base], base; continue
+        lo_, hi_ = max(0, base - w), min(TAPE_LAST, base + w)
+        seg = MTD[n][lo_:hi_ + 1]
+        if not np.isfinite(seg).any(): v[n], vbar[n] = np.nan, base; continue
+        j = int(np.nanargmax(seg)) if d > 0 else int(np.nanargmin(seg))
+        v[n], vbar[n] = float(seg[j]), lo_ + j
+    r1 = all(np.isfinite(v[n]) and same(v[n]) for n in v)
+    noob = sum(1 for n in ('g5','g15','g30','ws1') if np.isfinite(v[n]) and same(v[n]))
+    miss = [n for n in ('g5','g15','g30','ws1') if not (np.isfinite(v[n]) and same(v[n]))]
+    net = v['ws1'] - v['g15']
+    towards = (net > 0) if d > 0 else (net < 0)
+    route = 'mtd.r1' if r1 else ('mtd.r2' if towards else 'neither')
+    allow = ('LONG' if d > 0 else 'SHORT') if route == 'mtd.r2' else '-'
+    return {'route': route, 'src': src, 'ex': ex, 'd': d, 'v': v, 'net': net, 'noob': noob,
+            'miss': miss, 'towards': towards, 'allow': allow, 'lag': (ts[ex] - ts[k]) / 60000.0}
+
+# ---------------- branch D, verbatim from branchD.py
+def branchD(d, ex):
+    exf = (lambda v: v >= HI) if d > 0 else (lambda v: v <= LO)
+    blk = [t for t in TF if np.isfinite(Rl[t][ex]) and exf(Rl[t][ex])]
+    af = anchor_floater(Rl[1], PX, d, ex, block=AF_BLOCK)
+    div = bool(af.get('fired')) if isinstance(af, dict) else False
+    w1 = float(af['floater'][1]) if div else float(Rl[1][ex])
+    keep, drop = [], []
+    if blk:
+        keep = [blk[0]]
+        for t in blk[1:]:
+            if t - keep[-1] - 1 <= GAP_MAX: keep.append(t)
+        drop = [t for t in blk if t not in keep]
+    if not keep:
+        return {'fire': False, 'why': 'no r block', 'keep': [], 'claim': [], 'net': None, 'band': None}
+    weak = min(keep, key=lambda t: Rl[t][ex]) if d > 0 else max(keep, key=lambda t: Rl[t][ex])
+    band = (min(w1, Rl[weak][ex]), max(w1, Rl[weak][ex]))
+    claim = [t for t in TF if t > max(keep) and np.isfinite(Rl[t][ex]) and band[0] <= Rl[t][ex] <= band[1]]
+    net = Mg[12][ex] - Mg[1][ex]
+    away = (net < 0) if d > 0 else (net > 0)
+    return {'fire': not claim, 'why': 'band claimed' if claim else 'fires', 'keep': keep, 'drop': drop,
+            'claim': claim, 'net': net, 'away': away, 'band': band, 'weak': weak}
+
+# ---------------- swing_detect scoring, banked convention
+def pivots(pct):
+    piv = find_pivots(PX, pct)
+    return (np.array([p for p, kk in piv if kk == 'H']), np.array([p for p, kk in piv if kk == 'L']))
+
+def score(k, d, Hs, Ls):
+    """-> (mfe, mae, exit_bar). d +1 = SHORT (favourable = next L), d -1 = LONG (favourable = next H)."""
+    entry = float(PX[k])
+    tgt = Ls if d > 0 else Hs
+    nxt = tgt[tgt > k]
+    if nxt.size == 0: return (None, None, None)
+    j = int(nxt[0]); seg = PX[k:j + 1]
+    seg = seg[np.isfinite(seg) & (seg > 0)]
+    if seg.size == 0: return (None, None, None)
+    if d > 0:
+        mfe = (entry - float(seg.min())) / entry * 100.0
+        mae = max(0.0, (float(seg.max()) - entry) / entry * 100.0)
+    else:
+        mfe = (float(seg.max()) - entry) / entry * 100.0
+        mae = max(0.0, (entry - float(seg.min())) / entry * 100.0)
+    return (mfe, mae, j)
+
+# ---------------- population
+DAY = os.environ.get('LG_DAY', '2026-09-25')
+A0, A1 = K(DAY + ' 00:00:00'), K(DAY + ' 23:59:55')
+OS = []
+for ln in open(_os.path.join(_HERE, 'octosig') + '/%s.out' % DAY):
+    if ln.startswith('R|') and not ln.startswith('R|run'):
+        f = ln.rstrip('\n').split('|')
+        if len(f) >= 7:
+            k = K(DAY + ' ' + f[2])
+            if A0 <= k <= A1: OS.append((k, f[2]))
+
+ROWS = []
+for k, lbl in OS:
+    m = mtd(k)
+    d = m['d']; side = 'SHORT' if d > 0 else 'LONG'
+    r = {'k': k, 'lbl': lbl, 'd': d, 'side': side, 'm': m}
+    if m['route'] == 'mtd.r1':
+        dd = branchD(d, m['ex']); r['D'] = dd
+        if dd['fire']:
+            r['status'] = 'CONFLUENCE'; r['grade'] = 'with-trend' if dd['away'] else 'against-trend'
+        else:
+            r['status'] = 'OPEN'; r['grade'] = dd['why']
+    elif m['route'] == 'mtd.r2':
+        r['status'] = 'BLOCKED'; r['grade'] = 'allows %s only' % m['allow']
+    else:
+        r['status'] = 'OPEN'; r['grade'] = 'no rule'
+    ROWS.append(r)
+
+# ---------------- the swing-size sweep
+print('## SWING SIZE SWEEP — the measurement that picks the pct')
+print('| swing pct | pivots on the tape | median hold (min) | scored | MAE>0.7 | MAE>0.8 | MFE med | MAE med | MFE>MAE |')
+print('|' + '---|' * 9)
+CACHE = {}
+for pct in (0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.25, 1.5, 2.0):
+    Hs, Ls = pivots(pct); CACHE[pct] = (Hs, Ls)
+    sc = [score(r['k'], r['d'], Hs, Ls) for r in ROWS]
+    ok = [(f, a, j, r) for (f, a, j), r in zip(sc, ROWS) if f is not None]
+    hold = [(ts[j] - ts[r['k']]) / 60000.0 for f, a, j, r in ok]
+    mfes = [f for f, a, j, r in ok]; maes = [a for f, a, j, r in ok]
+    print('| %.2f | %d | %.1f | %d | %d | %d | %.3f | %.3f | %d |'
+          % (pct, len(Hs) + len(Ls), float(np.median(hold)), len(ok),
+             sum(1 for a in maes if a > 0.7), sum(1 for a in maes if a > 0.8),
+             float(np.median(mfes)), float(np.median(maes)),
+             sum(1 for f, a, j, r in ok if f > a)))
+
+# ---------------- which swing size DISCRIMINATES? the mech's own split vs the MAE line
+print()
+print('## DISCRIMINATION — does the mech already separate MAE at this swing size?')
+print('# CONF = the 20 branch-D confluences · NOT-CONF = the 5 BLOCKED + 14 OPEN')
+print('| swing pct | CONF MAE med | NOT-CONF MAE med | CONF MAE>0.7 | NOT-CONF MAE>0.7 | CONF MFE>MAE | NOT MFE>MAE | agree with 0.7 line |')
+print('|' + '---|' * 8)
+for pct in (0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.25, 1.5, 2.0):
+    Hs, Ls = CACHE[pct]
+    C, Nn = [], []
+    for r in ROWS:
+        f, a, j = score(r['k'], r['d'], Hs, Ls)
+        (C if r['status'] == 'CONFLUENCE' else Nn).append((f, a))
+    agree = sum(1 for f, a in C if a <= 0.7) + sum(1 for f, a in Nn if a > 0.7)
+    print('| %.2f | %.3f | %.3f | %d of %d | %d of %d | %d of %d | %d of %d | %d of 39 |'
+          % (pct, float(np.median([a for f, a in C])), float(np.median([a for f, a in Nn])),
+             sum(1 for f, a in C if a > 0.7), len(C), sum(1 for f, a in Nn if a > 0.7), len(Nn),
+             sum(1 for f, a in C if f > a), len(C), sum(1 for f, a in Nn if f > a), len(Nn), agree))
+
+# ---------------- grade vs MAE, both candidate swing sizes
+print()
+print('## MAE BY GRADE — is the heat concentrated in one of the two confluence paths?')
+print('| swing pct | with-trend MAE med | against-trend MAE med | with MAE>0.7 | against MAE>0.7 | with MFE med | against MFE med |')
+print('|' + '---|' * 7)
+for pct in (0.7, 1.0):
+    Hs, Ls = CACHE[pct]
+    W, Ag = [], []
+    for r in ROWS:
+        if r['status'] != 'CONFLUENCE': continue
+        f, a, j = score(r['k'], r['d'], Hs, Ls)
+        (W if r['grade'] == 'with-trend' else Ag).append((f, a))
+    print('| %.2f | %.3f | %.3f | %d of %d | %d of %d | %.3f | %.3f |'
+          % (pct, float(np.median([a for f, a in W])), float(np.median([a for f, a in Ag])),
+             sum(1 for f, a in W if a > 0.7), len(W), sum(1 for f, a in Ag if a > 0.7), len(Ag),
+             float(np.median([f for f, a in W])), float(np.median([f for f, a in Ag]))))
+
+# ---------------- per-row dump, everything needed to write the gap column
+print()
+print('## PER-ROW — swing 1.0 (banked) and swing 0.7 (the knee)')
+print('| octo-sig | dr | side | status | grade | route | mtd oob | mtd net | D keep | D band | D claim | mage net | MAE@1.0 | MFE@1.0 | MAE@0.7 | MFE@0.7 | hold@1.0 min |')
+print('|' + '---|' * 17)
+H10, L10 = CACHE[1.0]; H07, L07 = CACHE[0.7]
+for r in ROWS:
+    m = r['m']; d = r['d']
+    f1, a1, j1 = score(r['k'], d, H10, L10)
+    f7, a7, j7 = score(r['k'], d, H07, L07)
+    oob = '4/4' if m.get('noob') == 4 else '%d/4 (%s)' % (m.get('noob', 0), ','.join(m.get('miss', [])))
+    D = r.get('D')
+    print('| %s | %+d | %s | %s | %s | %s | %s | %+.2f | %s | %s | %s | %s | %.3f | %.3f | %.3f | %.3f | %.1f |'
+          % (r['lbl'], d, r['side'], r['status'], r['grade'], m['route'], oob, m.get('net', float('nan')),
+             (','.join('ws%d' % t for t in D['keep']) if D and D['keep'] else '-') if D else '-',
+             ('[%.2f, %.2f]' % D['band']) if D and D['band'] else '-',
+             (','.join('ws%d' % t for t in D['claim']) if D and D['claim'] else 'none') if D else '-',
+             ('%+.2f' % D['net']) if D and D['net'] is not None else '-',
+             a1, f1, a7, f7, (ts[j1] - ts[r['k']]) / 60000.0))
+
+# ---------------- the distances the gap column needs
+print()
+print('## FENCE DISTANCES for the `neither` rows — how far the failing line is from its oob fence')
+print('| octo-sig | dr | fence | g5 | g15 | g30 | ws1 | failing line | distance to fence |')
+print('|' + '---|' * 9)
+for r in ROWS:
+    m = r['m']
+    if m['route'] != 'neither': continue
+    d = m['d']; fence = HI if d > 0 else LO
+    dist = {n: (fence - m['v'][n]) if d > 0 else (m['v'][n] - fence) for n in m['miss']}
+    print('| %s | %+d | %s %.0f | %.2f | %.2f | %.2f | %.2f | %s | %s |'
+          % (r['lbl'], d, 'hi' if d > 0 else 'lo', fence, m['v']['g5'], m['v']['g15'], m['v']['g30'],
+             m['v']['ws1'], ','.join(m['miss']), ', '.join('%s %+.2f' % (n, -dist[n]) for n in m['miss'])))
+
+print()
+print('## BAND DISTANCES for the `D no fire` rows — how far the claiming TF is inside the band')
+print('| octo-sig | dr | band | claiming TF | its r | distance inside the nearer edge |')
+print('|' + '---|' * 6)
+for r in ROWS:
+    D = r.get('D')
+    if not D or D['fire'] or not D['claim']: continue
+    lo_, hi_ = D['band']
+    for t in D['claim']:
+        v = Rl[t][r['m']['ex']]
+        print('| %s | %+d | [%.2f, %.2f] | ws%d | %.2f | %.2f |' % (r['lbl'], r['d'], lo_, hi_, t, v, min(v - lo_, hi_ - v)))
+
+# ---------------- FIRST TOUCH: would the live mae_cap 0.70 stop fire, and when?
+# mae_cap 0.70 % of entry is NOT a knob I am choosing - it is live inside trade_walk today
+# (memory `mae-mfe-only`). The banked scoring convention has no stop, so the MAE above is the
+# UNSTOPPED heat. This block asks the only question that distinguishes them: which came first.
+print()
+print('## FIRST TOUCH — adverse 0.70%% vs the favourable pivot, swing 0.70')
+print('| octo-sig | status | MAE% | MFE% | adverse 0.70 touched | at (min) | pivot at (min) | stop fires first |')
+print('|' + '---|' * 8)
+H07, L07 = CACHE[0.7]
+FT = {}
+for r in ROWS:
+    d = r['d']; k = r['k']; entry = float(PX[k])
+    f, a, j = score(k, d, H07, L07)
+    if f is None:
+        FT[r['lbl']] = None; continue
+    seg = PX[k:j + 1]
+    adv = (seg - entry) / entry * 100.0 if d > 0 else (entry - seg) / entry * 100.0
+    hit = np.flatnonzero(np.isfinite(adv) & (adv >= 0.70))
+    tmin = (ts[j] - ts[k]) / 60000.0
+    if hit.size:
+        hmin = (ts[k + int(hit[0])] - ts[k]) / 60000.0
+        FT[r['lbl']] = hmin
+        print('| %s | %s | %.3f | %.3f | yes | %.1f | %.1f | %s |'
+              % (r['lbl'], r['status'], a, f, hmin, tmin, 'YES' if hmin < tmin else 'no'))
+    else:
+        FT[r['lbl']] = None
+        print('| %s | %s | %.3f | %.3f | no | — | %.1f | no |' % (r['lbl'], r['status'], a, f, tmin))
+
+# ---------------- the degenerate band: a one-member ex-fence block
+print()
+print('## ONE-MEMBER ex-fence BLOCK — the band collapses to [ws1r, its floater], so no TF can object')
+print('| block size | confluences | MAE>0.7 | MAE med |')
+print('|' + '---|' * 4)
+buck = {}
+for r in ROWS:
+    if r['status'] != 'CONFLUENCE': continue
+    f, a, j = score(r['k'], r['d'], H07, L07)
+    buck.setdefault(1 if len(r['D']['keep']) == 1 else 2, []).append(a)
+for kk in sorted(buck):
+    v = buck[kk]
+    print('| %s | %d | %d | %.3f |' % ('1 member' if kk == 1 else '2+ members', len(v),
+                                       sum(1 for a in v if a > 0.7), float(np.median(v))))

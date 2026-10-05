@@ -33,7 +33,29 @@ sys.path.insert(0, '/home/joe/thecodes')
 
 import optimus9.orchestration.build_ws_lines as BWL  # noqa: E402
 
-VALIDATION_END = dt.datetime(2026, 9, 8, 0, 0, tzinfo=dt.timezone.utc)
+def _arg(flag, default):
+    """`--tape-end YYYY-MM-DD`, read from argv HERE because BWL must be patched before the four
+    modules below import it. argparse runs inside main(), which is far too late.
+
+    DEFAULT IS UNCHANGED at 2026-09-08, so every existing caller gets the tape it always got. The
+    flag exists because the tape ends the day BEFORE this date, so --day on or after it walked off
+    the end of the tape and died inside Rig.__init__ with `IndexError: index N is out of bounds`
+    (self.B is clamped to n-1, self.A is not). Joe 1004 authorised extending the cache after the
+    o9-live check came back clean: none of the nine ops/*.py scripts reads BWL, rpl_cache,
+    report_coil_exit or build_wsf_trades, so the live loop cannot see this.
+
+    kline_collection holds 2026-05-07 00:00 .. 2026-10-04 17:35 with ZERO gaps over 09-29..10-04
+    (86,400 rows against 86,400 expected at the 5 s grid, 0 non-5 s steps), so --tape-end 2026-10-04
+    is the furthest FULL day available. Cache files are keyed on END_MS, so a new end builds a new
+    generation beside the old ones and destroys nothing.
+    """
+    if flag in sys.argv:
+        return sys.argv[sys.argv.index(flag) + 1]
+    return default
+
+
+VALIDATION_END = dt.datetime.strptime(_arg('--tape-end', '2026-09-08'), '%Y-%m-%d').replace(
+    tzinfo=dt.timezone.utc)
 BWL.TAPE_END = VALIDATION_END
 BWL.END_MS = int(VALIDATION_END.timestamp() * 1000)
 
@@ -78,7 +100,8 @@ MOMO_TOL = 2.0       # flat_run_at's tolerance, r points
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--day', default='2026-09-01')
-    a = ap.parse_args()
+    ap.add_argument('--tape-end', default='2026-09-08')   # consumed at import by _arg; declared so
+    a = ap.parse_args()                                   # argparse does not reject it
     d0 = dt.datetime.strptime(a.day, '%Y-%m-%d').replace(tzinfo=dt.timezone.utc)
     ms0 = int(d0.timestamp() * 1000)
     ms1 = ms0 + 86400000

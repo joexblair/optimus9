@@ -36,3 +36,9 @@ sidegigs/
 # 1002 runtime state and nohup output of the o9-live diagnostics (repo root)
 *.out
 rc_alerts.state.json
+
+# ...but the 1005 lazy-g scoring chain's .out files are not runtime noise: octosig/*.out are its
+# INPUTS (298 octo-sig over 9 days) and the rest are the evidence tables 1005_scored_outcomes.md
+# quotes. Without them nothing in 1005_scoring/ reproduces. Joe 1005: "docs and knobs durable".
+!docs/octo-freedom/1005_scoring/*.out
+!docs/octo-freedom/1005_scoring/octosig/*.out

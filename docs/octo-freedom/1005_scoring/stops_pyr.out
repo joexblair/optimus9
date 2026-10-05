@@ -1,0 +1,54 @@
+# STOP 0.70 vs 0.80, PYRAMID MAX 2 — 9 days, 09-25 .. 10-03
+
+## THE GATE — how many confluences the pyramid-2 cap drops
+| stop | side rule | confluences | taken | skipped by pyramid 2 | stopped out | of taken |
+|---|---|---|---|---|---|
+| 0.70 % | stage 2 flip | 151 | **144** | 7 | 42 | 29 % |
+| 0.70 % | dr-bias, no flip | 151 | **144** | 7 | 43 | 30 % |
+| 0.80 % | stage 2 flip | 151 | **143** | 8 | 39 | 27 % |
+| 0.80 % | dr-bias, no flip | 151 | **144** | 7 | 35 | 24 % |
+
+## NET RESULT — 4 combinations, all 9 days
+| stop | side rule | taken | total net % | mean net % | median net % | winners | worst trade % |
+|---|---|---|---|---|---|---|---|
+| 0.70 % | stage 2 flip | 144 | **+35.999** | +0.250 | +0.265 | 93 of 144 | -0.897 |
+| 0.70 % | dr-bias, no flip | 144 | **+37.938** | +0.263 | +0.385 | 97 of 144 | -0.897 |
+| 0.80 % | stage 2 flip | 143 | **+35.750** | +0.250 | +0.277 | 94 of 143 | -0.998 |
+| 0.80 % | dr-bias, no flip | 144 | **+47.124** | +0.327 | +0.406 | 103 of 144 | -0.998 |
+
+## AGAINST NO PYRAMID CAP — what the cap costs or saves
+| stop | side rule | ungated n | ungated total % | pyramid-2 n | pyramid-2 total % | delta | mean before | mean after |
+|---|---|---|---|---|---|---|---|---|
+| 0.70 % | stage 2 flip | 151 | +37.148 | 144 | **+35.999** | **-1.149** | +0.246 | +0.250 |
+| 0.70 % | dr-bias, no flip | 151 | +39.656 | 144 | **+37.938** | **-1.717** | +0.263 | +0.263 |
+| 0.80 % | stage 2 flip | 151 | +37.979 | 143 | **+35.750** | **-2.229** | +0.252 | +0.250 |
+| 0.80 % | dr-bias, no flip | 151 | +49.483 | 144 | **+47.124** | **-2.359** | +0.328 | +0.327 |
+
+## COMPOUND, pyramid 2 applied
+| stop | side rule | L=1 x | L=2 x | L=3 x | L=5 x | L=10 x | max DD at L=5 % | max DD at L=10 % |
+|---|---|---|---|---|---|---|---|---|
+| 0.70 % | stage 2 flip | 1.4235 | 1.9993 | 2.7712 | 5.1224 | 19.1879 | 27.99 | 50.45 |
+| 0.70 % | dr-bias, no flip | 1.4521 | 2.0824 | 2.9496 | 5.7076 | 24.2492 | 24.14 | 46.30 |
+| 0.80 % | stage 2 flip | 1.4194 | 1.9860 | 2.7401 | 5.0056 | 17.9295 | 33.79 | 58.47 |
+| 0.80 % | dr-bias, no flip | 1.5911 | 2.4980 | 3.8703 | 8.9383 | 58.2771 | 26.54 | 47.13 |
+
+## PER DAY — the combination with the best 9-day total
+# stop 0.80 %, dr-bias no flip, pyramid 2
+| day | taken | skipped | total net % | mean net % | winners | stopped |
+|---|---|---|---|---|---|---|
+| 09-25 | 18 | 2 | **+2.264** | +0.126 | 9 of 18 | 7 |
+| 09-26 | 13 | 0 | **+1.694** | +0.130 | 9 of 13 | 3 |
+| 09-27 | 18 | 0 | **+6.223** | +0.346 | 13 of 18 | 5 |
+| 09-28 | 11 | 0 | **+4.305** | +0.391 | 8 of 11 | 3 |
+| 09-29 | 21 | 1 | **+5.786** | +0.276 | 14 of 21 | 5 |
+| 09-30 | 10 | 1 | **+3.860** | +0.386 | 8 of 10 | 2 |
+| 10-01 | 16 | 1 | **+10.505** | +0.657 | 14 of 16 | 1 |
+| 10-02 | 24 | 1 | **+6.037** | +0.252 | 17 of 24 | 7 |
+| 10-03 | 13 | 1 | **+6.452** | +0.496 | 11 of 13 | 2 |
+| **9 days** | 144 | 7 | **+47.124** | +0.327 | 103 of 144 | 35 |
+
+## EXPOSURE CENSUS under pyramid 2 — how often 2 legs are open at once
+- stop 0.70 %, stage 2 flip: 144 trades, total open time 43.5 h, both-legs-open 7.2 h = 16.5 % of it
+- stop 0.70 %, dr-bias, no flip: 144 trades, total open time 54.9 h, both-legs-open 9.1 h = 16.6 % of it
+- stop 0.80 %, stage 2 flip: 143 trades, total open time 45.5 h, both-legs-open 7.8 h = 17.1 % of it
+- stop 0.80 %, dr-bias, no flip: 144 trades, total open time 59.9 h, both-legs-open 10.9 h = 18.2 % of it

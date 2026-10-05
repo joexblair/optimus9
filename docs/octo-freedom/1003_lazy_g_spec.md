@@ -461,6 +461,146 @@ On 03:30, same branch:
 
 | open | detail |
 |---|---|
-| **the "lookback test"** | Joe named *"a divergence test, and a lookback test"* with an OR. The divergence test is `anchor_floater`/`divergence`. The lookback test is NOT defined. **MY READING, not his**: it is the ib-return lead - ws1r returns in-fence before the ex-fence block members do, which is exactly the scenario his own sentence describes and which measured true at 02:08:50. Needs his word before it goes in code |
+| ~~the "lookback test"~~ | **DEFINED by Joe 1004.** *"the lookback needs to find the extrema of ws1r. this means looking back in 5 minute increments (same as the divergence lookback mech) until a extrema is exposed"*. That is the step-3 BACKWARD BLOCK WALK of `jig.anchor_floater` - `AF_BLOCK` 60 bars = 300 s = 5 min, walking back until a block adds no new extreme. **So the two tests share one producer and differ in strictness**: the DIVERGENCE test needs `fired` (price makes a further extreme while the oscillator does not), the LOOKBACK test needs only that the block walk EXPOSES an extrema at all. That is what makes his OR meaningful - a strong test and a weak one. **The strictness split is MY READING of why both exist; the 5-minute block walk is his word.** My earlier candidate - the ib-return lead - is WRONG and is struck |
 | gap measurement | `LAZY_G_D_GAP_MAX` 4 - is the gap the COUNT OF SKIPPED TFs (ws2->ws5 = 2 skipped) or the TF-number difference (ws2->ws5 = 3)? His example *"if the gap was 2 (eg ws2 jumps to ws5)"* says **skipped count**, which is my reading of his arithmetic, not a separate ruling |
 | ws2's role | Joe said *"interogate ws1 and ws2"*. ws1's role is ruled (D.3 #2). **ws2 has no separate rule** - it is currently just the bottom of the ex-fence block |
+
+## THE CASCADE — LOCKED IN, 1004. READ THIS BEFORE TOUCHING ANY CASCADE MECH
+
+Joe 1004: *"bank your understanding of the cascade with clear detail so that its locked in"*. Written
+after I wrongly flagged mtd.r2 as inverted. It was not; the error was mine, twice over in two days.
+
+### THE ONE RULE — direction of travel up the TF ladder
+
+| the cascade, read LOW TF -> HIGH TF | confluences |
+|---|---|
+| **lifting** (values rise up the ladder) | **LONG** |
+| **falling** (values fall up the ladder) | **SHORT** |
+
+Joe 1004, verbatim: *"if the mage cascade is 'lifting' the values from g5 to ws12 it can only
+confluence a LONG trade. both the LONG trade and the mage cascade are 'lifting' upwards"* and *"if
+the mage cascade is 'falling', ie ws12 has a high value and g5 has a lower value, then only a SHORT
+can be confluenced (because the SHORT is falling)"*.
+
+**VALIDATED 25 of 25** on the 10-02 live octo-sig. Nothing about this rule is inferred.
+
+### AWAY FROM dr vs TOWARDS dr — the two phrasings, and the trade each yields
+
+dr is the BIAS frame: **dr +1 = SHORT, dr -1 = LONG** ([[dr-plus-one-is-short]]). The dr SIDE is the
+high side at dr +1 and the low side at dr -1.
+
+| dr | dr side | **AWAY** from dr | that cascade confluences | **TOWARDS** dr | that cascade confluences |
+|---|---|---|---|---|---|
+| **+1** | high | the cascade **FALLS** | **SHORT** = the dr-side trade | the cascade **LIFTS** | **LONG** = the opposite trade |
+| **-1** | low | the cascade **LIFTS** | **LONG** = the dr-side trade | the cascade **FALLS** | **SHORT** = the opposite trade |
+
+- **AWAY from dr always yields the dr-side trade.** This is branch A's Q1.
+- **TOWARDS dr always yields the OPPOSITE trade.** This is mtd.r2.
+- Both are the SAME single lifting/falling rule. Neither is an inversion of the other.
+
+**THE MISTAKE I MADE, so it is not repeated:** I compared mtd.r2's CASCADE direction against the
+dr-bias TRADE side and called it a conflict. Those are two different quantities. A cascade "facing
+dr" is a statement about the lines, not about which trade the dr implies.
+
+**THE OTHER MISTAKE, 1003:** I restated *"Mage moving away from dr"* as *"Mage x dr decreasing"*,
+which flipped the sign of both of Joe's figures (-1.6 -> +1.6, 70.5 -> -70.5). Joe: *"this is upside
+down - you've changed my numbers to suit your bias"*. **NEVER restate a cascade as a signed
+product.** Report the raw low-TF and high-TF values and the word lifting or falling.
+
+**A dr-SIGNED COLUMN HIDES THE DIRECTION.** `Q1 away` is `(ws12 - ws1) x -dr`, so a positive value
+means lifting on a LONG and falling on a SHORT. Joe read 02:11's `+36.03` as a lift and asked why a
+SHORT was being confluenced; it was a 36.03-point FALL. **Always print the raw pair beside any
+dr-signed cascade number.**
+
+### MEASURED BOTH WAYS ON 10-02, all 25
+
+| group | n | the cascade's confluenced side vs the trade that fired |
+|---|---|---|
+| cascade AWAY from dr (`Q1 away > 0`) | 14 | the cascade confluences the trade that fired |
+| cascade TOWARDS dr (`Q1 away <= 0`) | 11 | the cascade confluences the OPPOSITE of the trade that fired |
+| agreement between the two readings | **25 of 25** | |
+
+Worked example, 04:30, a SHORT on dr +1: g5Mage **98.71** -> ws12Mage **122.79** = **lifting**, so
+the cascade confluences a **LONG** while a SHORT fired. `Q1 away` reads **-24.08** (towards dr). That
+SHORT lost **-124.87**.
+
+## mtd — THE MAGE-TREND-DETECTOR, Joe 1004
+
+Joe 1004: *"07:59 is blocked because of a new `mage-trend-detector` (`mtd`) mech"*.
+
+| | |
+|---|---|
+| what it tests | *"the likelihood of an overarching trend continuing. in practical terms, `mtd` is deployed to gate early reversals"* |
+| where it sits | *"the priority branch, ie the first gate test in the octo-sig confluencing machine"* - it runs BEFORE A, B, C and D |
+| its lines | **g5, g15, g30, ws1** |
+
+### THE NAMES, Joe 1004 — TENTATIVE, his word is "maybe"
+
+> *"lazy-g is the machine in my eyes. maybe me split it into lazy-g and lazy-g-conf. lazy-g is what
+> creates the ~04:41 and ~06:13 trades"*
+
+| name | what it is |
+|---|---|
+| **lazy-g** | the machine that CREATES trades - the off-book ~04:41 / ~06:13 ones. His stage 3 |
+| **lazy-g-conf** | the confluencing machine - mtd first, then branches A/B/C/D, gating octo-sig. His stage 1 |
+
+**NOT FINAL.** He said *"maybe"*. Do not rename files or code on this yet.
+
+### mtd STEP 1 — find the most extreme point from dr
+
+**THE LOOKBACK, Joe 1004.** His flow:
+
+> *"from a bar that is 4 minutes before the signal (07:55) / find the oob extrema between that bar
+> and the signal (07:59) / if no oob extrema is found, the lookback test is disqualified and the walk
+> walks forward"*
+
+**CORRECTED by Joe 1004, and the correction is the whole point of the two numbers:**
+
+> *"4 minutes is the wide angled view of the 2 minute lookback. we use 4 minutes so that it is easy
+> to spot an extrema anywhere in the 2 minute lookback"*
+
+| | |
+|---|---|
+| **THE MECH'S WINDOW** | **2 minutes = 24 bars** at the 5 s grid, from signal-2min to the signal bar. THIS is what the test reads |
+| **THE DISPLAY WINDOW** | **4 minutes = 48 bars**, signal-4min to the signal bar. REPORTING ONLY, so an extrema sitting near the 2 min edge is visible in context |
+| what it looks for | the **opposing-dr** g5Mage oob extrema inside the **2 minute** window |
+| no existing mech is needed | it is a plain window scan. Joe 1004: *"if you can't find the mech then I've probably conflated"* - he had. `opposed_extrema` walks 5-min blocks and is NOT this |
+| on no-find | the lookback test is **disqualified** and the walk walks forward |
+
+- **MY ERROR, corrected in place:** I first recorded the 4 minutes as the mech's window and wrote
+  that it superseded the 2 minutes. It does not. The mech is 2 minutes; 4 minutes is how it is drawn.
+- for a 07:59:20 signal: the mech reads **07:57:20 -> 07:59:20**, the report draws
+  **07:55:20 -> 07:59:20**.
+
+**THE FORWARD WALK, Joe 1004:**
+> *"walk forward to a opposing-dr g5Mage oob and keep walking to the g5Mage reversal, wob 2. this is
+> the forward-walked extrema"*
+
+- `wob 2` matches `rev_wob` 2 in v3_config, so `jig._mage_rev` takes it unchanged.
+- **NO CAP** on how far forward it walks. None given, and none is to be invented.
+- **THE WALK DEFERS THE DECISION, AND THE TRADE MOVES WITH IT.** Joe 1004, correcting me after I
+  called the forward walk non-causal because 07:59's verdict only lands at 08:05: *"I disagree. my
+  words, 'the walk walks', therefore we trade at 08:05"*. The signal bar is NOT the decision bar.
+  Every bar the walk reads is the current bar, so there is **no lookahead anywhere** - the entry
+  simply happens later than the octo-sig that started the walk.
+  **MY ERROR:** I assumed a gate must resolve on the signal bar. It does not.
+
+### mtd STEP 2 — the micro mage-cascade, and the two routes
+
+> *"at the chosen (lookback or forward-walked) extrema, measure the Mage values for the 4 `mtd lines`"*
+
+| route | condition | outcome |
+|---|---|---|
+| **mtd.r1** | *"all 4 Mages are oob, denoting that there is a coil ready to release"*. **OPPOSING-dr oob**, Joe 1004 | *"delegate to the r-cascade and mage-cascade branch"* = **branch D** |
+| **mtd.r2** | *"the 3 Mages above g5 create a cascade towards dr"* - g15, g30, ws1. **NET**, not monotone, Joe 1004 | *"confluence a octo-signal that faces dr. eg, +1dr: confluence only a LONG trade octo-sig, -1dr confluence only a SHORT trade octo-sig"* |
+
+**mtd.r2's trade side is CORRECT AS WRITTEN** and follows the one cascade rule above: towards dr on
+dr +1 is a LIFT, and a lift confluences a LONG. See the locked-in cascade section.
+
+### STILL OPEN
+
+| open | detail |
+|---|---|
+| the forward walk's no-find outcome | Joe 1004: *"let's review no-find when it appears in the walk"*. Deferred by him, not by me |
+| whether `lazy-g` / `lazy-g-conf` is the final split | his word is *"maybe"* |
+| the 07:59 testcase | he says mtd blocks it. Not yet verified - that is the next measurement |

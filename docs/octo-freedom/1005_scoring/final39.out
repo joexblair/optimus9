@@ -1,0 +1,86 @@
+## THE 39 OCTO-SIG OF 09-25 — both confluence paths, scored on swing_detect 0.70%, blocked at MAE > 0.70%
+
+| octo-sig | dr | side | status | route | mtd oob | why it landed there | MAE% | MFE% | 0.70 hit at | verdict vs the 0.70 line | the gap that would close it |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 08:39:00 | +1 | SHORT | CONFLUENCE · against-trend | mtd.r1 | 4/4 | block ws3,ws4,ws5,ws6,ws7,ws8,ws9,ws11,ws12, no claim; Mage +15.59 TOWARDS | 0.176 | 1.039 | — | correct | — |
+| 08:40:50 | +1 | SHORT | CONFLUENCE · against-trend | mtd.r1 | 4/4 | block ws1,ws4,ws5,ws6,ws7,ws8,ws9,ws10,ws11,ws12, no claim; Mage +23.91 TOWARDS | 0.027 | 0.957 | — | correct | — |
+| 09:32:00 | +1 | SHORT | CONFLUENCE · against-trend | mtd.r1 | 4/4 | block ws1, no claim; Mage +3.61 TOWARDS | 0.008 | 1.571 | — | correct | band degenerate: ws1 alone, no TF can object |
+| 10:45:15 | +1 | SHORT | CONFLUENCE · against-trend | mtd.r1 | 4/4 | block ws4, no claim; Mage +4.63 TOWARDS | 2.108 | 0.037 | 21.6 m | **let heat through** | band degenerate: ws4 alone, no TF can object — the ONE D lever that tracks heat (1-member 3 of 6 vs 2+ 4 of 14) |
+| 11:28:15 | +1 | SHORT | CONFLUENCE · against-trend | mtd.r1 | 4/4 | block ws7,ws8,ws9, no claim; Mage +10.74 TOWARDS | 0.000 | 0.078 | — | correct | — |
+| 20:36:00 | +1 | SHORT | CONFLUENCE · against-trend | mtd.r1 | 4/4 | block ws6,ws7,ws8,ws9,ws10,ws11, no claim; Mage +19.62 TOWARDS | 0.309 | 0.431 | — | correct | — |
+| 20:36:15 | +1 | SHORT | CONFLUENCE · against-trend | mtd.r1 | 4/4 | block ws6,ws7,ws8,ws9,ws10,ws11, no claim; Mage +19.62 TOWARDS | 0.254 | 0.486 | — | correct | — |
+| 22:36:15 | +1 | SHORT | CONFLUENCE · against-trend | mtd.r1 | 4/4 | block ws3,ws4,ws5,ws6,ws8, no claim; Mage +4.82 TOWARDS | 0.468 | 0.704 | — | correct | — |
+| 02:12:10 | +1 | SHORT | CONFLUENCE · with-trend | mtd.r1 | 4/4 | block ws2, no claim; Mage -43.75 AWAY | 0.071 | 2.531 | — | correct | band degenerate: ws2 alone, no TF can object |
+| 02:13:10 | +1 | SHORT | CONFLUENCE · with-trend | mtd.r1 | 4/4 | block ws2, no claim; Mage -43.75 AWAY | 0.056 | 2.328 | — | correct | band degenerate: ws2 alone, no TF can object |
+| 02:48:50 | -1 | LONG | CONFLUENCE · with-trend | mtd.r1 | 4/4 | block ws3,ws4, no claim; Mage +15.99 AWAY | 0.262 | 0.508 | — | correct | — |
+| 02:50:45 | -1 | LONG | CONFLUENCE · with-trend | mtd.r1 | 4/4 | block ws3,ws4, no claim; Mage +15.37 AWAY | 0.064 | 0.708 | — | correct | — |
+| 03:32:35 | -1 | LONG | CONFLUENCE · with-trend | mtd.r1 | 4/4 | block ws1,ws2, no claim; Mage +6.93 AWAY | 0.100 | 1.188 | — | correct | — |
+| 07:59:20 | +1 | SHORT | CONFLUENCE · with-trend | mtd.r1 | 4/4 | block ws2,ws7, no claim; Mage -52.04 AWAY | 2.663 | 0.255 | 17.8 m | **let heat through** | no TF objected, nothing in D separates it — named unbuilt lever: the stall-contiguity gate (your 07:57 verdict) |
+| 08:06:10 | +1 | SHORT | CONFLUENCE · with-trend | mtd.r1 | 4/4 | block ws1,ws2,ws3,ws7, no claim; Mage -40.11 AWAY | 2.782 | 0.141 | 10.0 m | **let heat through** | no TF objected, nothing in D separates it — named unbuilt lever: the stall-contiguity gate (your 07:57 verdict) |
+| 08:26:10 | +1 | SHORT | CONFLUENCE · with-trend | mtd.r1 | 4/4 | block ws1,ws2,ws5,ws6,ws7,ws8,ws9,ws12, no claim; Mage -13.22 AWAY | 1.132 | 0.169 | 11.0 m | **let heat through** | no TF objected, nothing in D separates it — named unbuilt lever: the stall-contiguity gate (your 07:57 verdict) |
+| 15:40:55 | -1 | LONG | CONFLUENCE · with-trend | mtd.r1 | 4/4 | block ws1,ws3, no claim; Mage +35.80 AWAY | 0.000 | 0.107 | — | correct | — |
+| 18:04:35 | +1 | SHORT | CONFLUENCE · with-trend | mtd.r1 | 4/4 | block ws12, no claim; Mage -50.00 AWAY | 1.616 | 0.148 | 5.5 m | **let heat through** | band degenerate: ws12 alone, no TF can object — the ONE D lever that tracks heat (1-member 3 of 6 vs 2+ 4 of 14) |
+| 18:06:15 | +1 | SHORT | CONFLUENCE · with-trend | mtd.r1 | 4/4 | block ws1, no claim; Mage -50.88 AWAY | 1.515 | 0.000 | 3.9 m | **let heat through** | band degenerate: ws1 alone, no TF can object — the ONE D lever that tracks heat (1-member 3 of 6 vs 2+ 4 of 14) |
+| 20:10:50 | +1 | SHORT | CONFLUENCE · with-trend | mtd.r1 | 4/4 | block ws4,ws5,ws6,ws8, no claim; Mage -10.42 AWAY | 2.771 | 0.000 | 7.8 m | **let heat through** | no TF objected, nothing in D separates it — named unbuilt lever: the stall-contiguity gate (your 07:57 verdict) |
+| 09:02:00 | +1 | SHORT | BLOCKED | mtd.r2 | 2/4 (g15,g30 out) | lifting TOWARDS dr, net +14.41; only LONG allowed | 0.096 | 0.645 | — | **over-blocked** | mtd.r2 has no magnitude floor; net +14.41 vs the 2 correct blocks -26.92/+10.54 — no split |
+| 11:14:00 | +1 | SHORT | BLOCKED | mtd.r2 | 3/4 (g15 out) | lifting TOWARDS dr, net +27.20; only LONG allowed | 0.185 | 0.609 | — | **over-blocked** | mtd.r2 has no magnitude floor; net +27.20 vs the 2 correct blocks -26.92/+10.54 — no split |
+| 16:46:10 | +1 | SHORT | BLOCKED | mtd.r2 | 2/4 (g15,g30 out) | lifting TOWARDS dr, net +9.49; only LONG allowed | 0.000 | 0.892 | — | **over-blocked** | mtd.r2 has no magnitude floor; net +9.49 vs the 2 correct blocks -26.92/+10.54 — no split |
+| 19:54:00 | +1 | SHORT | BLOCKED | mtd.r2 | 3/4 (g15 out) | lifting TOWARDS dr, net +10.54; only LONG allowed | 3.858 | 0.206 | 8.0 m | correct | — |
+| 02:42:35 | -1 | LONG | BLOCKED | mtd.r2 | 3/4 (g15 out) | falling TOWARDS dr, net -26.92; only SHORT allowed | 0.833 | 0.229 | 3.9 m | correct | — |
+| 13:33:40 | -1 | LONG | OPEN | mtd.r1 | 4/4 | band [12.58, 52.47] claimed by ws6,ws7,ws8,ws9,ws10,ws11,ws12 | 0.000 | 1.658 | — | open -> **fire** | rule `no fire`=BLOCK costs this entry (MFE 1.658); deepest claim 18.89 inside |
+| 13:37:05 | -1 | LONG | OPEN | mtd.r1 | 4/4 | band [6.91, 14.29] claimed by ws12 | 1.681 | 0.204 | 7.2 m | open -> **block** | rule `no fire`=BLOCK correct here; deepest claim 1.33 inside the band |
+| 17:21:30 | +1 | SHORT | OPEN | mtd.r1 | 4/4 | band [79.10, 89.72] claimed by ws10,ws11,ws12 | 0.072 | 1.080 | — | open -> **fire** | rule `no fire`=BLOCK costs this entry (MFE 1.080); deepest claim 4.27 inside |
+| 18:14:15 | +1 | SHORT | OPEN | mtd.r1 | 4/4 | band [40.45, 85.61] claimed by ws6,ws7,ws8,ws9,ws10,ws11 | 0.628 | 0.711 | — | open -> **fire** | rule `no fire`=BLOCK costs this entry (MFE 0.711); deepest claim 19.78 inside |
+| 20:04:00 | +1 | SHORT | OPEN | mtd.r1 | 4/4 | band [31.12, 86.98] claimed by ws7,ws8,ws9,ws10,ws11,ws12 | 3.068 | 0.425 | 5.4 m | open -> **block** | rule `no fire`=BLOCK correct here; deepest claim 26.92 inside the band |
+| 20:04:45 | +1 | SHORT | OPEN | mtd.r1 | 4/4 | band [45.40, 87.86] claimed by ws7,ws8,ws9,ws10,ws11,ws12 | 3.443 | 0.063 | 3.5 m | open -> **block** | rule `no fire`=BLOCK correct here; deepest claim 21.14 inside the band |
+| 19:49:55 | +1 | SHORT | OPEN | mtd.r1 | 4/4 | mtd 4/4, then no ws1..ws12 r is ex-fence at the extrema | 3.862 | 0.203 | 12.1 m | open -> **block** | rule D empty-block=BLOCK correct here (MAE 3.862) |
+| 03:30:05 | -1 | LONG | OPEN | neither | 3/4 (ws1 out) | lifting AWAY from dr, net +22.54; no rule | 0.244 | 1.225 | — | open -> **fire** | rule `neither`=BLOCK costs this entry (MFE 1.225, no 0.70 touch) |
+| 10:50:30 | +1 | SHORT | OPEN | neither | 2/4 (g15,ws1 out) | falling AWAY from dr, net -3.72; no rule | 1.943 | 0.187 | 16.4 m | open -> **block** | rule `neither`=BLOCK (5 of 7 take >0.70); nearest miss g15 by 0.03, distance does not sort the 7 |
+| 10:55:00 | +1 | SHORT | OPEN | neither | 3/4 (ws1 out) | falling AWAY from dr, net -30.89; no rule | 1.622 | 0.501 | 12.8 m | open -> **block** | rule `neither`=BLOCK (5 of 7 take >0.70); nearest miss ws1 by 2.47, distance does not sort the 7 |
+| 18:58:00 | +1 | SHORT | OPEN | neither | 3/4 (ws1 out) | falling AWAY from dr, net -43.54; no rule | 4.445 | 0.401 | 62.3 m | open -> **block** | rule `neither`=BLOCK (5 of 7 take >0.70); nearest miss ws1 by 21.65, distance does not sort the 7 |
+| 20:21:00 | +1 | SHORT | OPEN | neither | 3/4 (g30 out) | falling AWAY from dr, net -4.86; no rule | 1.911 | 0.481 | 9.4 m | open -> **block** | rule `neither`=BLOCK (5 of 7 take >0.70); nearest miss g30 by 0.26, distance does not sort the 7 |
+| 20:30:00 | +1 | SHORT | OPEN | neither | 3/4 (ws1 out) | falling AWAY from dr, net -18.73; no rule | 1.653 | 0.130 | 3.2 m | open -> **block** | rule `neither`=BLOCK (5 of 7 take >0.70); nearest miss ws1 by 1.22, distance does not sort the 7 |
+| 22:54:00 | +1 | SHORT | OPEN | neither | 3/4 (ws1 out) | falling AWAY from dr, net -49.37; no rule | 0.195 | 0.973 | — | open -> **fire** | rule `neither`=BLOCK costs this entry (MFE 0.973, no 0.70 touch) |
+
+## THE SCORE — the mech has a verdict on 25 of 39
+| mech says | n | MAE <= 0.70 | MAE > 0.70 | reading |
+|---|---|---|---|---|
+| CONFLUENCE · with-trend | 12 | 6 | 6 | 6 of 12 correct |
+| CONFLUENCE · against-trend | 8 | 7 | 1 | 7 of 8 correct |
+| BLOCKED (mtd.r2) | 5 | 3 | 2 | 2 of 5 correct |
+| OPEN · neither | 7 | 2 | 5 | 5 would block, 2 would fire |
+| OPEN · D no fire | 6 | 3 | 3 | 3 would block, 3 would fire |
+| OPEN · no r block | 1 | 0 | 1 | 1 would block, 0 would fire |
+
+## WHAT EACH PENDING RULING BUYS — all three are yours, none is built
+| ruling | rows | right | wrong | net |
+|---|---|---|---|---|
+| `neither` = BLOCK | 7 | 5 | 2 | +3 |
+| `no fire` = BLOCK | 6 | 3 | 3 | +0 |
+| D empty block = BLOCK | 1 | 1 | 0 | +1 |
+| | | | | |
+| agreement now (25 rows with a verdict) | | | | 15 of 25 |
+| agreement with all three ruled (39 rows) | | | | 24 of 39 |
+
+## THE BAND-DEPTH KNOB — a claim counts only if it is at least X inside the band
+| octo-sig | deepest claim inside the band | MAE% | firing would be |
+|---|---|---|---|
+| 13:37:05 | 1.33 | 1.681 | WRONG |
+| 17:21:30 | 4.27 | 0.072 | right |
+| 13:33:40 | 18.89 | 0.000 | right |
+| 18:14:15 | 19.78 | 0.628 | right |
+| 20:04:45 | 21.14 | 3.443 | WRONG |
+| 20:04:00 | 26.92 | 3.068 | WRONG |
+
+| depth floor X | rows that FIRE instead | right | wrong | `no fire` correct of 6 |
+|---|---|---|---|---|
+| 0.0 | 0 | 0 | 0 | 3 |
+| 1.0 | 0 | 0 | 0 | 3 |
+| 2.0 | 1 | 0 | 1 | 2 |
+| 5.0 | 2 | 1 | 1 | 3 |
+| 10.0 | 2 | 1 | 1 | 3 |
+| 19.0 | 3 | 2 | 1 | 4 |
+| 20.0 | 4 | 3 | 1 | 5 |
+| 21.0 | 4 | 3 | 1 | 5 |
+| 22.0 | 5 | 3 | 2 | 4 |
+| 27.0 | 6 | 3 | 3 | 3 |
