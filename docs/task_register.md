@@ -299,3 +299,28 @@ lookahead; both are the proof that lookahead is absent.
 it, rather than deleting text. The candidate is a single owner for `max(brk, rev, fired)` that the v7
 chain imports and the leash code does not, which also fixes the three-way duplication of that formula.
 Not started. Joe rules on the docstring question before any edit.
+
+---
+
+## 1005 — the lazy-g routing / scoring open list lives in its own register
+
+Added 2026-10-05. The register's newest section before this was 0918, so the 1005 items would have
+been invisible here. They are NOT duplicated into this file — the single durable list is
+**`docs/octo-freedom/1005_knobs.md` section 5**, with an owner per row. Summary of what is open:
+
+| item | state |
+|---|---|
+| `neither` = BLOCK · `no fire` = BLOCK · D empty-block = BLOCK | all three **invert between 09-25 and 09-26** (+3/-1, 0/0, +1/-5). None is a one-day call. Joe's to rule |
+| the stall-contiguity gate | Joe's own 07:57 verdict mechanism. He has not been able to name the knob. UNBUILT |
+| **the baton lineage rule — a defect in `baton.py:125`** | `rider = max(c)`, so there is no lineage at all. 41 of 139 passes on 09-25 had no legal successor within +-3 TF and the chain jumped anyway. Invalidates the `riding`/`traj` columns in both `transfer/*baton_stall_octosig*.txt` (both files now carry a CORRECTION header). Three values open: the hop window, the no-successor case, whether a downward pass counts |
+| `LAZY_G_D_GAP_MAX` 4 | Joe's, explicitly arbitrary, flagged for sweeping. Not swept |
+| the stop: 0.70 live vs 0.80 scored | **a deliberate divergence.** `wsf_trade_config` v3 runs `mae_cap` 0.70; 0.80 beat it by +9.186 pp over 9 days. Two points is not a sweep — the knee is unlocated. Do not reconcile without Joe |
+| swing_detect 0.70 vs the banked 1 % | mine, named. `docs/linelab_spec.md` s0 records 1 % as locked by Joe |
+| the 2.0 % risk budget | mine. Return AND drawdown are both near-linear in it — no knee, so it is a convention |
+| mtd population B | the ws1mage-rev + ws1r oob events walked bar by bar. NEVER RUN |
+| branch B and C agree/disagree direction | unruled |
+| held-out days | **NONE.** All 9 days (09-25..10-03) are in-sample for every knob |
+| pyramids (#7 above) | still open, and now measured: with the cap dropped, **max 4 concurrent legs**, both-legs-open 16.5-18.2 % of total open time |
+
+Results: `docs/octo-freedom/1005_scored_outcomes.md`. Runnable chain + the 298 octo-sig inputs:
+`docs/octo-freedom/1005_scoring/`. Per-trade P&L: MySQL `lazyg_compound`.
