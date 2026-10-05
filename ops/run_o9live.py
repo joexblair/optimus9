@@ -49,7 +49,11 @@ control = O9Control(o9)
 health = HealthStore(o9)                                          # cascade phase + loop_ms heartbeat → UI
 STATE_LOG = os.environ.get("O9_STATE_LOG", "/home/joe/thecodes/o9_state.log")
 state_logger = StateLogger(o9, STATE_LOG)                         # edge-triggered cascade state-change log (DB + file)
-app = O9LiveApp(strat, PositionSizer(max_order=66000), adapter, ledger, control, SYM,
+# dynamic_leverage reads the stop the trade book places, so a stop ruling moves the leverage in the same
+# change (Joe 1005). octo: wsf_trade_config mae_cap (0.70). Other producers have no single stop -> None,
+# and the sizer refuses dynamic_leverage for them rather than guess.
+STOP_PCT = strat.cfg.mae_cap if PRODUCER == "octo" else None
+app = O9LiveApp(strat, PositionSizer(max_order=66000, stop_pct=STOP_PCT), adapter, ledger, control, SYM,
                 health=health, state_logger=state_logger)
 
 print("o9-live REALTIME · fakeAPI=%s · symbol=%s · mode=%s · producer=%s · equity=$%.0f" % (FAKEAPI, SYM, MODE, PRODUCER, ledger.equity()), flush=True)

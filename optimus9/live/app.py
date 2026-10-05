@@ -65,11 +65,18 @@ class O9LiveApp:
 
     def _execute(self, intent, price, mode, split, now_ms, placed):
         spl = 1 if intent.action in ("close", "reduce") else split   # never split a close (would over-reduce a leg)
-        for o in self.sizer.size(intent, self.ledger.equity(), price, mode=mode, split=spl):
+        opening = intent.action in ("open", "add")
+        n_live = len(self.ledger.open_legs()) if opening else 0     # legs already open at this entry
+        for o in self.sizer.size(intent, self.ledger.equity(), price, mode=mode, split=spl, n_live=n_live):
             oid = self.adapter.place(o)
             fpx = self._fill_price(oid)
-            if intent.action in ("open", "add"):
+            if opening:
                 self.ledger.record_open(o.side, o.qty, fpx, oid, intent.reason, now_ms)
+                if self.sizer.last_calc:
+                    try:                                              # a record, never a reason to stop trading
+                        self.ledger.record_sizing(oid, now_ms, self.sizer.last_calc, o.qty)
+                    except Exception as e:
+                        self.log("o9-live: o9_sizing write failed for %s: %s" % (oid, e))
                 self._last_trade_ms = now_ms                          # a trade closes the 3 latch states (test)
                 act = "add" if intent.action == "add" else ("open_long" if o.side == "Buy" else "open_short")
             elif intent.led_id is not None:                          # option B per-leg SL → close just this leg
@@ -89,6 +96,8 @@ class O9LiveApp:
         t0 = _ms()
         ctl = self.control.read()
         self.sizer.max_order = int(ctl["max_order"])
+        self.sizer.risk_pct = float(ctl["risk_pct"])          # dynamic_leverage knobs, picked up next bar
+        self.sizer.drag_pct = float(ctl["drag_pct"])
         placed = []
 
         if ctl["flatten_req"]:                               # kill-switch or exit button — close BOTH legs

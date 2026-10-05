@@ -20,6 +20,41 @@ class O9Ledger:
         if not self.db.execute("SELECT 1 FROM o9_account WHERE acct_id=1", fetch=True):
             self.db.execute("INSERT INTO o9_account (acct_id, equity, updated_ms) VALUES (1,%s,%s)",
                             (start_equity, self._now()))
+        self.db.execute(self._SIZING_DDL)
+
+    # one row per open/add order: what the sizer was given and what it chose, so every trade's leverage
+    # can be checked against its own inputs (Joe 1005: "the dynamic leverage is on point, every trade")
+    _SIZING_DDL = """CREATE TABLE IF NOT EXISTS o9_sizing (
+        order_id    VARCHAR(40)   NOT NULL PRIMARY KEY,
+        kline_ms    BIGINT        NOT NULL,          -- the decision instant
+        mode        VARCHAR(16)   NOT NULL,          -- o9_control.mode at the open
+        equity      DECIMAL(16,4) NOT NULL,          -- o9_account equity at the open: settled, closes only
+        price       DECIMAL(16,8) NOT NULL,          -- the bar close the size was computed on
+        n_live      TINYINT       NOT NULL,          -- legs already open at this entry
+        risk_pct    DECIMAL(6,4)  NULL,              -- dynamic_leverage only: % of equity at risk
+        stop_pct    DECIMAL(6,4)  NULL,              -- dynamic_leverage only: the stop the book places
+        drag_pct    DECIMAL(6,4)  NULL,              -- dynamic_leverage only: round-trip drag
+        lev_target  DECIMAL(8,4)  NULL,              -- dynamic_leverage only: (risk/(n_live+1))/(stop+drag)
+        coins       DECIMAL(20,8) NOT NULL,          -- this order's qty
+        notional    DECIMAL(16,4) NOT NULL,          -- coins x price
+        lev_applied DECIMAL(8,4)  NULL,              -- notional / equity
+        capped      TINYINT       NOT NULL,          -- 1 = max_order bound the size below lev_target
+        created_ms  BIGINT        NOT NULL,
+        INDEX (kline_ms))"""
+
+    def record_sizing(self, order_id, kline_ms, calc, qty):
+        """The sizer's inputs + result for one open/add order (`PositionSizer.last_calc`). qty is THIS
+        order's size - a split open writes one row per order, each with its own notional."""
+        price, eq = float(calc["price"]), float(calc["equity"])
+        self.db.execute(
+            "INSERT INTO o9_sizing (order_id, kline_ms, mode, equity, price, n_live, risk_pct, stop_pct, "
+            "drag_pct, lev_target, coins, notional, lev_applied, capped, created_ms) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            (order_id, kline_ms, calc["mode"], round(eq, 4), price, int(calc["n_live"]), calc["risk_pct"],
+             calc["stop_pct"], calc["drag_pct"],
+             None if calc["lev_target"] is None else round(float(calc["lev_target"]), 4),
+             qty, round(qty * price, 4), round(qty * price / eq, 4) if eq > 0 else None,
+             int(calc["capped"]), self._now()))
 
     # ── account (o9's tally) ──
     def equity(self) -> float:

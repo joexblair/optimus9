@@ -38,3 +38,17 @@ def test_open_close_realizes_and_tallies(db):
     assert row["status"] == "closed" and abs(float(row["net"]) - realized) < 0.01
     acct = db.execute("SELECT trade_count FROM o9_account WHERE acct_id=1", fetch=True)[0]
     assert acct["trade_count"] == 1
+
+
+def test_record_sizing_banks_the_inputs_and_the_leverage(db):
+    from optimus9.live.sizing import PositionSizer, TradeIntent
+    db.execute("DROP TABLE IF EXISTS o9_sizing")                  # test DB only: prove the ledger creates it
+    lg = O9Ledger(db, SYM, start_equity=888, taker_bps=5.5, clock=lambda: 1000)
+    sz = PositionSizer(max_order=66000, risk_pct=2.0, stop_pct=0.70, drag_pct=0.1975)
+    o = sz.size(TradeIntent(action="open", side="Buy"), lg.equity(), 0.18291, mode="dynamic_leverage")
+    lg.record_sizing("ord-1", 5000, sz.last_calc, o[0].qty)
+    r = db.execute("SELECT * FROM o9_sizing WHERE order_id='ord-1'", fetch=True)[0]
+    assert r["mode"] == "dynamic_leverage" and float(r["equity"]) == 888 and r["n_live"] == 0
+    assert float(r["risk_pct"]) == 2.0 and float(r["stop_pct"]) == 0.70 and float(r["drag_pct"]) == 0.1975
+    assert float(r["coins"]) == 10818 and float(r["lev_target"]) == 2.2284
+    assert abs(float(r["lev_applied"]) - 10818 * 0.18291 / 888) < 1e-4 and r["capped"] == 0

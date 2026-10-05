@@ -18,6 +18,7 @@ from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.live.feed import OrderBookFeed
 from optimus9.live.control import O9Control
+from optimus9.live.ledger import O9Ledger
 from optimus9.live.health import HealthStore
 
 FAKEAPI = os.environ.get("O9_FAKEAPI_URL", "http://127.0.0.1:8098")
@@ -244,7 +245,8 @@ def reset_account():
     # are DURABLE across resets by design (Joe 0707): they are the audit trail for the o9-live<->backtest reconcile,
     # keyed by kline_ms (a continuous time series, not per-run). Wiping them on a paper-account reset was scope-creep
     # that cost 11.6h of reconcile history; recon_arm_gate.py rebuilds arm_gate_recon itself when it runs.
-    for t in ("o9_ledger", "o9_decision", "o9_forecast"):
+    o9.execute(O9Ledger._SIZING_DDL)                                # o9-live creates it; a reset must not depend on that
+    for t in ("o9_ledger", "o9_decision", "o9_forecast", "o9_sizing"):
         o9.execute("TRUNCATE TABLE %s" % t)
     o9.execute("INSERT INTO o9_account (acct_id, equity, realized_total, trade_count, updated_ms) "
                "VALUES (1,%s,0,0,%s) ON DUPLICATE KEY UPDATE equity=%s, realized_total=0, trade_count=0, "
@@ -340,7 +342,7 @@ td{padding:8px 14px;text-align:right;border-bottom:1px solid rgba(42,51,70,.5);w
 </style></head><body><div class=wrap>
 <header class="sliver panel"><span class=dot></span><span class=brand>o9<b>&middot;</b>live</span><span class=env>FAKE-API &middot; realtime</span>
  <span class="px num" id=px>&mdash;</span>
- <div class=sizing><span class=lbl>size</span><div class=seg id=seg><span data-m=smallest>Smallest</span><span data-m=fixed>Fixed</span><span data-m=dynamic5x>Dynamic 5&times;</span></div>
+ <div class=sizing><span class=lbl>size</span><div class=seg id=seg><span data-m=smallest>Smallest</span><span data-m=fixed>Fixed</span><span data-m=dynamic5x>Dynamic 5&times;</span><span data-m=dynamic_leverage>Dynamic leverage</span></div>
   <span class=chip2>max <input class=szin id=maxo inputmode=numeric></span><span class=chip2>split <input class=szin id=split inputmode=numeric></span></div>
  <div class=spacer></div><button class=bktog id=bktog>Order book</button><button class=reset id=reset title="Reset the paper account on fakeAPI">Reset</button><button class=kill id=kill>&#9632; FLATTEN &amp; HALT</button></header>
 <div class="status panel">
