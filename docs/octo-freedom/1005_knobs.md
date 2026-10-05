@@ -317,3 +317,70 @@ class of bug would have burned the budget.
 
 CARRIED FORWARD, unmeasured: whether lazy-g reads momentum through the same WS1_CFG path. Joe named
 octo-freedom AND lazy-g as the two users; only octo-freedom's path has been traced.
+
+## 11. ws1mage-rev DOES NOT READ ws1Mage IN THE WALK — Joe's swap idea, and what it uncovered
+
+Joe 1005, overnight: *"I have an idea to swap ws1mage-rev with ws2 or ws3"*. The swap he meant
+(the `g1` line) moves nothing, and finding out why is the real result.
+
+`jig.ws1mage_rev(g1, sig_mage, hi, lo, dwell, rev_wob, hold, gate)` returns THREE legs. The walk
+consumes TWO of them (`report_leash_walk.py:200`):
+
+```python
+rev = {d: rev_lookback_mask(legs[d]['sig'], legs[d]['sig_conf'], rig.n, knobs['rev_lookback'])
+       for d in (1, -1)}
+```
+
+| leg | derives from | consumed by the walk |
+|---|---|---|
+| `dwell_ok` | **g1 = ws1Mage**, gated by `dwell` | **NO — computed and discarded** |
+| `rev` | **g1 = ws1Mage** via `_mage_rev(g1, rev_wob)` | **NO — computed and discarded** |
+| `sig` / `sig_conf` | **`sig_mage` = gcws30Mage**, oob -> ib cross | YES, only these |
+
+**So inside the octo-sig walk, "ws1mage-rev" never touches ws1Mage.** It is a gcws30Mage
+out-of-bounds-to-in-bounds cross. Three knobs are inert for that one reason: `dwell`, `rev_wob`, and
+the identity of the g1 line itself.
+
+**THIS IS A SPEC-LEVEL FINDING, NOT A TUNING ONE.** Joe's off-book rule (1003 spec, batch 2) is that
+those trades *"must qualify with a same-dr ws1mage-rev event + ws1r oob"*. The walk's `rev` carries
+only the gcws30Mage cross, so the ws1Mage half of that qualifier is not being applied. **Joe's to
+rule: is the discard intended, or should `dwell_ok` and `rev` gate the signal too?**
+
+### MEASURED — g1 and dwell, 12 walks on 10-02, all 43 signals
+
+| g1 line | dwell 1 | dwell 3 | dwell 6 | dwell 12 |
+|---|---|---|---|---|
+| ws1Mage | 43 | 43 | 43 | 43 |
+| ws2Mage | 43 | 43 | 43 | 43 |
+| ws3Mage | 43 | 43 | 43 | 43 |
+
+My first explanation for the inertness was WRONG and is corrected here: I guessed ws1Mage's oob runs
+were all longer than `dwell`. They are not — median 4 bars and **73.8 % of hi runs are <= 12 bars**,
+so `dwell` 12 should bind on three quarters of them. The cause is the discard, not the run lengths.
+
+### THE SWAP WITH TEETH IS `sig_mage`, AND IT IS LIVE
+
+| `sig_mage` line | 10-02 signals | vs baseline |
+|---|---|---|
+| **gcws30Mage (current)** | **43** | baseline |
+| ws1Mage | 38 | **-5** |
+| ws2Mage | 30 | **-13** |
+| ws3Mage | 21 | **-22** |
+| ws4Mage | 19 | **-24** |
+| gcws15Mage (`rig.C['sig_line_surgical']`) | — | **NOT IN THE CACHE** — needs a line build before it can be tested |
+
+Monotonic: the higher the TF carrying the cross, the fewer signals. Under Joe's objective that is a
+LOSS OF TRADES of 30 % to 56 %, so it only pays if net per trade rises enough to cover it. Scored
+across all 17 days separately - signal count is not the objective.
+
+### `boundary_xwob` IS live — it sets `sig_conf` = cross + hold - 1
+
+| `boundary_xwob` | 10-02 signals |
+|---|---|
+| 1 | 41 |
+| **4 (current)** | **43** |
+| 8 | 40 |
+| 12 | 36 |
+
+The current 4 is the peak of the four sampled. First knob found with a local maximum at its banked
+value rather than at an edge.
