@@ -254,3 +254,66 @@ constants I censused in `1005_knob_census.md` are mostly NOT on the octo-sig pat
   17 days x 17.4 s = 5.1 min.
 - `momo_slope_min` appears in BOTH `rig.C` (0.4) and `momo_config` v1 (1.2). Which one the walk
   honours is **unmeasured** and must be settled before either is swept.
+
+## 10. MOMENTUM — WHICH VALUE IS IN EFFECT. Joe 1005: "we're only using momentum in octo-freedom and lazy-g"
+
+**0.4 is in effect. The 1.2 in `momo_config` v1 is overwritten before every verdict.**
+
+`walk_mom_models.momentum_true` (the only momentum entry the walk calls, via `mom_at`):
+
+```python
+b = dict(bank); b.update({q: cfg[q] for q in
+        ('momo_slope_min', 'momo_slack_ref', 'momo_r2_min', 'level_slack', 'momo_seam')})
+with momo_config(b), momo_window(SPAN_MIN):
+```
+
+- `bank` is `rig.BK[tf]` = `momo_bank(db, tf, version=1)` (`sweep_v3_signal.py:91`)
+- `cfg` is **`walk_mom_models.WS1_CFG`** = `{momo_slope_min: 0.4, momo_slack_ref: 0.4, momo_r2_min: 0.7, level_slack: 13.9, momo_seam: 'off'}`
+- so those 5 keys come from WS1_CFG and the bank's values for them are discarded
+- `momo_window(SPAN_MIN)` with **`SPAN_MIN = 10`** (`walk_mom_models.py:60`) also overrides the bank's `momo_window_min` 60
+
+### MEASURED, not read — the A/B that settles it, 10-02
+
+| what was moved | 10-02 signals | verdict |
+|---|---|---|
+| baseline | 43 | — |
+| `rig.C['momo_slope_min']` 0.4 -> 99.0 | 43 | **UNCHANGED — never read by the walk** |
+| `rig.BK[t]['momo_slope_min']` 1.2 -> 99.0, every TF | 43 | **UNCHANGED — overwritten by WS1_CFG** |
+| `WS1_CFG['momo_slope_min']` 0.4 -> 0.1 | **44** | **MOVED** |
+| `WS1_CFG['momo_slope_min']` 0.4 -> 1.2 | **39** | **MOVED — adopting momo_config's value LOSES 4 signals** |
+| `WS1_CFG['momo_slope_min']` 0.4 -> 3.0 | **38** | **MOVED** |
+
+And momentum is load-bearing, not decorative: forcing `momentum_true` to a constant kills the day
+entirely — True -> 0 signals, False -> 0 signals, both with 0 MECH bars. The mechanic needs a MIX of
+verdicts across timeframes, so it is a relationship between TFs, not a threshold on one.
+
+### THE MOMENTUM KNOB CENSUS FOR octo-freedom, corrected
+
+| knob | value | store | status |
+|---|---|---|---|
+| `momo_slope_min` | **0.4** | `WS1_CFG` | LIVE, swept |
+| `momo_slack_ref` | **0.4** | `WS1_CFG` | LIVE, swept |
+| `momo_r2_min` | 0.7 | `WS1_CFG` | LIVE, swept (same value as the bank's, so no conflict) |
+| `level_slack` | 13.9 | `WS1_CFG` | LIVE, swept (same as the bank's) |
+| `momo_seam` | 'off' | `WS1_CFG` | LIVE (same as the bank's) |
+| `SPAN_MIN` | **10** | `walk_mom_models` | LIVE, overrides the bank's `momo_window_min` 60 |
+| `momo_step_min` | 5 | bank | LIVE, from `momo_config` v1 |
+| `momo_fixed_samples` | 21 | bank | LIVE |
+| `k_window` | 6 | bank | LIVE |
+| `curl_arc_min` | 4.0 | bank | LIVE |
+| `curl_vtx_lo` / `curl_vtx_hi` | 0.05 / 0.95 | bank | LIVE |
+| `curl_r2_min` | 0.4 | bank | LIVE |
+| `momo_config.momo_slope_min` | 1.2 | DB | **DEAD for octo-freedom** — overwritten |
+| `momo_config.momo_slack_ref` | 1.2 | DB | **DEAD for octo-freedom** — overwritten |
+| `momo_config.momo_window_min` | 60 | DB | **DEAD for octo-freedom** — overridden by SPAN_MIN 10 |
+| `rig.C['momo_slope_min']` | 0.4 | v3 config row | **DEAD for the walk** — never read. It is `build_wsf_dtf_v3.py:88 SLOPE = 0.4 # FITTED`, applied only inside that report |
+
+So the practical divergence is exactly two numbers — **slope_min and slack_ref, 0.4 vs 1.2** — and
+WS1_CFG's 0.4 wins. The other three WS1_CFG keys already match the bank.
+
+**THE SWEEP TARGET IS `walk_mom_models.WS1_CFG` + `SPAN_MIN`, not `momo_config`.** Sweeping
+`momo_config` would have produced identical cells for slope, slack and window — the third time this
+class of bug would have burned the budget.
+
+CARRIED FORWARD, unmeasured: whether lazy-g reads momentum through the same WS1_CFG path. Joe named
+octo-freedom AND lazy-g as the two users; only octo-freedom's path has been traced.
