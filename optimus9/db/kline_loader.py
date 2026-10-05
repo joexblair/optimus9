@@ -15,6 +15,7 @@ Terminology:
 """
 
 from datetime import datetime, timedelta, timezone
+import numpy as np
 import pandas as pd
 
 from logger import get_logger
@@ -58,13 +59,13 @@ class KlineLoader:
             where, params = 'kc_tp_pk = %s', (tp_pk,)
         return self._fetch(where, params, tp_pk)
 
-    def load_window(self, tp_pk: int, start_ms: int, end_ms: int) -> pd.DataFrame:
-        """Klines for tp_pk within [start_ms, end_ms).  Half-open interval."""
-        return self._fetch(
-            'kc_tp_pk = %s AND kc_timestamp >= %s AND kc_timestamp < %s',
-            (tp_pk, start_ms, end_ms),
-            tp_pk,
-        )
+    def load_window(self, tp_pk: int, start_ms: int, end_ms: int, as_float: bool = False) -> pd.DataFrame:
+        """Klines for tp_pk within [start_ms, end_ms).  Half-open interval.
+        as_float=True returns timestamp int64 + OHLCV float64 (see _fetch_float); default unchanged."""
+        where, params = 'kc_tp_pk = %s AND kc_timestamp >= %s AND kc_timestamp < %s', (tp_pk, start_ms, end_ms)
+        if as_float:
+            return self._fetch_float(where, params, tp_pk)
+        return self._fetch(where, params, tp_pk)
 
     def load_all(self, tp_pk: int) -> pd.DataFrame:
         """Every kline for tp_pk."""
@@ -78,3 +79,27 @@ class KlineLoader:
         if not rows:
             raise RuntimeError(f'No klines for tp_pk={tp_pk}')
         return pd.DataFrame(rows)
+
+    def _fetch_float(self, where: str, params: tuple, tp_pk: int) -> pd.DataFrame:
+        """The same rows as _fetch, as int64 / float64 columns. Joe 1005 o9-live loop optimisation:
+        _fetch builds one dict per row and leaves DECIMAL objects that every consumer re-converts -
+        ~0.4 s of a 104 h window. Here the rows come back raw (bytes) and each value is converted
+        ONCE with float()/int(), the same correctly-rounded parse float(Decimal) does, so the values
+        are identical to _fetch's after .to_numpy(dtype=float)."""
+        sql = f'{self._SELECT_BASE} WHERE {where} ORDER BY kc_timestamp ASC'
+
+        def run():
+            cur = self._db._conn.cursor(raw=True)
+            try:
+                cur.execute(sql, params)
+                return cur.fetchall()
+            finally:
+                cur.close()
+        rows = self._db._with_reconnect(run)
+        if not rows:
+            raise RuntimeError(f'No klines for tp_pk={tp_pk}')
+        cols = list(zip(*rows))
+        df = pd.DataFrame({'timestamp': np.array([int(x) for x in cols[0]], dtype=np.int64)})
+        for j, c in enumerate(('open', 'high', 'low', 'close', 'volume'), 1):
+            df[c] = np.array([float(x) for x in cols[j]], dtype=float)
+        return df

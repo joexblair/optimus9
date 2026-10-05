@@ -119,7 +119,7 @@ class BiasWindow:
             base, ts, px = base_cache
         else:
             det = BLDetect(db, lookback_hours=lookback, warmup_hours=warmup)
-            base, ts, _ws, _x, px = det._setup(end)
+            base, ts, _ws, _x, px = det._setup(end, raw_pk_on=False, as_float=True)   # raw pk unused here; tape as floats (Joe 1005 loop optimisation)
         self.base, self.ts, self.px = base, ts, px
         for _c in ('open', 'high', 'low', 'close', 'volume'):     # DECIMAL→float64 ONCE (pymysql gives object dtype);
             if _c in self.base.columns and self.base[_c].dtype == object:   # else every line-compute re-converts

@@ -242,18 +242,25 @@ class BLDetect:
                     bb_mult=float(r['ic_bb_mult']), src=r['ic_src'])
 
     # ── public ───────────────────────────────────────────────────────────────
-    def _setup(self, end_ms=None):
+    def _setup(self, end_ms=None, raw_pk_on=True, as_float=False):
         """Shared compute for report() AND the grind sweep — the tape, the raw 5s-pk
         (Pine-aligned → decision-delay → bny30 gate, so it's the gated entry signal), and
-        px_smooth. Returns (base, ts, win_start, raw_pk, px)."""
+        px_smooth. Returns (base, ts, win_start, raw_pk, px).
+
+        Two opt-ins, both OFF by default so every existing caller is unchanged (Joe 1005 o9-live loop
+        optimisation; BiasWindow turns both on):
+          raw_pk_on=False  skip the raw pk - BiasWindow discards it - and return None in its place
+          as_float=True    load the tape as float64 (KlineLoader as_float) instead of DECIMAL objects"""
         end_ms     = int(end_ms or self._data_max())
         win_start  = int(end_ms - self._lookback * 3600_000)
         load_start = int(win_start - self._warmup * 3600_000)
-        base  = KlineLoader(self._db).load_window(self._tp, load_start, end_ms)
+        base  = KlineLoader(self._db).load_window(self._tp, load_start, end_ms, as_float=as_float)
         ts    = base['timestamp'].to_numpy()
-        from ..orchestration.gate_signal_sweep import pine_aligned_signals
-        pk_idx, pk_dirs = pine_aligned_signals(base, self._db, GCA5M_RAW, gate=False)   # RAW pk = ungated (match grind/pine)
-        raw_pk = np.zeros(len(ts), np.int8); raw_pk[pk_idx] = pk_dirs
+        raw_pk = None
+        if raw_pk_on:
+            from ..orchestration.gate_signal_sweep import pine_aligned_signals
+            pk_idx, pk_dirs = pine_aligned_signals(base, self._db, GCA5M_RAW, gate=False)   # RAW pk = ungated (match grind/pine)
+            raw_pk = np.zeros(len(ts), np.int8); raw_pk[pk_idx] = pk_dirs
         # px_smooth: global 5s DEMA, params from optimus9_system (close/2/5) — same manner as the
         # PK machine's dema (5s base, config-driven), NOT the old primary-TF resample.
         s = self._sys

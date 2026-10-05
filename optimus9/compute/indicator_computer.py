@@ -239,6 +239,10 @@ class IndicatorComputer:
     def _stdev(src: np.ndarray, n: int) -> np.ndarray:
         return pd.Series(src).rolling(n, min_periods=n).std(ddof=0).to_numpy()
 
+    # _ema / _rma: the recursion runs on Python floats, not numpy scalars. Same operations in the same
+    # order on IEEE doubles, so the output is bit-identical to the numpy-scalar loop it replaced; it is
+    # ~3-4x faster because each step no longer boxes a numpy scalar (Joe 1005, o9-live loop: verified
+    # identical on 244 arrays x 4 live bars, docs/o9-live-recon/OPEN.md "loop optimisation, 1005").
     @staticmethod
     def _ema(src: np.ndarray, n: int) -> np.ndarray:
         alpha = 2.0 / (n + 1)
@@ -248,9 +252,14 @@ class IndicatorComputer:
             return out
         seed      = valid[n - 1]
         out[seed] = float(np.nanmean(src[valid[0] : seed + 1]))
-        for i in range(seed + 1, len(src)):
-            out[i] = alpha * src[i] + (1.0 - alpha) * out[i - 1] if not np.isnan(src[i]) else out[i - 1]
-        return out
+        s, o, keep = src.tolist(), out.tolist(), 1.0 - alpha
+        prev = o[seed]
+        for i in range(seed + 1, len(s)):
+            x = s[i]
+            if x == x:                                        # not NaN; a NaN bar carries the last value
+                prev = alpha * x + keep * prev
+            o[i] = prev
+        return np.array(o, dtype=float)
 
     @staticmethod
     def _rma(src: np.ndarray, n: int) -> np.ndarray:
@@ -262,9 +271,14 @@ class IndicatorComputer:
             return out
         seed      = valid[n - 1]
         out[seed] = float(np.nanmean(src[valid[0]: seed + 1]))
-        for i in range(seed + 1, len(src)):
-            out[i] = (out[i - 1] * (n - 1) + src[i]) / n if not np.isnan(src[i]) else out[i - 1]
-        return out
+        s, o, m = src.tolist(), out.tolist(), n - 1
+        prev = o[seed]
+        for i in range(seed + 1, len(s)):
+            x = s[i]
+            if x == x:                                        # not NaN; a NaN bar carries the last value
+                prev = (prev * m + x) / n
+            o[i] = prev
+        return np.array(o, dtype=float)
 
     @staticmethod
     def _rsi(src: np.ndarray, n: int) -> np.ndarray:
@@ -454,10 +468,25 @@ class IndicatorComputer:
         })
         
     @staticmethod
+    def _memo_resample(memo, kind, base_df, target_seconds, anchor):
+        """`resample` ('closed') or `lookahead_resample` ('developing'), reused across lines through
+        `memo` (Joe 1005 o9-live loop optimisation). Every line at the same timeframe re-grouped the
+        same bars; the memo groups them once. The caller owns one memo per base_df for that frame's
+        lifetime (LineReader does, per window), and the frames are only read downstream, so sharing
+        them changes no value. memo=None = the old behaviour, a fresh resample per call."""
+        fn = IndicatorComputer.resample if kind == 'closed' else IndicatorComputer.lookahead_resample
+        if memo is None:
+            return fn(base_df, target_seconds, anchor)
+        key = (kind, id(base_df), len(base_df), int(target_seconds), anchor)
+        if key not in memo:
+            memo[key] = fn(base_df, target_seconds, anchor)
+        return memo[key]
+
+    @staticmethod
     def f_bb_lookahead(base_df: pd.DataFrame, target_seconds: int,
                        length: int, mult: float, src: str,
                        rsi_ob: float = RSI_OVERBOUGHT, rsi_os: float = RSI_OVERSOLD,
-                       anchor: str = 'epoch') -> np.ndarray:
+                       anchor: str = 'epoch', memo: dict = None) -> np.ndarray:
         """
         BB(length, mult) at each 5s bar against the developing higher-TF bar.
 
@@ -478,7 +507,7 @@ class IndicatorComputer:
         history). Same return shape and scaling as f_bb.
         """
         # ── closed higher-TF source series ────────────────────────────────
-        closed     = IndicatorComputer.resample(base_df, target_seconds, anchor)
+        closed     = IndicatorComputer._memo_resample(memo, 'closed', base_df, target_seconds, anchor)
         closed_src = IndicatorComputer.build_source(closed, src)
         closed_ts  = closed['timestamp'].to_numpy()
 
@@ -489,7 +518,7 @@ class IndicatorComputer:
         roll_sumsq = (s ** 2).rolling(length - 1, min_periods=length - 1).sum().to_numpy()
 
         # ── developing source values at every 5s ──────────────────────────
-        dev_df  = IndicatorComputer.lookahead_resample(base_df, target_seconds, anchor)
+        dev_df  = IndicatorComputer._memo_resample(memo, 'developing', base_df, target_seconds, anchor)
         dev_src = IndicatorComputer.build_source(dev_df, src)
 
         # ── map each 5s timestamp to its developing-window index in closed ─
@@ -526,7 +555,7 @@ class IndicatorComputer:
     @staticmethod
     def f_k_lookahead(base_df: pd.DataFrame, target_seconds: int,
                       k_len: int, rsi_len: int, stc_len: int, src: str,
-                      anchor: str = 'epoch') -> np.ndarray:
+                      anchor: str = 'epoch', memo: dict = None) -> np.ndarray:
         """
         K chain (RSI → Stoch → SMA) at each 5s bar against the developing
         higher-TF bar.
@@ -550,7 +579,7 @@ class IndicatorComputer:
         Returns a 1D float array parallel to base_df.
         """
         # ── closed higher-TF chain ────────────────────────────────────────
-        closed     = IndicatorComputer.resample(base_df, target_seconds, anchor)
+        closed     = IndicatorComputer._memo_resample(memo, 'closed', base_df, target_seconds, anchor)
         closed_src = IndicatorComputer.build_source(closed, src)
         closed_ts  = closed['timestamp'].to_numpy()
 
@@ -577,7 +606,7 @@ class IndicatorComputer:
         roll_stoch_sum = stoch_c_s.rolling(k_len - 1, min_periods=k_len - 1).sum().to_numpy()
 
         # ── developing source at every 5s ─────────────────────────────────
-        dev_df  = IndicatorComputer.lookahead_resample(base_df, target_seconds, anchor)
+        dev_df  = IndicatorComputer._memo_resample(memo, 'developing', base_df, target_seconds, anchor)
         dev_src = IndicatorComputer.build_source(dev_df, src)
 
         base_ts = base_df['timestamp'].to_numpy()

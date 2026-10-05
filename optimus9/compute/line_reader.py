@@ -36,6 +36,7 @@ class LineReader:
         self._evt_remap = evt_remap
         self._anchor = anchor
         self.force_emerging = force_emerging
+        self._memo = {}                                       # resamples of self._lbase, shared by every line (IC._memo_resample)
 
     # ── closed (base-aligned) ──
     def _raw(self, tf_sec, cfg):
@@ -60,9 +61,9 @@ class LineReader:
         anc = anchor if anchor is not None else self._anchor
         b = self._lbase                                       # event tape when filler-invisible
         if cfg[0] == 'bb':
-            out = IC.f_bb_lookahead(b, tf_sec, cfg[1], cfg[2], cfg[3], anchor=anc)
+            out = IC.f_bb_lookahead(b, tf_sec, cfg[1], cfg[2], cfg[3], anchor=anc, memo=self._memo)
         else:
-            out = IC.f_k_lookahead(b, tf_sec, cfg[3], cfg[1], cfg[2], cfg[4], anchor=anc)
+            out = IC.f_k_lookahead(b, tf_sec, cfg[3], cfg[1], cfg[2], cfg[4], anchor=anc, memo=self._memo)
         return out[self._evt_remap] if self._evt_remap is not None else out   # remap event grid → full 5s grid
 
     # ── THE value_mode-honouring read (#42) — the one place every consumer should land ──
