@@ -384,3 +384,80 @@ across all 17 days separately - signal count is not the objective.
 
 The current 4 is the peak of the four sampled. First knob found with a local maximum at its banked
 value rather than at an edge.
+
+## 12. THE MISSING HIGHER-TF MOM-TRUE GATE — found by Joe's eyes on 10-04 14:30
+
+Joe 1005: *"something's wrong with 10-04 14:30 ... I can see that ws4,5,6,7 are showing momentum"*.
+
+**His read was right.** Measured at the signal bar, dr +1, r-momo fence 17/83:
+
+| TF | Mage @extrema | r @signal | mom-true @signal | state |
+|---|---|---|---|---|
+| ws1 | 117.86 | 56.42 | false | none |
+| ws2 | 107.44 | 65.93 | false | none |
+| ws3 | 116.55 | 88.10 | false | none |
+| **ws4** | 111.41 | 76.16 | **TRUE** | momo |
+| **ws5** | 98.77 | 80.55 | **TRUE** | momo |
+| **ws6** | 85.32 | 59.97 | **TRUE** | momo |
+| ws7 | 66.20 | 49.47 | false | none |
+| **ws8** | 53.36 | 45.80 | **TRUE** | momo |
+| ws9..ws12 | 49.60..40.02 | — | false | sideways |
+
+He called ws4,5,6,7. The mech says **ws4, ws5, ws6, ws8** — three of his four exact, plus ws8 he did
+not name, and ws7 reads as momentum on the chart but is `none` to the mech.
+
+**AND 10-04 14:30:20's D ex-fence block is ws2 ALONE.** So four higher TFs carry momentum above a
+one-member block, and my build confluenced it anyway.
+
+### THE GATE WAS RULED AND NEVER BUILT — two failures, both mine
+
+Joe's 1004 batch-1 ruling, verbatim from the conversation: *"02:42,02:48,02:50 are gated by higher
+TF mom-true"*. It is **not in this spec, not in the chat log, and not in the code**:
+
+```
+grep -c momentum_true|mom_at|mom-true   branchD.py -> 0 | sweep.py -> 0
+```
+
+So I neither banked his ruling nor implemented it. Measured against his own calls:
+
+| octo-sig | his ruling | dr | D ex-fence block | mom-true TFs | above the block | my build decided |
+|---|---|---|---|---|---|---|
+| 09-25 02:12:10 | confluenced | +1 | ws2 | ws5,6,7,8 | **ws5,6,7,8** | CONFLUENCE — agrees |
+| 09-25 02:13:10 | pyramid candidate | +1 | ws2 | ws5,6,7,8 | **ws5,6,7,8** | CONFLUENCE — agrees |
+| 09-25 02:42:35 | **GATED** | -1 | ws1..ws4 | ws5,6,8 | ws5,6,8 | BLOCKED, but by mtd.r2 — not by momentum |
+| 09-25 02:48:50 | **GATED** | -1 | ws3,ws4 | ws5,6 | **ws5,ws6** | **CONFLUENCE — CONTRADICTS HIM** |
+| 09-25 02:50:45 | **GATED** | -1 | ws3,ws4 | ws6 | **ws6** | **CONFLUENCE — CONTRADICTS HIM** |
+| 09-25 03:30:05 | confluenced | -1 | ws10 | ws3,ws12 | ws12 | OPEN `neither` — contradicts him, separate gap |
+| 10-04 14:30:20 | *(he flagged it)* | +1 | **ws2** | **ws4,5,6,8** | **ws4,5,6,8** | **CONFLUENCE with-trend** |
+
+### THE GATE CANNOT BE "ANY HIGHER TF MOM-TRUE" — his own calls forbid it
+
+02:12 and 02:13 are **confluenced** by Joe and carry mom-true at ws5,6,7,8 above a ws2 block. A
+blanket "any mom-true above the block gates it" would wrongly block the two signals he approved.
+
+What separates them, measured — the GAP between the block top and the lowest mom-true TF:
+
+| octo-sig | block top | lowest mom-true above | gap | his ruling |
+|---|---|---|---|---|
+| 02:12:10 | ws2 | ws5 | **2** (ws3, ws4 quiet) | confluenced |
+| 02:13:10 | ws2 | ws5 | **2** | confluenced |
+| 02:48:50 | ws4 | ws5 | **0 — adjacent** | GATED |
+| 02:50:45 | ws4 | ws6 | **1** | GATED |
+| 10-04 14:30:20 | ws2 | ws4 | **1** | he flagged it as wrong |
+
+**ADJACENCY is the candidate discriminator: gap 0 or 1 gates, gap 2 confluences.** That is MY
+hypothesis from five data points, NOT his rule, and it is not implemented. He names it or rejects it.
+
+### WHAT THIS EXPLAINS
+
+- 10-04 14:30:20 shorted into a rise that ran a further **+0.427 %** over the next hour, took 0.906 %
+  of heat for 0.356 % of gain. With momentum live on ws4, ws5, ws6 and ws8 just above a one-member
+  block, the gate he ruled for would have stopped it.
+- **19 of the 32 trades the 0.95 stop rescues sit on a one-member D block** (section 11). The wider
+  stop has been partly compensating for a band test that cannot fire AND a momentum gate that was
+  never built.
+
+OPEN, for Joe: (1) the gap rule above - his to name; (2) whether the gate reads momentum at the
+SIGNAL bar or at the mtd extrema - both measured above and they differ at ws8 (false at the extrema,
+true at the signal); (3) whether `mom-true` here means `momentum_true` with `strip_mom_at_fence`, as
+measured, or the raw verdict.
