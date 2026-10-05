@@ -113,3 +113,56 @@ only in the leverage divisor. That row needs re-scoring at 0.80 before it is use
   *"Do not sweep and hand back 'the winner'."*
 - **the 32 upstream knobs are not run.** One-at-a-time over them is 25.3 days of compute. Joe scopes
   which subset, or sets a time budget and I pick the cheapest informative slice and say which.
+
+## THE 7 OOS WALKS — all complete
+
+| day | walk secs | octo-sig rows |
+|---|---|---|
+| 2026-07-23 | 73 | 16 |
+| 2026-07-25 | 80 | 28 |
+| 2026-08-06 | 85 | 32 |
+| 2026-08-20 | 93 | 32 |
+| 2026-08-30 | 92 | 35 |
+| 2026-09-14 | 91 | 30 |
+| 2026-09-17 | 101 | 34 |
+| **7 days** | **615** | **207** |
+
+FIT carries 328 signals over 10 days; TEST carries 207 over 7. Signals live at
+`1005_scoring/octosig/<day>.out`.
+
+## A SECOND DEFECT FOUND BY THE HARNESS CHECK — and its magnitude
+
+`ninedays.py:60` does `if f is None: continue` — it drops the WHOLE ROW when the **flipped** leg is
+unresolved, so the dr-bias basis loses a row it could have scored. Line 72 does the reverse. The two
+bases are supposed to be independent.
+
+Measured on the 10 FIT days at stop 0.70, each basis on its own MAXIMAL set:
+
+| basis | scoreable rows | total net % | mean |
+|---|---|---|---|
+| dr-bias | **162** | +41.842 | +0.2583 |
+| flipped (stage 2 on with-trend) | **164** | +47.501 | +0.2896 |
+
+- **dr-bias was NOT contaminated** — 162 is genuinely its maximal set, and +41.842 stands.
+- the flipped basis was reported as **+47.546 on 162 rows**; its true maximal set is 164 rows at
+  **+47.501**. The 2 dropped rows were slightly negative, so the published figure was **overstated
+  by 0.045 pp**.
+- **0.045 pp changes no conclusion.** The flip is still undecided. Recorded because the defect is
+  structural, not because the number moved.
+
+## THE CORRECTED LEVERAGE TABLE — each row scored at ITS OWN stop
+
+Supersedes the table in chat #53, where every row's trade outcomes were at stop 0.70 while one row
+was labelled 0.80. 10 FIT days, dr-bias, $888 start.
+
+| rule | stop used | lev | trades | one worst trade | longest losing run | that run costs | final $ | max DD % |
+|---|---|---|---|---|---|---|---|---|
+| live now: fixed 66,000 coins | 0.70 | **13.595x** | 162 | 12.20 % | 6 | **54.19 %** | 70,254.95 | **60.41** |
+| 2 % risk at the live stop 0.70 | 0.70 | **2.228x** | 162 | 2.00 % | 6 | 11.42 % | 2,172.82 | 11.23 |
+| 2 % risk at the scored stop 0.80 | 0.80 | **2.005x** | 162 | 2.00 % | 6 | 11.42 % | **2,393.62** | 11.43 |
+| max L for DD <= 25 %, stop 0.70 | 0.70 | **5.183x** | 162 | 4.65 % | 6 | 24.86 % | 6,360.51 | 25.00 |
+| max L for DD <= 25 %, stop 0.80 | 0.80 | **4.674x** | 162 | 4.66 % | 6 | 24.91 % | 8,126.18 | 25.00 |
+
+Changes from what was sent: the 0.80 row's final was **1,993.05 -> 2,393.62**, and the DD <= 25 %
+leverage was **4.800x -> 5.183x (0.70) / 4.674x (0.80)**. The earlier 4.800x came through the
+cross-drop path above.

@@ -1,0 +1,27 @@
+2026-10-05 06:08:15  DatabaseManager             INFO      MySQL connected
+2026-10-05 06:08:15  DatabaseManager             INFO      MySQL disconnected
+K|wsf_trade_config v4|key wtc_v4_v7_rule1_gateopen_mae0.70
+K|arm ws5Mage fence 25.0/75.0 wob 6 bars = 30 s|same dr 1
+K|ladder ws4..ws23|min_tf ws7|fall 3|race 1|frmin ws4|lb 48 bars = 4 min
+K|rev lookback 48 bars = 240 s|rule#1 back 60 bars = 5.0 min
+K|tape END_MS 2026-10-05 00:00|day 2026-07-23|bars 354240..371519
+D|dr recipe ws1Mage + ws13m at 15.0/85.0 wob 0|rebuilt vs rig.DR: 0 of 1632960 bars differ
+W|MECH bars 1558|rule#1 cut 942|EMITTED 616|momentum_true calls 43953|flat_run_at calls 206420
+R|run|WALK FIRES FROM|last emitted bar|bars|dr|arm bar
+R|1|00:29:30|00:32:45|40|+1|00:26:40
+R|2|04:32:10|04:34:00|23|+1|04:15:50
+R|3|05:36:10|05:37:25|16|+1|05:27:00
+R|4|06:20:00|06:26:05|74|+1|05:27:00
+R|5|06:50:20|06:55:05|58|+1|05:27:00
+R|6|07:14:45|07:15:55|15|-1|07:11:55
+R|7|07:16:20|07:18:30|27|-1|07:11:55
+R|8|11:00:05|11:05:55|71|-1|10:51:55
+R|9|11:48:10|11:49:05|12|-1|10:51:55
+R|10|11:58:00|12:04:10|75|-1|10:51:55
+R|11|15:15:00|15:18:35|44|-1|15:01:50
+R|12|18:01:40|18:05:25|46|-1|17:56:30
+R|13|18:05:40|18:06:55|16|-1|17:56:30
+R|14|18:46:00|18:47:45|22|-1|17:56:30
+R|15|21:03:55|21:07:40|46|+1|20:28:25
+R|16|23:57:00|23:59:30|31|-1|22:52:00
+V|no validated bar set for 2026-07-23 - nothing asserted
