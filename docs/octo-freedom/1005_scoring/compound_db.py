@@ -41,7 +41,7 @@ exec(open(_os.path.join(_HERE, 'ninedays.py')).read().split('ALL = {}')[0])
 from optimus9.db.database_manager import DatabaseManager
 from optimus9.config import get_db_config
 
-STOP = 0.80; SWING = 0.70; COST = 0.1975; START = 888.00; RISK_PCT = 2.0
+STOP = 0.95; SWING = 0.70; COST = 0.1975; START = 888.00; RISK_PCT = 1.5
 # Destination table. Override with LG_TABLE so an out-of-sample window banks ALONGSIDE the
 # in-sample one instead of into it:  LG_TABLE=lazyg_compound_oos LG_TAPE_END=2026-10-05 ...
 TABLE = _os.environ.get('LG_TABLE', 'lazyg_compound')

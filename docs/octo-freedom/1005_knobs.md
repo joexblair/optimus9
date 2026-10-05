@@ -148,3 +148,109 @@ tape-end shift does not move the lines and the 10-day aggregate is legitimate.
    the entry inside the tape. 3 of them on 10-04 (23:04:15, 23:15:00, 23:16:30) because the tape ends
    10-04 23:59:55. They are EXCLUDED and COUNTED, never scored 0 — inventing an exit at the tape end
    would be a truncation. The 9 in-sample days have 0, because that tape ran a day past 10-03.
+
+---
+
+## 7. BAKED 1005 — JOE'S SIZING AND STOP RULINGS
+
+These were MINE as proposals. Joe ruled on both, so they are now **JOE** and not to be moved by a
+sweep.
+
+| knob | OLD | **BAKED** | Joe's words |
+|---|---|---|---|
+| risk per trade | 2.0 % (mine, a convention) | **1.5 %** | *"I agree with you"* to the 1.5 % / 1.67x recommendation |
+| stop | 0.80 (scoring) / 0.70 (live) | **0.95** | *"bake the 0.95"* after the 0.70->1.40 scan |
+| leverage | derived | **1.31x** = 1.5 / (0.95 + 0.1975) | the two are COUPLED: `lev = risk / (stop + drag)`. Move one, recompute the other |
+
+Baked into `1005_scoring/compound_db.py`, `ninedays.py`, `sweep.py`, `upstream_run.py`.
+
+### WHY 0.95 — the scan, 0.70 to 1.40 at 0.05, risk 1.5 %
+
+| basis | best stop | figure |
+|---|---|---|
+| **held-out dollars (7 random days)** | **0.95** | **$1,186.07** |
+| **robust per-day growth** | **0.95** | **1.042213** |
+| in-sample dollars | 0.80 | $1,655.73 — overfit |
+| raw total net % | 1.20-1.40 | keeps climbing, paid for with leverage you must give up |
+
+Against the live 0.70, 0.95 is better on every axis at once: FIT +41.842 -> +51.933 %, TEST +14.608
+-> **+31.339 %** (more than double), TEST DD 13.36 -> **7.38 %**, stop-outs 51 -> 36 (FIT) and 44 ->
+27 (TEST), and **zero trades lost** - n is 162/110 at every stop, because the stop changes outcomes,
+never which signals fire.
+
+Dollars peak at 0.95 while total % climbs to 1.40 because at fixed risk a wider stop forces LOWER
+leverage (1.67x -> 0.95x). Past ~1.00 you buy total with position size and lose on net.
+
+### THE RESULT AT THE BAKED CONFIG — `lazyg_compound_v095`, 10 FIT days
+
+| sizing | trades | start $ | final $ | return % | max DD % | peak lev | min lev | mean lev |
+|---|---|---|---|---|---|---|---|---|
+| shared budget | 155 | 888.00 | **1,517.84** | **+70.93** | **7.52** | 1.31x | 0.33x | 1.11x |
+| constant per leg | 155 | 888.00 | 1,677.95 | +88.96 | 8.89 | 1.31x | 1.31x | 1.31x |
+
+Drag: **$384.00 on $1,013.84 gross = 37.9 %**, against $629.84 of net growth.
+
+### THE LEVERAGE LADDER — tied to held-out evidence, not to equity
+
+| held-out days cumulatively positive | risk/trade | leverage at stop 0.95 |
+|---|---|---|
+| now (7 days, +0.1328 %/trade pre-bake) | **1.5 %** | **1.31x** |
+| 20 | 2.0 % | 1.74x |
+| 40 | 2.5 % | 2.18x |
+| 60+ | 3.0 % | 2.61x |
+
+What would move it DOWN: OOS mean below +0.05 %/trade -> 1.0 %. A losing run longer than 8 -> recut
+from the new run length. A measured slippage worse than 0.1975 % at real size -> it eats the edge
+directly, drag already being 37.9 % of gross.
+
+### THE LIVE CONFIG IS NOT CHANGED BY THIS
+
+`wsf_trade_config` v3 still carries `mae_cap` **0.70** and `o9_control` still carries fixed 66,000
+coins. Both are the o9-live session's to deploy, and the one-line change plus Joe's ruling have been
+handed to them. **At the live 13.595x, five consecutive worst-case stops halve the account** - that
+is the number to fix first, ahead of anything in this document.
+
+## 8. THE REFERENCE DIFF — the recon session's optimisation is clean, and MY data had a hole
+
+Run after `39e421d` landed: re-walked all 17 days at the current knobs and byte-compared the `R|`
+rows against the signals banked before it.
+
+| result | days |
+|---|---|
+| IDENTICAL | **16 of 17** |
+| differed | 10-03 only: old 27 rows, new 32 |
+
+**The 5 extra rows are MY tape boundary, not their code.** Proved by walking 10-03 on the NEW code at
+the OLD `--tape-end 2026-10-04`: **27 rows, matching the banked file exactly.** Their bit-identical
+claim is verified on 17 of 17 days once the tape end is held constant.
+
+**THE HOLE IT EXPOSED IN MY OWN DATA:** `octosig/2026-10-03.out` was built on the 10-04 tape, where
+10-03 was the tape's LAST day. Five signals after 21:07 never emitted for want of forward bars to
+resolve. Every figure published before this that includes 10-03 was built on **27 signals when there
+are 32**. 10-03 has been rebuilt on the 10-05 tape and the trade count moves 151 -> 155.
+
+**AND IT IS STILL TRUE OF 10-04.** 10-04 is the last day of the 10-05 tape, so it is truncated the
+same way - the 3 UNRESOLVED rows in section 6 are the symptom. 10-04 cannot be made whole until
+10-05 closes and a 10-06 tape is built. Stated, not corrected.
+
+## 9. WHERE THE UPSTREAM KNOBS ACTUALLY LIVE — my census was looking in the wrong place
+
+`rig.C` holds **39 numeric knobs** and it is what the Rig AND the walk both read. The Jig module
+constants I censused in `1005_knob_census.md` are mostly NOT on the octo-sig path:
+
+    band_dtf_hi 23      band_dtf_lo 13     band_wsf_hi 12    band_wsf_lo 1     block 60
+    boundary_xwob 4     confirm_lag_s 180  count_min 2        dr_latched 1      dwell 3
+    dwell_min_per_tf 1  fence 50           fence_hi 75.0      fence_lo 25.0     gap_fill 1
+    grid_s 5            lookback_s 240     mage_dwell 12      momo_bank_version 1
+    momo_fence_r 17     momo_slope_min 0.4 momo_span_min 10   momo_xwob 4       oob_hi 85.0
+    oob_lo 15.0         r_wob 3            return_bars 3      rev_wob 2         ride_tf_hi 4
+    stall_n 6           support_min 23     tf_hi 23           tf_lo 1           threemage_dr 0
+    tp_lookback_min 4   wmt_tf_hi 12       wmt_tf_lo 2        xrace_hold 5      xwob 5
+
+- the walk passes `dwell=int(rig.C['dwell'])`, `rev_wob=int(rig.C['rev_wob'])`,
+  `hold=int(rig.C['boundary_xwob'])` EXPLICITLY, so neither the jig module constants nor the
+  function's `__defaults__` reach them. Two failed patch attempts before this was found.
+- `rig.C` is a plain dict on the CACHED Rig, so a cell mutates it with no reload. Per cell stays
+  17 days x 17.4 s = 5.1 min.
+- `momo_slope_min` appears in BOTH `rig.C` (0.4) and `momo_config` v1 (1.2). Which one the walk
+  honours is **unmeasured** and must be settled before either is swept.

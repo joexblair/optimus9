@@ -15,7 +15,7 @@ os.environ['LG_DAY'] = '2026-09-25'
 _b = io.StringIO()
 with contextlib.redirect_stdout(_b):
     import score39 as S
-PCT = 0.70; COST = 0.1975; CAP = 0.70
+PCT = 0.70; COST = 0.1975; CAP = 0.95
 H, L = S.CACHE[PCT]; PX, ts = S.PX, S.ts
 # The window. Override with LG_DAYS=YYYY-MM-DD[,...]. A day outside the default tape ALSO needs
 # LG_TAPE_END (score39.py refuses nothing — it would silently index the tape's last bar). Each day

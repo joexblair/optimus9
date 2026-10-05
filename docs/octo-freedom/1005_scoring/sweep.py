@@ -39,7 +39,7 @@ from optimus9.config import get_db_config
 FIT = ['2026-09-%02d' % d for d in (25, 26, 27, 28, 29, 30)] + ['2026-10-%02d' % d for d in (1, 2, 3, 4)]
 TEST = [l.strip() for l in open(_os.path.join(_HERE, 'oos7.txt')) if l.strip()]
 COST = 0.1975
-CUR = dict(swing=0.70, stop=0.80, risk=2.0, pyr=0, lookback=48, tol15=3, tol30=6,
+CUR = dict(swing=0.70, stop=0.95, risk=1.5, pyr=0, lookback=48, tol15=3, tol30=6,
            fence=85.0, rev_wob=2, gap_max=4, af_block=60)
 
 # ---------- the signal pool: every octo-sig bar of every day, read ONCE
@@ -225,37 +225,6 @@ def row(stage, knob, c, f, t):
             t['n'], round(t['total'],4), round(t['mean'],5), t['wins'], round(t['fin'],6), round(t['dd'],5),
             round(min(f['mean'], t['mean']),5))
 
-if __name__ == '__main__':
-    t0 = time.time()
-    print('# GPU: %s%s | FIT %d days | TEST %d days' %
-          (GPU, (' cupy ' + _cp.__version__) if GPU else ' numpy fallback', len(FIT), len(TEST)))
-    SIG = signal_bars(FIT + TEST)
-    print('# signals: FIT %d | TEST %d' % (sum(len(SIG[d]) for d in FIT), sum(len(SIG[d]) for d in TEST)))
-    db = DatabaseManager(**get_db_config()); db.connect(); db.execute(DDL)
-    ins = []
-    print()
-    print('## STAGE 1 — ONE-AT-A-TIME, all 11 downstream knobs, every cell banked')
-    print('| knob | cells | fit mean range | test mean range | robust range | secs |')
-    print('|' + '---|' * 6)
-    for knob, lo, hi, st in OAT:
-        g = grid(lo, hi, st); k0 = time.time(); fm = []; tm = []; rb = []
-        for val in g:
-            c = dict(CUR); c[knob] = int(val) if knob in ('pyr','lookback','tol15','tol30','rev_wob','gap_max','af_block') else val
-            f = metrics(FIT, c, SIG); t = metrics(TEST, c, SIG)
-            ins.append(row('oat', knob, c, f, t))
-            fm.append(f['mean']); tm.append(t['mean']); rb.append(min(f['mean'], t['mean']))
-        print('| %s | %d | %+.3f .. %+.3f | %+.3f .. %+.3f | %+.3f .. %+.3f | %.0f |'
-              % (knob, len(g), min(fm), max(fm), min(tm), max(tm), min(rb), max(rb), time.time()-k0))
-    db.executemany('INSERT INTO lazyg_sweep (' + COLS + ') VALUES (' + ','.join(['%s']*26) + ') '
-                   'ON DUPLICATE KEY UPDATE ls_robust=VALUES(ls_robust)', ins)
-    print()
-    print('# STAGE 1 banked: %d cells in %.0f s' % (len(ins), time.time()-t0))
-    if _os.environ.get('LG_STAGE2', '1') == '1':
-        stage2(SIG, db)
-    db.disconnect()
-
-
-
 # ================= STAGE 2 — the dense joint grid, routing held at CUR =================
 # Routing does NOT depend on swing / stop / pyr / risk, so every signal is routed ONCE and the
 # 396,000 cells reuse it. The compound is vectorised over the risk axis (cupy when present).
@@ -304,19 +273,21 @@ def grid_block(o, cl, nt, pyr, risks, worst):
     nl = ((oo[None, :] <= oo[:, None]) & (oo[:, None] < cc[None, :])).sum(1) - 1
     order = np.argsort(cc)
     nn, nl = nn[order], nl[order]
-    R = XP.asarray(np.asarray(risks, float))[:, None]
-    NT = XP.asarray(nn)[None, :]; NL = XP.asarray(nl.astype(float))[None, :]
+    # NUMPY, not cupy. MEASURED 1005: cupy has no `maximum.accumulate`, and at this shape
+    # (96 risk levels x ~160 trades) the transfer cost exceeds any kernel win. The GPU is real and
+    # available (RTX 3060 Ti, cupy 14.1.1) - it just buys nothing for an array this small. Stated
+    # rather than left as an unused import.
+    R = np.asarray(risks, float)[:, None]
+    NT = nn[None, :]; NL = nl.astype(float)[None, :]
     lev = R / (NL + 1.0) / worst
     f = 1.0 + lev * NT / 100.0
     dead = (f <= 0).any(axis=1)
-    f = XP.where(f <= 0, 1e-12, f)
-    eq = XP.cumprod(f, axis=1)
-    pk = XP.maximum.accumulate(eq, axis=1)
-    dd = XP.max((pk - eq) / pk, axis=1)
-    fin = eq[:, -1]
-    fin = XP.where(dead, 0.0, fin); dd = XP.where(dead, 1.0, dd)
-    g = (lambda x: _cp.asnumpy(x)) if GPU else (lambda x: x)
-    return g(fin), g(dd), int(oo.size)
+    f = np.where(f <= 0, 1e-12, f)
+    eq = np.cumprod(f, axis=1)
+    pk = np.maximum.accumulate(eq, axis=1)
+    dd = np.max((pk - eq) / pk, axis=1)
+    fin = np.where(dead, 0.0, eq[:, -1]); dd = np.where(dead, 1.0, dd)
+    return fin, dd, int(oo.size)
 
 def stage2(SIG, db):
     SW = grid(0.40, 2.00, 0.05); ST = grid(0.30, 1.50, 0.05)
@@ -352,3 +323,36 @@ def stage2(SIG, db):
         db.executemany('INSERT INTO lazyg_sweep (' + COLS + ') VALUES (' + ','.join(['%s']*26) + ') '
                        'ON DUPLICATE KEY UPDATE ls_robust=VALUES(ls_robust)', ins)
     print('# STAGE 2 banked: %d cells in %.0f s' % (cells, time.time()-t0))
+
+
+if __name__ == '__main__':
+    t0 = time.time()
+    print('# GPU: %s%s | FIT %d days | TEST %d days' %
+          (GPU, (' cupy ' + _cp.__version__) if GPU else ' numpy fallback', len(FIT), len(TEST)))
+    SIG = signal_bars(FIT + TEST)
+    print('# signals: FIT %d | TEST %d' % (sum(len(SIG[d]) for d in FIT), sum(len(SIG[d]) for d in TEST)))
+    db = DatabaseManager(**get_db_config()); db.connect(); db.execute(DDL)
+    ins = []
+    if _os.environ.get('LG_SKIP_STAGE1') == '1':
+        print('# STAGE 1 skipped (already banked, LG_SKIP_STAGE1=1)')
+        stage2(SIG, db); db.disconnect(); raise SystemExit(0)
+    print()
+    print('## STAGE 1 — ONE-AT-A-TIME, all 11 downstream knobs, every cell banked')
+    print('| knob | cells | fit mean range | test mean range | robust range | secs |')
+    print('|' + '---|' * 6)
+    for knob, lo, hi, st in OAT:
+        g = grid(lo, hi, st); k0 = time.time(); fm = []; tm = []; rb = []
+        for val in g:
+            c = dict(CUR); c[knob] = int(val) if knob in ('pyr','lookback','tol15','tol30','rev_wob','gap_max','af_block') else val
+            f = metrics(FIT, c, SIG); t = metrics(TEST, c, SIG)
+            ins.append(row('oat', knob, c, f, t))
+            fm.append(f['mean']); tm.append(t['mean']); rb.append(min(f['mean'], t['mean']))
+        print('| %s | %d | %+.3f .. %+.3f | %+.3f .. %+.3f | %+.3f .. %+.3f | %.0f |'
+              % (knob, len(g), min(fm), max(fm), min(tm), max(tm), min(rb), max(rb), time.time()-k0))
+    db.executemany('INSERT INTO lazyg_sweep (' + COLS + ') VALUES (' + ','.join(['%s']*26) + ') '
+                   'ON DUPLICATE KEY UPDATE ls_robust=VALUES(ls_robust)', ins)
+    print()
+    print('# STAGE 1 banked: %d cells in %.0f s' % (len(ins), time.time()-t0))
+    if _os.environ.get('LG_STAGE2', '1') == '1':
+        stage2(SIG, db)
+    db.disconnect()
