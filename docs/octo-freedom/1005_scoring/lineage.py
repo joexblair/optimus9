@@ -14,6 +14,7 @@ This script re-walks 09-25 on the same masks and measures, at the EXACT SEAT BAR
 not the pass bar the report's `candidates` column shows), whether a successor within +-W TFs of the
 outgoing rider existed.
 """
+import os as _os
 import datetime as dt, io, os, sys
 import numpy as np
 sys.path.insert(0, '/home/joe/thecodes')
@@ -29,7 +30,12 @@ from optimus9.db.database_manager import DatabaseManager
 from optimus9.config import get_db_config
 sys.stderr = _e
 STALL_N = 6; TFS = list(range(3, 24))
-EM = int(dt.datetime(2026, 10, 4, tzinfo=dt.timezone.utc).timestamp() * 1000)
+# TAPE END, exclusive. Override with LG_TAPE_END=YYYY-MM-DD when the window needs a later tape:
+# a day AFTER this date is NOT in the cache, and K() would searchsorted past the end of ts and
+# index the last bar instead of failing. 2026-10-04 covers 09-25..10-03. For 10-04 use 2026-10-05
+# (build it first: build_tape.py 2026-10-05).
+EM = int(dt.datetime.strptime(_os.environ.get('LG_TAPE_END', '2026-10-04'), '%Y-%m-%d')
+        .replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
 db = DatabaseManager(**get_db_config()); db.connect()
 spec = {}
 for g in mech_lines(db, 'wsf'):

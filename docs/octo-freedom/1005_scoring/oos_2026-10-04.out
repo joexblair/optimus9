@@ -1,0 +1,55 @@
+# 2026-10-04 built: 27 octo-sig
+## PER DAY — 1 day, same pipeline, nothing held back
+| day | octo-sig | CONF | wt flip | at | BLOCKED | OPEN | CONF total net % | CONF mean net % | winners | stopped | ungated mean net % |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 10-04 | 27 | 11 | 7 | 4 | 5 | 11 | **+10.398** | +0.945 | 10 of 11 | 1 | +0.465 |
+| **1 day** | 27 | 11 | 7 | 4 | 5 | 11 | **+10.398** | +0.945 | 10 of 11 | 1 | +0.465 |
+
+
+## UNRESOLVED — 3 rows EXCLUDED: no favourable swing pivot after the entry inside the tape
+# tape ends 2026-10-04 23:59:55+00:00 — a late entry on the last day has nowhere to run to. Excluded, NOT scored 0.
+| day | octo-sig | which leg |
+|---|---|---|
+| 2026-10-04 | 23:04:15 | flipped leg |
+| 2026-10-04 | 23:15:00 | dr-bias leg |
+| 2026-10-04 | 23:16:30 | dr-bias leg |
+
+## THE STAGE 2 FLIP ACROSS 1 day — with-trend rows only
+| day | wt rows | total net % as published | total net % flipped | delta |
+|---|---|---|---|---|
+| 10-04 | 7 | -1.066 | **+7.146** | **+8.212** |
+| **1 day** | 7 | -1.066 | **+7.146** | **+8.212** (+1.173 per trade) |
+
+## COMPOUND — the 11 confluences, chronological across 1 day
+| L | final equity x | total return % | max DD % | liquidated at trade |
+|---|---|---|---|---|
+| 1x | 1.1084 | +10.84 | 0.90 | — |
+| 2x | 1.2259 | +22.59 | 1.80 | — |
+| 3x | 1.3531 | +35.31 | 2.69 | — |
+| 5x | 1.6392 | +63.92 | 4.49 | — |
+| 10x | 2.5696 | +156.96 | 8.97 | — |
+| 15x | 3.8813 | +288.13 | 13.46 | — |
+| 20x | 5.6797 | +467.97 | 17.95 | — |
+| 25x | 8.0840 | +708.40 | 22.44 | — |
+| 30x | 11.2239 | +1022.39 | 26.92 | — |
+| 50x | 33.7154 | +3271.54 | 44.88 | — |
+| 75x | 85.4134 | +8441.34 | 67.31 | — |
+| 100x | 92.7679 | +9176.79 | 89.75 | — |
+| 112x | **0 — wiped** | **-100** | 100.00 | **#11** |
+
+## THE LEVERAGE CEILING over 1 day
+| measure | value |
+|---|---|
+| worst single trade | -0.8975 % |
+| L at which ONE worst trade wipes | **111.4x** |
+| longest consecutive losing run | **1 trades** |
+| max L holding max DD <= 10 % | **11.1x** -> final 2.83x, total +183.2 %, DD 10.0 % |
+| max L holding max DD <= 20 % | **22.3x** -> final 6.70x, total +569.5 %, DD 20.0 % |
+| max L holding max DD <= 25 % | **27.9x** -> final 9.78x, total +877.8 %, DD 25.0 % |
+| max L holding max DD <= 33 % | **36.8x** -> final 16.89x, total +1588.7 %, DD 33.0 % |
+| max L holding max DD <= 50 % | **55.7x** -> final 43.59x, total +4259.4 %, DD 50.0 % |
+
+## DAILY EQUITY PATH at a few L — one row per day, compounding carried across days
+| day | trades | L=1 equity x | L=5 | L=10 | L=20 | worst DD so far at L=10 % |
+|---|---|---|---|---|---|---|
+| 10-04 | 11 | 1.1084 | 1.6392 | 2.5696 | 5.6797 | 8.97 |

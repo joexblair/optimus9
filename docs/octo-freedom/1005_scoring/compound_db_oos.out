@@ -1,0 +1,57 @@
+# BANKED: lazyg_compound_oos — 22 rows written this run, 11 shared + 11 constant in the table
+# config: dr-bias · stop 0.80% · swing 0.70% · cost 0.1975% · pyramid NO CAP · risk 2.0% · start $888.00
+# max concurrent legs with the cap dropped: 3
+# UNRESOLVED and EXCLUDED, 2: no favourable swing pivot inside the tape — 2026-10-04 23:15:00, 2026-10-04 23:16:30
+
+## THE COMPLETE TABLE — shared budget, read back from lazyg_compound_oos
+| # | day | octo-sig | dr | side | grade | exit | hold min | gross % | drag % | net % | legs live | LEV | equity open $ | notional $ | risk $ | gross $ | drag $ | P&L $ | equity close $ | DD % |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 10-04 | 00:51:00 | -1 | LONG | wt | STOP | 65.0 | -0.800 | -0.1975 | -0.998 | 0 | **2.00x** | 888.00 | 1780.45 | 17.76 | -14.24 | **-3.52** | **-17.76** | **870.24** | 2.00 |
+| 2 | 10-04 | 01:49:10 | -1 | LONG | wt | pivot | 339.5 | +2.823 | -0.1975 | +2.625 | 1 | **1.00x** | 888.00 | 890.23 | 8.88 | +25.13 | **-1.76** | **+23.37** | **887.81** | 2.65 |
+| 3 | 10-04 | 01:59:00 | -1 | LONG | at | pivot | 329.7 | +3.036 | -0.1975 | +2.838 | 1 | **1.00x** | 870.24 | 872.42 | 8.70 | +26.49 | **-1.72** | **+24.76** | **912.57** | 2.65 |
+| 4 | 10-04 | 06:13:30 | +1 | SHORT | wt | STOP | 41.2 | -0.800 | -0.1975 | -0.998 | 2 | **0.67x** | 870.24 | 581.61 | 5.80 | -4.65 | **-1.15** | **-5.80** | **864.44** | 2.65 |
+| 5 | 10-04 | 07:21:45 | +1 | SHORT | at | pivot | 137.7 | +0.835 | -0.1975 | +0.638 | 2 | **0.67x** | 864.44 | 577.74 | 5.76 | +4.83 | **-1.14** | **+3.69** | **916.26** | 2.65 |
+| 6 | 10-04 | 07:29:30 | +1 | SHORT | at | pivot | 129.9 | +0.871 | -0.1975 | +0.673 | 1 | **1.00x** | 912.57 | 914.86 | 9.13 | +7.97 | **-1.81** | **+6.16** | **922.42** | 2.65 |
+| 7 | 10-04 | 11:34:30 | -1 | LONG | wt | pivot | 210.0 | +0.994 | -0.1975 | +0.797 | 0 | **2.00x** | 922.42 | 1849.46 | 18.45 | +18.39 | **-3.65** | **+14.73** | **921.78** | 2.65 |
+| 8 | 10-04 | 14:28:50 | +1 | SHORT | wt | STOP | 35.3 | -0.800 | -0.1975 | -0.998 | 1 | **1.00x** | 922.42 | 924.73 | 9.22 | -7.40 | **-1.83** | **-9.22** | **913.19** | 2.65 |
+| 9 | 10-04 | 14:30:20 | +1 | SHORT | wt | STOP | 33.9 | -0.800 | -0.1975 | -0.998 | 2 | **0.67x** | 922.42 | 616.49 | 6.15 | -4.93 | **-1.22** | **-6.15** | **907.04** | 2.65 |
+| 10 | 10-04 | 18:31:20 | +1 | SHORT | wt | STOP | 3.4 | -0.800 | -0.1975 | -0.998 | 0 | **2.00x** | 921.78 | 1848.17 | 18.44 | -14.79 | **-3.65** | **-18.44** | **903.34** | 2.65 |
+| 11 | 10-04 | 18:40:50 | +1 | SHORT | at | STOP | 6.8 | -0.800 | -0.1975 | -0.998 | 0 | **2.00x** | 903.34 | 1811.21 | 18.07 | -14.49 | **-3.58** | **-18.07** | **885.27** | 4.03 |
+
+## SUMMARY
+| sizing mode | trades | start $ | final $ | return % | max DD % | peak lev | min lev | mean lev | worst trade $ | best trade $ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| shared budget | 11 | 888.00 | **885.27** | **-0.31** | 4.03 | 2.01x | 0.67x | 1.28x | -18.44 | +24.76 |
+| constant per leg | 11 | 888.00 | **911.85** | **+2.69** | 6.27 | 2.01x | 2.01x | 2.01x | -19.46 | +49.53 |
+
+## PER DAY — shared budget, sliced by the LAST CLOSE on that day (not the open day)
+| day | trades | equity close $ | day P&L $ | day % | DD so far % |
+|---|---|---|---|---|---|
+| 10-04 | 11 | 885.27 | -2.73 | -0.31 % | 4.03 |
+
+## DRAG — what the round trip actually cost, read back from lazyg_compound_oos
+| day | trades | notional traded $ | gross P&L $ | drag paid $ | net P&L $ | drag as % of gross |
+|---|---|---|---|---|---|---|
+| 10-04 | 11 | 12667.36 | +22.29 | **-25.02** | -2.73 | 112.2 % |
+| **1 day** | 11 | **12667.36** | **+22.29** | **-25.02** | **-2.73** | **112.2 %** |
+
+- drag per trade: $2.27 mean, $1.14 min, $3.65 max (it is 0.1975 % of notional, so it grows with equity)
+- drag as a share of the $-2.73 account growth: -917.7 % — $25.02 paid to make $-2.73
+
+## WHAT THE DRAG COSTS COMPOUNDED — same trades, drag set to zero
+| variant | final $ | return % | delta $ | delta pp |
+|---|---|---|---|---|
+| as traded, drag 0.1975 % | 885.27 | -0.31 | +0.00 | +0.00 |
+| drag 0.0000 % (no fees, no slippage) | 909.92 | +2.47 | +24.65 | +2.78 |
+
+## RISK BUDGET SWEEP — the one value I chose, so here is the curve around it
+| risk per entry % | implied lev when alone | final $ shared | DD % shared | final $ constant | DD % constant |
+|---|---|---|---|---|---|
+| 0.5 | 0.50x | 887.57 | 1.01 | 894.78 | 1.59 |
+| 1.0 | 1.00x | 886.97 | 2.02 | 901.01 | 3.17 |
+| 1.5 | 1.50x | 886.20 | 3.03 | 906.69 | 4.73 |
+| 2.0 | 2.01x | 885.27 | 4.03 | 911.85 | 6.27 |
+| 3.0 | 3.01x | 882.94 | 6.01 | 920.61 | 9.30 |
+| 5.0 | 5.01x | 876.44 | 9.91 | 932.24 | 15.17 |
+| 8.0 | 8.02x | 862.37 | 15.60 | 936.21 | 23.49 |
+| 10.0 | 10.03x | 850.33 | 19.28 | 930.82 | 28.73 |

@@ -32,7 +32,12 @@ from optimus9.analysis.lr_v2 import _mage_rev
 from optimus9.db.database_manager import DatabaseManager
 from optimus9.config import get_db_config
 sys.stderr = _e
-EM = int(dt.datetime(2026, 10, 4, tzinfo=dt.timezone.utc).timestamp() * 1000)
+# TAPE END, exclusive. Override with LG_TAPE_END=YYYY-MM-DD when the window needs a later tape:
+# a day AFTER this date is NOT in the cache, and K() would searchsorted past the end of ts and
+# index the last bar instead of failing. 2026-10-04 covers 09-25..10-03. For 10-04 use 2026-10-05
+# (build it first: build_tape.py 2026-10-05).
+EM = int(dt.datetime.strptime(_os.environ.get('LG_TAPE_END', '2026-10-04'), '%Y-%m-%d')
+        .replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
 HI, LO, DWELL, REV_WOB, HOLD = 85.0, 15.0, 3, 2, 4
 LOOKBACK_BARS = 48   # 4 min. MEASURED KNEE, 09-25: 4 min captures 39 of 39 signals and nothing
 #                      past it adds one - it only ages the extrema (median staleness 2.5 m at 4 min

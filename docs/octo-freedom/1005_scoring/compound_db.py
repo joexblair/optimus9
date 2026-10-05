@@ -32,6 +32,7 @@ changes only at closes. Reported alongside: CONSTANT-LEG sizing (every leg takes
 sneaky-1 precedent, so the two are comparable.
 """
 import os as _os
+import re
 _HERE = _os.path.dirname(_os.path.abspath(__file__))
 import sys, io, os, contextlib, json
 import numpy as np
@@ -41,8 +42,15 @@ from optimus9.db.database_manager import DatabaseManager
 from optimus9.config import get_db_config
 
 STOP = 0.80; SWING = 0.70; COST = 0.1975; START = 888.00; RISK_PCT = 2.0
+# Destination table. Override with LG_TABLE so an out-of-sample window banks ALONGSIDE the
+# in-sample one instead of into it:  LG_TABLE=lazyg_compound_oos LG_TAPE_END=2026-10-05 ...
+TABLE = _os.environ.get('LG_TABLE', 'lazyg_compound')
+assert re.fullmatch(r'[a-z0-9_]{1,60}', TABLE), 'LG_TABLE must be a bare lower-case identifier'
+Q = lambda sql: sql.replace('__TBL__', TABLE)   # one sentinel, no quote-delimiter traps
 WORST = STOP + COST                      # 0.9975 % of notional, the known per-trade worst case
 SIDE_RULE = 'dr-bias'; PYR = 0           # 0 = no cap
+
+UNRES = []
 
 def rows_at(stop, flip_on=False):
     out = []
@@ -61,6 +69,10 @@ def rows_at(stop, flip_on=False):
             grade = 'with-trend' if dd['away'] else 'against-trend'
             de = (-d if grade == 'with-trend' else d) if flip_on else d
             mfe, mae, j = S.score(k, de, H, L)
+            # UNRESOLVED: no favourable swing pivot after this bar inside the tape (happens on the
+            # tape's LAST day). Excluded and counted — never scored 0, which would be a truncation.
+            if mfe is None:
+                UNRES.append((day, f[2])); continue
             entry = float(PX[k]); seg = PX[k:j + 1]
             adv = (seg - entry) / entry * 100.0 if de > 0 else (entry - seg) / entry * 100.0
             hit = np.flatnonzero(np.isfinite(adv) & (adv >= stop))
@@ -113,7 +125,7 @@ CO, eq_co, dd_co = walk(T, 'constant', RISK_PCT)
 
 # ---- DB: NEW table, nothing dropped, every knob in the unique key
 db = DatabaseManager(**get_db_config()); db.connect()
-db.execute('''CREATE TABLE IF NOT EXISTS lazyg_compound (
+db.execute(Q('''CREATE TABLE IF NOT EXISTS __TBL__ (
     lc_pk          BIGINT AUTO_INCREMENT PRIMARY KEY,
     lc_side_rule   VARCHAR(16)  NOT NULL,     -- dr-bias | stage2-flip
     lc_stop_pct    DECIMAL(6,4) NOT NULL,     -- 0.8000 = the 0.80 % stop on entry price
@@ -152,15 +164,15 @@ db.execute('''CREATE TABLE IF NOT EXISTS lazyg_compound (
     lc_dd_pct      DECIMAL(8,4) NOT NULL,     -- running peak-to-trough drawdown, %
     UNIQUE KEY uq_lc (lc_side_rule, lc_stop_pct, lc_swing_pct, lc_cost_pct, lc_pyr_max,
                       lc_risk_pct, lc_size_mode, lc_start_usd, lc_open_ms),
-    INDEX (lc_day), INDEX (lc_size_mode))''')
+    INDEX (lc_day), INDEX (lc_size_mode))'''))
 
 have = {r['c'] for r in db.execute('''SELECT COLUMN_NAME c FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='lazyg_compound' ''', fetch=True)}
+    WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s''', (TABLE,), fetch=True)}
 for col, ddl in (('lc_drag_pct',  'DECIMAL(10,4) NOT NULL DEFAULT 0 AFTER lc_gross_pct'),
                  ('lc_gross_usd', 'DECIMAL(16,4) NOT NULL DEFAULT 0 AFTER lc_net_pct'),
                  ('lc_drag_usd',  'DECIMAL(16,4) NOT NULL DEFAULT 0 AFTER lc_gross_usd')):
     if col not in have:
-        db.execute('ALTER TABLE lazyg_compound ADD COLUMN %s %s' % (col, ddl))
+        db.execute('ALTER TABLE %s ADD COLUMN %s %s' % (TABLE, col, ddl))
         print('# ALTER: added %s' % col)
 
 ins = []
@@ -176,7 +188,7 @@ for mode, A in (('shared', SH), ('constant', CO)):
                     p['n_live'], round(p['lev'], 4), round(p['eq_open'], 4), round(p['notional'], 4),
                     round(p['risk_usd'], 4), round(p['pnl'], 4), round(p['eq_close'], 4),
                     round(p['dd'] * 100, 4)))
-db.executemany('''INSERT INTO lazyg_compound
+db.executemany(Q('''INSERT INTO __TBL__
  (lc_side_rule,lc_stop_pct,lc_swing_pct,lc_cost_pct,lc_pyr_max,lc_risk_pct,lc_size_mode,lc_start_usd,
   lc_seq,lc_day,lc_octosig,lc_open_ms,lc_close_ms,lc_dr,lc_side,lc_grade,lc_entry_px,lc_exit_px,
   lc_hold_min,lc_mfe_pct,lc_mae_pct,lc_stopped,lc_gross_pct,lc_drag_pct,lc_net_pct,lc_gross_usd,
@@ -186,21 +198,24 @@ db.executemany('''INSERT INTO lazyg_compound
   lc_notional=VALUES(lc_notional), lc_risk_usd=VALUES(lc_risk_usd), lc_pnl_usd=VALUES(lc_pnl_usd),
   lc_eq_close=VALUES(lc_eq_close), lc_dd_pct=VALUES(lc_dd_pct), lc_n_live=VALUES(lc_n_live),
   lc_drag_pct=VALUES(lc_drag_pct), lc_gross_usd=VALUES(lc_gross_usd),
-  lc_drag_usd=VALUES(lc_drag_usd)''', ins)
-n_sh = db.execute("SELECT COUNT(*) c FROM lazyg_compound WHERE lc_size_mode='shared'", fetch=True)[0]['c']
-n_co = db.execute("SELECT COUNT(*) c FROM lazyg_compound WHERE lc_size_mode='constant'", fetch=True)[0]['c']
-print('# BANKED: lazyg_compound — %d rows written this run, %d shared + %d constant in the table'
+  lc_drag_usd=VALUES(lc_drag_usd)'''), ins)
+n_sh = db.execute(Q("SELECT COUNT(*) c FROM __TBL__ WHERE lc_size_mode='shared'"), fetch=True)[0]['c']
+n_co = db.execute(Q("SELECT COUNT(*) c FROM __TBL__ WHERE lc_size_mode='constant'"), fetch=True)[0]['c']
+print('# BANKED: ' + TABLE + ' — %d rows written this run, %d shared + %d constant in the table'
       % (len(ins), n_sh, n_co))
 print('# config: %s · stop %.2f%% · swing %.2f%% · cost %.4f%% · pyramid NO CAP · risk %.1f%% · start $%.2f'
       % (SIDE_RULE, STOP, SWING, COST, RISK_PCT, START))
 print('# max concurrent legs with the cap dropped: %d' % mx)
+if UNRES:
+    print('# UNRESOLVED and EXCLUDED, %d: no favourable swing pivot inside the tape — %s'
+          % (len(UNRES), ', '.join('%s %s' % r for r in UNRES)))
 print()
-print('## THE COMPLETE TABLE — shared budget, read back from lazyg_compound')
-q = db.execute("""SELECT lc_seq,lc_day,lc_octosig,lc_dr,lc_side,lc_grade,lc_stopped,lc_hold_min,
+print('## THE COMPLETE TABLE — shared budget, read back from ' + TABLE)
+q = db.execute(Q("""SELECT lc_seq,lc_day,lc_octosig,lc_dr,lc_side,lc_grade,lc_stopped,lc_hold_min,
        lc_gross_pct,lc_drag_pct,lc_net_pct,lc_n_live,lc_lev,lc_eq_open,lc_notional,lc_risk_usd,
        lc_gross_usd,lc_drag_usd,lc_pnl_usd,lc_eq_close,lc_dd_pct
-  FROM lazyg_compound WHERE lc_size_mode='shared' AND lc_risk_pct=%s AND lc_start_usd=%s
-  ORDER BY lc_seq""", (RISK_PCT, START), fetch=True)
+  FROM __TBL__ WHERE lc_size_mode='shared' AND lc_risk_pct=%s AND lc_start_usd=%s
+  ORDER BY lc_seq"""), (RISK_PCT, START), fetch=True)
 print('| # | day | octo-sig | dr | side | grade | exit | hold min | gross % | drag % | net % | legs live | LEV | equity open $ | notional $ | risk $ | gross $ | drag $ | P&L $ | equity close $ | DD % |')
 print('|' + '---|' * 21)
 for r in q:
@@ -236,11 +251,11 @@ for day in DAYS:
     prev = e
 
 print()
-print('## DRAG — what the round trip actually cost, read back from lazyg_compound')
-dq = db.execute('''SELECT lc_day d, COUNT(*) n, SUM(lc_gross_usd) g, SUM(lc_drag_usd) dr,
+print('## DRAG — what the round trip actually cost, read back from ' + TABLE)
+dq = db.execute(Q('''SELECT lc_day d, COUNT(*) n, SUM(lc_gross_usd) g, SUM(lc_drag_usd) dr,
        SUM(lc_pnl_usd) p, SUM(lc_notional) nt
-  FROM lazyg_compound WHERE lc_size_mode='shared' AND lc_risk_pct=%s AND lc_start_usd=%s
-  GROUP BY lc_day ORDER BY lc_day''', (RISK_PCT, START), fetch=True)
+  FROM __TBL__ WHERE lc_size_mode='shared' AND lc_risk_pct=%s AND lc_start_usd=%s
+  GROUP BY lc_day ORDER BY lc_day'''), (RISK_PCT, START), fetch=True)
 print('| day | trades | notional traded $ | gross P&L $ | drag paid $ | net P&L $ | drag as %% of gross |'.replace('%%','%'))
 print('|' + '---|' * 7)
 tg = td = tp = tn = 0.0
@@ -250,11 +265,12 @@ for r in dq:
     print('| %s | %d | %.2f | %+.2f | **-%.2f** | %+.2f | %s |'
           % (str(r['d'])[5:], r['n'], nt, g, dr, p,
              ('%.1f %%' % (100.0 * dr / abs(g))) if g else 'n/a'))
-print('| **9 days** | %d | **%.2f** | **%+.2f** | **-%.2f** | **%+.2f** | **%.1f %%** |'
+print('| **' + SPAN + '** | %d | **%.2f** | **%+.2f** | **-%.2f** | **%+.2f** | **%.1f %%** |'
       % (sum(r['n'] for r in dq), tn, tg, td, tp, 100.0 * td / abs(tg)))
 print()
 print('- drag per trade: $%.2f mean, $%.2f min, $%.2f max (it is %.4f %% of notional, so it grows with equity)'
-      % (td / 151, min(float(p['notional']) * COST / 100 for p in SH), max(float(p['notional']) * COST / 100 for p in SH), COST))
+      % (td / max(1, len(SH)), min(float(p['notional']) * COST / 100 for p in SH),
+         max(float(p['notional']) * COST / 100 for p in SH), COST))
 print('- drag as a share of the $%.2f account growth: %.1f %% — $%.2f paid to make $%.2f'
       % (eq_sh - START, 100.0 * td / (eq_sh - START), td, eq_sh - START))
 

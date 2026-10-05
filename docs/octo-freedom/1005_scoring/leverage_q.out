@@ -1,0 +1,22 @@
+## LEVERAGE — 10 days, 162 confluences, dr-bias basis, $888 start
+| the rule | leverage | one worst trade costs | final $ | total return % | max DD % |
+|---|---|---|---|---|---|
+| live now: fixed 66,000 coins at 0.18291 on $888 | **13.595x** | 12.20 % of equity | 70254.95 | +7811.59 | **60.41** |
+| 2 % risk, LIVE stop 0.70 + 0.1975 drag = 0.8975 worst | **2.228x** | 2.00 % of equity | 2172.82 | +144.69 | **11.23** |
+| 2 % risk, SCORED stop 0.80 + 0.1975 = 0.9975 worst | **2.005x** | 2.00 % of equity | 1993.05 | +124.44 | **10.15** |
+| max L holding max DD <= 25 % | **4.800x** | 4.79 % of equity | 5572.93 | +527.58 | **23.20** |
+| max L holding max DD <= 50 % | **10.700x** | 10.67 % of equity | 34173.30 | +3748.35 | **49.19** |
+
+## THE MEASURED LOSING RUN — 6 consecutive losers is the worst over 10 days
+| the rule | leverage | 6 straight worst-case stops cost | survives? |
+|---|---|---|---|
+| live now: fixed 66,000 coins at 0.18291 on $888 | 13.595x | **54.19 %** of equity | yes |
+| 2 % risk, LIVE stop 0.70 + 0.1975 drag = 0.8975 worst | 2.228x | **11.42 %** of equity | yes |
+| 2 % risk, SCORED stop 0.80 + 0.1975 = 0.9975 worst | 2.005x | **11.42 %** of equity | yes |
+| max L holding max DD <= 25 % | 4.800x | **25.50 %** of equity | yes |
+| max L holding max DD <= 50 % | 10.700x | **49.20 %** of equity | yes |
+
+- L at which ONE worst trade wipes the account: **111.4x** at the 0.70 stop, **100.3x** at 0.80
+- the fixed-coin size is not a risk rule: 66,000 coins is a CONSTANT NOTIONAL, so the fraction
+  of equity it risks changes every time equity or price moves. At $888 it is 13.595x; the same
+  66,000 coins on the $500 the ledger started from was 24.1x.

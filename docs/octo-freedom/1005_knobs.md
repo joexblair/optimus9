@@ -72,3 +72,79 @@ decision I made and named; it is a proposal, not a fact. **BANKED** = already in
 | branch B and C agree/disagree direction | unruled |
 | mtd population B | the ws1mage-rev + ws1r oob events walked bar by bar. NEVER RUN |
 | held-out days | **NONE.** All 9 days are in-sample for every knob above |
+
+---
+
+## 6. 1005 OOS — 10-04, THE FIRST HELD-OUT DAY. IT MOVES TWO CONCLUSIONS.
+
+Added 2026-10-05 after Joe reassigned the OOS run to this session. Built: `build_tape.py 2026-10-05`
+(98 override lines, 63.4 s, the tape reused from the recon session's build) ->
+`report_leash_walk.py --day 2026-10-04 --tape-end 2026-10-05` -> 30 `R|` rows, 27 in the day window.
+
+Every knob in sections 1-3 UNCHANGED. The chain is now parameterised so the OOS runs the identical
+code path: `LG_DAYS`, `LG_TAPE_END`, `LG_TABLE`.
+
+| basis | trades | total net % | mean net % | winners | stopped |
+|---|---|---|---|---|---|
+| 10-04 confluences, FLIPPED (ninedays `net`) | 11 | **+10.398** | **+0.945** | 10 of 11 | 1 |
+| 10-04, every octo-sig ungated | 27 | — | +0.465 | — | — |
+
+- +0.945 mean is the **best of any day in the set**. n = 11. One day.
+- banked to **`lazyg_compound_oos`** (11 rows x 2 sizing modes). `lazyg_compound` stays in-sample
+  only and was verified unchanged at 302 rows before and after.
+
+### ON THE RECOMMENDED dr-bias BASIS THE HELD-OUT DAY LOSES MONEY
+
+| sizing | trades | start $ | final $ | return % | max DD % |
+|---|---|---|---|---|---|
+| shared budget | 11 | 888.00 | **885.27** | **-0.31** | 4.03 |
+| constant per leg | 11 | 888.00 | 911.85 | +2.69 | 6.27 |
+
+| 10-04 | notional traded $ | gross P&L $ | drag paid $ | net P&L $ | drag as % of gross |
+|---|---|---|---|---|---|
+| 11 trades | 12,667.36 | +22.29 | **-25.02** | **-2.73** | **112.2 %** |
+
+**The day's gross edge did not clear its own drag.** $25.02 paid against $22.29 of gross.
+
+### THE FLIP IS NOT DECIDED — section 5's correction was itself an over-read
+
+| day | wt rows | dr-bias total net % | flipped total net % | delta |
+|---|---|---|---|---|
+| 09-25 | 12 | +0.800 | +10.378 | **+9.578** |
+| 09-26 | 11 | -0.787 | +5.756 | **+6.543** |
+| 09-27 | 15 | +0.816 | +4.690 | **+3.873** |
+| 09-28 | 5 | +3.702 | -0.895 | **-4.597** |
+| 09-29 | 20 | +4.055 | +7.945 | **+3.891** |
+| 09-30 | 10 | +2.629 | -0.623 | **-3.252** |
+| 10-01 | 13 | +7.066 | -1.232 | **-8.298** |
+| 10-02 | 17 | +8.748 | +4.242 | **-4.506** |
+| 10-03 | 14 | +5.353 | -0.387 | **-5.740** |
+| **10-04 HELD OUT** | 7 | **-1.066** | **+7.146** | **+8.212** |
+| **10 days** | 124 | +31.316 | **+37.020** | **+5.704** (+0.046/trade) |
+
+- **the flip wins 5 days and loses 5.** Over 9 days it totalled **-2.508**; adding one held-out day
+  flips the total to **+5.704**.
+- single-day deltas run **-8.298 to +9.578**. The 10-day total is inside one day's swing of zero.
+- so: NOT "the flip holds" (my 2-day read) and NOT "the flip costs 2.5 pp" (my 9-day read). The
+  quantity's day-to-day spread exceeds its own total. **Undecided, and it needs more days, not a
+  verdict.** See [[day-is-the-block-unit]].
+
+### THE TEN DAYS TOGETHER — 9 in-sample + 1 held out, labelled as such
+
+| | octo-sig | CONF | BLOCKED | OPEN | CONF total net % | CONF mean | winners | stopped | ungated mean |
+|---|---|---|---|---|---|---|---|---|---|
+| 9 in-sample | 298 | 151 | 31 | 116 | +37.148 | +0.246 | 97 of 151 | 44 | +0.206 |
+| **10 days** | **325** | **162** | 36 | 127 | **+47.546** | **+0.293** | 107 of 162 | 45 | **+0.227** |
+
+The 9 in-sample days reproduce BYTE-IDENTICALLY on the 10-05 tape (checked row by row), so the
+tape-end shift does not move the lines and the 10-day aggregate is legitimate.
+
+### TWO CORRECTIONS TO SECTION 5
+
+1. **the longest consecutive losing run is 6, not 3.** The 3 was the FLIPPED basis over 9 days. On
+   the dr-bias basis over 10 days it is **6**. At 2.228x that is 11.42 % of equity; at the live
+   13.595x it is **54.19 %**.
+2. a new boundary case now handled: **UNRESOLVED** rows, where no favourable swing pivot exists after
+   the entry inside the tape. 3 of them on 10-04 (23:04:15, 23:15:00, 23:16:30) because the tape ends
+   10-04 23:59:55. They are EXCLUDED and COUNTED, never scored 0 — inventing an exit at the tape end
+   would be a truncation. The 9 in-sample days have 0, because that tape ran a day past 10-03.
