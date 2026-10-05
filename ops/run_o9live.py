@@ -44,7 +44,7 @@ else:
     strat = StrategyLoop(dev, bcfg, lr_config(dev), SYM, buffer_hours=8, warmup_hours=6,   # sweep-measured floors lb=6h/wm=4h (+margin); reproduces 12/24 exactly. TODO DB-source
                          producer=_PRODUCERS[PRODUCER])
 adapter = BybitAdapter(BybitV5Client(FAKEAPI, HmacSigner("o9-fake-key", "o9-fake-secret")), SYM)
-ledger = O9Ledger(o9, SYM, start_equity=float(os.environ.get("O9_START_EQUITY", "500")))
+ledger = O9Ledger(o9, SYM, start_equity=float(os.environ.get("O9_START_EQUITY", "888")))   # Joe 1005: "888" (was 500)
 control = O9Control(o9)
 health = HealthStore(o9)                                          # cascade phase + loop_ms heartbeat → UI
 STATE_LOG = os.environ.get("O9_STATE_LOG", "/home/joe/thecodes/o9_state.log")

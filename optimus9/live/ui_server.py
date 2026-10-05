@@ -21,7 +21,7 @@ from optimus9.live.control import O9Control
 from optimus9.live.health import HealthStore
 
 FAKEAPI = os.environ.get("O9_FAKEAPI_URL", "http://127.0.0.1:8098")
-START_EQUITY = float(os.environ.get("O9_START_EQUITY", "500"))
+START_EQUITY = float(os.environ.get("O9_START_EQUITY", "888"))   # Joe 1005: "888" (was 500)
 DD_REF = float(os.environ.get("O9_DD_REF", "21.8"))
 SYMBOL = os.environ.get("O9_SYMBOL", "FARTCOINUSDT")
 UI_BOOK: dict = {}
