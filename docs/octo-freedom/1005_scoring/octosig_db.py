@@ -61,7 +61,21 @@ from optimus9.config import get_db_config
 
 TABLE = _os.environ.get('LG_TABLE', 'octosig_rulings')
 Q = lambda s: s.replace('__TBL__', TABLE)
-SWING = 0.70
+SWING = 1.25
+"""THE SWING pct FOR swing_detect, Joe 1006: *"I'm fine with it being 1.25"*. Was 0.70.
+
+WHY HE MOVED IT, his words on 09-25 08:39:00: *"the swing_detect value is too low, that's why the
+traded mae mfe data is so small - it tripped on a non-tradeable pullback at 08:40. the swing detect
+needs to be large enough to carrying the trade to the signal at 09:32"*. Measured on that signal:
+
+  0.70 / 0.90 / 1.00   stretch ends 08:40:05, 1.1 min,  MAE 0.022  MFE 0.176
+  1.25 / 1.50 / 1.75   stretch ends 09:28:25, 49.4 min, MAE 1.039  MFE 1.150
+  2.00 / 2.50 / 3.00   stretch ends 11:35:40, 176.7 min, MAE 1.039 MFE 5.808
+
+The knee sits between 1.00 and 1.25 and it is SHARP - nothing lands in between. 1.25 is the first
+value that carries past the 08:40 pullback.
+
+IT IS NOT MAE_BLOCK. That is a separate 0.70 and it has NOT moved."""
 MAE_BLOCK = 0.70
 # SEPTEMBER + OCTOBER ONLY. Joe 1005: *"reduce the report to the september and october dates"*.
 # The five July/August days (07-23, 07-25, 08-06, 08-20, 08-30) are OUT - they were the non-adjacent
@@ -72,9 +86,10 @@ DAYS = _os.environ.get('LG_DAYS', '2026-09-14,2026-09-17,2026-09-25,2026-09-26,2
 # Joe 1005 baked two mtd/branch-D knobs today. Both are in the key - a knob that moves rows and is
 # not in the unique key lets an A/B overwrite itself.
 KNOB_KEY = ('stall_n6|tf3-23|trajblk%d|minbars%d|swing%.2f|lookback_s%s|dwell%s|rev_wob%s|hold%s|%s'
-            '|%.0f/%.0f|mtdwalk%d|claimhop%d|flip-towards'
-            % (BT.AF_BLOCK, BT.TRAJ_MIN_BARS, SWING, SC.LOOKBACK_BARS * 5, 3, 2, 4, 'gcws30Mage',
-               SC.HI, SC.LO, SC.MTD_WALK_BARS, SC.CLAIM_HOP))
+            '|%.0f/%.0f|mtdwalk%d|claimhop%d|flip-towards|g5ex%d|stamp-resolved|routing-banked'
+            '|lineage-ws1'
+            % (BT.AF_BLOCK, BT.TRAJ_MIN_BARS, SWING, SC.G5EXTREMA_LOOKBACK_BARS * 5, 3, 2, 4, 'gcws30Mage',
+               SC.HI, SC.LO, SC.MTD_WALK_BARS, SC.CLAIM_HOP, SC.G5EXTREMA_LOOKBACK_BARS))
 H, L = SC.pivots(SWING)
 print('# table %s | knob_key %s' % (TABLE, KNOB_KEY))
 print('# MAE > %.2f%% -> BLOCK (Joe 1005, delegated). raw MAE/MFE stored.' % MAE_BLOCK)
@@ -92,7 +107,7 @@ db.execute(Q('''CREATE TABLE IF NOT EXISTS __TBL__ (
     os_riding        SMALLINT     NOT NULL,     -- the baton holder TF, 0 = no rider
     os_traj          VARCHAR(8)   NOT NULL,     -- towards | away | -
     os_hop           SMALLINT     NULL,         -- signed TF distance from the outgoing rider
-    os_legal_succ    TINYINT      NULL,         -- 1 = a candidate sat within +-3 at the seat bar
+    os_legal_succ    TINYINT      NULL,         -- REDEFINED 1006: 1 = the ws1 lineage strands no momentum
     os_stalled_n     TINYINT      NOT NULL,     -- stalled STATE count
     os_stalled_of    TINYINT      NOT NULL,     -- 21 (ws3..ws23)
     os_momtrue_n     TINYINT      NOT NULL,     -- momo+curl count
@@ -106,6 +121,42 @@ db.execute(Q('''CREATE TABLE IF NOT EXISTS __TBL__ (
     os_baton_ts      VARCHAR(8)   NOT NULL,     -- most recent pass at or before the bar
     os_stalled_ts    VARCHAR(8)   NOT NULL,     -- most recent onset at or before the bar
     os_pxs           DECIMAL(16,8) NOT NULL,
+    os_lin_chain     VARCHAR(96)  NOT NULL,     -- Joe's lineage from ws1, hop <= 2 TF numbers
+    os_lin_top       SMALLINT     NOT NULL,     -- the highest TF the lineage reached
+    os_lin_len       TINYINT      NOT NULL,     -- how many TFs are in the chain, ws1 included
+    os_lin_broke_at  SMALLINT     NOT NULL,     -- the TF it could not hop past
+    os_lin_mt_hi     SMALLINT     NOT NULL,     -- highest mom-true TF in ws1..ws12, 0 = none
+    os_lin_mt        VARCHAR(96)  NOT NULL,     -- every mom-true TF in ws1..ws12, the raw read
+    os_r_ladder      VARCHAR(32)  NOT NULL,     -- ws1..ws12 banded: O = oob, x = 83..85, . = in-fence
+    os_r_ws1         DECIMAL(12,4) NULL,        -- the anchor's own r
+    os_r_oob_top     SMALLINT     NOT NULL,     -- highest TF with r oob, 0 = none
+    os_r_between_n   TINYINT      NOT NULL,     -- how many sit in the 83..85 band
+    os_casc_str      VARCHAR(160) NOT NULL,     -- the mage cascade ws1..ws12, as a string
+    os_casc_mid_end  DECIMAL(12,4) NULL,        -- middle (ws3,ws4) minus ends (ws1,ws12)
+    os_casc_fast     DECIMAL(12,4) NULL,        -- ws1 -> ws3, the fast half
+    os_casc_slow     DECIMAL(12,4) NULL,        -- ws6 -> ws11, the slow half
+    os_casc_spread   DECIMAL(12,4) NULL,        -- the ladder's max minus its min
+    os_casc_argmin   SMALLINT     NOT NULL,     -- which TF is the ladder's minimum
+    os_casc_argmax   SMALLINT     NOT NULL,     -- which TF is the ladder's maximum
+    os_casc_monotone TINYINT      NOT NULL,     -- 1 = rises at every step up the ladder
+    os_mtd_fence     DECIMAL(6,2) NOT NULL,     -- the oob fence the four Mages are tested against
+    os_mtd_g5        DECIMAL(12,4) NULL,        -- g5Mage  at the anchor (TOL 0 bars)
+    os_mtd_g5_ts     VARCHAR(8)   NOT NULL,     -- the bar that value came from
+    os_mtd_g15       DECIMAL(12,4) NULL,        -- g15Mage at its extremum within TOL +-3 bars
+    os_mtd_g15_ts    VARCHAR(8)   NOT NULL,
+    os_mtd_g30       DECIMAL(12,4) NULL,        -- g30Mage at its extremum within TOL +-6 bars
+    os_mtd_g30_ts    VARCHAR(8)   NOT NULL,
+    os_mtd_ws1       DECIMAL(12,4) NULL,        -- ws1Mage at the anchor (TOL 0 bars)
+    os_mtd_ws1_ts    VARCHAR(8)   NOT NULL,
+    os_mtd_r1        TINYINT      NOT NULL,     -- 1 = all four oob -> mtd.r1
+    os_mtd_net       DECIMAL(12,4) NULL,        -- ws1Mage - g15Mage, the cascade net
+    os_mtd_towards   TINYINT      NOT NULL,     -- 1 = net faces dr -> mtd.r2 when r1 fails
+    os_d_blk         VARCHAR(128) NOT NULL,     -- every TF whose r is oob at the anchor
+    os_d_drop        VARCHAR(128) NOT NULL,     -- of those, dropped by the GAP_MAX 4 rule
+    os_d_weak        SMALLINT     NOT NULL,     -- the keep member closest to the fence, 0 = none
+    os_d_band_lo     DECIMAL(12,4) NULL,        -- the band the claim test reads
+    os_d_band_hi     DECIMAL(12,4) NULL,
+    os_d_fire        TINYINT      NOT NULL,     -- branch D's own verdict: 1 = fires, 0 = claimed/no block
     os_route         VARCHAR(16)  NOT NULL,     -- mtd.r1 | mtd.r2 | neither | no dr
     os_status        VARCHAR(16)  NOT NULL,     -- CONFLUENCE | BLOCKED | OPEN
     os_grade         VARCHAR(32)  NOT NULL,
@@ -113,17 +164,26 @@ db.execute(Q('''CREATE TABLE IF NOT EXISTS __TBL__ (
     os_d_keep        VARCHAR(128) NOT NULL,
     os_d_claim       VARCHAR(128) NOT NULL,
     os_mage_net      DECIMAL(12,4) NULL,        -- ws12Mage - ws1Mage at the mtd extrema
-    os_mae_pct       DECIMAL(10,4) NULL,        -- swing 0.70, swing-to-pivot, max(0,adverse), NO STOP
+    os_mae_pct       DECIMAL(10,4) NULL,        -- swing 1.25, swing-to-pivot, max(0,adverse), NO STOP
     os_mfe_pct       DECIMAL(10,4) NULL,
     os_mfe_over_mae  DECIMAL(12,4) NULL,
     os_hold_min      DECIMAL(10,2) NULL,
+    os_walk_ts       VARCHAR(8)   NOT NULL,     -- the WALK's own fire bar, what report_leash_walk emits
+    os_stamp_src     VARCHAR(16)  NOT NULL,     -- walk | fwd-extrema : which bar os_ts was taken from
+    os_g5ex_ts       VARCHAR(8)   NOT NULL,     -- the mtd step-1 g5Mage extrema bar: where branch D is READ
+    os_g5ex_src      VARCHAR(10)  NOT NULL,     -- lookback | fwd  (fwd lands AFTER the signal)
+    os_g5ex_lag_min  DECIMAL(10,2) NOT NULL,    -- extrema bar minus the signal bar, minutes. - = before
     os_flip          TINYINT      NOT NULL,     -- 1 = with-trend (net TOWARDS dr) = the pyramid signal
     os_trade_side    VARCHAR(5)   NOT NULL,     -- the side ACTUALLY taken after the flip rule
     os_mae_traded    DECIMAL(10,4) NULL,        -- MAE on the side actually taken
     os_mfe_traded    DECIMAL(10,4) NULL,        -- MFE on the side actually taken
     os_mo_traded     DECIMAL(12,4) NULL,        -- MFE/MAE on the side actually taken
     os_verdict       VARCHAR(8)   NOT NULL,     -- BLOCK if os_mae_traded > 0.70 else FIRE; UNSCORED if no pivot
-    UNIQUE KEY uq_os (os_knob_key, os_day, os_bar_ms),
+    -- `os_walk_ts` IS IN THE KEY. Joe 1006 ruled os_ts = the fwd-g5extrema when the lookback found
+    -- none, which can collapse TWO walk fires onto ONE anchor: measured, 1 collision in 397 -
+    -- 09-29 23:46:05 and 23:46:40 both forward-walk to 23:47:25. Keying on the walk bar as well
+    -- keeps BOTH rows rather than dropping one. Whether they are one event or two is Joe's ruling.
+    UNIQUE KEY uq_os (os_knob_key, os_day, os_bar_ms, os_walk_ts),
     INDEX (os_day), INDEX (os_status), INDEX (os_verdict), INDEX (os_riding))'''))
 
 # the mtd-oob string, VERBATIM from score39.py:255 - the only line of rendering carried across,
@@ -134,14 +194,112 @@ MTD_OOB = lambda m: ('4/4' if m.get('noob') == 4
 
 have = {r['c'] for r in db.execute('''SELECT COLUMN_NAME c FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s''', (TABLE,), fetch=True)}
-for col, ddl in (('os_flip',       'TINYINT NOT NULL DEFAULT 0 AFTER os_hold_min'),
+for col, ddl in ((('os_mtd_fence'),   'DECIMAL(6,2) NOT NULL DEFAULT 0 AFTER os_g5ex_lag_min'),
+                 ('os_mtd_g5',      'DECIMAL(12,4) NULL AFTER os_mtd_fence'),
+                 ('os_mtd_g5_ts',   "VARCHAR(8) NOT NULL DEFAULT '' AFTER os_mtd_g5"),
+                 ('os_mtd_g15',     'DECIMAL(12,4) NULL AFTER os_mtd_g5_ts'),
+                 ('os_mtd_g15_ts',  "VARCHAR(8) NOT NULL DEFAULT '' AFTER os_mtd_g15"),
+                 ('os_mtd_g30',     'DECIMAL(12,4) NULL AFTER os_mtd_g15_ts'),
+                 ('os_mtd_g30_ts',  "VARCHAR(8) NOT NULL DEFAULT '' AFTER os_mtd_g30"),
+                 ('os_mtd_ws1',     'DECIMAL(12,4) NULL AFTER os_mtd_g30_ts'),
+                 ('os_mtd_ws1_ts',  "VARCHAR(8) NOT NULL DEFAULT '' AFTER os_mtd_ws1"),
+                 ('os_mtd_r1',      'TINYINT NOT NULL DEFAULT 0 AFTER os_mtd_ws1_ts'),
+                 ('os_mtd_net',     'DECIMAL(12,4) NULL AFTER os_mtd_r1'),
+                 ('os_mtd_towards', 'TINYINT NOT NULL DEFAULT 0 AFTER os_mtd_net'),
+                 ('os_d_blk',       "VARCHAR(128) NOT NULL DEFAULT '' AFTER os_mtd_towards"),
+                 ('os_d_drop',      "VARCHAR(128) NOT NULL DEFAULT '' AFTER os_d_blk"),
+                 ('os_d_weak',      'SMALLINT NOT NULL DEFAULT 0 AFTER os_d_drop'),
+                 ('os_d_band_lo',   'DECIMAL(12,4) NULL AFTER os_d_weak'),
+                 ('os_d_band_hi',   'DECIMAL(12,4) NULL AFTER os_d_band_lo'),
+                 ('os_d_fire',      'TINYINT NOT NULL DEFAULT 0 AFTER os_d_band_hi'),
+                 ('os_walk_ts',    "VARCHAR(8) NOT NULL DEFAULT '' AFTER os_hold_min"),
+                 ('os_stamp_src',  "VARCHAR(16) NOT NULL DEFAULT '' AFTER os_walk_ts"),
+                 ('os_g5ex_ts',     "VARCHAR(8) NOT NULL DEFAULT '' AFTER os_stamp_src"),
+                 ('os_g5ex_src',    "VARCHAR(10) NOT NULL DEFAULT '' AFTER os_g5ex_ts"),
+                 ('os_g5ex_lag_min','DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER os_g5ex_src'),
+                 ('os_flip',       'TINYINT NOT NULL DEFAULT 0 AFTER os_g5ex_lag_min'),
                  ('os_trade_side', "VARCHAR(5) NOT NULL DEFAULT '' AFTER os_flip"),
                  ('os_mae_traded', 'DECIMAL(10,4) NULL AFTER os_trade_side'),
                  ('os_mfe_traded', 'DECIMAL(10,4) NULL AFTER os_mae_traded'),
-                 ('os_mo_traded',  'DECIMAL(12,4) NULL AFTER os_mfe_traded')):
+                 ('os_mo_traded',  'DECIMAL(12,4) NULL AFTER os_mfe_traded'),
+                 ('os_lin_chain',   "VARCHAR(96) NOT NULL DEFAULT '' AFTER os_verdict"),
+                 ('os_lin_top',     'SMALLINT NOT NULL DEFAULT 0 AFTER os_lin_chain'),
+                 ('os_lin_len',     'TINYINT NOT NULL DEFAULT 0 AFTER os_lin_top'),
+                 ('os_lin_broke_at','SMALLINT NOT NULL DEFAULT 0 AFTER os_lin_len'),
+                 ('os_lin_mt_hi',   'SMALLINT NOT NULL DEFAULT 0 AFTER os_lin_broke_at'),
+                 ('os_lin_mt',      "VARCHAR(96) NOT NULL DEFAULT '' AFTER os_lin_mt_hi"),
+                 ('os_r_ladder',    "VARCHAR(32) NOT NULL DEFAULT '' AFTER os_lin_mt"),
+                 ('os_r_ws1',       'DECIMAL(12,4) NULL AFTER os_r_ladder'),
+                 ('os_r_oob_top',   'SMALLINT NOT NULL DEFAULT 0 AFTER os_r_ws1'),
+                 ('os_r_between_n', 'TINYINT NOT NULL DEFAULT 0 AFTER os_r_oob_top'),
+                 ('os_casc_str',    "VARCHAR(160) NOT NULL DEFAULT '' AFTER os_r_between_n"),
+                 ('os_casc_mid_end','DECIMAL(12,4) NULL AFTER os_casc_str'),
+                 ('os_casc_fast',   'DECIMAL(12,4) NULL AFTER os_casc_mid_end'),
+                 ('os_casc_slow',   'DECIMAL(12,4) NULL AFTER os_casc_fast'),
+                 ('os_casc_spread', 'DECIMAL(12,4) NULL AFTER os_casc_slow'),
+                 ('os_casc_argmin', 'SMALLINT NOT NULL DEFAULT 0 AFTER os_casc_spread'),
+                 ('os_casc_argmax', 'SMALLINT NOT NULL DEFAULT 0 AFTER os_casc_argmin'),
+                 ('os_casc_monotone','TINYINT NOT NULL DEFAULT 0 AFTER os_casc_argmax')):
     if col not in have:
         db.execute('ALTER TABLE %s ADD COLUMN %s %s' % (TABLE, col, ddl))
         print('# ALTER: added %s' % col, flush=True)
+
+
+R_OOB, R_EXF = 85.0, 83.0
+"""THE TWO r FENCES. oob is `oob_hi`/`oob_lo` 85/15; the ex-fence is `momo_fence_r` 17, i.e. 83/17
+(`wsf_dtf_v3_spec.md:83`, Joe 0820: *"create a new fence: momo-fence-r 100-{knob:17}"*). The band
+BETWEEN them is what Joe 1006 read at 11:28:15: *"ws9 oob, ws10 is between ex-fence and oob, and
+ws11 and ws12 are infence. this is a perfect picture of waning momentum"*."""
+
+LIN_HOP = 2
+"""THE LINEAGE HOP, Joe 1006: *"for the lineage to qualify legal, it needs to be measured from ws1
+and jump no more than 2 higher TFs to find the next TF with momentum"*, and on how to count it:
+*"TF numbers. eg, ws1 can only look to ws2 and ws3 for a baton pass"*."""
+
+LIN_TF = list(range(1, 13))
+LIN_ANCHOR = 1
+"""ws1r IS THE ANCHOR. Joe 1006: *"I know the spec doesn't include ws1r at the moment, but this
+example shows me that we need it as an anchor"*. baton.py's TFS is range(3, 24) - ws1 and ws2 are
+NOT in it, so the lineage Joe describes CANNOT be expressed by the baton chain at all.
+
+AND IT IS A DIFFERENT MECHANIC FROM THE BATON, though Joe 1006 called the difference subtle:
+*"the lineage check and baton pass is time based, the data to measure at the signal is a snapshot of
+that evolving time"*. The baton chains THROUGH TIME - a rider holds until it stalls, successor =
+max(available). This chains UP THE LADDER AT ONE BAR - from ws1, hop <= 2, find the next TF with
+momentum, repeat. Both are kept; neither replaces the other."""
+
+
+def r_band(v, d):
+    """THE THREE-BAND READ, on the dr side. -> 'O' oob | 'x' between the fences | '.' in-fence.
+
+    Joe 1006 at 11:28:15: *"ws9 oob, ws10 is between ex-fence and oob, and ws11 and ws12 are
+    infence. this is a perfect picture of waning momentum: 10 is signalling that it might be able to
+    reach oob, and 11 and 12 are too weak AT THAT moment."*
+
+    dr +1 reads the HIGH side (oob >= 85, between 83..85), dr -1 the LOW side (oob <= 15, between
+    15..17). The fences are score39's own HI/LO and momo_fence_r's mirror of them.
+    """
+    if v is None or not np.isfinite(v): return '?'
+    if d > 0:
+        return 'O' if v >= R_OOB else ('x' if v >= R_EXF else '.')
+    return 'O' if v <= (100.0 - R_OOB) else ('x' if v <= (100.0 - R_EXF) else '.')
+
+
+def lineage(mt_at, lo=LIN_ANCHOR, hi_tf=12):
+    """Joe's lineage: start at ws`lo`, hop at most LIN_HOP TF NUMBERS to the next TF WITH MOMENTUM,
+    repeat. -> (chain, broke_at). `mt_at(t)` is True when ws{t} is mom-true.
+
+    MOM-TRUE IS INHERITED, NOT CHOSEN: momo_g_why's state in ('momo','curl'). `sideways` counts as
+    NOT mom-true, which is the existing definition everywhere in this project - Joe has not ruled on
+    whether a sideways line may carry a lineage hop.
+    """
+    cur = lo
+    chain = [cur]
+    while True:
+        nxt = next((t for t in range(cur + 1, min(cur + LIN_HOP, hi_tf) + 1) if mt_at(t)), None)
+        if nxt is None:
+            return chain, cur
+        chain.append(nxt); cur = nxt
 
 
 def clusters(tfs):
@@ -164,8 +322,23 @@ COLS = ('os_knob_key,os_day,os_ts,os_bar_ms,os_arm_ts,os_dr,os_side,os_riding,os
         'os_candidates,os_stalled_now,os_stall_clusters,os_stall_widest_gap,os_new_stalls,'
         'os_baton_ts,os_stalled_ts,os_pxs,os_route,os_status,os_grade,os_mtd_oob,os_d_keep,'
         'os_d_claim,os_mage_net,os_mae_pct,os_mfe_pct,os_mfe_over_mae,os_hold_min,'
-        'os_flip,os_trade_side,os_mae_traded,os_mfe_traded,os_mo_traded,os_verdict')
+        'os_walk_ts,os_stamp_src,os_g5ex_ts,os_g5ex_src,os_g5ex_lag_min,'
+        'os_mtd_fence,os_mtd_g5,os_mtd_g5_ts,os_mtd_g15,os_mtd_g15_ts,os_mtd_g30,os_mtd_g30_ts,'
+        'os_mtd_ws1,os_mtd_ws1_ts,os_mtd_r1,os_mtd_net,os_mtd_towards,'
+        'os_d_blk,os_d_drop,os_d_weak,os_d_band_lo,os_d_band_hi,os_d_fire,'
+        'os_flip,os_trade_side,os_mae_traded,os_mfe_traded,os_mo_traded,os_verdict,'
+        'os_lin_chain,os_lin_top,os_lin_len,os_lin_broke_at,os_lin_mt_hi,os_lin_mt,'
+        'os_r_ladder,os_r_ws1,os_r_oob_top,os_r_between_n,'
+        'os_casc_str,os_casc_mid_end,os_casc_fast,os_casc_slow,os_casc_spread,'
+        'os_casc_argmin,os_casc_argmax,os_casc_monotone')
 NCOL = len(COLS.split(','))
+db.execute(Q("ALTER TABLE __TBL__ MODIFY os_stamp_src VARCHAR(16) NOT NULL DEFAULT ''"))
+_ix = {r['Key_name'] + '/' + str(r['Seq_in_index']) + '/' + r['Column_name']
+       for r in db.execute(Q('SHOW INDEX FROM __TBL__'), fetch=True)}
+if 'uq_os/4/os_walk_ts' not in _ix:
+    db.execute(Q('ALTER TABLE __TBL__ DROP INDEX uq_os, '
+                 'ADD UNIQUE KEY uq_os (os_knob_key, os_day, os_bar_ms, os_walk_ts)'))
+    print('# ALTER: uq_os now includes os_walk_ts', flush=True)
 SQL = Q('INSERT INTO __TBL__ (%s) VALUES (%s)' % (COLS, ','.join(['%s'] * NCOL)))
 total = 0
 for day in DAYS:
@@ -187,11 +360,9 @@ for day in DAYS:
         cav = C.avail(j)
         # lineage: the chain whose reign covers j, and the one before it
         cur = next((i for i, c in enumerate(chains) if c[2] <= j <= c[3]), None)
-        hop = lsucc = None
+        hop = None
         if cur is not None and cur > 0:
-            out_tf = chains[cur - 1][1]
-            hop = int(chains[cur][1] - out_tf)
-            lsucc = 1 if any(abs(x - out_tf) <= 3 for x in chains[cur - 1][5]) else 0
+            hop = int(chains[cur][1] - chains[cur - 1][1])
         if prev_bar is None:
             ns = '—'
         else:
@@ -201,6 +372,64 @@ for day in DAYS:
             ns = ', '.join('ws%d%s' % (t, '' if cnt[t] == 1 else ' x%d' % cnt[t])
                            for t in sorted(cnt)) or '—'
         r = SC.classify(k, sig)
+        # THE STAMPED BAR. Joe 1006: *"to make as whole, I vote that os_ts represents the forward
+        # g5extrema if there is no lookback"*. mtd reads the four Mages at `base = ex` (score39:98)
+        # and branch D at `m['ex']` (:256), so on a `fwd` row the ROUTING uses bars 0.58..15.08 min
+        # AFTER the walk's fire bar while MAE/MFE started AT that bar. One bar now serves both.
+        # mtd appears 0 times in report_leash_walk.py and 0 times in optimus9/live/octo_freedom.py,
+        # so this is a scoring-layer definition - nothing the live machine emits moves, and
+        # `WALK FIRES FROM` keeps its meaning. It is preserved here as `os_walk_ts`.
+        # COLUMN NAME `os_walk_ts` IS MINE, not Joe's - say the word and it changes.
+        walk_k = k
+        kx = r['m'].get('ex')
+        if kx is not None and int(kx) > k:
+            k = int(kx)                                     # fwd extrema becomes the stamped bar
+            sig = BT.U(k)
+        stamp_src = 'fwd-extrema' if k != walk_k else 'walk'
+        # THE ROUTING'S WORKING, banked 1006 on Joe's word: *"recreate the routing calculations and
+        # verdicts, and drop them in the table on a new key"*. EVERY routing value is read at the
+        # ANCHOR - the lookback-g5extrema bar, or the fwd-g5extrema bar when the lookback found none.
+        # `vbar` records which bar each Mage's value came from: g5 and ws1 are read AT the anchor
+        # (TOL 0), g15 within +-3 bars and g30 within +-6 bars of it.
+        _v = r['m'].get('v') or {}; _vb = r['m'].get('vbar') or {}
+        MV = lambda n: (round(float(_v[n]), 4) if n in _v and _v[n] == _v[n] else None)
+        MB = lambda n: (BT.U(_vb[n]) if n in _vb else '—')
+        # ---- JOE'S LINEAGE, THE THREE-BAND r READ AND THE MAGE CASCADE, 1006.
+        # ALL THREE ARE READ AT THE ROUTING ANCHOR `anc` - the same bar mtd and branch D read, i.e.
+        # the lookback-g5extrema bar, or the fwd-g5extrema bar when the lookback found none. Joe
+        # 1006: *"the data to measure at the signal is a snapshot of that evolving time"*.
+        anc = int(r['m']['ex']) if r['m'].get('ex') is not None else k
+        ja = anc - C.A                                      # the baton window's own index
+        if 0 <= ja < C.N:
+            mt_at = lambda t: bool(C.MT12[t][ja])
+            lin, broke = lineage(mt_at)
+            mt12 = [t for t in LIN_TF if mt_at(t)]
+        else:                                               # anchor outside the warmed window
+            lin, broke, mt12 = [LIN_ANCHOR], LIN_ANCHOR, []
+        mt_hi = max(mt12) if mt12 else 0
+        # os_legal_succ, REDEFINED. Joe 1006: *"os_legal_succ should be a confirmation of the lineage
+        # - if its 1, we can act on os_stalled_now and os_new_stalls"*. The ws1-anchored walk can
+        # only make legal hops, so the question it answers is whether anything was STRANDED: 1 = the
+        # chain reached the highest mom-true TF on the ladder, 0 = momentum sits above a gap wider
+        # than LIN_HOP and the lineage could not carry to it. NULL = no mom-true TF at all in
+        # ws1..ws12, so there is no lineage to confirm.
+        # THE DEFINITION IS MINE, read off Joe's sentence - the raw parts (os_lin_chain,
+        # os_lin_top, os_lin_broke_at, os_lin_mt, os_lin_mt_hi) are all banked, so it can be
+        # redefined against the table without another rebuild.
+        lsucc = None if not mt12 else (1 if lin[-1] == mt_hi else 0)
+        _r = {t: (float(SC.Rl[t][anc]) if np.isfinite(SC.Rl[t][anc]) else None) for t in LIN_TF}
+        ladder = ''.join(r_band(_r[t], d) for t in LIN_TF)
+        oobs = [t for t in LIN_TF if r_band(_r[t], d) == 'O']
+        _mg = {t: (float(SC.Mg[t][anc]) if np.isfinite(SC.Mg[t][anc]) else None) for t in LIN_TF}
+        fin = [t for t in LIN_TF if _mg[t] is not None]
+        casc = ','.join(('%.1f' % _mg[t]) if _mg[t] is not None else '-' for t in LIN_TF)
+        MID, END = (3, 4), (1, 12)                          # the matryoshka read, 1006_g5extrema_sweep.md
+        _av = lambda tt: (sum(_mg[t] for t in tt) / len(tt)
+                          if all(_mg[t] is not None for t in tt) else None)
+        _mid, _end = _av(MID), _av(END)
+        mid_end = (_mid - _end) if (_mid is not None and _end is not None) else None
+        _sub = lambda hi, lo: ((_mg[hi] - _mg[lo]) if (_mg[hi] is not None and _mg[lo] is not None)
+                               else None)
         f, a, xb = SC.score(k, d, H, L)                     # the dr-bias side, kept as a reference
         mo = (f / a) if (f is not None and a and a > 0) else None
         D_ = r.get('D') or {}
@@ -209,7 +438,7 @@ for day in DAYS:
         # the MAE and MFE weren't swapped to honour `with-trend`"*. He was right - every row was
         # scored at the dr-bias side, so a flip row carried its MFE in the MAE column. 979 went
         # MAE 2.1076 / MFE 0.0368 as banked and MAE 0.0368 / MFE 2.1076 on the side it would trade.
-        # MAE/MFE are RESCORED, not swapped: the exit is the next favourable pivot FOR THAT SIDE.
+        # MAE/MFE are RESCORED, not swapped: the stretch runs to the next favourable PIVOT for that side.
         flip = bool(r['status'] == 'CONFLUENCE' and not D_.get('away', True))
         dt = -d if flip else d
         ft, at, _xt = (f, a, xb) if not flip else SC.score(k, dt, H, L)
@@ -229,11 +458,42 @@ for day in DAYS:
                     (round(f, 4) if f is not None else None),
                     (round(mo, 4) if mo is not None else None),
                     (round((BT.ts[xb] - BT.ts[k]) / 60000.0, 2) if xb is not None else None),
+                    BT.U(walk_k), stamp_src,
+                    (BT.U(r['m']['ex']) if r['m'].get('ex') is not None else '—'),
+                    str(r['m'].get('src', '-')),
+                    round(float(r['m'].get('lag') or 0.0), 2),
+                    (SC.HI if d > 0 else SC.LO),
+                    MV('g5'), MB('g5'), MV('g15'), MB('g15'),
+                    MV('g30'), MB('g30'), MV('ws1'), MB('ws1'),
+                    1 if (r['m'].get('noob') == 4) else 0,
+                    (round(float(r['m']['net']), 4) if r['m'].get('net') is not None else None),
+                    1 if r['m'].get('towards') else 0,
+                    ', '.join('ws%d' % t for t in sorted(D_.get('keep', []) + D_.get('drop', []))) or '—',
+                    ', '.join('ws%d' % t for t in D_.get('drop', [])) or '—',
+                    int(D_.get('weak') or 0),
+                    (round(float(D_['band'][0]), 4) if D_.get('band') else None),
+                    (round(float(D_['band'][1]), 4) if D_.get('band') else None),
+                    1 if D_.get('fire') else 0,
                     1 if flip else 0, 'SHORT' if dt > 0 else 'LONG',
                     (round(at, 4) if at is not None else None),
                     (round(ft, 4) if ft is not None else None),
                     (round(mot, 4) if mot is not None else None),
-                    verdict))
+                    verdict,
+                    ' > '.join('ws%d' % t for t in lin), lin[-1], len(lin), broke,
+                    mt_hi, ', '.join('ws%d' % t for t in mt12) or '—',
+                    ladder,
+                    (round(_r[1], 4) if _r[1] is not None else None),
+                    (max(oobs) if oobs else 0), ladder.count('x'),
+                    casc,
+                    (round(mid_end, 4) if mid_end is not None else None),
+                    (round(_sub(3, 1), 4) if _sub(3, 1) is not None else None),
+                    (round(_sub(11, 6), 4) if _sub(11, 6) is not None else None),
+                    (round(max(_mg[t] for t in fin) - min(_mg[t] for t in fin), 4) if fin else None),
+                    (min(fin, key=lambda t: _mg[t]) if fin else 0),
+                    (max(fin, key=lambda t: _mg[t]) if fin else 0),
+                    (1 if len(fin) == len(LIN_TF)
+                       and all(_mg[LIN_TF[i + 1]] > _mg[LIN_TF[i]] for i in range(len(LIN_TF) - 1))
+                     else 0)))
         prev_bar = j
     assert not ins or len(ins[0]) == NCOL, 'tuple %d vs %d columns' % (len(ins[0]), NCOL)
     if ins:

@@ -169,7 +169,23 @@ def pivots(pct):
     return (np.array([p for p, kk in piv if kk == 'H']), np.array([p for p, kk in piv if kk == 'L']))
 
 def score(k, d, Hs, Ls):
-    """-> (mfe, mae, exit_bar). d +1 = SHORT (favourable = next L), d -1 = LONG (favourable = next H)."""
+    """-> (mfe, mae, pivot_bar) over the stretch from `k` to swing_detect's next FAVOURABLE pivot.
+
+    d +1 = SHORT, favourable = the next L. d -1 = LONG, favourable = the next H.
+
+    `pivot_bar` WAS NAMED `exit_bar` AND THAT WAS WRONG. Joe 1006: *"scoring comes from MAE and MFE.
+    there is no other scoring"*. There is no exit mech in this project and this bar is not standing in
+    for one - MAE and MFE are EXCURSIONS over a stretch, and the stretch's far edge IS the next
+    favourable pivot. Nothing opens, nothing closes, nothing is realised. The old name carried a P&L
+    frame into every sentence written about it, and it did leak: 1006 I described two stretches as a
+    trade that "had already closed, in profit".
+
+    THE ONE THING THIS BAR DOES MEAN FOR AN A/B: the stretch has two edges, the start bar and this
+    pivot. Move the start and the stretch moves. Measured 1006 on the g5-extrema-vs-octo-sig start
+    comparison: 340 of 356 rows ran to the SAME pivot (comparable), and the 16 that did not averaged
+    a 1.1 minute stretch against 54.2 minutes - which alone produced a false improvement of
+    0.6470 -> 0.6097 until they were separated out.
+    """
     entry = float(PX[k])
     tgt = Ls if d > 0 else Hs
     nxt = tgt[tgt > k]

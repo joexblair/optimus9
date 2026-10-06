@@ -44,6 +44,15 @@ from optimus9.db.database_manager import DatabaseManager
 from optimus9.config import get_db_config
 sys.stderr = _e
 STALL_N = 6; TFS = list(range(3, 24)); TRAJ_MIN_BARS = 24; TRAJ_MIN_TRAVEL = 0.0
+LIN_TFS = list(range(1, 13))
+"""THE LADDER JOE'S LINEAGE WALKS - ws1..ws12, the wsf band.
+
+TFS IS NOT TOUCHED. Joe 1006 anchored the lineage on ws1 (*"this example shows me that we need it
+as an anchor"*) and TFS starts at ws3, so ws1 and ws2 have no mom-true here at all. Widening TFS
+would have moved the baton chain, os_stalled_n, os_momtrue_n and the "of 21" denominator on every
+banked row - a different mechanic's numbers. So mom-true is computed a SECOND time over ws1..ws12
+and returned as `MT12`, and nothing the baton reports changes."""
+_ALL_TFS = sorted(set(TFS) | set(LIN_TFS))
 # TAPE END, exclusive. Override with LG_TAPE_END=YYYY-MM-DD when the window needs a later tape:
 # a day AFTER this date is NOT in the cache, and K() would searchsorted past the end of ts and
 # index the last bar instead of failing. 2026-10-04 covers 09-25..10-03. For 10-04 use 2026-10-05
@@ -55,12 +64,12 @@ spec = {}
 for g in mech_lines(db, 'wsf'):
     if g['role'] not in spec: _t, s_, m_ = g['override']; spec[g['role']] = (s_, m_)
 sy = db.execute('SELECT pxsmooth_dema_src s, pxsmooth_dema_len l FROM optimus9_system WHERE sys_pk=1', fetch=True)[0]
-BANK = {t: momo_bank(db, t) for t in TFS}
+BANK = {t: momo_bank(db, t) for t in _ALL_TFS}
 db.disconnect()
 tp = np.load(os.path.join(TAPE_DIR, _tape_key(EM, HOURS, WARMUP, {'src': sy['s'], 'len': sy['l']}) + '.npz'))
 ts = tp['__ts__']; PX = tp['__pxs__']
 LD = lambda tfs, role: np.asarray(np.load(os.path.join(LINE_DIR, _line_key(EM, HOURS, WARMUP, override(tfs, *spec[role])) + '.npy'), mmap_mode='r'), float)
-R = {t: LD(t * 60, 'r')[:len(ts)] for t in TFS}
+R = {t: LD(t * 60, 'r')[:len(ts)] for t in _ALL_TFS}
 U = lambda k: dt.datetime.fromtimestamp(int(ts[k]) / 1000, dt.timezone.utc).strftime('%H:%M:%S')
 K = lambda s: int(np.searchsorted(ts, int(dt.datetime.strptime(s, '%Y-%m-%d %H:%M:%S').replace(tzinfo=dt.timezone.utc).timestamp() * 1000)))
 # JOE 1004, RULING: "start the walk 3 hours earlier, regardless of if it's a o9-live loop walk or a
@@ -105,6 +114,17 @@ def compute(start_s, end_s, octosig_path=None, warn=True):
             with momo_window(int(BANK[t]['k_window']) * t):
                 MT[t] = np.array([momo_g_why(R[t], int(D[i]), A + i)[0] in ('momo', 'curl')
                                   for i in range(N)])
+    # ---- mom-true again, over LIN_TFS, for Joe's ws1-anchored lineage ONLY. ws3..ws12 are shared
+    # with the baton's own MT - same bank, same window, same bars - so only ws1 and ws2 are new work.
+    MT12 = dict(MT)
+    for t in LIN_TFS:
+        if t in MT12: continue
+        with momo_config(BANK[t]):
+            with momo_window(int(BANK[t]['k_window']) * t):
+                MT12[t] = np.array([momo_g_why(R[t], int(D[i]), A + i)[0] in ('momo', 'curl')
+                                    for i in range(N)])
+    MT12 = {t: MT12[t] for t in LIN_TFS}
+
     ONSET = {t: np.flatnonzero(np.diff(np.concatenate(([0], ST[t].astype(np.int8)))) == 1) for t in TFS}
     STALL_EV = sorted([(int(x), t) for t in TFS for x in ONSET[t]])
     STALL_AT = [x for x, _t in STALL_EV]
@@ -159,7 +179,7 @@ def compute(start_s, end_s, octosig_path=None, warn=True):
 
     import types
     return types.SimpleNamespace(
-        A=A, B=B, N=N, P=P, D=D, MT=MT, ST=ST, ONSET=ONSET, STALL_EV=STALL_EV, STALL_AT=STALL_AT,
+        A=A, B=B, N=N, P=P, D=D, MT=MT, MT12=MT12, ST=ST, ONSET=ONSET, STALL_EV=STALL_EV, STALL_AT=STALL_AT,
         nst=nst, nmt=nmt, traj=traj, OS=OS, RIDER=RIDER, CHAIN=CHAIN, PASSED=PASSED,
         avail=avail, last_baton=last_baton, last_stall=last_stall)
 
