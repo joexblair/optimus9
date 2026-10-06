@@ -254,7 +254,21 @@ ws11 and ws12 are infence. this is a perfect picture of waning momentum"*."""
 LIN_HOP = 2
 """THE LINEAGE HOP, Joe 1006: *"for the lineage to qualify legal, it needs to be measured from ws1
 and jump no more than 2 higher TFs to find the next TF with momentum"*, and on how to count it:
-*"TF numbers. eg, ws1 can only look to ws2 and ws3 for a baton pass"*."""
+*"TF numbers. eg, ws1 can only look to ws2 and ws3 for a baton pass"*.
+
+UPWARD ONLY, NEVER BACKWARDS. Joe 1006: *"it's important that the lineage walks TFs upward, never
+backwards"*. The candidate set for a rider on ws{t} is exactly {ws{t+1}, ws{t+2}} - every lower TF is
+out of the walk for good, including ones still sitting oob. Measured on 09-25's dr +1 leg: at 11:15
+ws7 (r 90.91) and ws8 (r 87.91) are both oob behind the rider ws9 and neither is a candidate.
+
+MOMENTUM IS A STATE, AND THERE ARE TWO OF THEM. Joe 1006:
+  per line      - *"an `r` line either has it or it doesn't, based on the established momentum
+                  machine's mechs"* -> mom-true, momo_g_why state in ('momo', 'curl').
+  per collective- *"momentum is held by an `r` line as the rider of momentum, and collective momentum
+                  is lost when the {riderTF +2} TFs have not proven strong enough to exit the fence
+                  at the moment when riderTF has stalled"*.
+The r band is NOT the momentum test - it is the fence-exit proof. oob = exited, 83..85 = might exit,
+in-fence = too weak."""
 
 LIN_TF = list(range(1, 13))
 LIN_ANCHOR = 1

@@ -216,3 +216,112 @@ are near-simultaneous, not strictly ordered.
 
 Full event trace, 514 events, every mom-true on/off, every band crossing, every stall onset:
 `1006_lineage_trace_0925.txt`. Producer: `1005_scoring/lineage_trace.py`.
+
+---
+
+# THE WALK COMPLETED — 09-25, 10:27:05 TO A TRADE SIGNAL
+
+Joe 1006: *"it's important that the lineage walks TFs upward, never backwards"* — banked in
+`octosig_db.py:LIN_HOP`. The candidate set for a rider on ws{t} is exactly {ws{t+1}, ws{t+2}};
+every lower TF is out of the walk for good, including ones still sitting oob.
+
+Producers: `1005_scoring/walk_after_1115.py` (env `W_FROM`, `W_RIDER`),
+`1005_scoring/signal_after_loss.py` (env `W_LOSS`).
+
+## THE LADDER CLIMB
+
+| ts | event | r |
+|---|---|---|
+| 10:26:10 -> 10:27:05 | dr flips -1 -> +1; ws1, ws2, ws3, ws4 all print mom-true | 81.05 / 80.59 / 79.26 / 50.00 |
+| 10:28:00 | ws1 oob, ws2 oob | 91.25 / 85.46 |
+| 10:30:25 | ws3 oob | 85.25 |
+| 10:40:00 | ws4 oob | 86.92 |
+| 10:50:00 | ws5 oob | 92.60 |
+| 10:54:00 | ws6 oob | 88.99 |
+| 11:04:00 | ws8 oob | 87.91 |
+| 11:05:00 | ws7 oob | 90.91 |
+| 11:15:00 | ws9 oob | 93.90 |
+| **11:28:15** | **the octo-sig fires** — ws9 oob, ws10 in the 83-85 band, ws11/ws12 in-fence | — |
+| 11:30:00 | ws10 oob — the last successful pass | 88.17 |
+| **11:48:00** | **ws10 stalls, ws11 69.31 and ws12 74.36 both in-fence -> COLLECTIVE MOMENTUM LOST** | 78.97 |
+
+## THE LOSS CALL — BOTH READINGS AGREE, 2.1 min APART
+
+Joe's rule: *"collective momentum is lost when the {riderTF +2} TFs have not proven strong enough to
+exit the fence at the moment when riderTF has stalled"*. Two readings of *"have not proven ... at the
+moment"*:
+
+| reading | rider | stalls at | ws+1 / ws+2 at that bar | verdict |
+|---|---|---|---|---|
+| snapshot at the stall bar | ws9 | 11:50:05 | ws10 60.90 `.` / ws11 66.84 `.` | LOST |
+| "have proven" = during the rider's reign, so ws10 took the baton at 11:30:00 | ws10 | **11:48:00** | ws11 69.31 `.` / ws12 74.36 `.` | LOST |
+
+ws11 and ws12 never reach oob in this dr +1 leg. Their first oob crossings are 13:00:00 (ws12) and
+13:46:05 (ws11), both at dr -1. **This example does not force the ruling** - it only says the
+continuation reading is the earlier call.
+
+ws10 at its stall is still mom-true and already back in-fence at 78.97 after peaking at 88.17. ws11
+and ws12 are mom-true with neither out of the fence - Joe's "waning momentum" picture, one rung above
+where he read it at 11:28.
+
+## THE TRADE SIGNAL
+
+Joe's rule: *"a signal is placed on the next g5Mage and g15Mage same-side oob reversing"*. The
+"reversing" test is `_mage_rev(line, wob_n)` with `REV_WOB` = 2 bars = 10 s at the 5 s grid - the
+turn is confirmed only after 2 consecutive same-direction steps, NaN counting as flat and extending
+the run. It returns a SIGNED flag, so the turn has a direction.
+
+| reading of "same-side" | ts | dr | g5Mage | g15Mage | REV signed | after the loss |
+|---|---|---|---|---|---|---|
+| **A** - both Mages on the same side as each other, read at the current dr | **12:14:10** | -1 | 8.94 | -18.20 | **+1** (turned UP) | 26.2 min |
+| **B** - the same side as the leg that just died (high, >= 85) | **12:30:20** | -1 | 92.17 | 89.88 | **-1** (turned DOWN) | 42.3 min |
+
+BOTH readings are directionally coherent, each out of its own fence:
+
+| reading | ts | the fence both Mages are outside | g5Mage turns | out of that fence |
+|---|---|---|---|---|
+| A | 12:14:10 | low, <= 15 (g5 8.94, g15 -18.20) | **UP**, REV +1 | yes |
+| B | 12:30:20 | high, >= 85 (g5 92.17, g15 89.88) | **DOWN**, REV -1 | yes |
+
+So the choice between them is not settled by direction - both are a genuine reversal out of the fence
+they sit outside. They differ in WHICH fence, 16.2 min apart, and reading B is on the side the dead
+leg was climbing.
+
+**dr flipped +1 -> -1 at 12:13:55**, between the loss call and both signal bars. The loss was declared
+on the dr +1 leg and both candidate signals land after the flip. Whether the walk survives a dr flip
+is not ruled.
+
+## NEITHER SIGNAL EXISTS IN octo-freedom TODAY
+
+09-25 has **39** `WALK FIRES FROM` rows. Between 11:28:15 and 13:40 there are only:
+
+| octo-sig |
+|---|
+| 11:28:15 |
+| 13:33:40 |
+| 13:37:05 |
+
+| gap | minutes |
+|---|---|
+| loss 11:48:00 -> next existing octo-sig 13:33:40 | **105.7** |
+| reading A 12:14:10 -> 13:33:40 | 79.5 |
+| reading B 12:30:20 -> 13:33:40 | 63.3 |
+
+**The walk fires in a 105.7-minute window where octo-freedom is silent.** That is the whole point of
+the mech, and it is the first measured evidence of it.
+
+## NOT SCORED, AND WHY
+
+No MAE/MFE on 12:14:10 or 12:30:20. The signal's SIDE is not ruled. dr is -1 at both bars, so the
+dr-bias frame would read LONG, but this is a new signal type and Joe has not said whether it inherits
+that frame, the `sneaky-trade-1` frame, or something else. Scoring it under a guessed side would
+manufacture the result.
+
+## OPEN FOR JOE
+
+1. the loss reading - snapshot at the rider's stall, or "has proven during the reign" (the baton
+   moves to ws10 at 11:30:00 and the call comes 2.1 min earlier)
+2. "same-side" - both Mages agreeing with each other at the current dr (12:14:10), or the side of the
+   leg that just died (12:30:20)
+3. does the walk survive a dr flip? The flip at 12:13:55 sits between the loss and both signals
+4. what side does this signal take?
