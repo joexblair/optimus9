@@ -129,3 +129,90 @@ The forward-walk mech — walk until the oob line stalls, retest its peers, and 
 unchanged place a signal on the next g5Mage and g15Mage same-side oob reversing. Joe 1006: *"leave
 this mech-build to last. build everything else, then we'll carefully craft it so that it matches my
 vision"*.
+
+---
+
+# JOE'S ANSWER, 1006 — MOMENTUM IS A STATE, THE LINEAGE IS A TIME WALK
+
+> *"momentum is a state"*
+> *"per line: an `r` line either has it or it doesn't, based on the established momentum machine's mechs"*
+> *"per collective: momentum is held by an `r` line as the rider of momentum, and collective momentum
+> is lost when the {riderTF +2} TFs have not proven strong enough to exit the the fence at the moment
+> when riderTF has stalled"*
+
+| question | settled |
+|---|---|
+| per-line momentum | **mom-true** — `momo_g_why` state in (`momo`, `curl`) |
+| the r band | **not momentum** — it is the fence-exit proof. oob = exited, 83-85 = might exit, in-fence = too weak |
+| the lineage's shape | **a time walk**, not a one-bar ladder read |
+| the loss test | riderTF **stalls** AND {riderTF, +1, +2} have not exited the fence |
+
+The snapshot lineage built earlier in this file answers "what does the ladder look like now". It does
+not answer "who holds momentum and did it get passed". **`os_legal_succ` as built measures nothing
+Joe has described.**
+
+The lineage and the mech Joe held to last are the SAME machine. *"walk the signal forward until ws9
+(the oob line) is stalled, then retest its peers"* IS the collective-loss test.
+
+## JOE'S THREE STEPS vs THE TAPE — 09-25
+
+| Joe's step | the event on the tape | tape ts | Joe's ts | Joe's offset |
+|---|---|---|---|---|
+| ws1 printing mom-true | ws1 mom-true ON at dr +1, r 81.05 | **10:27:05** | 10:24 | 3.1 min early |
+| ws2 is oob | ws2 first `. -> O`, r 85.46 | **10:28:00** | 10:32 | 4.0 min late |
+| ws4 is mom-true | ws4 mom-true ON, r 50.00 | **10:27:05** | 10:32 | 4.9 min late |
+| ws4 is oob | ws4 first `. -> O`, r 86.92 | **10:40:00** | 10:44 | 4.0 min late |
+| ws6 is mom-true | ws6 mom-true ON, r 46.38 | **10:40:40** | 10:44 | 3.3 min late |
+
+Every step confirmed. dr flipped from -1 to +1 between 10:26:10 and 10:27:05, and ws1, ws2, ws3, ws4
+all printed mom-true on that same bar — the leg starts at the dr flip, not at ws1 alone.
+
+At 10:32:00 exactly ws2 reads 83.91, the 83-85 band. It chatters in and out of oob from 10:28:00 to
+10:34:45. First crossing is the event; the exact second is not.
+
+## THE WHOLE dr +1 LEG, 10:27:05 -> 11:30:00
+
+| ts | event | r |
+|---|---|---|
+| 10:27:05 | ws1, ws2, ws3, ws4 mom-true ON | 81.05 / 80.59 / 79.26 / 50.00 |
+| 10:28:00 | ws1 oob, ws2 oob | 91.25 / 85.46 |
+| 10:30:25 | ws3 oob | 85.25 |
+| 10:30:45 | ws5 mom-true ON | 51.31 |
+| 10:40:00 | ws4 oob, ws8 mom-true ON | 86.92 / 50.04 |
+| 10:40:40 | ws6 mom-true ON | 46.38 |
+| 10:48:00 | ws7 mom-true ON | 53.19 |
+| 10:50:00 | ws5 oob | 92.60 |
+| 10:51:05 | ws9 mom-true ON | 58.02 |
+| 10:54:00 | ws6 oob, ws10 mom-true ON | 88.99 / 47.21 |
+| 11:01:40 | ws11 mom-true ON | 49.60 |
+| 11:04:00 | ws8 oob | 87.91 |
+| 11:05:00 | ws7 oob | 90.91 |
+| 11:12:00 | ws12 mom-true ON | 57.86 |
+| 11:15:00 | ws9 oob | 93.90 |
+
+## THE PASS, TESTED ON EVERY oob CROSSING IN THE LEG
+
+| TF exits the fence | ts | TF+1 mom-true | TF+2 mom-true | pass within +2 |
+|---|---|---|---|---|
+| ws1 | 10:28:00 | ws2 Y | ws3 Y | yes |
+| ws2 | 10:28:00 | ws3 Y | ws4 Y | yes |
+| ws3 | 10:30:25 | ws4 Y | ws5 Y (+20 s) | yes |
+| ws4 | 10:40:00 | ws5 Y | ws6 Y (+40 s) | yes |
+| ws5 | 10:50:00 | ws6 Y | ws7 Y | yes |
+| ws6 | 10:54:00 | ws7 Y | ws8 Y | yes |
+| ws8 | 11:04:00 | ws9 Y | ws10 Y | yes |
+| ws7 | 11:05:00 | ws8 Y | ws9 Y | yes |
+| ws9 | 11:15:00 | ws10 Y | ws11 Y | yes |
+
+**Nine of nine.** The cascade never broke in this leg. The successor is sometimes ahead of the oob
+crossing (ws4 by 55 s, ws7 by 2.0 min) and sometimes behind it (ws5 by 20 s, ws6 by 40 s) — the two
+are near-simultaneous, not strictly ordered.
+
+## WHAT THIS TRACE DOES NOT COVER
+
+- the window is 10:00:00 to 11:30:00, which I chose. The octo-sig is at 11:28:15, so the **forward
+  walk to ws9's stall runs past the end of it.** The loss test cannot be read from this file.
+- ws10/ws11/ws12 fence state after 11:30 is not in it either.
+
+Full event trace, 514 events, every mom-true on/off, every band crossing, every stall onset:
+`1006_lineage_trace_0925.txt`. Producer: `1005_scoring/lineage_trace.py`.
