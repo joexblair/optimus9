@@ -115,3 +115,86 @@ Whether that is worth the `neither` count rising 42 -> 104 is his call, not a sw
 `1005_scoring/g5extrema_sweep.py` -> `g5sweep.out` (40 cells, route + status + mean/median MAE)
 `1005_scoring/g5extrema_tail.py` -> `g5tail.out` (40 cells, rows_18 / arms_18 / mae_18 / worst / top arm)
 the adverse-turn ladder -> `adverse_turns.out`
+
+---
+
+# THE MATRYOSHKA READ OF THE MAGE CASCADE — Joe 1006, PARKED
+
+Joe asked whether I could see what the `os_mage_net` grade misses: *"if you consider the
+matryoshkaic nature of faster lines, what do you see now in the mage cascade?"*
+
+## 09-25 09:32:00, the anchor at 09:28:05
+
+| ws | Mage |
+|---|---|
+| **ws1** | **106.8975** |
+| ws2 | 94.8561 |
+| **ws3** | **87.8215** |
+| ws4 | 89.9240 |
+| ws5 | 95.9524 |
+| ws6 | 101.0092 |
+| ws7 | 101.3329 |
+| ws8 | 102.2915 |
+| ws9 | 108.0409 |
+| ws10 | 113.9913 |
+| **ws11** | **115.6010** |
+| ws12 | 110.5082 |
+
+| the shape | value |
+|---|---|
+| `os_mage_net` = ws12 - ws1 | **+3.6107** -> read as "lifting" -> grade `with-trend` -> flip to LONG |
+| the ladder's own spread | **27.7795** |
+| monotone up the ladder | **NO** |
+| ends (ws1, ws12) mean | **108.70** |
+| middle (ws3, ws4) mean | **88.87** |
+| the middle sits BELOW the ends by | **19.83** |
+| fast half, ws1 -> ws3 | **-19.08** |
+| slow half, ws6 -> ws11 | **+14.59**, monotone over six lines |
+
+## WHAT THE NET CANNOT SEE
+
+Joe's own words from 09-25 name the shape: **"Matryoshka — supported at the ends, absent in the
+middle."** `os_mage_net` takes ws12 minus ws1 - **the two points a matryoshka holds UP** - gets
++3.61 out of a 27.78 spread, and calls it a lift. It is structurally blind to the only thing that
+moved: the fast middle dropping out.
+
+And the matryoshka says which way. **ws2/ws3/ws4 are the faster lines and have already rolled over
+while ws9..ws12 are slower and still elevated because they lag.** Fast turning first with slow not
+yet caught up is a down move in progress -> SHORT.
+
+The outcome agrees, measured at swing 0.70:
+
+| side | MAE | MFE | stretch |
+|---|---|---|---|
+| LONG, what the flip traded | **1.571** | 1.870 | 09:32 -> 11:12:40, 100 min |
+| **SHORT, the dr-bias side** | **0.008** | **1.571** | 09:32 -> 10:04:05, 32 min |
+
+## JOE'S SIZING READ — PARKED TO MVP3, HIS WORD
+
+Joe 1006: *"the mage cascade from ws6 to ws12 is going upwards, while the fast lines are pressing
+down. this split tells us that there is strong upward pressure, so the short position at 09:32 will
+likely be a small trade"*, and the denominator: *"small relative to the bullish leg that it was on.
+the whole leg was ~9%"*.
+
+| | value |
+|---|---|
+| the SHORT's MFE | **1.571** |
+| the bullish leg it fought, Joe's read | **~9 %** |
+| the SHORT captured | **~17 % of the leg** |
+
+NOT a claim about the mech. Joe 1006: *"for the updated mech, the size claim is less important at
+the moment. it'll come in to play when we're sizing lots - MVP3 maybe"*. Banked here so MVP3 has the
+number rather than a recollection. The ~9 % is Joe's read of the leg and has not been re-measured.
+
+## HELD, AT JOE'S WORD
+
+**mage-cascade as a text string in the table.** Joe 1006: *"this also shows that we need
+mage-cascade as a text string in the table, but hold on that work for now - I might have more
+adjustments coming"*. Not started.
+
+## STILL JOE'S TO RULE, both surfaced by this row
+
+| # | the question |
+|---|---|
+| 1 | a MINIMUM net before the grade may flip a side. 09:32 flipped on +3.61 inside a 27.78 spread |
+| 2 | may a ONE-MEMBER D block fire at all. 09:32's block is ws1 alone, band [93.7208, 100.0000] |
