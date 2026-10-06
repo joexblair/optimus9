@@ -11,7 +11,7 @@ decision I made and named; it is a proposal, not a fact. **BANKED** = already in
 | knob | value | owner | source |
 |---|---|---|---|
 | mtd lines | g5 / g15 / g30 / ws1 Mage | JOE | 1004 mtd spec |
-| mtd step-1 lookback | **48 bars = 4 min** | MINE | measured knee, 09-25: 4 min captures 39 of 39 signals, nothing past it adds one; 2 min caught 29 of 39. `1003_lazy_g_spec.md` |
+| **`g5extrema_lookback`** (mtd step-1) — renamed 1006 on Joe's word, *"add `g5extrema`"*; it is NOT `rev_lookback`, which is a different knob at the same 48 bars | **48 bars = 4 min** | MINE | measured knee, 09-25: 4 min captures 39 of 39 signals, nothing past it adds one; 2 min caught 29 of 39. `1003_lazy_g_spec.md` |
 | mtd extrema test | **same-dr**, both the lookback and the forward walk | JOE | 1004, *"that's my mistake - the extrema test is same-dr"* + *"yes same-dr for the forward walk too"* |
 | mtd step-2 read bar | the step-1 extrema | JOE | 1004 rollback, *"you're absolutely right. rollback"* |
 | mtd per-line tolerance | g5 0 · g15 **3** · g30 **6** · ws1 0 bars (= 0 s / 15 s / 30 s / 0 s) | MINE | Joe 1004 *"your call on the #2 window size"*. Anchored to CONSTRUCTION — each line's own bar width, the most its close can lag a 5 s close. A 5-120 s sweep showed no stability knee |
@@ -19,7 +19,8 @@ decision I made and named; it is a proposal, not a fact. **BANKED** = already in
 | `LAZY_G_D_GAP_MAX` | **4** skipped TFs in the ex-fence block | JOE | 1004, explicitly arbitrary, *"I'm choosing 4 as an arbitrary knob (add to spec for sweeping)"* — NOT YET SWEPT |
 | branch D ladder | ws1..ws12 r, ws1 claims its floater value when the divergence test fires | JOE | 1004, *"the floater, ie the moment when ws1r completed its purpose"* |
 | branch D band test | higher TFs have no claim unless they print between ws1r and the weakest ex-fence r | JOE | 1004 answer 3 |
-| branch D grade | Mage net ws1->ws12. AWAY from dr = with-trend · TOWARDS = against-trend | JOE | 1004 |
+| branch D grade | Mage net ws1->ws12. **AWAY from dr = against-trend · TOWARDS = with-trend** | JOE | **1006** |
+| ~~branch D grade, 1004~~ | ~~AWAY = with-trend · TOWARDS = against-trend~~ — **INVERTED, corrected 1006** | JOE | 1004 |
 | warm-up | **2160 bars = 3 h** before any printed span | JOE | 1004 ruling |
 | `rig.DR` | per bar, rebuilt from `sweep_v3_signal.Rig.__init__:99-106` | JOE | 1004, *"the report's rows must honour rig.DR"* |
 | `STALL_N` | 6 | BANKED | Joe 0814 |

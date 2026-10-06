@@ -34,65 +34,89 @@ try:
     if hasattr(_J, 'momo_bank'): _J.momo_bank = _bank
 except Exception: pass
 
-# ============================= WHAT ACTUALLY REACHES AN OCTO-SIG =============================
-# MEASURED 1005, and it corrected my own 32-knob census: `report_leash_walk` calls exactly TWO
-# jig/momentum entry points -- `flat_run_at` (line 194) and `ws1mage_rev` (line 197). It never calls
-# anchor_floater, sideways_reversal, wsf_qualify, ws_fin_9of12 or weak_mage_tf, so SR_*, WSF_*, WMT_*
-# and AF_BLOCK CANNOT move a signal. They were in my census because they are Jig knobs, not because
-# they are on this mech's path.
-#
-# AND: `ws1mage_rev(g1, sig_mage, hi, lo, dwell=WS1MR_DWELL, rev_wob=WS1MR_REV_WOB, hold=WS1MR_HOLD,
-# gate='rev')` binds those as POSITIONAL DEFAULTS at def time -- __defaults__ == (3, 2, 4, 'rev').
-# `setattr(jig, 'WS1MR_DWELL', v)` reaches NOTHING. Four cells banked identical values before this
-# was caught. The fix patches the function's __defaults__ tuple, which both the jig module and
-# report_leash_walk's direct import see, because it is the same function object.
-_W1 = UP.RLW.ws1mage_rev
-_W1_BASE = list(_W1.__defaults__)            # (dwell, rev_wob, hold, gate)
-def set_w1(idx, val):
-    d = list(_W1_BASE); d[idx] = val; _W1.__defaults__ = tuple(d)
-def reset_w1(): _W1.__defaults__ = tuple(_W1_BASE)
+# ===================== THE THREE REAL KNOB STORES, ALL MEASURED 1005 =====================
+# Three wrong stores were tried and discarded before these were found, each verified by A/B rather
+# than by reading:
+#   1. jig module constants  -> ws1mage_rev binds them as DEFAULT ARGS at def time. setattr: no-op.
+#   2. the function __defaults__ -> the walk passes dwell/rev_wob/hold EXPLICITLY from rig.C.
+#   3. momo_config v1 (DB)   -> walk_mom_models.momentum_true OVERWRITES 5 keys from WS1_CFG, and
+#                               momo_window(SPAN_MIN=10) overrides the bank's momo_window_min 60.
+# What actually moves an octo-sig:
+#   rig.C   a plain dict on the CACHED Rig. Mutate between cells, no reload.
+#   WS1_CFG walk_mom_models.WS1_CFG - slope_min 0.4, slack_ref 0.4, r2_min 0.7, level_slack 13.9
+#   SPAN    walk_mom_models.SPAN_MIN = 10, the lattice span the chain runs at
+_RIGREF = {}
+def _rig():
+    # the Rig is built lazily by UP.walk_day; force it so snap() has something to read
+    if UP._RIG is None:
+        import datetime as _dt
+        ms = int(_dt.datetime(2026, 10, 4, tzinfo=_dt.timezone.utc).timestamp() * 1000)
+        UP._cached_rig((ms, ms + 86400000))
+    return UP._RIG
 
-MOMO_KEYS = ('mmc_momo_slope_min','mmc_momo_slack_ref','mmc_momo_r2_min','mmc_momo_window_min',
-             'mmc_momo_step_min','mmc_momo_fixed_samples','mmc_k_window','mmc_level_slack',
-             'mmc_curl_arc_min','mmc_curl_vtx_lo','mmc_curl_vtx_hi','mmc_curl_r2_min')
-
-# knob, lo, hi, step, where   where in {'w1d','w1r','w1h','rlw','momo'}
+# knob, lo, hi, step, store
 GRIDS = [
- ('WS1MR_DWELL',    1,    12,   1,    'w1d'),
- ('WS1MR_REV_WOB',  1,    6,    1,    'w1r'),
- ('WS1MR_HOLD',     1,    12,   1,    'w1h'),
- ('MOMO_SAMPLES',   2,    8,    1,    'rlw'),
- ('MOMO_TOL',       0.50, 5.00, 0.05, 'rlw'),
- ('mmc_momo_slope_min',     0.10, 5.00, 0.05, 'momo'),
- ('mmc_momo_slack_ref',     0.10, 5.00, 0.05, 'momo'),
- ('mmc_momo_r2_min',        0.00, 1.00, 0.05, 'momo'),
- ('mmc_momo_window_min',    15,   120,  5,    'momo'),
- ('mmc_momo_step_min',      1,    15,   1,    'momo'),
- ('mmc_momo_fixed_samples', 5,    41,   2,    'momo'),
- ('mmc_k_window',           1,    12,   1,    'momo'),
- ('mmc_level_slack',        0.0,  20.0, 0.5,  'momo'),
- ('mmc_curl_arc_min',       0.0,  15.0, 0.5,  'momo'),
- ('mmc_curl_vtx_lo',        0.00, 0.50, 0.05, 'momo'),
- ('mmc_curl_vtx_hi',        0.50, 1.00, 0.05, 'momo'),
- ('mmc_curl_r2_min',        0.00, 1.00, 0.05, 'momo'),
+ # --- rig.C: the walk's own mechanics
+ ('dwell',            1,    12,   1,    'C'),
+ ('rev_wob',          1,    8,    1,    'C'),
+ ('boundary_xwob',    1,    12,   1,    'C'),
+ ('stall_n',          2,    12,   1,    'C'),
+ ('momo_fence_r',     5,    30,   1,    'C'),
+ ('momo_xwob',        1,    10,   1,    'C'),
+ ('momo_span_min',    4,    30,   2,    'C'),
+ ('oob_hi',           70.0, 95.0, 0.5,  'C'),
+ ('fence_hi',         60.0, 90.0, 0.5,  'C'),
+ ('fence',            35.0, 65.0, 0.5,  'C'),
+ ('xwob',             1,    12,   1,    'C'),
+ ('r_wob',            1,    10,   1,    'C'),
+ ('count_min',        1,    8,    1,    'C'),
+ ('support_min',      8,    23,   1,    'C'),
+ ('return_bars',      1,    12,   1,    'C'),
+ ('xrace_hold',       1,    15,   1,    'C'),
+ ('mage_dwell',       2,    24,   2,    'C'),
+ ('lookback_s',       60,   600,  30,   'C'),
+ ('tp_lookback_min',  1,    12,   1,    'C'),
+ ('ride_tf_hi',       1,    12,   1,    'C'),
+ ('dwell_min_per_tf', 1,    6,    1,    'C'),
+ ('confirm_lag_s',    30,   360,  30,   'C'),
+ ('wmt_tf_hi',        8,    23,   1,    'C'),
+ ('wmt_tf_lo',        1,    6,    1,    'C'),
+ # --- WS1_CFG: the LIVE momentum knobs (momo_config's are overwritten)
+ ('momo_slope_min',   0.05, 3.00, 0.05, 'W'),
+ ('momo_slack_ref',   0.05, 3.00, 0.05, 'W'),
+ ('momo_r2_min',      0.00, 1.00, 0.05, 'W'),
+ ('level_slack',      0.0,  30.0, 0.5,  'W'),
+ # --- the lattice span
+ ('SPAN_MIN',         2,    30,   2,    'S'),
 ]
-INT = {'WS1MR_DWELL','WS1MR_REV_WOB','WS1MR_HOLD','MOMO_SAMPLES',
-       'mmc_momo_window_min','mmc_momo_step_min','mmc_momo_fixed_samples','mmc_k_window'}
-W1IDX = {'w1d': 0, 'w1r': 1, 'w1h': 2}
+FLOATK = {'oob_hi','fence_hi','fence','momo_slope_min','momo_slack_ref','momo_r2_min','level_slack'}
 
 def grid(lo, hi, st):
     n = int(round((hi - lo) / st)) + 1
     return [round(lo + i * st, 6) for i in range(n)]
 
+_BASE = {}
+def snap():
+    r = _rig()
+    for n, _a, _b, _c, w in GRIDS:
+        if   w == 'C': _BASE[n] = r.C[n]
+        elif w == 'W': _BASE[n] = UP.RLW.W.WS1_CFG[n]
+        else:          _BASE[n] = UP.RLW.W.SPAN_MIN
+
 def apply_knob(name, where, val):
-    if where in W1IDX: set_w1(W1IDX[where], val)
-    elif where == 'rlw': setattr(UP.RLW, name, val)
-    else: MOMO_OVR[name] = val
+    if   where == 'C': _rig().C[name] = val
+    elif where == 'W': UP.RLW.W.WS1_CFG[name] = val
+    else:              UP.RLW.W.SPAN_MIN = val
 
 def reset_all():
-    reset_w1(); MOMO_OVR.clear()
-    UP.RLW.MOMO_SAMPLES = _RLW_BASE['MOMO_SAMPLES']; UP.RLW.MOMO_TOL = _RLW_BASE['MOMO_TOL']
-_RLW_BASE = {'MOMO_SAMPLES': UP.RLW.MOMO_SAMPLES, 'MOMO_TOL': UP.RLW.MOMO_TOL}
+    r = _rig()
+    for n, _a, _b, _c, w in GRIDS:
+        if   w == 'C': r.C[n] = _BASE[n]
+        elif w == 'W': UP.RLW.W.WS1_CFG[n] = _BASE[n]
+        else:          UP.RLW.W.SPAN_MIN = _BASE[n]
+    # oob_lo and fence_lo mirror their hi partners (oob is 15/85, the fence is 25/75)
+    r.C['oob_lo'] = 100.0 - r.C['oob_hi']
+    r.C['fence_lo'] = 100.0 - r.C['fence_hi']
 
 DDL = """CREATE TABLE IF NOT EXISTS lazyg_sweep_up (
     lu_pk BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -142,17 +166,18 @@ def score_set(days, sigmap):
 if __name__ == '__main__':
     db = DatabaseManager(**get_db_config()); db.connect(); db.execute(DDL)
     mine = [g for i, g in enumerate(GRIDS) if i % NSHARD == SHARD]
+    snap()
     print('# shard %d/%d | %d knobs | %d cells | FIT %d days TEST %d days'
           % (SHARD, NSHARD, len(mine), sum(len(grid(a,b,c)) for _n,a,b,c,_w in mine), len(FIT), len(TEST)), flush=True)
     base = None
     for name, lo, hi, st, where in mine:
-        if where == 'momo':   cur = float(_REAL_BANK(db, 5)[name])
-        elif where in W1IDX:  cur = float(_W1_BASE[W1IDX[where]])
-        else:                 cur = float(_RLW_BASE[name])
+        cur = float(_BASE[name])
         for val in grid(lo, hi, st):
-            v = int(val) if name in INT else float(val)
+            v = float(val) if name in FLOATK else int(val)
             t0 = time.time()
             reset_all(); apply_knob(name, where, v)
+            if name == 'oob_hi':   _rig().C['oob_lo'] = 100.0 - v
+            if name == 'fence_hi': _rig().C['fence_lo'] = 100.0 - v
             sig = {}
             ok = True
             for day in FIT + TEST:

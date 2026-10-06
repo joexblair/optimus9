@@ -39,7 +39,7 @@ from optimus9.config import get_db_config
 FIT = ['2026-09-%02d' % d for d in (25, 26, 27, 28, 29, 30)] + ['2026-10-%02d' % d for d in (1, 2, 3, 4)]
 TEST = [l.strip() for l in open(_os.path.join(_HERE, 'oos7.txt')) if l.strip()]
 COST = 0.1975
-CUR = dict(swing=0.70, stop=0.95, risk=1.5, pyr=0, lookback=48, tol15=3, tol30=6,
+CUR = dict(swing=0.70, stop=0.95, risk=1.5, pyr=0, g5extrema_lookback=48, tol15=3, tol30=6,
            fence=85.0, rev_wob=2, gap_max=4, af_block=60)
 
 # ---------- the signal pool: every octo-sig bar of every day, read ONCE
@@ -65,7 +65,7 @@ def route(k, c):
     if d == 0: return (None, None, 0)
     HI, LO = c['fence'], 100.0 - c['fence']
     same = (lambda v: v >= HI) if d > 0 else (lambda v: v <= LO)
-    a = max(0, k - c['lookback'])
+    a = max(0, k - c['g5extrema_lookback'])
     g5 = S.MTD['g5']
     hits = [i for i in range(a, k + 1) if np.isfinite(g5[i]) and same(g5[i])]
     if hits:
@@ -110,7 +110,14 @@ def route(k, c):
     if claim: return ('OPEN', 'band claimed', d)
     mnet = S.Mg[12][ex] - S.Mg[1][ex]
     away = (mnet < 0) if d > 0 else (mnet > 0)
-    return ('CONFLUENCE', 'with-trend' if away else 'against-trend', d)
+    # GRADE CORRECTED 1006. Joe: *"`with-trend` would be SHORT because dr is -1. the truth is
+    # what the MAE and MFE are reporting - the only change to make is `against-trend`"*. The
+    # mapping was recorded in 1005_knobs.md:22 as his 1004 ruling, AWAY = with-trend, and it is
+    # inverted. AWAY from dr is now **against-trend**; TOWARDS is **with-trend**, which matches
+    # 1003_lazy_g_spec.md:403 - *"present = with-trend, absent = against-trend"*.
+    # THE STAGE-2 FLIP POPULATION DOES NOT MOVE. Every selector is pinned to `away` itself, not
+    # to the label, so the rows Joe flipped on 1005 are the same rows. Only their NAME changed.
+    return ('CONFLUENCE', 'against-trend' if away else 'with-trend', d)
 
 # ---------- pivots, cached per swing pct (the only sequential cost)
 _PIV = {}
@@ -187,7 +194,7 @@ def grid(lo, hi, st):
 OAT = [  # knob, lo, hi, step  — the 11 DOWNSTREAM knobs
  ('swing',    0.40, 2.00, 0.05), ('stop',     0.30, 1.50, 0.05),
  ('risk',     0.50,10.00, 0.10), ('pyr',      0,    4,    1),
- ('lookback', 12,   240,  12),   ('tol15',    0,    12,   1),
+ ('g5extrema_lookback', 12, 240, 12),   ('tol15',    0,    12,   1),
  ('tol30',    0,    12,   1),    ('fence',    70.0, 95.0, 0.5),
  ('rev_wob',  1,    6,    1),    ('gap_max',  0,    11,   1),
  ('af_block', 12,   180,  12),
@@ -219,7 +226,7 @@ COLS = ('ls_stage,ls_knob,ls_swing,ls_stop,ls_risk,ls_pyr,ls_lookback,ls_tol15,l
         'ls_fit_dd,ls_test_n,ls_test_total,ls_test_mean,ls_test_wins,ls_test_fin,ls_test_dd,ls_robust')
 
 def row(stage, knob, c, f, t):
-    return (stage, knob, c['swing'], c['stop'], c['risk'], c['pyr'], c['lookback'], c['tol15'],
+    return (stage, knob, c['swing'], c['stop'], c['risk'], c['pyr'], c['g5extrema_lookback'], c['tol15'],
             c['tol30'], c['fence'], c['rev_wob'], c['gap_max'], c['af_block'],
             f['n'], round(f['total'],4), round(f['mean'],5), f['wins'], round(f['fin'],6), round(f['dd'],5),
             t['n'], round(t['total'],4), round(t['mean'],5), t['wins'], round(t['fin'],6), round(t['dd'],5),
@@ -343,7 +350,7 @@ if __name__ == '__main__':
     for knob, lo, hi, st in OAT:
         g = grid(lo, hi, st); k0 = time.time(); fm = []; tm = []; rb = []
         for val in g:
-            c = dict(CUR); c[knob] = int(val) if knob in ('pyr','lookback','tol15','tol30','rev_wob','gap_max','af_block') else val
+            c = dict(CUR); c[knob] = int(val) if knob in ('pyr','g5extrema_lookback','tol15','tol30','rev_wob','gap_max','af_block') else val
             f = metrics(FIT, c, SIG); t = metrics(TEST, c, SIG)
             ins.append(row('oat', knob, c, f, t))
             fm.append(f['mean']); tm.append(t['mean']); rb.append(min(f['mean'], t['mean']))

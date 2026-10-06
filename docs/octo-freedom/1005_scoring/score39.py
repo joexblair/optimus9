@@ -40,7 +40,15 @@ sys.stderr = _e
 EM = int(dt.datetime.strptime(_os.environ.get('LG_TAPE_END', '2026-10-04'), '%Y-%m-%d')
         .replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
 HI, LO, REV_WOB, GAP_MAX = 85.0, 15.0, 2, 4
-LOOKBACK_BARS = 48
+G5EXTREMA_LOOKBACK_BARS = 48
+"""Joe 1006: *"mod the knob label - add `g5extrema`"*. Renamed from `LOOKBACK_BARS`, which sat one
+word away from `rev_lookback` (the ws1mage-rev mask in the walk) at the SAME 48 bars / 240 s while
+doing an unrelated job. Same naming hazard Joe caught earlier today in `rev_lookback_mask`, which
+does not read `rev` at all.
+
+THIS KNOB HAS EXACTLY ONE JOB, used once at :76 - how far back mtd step 1 searches for the g5Mage
+oob extrema. It never touches the arm, the coil, the qualify, the race, the TOL windows or branch D.
+"""
 TOL = {'g5': 0, 'g15': 3, 'g30': 6, 'ws1': 0}
 db = DatabaseManager(**get_db_config()); db.connect()
 spec = {}
@@ -73,7 +81,7 @@ def mtd(k):
     d = int(DRv[k])
     if d == 0: return {'route': 'no dr', 'src': '-', 'ex': None, 'd': 0}
     same = (lambda v: v >= HI) if d > 0 else (lambda v: v <= LO)
-    a = max(0, k - LOOKBACK_BARS)
+    a = max(0, k - G5EXTREMA_LOOKBACK_BARS)
     hits = [i for i in range(a, k + 1) if np.isfinite(MTD['g5'][i]) and same(MTD['g5'][i])]
     if hits:
         ex = max(hits, key=lambda i: MTD['g5'][i]) if d > 0 else min(hits, key=lambda i: MTD['g5'][i])
@@ -105,10 +113,32 @@ def mtd(k):
     towards = (net > 0) if d > 0 else (net < 0)
     route = 'mtd.r1' if r1 else ('mtd.r2' if towards else 'neither')
     allow = ('LONG' if d > 0 else 'SHORT') if route == 'mtd.r2' else '-'
-    return {'route': route, 'src': src, 'ex': ex, 'd': d, 'v': v, 'net': net, 'noob': noob,
-            'miss': miss, 'towards': towards, 'allow': allow, 'lag': (ts[ex] - ts[k]) / 60000.0}
+    # `vbar` added 1005 for octosig_neither_why: the BAR each line's tolerance-window extremum was
+    # taken from. Nothing else reads it, so the report's output is unchanged - verified.
+    return {'route': route, 'src': src, 'ex': ex, 'd': d, 'v': v, 'vbar': vbar, 'net': net,
+            'noob': noob, 'miss': miss, 'towards': towards, 'allow': allow,
+            'lag': (ts[ex] - ts[k]) / 60000.0}
 
 # ---------------- branch D, verbatim from branchD.py
+CLAIM_HOP = 3
+"""THE CLAIM ADJACENCY BOUND. Joe 1005: *"this can't be claimed by lines that are so far away from
+the action (action = ws2r is stronger than ws3r)"* and *"if the ws4r or ws5r were printing r
+ex-fence, that would qualify band claimed. skipping 1 or 2 TFs in a baton handoff is not unusual"*.
+Block top ws2 -> ws4 is +2 and ws5 is +3, so his examples reach +3. His ruling, 1005: *"A at +3
+makes sense based your findings"*.
+
+A claimer must now sit within +3 TFs of the top of `keep`. The in-band test is unchanged.
+
+WHY NOT HIS SENTENCE READ LITERALLY (near AND ex-fence): that case is EMPTY BY CONSTRUCTION, and it
+was measured. `keep` absorbs anything ex-fence within a GAP_MAX = 4 gap, so an ex-fence line within
+4 TFs of the top is already a block MEMBER and cannot be a claimer. Across the 43 `band claimed`
+rows on 12 days there were ZERO ex-fence claimers at hop <= 5; every one sat at +6 or further.
+Requiring ex-fence would have released all 43, i.e. deleted the test.
+
+MEASURED AT +3: 11 of 43 rows released, median MAE 0.2032, mean MFE 0.8555, 4 of the 11 over 0.70.
+"""
+
+
 def branchD(d, ex):
     exf = (lambda v: v >= HI) if d > 0 else (lambda v: v <= LO)
     blk = [t for t in TF if np.isfinite(Rl[t][ex]) and exf(Rl[t][ex])]
@@ -125,7 +155,9 @@ def branchD(d, ex):
         return {'fire': False, 'why': 'no r block', 'keep': [], 'claim': [], 'net': None, 'band': None}
     weak = min(keep, key=lambda t: Rl[t][ex]) if d > 0 else max(keep, key=lambda t: Rl[t][ex])
     band = (min(w1, Rl[weak][ex]), max(w1, Rl[weak][ex]))
-    claim = [t for t in TF if t > max(keep) and np.isfinite(Rl[t][ex]) and band[0] <= Rl[t][ex] <= band[1]]
+    top = max(keep)
+    claim = [t for t in TF if top < t <= top + CLAIM_HOP and np.isfinite(Rl[t][ex])
+             and band[0] <= Rl[t][ex] <= band[1]]
     net = Mg[12][ex] - Mg[1][ex]
     away = (net < 0) if d > 0 else (net > 0)
     return {'fire': not claim, 'why': 'band claimed' if claim else 'fires', 'keep': keep, 'drop': drop,
@@ -164,22 +196,67 @@ for ln in open(_os.path.join(_HERE, 'octosig') + '/%s.out' % DAY):
             k = K(DAY + ' ' + f[2])
             if A0 <= k <= A1: OS.append((k, f[2]))
 
-ROWS = []
-for k, lbl in OS:
+MTD_WALK_BARS = 24
+"""THE 2 MINUTE FORWARD WALK. Joe 1005: *"bake the 2 minute forward walk"*.
+
+24 bars = 120 s at the 5 s grid. When mtd does not route at the octo-sig bar, the walk walks: mtd is
+re-tested at EVERY bar forward until it routes r1 or r2, or the window runs out. CAUSAL - mtd(j)
+reads only bars at or before j.
+
+MEASURED BEFORE BAKING, on the 64 `neither` signals over 12 days:
+  changed at 1 min   11 of 64
+  changed at 2 min   22 of 64   (21 -> mtd.r1, 1 -> mtd.r2)
+  MAE mean           0.5941 -> 0.5920   (-0.0021)
+  MFE mean           0.7787 -> 0.8653   (+0.0867)
+  MAE > 0.70 BLOCK   7 -> 5
+The arm-bar alternative was measured and REJECTED: mtd qualifies somewhere in the arm -> octo-sig
+stretch on 55 of 64 but on only a median 53.8 % of its bars and on every bar for NONE of them - it
+flickers - and taking the first qualification moved entry a median 54.5 min earlier for MAE mean
++0.2970, MFE mean -0.2399 and 12 more BLOCKs.
+
+THE ENTRY BAR MOVES TO THE QUALIFYING BAR. That is the version the numbers above were measured on.
+"""
+
+
+def classify(k, lbl=None):
+    """mtd + branch D -> the BLOCK / CONFLUENCE / OPEN row for one octo-sig bar.
+
+    LIFTED OUT OF THE ROWS LOOP 1005 so `octosig_db.py` calls it instead of copying these fourteen
+    lines. Joe 1005: *"using sanctioned producers keeps us whole and prevents sweeping
+    misunderstandings"*. The loop below now calls it, so the report and the DB table cannot answer
+    the status question differently. Behaviour unchanged.
+    """
     m = mtd(k)
+    kw = k                                    # the bar the route was taken on
+    if m['route'] not in ('mtd.r1', 'mtd.r2') and MTD_WALK_BARS > 0:
+        for j in range(k + 1, min(TAPE_LAST, k + MTD_WALK_BARS) + 1):
+            m2 = mtd(j)
+            if m2['route'] in ('mtd.r1', 'mtd.r2'):
+                m, kw = m2, j
+                break
     d = m['d']; side = 'SHORT' if d > 0 else 'LONG'
-    r = {'k': k, 'lbl': lbl, 'd': d, 'side': side, 'm': m}
+    r = {'k': k, 'kw': kw, 'walk_bars': kw - k, 'lbl': lbl, 'd': d, 'side': side, 'm': m}
     if m['route'] == 'mtd.r1':
         dd = branchD(d, m['ex']); r['D'] = dd
         if dd['fire']:
-            r['status'] = 'CONFLUENCE'; r['grade'] = 'with-trend' if dd['away'] else 'against-trend'
+            # GRADE CORRECTED 1006. Joe: *"`with-trend` would be SHORT because dr is -1. the truth is
+            # what the MAE and MFE are reporting - the only change to make is `against-trend`"*. The
+            # mapping was recorded in 1005_knobs.md:22 as his 1004 ruling, AWAY = with-trend, and it is
+            # inverted. AWAY from dr is now **against-trend**; TOWARDS is **with-trend**, which matches
+            # 1003_lazy_g_spec.md:403 - *"present = with-trend, absent = against-trend"*.
+            # THE STAGE-2 FLIP POPULATION DOES NOT MOVE. Every selector is pinned to `away` itself, not
+            # to the label, so the rows Joe flipped on 1005 are the same rows. Only their NAME changed.
+            r['status'] = 'CONFLUENCE'; r['grade'] = 'against-trend' if dd['away'] else 'with-trend'
         else:
             r['status'] = 'OPEN'; r['grade'] = dd['why']
     elif m['route'] == 'mtd.r2':
         r['status'] = 'BLOCKED'; r['grade'] = 'allows %s only' % m['allow']
     else:
         r['status'] = 'OPEN'; r['grade'] = 'no rule'
-    ROWS.append(r)
+    return r
+
+
+ROWS = [classify(k, lbl) for k, lbl in OS]
 
 # ---------------- the swing-size sweep
 print('## SWING SIZE SWEEP — the measurement that picks the pct')

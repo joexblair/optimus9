@@ -40,7 +40,16 @@ def sc(k, d):
 side = lambda d: 'SHORT' if d > 0 else 'LONG'
 for r in ROWS:
     d = r['d']; k = r['k']
-    r['flip'] = (r['status'] == 'CONFLUENCE' and r['grade'] == 'with-trend')
+    # REPINNED TO `towards` 1006. Joe: *"understood - make them towards"*, after identifying the
+    # flip population from the table itself: *"979 (os_pk) and more are `CONFLUENCE with-trend`
+    # which is our agreed pyramid signal"*. with-trend is net TOWARDS dr under the 1006 label
+    # correction, so the flip is `not away`. Measured before repinning, 53 towards rows:
+    #   MAE mean  0.921 -> 0.403   MFE mean  0.799 -> 1.189   rows over 0.70  19 -> 11
+    # The 175 `away` rows barely move when flipped (MAE 0.603 -> 0.452), which is why towards is
+    # the population that behaves like a pyramid signal.
+    # CONSEQUENCE, STATED: stop 0.95 and risk 1.5 % were derived with the flip on `away`. They are
+    # PROVISIONAL until re-derived. Joe 1006: no P&L activity for now, so nothing here is re-run.
+    r['flip'] = (r['status'] == 'CONFLUENCE' and not r.get('D', {}).get('away', True))
     r['deff'] = -d if r['flip'] else d                     # +1 = SHORT in the scorer
     r['A'] = sc(k, d)
     r['B'] = sc(k, r['deff'])

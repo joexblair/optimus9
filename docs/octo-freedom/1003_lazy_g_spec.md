@@ -401,6 +401,7 @@ On 03:30, same branch:
 |---|---|
 | the firing condition | **the r-cascade.** 03:30 has no mage-cascade and Joe still called it confluenced |
 | the mage-cascade | **a grade, not a gate** - present = with-trend, absent = against-trend |
+| the grade, in code terms | Mage net ws1->ws12. **TOWARDS dr = with-trend · AWAY from dr = against-trend**. Joe 1006: *"`with-trend` would be SHORT because dr is -1. the truth is what the MAE and MFE are reporting - the only change to make is `against-trend`"*. `1005_knobs.md` carried the inverse as his 1004 ruling and it was wrong. The STAGE-2 FLIP population is unchanged: every selector is pinned to `away`, not to the label |
 | branch D's verdict | **confluence.** Joe called both 02:12 and 03:30 confluenced. Unlike B and C, D has a direction |
 | against-trend consequence | *"should create a smaller sized position to handled slippage costs"* - **MVP2**, not this build |
 | magnitude thresholds | **none.** Joe 1004: *"unlikely. the mech needs lines to be under or over the starting block"* - the test is positional, not magnitude |

@@ -1,6 +1,14 @@
 """The baton chain, the stalled counts and r's trajectory, every row honouring rig.DR per bar.
 argv: START END [OCTOSIG_FILE]
 
+SPLIT 1005 INTO compute() + render(), NO BEHAVIOUR CHANGE. Joe 1005: *"using sanctioned producers
+keeps us whole and prevents sweeping misunderstandings"*. The window compute used to run at module
+import, so nothing could call it and `octosig_db.py` would have had to re-implement the stall/baton/
+traj walk - the divergent copy this project keeps paying for (`walk_mom_models.py:175` records one
+that drifted to 75/25 while asserting it was verbatim at 15/85). Now both the report and the DB
+builder call `compute()`. Verified byte-identical against
+`transfer/2026-09-25_baton_stall_octosig_fullday.txt` before any row was inserted.
+
 JOE 1004, RULING: "the report's rows must honour rig.DR. we are simulating o9-live walks, therefore
 we must be completely aligned". So there is NO dr argument any more. Every per-bar test - mom-true,
 stalled, trajectory - reads rig.DR AT THAT BAR. The earlier reports ran at a fixed dr +1 and are
@@ -59,13 +67,8 @@ K = lambda s: int(np.searchsorted(ts, int(dt.datetime.strptime(s, '%Y-%m-%d %H:%
 # target timestamp that we're focusing on". So the chain is WARMED from 3 h back and PRINTING starts
 # at the requested bar - row 1 is then the rider a continuous walk would be carrying, not a cold seed.
 WARM_BARS = 3 * 3600 // 5                      # 2160 bars = 3 h at the 5 s grid
-P = K(sys.argv[1])                             # the first PRINTED bar
-A = max(0, P - WARM_BARS)                      # the first WALKED bar
-B = K(sys.argv[2]); N = B - A + 1
-if A == 0 or P - A < WARM_BARS:
-    print('# WARNING: only %.2f h of warm-up available, not 3 h' % ((P - A) * 5 / 3600.0))
 
-# ---- rig.DR, per bar
+# ---- rig.DR, per bar. WINDOW-INDEPENDENT, so it is built ONCE at import, not per call.
 G1, M13 = LD(60, 'Mage'), LD(13 * 60, 'm')
 DRv = np.zeros(len(ts), np.int8); cur = 0
 for k in range(min(len(ts), len(G1), len(M13))):
@@ -74,122 +77,152 @@ for k in range(min(len(ts), len(G1), len(M13))):
         if a >= 85.0 and b >= 85.0: cur = +1
         elif a <= 15.0 and b <= 15.0: cur = -1
     DRv[k] = cur
-D = DRv[A:B + 1]
-if (D == 0).any():
-    raise SystemExit('rig.DR is 0 on %d bars in this window - no direction, and no rule for it' % int((D == 0).sum()))
 
-# ---- mom-true and stalled, selected per bar by rig.DR
-MT = {}; ST = {}
-for t in TFS:
-    both = {}
-    for dd in (-1, +1):
+
+def compute(start_s, end_s, octosig_path=None, warn=True):
+    """The window compute, verbatim from what ran at module scope before the 1005 split.
+    -> SimpleNamespace with every array and closure the renderer and the DB builder read."""
+    P = K(start_s)                                 # the first PRINTED bar
+    A = max(0, P - WARM_BARS)                      # the first WALKED bar
+    B = K(end_s); N = B - A + 1
+    if warn and (A == 0 or P - A < WARM_BARS):
+        print('# WARNING: only %.2f h of warm-up available, not 3 h' % ((P - A) * 5 / 3600.0))
+    D = DRv[A:B + 1]
+    if (D == 0).any():
+        raise SystemExit('rig.DR is 0 on %d bars in this window - no direction, and no rule for it' % int((D == 0).sum()))
+
+    # ---- mom-true and stalled, selected per bar by rig.DR
+    MT = {}; ST = {}
+    for t in TFS:
+        both = {}
+        for dd in (-1, +1):
+            with momo_config(BANK[t]):
+                with momo_window(int(BANK[t]['k_window']) * t):
+                    step, samples = int(MC.MOMO_STEP_BARS), int(MC.MOMO_SAMPLES)
+            both[dd] = stall_mask(R[t], dd, STALL_N, step, samples)[A:B + 1]
+        ST[t] = np.where(D > 0, both[+1], both[-1])
         with momo_config(BANK[t]):
             with momo_window(int(BANK[t]['k_window']) * t):
-                step, samples = int(MC.MOMO_STEP_BARS), int(MC.MOMO_SAMPLES)
-        both[dd] = stall_mask(R[t], dd, STALL_N, step, samples)[A:B + 1]
-    ST[t] = np.where(D > 0, both[+1], both[-1])
-    with momo_config(BANK[t]):
-        with momo_window(int(BANK[t]['k_window']) * t):
-            MT[t] = np.array([momo_g_why(R[t], int(D[i]), A + i)[0] in ('momo', 'curl')
-                              for i in range(N)])
-ONSET = {t: np.flatnonzero(np.diff(np.concatenate(([0], ST[t].astype(np.int8)))) == 1) for t in TFS}
-STALL_EV = sorted([(int(x), t) for t in TFS for x in ONSET[t]])
-STALL_AT = [x for x, _t in STALL_EV]
-nst = np.array([sum(1 for t in TFS if ST[t][j]) for j in range(N)])
-nmt = np.array([sum(1 for t in TFS if MT[t][j]) for j in range(N)])
+                MT[t] = np.array([momo_g_why(R[t], int(D[i]), A + i)[0] in ('momo', 'curl')
+                                  for i in range(N)])
+    ONSET = {t: np.flatnonzero(np.diff(np.concatenate(([0], ST[t].astype(np.int8)))) == 1) for t in TFS}
+    STALL_EV = sorted([(int(x), t) for t in TFS for x in ONSET[t]])
+    STALL_AT = [x for x, _t in STALL_EV]
+    nst = np.array([sum(1 for t in TFS if ST[t][j]) for j in range(N)])
+    nmt = np.array([sum(1 for t in TFS if MT[t][j]) for j in range(N)])
 
-def traj(t, j):
-    """r's trajectory direction for TF t at bar A+j, at rig.DR. -> 'towards', 'away' or '-'."""
-    if not t: return '—'
-    d = int(D[j])
-    g = trajectory(R[t], d, A + j, AF_BLOCK, TRAJ_MIN_BARS, TRAJ_MIN_TRAVEL)
-    if g['has']: return 'towards'
-    rv = trajectory(R[t], -d, A + j, AF_BLOCK, TRAJ_MIN_BARS, TRAJ_MIN_TRAVEL)
-    return 'away' if rv['has'] else '—'
+    def traj(t, j):
+        """r's trajectory direction for TF t at bar A+j, at rig.DR. -> 'towards', 'away' or '-'."""
+        if not t: return '—'
+        d = int(D[j])
+        g = trajectory(R[t], d, A + j, AF_BLOCK, TRAJ_MIN_BARS, TRAJ_MIN_TRAVEL)
+        if g['has']: return 'towards'
+        rv = trajectory(R[t], -d, A + j, AF_BLOCK, TRAJ_MIN_BARS, TRAJ_MIN_TRAVEL)
+        return 'away' if rv['has'] else '—'
 
-# ---- octo-sig rows
-OS = []
-if len(sys.argv) > 3 and os.path.exists(sys.argv[3]):
-    day = sys.argv[1][:10]
-    for ln in open(sys.argv[3]):
-        if not ln.startswith('R|') or ln.startswith('R|run'): continue
-        f = ln.rstrip('\n').split('|')
-        if len(f) < 7: continue
-        try: k = K(day + ' ' + f[2])
-        except ValueError: continue
-        if P <= k <= B: OS.append((k, f[2], f[3], int(f[4]), int(f[5]), f[6]))
+    # ---- octo-sig rows
+    OS = []
+    if octosig_path and os.path.exists(octosig_path):
+        day = start_s[:10]
+        for ln in open(octosig_path):
+            if not ln.startswith('R|') or ln.startswith('R|run'): continue
+            f = ln.rstrip('\n').split('|')
+            if len(f) < 7: continue
+            try: k = K(day + ' ' + f[2])
+            except ValueError: continue
+            if P <= k <= B: OS.append((k, f[2], f[3], int(f[4]), int(f[5]), f[6]))
 
-# ---- PHASE 1: walk the chain. Compute only.
-RIDER = np.zeros(N, np.int16)
-CHAIN = []
-avail = lambda j: [t for t in TFS if MT[t][j] and not ST[t][j]]
-j = 0; rider = None; nn = 0
-while j < N:
-    if rider is None:
-        c = avail(j)
-        if not c: j += 1; continue
-        rider = max(c); start = j
-    if ST[rider][j] or not MT[rider][j]:
+    # ---- PHASE 1: walk the chain. Compute only.
+    RIDER = np.zeros(N, np.int16)
+    CHAIN = []
+    avail = lambda j: [t for t in TFS if MT[t][j] and not ST[t][j]]
+    j = 0; rider = None; nn = 0
+    while j < N:
+        if rider is None:
+            c = avail(j)
+            if not c: j += 1; continue
+            rider = max(c); start = j
+        if ST[rider][j] or not MT[rider][j]:
+            nn += 1
+            CHAIN.append((nn, rider, start, j, 'STALLED' if ST[rider][j] else 'lost mom-true',
+                          [x for x in avail(j) if x != rider]))
+            RIDER[start:j + 1] = rider
+            rider = None; j += 1; continue
+        j += 1
+    if rider is not None:
         nn += 1
-        CHAIN.append((nn, rider, start, j, 'STALLED' if ST[rider][j] else 'lost mom-true',
-                      [x for x in avail(j) if x != rider]))
-        RIDER[start:j + 1] = rider
-        rider = None; j += 1; continue
-    j += 1
-if rider is not None:
-    nn += 1
-    CHAIN.append((nn, rider, start, N - 1, 'still riding', avail(N - 1)))
-    RIDER[start:N] = rider
-PASSED = [c[3] for c in CHAIN]
-last_baton = lambda u: (U(A + max(b for b in PASSED if b <= u)) if any(b <= u for b in PASSED) else '—')
-last_stall = lambda u: (U(A + max(b for b in STALL_AT if b <= u)) if any(b <= u for b in STALL_AT) else '—')
+        CHAIN.append((nn, rider, start, N - 1, 'still riding', avail(N - 1)))
+        RIDER[start:N] = rider
+    PASSED = [c[3] for c in CHAIN]
+    last_baton = lambda u: (U(A + max(b for b in PASSED if b <= u)) if any(b <= u for b in PASSED) else '—')
+    last_stall = lambda u: (U(A + max(b for b in STALL_AT if b <= u)) if any(b <= u for b in STALL_AT) else '—')
 
-# ---- PHASE 2: render
-print('# %s .. %s   rig.DR PER BAR   STALL_N %d   ws3..ws23   traj block %d min_bars %d'
-      % (sys.argv[1], sys.argv[2], STALL_N, AF_BLOCK, TRAJ_MIN_BARS))
-print('# walk WARMED from %s (3 h back, Joe 1004) - printing starts at %s'
-      % (U(A), U(P)))
-print('# pxs high %s %.6f  |  pxs low %s %.6f  |  dr +1 on %d bars, -1 on %d   (PRINTED span only)'
-      % (U(P + int(np.argmax(PX[P:B+1]))), PX[P:B+1].max(), U(P + int(np.argmin(PX[P:B+1]))),
-         PX[P:B+1].min(), int((D[P-A:] > 0).sum()), int((D[P-A:] < 0).sum())))
-print('# octo-sig rows interleaved: %d' % len(OS))
-print()
-# COLUMN NAMES FIXED 1005. "stalled TFs" showed stall ONSETS while the stalled STATE appeared only
-# as a count, so the two were read as the same thing. Now: `stalled now` is the STATE list and
-# `new stalls` is the onsets since the prior row.
-print('| # | riding | traj | dr | from | to | held | why it passed | stalled | mom-true | pxs | candidates | stalled now | new stalls | baton ts | stalled ts |')
-print('|' + '---|' * 16)
-P0 = P - A
-prev = max([b for b in PASSED if b <= P0], default=0)
-for bar, kind, row in sorted([(c[3], 'baton', c) for c in CHAIN] + [(o[0] - A, 'sig', o) for o in OS]):
-    if bar < P0:
+    import types
+    return types.SimpleNamespace(
+        A=A, B=B, N=N, P=P, D=D, MT=MT, ST=ST, ONSET=ONSET, STALL_EV=STALL_EV, STALL_AT=STALL_AT,
+        nst=nst, nmt=nmt, traj=traj, OS=OS, RIDER=RIDER, CHAIN=CHAIN, PASSED=PASSED,
+        avail=avail, last_baton=last_baton, last_stall=last_stall)
+
+
+def render(C, start_s, end_s):
+    """PHASE 2, verbatim. Reads only what compute() returned."""
+    A, B, N, P, D = C.A, C.B, C.N, C.P, C.D
+    MT, ST, nst, nmt = C.MT, C.ST, C.nst, C.nmt
+    ONSET, STALL_EV, STALL_AT = C.ONSET, C.STALL_EV, C.STALL_AT
+    traj, OS, RIDER, CHAIN, PASSED = C.traj, C.OS, C.RIDER, C.CHAIN, C.PASSED
+    avail, last_baton, last_stall = C.avail, C.last_baton, C.last_stall
+    # ---- PHASE 2: render
+    print('# %s .. %s   rig.DR PER BAR   STALL_N %d   ws3..ws23   traj block %d min_bars %d'
+          % (start_s, end_s, STALL_N, AF_BLOCK, TRAJ_MIN_BARS))
+    print('# walk WARMED from %s (3 h back, Joe 1004) - printing starts at %s'
+          % (U(A), U(P)))
+    print('# pxs high %s %.6f  |  pxs low %s %.6f  |  dr +1 on %d bars, -1 on %d   (PRINTED span only)'
+          % (U(P + int(np.argmax(PX[P:B+1]))), PX[P:B+1].max(), U(P + int(np.argmin(PX[P:B+1]))),
+             PX[P:B+1].min(), int((D[P-A:] > 0).sum()), int((D[P-A:] < 0).sum())))
+    print('# octo-sig rows interleaved: %d' % len(OS))
+    print()
+    # COLUMN NAMES FIXED 1005. "stalled TFs" showed stall ONSETS while the stalled STATE appeared only
+    # as a count, so the two were read as the same thing. Now: `stalled now` is the STATE list and
+    # `new stalls` is the onsets since the prior row.
+    print('| # | riding | traj | dr | from | to | held | why it passed | stalled | mom-true | pxs | candidates | stalled now | new stalls | baton ts | stalled ts |')
+    print('|' + '---|' * 16)
+    P0 = P - A
+    prev = max([b for b in PASSED if b <= P0], default=0)
+    for bar, kind, row in sorted([(c[3], 'baton', c) for c in CHAIN] + [(o[0] - A, 'sig', o) for o in OS]):
+        if bar < P0:
+            prev = bar
+            continue
+        if kind == 'baton':
+            nn_, rd, st_, j_, why, c = row
+            print('| %d | ws%d | %s | %+d | %s | %s | %.1f m | %s | %d of 21 | %d | %.6f | %s | %s | %s | %s | %s |'
+                  % (nn_, rd, traj(rd, j_), D[j_], U(A + st_), U(A + j_), (ts[A+j_]-ts[A+st_])/60000.0, why,
+                     nst[j_], nmt[j_], PX[A+j_],
+                     ', '.join('ws%d' % x for x in c) if c else '**NONE**',
+                     ', '.join('ws%d' % t for t in TFS if ST[t][j_]) or '—', '—',
+                     last_baton(j_), last_stall(j_)))
+        else:
+            _k, sig, _l, _b, _d, _arm = row
+            bp = [b for b in PASSED if prev < b <= bar]
+            so = [(x, t) for x, t in STALL_EV if prev < x <= bar]
+            cnt = {}
+            for _x, t in so: cnt[t] = cnt.get(t, 0) + 1
+            tfs_ = ', '.join('ws%d%s' % (t, '' if cnt[t] == 1 else ' x%d' % cnt[t]) for t in sorted(cnt)) or '—'
+            rd = int(RIDER[bar])
+            cav = avail(bar)
+            print('| **octo-sig** | %s | %s | %+d | **%s** | %d baton | %d new stalls | since the prior row | %d of 21 | %d | %.6f | %s | %s | %s | %s | %s |'
+                  % ('ws%d' % rd if rd else '**no rider**', traj(rd, bar), D[bar], sig, len(bp), len(so),
+                     nst[bar], nmt[bar], PX[A+bar],
+                     ', '.join('ws%d' % x for x in cav) if cav else '**NONE**',
+                     ', '.join('ws%d' % t for t in TFS if ST[t][bar]) or '—', tfs_,
+                     last_baton(bar), last_stall(bar)))
         prev = bar
-        continue
-    if kind == 'baton':
-        nn_, rd, st_, j_, why, c = row
-        print('| %d | ws%d | %s | %+d | %s | %s | %.1f m | %s | %d of 21 | %d | %.6f | %s | %s | %s | %s | %s |'
-              % (nn_, rd, traj(rd, j_), D[j_], U(A + st_), U(A + j_), (ts[A+j_]-ts[A+st_])/60000.0, why,
-                 nst[j_], nmt[j_], PX[A+j_],
-                 ', '.join('ws%d' % x for x in c) if c else '**NONE**',
-                 ', '.join('ws%d' % t for t in TFS if ST[t][j_]) or '—', '—',
-                 last_baton(j_), last_stall(j_)))
-    else:
-        _k, sig, _l, _b, _d, _arm = row
-        bp = [b for b in PASSED if prev < b <= bar]
-        so = [(x, t) for x, t in STALL_EV if prev < x <= bar]
-        cnt = {}
-        for _x, t in so: cnt[t] = cnt.get(t, 0) + 1
-        tfs_ = ', '.join('ws%d%s' % (t, '' if cnt[t] == 1 else ' x%d' % cnt[t]) for t in sorted(cnt)) or '—'
-        rd = int(RIDER[bar])
-        cav = avail(bar)
-        print('| **octo-sig** | %s | %s | %+d | **%s** | %d baton | %d new stalls | since the prior row | %d of 21 | %d | %.6f | %s | %s | %s | %s | %s |'
-              % ('ws%d' % rd if rd else '**no rider**', traj(rd, bar), D[bar], sig, len(bp), len(so),
-                 nst[bar], nmt[bar], PX[A+bar],
-                 ', '.join('ws%d' % x for x in cav) if cav else '**NONE**',
-                 ', '.join('ws%d' % t for t in TFS if ST[t][bar]) or '—', tfs_,
-                 last_baton(bar), last_stall(bar)))
-    prev = bar
-print()
-print('| bar | dr | stalled of 21 | mom-true of 21 | pxs |'); print('|---|---|---|---|---|')
-for j in range(P0, N, 360):
-    print('| %s | %+d | %d | %d | %.6f |' % (U(A+j), D[j], nst[j], nmt[j], PX[A+j]))
+    print()
+    print('| bar | dr | stalled of 21 | mom-true of 21 | pxs |'); print('|---|---|---|---|---|')
+    for j in range(P0, N, 360):
+        print('| %s | %+d | %d | %d | %.6f |' % (U(A+j), D[j], nst[j], nmt[j], PX[A+j]))
+
+
+if __name__ == '__main__':
+    _os_path = sys.argv[3] if len(sys.argv) > 3 else None
+    _C = compute(sys.argv[1], sys.argv[2], _os_path)
+    render(_C, sys.argv[1], sys.argv[2])

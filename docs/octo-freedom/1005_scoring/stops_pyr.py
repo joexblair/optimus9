@@ -42,8 +42,17 @@ def build(cap):
             if m['route'] != 'mtd.r1': continue
             dd = S.branchD(d, m['ex'])
             if not dd['fire']: continue
-            grade = 'with-trend' if dd['away'] else 'against-trend'
-            flip = (grade == 'with-trend')
+            grade = 'against-trend' if dd['away'] else 'with-trend'   # label corrected 1006
+            # REPINNED TO `towards` 1006. Joe: *"understood - make them towards"*, after identifying the
+            # flip population from the table itself: *"979 (os_pk) and more are `CONFLUENCE with-trend`
+            # which is our agreed pyramid signal"*. with-trend is net TOWARDS dr under the 1006 label
+            # correction, so the flip is `not away`. Measured before repinning, 53 towards rows:
+            #   MAE mean  0.921 -> 0.403   MFE mean  0.799 -> 1.189   rows over 0.70  19 -> 11
+            # The 175 `away` rows barely move when flipped (MAE 0.603 -> 0.452), which is why towards is
+            # the population that behaves like a pyramid signal.
+            # CONSEQUENCE, STATED: stop 0.95 and risk 1.5 % were derived with the flip on `away`. They are
+            # PROVISIONAL until re-derived. Joe 1006: no P&L activity for now, so nothing here is re-run.
+            flip = not bool(dd['away'])    # towards = with-trend = the pyramid signal
             rec = {'day': day, 'lbl': lbl, 'grade': grade, 'flip': flip, 'open_ms': int(ts[k])}
             for tag, de in (('net', -d if flip else d), ('net_asis', d)):
                 f_, a_, j_ = S.score(k, de, H, L)

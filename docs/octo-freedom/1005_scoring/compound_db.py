@@ -66,8 +66,17 @@ def rows_at(stop, flip_on=False):
             if m['route'] != 'mtd.r1': continue
             dd = S.branchD(d, m['ex'])
             if not dd['fire']: continue
-            grade = 'with-trend' if dd['away'] else 'against-trend'
-            de = (-d if grade == 'with-trend' else d) if flip_on else d
+            grade = 'against-trend' if dd['away'] else 'with-trend'   # label corrected 1006
+            # REPINNED TO `towards` 1006. Joe: *"understood - make them towards"*, after identifying the
+            # flip population from the table itself: *"979 (os_pk) and more are `CONFLUENCE with-trend`
+            # which is our agreed pyramid signal"*. with-trend is net TOWARDS dr under the 1006 label
+            # correction, so the flip is `not away`. Measured before repinning, 53 towards rows:
+            #   MAE mean  0.921 -> 0.403   MFE mean  0.799 -> 1.189   rows over 0.70  19 -> 11
+            # The 175 `away` rows barely move when flipped (MAE 0.603 -> 0.452), which is why towards is
+            # the population that behaves like a pyramid signal.
+            # CONSEQUENCE, STATED: stop 0.95 and risk 1.5 % were derived with the flip on `away`. They are
+            # PROVISIONAL until re-derived. Joe 1006: no P&L activity for now, so nothing here is re-run.
+            de = (-d if not dd['away'] else d) if flip_on else d
             mfe, mae, j = S.score(k, de, H, L)
             # UNRESOLVED: no favourable swing pivot after this bar inside the tape (happens on the
             # tape's LAST day). Excluded and counted — never scored 0, which would be a truncation.
