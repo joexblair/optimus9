@@ -282,3 +282,91 @@ reversed, is that event actioned on or does the mech walk forward to find the ne
 - **`score39`'s tape is cwd-sensitive.** From `1005_scoring` with `LG_TAPE_END=2026-10-05` it is
   1,632,960 bars to 10-04 23:59:55; from another directory it silently resolves to 1,630,780 bars
   to 10-03 20:58:15
+
+---
+
+## 11. THE FULL 09-25 SCAN, AND THE 21:48 RULING
+
+Joe 1007: *"scan 09-25 and find all of the ws12r oob >6 minutes. walk the process and share what
+you see"*. Scripts: `_scan0925.py` (the full scan), `_scan0925_mm.py` (the walked timestamps and
+MAE/MFE), `_dive2148.py` (21:48 bar by bar), `_pegging.py` (the HTF pegging measure).
+
+**77 ws12r oob runs on the day across both fences. 11 pass `oob_gate_bars` 72.** 9 hi (+dr), 2 lo.
+
+| oob from | dr | gate | branch 1 | 50 dip | confirm | exit | on | MAE% | MFE% | realised |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 00:12:05 | +1 | 00:18:10 | — | 00:26:25 | 00:27:20 | 00:42:00 | ws1r | 0.3635 | 0.4624 | +0.3486 |
+| 00:36:40 | +1 | 00:42:45 | — | 00:44:05 | 00:45:00 | 00:45:10 | ws2r | 0.4551 | 0.0000 | −0.4332 |
+| 01:00:55 | +1 | 01:07:00 | — | 01:22:30 | 01:23:25 | 02:09:45 | ws1r | 1.1901 | 0.4877 | +0.1970 |
+| 08:26:25 | +1 | 08:32:30 | — | 09:20:10 | 09:21:05 | 09:29:10 | ws1r | 0.0000 | 2.2602 | +2.1810 |
+| 08:48:00 | +1 | 08:54:05 | — | 09:20:10 | 09:21:05 | 09:29:10 | ws1r | 0.0030 | 1.4436 | +1.3651 |
+| 13:18:35 | −1 | 13:24:40 | — | 14:30:55 | 14:31:50 | 14:45:50 | ws1r | 0.7984 | 3.7035 | +2.0958 |
+| 17:41:25 | +1 | 17:47:30 | — | 18:37:20 | 18:38:15 | 18:59:10 | ws1r | 0.3630 | 2.0224 | +1.1610 |
+| 17:59:00 | +1 | 18:05:05 | — | 18:37:20 | 18:38:15 | 18:59:10 | ws1r | 0.1230 | 1.6411 | +0.7829 |
+| 18:28:15 | +1 | 18:34:20 | 18:31:05 | 18:37:20 | 18:38:15 | 18:59:10 | ws1r | 0.4679 | 0.2867 | +0.0688 |
+| 21:48:00 | −1 | 21:54:05 | 21:48:40 | 22:05:00 | 22:05:55 | 23:22:45 | ws1r | 2.5199 | 1.1633 | −2.0706 |
+| 23:12:00 | +1 | 23:18:05 | 23:12:20 | 23:19:05 | 23:20:00 | — | — | — | — | — |
+
+- **8 of 10 exits realised positive — 80%.** 7 of 11 ended MFE > MAE.
+- **THIS IS THE LAST MILE.** Joe 1007: *"we're only reporting on the last mile (if you think about
+  it, we already walked to the ws12 oob moment holding an open trade)"*. The trade is already open
+  and already in profit by the oob moment, so every MAE/MFE above is the tail, not the trade.
+- MAE/MFE run from the GATE bar. Branch 1 gave a real open on only 3 of 11, so on the other 8 the
+  gate bar is a stand-in - mine, and said here rather than per row.
+- **11 runs yield only 7 distinct exits.** 08:26:25 and 08:48:00 share the 09:20:10 dip and exit
+  together at 09:29:10; 17:41:25, 17:59:00 and 18:28:15 all share 18:37:20 and exit at 18:59:10.
+  Anything that counts per run double-counts.
+- **reading B kills 7 of 11** (spec open #1): only 00:36:40, 18:28:15, 21:48:00 and 23:12:00 have a
+  dip starting inside the oob run. Leg 8's dip is 35.4 min after its run ended.
+- **1 of 11 never exits**: 23:12:00 finds no qualifying reversal before the day end.
+- the MFE/MAE ratio is unstable at tiny MAE - 08:48:00 prints 483.66 at MAE 0.0030 and 08:26:25
+  prints `inf` at MAE exactly 0. Read the two columns, not the ratio.
+
+### 21:48 — RULED, accepted as it stands
+
+Joe 1007: *"I've checked the three and there's no easy discriminator. we accept 21:48 as it is, the
+1.1 stop fires at ~22:18"*.
+
+| what | ts | +min | pct |
+|---|---|---|---|
+| ws12r oob from | 21:48:00 | −6.1 | +0.0654 |
+| branch 1 cross | 21:48:40 | −5.4 | +0.0213 |
+| gate bar | 21:54:05 | +0.0 | +0.0000 |
+| MFE | 21:58:20 | +4.2 | +1.1633 |
+| 50 dip | 22:05:00 | +10.9 | −0.0087 |
+| dip confirmed | 22:05:55 | +11.8 | −0.0343 |
+| **the 1.10 stop fires** | **22:17:15** | **+23.2** | **−1.1061** |
+| MAE | 23:16:45 | +82.7 | −2.5199 |
+| EXIT on ws1r | 23:22:45 | +88.7 | −2.0706 |
+
+- **`mae_stop_pct` 1.10 fires at 22:17:15 for −1.1061 — 65.5 min before the mech's own exit, and
+  roughly half the loss.** No new mech is needed; the banked stop already handles this run.
+- **the divergence held the exit off, not the x-cross.** 166 reversal bars between the confirm and
+  the exit: 165 blocked, **164 of them by no divergence at all**. Only 38 were blocked by x not
+  being over r, and every one of those was also blocked by the divergence.
+- the exit was not even the best bar available: the best pct at any reversal bar in that window was
+  **−2.5038 at 23:17:40**. Every bar was worse than the gate.
+- **the arming sequence is slower than this leg's favourable window**: the MFE came at +4.2 min and
+  the mech's earliest possible exit was the confirm at +11.8 min.
+- ws12r is **91.90 at the exit** against **5.65 at the oob start** — the mech held a SHORT while its
+  own trigger line crossed the whole range to the opposite fence.
+
+### HTF pegging — measured, and it is not a discriminator
+
+Joe 1007 named it: *"ws12Mage ... stayed higher than 50 after travelling from a high oob at 20:24.
+that's my definition of HTF pegging"*.
+
+- the oob visit **ends 20:59:10**, not 20:24 - ws12Mage was hi-oob for **663 bars** from 20:01:40.
+- *"stayed higher than 50"* is absolute: **0 of 1724 bars below 50** from 20:59:10 to the exit, with
+  a floor of **53.07 at 21:58:20 — the trade's own MFE bar**.
+- **pegged at the gate: 3 of 11** - 13:18:35, 17:41:25, 21:48:00. Only 1 of the 3 has MAE > MFE, and
+  the other two are the day's **highest MFE (13:18:35, 3.7035)** and its **third-highest (17:41:25,
+  2.0224)**. As a filter it would discard two of the best runs.
+- of the 4 runs with MAE > MFE, **only 1 is pegged**.
+- the stricter *pegged through to the exit* reading isolates 21:48 alone - **1 of 11**, which fits
+  perfectly and proves nothing.
+- Joe checked the three and ruled: no easy discriminator. The stop carries it.
+- **the cascade half is untested**: *"the peak of a mage cascade/mage ladder"* has no ruled
+  producer and task #22 is parked. Everything above is the ws12Mage line only.
+- the three 00:xx runs show no ws12Mage oob visit because my lookback stops at the day start; their
+  last visit is probably on 09-24.
