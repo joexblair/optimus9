@@ -16,6 +16,13 @@ errors log; the ALERT prints only when `FROZEN_RUN_BARS` consecutive bars are fr
 tick sockets' auto-restart threshold, so it means a freeze the restart did not clear. Since 09-25: 40
 single frozen bars, one 3-bar run, one 201-bar run (05:08) - only the last reaches 12.
 
+1m INCOMPLETE FROM THE API THROTTLE, Joe 1007: *"instead of firing on the api throttle event, fire on the
+api throttle event + any downstream issue"*. A `1m incomplete` line whose own tape and official bar are
+complete (`kc=12/12 official=True`) is a gap on the auditor's REST side only - Bybit's 10006 replies in the
+first seconds of a minute (accepted, `docs/o9-live-recon/OPEN.md` 1007). That line alone no longer alerts.
+It alerts, as ONE line naming both, when any other kline_audit verdict lands on a bar inside the same
+minute - before or after it. A `1m incomplete` with our tape or the official bar short alerts as before.
+
 REPEATS. The 1002 outage wrote a `5s frozen` line every 5 s for 17 min (202 lines). The first line of
 each (source, kind) prints at once; while the same (source, kind) keeps arriving, ONE line per
 `REPEAT_S` prints with the count since the last print. Every line stays in the source files.
@@ -27,6 +34,7 @@ positions to STATE and the next run starts there, so a line written between two 
 """
 import json
 import os
+import re
 import sys
 import time
 
@@ -36,6 +44,54 @@ STATE = os.environ.get('O9_RC_ALERTS_STATE', '/home/joe/thecodes/rc_alerts.state
 REPEAT_S = 60.0                     # one summary line per minute while one (source, kind) repeats
 FROZEN_RUN_BARS = 12                # 60 s of consecutive 5 s frozen bars before the alert (Joe 1002)
 POLL_S = 0.5
+_INCOMPLETE = re.compile(r'audit=(\d+)/(\d+) kc=(\d+)/(\d+) official=(True|False)')
+MINUTE_MS = 60_000
+
+
+class ThrottleGate:
+    """The 1m-incomplete rule (Joe 1007). feed() takes every errors-log record and returns
+    (alert, detail): alert False = stay silent; True = print, with detail replacing the record's own.
+
+    A throttle-only minute is one whose `1m incomplete` line shows kc and official complete. Every other
+    kline_audit verdict is remembered by the minute its bar falls in, so a downstream verdict that
+    arrived first (5 s verdicts land during the minute, the 1m line ~80 s after it starts) still pairs.
+    Memory keeps the minutes within KEEP_MS of the newest bar seen - lines for a minute arrive within
+    about 2 minutes of it, so 10 minutes holds every pairing with room to spare."""
+
+    KEEP_MS = 10 * MINUTE_MS
+
+    def __init__(self):
+        self.throttled = {}                     # minute -> the 1m incomplete record
+        self.verdicts = {}                      # minute -> [(kind, bar_ms, detail)]
+        self.newest = 0
+
+    def _prune(self):
+        for d in (self.throttled, self.verdicts):
+            for m in [m for m in d if m < self.newest - self.KEEP_MS]:
+                del d[m]
+
+    def feed(self, r):
+        if r.get('source') != 'kline_audit' or not r.get('bar_ms'):
+            return None                         # not this rule's record: the normal path decides
+        b = int(r['bar_ms']); m = b - b % MINUTE_MS
+        self.newest = max(self.newest, b); self._prune()
+        if r.get('kind') == '1m incomplete':
+            g = _INCOMPLETE.search(str(r.get('detail', '')))
+            if not g or int(g.group(3)) < int(g.group(4)) or g.group(5) != 'True':
+                return None                     # our tape or the official bar is short: alert as before
+            self.throttled[m] = r
+            seen = self.verdicts.get(m)
+            if not seen:
+                return (False, None)            # throttle only: silent
+            return (True, 'API throttle at %s (%s) + %d downstream: %s' % (
+                _hms(m), g.group(0).split(' kc')[0], len(seen),
+                '; '.join('%s %s %s' % (k, _hms(x), d[:40]) for k, x, d in seen[:3])))
+        self.verdicts.setdefault(m, []).append((r.get('kind'), b, str(r.get('detail', ''))))
+        t = self.throttled.get(m)
+        if t is None:
+            return None
+        return (True, 'API throttle at %s + downstream %s %s | %s' % (
+            _hms(m), r.get('kind'), _hms(b), str(r.get('detail', ''))[:60]))
 
 
 class Follow:
@@ -77,6 +133,7 @@ def main():
     fe, fp = Follow(ERRORS, st.get(ERRORS)), Follow(PFSENSE, st.get(PFSENSE))
     seen = {}                       # (source, kind) -> [last print time, count since]
     frozen = dict(n=0, last=None, first=None)   # the current run of consecutive 5 s frozen bars
+    gate = ThrottleGate()
     print('rc_alerts following %s and %s' % (ERRORS, PFSENSE), flush=True)
     while True:
         now = time.time()
@@ -87,6 +144,17 @@ def main():
                 print('ALERT errors-log unparsed: %s' % line[:160], flush=True)
                 continue
             key = (r.get('source'), r.get('kind'))
+            g = gate.feed(r)
+            if g is not None and g[0] is False:
+                continue                                    # throttle-only 1m incomplete: silent
+            if g is not None:                               # throttle + downstream: one line, always
+                print('ALERT %s %s | bar %s | %s' % (key[0], key[1], _hms(r.get('bar_ms')), g[1][:180]),
+                      flush=True)
+                if key == ('kline_audit', '5s frozen'):     # keep the frozen-run count true
+                    b = r.get('bar_ms')
+                    run = frozen['n'] + 1 if (b and frozen['last'] and int(b) - frozen['last'] == 5000) else 1
+                    frozen.update(n=run, last=int(b) if b else None, first=frozen['first'] if run > 1 else b)
+                continue
             if key == ('kline_audit', '5s frozen'):
                 b = r.get('bar_ms')
                 run = frozen['n'] + 1 if (b and frozen['last'] and int(b) - frozen['last'] == 5000) else 1
