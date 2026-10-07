@@ -39,9 +39,10 @@ sys.stderr = _e
 # (build it first: build_tape.py 2026-10-05).
 EM = int(dt.datetime.strptime(_os.environ.get('LG_TAPE_END', '2026-10-04'), '%Y-%m-%d')
         .replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
-HI, LO, REV_WOB, GAP_MAX = 85.0, 15.0, 2, 4
-G5EXTREMA_LOOKBACK_BARS = 48
-"""Joe 1006: *"mod the knob label - add `g5extrema`"*. Renamed from `LOOKBACK_BARS`, which sat one
+# HI, LO, REV_WOB, GAP_MAX, G5EXTREMA_LOOKBACK_BARS and TOL are read from `lazy_g_config`
+# below, once `db` exists. Joe 1006: *"anything that's currently hardcoded in lazy-g and
+# octo-freedom can go into their respective config tables now"*.
+_G5EX_DOC = """Joe 1006: *"mod the knob label - add `g5extrema`"*. Renamed from `LOOKBACK_BARS`, which sat one
 word away from `rev_lookback` (the ws1mage-rev mask in the walk) at the SAME 48 bars / 240 s while
 doing an unrelated job. Same naming hazard Joe caught earlier today in `rev_lookback_mask`, which
 does not read `rev` at all.
@@ -49,8 +50,14 @@ does not read `rev` at all.
 THIS KNOB HAS EXACTLY ONE JOB, used once at :76 - how far back mtd step 1 searches for the g5Mage
 oob extrema. It never touches the arm, the coil, the qualify, the race, the TOL windows or branch D.
 """
-TOL = {'g5': 0, 'g15': 3, 'g30': 6, 'ws1': 0}
 db = DatabaseManager(**get_db_config()); db.connect()
+from optimus9.compute.spec_config import spec_config
+LG = spec_config(db, 'lazy_g_config')
+LG_KEY = LG.key()                                   # 'lazy_g_config.v1' - goes in the knob key
+HI, LO = float(LG['oob_hi']), float(LG['oob_lo'])
+REV_WOB, GAP_MAX = int(LG['rev_wob']), int(LG['gap_max'])
+G5EXTREMA_LOOKBACK_BARS = int(LG['g5extrema_lookback_bars'])
+TOL = {n: int(LG['tol_' + n]) for n in ('g5', 'g15', 'g30', 'ws1')}
 spec = {}
 for g in mech_lines(db, 'wsf'):
     if g['role'] not in spec: _t, s_, m_ = g['override']; spec[g['role']] = (s_, m_)
@@ -60,7 +67,7 @@ tp = np.load(os.path.join(TAPE_DIR, _tape_key(EM, HOURS, WARMUP, {'src': sy['s']
 ts = tp['__ts__']; PX = np.asarray(tp['__pxs__'], float)
 LD = lambda tfs, role: np.asarray(np.load(os.path.join(LINE_DIR, _line_key(EM, HOURS, WARMUP, override(tfs, *spec[role])) + '.npy'), mmap_mode='r'), float)
 MTD = {'g5': LD(5, 'Mage'), 'g15': LD(15, 'Mage'), 'g30': LD(30, 'Mage'), 'ws1': LD(60, 'Mage')}
-TF = list(range(1, 13))
+TF = list(range(int(LG['band_lo']), int(LG['band_hi']) + 1))
 Rl = {t: LD(t * 60, 'r') for t in TF}
 Mg = {t: (MTD['ws1'] if t == 1 else LD(t * 60, 'Mage')) for t in TF}
 M13 = LD(13 * 60, 'm'); G1 = MTD['ws1']
@@ -120,7 +127,7 @@ def mtd(k):
             'lag': (ts[ex] - ts[k]) / 60000.0}
 
 # ---------------- branch D, verbatim from branchD.py
-CLAIM_HOP = 3
+CLAIM_HOP = int(LG['claim_hop'])
 """THE CLAIM ADJACENCY BOUND. Joe 1005: *"this can't be claimed by lines that are so far away from
 the action (action = ws2r is stronger than ws3r)"* and *"if the ws4r or ws5r were printing r
 ex-fence, that would qualify band claimed. skipping 1 or 2 TFs in a baton handoff is not unusual"*.
@@ -212,7 +219,7 @@ for ln in open(_os.path.join(_HERE, 'octosig') + '/%s.out' % DAY):
             k = K(DAY + ' ' + f[2])
             if A0 <= k <= A1: OS.append((k, f[2]))
 
-MTD_WALK_BARS = 24
+MTD_WALK_BARS = int(LG['mtd_walk_bars'])
 """THE 2 MINUTE FORWARD WALK. Joe 1005: *"bake the 2 minute forward walk"*.
 
 24 bars = 120 s at the 5 s grid. When mtd does not route at the octo-sig bar, the walk walks: mtd is
@@ -244,8 +251,28 @@ def classify(k, lbl=None):
     """
     m = mtd(k)
     kw = k                                    # the bar the route was taken on
+    d_sig = int(DRv[k])                       # the OCTO-SIG's own dr. The routing must read its fence.
     if m['route'] not in ('mtd.r1', 'mtd.r2') and MTD_WALK_BARS > 0:
         for j in range(k + 1, min(TAPE_LAST, k + MTD_WALK_BARS) + 1):
+            # THE dr GUARD, 1006. The walk had none, so a bar whose dr had flipped could supply the
+            # route - and mtd() picks its fence from THAT bar's dr. The whole branch-D read (blk,
+            # keep, the r ladder, the mage net, the grade) was then taken on the OPPOSITE fence from
+            # the signal, while os_dr still recorded the signal's dr. Joe 1006 found it on 09-30
+            # 15:25:45: dr +1, mtd `neither` with ex 15:22:10, the walk moves ONE bar to 15:25:50
+            # where dr is -1, and the row takes that bar's mtd.r1 and its LOW-side ex 15:24:55 -
+            # which is how a +1 and a -1 signal came to share one g5extrema.
+            #
+            # MEASURED BEFORE THE FIX, 397 rows / 12 days: the walk ran on 22, and 2 crossed a flip -
+            # 09-17 07:49:00 (-1 -> +1 after 14 bars) and 09-30 15:25:45 (+1 -> -1 after 1 bar).
+            # ZERO with-trend rows of 53 were affected.
+            #
+            # THE RULE IS MINE, and it is the minimal one: a bar may supply the route only if its dr
+            # EQUALS the signal's. Mismatched bars are SKIPPED, not terminal, so a dr that flips away
+            # and returns inside the window can still serve. The stricter reading - stop the walk at
+            # the first flip - differs on neither of the 2 measured rows, because each crossed on the
+            # bar that gave it its route.
+            if int(DRv[j]) != d_sig:
+                continue
             m2 = mtd(j)
             if m2['route'] in ('mtd.r1', 'mtd.r2'):
                 m, kw = m2, j

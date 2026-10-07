@@ -39,7 +39,20 @@ import time
 from optimus9.config import get_db_config
 from optimus9 import DatabaseManager
 from optimus9.compute.line_config import KLine, override, mech_lines
-from optimus9.orchestration.build_ws_lines import END_MS, HOURS, WARMUP, TAPE_END
+from optimus9.orchestration.build_ws_lines import END_MS as _WS_END_MS, HOURS, WARMUP, TAPE_END
+
+# THE WINDOW. Default is build_ws_lines' own END_MS. `WSF_TAPE_END=YYYY-MM-DD` targets another one
+# WITHOUT editing build_ws_lines, because the lazy-g stack reads a different window: score39.py and
+# baton.py key on LG_TAPE_END, default 2026-10-04, while build_ws_lines sits at 2026-09-30. Measured
+# 1006: of the 120 (ws1..ws30 x r/x/m/Mage) lines, 108 were cached at 09-30 and only 92 at 10-04.
+# Nothing is deleted - each window keeps its own filenames.
+import datetime as _dt
+_env_end = _os.environ.get('WSF_TAPE_END') if (_os := __import__('os')) else None
+if _env_end:
+    TAPE_END = _dt.datetime.strptime(_env_end, '%Y-%m-%d').replace(tzinfo=_dt.timezone.utc)
+    END_MS = int(TAPE_END.timestamp() * 1000)
+else:
+    END_MS = _WS_END_MS
 from optimus9.orchestration.rpl_cache import cache_jig_perline, LINE_DIR, _line_key
 import build_momo_landed as B
 
@@ -53,8 +66,12 @@ WANTED = {
     **{tf: ('r', 'x', 'm', 'Mage', 'b') for tf in (11, 12, 13, 14, 16, 17, 18)},
     **{tf: ('r', 'x', 'm', 'Mage', 'b') for tf in (19, 20, 21, 23)},
     **{tf: ('Mage', 'b') for tf in (6, 7, 8, 9, 10, 15)},
-    **{tf: ('x', 'Mage', 'b') for tf in (24, 25, 26, 27, 28, 29)},
+    **{tf: ('r', 'x', 'm', 'Mage', 'b') for tf in (24, 25, 26, 27, 28, 29)},
 }
+# 1006 ADDED `r` and `m` at 24..29. Joe: *"update the line cache to include the Mage, m, x, r lines
+# for all TFS up to and including ws30 (1800 sec)"*. ws1..ws10, ws12, ws15 and ws22 are REGISTRY
+# lines and already carry all four roles - measured 1006, present at both cache windows - so they
+# are deliberately NOT declared here. The file's own rule: one source per line, never two.
 # 0908 ADDED `m` at 11..14 and 16..18, and the whole role set at 19, 20, 21, 23. Joe's TF2-23
 # walk scans every timeframe in that range, and `m` is the x-cross target its terminator uses
 # (x X m). ws22 is a registry line and needs nothing here; 19, 20, 21 and 23 are not registered.

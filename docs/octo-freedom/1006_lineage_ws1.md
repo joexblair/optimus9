@@ -325,3 +325,50 @@ manufacture the result.
    leg that just died (12:30:20)
 3. does the walk survive a dr flip? The flip at 12:13:55 sits between the loss and both signals
 4. what side does this signal take?
+
+---
+
+# JOE'S RULINGS ON THE WALK, 1006 — BANKED
+
+| # | Joe's words | effect |
+|---|---|---|
+| loss call | *"the baton moves to ws10 at 11:30:00 and the call comes at 11:48:00"* | a candidate exiting the fence takes the baton AT its crossing; the loss fires at the holder's stall |
+| the tag | *"if a rider has crossed to oob at any time, it takes a `waiting for stalled` tag from the previous holder. that tag moves to the next TF (max riderTF+2) if the next TF crosses to oob"* | the tag holder IS the rider; it passes on an oob crossing within +2 |
+| the tag's fence state | *"the `waiting for stalled` line does not need to be oob when `stalled` is printed"* | **the holder's own fence state at its stall is NOT a condition.** 7 of 33 losses on 09-25 had the holder still oob; under this ruling all 7 fire |
+| the finisher | *"drop the g5/g15 mech and fire on the `stalled` event at 11:48"* | g5Mage/g15Mage finishers deleted from the mech |
+| the dr flip | *"emit a signal at the flip bar"* | the flip bar IS the walked timestamp |
+| the side | *"the side is set by the on-book octo-sig"* | dr is never re-read at the walked bar |
+| ws1 / ws2 | *"we need both ws1 and ws2, and if that moves any column data then it's the price of correctness"* | `baton.TFS` widened from `range(3, 24)` to `range(1, 24)`; the denominator goes "of 21" -> "of 23" |
+| octo-sig | *"that nulls my read-only claim, and I agree with your call"* | `os_ts` KEEPS the fwd-g5extrema stamp. `os_dr` was already read at the walk's fire bar before the stamp moves k, so dr was never on the extrema and the read-only requirement was already met |
+
+## THE COLUMN JOE READS IN EXCEL
+
+| column | holds |
+|---|---|
+| **`os_walked_ts`** | **the trade signal timestamp** — the bar the walk ends on |
+| **`os_mae_walked`** | **MAE from `os_walked_ts`** |
+| **`os_mfe_walked`** | **MFE from `os_walked_ts`** |
+| `os_mo_walked` | MFE/MAE at the walked bar |
+| `os_hold_walked` | minutes from `os_walked_ts` to the favourable pivot |
+| `os_walk_why` | `rider stalled` / `dr flip` / `no rider` |
+| `os_walk_chain` | the baton chain with timestamps |
+| `os_walk_lag_min` | `os_walked_ts` minus the octo-sig bar |
+
+`os_mae_traded` / `os_mfe_traded` are LEFT IN PLACE at the stamped bar. They are not deleted and not
+relabelled - the walked columns are added alongside so a banked figure stays findable.
+
+DECIDED, not ruled: the walked MAE/MFE are scored on `os_trade_side` - the side already banked after
+the flip rule - because Joe's *"the side is set by the on-book octo-sig"* fixes the dr, and the flip
+ruling is a separate banked mech that the walk does not touch. If the raw dr-bias side is wanted
+instead it is a column swap, not a rebuild.
+
+## WHY ws1/ws2 STALLS WERE RAISED — THE HONEST ANSWER
+
+`baton.ST` was built over `TFS = range(3, 24)`, so ws1 and ws2 had no stall array and the walk would
+raise KeyError rather than skip. Joe 1006 is right that it only matters when no TF+2 exits the fence,
+and on 09-25 that was **0 of 39 rows**. The call-out was anticipatory, not evidence-driven.
+
+**ST12 does not help 09:32.** 09:32 fails one step earlier - no oob line anywhere in ws1..ws12 at the
+octo-sig bar, so there is no rider to stall and ST12 is never read. What decides 09:32 is which bar
+the walk starts from: ws1 is 66.09 (in-fence) at 09:32:00 and 93.72 (oob) at the routing anchor
+09:28:05.

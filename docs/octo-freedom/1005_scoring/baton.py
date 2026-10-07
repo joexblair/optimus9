@@ -43,15 +43,26 @@ from optimus9.analysis.jig import stall_mask, AF_BLOCK
 from optimus9.db.database_manager import DatabaseManager
 from optimus9.config import get_db_config
 sys.stderr = _e
-STALL_N = 6; TFS = list(range(3, 24)); TRAJ_MIN_BARS = 24; TRAJ_MIN_TRAVEL = 0.0
-LIN_TFS = list(range(1, 13))
-"""THE LADDER JOE'S LINEAGE WALKS - ws1..ws12, the wsf band.
+_CFG_DB = DatabaseManager(**get_db_config()); _CFG_DB.connect()
+from optimus9.compute.spec_config import spec_config
+LG = spec_config(_CFG_DB, 'lazy_g_config')
+LG_KEY = LG.key()
+STALL_N = int(LG['stall_n'])
+TFS = list(range(int(LG['baton_tf_lo']), int(LG['baton_tf_hi']) + 1))
+TRAJ_MIN_BARS = int(LG['traj_min_bars'])
+TRAJ_MIN_TRAVEL = float(LG['traj_min_travel'])
+LIN_TFS = list(range(int(LG['band_lo']), int(LG['band_hi']) + 1))
+"""THE LADDER JOE'S LINEAGE WALKS, and the baton's own. Both from `lazy_g_config`.
 
-TFS IS NOT TOUCHED. Joe 1006 anchored the lineage on ws1 (*"this example shows me that we need it
-as an anchor"*) and TFS starts at ws3, so ws1 and ws2 have no mom-true here at all. Widening TFS
-would have moved the baton chain, os_stalled_n, os_momtrue_n and the "of 21" denominator on every
-banked row - a different mechanic's numbers. So mom-true is computed a SECOND time over ws1..ws12
-and returned as `MT12`, and nothing the baton reports changes."""
+`baton_tf_lo` is 1, not 3. It was hardcoded `range(3, 24)` and contradicted wsf_dtf_v3_config's own
+bands.band_wsf_lo = 1 and v3_report.tf_lo = 1 - nothing read the config, so nothing caught the drift.
+Joe 1006: *"we need both ws1 and ws2, and if that moves any column data then it's the price of
+correctness"*. Measured on 09-25: baton passes 128 -> 138, 16 of 138 ridden by ws1/ws2, and the rider
+at every one of the 39 octo-sig rows is UNCHANGED - `rider = max(avail)` cannot be lowered by adding
+TFs beneath it.
+
+MT12 and ST12 are kept as the lineage's own named accessors over LIN_TFS even though TFS now covers
+them: the lineage is a different mechanic from the baton and reads its own names."""
 _ALL_TFS = sorted(set(TFS) | set(LIN_TFS))
 # TAPE END, exclusive. Override with LG_TAPE_END=YYYY-MM-DD when the window needs a later tape:
 # a day AFTER this date is NOT in the cache, and K() would searchsorted past the end of ts and
@@ -75,7 +86,7 @@ K = lambda s: int(np.searchsorted(ts, int(dt.datetime.strptime(s, '%Y-%m-%d %H:%
 # JOE 1004, RULING: "start the walk 3 hours earlier, regardless of if it's a o9-live loop walk or a
 # target timestamp that we're focusing on". So the chain is WARMED from 3 h back and PRINTING starts
 # at the requested bar - row 1 is then the rider a continuous walk would be carrying, not a cold seed.
-WARM_BARS = 3 * 3600 // 5                      # 2160 bars = 3 h at the 5 s grid
+WARM_BARS = int(LG['warm_bars'])               # 2160 bars = 3 h at the 5 s grid
 
 # ---- rig.DR, per bar. WINDOW-INDEPENDENT, so it is built ONCE at import, not per call.
 G1, M13 = LD(60, 'Mage'), LD(13 * 60, 'm')
@@ -124,6 +135,21 @@ def compute(start_s, end_s, octosig_path=None, warn=True):
                 MT12[t] = np.array([momo_g_why(R[t], int(D[i]), A + i)[0] in ('momo', 'curl')
                                     for i in range(N)])
     MT12 = {t: MT12[t] for t in LIN_TFS}
+
+    # ---- stalled again, over LIN_TFS. The lineage's loss test fires on the RIDER's stall, and a
+    # rider can be ws1 or ws2 (09-25 09:32's ladder is O........... - ws1 is the only oob line), so
+    # ST over TFS 3..23 cannot answer it. Same construction as ST, same bank, same STALL_N.
+    ST12 = dict(ST)
+    for t in LIN_TFS:
+        if t in ST12: continue
+        both = {}
+        for dd in (-1, +1):
+            with momo_config(BANK[t]):
+                with momo_window(int(BANK[t]['k_window']) * t):
+                    step, samples = int(MC.MOMO_STEP_BARS), int(MC.MOMO_SAMPLES)
+            both[dd] = stall_mask(R[t], dd, STALL_N, step, samples)[A:B + 1]
+        ST12[t] = np.where(D > 0, both[+1], both[-1])
+    ST12 = {t: ST12[t] for t in LIN_TFS}
 
     ONSET = {t: np.flatnonzero(np.diff(np.concatenate(([0], ST[t].astype(np.int8)))) == 1) for t in TFS}
     STALL_EV = sorted([(int(x), t) for t in TFS for x in ONSET[t]])
@@ -179,7 +205,7 @@ def compute(start_s, end_s, octosig_path=None, warn=True):
 
     import types
     return types.SimpleNamespace(
-        A=A, B=B, N=N, P=P, D=D, MT=MT, MT12=MT12, ST=ST, ONSET=ONSET, STALL_EV=STALL_EV, STALL_AT=STALL_AT,
+        A=A, B=B, N=N, P=P, D=D, MT=MT, MT12=MT12, ST=ST, ST12=ST12, ONSET=ONSET, STALL_EV=STALL_EV, STALL_AT=STALL_AT,
         nst=nst, nmt=nmt, traj=traj, OS=OS, RIDER=RIDER, CHAIN=CHAIN, PASSED=PASSED,
         avail=avail, last_baton=last_baton, last_stall=last_stall)
 
@@ -192,8 +218,8 @@ def render(C, start_s, end_s):
     traj, OS, RIDER, CHAIN, PASSED = C.traj, C.OS, C.RIDER, C.CHAIN, C.PASSED
     avail, last_baton, last_stall = C.avail, C.last_baton, C.last_stall
     # ---- PHASE 2: render
-    print('# %s .. %s   rig.DR PER BAR   STALL_N %d   ws3..ws23   traj block %d min_bars %d'
-          % (start_s, end_s, STALL_N, AF_BLOCK, TRAJ_MIN_BARS))
+    print('# %s .. %s   rig.DR PER BAR   STALL_N %d   ws%d..ws%d   traj block %d min_bars %d'
+          % (start_s, end_s, STALL_N, TFS[0], TFS[-1], AF_BLOCK, TRAJ_MIN_BARS))
     print('# walk WARMED from %s (3 h back, Joe 1004) - printing starts at %s'
           % (U(A), U(P)))
     print('# pxs high %s %.6f  |  pxs low %s %.6f  |  dr +1 on %d bars, -1 on %d   (PRINTED span only)'
@@ -214,9 +240,9 @@ def render(C, start_s, end_s):
             continue
         if kind == 'baton':
             nn_, rd, st_, j_, why, c = row
-            print('| %d | ws%d | %s | %+d | %s | %s | %.1f m | %s | %d of 21 | %d | %.6f | %s | %s | %s | %s | %s |'
+            print('| %d | ws%d | %s | %+d | %s | %s | %.1f m | %s | %d of %d | %d | %.6f | %s | %s | %s | %s | %s |'
                   % (nn_, rd, traj(rd, j_), D[j_], U(A + st_), U(A + j_), (ts[A+j_]-ts[A+st_])/60000.0, why,
-                     nst[j_], nmt[j_], PX[A+j_],
+                     nst[j_], len(TFS), nmt[j_], PX[A+j_],
                      ', '.join('ws%d' % x for x in c) if c else '**NONE**',
                      ', '.join('ws%d' % t for t in TFS if ST[t][j_]) or '—', '—',
                      last_baton(j_), last_stall(j_)))
@@ -229,15 +255,15 @@ def render(C, start_s, end_s):
             tfs_ = ', '.join('ws%d%s' % (t, '' if cnt[t] == 1 else ' x%d' % cnt[t]) for t in sorted(cnt)) or '—'
             rd = int(RIDER[bar])
             cav = avail(bar)
-            print('| **octo-sig** | %s | %s | %+d | **%s** | %d baton | %d new stalls | since the prior row | %d of 21 | %d | %.6f | %s | %s | %s | %s | %s |'
+            print('| **octo-sig** | %s | %s | %+d | **%s** | %d baton | %d new stalls | since the prior row | %d of %d | %d | %.6f | %s | %s | %s | %s | %s |'
                   % ('ws%d' % rd if rd else '**no rider**', traj(rd, bar), D[bar], sig, len(bp), len(so),
-                     nst[bar], nmt[bar], PX[A+bar],
+                     nst[bar], len(TFS), nmt[bar], PX[A+bar],
                      ', '.join('ws%d' % x for x in cav) if cav else '**NONE**',
                      ', '.join('ws%d' % t for t in TFS if ST[t][bar]) or '—', tfs_,
                      last_baton(bar), last_stall(bar)))
         prev = bar
     print()
-    print('| bar | dr | stalled of 21 | mom-true of 21 | pxs |'); print('|---|---|---|---|---|')
+    print('| bar | dr | stalled of %d | mom-true of %d | pxs |' % (len(TFS), len(TFS))); print('|---|---|---|---|---|')
     for j in range(P0, N, 360):
         print('| %s | %+d | %d | %d | %.6f |' % (U(A+j), D[j], nst[j], nmt[j], PX[A+j]))
 

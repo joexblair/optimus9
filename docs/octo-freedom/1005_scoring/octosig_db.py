@@ -61,7 +61,7 @@ from optimus9.config import get_db_config
 
 TABLE = _os.environ.get('LG_TABLE', 'octosig_rulings')
 Q = lambda s: s.replace('__TBL__', TABLE)
-SWING = 1.25
+SWING = float(SC.LG['swing'])
 """THE SWING pct FOR swing_detect, Joe 1006: *"I'm fine with it being 1.25"*. Was 0.70.
 
 WHY HE MOVED IT, his words on 09-25 08:39:00: *"the swing_detect value is too low, that's why the
@@ -76,7 +76,7 @@ The knee sits between 1.00 and 1.25 and it is SHARP - nothing lands in between. 
 value that carries past the 08:40 pullback.
 
 IT IS NOT MAE_BLOCK. That is a separate 0.70 and it has NOT moved."""
-MAE_BLOCK = 0.70
+MAE_BLOCK = float(SC.LG['mae_block'])
 # SEPTEMBER + OCTOBER ONLY. Joe 1005: *"reduce the report to the september and october dates"*.
 # The five July/August days (07-23, 07-25, 08-06, 08-20, 08-30) are OUT - they were the non-adjacent
 # OOS draw from when FIT/TEST was still in force, and Joe dropped FIT/TEST earlier today. 12 days.
@@ -85,11 +85,15 @@ DAYS = _os.environ.get('LG_DAYS', '2026-09-14,2026-09-17,2026-09-25,2026-09-26,2
                        '2026-10-04').split(',')
 # Joe 1005 baked two mtd/branch-D knobs today. Both are in the key - a knob that moves rows and is
 # not in the unique key lets an A/B overwrite itself.
-KNOB_KEY = ('stall_n6|tf3-23|trajblk%d|minbars%d|swing%.2f|lookback_s%s|dwell%s|rev_wob%s|hold%s|%s'
-            '|%.0f/%.0f|mtdwalk%d|claimhop%d|flip-towards|g5ex%d|stamp-resolved|routing-banked'
-            '|lineage-ws1'
-            % (BT.AF_BLOCK, BT.TRAJ_MIN_BARS, SWING, SC.G5EXTREMA_LOOKBACK_BARS * 5, 3, 2, 4, 'gcws30Mage',
-               SC.HI, SC.LO, SC.MTD_WALK_BARS, SC.CLAIM_HOP, SC.G5EXTREMA_LOOKBACK_BARS))
+KNOB_KEY = '%s|%s|flip-towards+norblock|stamp-resolved|routing-banked|lineage-ws1|mtdwalk-drguard' % (
+    SC.LG_KEY, 'gcws30Mage')
+"""THE KNOB KEY CARRIES THE CONFIG VERSION, NOT THE VALUES. Joe 1006 moved every lazy-g constant
+into `lazy_g_config`; 20+ in_key knobs spelled into one string overflows os_knob_key VARCHAR(190) and
+is unreadable in Excel. `lazy_g_config.v1` resolves to the exact knob set with one SELECT, cannot
+drift from it, and changing any in_key knob forces a new version - so a new version IS a new key.
+
+What stays spelled out is what is NOT in the config: the ws1mage-rev signal line, and the RULINGS
+that changed the mech's shape rather than a number."""
 H, L = SC.pivots(SWING)
 print('# table %s | knob_key %s' % (TABLE, KNOB_KEY))
 print('# MAE > %.2f%% -> BLOCK (Joe 1005, delegated). raw MAE/MFE stored.' % MAE_BLOCK)
@@ -245,13 +249,13 @@ for col, ddl in ((('os_mtd_fence'),   'DECIMAL(6,2) NOT NULL DEFAULT 0 AFTER os_
         print('# ALTER: added %s' % col, flush=True)
 
 
-R_OOB, R_EXF = 85.0, 83.0
+R_OOB = float(SC.LG['oob_hi']); R_EXF = 100.0 - float(SC.LG['momo_fence_r'])
 """THE TWO r FENCES. oob is `oob_hi`/`oob_lo` 85/15; the ex-fence is `momo_fence_r` 17, i.e. 83/17
 (`wsf_dtf_v3_spec.md:83`, Joe 0820: *"create a new fence: momo-fence-r 100-{knob:17}"*). The band
 BETWEEN them is what Joe 1006 read at 11:28:15: *"ws9 oob, ws10 is between ex-fence and oob, and
 ws11 and ws12 are infence. this is a perfect picture of waning momentum"*."""
 
-LIN_HOP = 2
+LIN_HOP = int(SC.LG['lin_hop'])
 """THE LINEAGE HOP, Joe 1006: *"for the lineage to qualify legal, it needs to be measured from ws1
 and jump no more than 2 higher TFs to find the next TF with momentum"*, and on how to count it:
 *"TF numbers. eg, ws1 can only look to ws2 and ws3 for a baton pass"*.
@@ -270,8 +274,8 @@ MOMENTUM IS A STATE, AND THERE ARE TWO OF THEM. Joe 1006:
 The r band is NOT the momentum test - it is the fence-exit proof. oob = exited, 83..85 = might exit,
 in-fence = too weak."""
 
-LIN_TF = list(range(1, 13))
-LIN_ANCHOR = 1
+LIN_TF = list(range(int(SC.LG['band_lo']), int(SC.LG['band_hi']) + 1))
+LIN_ANCHOR = int(SC.LG['lin_anchor'])
 """ws1r IS THE ANCHOR. Joe 1006: *"I know the spec doesn't include ws1r at the moment, but this
 example shows me that we need it as an anchor"*. baton.py's TFS is range(3, 24) - ws1 and ws2 are
 NOT in it, so the lineage Joe describes CANNOT be expressed by the baton chain at all.
@@ -453,7 +457,19 @@ for day in DAYS:
         # scored at the dr-bias side, so a flip row carried its MFE in the MAE column. 979 went
         # MAE 2.1076 / MFE 0.0368 as banked and MAE 0.0368 / MFE 2.1076 on the side it would trade.
         # MAE/MFE are RESCORED, not swapped: the stretch runs to the next favourable PIVOT for that side.
-        flip = bool(r['status'] == 'CONFLUENCE' and not D_.get('away', True))
+        # `no r block` JOINS THE FLIP, Joe 1006. branchD:162 returns why='no r block' when no line
+        # in ws1..ws12 is oob at the g5extrema - there is no wall, so there is no grade and net is
+        # None, which is why these rows were never flipped and were scored on the dr-bias side.
+        # MEASURED over 46 rows / 41 g5extrema bars / 12 days, at swing 1.25:
+        #     counter-dr side   median MAE 0.4007  MFE 1.3893   MFE>MAE 36 of 46   MAE>0.70 14
+        #     dr-bias side      median MAE 1.0812  MFE 0.7585   MFE>MAE 23 of 45   MAE>0.70 29
+        # Joe's r-vs-Mage "mostly" threshold was tested and DROPPED: held out chronologically
+        # (FIT 8 days / OOS 4), T 0..8 are the identical OOS population, T 9 is worse than no filter
+        # at all, and the thresholds that score best are 5 and 9 rows. Joe 1006: *"the only path to
+        # the truth is OOS"*, and the OOS said the side is the finding and "mostly" is not.
+        # The r-vs-Mage statistic is NOT banked as a knob - nothing to back out.
+        flip = bool((r['status'] == 'CONFLUENCE' and not D_.get('away', True))
+                    or D_.get('why') == 'no r block')
         dt = -d if flip else d
         ft, at, _xt = (f, a, xb) if not flip else SC.score(k, dt, H, L)
         mot = (ft / at) if (ft is not None and at and at > 0) else None
