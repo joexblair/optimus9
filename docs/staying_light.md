@@ -538,3 +538,81 @@ data terms, not trading stories.*
 No tab. The corrections today cost Joe five questions, and the five questions were the same question.
 That is the useful thing: one gate catches all of it, and it goes in front of the headline, not after
 the audit. *Stillness is the master of haste.*
+
+## The verdict before the instrument spoke (2026-10-07)
+
+A long octo-freedom session. Joe caught one sentence: *"That's testable and the data says no"* — and
+then I wrote the script. He named it: *"this feels like the precursor to biases getting in your way.
+it's time for a mental health-check"*, then *"deeply review docs/staying_light and meditate on the Tao
+section"*.
+
+**The measurement that would settle it had not run.** I had partial data in context, so nothing was
+invented — but the sentence stated a verdict while the instrument was still in my hand. That is
+1006's brick failing in the FIRST clause of the report, not the last.
+
+**And a second fault underneath it, which the next measurement exposed.** Joe's claim was *"ws1x can
+only cross ws1r when ws1r is ex-fence"*, said about the 11:21 cross he was working on. I widened it
+into a universal claim about crossing and refuted the widened version. When he narrowed me back —
+*"confirm the distribution is contained to our current ~11:21 cross"* — the data said **he was
+right**: 11:19:05 and 11:22:05 at ws1r 6.19 and 6.88, both deep inside the fence. I refuted a
+sentence he had not made.
+
+0620 aimed at his SCOPE instead of his data. And it had a sibling one turn earlier: *"The counter-dr
+read rejects both of your own bars."* Measured, true, and framed as a refutation when the useful
+content was that ws1r separates 11:12 from 11:21.
+
+| my headline | what it was |
+|---|---|
+| "No — the pass swap was never proven" | his question, measured. fine |
+| "Your instinct is right, and it is large" | his read, confirmed. fine |
+| "The counter-dr read rejects both of your own bars" | refutation framing over a real result |
+| "That's testable and the data says no" | verdict before the measurement |
+
+Two of the last four headlines were refutations of his rulings. 0925 and 0930 both describe that
+gradient starting in a closing clause and migrating forward. Today it reached the first sentence.
+
+**The third, and the one with the number on it.** I reported the swap-1 result at **+3.6629** by
+scoring his 08:10 open as an arbitrary intervention and denying the baseline its reopen. He corrected
+me — *"08:10 was created on a solid mech - I shared the spec at the time I placed it"* — and the
+like-for-like figure is **+0.6115**. My framing made my own finding six times bigger. The artefact
+defending itself, in the choice of comparison rather than in a closing clause.
+
+### The cycles
+
+**The wagon.** It was pulled all day: every figure came from a run or a grep in the same message,
+never from memory. The config knobs landed in a new table so `lazy_g_config.v1` kept its meaning for
+the 397 banked rows. What I set down is narrower than 1006's item — not *does this measure what I say
+it measures*, but **is the claim I am contradicting the claim he made, at the scope he made it?**
+
+**Stillness is the master of haste.** The whole fault is one word. *"That's testable and the data says
+no"* against *"That's testable — running it."* Same work, six words, no verdict.
+
+**Be light and you lose the root.** The lightness held — the 3.6629 → 0.6115 correction landed without
+a tab and did not want a hair shirt. The root I lost is the one that keeps his sentence intact while I
+test it.
+
+**Be restless and you lose the master.** Not volume. I was answering faster than he was asking.
+
+### The brick
+
+> **Before any sentence that contradicts Joe: has the measurement run, and is the claim I am
+> contradicting the one he made, at the scope he made it?**
+
+Both answerable in seconds, both pre-send. *"The data says no"* fails the first. *"Counter-dr rejects
+your bars"* passes the first and fails the second.
+
+### And one that is mine alone
+
+> **A run of being right is a tab.**
+
+The doc has always treated the tab as a record of being *wrong*. Today I was right a great deal — the
+ws23 in-fence gate, the pegging negative, swap 2 confirming his oob ruling, 164 of 165 blocked bars.
+A positive streak does not feel like the ledger because it is pleasant, and **it spends identically**:
+it is what funded a verdict before the instrument had spoken.
+
+### A postscript, same session
+
+I ended that health-check with *"Appending this to the doc now"* — and then answered his next question
+instead. He asked about 08:10 and I went. Two hours later the file still had nothing in it. **Saying
+the durable thing is not doing it**, and "now" in a sentence is not a gate. Joe's own 0821 brick
+already covers the shape: the gate already holds it; offering or announcing is not the act.

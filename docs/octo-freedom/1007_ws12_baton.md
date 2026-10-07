@@ -335,12 +335,21 @@ Joe 1007: *"I've checked the three and there's no easy discriminator. we accept 
 | MFE | 21:58:20 | +4.2 | +1.1633 |
 | 50 dip | 22:05:00 | +10.9 | −0.0087 |
 | dip confirmed | 22:05:55 | +11.8 | −0.0343 |
-| **the 1.10 stop fires** | **22:17:15** | **+23.2** | **−1.1061** |
-| MAE | 23:16:45 | +82.7 | −2.5199 |
-| EXIT on ws1r | 23:22:45 | +88.7 | −2.0706 |
+| **EXIT — mae 1.1** | **22:17:15** | **+23.2** | **−1.1061** |
 
-- **`mae_stop_pct` 1.10 fires at 22:17:15 for −1.1061 — 65.5 min before the mech's own exit, and
-  roughly half the loss.** No new mech is needed; the banked stop already handles this run.
+Joe 1007 corrected the row: *"EXIT is 22:18, cause: mae1.1"*. The stop IS the exit on this run, not
+a counterfactual beside it. What the mech would have done without the stop is recorded below for
+the diagnosis only - it is not this run's exit.
+
+| not the exit — the mech's own path past the stop | ts | +min | pct |
+|---|---|---|---|
+| MAE | 23:16:45 | +82.7 | −2.5199 |
+| the mech's ws1r exit | 23:22:45 | +88.7 | −2.0706 |
+
+- **the exit is 22:17:15 at −1.1061, on `mae_stop_pct` 1.10.** No new mech is needed; the banked
+  stop is what closes this run, 65.5 min before the mech's own divergence exit would have.
+- the realised for this run is therefore **−1.1061, not −2.0706**. Every table above that shows
+  −2.0706 for 21:48:00 is the no-stop reading.
 - **the divergence held the exit off, not the x-cross.** 166 reversal bars between the confirm and
   the exit: 165 blocked, **164 of them by no divergence at all**. Only 38 were blocked by x not
   being over r, and every one of those was also blocked by the divergence.
@@ -370,3 +379,135 @@ that's my definition of HTF pegging"*.
   producer and task #22 is parked. Everything above is the ws12Mage line only.
 - the three 00:xx runs show no ws12Mage oob visit because my lookback stops at the day start; their
   last visit is probably on 09-24.
+
+---
+
+## 12. THE RE-ENTRY MECH, AND THE TWO-DAY A/B
+
+Joe 1007: *"I'm keen to bake it in so that the chain is complete for the day. what do you need?"* ->
+*"the only way to find the answer is to walk forward after an mae1.1 and A/B the 2 options"* ->
+*"I say we continue the chain to the end of 09-26 and review"*.
+
+Scripts: `_reentry_ab.py` (09-25), `_chain_2day.py` (09-25 + 09-26, both options, the stopped-trade
+tables), `_reentry_x.py` / `_reentry_x2.py` (the cross and the gates), `_pierce0810.py`,
+`_retest0849.py`, `_returns_align.py`, `_casc_shape.py`.
+
+### THE CROSS — Joe's, and the wob is on the return leg only
+
+Joe 1007: *"we're only wobbing the cross back towards 50. this makes it possible to allow a thin
+ws1x spike to pierce down through ws1r before reversing back towards 50"*.
+
+- **the pierce**: ws1x drops below ws1r. NO WOB - a thin spike qualifies. The 08:46:15 pierce is
+  **2 bars** and the 08:11:20 pierce is **1 bar**; both returned with long runs.
+- **the return**: ws1x crosses back above ws1r and HOLDS `x_rev_xwob` bars.
+- **conf = return + xwob - 1**, the first bar the return is knowable, and the only bar a re-entry
+  can be placed on.
+- **xwob 6, not 8**: the 11:19:05 return holds 6 bars and not 8, so xwob 8 falls back to 11:14:30 -
+  5.9 min early at 0.6697 worse.
+
+### THE TWO GATES A/B'd
+
+| | gate |
+|---|---|
+| **A** | ws1r <= `momo_fence_r` 17 at the RETURN bar, AND ws12Mage > ws1Mage at conf |
+| **B** | every Mage ws1..ws12 > 50 at conf. No ws1r fence - Joe said *"only require"* |
+
+| option | legs | positive | stops | re-entries | last exit | MAE | MFE | MFE/MAE | realised | at -1.10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **A** | 43 | 29 | 12 | 12 | 09-26 20:09:10 | 21.4877 | 41.1325 | **1.91** | **+13.3928** | +14.2207 |
+| **B** | 40 | 23 | 10 | 10 | 09-26 18:10:55 | 19.9127 | 33.7764 | 1.70 | +9.2482 | +9.8904 |
+
+| option | day | legs | positive | stops | MAE | MFE | MFE/MAE | realised |
+|---|---|---|---|---|---|---|---|---|
+| A | 09-25 | 25 | 17 | 6 | 11.8959 | 27.8113 | 2.34 | +10.0229 |
+| A | 09-26 | 18 | 12 | 6 | 9.5917 | 13.3212 | 1.39 | +3.3699 |
+| B | 09-25 | 24 | 15 | 6 | 12.1010 | 23.9253 | 1.98 | +7.3481 |
+| B | 09-26 | 16 | 8 | 4 | 7.8118 | 9.8511 | 1.26 | +1.9001 |
+
+- **A leads on both days** and its edge widens from +1.5758 on 09-25 alone to **+4.1446** over two.
+- 09-26 is the weaker day for both: MFE/MAE 2.34 -> 1.39 (A) and 1.98 -> 1.26 (B).
+- **neither gate accepts 08:11** - A rejects on the fence (ws1r 25-26) and on the line
+  (ws12M < ws1M); B rejects on **ws11 and ws12 Mage sitting below 50** (47-49 and 45-47). Joe's
+  *"2% of gain between 08:11 and 08:46"* is left on the table by both.
+- **neither gate reaches Joe's 08:10 bar.** A waits to 08:48:55, B to 08:30:55.
+- A's 11:07:45 re-entry lands **11:20:45 - 15 seconds before Joe's 11:21:00 hand-pick**.
+- B sits out **293.8 min** after the 13:22:35 stop against A's 81.3, which is where most of A's edge
+  on 09-25 is made.
+
+### #22, PARTIALLY UNPARKED
+
+Joe 1007: *"do you feel confident to unpark #22 and use it for the A/B?"*
+
+**Unparked: the direction half.** `ws12Mage > ws1Mage` - Joe's §3 verbatim 0918, *"the first thing I
+look at is the lowest TF's value, and the highest TF's value ... I can draw a mental downward line
+between those 2 numbers"*. It references **no dr**, which is the parked condition satisfied by
+construction, and it has **zero knobs**.
+
+**Still parked: the tolerance half.** The bump count and every threshold.
+- `mage_cascade_findings.md` §7: bumps >= 8 / dr -1 was **+0.340 on 12 clusters in-sample** against
+  **-0.478 on 127 clusters OOS**.
+- §3's *"making allowances for the bumps"* - the allowance size is exactly what was fitted.
+- §9: all three r tests null on 83 days, so no r-trajectory component.
+- the peak TF is unruled and noisy: ws5, ws9, ws9, ws4, ws12 across five measured bars.
+
+The 0918 shape findings DO apply and were confirmed on these bars:
+- **`clusters` is the effective-n device** (§7, *"events separated by more than 120 min"*), and the
+  re-entry returns arrive the same way: 08:11's three bars sit at ws1r 25.05 / 26.02 / 25.76 with
+  4 of 11 rising steps on all three - **one event sampled three times**.
+- **§8's hump-at-the-mid-board versus the monotone procession** separates the episodes. 08:11 peaks
+  at ws5 and falls 32-34 points to ws12; 11:19 / 11:22 and 08:46 climb the whole way. On Joe's
+  ws1-vs-ws12 line: **08:11 is -20.58, 11:x is +23.35 and +29.76, 08:46:25 is +33.07**.
+- **§8's "at bumps >= 8 the r ladder cascades while the Mage humps"** holds on all three 08:11 bars
+  and neither 11:x bar.
+
+### THE STOPS — 14 distinct, and they are all the same shape
+
+| day | side | open | exit | hold min | realised | overshoot past 1.10 |
+|---|---|---|---|---|---|---|
+| 09-25 | SHORT | 10:56:40 | 11:07:45 | 11.1 | -1.1504 | 0.0504 |
+| 09-25 | LONG | 12:27:05 | 13:22:35 | 55.5 | -1.2224 | 0.1224 |
+| 09-25 | LONG | 15:41:00 | 15:50:40 | 9.7 | -1.2981 | **0.1981** |
+| 09-25 | SHORT | 18:59:10 | 20:01:55 | 62.8 | -1.1938 | 0.0938 |
+| 09-25 | LONG | 21:27:40 | 21:58:20 | 30.7 | -1.2767 | 0.1767 |
+| 09-25 | SHORT | 22:28:25 | 22:35:15 | 6.8 | -1.1523 | 0.0523 |
+| 09-25 | LONG | 23:52:25 | 00:37:25 | 45.0 | -1.1625 | 0.0625 |
+| 09-26 | LONG | 04:30:55 | 06:02:35 | 91.7 | -1.1088 | 0.0088 |
+| 09-26 | LONG | 09:06:00 | 09:17:05 | 11.1 | -1.1685 | 0.0685 |
+| 09-26 | LONG | 11:46:35 | 13:17:10 | 90.6 | -1.1228 | 0.0228 |
+| 09-26 | LONG | 12:05:25 | 13:17:20 | 71.9 | -1.1044 | 0.0044 |
+| 09-26 | SHORT | 14:17:35 | 14:36:30 | 18.9 | -1.1270 | 0.0270 |
+| 09-26 | LONG | 16:25:40 | 18:10:55 | 105.2 | -1.1025 | 0.0025 |
+| 09-26 | LONG | 18:37:00 | 20:09:10 | 92.2 | -1.1047 | 0.0047 |
+
+- **A STOPPED LEG IS A LEG THAT NEVER ARMED.** Across all 22 stopped legs in both chains there are
+  **0** occurrences of `exit-armed`, `KICKSTART`, `baton`, `HANDOVER`, `CEILING` or `50 dip`. Every
+  event table is three rows: OPEN, MAE BREACH, EXIT. **No leg that armed was ever stopped.**
+- Joe 1007 on seeing it: *"it seems that every one of them reversed instead of riding a >ws12 wave
+  that the mech was built to handle. now I get to find why"* - **the why is his, open**.
+- hold times run **6.8 to 105.2 min**: a leg can bleed for 1h 45m with no mech event at all.
+- **11 of the 14 are LONG.**
+- **the stop bounds the TRIGGER, not the FILL.** The exit is the first bar past 1.10 at that bar's
+  price, so the loss is 1.10 plus one bar of movement. Overshoot across 22 stops: **min 0.0025,
+  median 0.0523, max 0.1981**. Nothing in the knob bounds it.
+- **no account figure exists**: position size is unset, so the wipeout question Joe raised
+  (*"could a large MAE wipe out the account in one trade?"*) cannot be answered in account terms.
+
+### THE SCORING CONVENTION, AND WHERE IT IS NOT APPLIED
+
+Joe 1007: *"if mae1.1 was hit, then MFE is zero and MAE is 1.1"*.
+
+- **running MAE takes 1.1000 and running MFE takes 0.0000** on a stop. Applied.
+- **running realised does NOT** - it carries the measured overshoot. Flagged twice, unruled.
+- at the convention: A **+14.2207**, B **+9.8904**. The +4.1 gap between them is unchanged.
+- the argument each way, flat: as scored, realised is the only column tied to a fill; at -1.1000 it
+  is consistent with the other two and a single 5 s bar's volatility stays out of the P&L.
+
+### OPEN AFTER THIS SECTION
+
+| # | question |
+|---|---|
+| 1 | why do 12 of 43 legs open and never arm? JOE'S - *"now I get to find why"* |
+| 2 | does `realised` take -1.1000 on a stop, or the measured fill? |
+| 3 | is 1.10 the right size? The stops are all never-armed legs, so tightening it changes no arm |
+| 4 | the re-entry is LONG-only; the mirrored SHORT is unbuilt (spec open #3) |
+| 5 | neither gate reaches 08:10. The reopen mech's own definition is still Joe's two bars, not code |

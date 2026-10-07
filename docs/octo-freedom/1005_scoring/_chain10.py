@@ -1,0 +1,278 @@
+"""THE CHAIN RECREATED: the existing lineage walk + the new >ws12 oob mech. 09-25. 1007.
+
+Joe 1007: *"'recreate the chain' means using the exisitng lineage walk + the new ws12 oob mech"* /
+*"let's see where the next MAE 1.1 stop"*.
+
+ONE LEG, with both mechs composed:
+
+  OPEN          the previous leg's exit, or the seed bar.
+  MAE STOP      at the first bar the adverse excursion from this leg's open exceeds mae_stop_pct
+                1.10, the leg closes AT that bar and THE CHAIN STOPS. Outranks everything.
+  THE CEILING   ws12r crossing into oob extends the baton's ceiling to ws23, per leg.
+  THE WALK      until the handover: exit-armed on ws2Mage, one-time KICKSTART, baton on an oob
+                crossing within lin_hop, exit on x-cross or final stalled.
+  THE HANDOVER  the first bar where a CONSECUTIVE ws12r oob run on the leg's dr side exceeds
+                oob_gate_bars 72. From that bar the >ws12 mech owns the exit and the walk's
+                x-cross and stall are SUPPRESSED.
+
+                THIS IS MY COMPOSITION DECISION, stated so it can be flipped. Joe's spec says
+                "apply this logic after ws12r is oob for >6 minutes", which reads as a handover,
+                and the mech exists because the walk's ws23 x-cross fired 56.6 min after the pivot
+                on leg 8. The alternative - both live, first to fire wins - is one line away.
+  AFTER IT      the ws1Mage 50 dip with a dwell > dip_dwell_bars 12, confirmed at dip + 11, then
+                the first ws1r or ws2r reversal carrying a divergence with x under r (dr +1).
+
+  BRANCH 1      a counter-dr ws12x cross of ws12r inside the first 6 min of an oob run is RECORDED
+                and NOT ACTED ON. It is a trade SIGNAL and spec open question #4 - what closes a
+                branch-1 trade in an always-in-market chain - is unanswered. Acting on it here
+                would be me answering it.
+
+Knobs from ws12_baton_config v1 and lazy_g_config v1.
+"""
+import os, io, contextlib, sys
+import numpy as np
+sys.path.insert(0, '/home/joe/thecodes')
+from optimus9.compute import momo_core as MC
+from optimus9.compute.momo_config import momo_bank, momo_config
+from optimus9.compute.momo_gated import momo_window
+from optimus9.analysis.lr_v2 import _mage_rev
+from optimus9.analysis.jig import stall_mask, anchor_floater
+from optimus9.compute.spec_config import spec_config
+from optimus9.db.database_manager import DatabaseManager
+from optimus9.config import get_db_config
+import time as _t; _T0 = _t.time()
+_P = lambda m: print('# [%6.1fs] %s' % (_t.time() - _T0, m), flush=True)
+_P('importing score39 ...')
+_b = io.StringIO()
+with contextlib.redirect_stdout(_b):
+    import score39 as SC
+_P('ready')
+
+D = os.environ.get('W_DAY', '2026-09-25')
+START = os.environ.get('W_START', '08:10:00')
+FIRST = int(os.environ.get('W_SIDE', '1'))
+LEG0 = int(os.environ.get('W_LEG0', '7'))
+db = DatabaseManager(**get_db_config()); db.connect()
+W = spec_config(db, 'ws12_baton_config')
+LIN_HOP = int(SC.LG['lin_hop']); BASE_HI = SC.TF[-1]
+TRIG_TF, CEIL_HI = int(W['ceil_trig_tf']), int(W['ceil_hi'])
+GATE_BARS, SIG_WIN = int(W['oob_gate_bars']), int(W['sig_window_bars'])
+DIP_MID, DIP_DWELL = float(W['dip_mid']), int(W['dip_dwell_bars'])
+RREV, MAE_STOP = int(W['rrev_wob']), float(W['mae_stop_pct'])
+PASS = os.environ.get('W_PASS', 'oob')  # 'oob' (as built, Joe's tag ruling) or 'stalled'.
+#                                        THE BATON'S PASS TEST. Joe 1007: *"keeping the
+#                                        x-cross and swapping oob with stalled"*.
+NOX = os.environ.get('W_NOX') == '1'   # 1 disables the lineage walk's x-cross exit, leaving
+#                                        `final stalled` as its only exit. Joe 1007 asked what
+#                                        the swap left behind; this is the switch that shows it.
+DIV_TFS = [int(s.strip().replace('ws', '').replace('r', '')) for s in W['div_lines'].split(',')]
+EXF_HI = 100.0 - float(SC.LG['momo_fence_r']); EXF_LO = float(SC.LG['momo_fence_r'])
+N = len(SC.ts)
+ALL_TF = list(range(SC.TF[0], CEIL_HI + 1))
+RL = {t: SC.LD(t * 60, 'r') for t in range(SC.TF[0], CEIL_HI + 3)}
+R = {t: RL[t][:N] for t in RL}
+X = {t: SC.LD(t * 60, 'x')[:N] for t in ALL_TF}
+M2 = SC.Mg[2][:N]; G1 = SC.MTD['ws1'][:N]; PX = SC.PX[:N]
+BANK = {t: momo_bank(db, t) for t in ALL_TF}; db.disconnect()
+ST = {}
+for t in ALL_TF:
+    with momo_config(BANK[t]):
+        with momo_window(int(BANK[t]['k_window']) * t):
+            s_, n_ = int(MC.MOMO_STEP_BARS), int(MC.MOMO_SAMPLES)
+    for dd in (-1, +1):
+        ST[(t, dd)] = stall_mask(RL[t], dd, int(SC.LG['stall_n']), s_, n_)
+REV = {t: _mage_rev(R[t], RREV) for t in DIV_TFS}
+_P('producers ready; ceiling ws%d->ws%d, gate %d bars, dip dwell %d, stop %.2f'
+   % (BASE_HI, CEIL_HI, GATE_BARS, DIP_DWELL, MAE_STOP))
+
+def bnd(t, k, d):
+    v = float(R[t][k])
+    if d > 0: return 'O' if v >= SC.HI else ('x' if v >= EXF_HI else '.')
+    return 'O' if v <= SC.LO else ('x' if v <= EXF_LO else '.')
+oobf = lambda t, k, d: (float(R[t][k]) >= SC.HI) if d > 0 else (float(R[t][k]) <= SC.LO)
+def xcond(h, k, d):
+    t1, t2 = h + 1, h + 2
+    if t1 not in R or t2 not in R: return False
+    xv = float(X[h][k])
+    c = (xv < float(R[t1][k]) and xv < float(R[t2][k])) if d > 0 else \
+        (xv > float(R[t1][k]) and xv > float(R[t2][k]))
+    return c and bnd(t1, k, d) == '.' and bnd(t2, k, d) == '.'
+xund = lambda t, k, d: (float(X[t][k]) < float(R[t][k])) if d > 0 else (float(X[t][k]) > float(R[t][k]))
+indip = lambda k, d: (float(G1[k]) < DIP_MID) if d > 0 else (float(G1[k]) > DIP_MID)
+WANT = lambda d: (-1 if d > 0 else +1)
+def box(hdr, rr):
+    w = [max(len(hdr[i]), max((len(str(x[i])) for x in rr), default=0)) for i in range(len(hdr))]
+    B = lambda s, m, e: s + m.join('─' * (x + 2) for x in w) + e
+    print(B('┌', '┬', '┐'))
+    print('│' + '│'.join(' ' + hdr[i].center(w[i]) + ' ' for i in range(len(hdr))) + '│')
+    print(B('├', '┼', '┤'))
+    for x in rr:
+        print('│' + '│'.join(' ' + str(x[i]).ljust(w[i]) + ' ' for i in range(len(hdr))) + '│')
+    print(B('└', '┴', '┘'))
+
+def run_leg(k0, d):
+    tr = []; p0 = float(PX[k0]); sgn = 1 if d > 0 else -1
+    armed = False; rider = None; mae = 0.0
+    ceil = BASE_HI; ceil_bar = None
+    oob_a = None; hand = None; dip = None; conf = None; ib_run = 0
+    for j in range(k0 + 1, N):
+        px = float(PX[j])
+        if np.isfinite(px) and px > 0:
+            adv = -((px - p0) / p0 * 100.0 * sgn)
+            if adv > mae: mae = adv
+            if adv > MAE_STOP:
+                tr.append((j, 'MAE BREACH %.4f%% over %.2f%% - chain stops for review'
+                           % (adv, MAE_STOP)))
+                return j, 'mae breach', mae, ceil_bar, hand, tr
+        # the ws12r oob run on the leg's dr side, and the handover
+        if oobf(TRIG_TF, j, d):
+            if oob_a is None:
+                oob_a = j
+                for q in range(j + 1, min(N, j + SIG_WIN) + 1):
+                    if not oobf(TRIG_TF, q, d): break
+                u = lambda z: float(X[TRIG_TF][z]) < float(R[TRIG_TF][z])
+                for q in range(j + 1, min(N - 1, j + SIG_WIN) + 1):
+                    if not oobf(TRIG_TF, q, d): break
+                    c = (u(q) and not u(q - 1)) if d > 0 else ((not u(q)) and u(q - 1))
+                    if c:
+                        tr.append((q, 'branch 1 cross — RECORDED, not acted on (ws%dx %.2f vs r %.2f)'
+                                   % (TRIG_TF, float(X[TRIG_TF][q]), float(R[TRIG_TF][q]))))
+                        break
+            if hand is None and (j - oob_a) > GATE_BARS:
+                hand = j
+                tr.append((j, 'HANDOVER — ws%dr oob %.1f min; the >ws12 mech owns the exit'
+                           % (TRIG_TF, (int(SC.ts[j]) - int(SC.ts[oob_a])) / 60000.0)))
+        else:
+            oob_a = None
+        if ceil == BASE_HI and oobf(TRIG_TF, j, d) and not oobf(TRIG_TF, j - 1, d):
+            ceil = CEIL_HI; ceil_bar = j
+            tr.append((j, 'CEILING ws%d -> ws%d (ws%dr %.2f)'
+                       % (BASE_HI, CEIL_HI, TRIG_TF, float(R[TRIG_TF][j]))))
+        # ---- after the handover: the >ws12 mech owns the exit
+        if hand is not None:
+            if dip is None:
+                if indip(j, d) and not indip(j - 1, d):
+                    n = 0
+                    while j + n <= N - 1 and indip(j + n, d):
+                        n += 1
+                    if n > DIP_DWELL:
+                        dip, conf = j, j + DIP_DWELL - 1
+                        tr.append((j, '50 dip — ws1Mage %.2f, run %d bars (%.1f min), confirms %s'
+                                   % (float(G1[j]), n, n * 5 / 60.0, SC.U(conf))))
+                continue
+            if j <= conf:
+                continue
+            for t in DIV_TFS:
+                if REV[t][j] != WANT(d) or not xund(t, j, d): continue
+                af = anchor_floater(R[t], PX, d, j)
+                if af is None or int(af['fired']) == 0: continue
+                tr.append((j, 'ws%dr reversal + divergence, x under r (floater %s, d_osc %+.2f)'
+                           % (t, SC.U(af['floater'][0]), af['d_osc'])))
+                return j, '>ws12 divergence on ws%dr' % t, mae, ceil_bar, hand, tr
+            continue
+        # ---- before the handover: the lineage walk
+        if not armed:
+            if (d > 0 and float(M2[j]) >= SC.HI and float(M2[j - 1]) < SC.HI) or \
+               (d < 0 and float(M2[j]) <= SC.LO and float(M2[j - 1]) > SC.LO):
+                armed = True
+                tr.append((j, 'exit-armed — ws2Mage %s %.0f (%.2f)'
+                           % ('over' if d > 0 else 'under', SC.HI if d > 0 else SC.LO,
+                              float(M2[j]))))
+            else:
+                continue
+        if rider is None:
+            c = [t for t in ALL_TF if t <= ceil and oobf(t, j, d)]
+            if c:
+                rider = max(c)
+                tr.append((j, 'KICKSTART — rider ws%d (r %.2f oob, ceiling ws%d)'
+                           % (rider, float(R[rider][j]), ceil)))
+            continue
+        cand = [t for t in range(rider + 1, min(rider + LIN_HOP, ceil) + 1)
+                if (ST[(t, d)][j] if PASS == 'stalled' else oobf(t, j, d))]
+        if cand:
+            rider = max(cand)
+            tr.append((j, 'baton -> ws%d %s (r %.2f)'
+                       % (rider, PASS, float(R[rider][j])))); continue
+        if ST[(rider, d)][j]:
+            tr.append((j, 'final stalled on ws%d (r %.2f %s)'
+                       % (rider, float(R[rider][j]), bnd(rider, j, d))))
+            return j, 'final stalled', mae, ceil_bar, hand, tr
+        if (not NOX) and xcond(rider, j, d):
+            tr.append((j, 'x-cross on ws%d' % rider))
+            return j, 'x-cross', mae, ceil_bar, hand, tr
+    return None, 'tape end', mae, ceil_bar, hand, tr
+
+def main():
+    k0 = SC.K('%s %s' % (D, START))
+    print('\n# THE CHAIN RECREATED FROM %s %s, side %s — lineage walk + the >ws12 oob mech'
+          % (D, START, 'LONG' if FIRST > 0 else 'SHORT'))
+    k, d, legs, n = k0, FIRST, [], LEG0
+    while True:
+        xk, why, mae, cb, hand, tr = run_leg(k, d)
+        if xk is None:
+            print('\n- leg %d found no exit before the tape end. the chain ends.' % (n + 1)); break
+        n += 1
+        p0 = float(PX[k]); sgn = 1 if d > 0 else -1
+        real = (float(PX[xk]) - p0) / p0 * 100.0 * sgn
+        legs.append(dict(leg=n, side='LONG' if d > 0 else 'SHORT', open=k, exit=xk, real=real,
+                         mae=mae, why=why, hand=hand))
+        pct = lambda j: '%+.4f' % ((float(PX[j]) - p0) / p0 * 100.0 * sgn)
+        mn = lambda j: '%+.1f' % ((int(SC.ts[j]) - int(SC.ts[k])) / 60000.0)
+        print('\n## LEG %d — %s   open %s   pxs %.6f' % (n, legs[-1]['side'], SC.U(k), p0))
+        box(('ts', '+min', 'event', 'pxs', 'pct'),
+            [(SC.U(k), '+0.0', 'OPEN %s' % legs[-1]['side'], '%.6f' % p0, '+0.0000')]
+            + [(SC.U(j), mn(j), lbl, '%.6f' % float(PX[j]), pct(j)) for j, lbl in tr]
+            + [(SC.U(xk), mn(xk), 'EXIT — %s' % why, '%.6f' % float(PX[xk]), pct(xk))])
+        if why == 'mae breach':
+            print('\n- MAE breach at %s. THE CHAIN IS STOPPED FOR REVIEW.' % SC.U(xk)); break
+        k = xk; d = -d
+
+    def mm(s_, e_, dd):
+        """MAE / MFE over the leg's own holding window, in the direction dr makes favourable."""
+        seg = PX[s_:e_ + 1]
+        seg = seg[np.isfinite(seg) & (seg > 0)]
+        if seg.size == 0: return 0.0, 0.0
+        p_ = float(PX[s_])
+        f = float(seg.max()) if dd > 0 else float(seg.min())
+        g = float(seg.min()) if dd > 0 else float(seg.max())
+        return (max(0.0, -((g - p_) / p_ * 100.0 * dd)), (f - p_) / p_ * 100.0 * dd)
+
+    # JOE'S SCORING RULE, 1007: *"if mae1.1 was hit, then MFE is zero and MAE is 1.1"*. A stopped leg
+    # scores the KNOB value, not the measured overshoot - 1.1000, not 1.1504.
+    print('\n# EVERY LEG AND THE RUNNING MAE / MFE')
+    rows = []; rA = 0.0; rF = 0.0; rR = 0.0
+    for L in legs:
+        dd = 1 if L['side'] == 'LONG' else -1
+        if L['why'] == 'mae breach':
+            a_, f_ = MAE_STOP, 0.0
+        else:
+            a_, f_ = mm(L['open'], L['exit'], dd)
+        rA += a_; rF += f_; rR += L['real']
+        rows.append((str(L['leg']), L['side'], SC.U(L['open']), SC.U(L['exit']),
+                     '%.1f' % ((int(SC.ts[L['exit']]) - int(SC.ts[L['open']])) / 60000.0),
+                     L['why'], '%.4f' % a_, '%.4f' % f_,
+                     ('%.2f' % (f_ / a_)) if a_ > 0 else 'inf',
+                     '%+.4f' % L['real'], '%.4f' % rA, '%.4f' % rF, '%+.4f' % rR))
+    box(('leg', 'side', 'open', 'exit', 'hold min', 'why', 'leg MAE', 'leg MFE', 'MFE/MAE',
+         'realised', 'running MAE', 'running MFE', 'running realised'), rows)
+    print('- a leg that hit the stop scores MFE 0.0000 and MAE %.4f, the knob value - Joe 1007.'
+          % MAE_STOP)
+    print('- running MFE/MAE over the chain: %.2f' % (rF / rA) if rA > 0 else '- running MAE is 0')
+
+    print('\n# THE CHAIN FROM %s' % START)
+    box(('leg', 'side', 'open', 'exit', 'hold min', 'handover', 'leg MAE', 'realised', 'why'),
+        [(str(L['leg']), L['side'], SC.U(L['open']), SC.U(L['exit']),
+          '%.1f' % ((int(SC.ts[L['exit']]) - int(SC.ts[L['open']])) / 60000.0),
+          SC.U(L['hand']) if L['hand'] else '—',
+          '%.4f' % L['mae'], '%+.4f' % L['real'], L['why']) for L in legs]
+        + [('legs %d-%d' % (legs[0]['leg'], legs[-1]['leg']), '', SC.U(legs[0]['open']),
+            SC.U(legs[-1]['exit']),
+            '%.1f' % sum((int(SC.ts[L['exit']]) - int(SC.ts[L['open']])) / 60000.0 for L in legs),
+            '%d of %d' % (sum(1 for L in legs if L['hand']), len(legs)),
+            '%.4f' % max(L['mae'] for L in legs), '%+.4f' % sum(L['real'] for L in legs), '')])
+    print('\n- %d legs, %d positive, %d handed over to the >ws12 mech'
+          % (len(legs), sum(1 for L in legs if L['real'] > 0), sum(1 for L in legs if L['hand'])))
+
+
+if __name__ == '__main__':
+    main()
