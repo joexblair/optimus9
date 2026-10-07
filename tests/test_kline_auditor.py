@@ -89,3 +89,54 @@ def test_is_frozen_kc_moving_not_frozen():
 
 def test_is_frozen_rest_move_below_threshold():
     assert not is_frozen([(0.10000, 0.10000), (0.10000, 0.10001)], MOVE)    # rest +1 tick ≤ 3
+
+
+# ── 1m reconcile when only the auditor's REST samples are short (Joe 1007) ──
+import logging
+from optimus9.data.kline_auditor import KlineAuditor
+from optimus9.live.rc_alerts import ThrottleGate
+
+M0 = 1791396000000
+
+
+def _auditor(kc_bars, official):
+    a = object.__new__(KlineAuditor)
+    a._tick, a._log, a.rows = 0.00001, logging.getLogger('t'), []
+    a._kc_minute = lambda tp, m: kc_bars
+    a._official_1m = lambda sym, m: official
+    a._record = lambda tp, ts, tier, verdict, kc, audit, off, var, detail: a.rows.append((verdict, detail))
+    return a
+
+
+def _bars(closes):
+    return [(c, c, c, c, 10.0) for c in closes]
+
+
+def _audit_5s(n):
+    return {M0 + i * 5000: (0.18, 0.18, 0.18, 0.18) for i in range(n)}
+
+
+def test_audit_short_tape_matches_stays_incomplete_and_the_alarm_stays_silent():
+    kc = _bars([0.18] * 12)
+    a = _auditor(kc, aggregate_1m(kc))
+    a._reconcile_1m(1, 'X', M0, _audit_5s(11), 0.0)
+    verdict, detail = a.rows[0]
+    assert verdict == 'incomplete' and 'audit=11/12 kc=12/12 official=True' in detail and 'off_vs_kc:match' in detail
+    rec = {'source': 'kline_audit', 'kind': '1m incomplete', 'bar_ms': M0, 'detail': detail}
+    assert ThrottleGate().feed(rec) == (False, None)
+
+
+def test_audit_short_tape_differs_is_a_variance():
+    kc = _bars([0.18] * 12)
+    off = list(aggregate_1m(kc)); off[3] = 0.18009                  # exchange close 9 ticks higher
+    a = _auditor(kc, tuple(off))
+    a._reconcile_1m(1, 'X', M0, _audit_5s(11), 0.0)
+    verdict, detail = a.rows[0]
+    assert verdict == 'variance' and ('off_vs_kc:c-9' in detail or 'off_vs_kc:c+9' in detail) and 'off_vs_audit:skipped' in detail
+
+
+def test_our_tape_short_is_still_incomplete():
+    kc = _bars([0.18] * 11)
+    a = _auditor(kc, aggregate_1m(_bars([0.18] * 12)))
+    a._reconcile_1m(1, 'X', M0, _audit_5s(12), 0.0)
+    assert a.rows[0] == ('incomplete', 'audit=12/12 kc=11/12 official=True')

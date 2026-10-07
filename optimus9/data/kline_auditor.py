@@ -275,11 +275,30 @@ class KlineAuditor:
         abars  = [audit_5s[w] for w in wins if w in audit_5s]
         kcbars = self._kc_minute(tp_pk, minute_start)
         official = self._official_1m(symbol, minute_start)
-        if official is None or len(abars) < n or len(kcbars) < n:
-            self._record(tp_pk, minute_start, '1m', 'incomplete', None, None, official, None,
-                         f'audit={len(abars)}/{n} kc={len(kcbars)}/{n} official={official is not None}')
+        short    = f'audit={len(abars)}/{n} kc={len(kcbars)}/{n} official={official is not None}'
+        if official is None or len(kcbars) < n:
+            self._record(tp_pk, minute_start, '1m', 'incomplete', None, None, official, None, short)
             self._log.error(f'1m incomplete @ {_iso(minute_start)}: audit {len(abars)}/{n}, '
                             f'kc {len(kcbars)}/{n}, official={official is not None}')
+            return
+        if len(abars) < n:
+            # Only the auditor's own REST samples are short (Bybit's 10006 in the first seconds of a
+            # minute, accepted Joe 1007). The gold-standard check needs only our tape and the official
+            # bar, so it still runs (Joe 1007, "yes" to it): a tape that differs from the exchange is a
+            # 'variance' like any other minute; a tape that matches stays 'incomplete' (the REST-sanity
+            # half could not run) with the passed check in its detail.
+            kc_1m = aggregate_1m(kcbars)
+            var   = tick_variance(official, kc_1m, self._tick)
+            if any(var.values()):
+                detail = (f'off_vs_kc:{_fmt_var(var)} off_vs_audit:skipped ({short}) '
+                          f'vol off={official[4]} kc={kc_1m[4]}')
+                self._record(tp_pk, minute_start, '1m', 'variance', kc_1m, None, official, var, detail)
+                self._log.error(f'1m VARIANCE @ {_iso(minute_start)}: our tape != the exchange | {detail}')
+            else:
+                self._record(tp_pk, minute_start, '1m', 'incomplete', kc_1m, None, official, var,
+                             f'{short} off_vs_kc:{_fmt_var(var)}')
+                self._log.error(f'1m incomplete @ {_iso(minute_start)}: audit {len(abars)}/{n}, '
+                                f'kc {len(kcbars)}/{n}, official=True; tape vs exchange matched')
             return
         a_ohlc   = aggregate_1m([(b[0], b[1], b[2], b[3], 0.0) for b in abars])
         audit_1m = (a_ohlc[0], a_ohlc[1], a_ohlc[2], a_ohlc[3], float(audit_v or 0.0))
