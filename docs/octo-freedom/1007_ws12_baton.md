@@ -1856,3 +1856,51 @@ their per-day realised kept, and only days 1-47 were allowed to choose.**
   hold's rank 33, and hold's rank 1 was only fit's rank 12.
 - the one structural result that is stable everywhere: **the stop rate.** Every config in the grid
   runs 8% to 16% where the banked one runs 26% to 40%.
+
+---
+
+## 29. WHAT ACTUALLY SURVIVES — TWO KNOB CHANGES
+
+The §28 split left three knobs winning on both halves: `mae_stop_pct` 2.5, `reent_xwob` 18 and
+`oob_gate_fence` 15.0. **The third is already the banked value**, so the whole surviving result is
+**two changes**.
+
+| config | the changes from banked | ALL 95 NET | fit 1-47 | **hold 48-95** | third 1 | third 2 | third 3 |
+|---|---|---|---|---|---|---|---|
+| **A** banked | — | **-151.9469** | -58.4802 | **-93.4667** | -32.8152 | -48.6394 | -70.4923 |
+| **B** | `mae_stop_pct` 2.5 | -48.6437 | -28.3490 | -20.2947 | -22.0793 | **+29.7219** | -56.2863 |
+| **C** | + `reent_xwob` 18 — **the survivors** | **-25.6072** | -36.6819 | **+11.0747** | -29.3109 | **+30.5678** | -26.8641 |
+| **D** | the §25 seven-knob winner | **+4.0625** | -32.6649 | **+36.7274** | -38.4336 | **+73.3738** | -30.8777 |
+| **E** | C + `dip_fence` 50.5 | -88.4127 | -48.2719 | -40.1408 | -23.9787 | -0.4353 | -63.9987 |
+| **F** | C + `oob_gate_fence` 18.0 | -39.7805 | -38.6160 | -1.1645 | -27.3146 | +27.9305 | -40.3964 |
+
+### THE FIVE READS
+
+- **ONE KNOB CARRIES TWO THIRDS OF IT.** `mae_stop_pct` 1.1 -> 2.5 alone moves net **+103.30** of the
+  +156.01. The other six knobs in §25's winner are worth +52.71 between them.
+- **C is the defensible config.** Two changes, both knobs that won on BOTH halves, and it is the
+  only configuration here whose every component passed an out-of-sample test. Hold **+11.0747**.
+- **D's hold score is contaminated and must not be quoted as out-of-sample.** D was chosen using all
+  95 days, hold block included. The §28 refit's genuinely blind winner scored **+4.3757** on hold,
+  not +36.73.
+- **`oob_gate_fence` 18.0 does not survive.** It measured +34.21 in the granular pass at D's config
+  and is **14.17 WORSE than C** once the other knobs return to banked. An interaction, not a value -
+  the third one found tonight.
+- **nothing is positive outside the middle third.** Every positive number in the table is third 2.
+  Thirds 1 and 3 are negative for all six configs, banked included.
+
+### WHAT I WOULD PUT IN FRONT OF JOE
+
+**Two knob changes, and no more:**
+
+| knob | banked | proposed | why it is the only pair I will defend |
+|---|---|---|---|
+| `mae_stop_pct` | 1.1 | **2.5** | wins on fit AND hold; the only value of any knob with a positive mean hold net (+8.0894); 2.75 loses 62 days to 22 so it is a real peak, not an edge |
+| `reent_xwob` | 6 | **18** | wins on fit AND hold; the curve is flat 2-12 and steps up only at 18 |
+
+- that pair takes the chain from **-151.9469 to -25.6072** over 95 days and from **-93.4667 to
+  +11.0747** on the hold half.
+- **it is still net negative over the full tape.** Two changes do not make this chain pay for its
+  fees, and nothing measured tonight does so out of sample.
+- the stop rate falls **34.1% -> 12.3%**, and that is the only structural result stable across every
+  block and every config tested.
