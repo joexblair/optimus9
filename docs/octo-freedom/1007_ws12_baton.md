@@ -1672,3 +1672,46 @@ ceiling trigger were all borrowing the GLOBAL oob 15/85 out of `lazy_g` - the sa
 
 - 2.5 and 1.8 were the top of the original grid and both won, so the edge was extended. **2.5 holds
   and 2.75 loses 62 days to 22.**
+
+---
+
+## 26. THE HOLD-OUT — THE DIRECTION HOLDS, THE MAGNITUDE IS ONE THIRD OF THE TAPE
+
+I raised the no-hold-out problem myself in §25 and Joe handed me the con for nine hours, so this is
+the first thing built with it. Every knob in §25 was fitted to the same 95 days that scored it.
+
+**THREE SPLITS, because one split is a choice and three is a measurement.** The chain is NOT
+restarted per block - it runs once over the whole tape and each leg is attributed to the block its
+OPEN bar falls in, Joe's *"day is the block unit"*. Restarting would seed a different chain in each
+block and the two would not be comparable.
+
+| the block | days | banked NET | best NET | the delta | delta per leg | days best won / lost | verdict |
+|---|---|---|---|---|---|---|---|
+| ALL 95 DAYS | 95 | -151.9472 | **+4.0627** | +156.0100 | +0.075012 | 49 / 46 | best wins |
+| HALVES — fit, days 1-47 | 47 | -58.4806 | -32.6645 | +25.8161 | +0.020286 | 21 / 26 | best wins |
+| **HALVES — hold, days 48-95** | 48 | -93.4666 | **+36.7273** | **+130.1939** | **+0.124312** | **28 / 20** | best wins |
+| INTERLEAVE — fit, odd days | 48 | -48.4812 | **+15.7299** | +64.2111 | +0.066068 | 26 / 22 | best wins |
+| INTERLEAVE — hold, even days | 47 | -103.4661 | -11.6672 | +91.7989 | +0.082966 | 23 / 24 | best wins |
+| **THIRDS — first** | 31 | -32.8155 | **-38.4333** | **-5.6178** | **-0.021632** | **12 / 19** | **BANKED WINS** |
+| **THIRDS — middle** | 32 | -48.6396 | **+73.3737** | **+122.0133** | **+0.195327** | 19 / 13 | best wins |
+| THIRDS — last | 32 | -70.4922 | -30.8777 | +39.6145 | +0.037733 | 18 / 14 | best wins |
+
+### WHAT IT SAYS
+
+- **the direction holds out of sample: 7 of 8 blocks.** The §25 config beats the banked one almost
+  everywhere, including on days that were never used to pick anything.
+- **the honest forward test is the best block.** Days 48-95 were not used to choose a single knob,
+  and there the delta is **+130.1939** and the config is **net +36.7273** - the only large positive
+  on the board, at 28 days won to 20.
+- **the magnitude is one third of the tape.** The middle third alone carries **+122.0133 of the
+  +156.0100**, 78% of the whole improvement from 32 of 95 days, at **+0.195327 per leg** against
+  +0.075012 overall.
+- **the first third is the one loss**: -38.4333 against the banked -32.8155, 12 days won to 19.
+- **only 3 of the 8 blocks are net POSITIVE for the config at all** - halves-hold, interleave-fit
+  and thirds-middle. Five are still net negative after drag.
+- the stop rate is the most stable thing in the table: **8.3% to 16.4%** across every block against
+  the banked 26.3% to 40.5%.
+
+**THE READING, and it is not a flattering one:** this is the shape of a config that is **right about
+direction and overfit on magnitude**. The 2.5 stop and the ws8 trigger genuinely reduce stops
+everywhere; the claim that the chain clears fees rests on 32 days.
