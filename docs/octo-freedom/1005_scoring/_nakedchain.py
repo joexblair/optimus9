@@ -85,11 +85,18 @@ def naked_walk(k0, d):
     return None, 'the walk never terminated', tr
 
 
-def run_chain_naked(gate, noland):
+def run_chain_naked(gate, noland, frame='dr'):
+    """THE WALK'S FRAME.
+
+      'dr'   int(DRv[k]), the tape dr at the open bar, the native side when dr is 0. Arms 1 and 2.
+      'inv'  -d, THE INVERSE OF THE TRADE SIDE. Joe 1008: *"the direction of the x cross is defined
+             by the trade - it's a SHORT trade, so the cross is downward"*. A downward cross is
+             `d > 0` in the code, so a SHORT trade (side -1) walks on frame +1. Arms 3 and 4.
+    """
     rows = []; n = 0
     k, d, seg_n = T.K(T.START_D, '02:48:50'), +1, 0
     while True:
-        fr = int(DRv[k]) or d                 # the frame: dr at the open; native side when dr is 0
+        fr = (int(DRv[k]) or d) if frame == 'dr' else -d
         lb, lw, ltr = naked_walk(k, fr)
         if lb is None or lb > T.LAST_OPEN:
             if noland == 'end':
@@ -125,8 +132,16 @@ def main():
     A1 = run_chain_naked(T.gate_A, 'end')
     print('# arm 2 — naked walk, no landing enters at the open ...', flush=True)
     A2 = run_chain_naked(T.gate_A, 'open')
-    ARMS = [('arm 0 — baseline, no walk', A0), ('arm 1 — naked walk, no landing ends it', A1),
-            ('arm 2 — naked walk, no landing enters at the open', A2)]
+    print('# arm 3 — frame = INVERSE OF THE TRADE SIDE, no landing ends it ...', flush=True)
+    A3 = run_chain_naked(T.gate_A, 'end', 'inv')
+    print('# arm 4 — frame = INVERSE OF THE TRADE SIDE, no landing enters at the open ...',
+          flush=True)
+    A4 = run_chain_naked(T.gate_A, 'open', 'inv')
+    ARMS = [('arm 0 — baseline, no walk', A0),
+            ('arm 1 — frame dr, no landing ends it', A1),
+            ('arm 2 — frame dr, no landing enters at the open', A2),
+            ('arm 3 — frame = inverse of the side, no landing ends it', A3),
+            ('arm 4 — frame = inverse of the side, no landing enters at the open', A4)]
 
     print('\n# THE THREE ARMS, 09-25 02:48:50 TO THE END OF 09-26')
     rows = []

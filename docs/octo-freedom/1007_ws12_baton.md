@@ -971,3 +971,74 @@ which is both `dr` and the inverse of the SHORT side, so neither bar shows a fra
 problem is the arm's CROSSING test against a line already past its fence. **The 6 legs where `dr`
 and the inverse-of-side rules disagree are not yet measured** - that is where a frame inversion
 could still be hiding.
+
+---
+
+## 17. THE FRAME RULE IMPLEMENTED — THE WHOLE CHAIN, FIVE ARMS
+
+Joe 1008: *"you're reporting to me the thing that I just asked to be implemented, but I haven't
+seen the confirmation that the work was done"*.
+
+**THE CHANGE, one line in `_nakedchain.run_chain_naked`:**
+
+```python
+    fr = (int(DRv[k]) or d) if frame == 'dr' else -d
+```
+
+- `frame='dr'` is arms 1 and 2 as §15 ran them: the tape dr at the open bar.
+- `frame='inv'` is **arms 3 and 4, Joe's rule**: `-d`, the **inverse of the trade side**. A SHORT
+  trade (side −1) walks on frame +1, because *"the direction of the x cross is defined by the trade
+  - it's a SHORT trade, so the cross is downward"* and a downward cross is `d > 0` in the code.
+- additive: the `dr` arms are kept, not replaced.
+
+| arm | legs | positive | stops | re-entries | last exit | running MAE | running MFE | MFE/MAE | realised as scored | realised at -1.10 | minutes naked | entry improvement |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| arm 0 — baseline, no walk | 43 | 29 | 12 | 12 | 09-26 20:09:10 | 21.4877 | 41.1325 | **1.91** | **+13.3928** | +14.2207 | 0.0 | +0.0000 |
+| arm 1 — frame dr, no landing ends it | 23 | 12 | 9 | 8 | 09-26 20:40:00 | 12.2899 | 14.8420 | 1.21 | -0.3915 | +0.1173 | 1255.6 | **-0.9054** |
+| arm 2 — frame dr, no landing enters at the open | 23 | 12 | 9 | 8 | 09-26 20:40:00 | 12.2899 | 14.8420 | 1.21 | -0.3915 | +0.1173 | 1255.6 | -0.9054 |
+| arm 3 — **frame = inverse of the side**, no landing ends it | 21 | 11 | 10 | 9 | 09-26 20:40:00 | 14.0879 | 13.2439 | 0.94 | **-2.4789** | -1.9307 | 1034.7 | **+1.3540** |
+| arm 4 — frame = inverse of the side, no landing enters at the open | 21 | 11 | 10 | 9 | 09-26 20:40:00 | 14.0879 | 13.2439 | 0.94 | -2.4789 | -1.9307 | 1034.7 | +1.3540 |
+
+| arm | day | legs | positive | stops | MAE | MFE | MFE/MAE | realised | minutes naked |
+|---|---|---|---|---|---|---|---|---|---|
+| arm 0 | 2026-09-25 | 25 | 17 | 6 | 11.8959 | 27.8113 | 2.34 | +10.0229 | 0.0 |
+| arm 0 | 2026-09-26 | 18 | 12 | 6 | 9.5917 | 13.3212 | 1.39 | +3.3699 | 0.0 |
+| arm 1 | 2026-09-25 | 11 | 5 | 5 | 6.8846 | 7.2865 | 1.06 | -1.4826 | 692.0 |
+| arm 1 | 2026-09-26 | 12 | 7 | 4 | 5.4053 | 7.5555 | 1.40 | +1.0911 | 563.6 |
+| arm 3 | 2026-09-25 | 10 | 5 | 5 | 6.9801 | 7.5851 | 1.09 | -1.2099 | 767.6 |
+| arm 3 | 2026-09-26 | 11 | 6 | 5 | 7.1079 | 5.6589 | 0.80 | -1.2689 | 267.1 |
+
+### THE INVERSION WAS REAL IN THE ENTRY COLUMN, AND THE FRAME RULE FIXES IT
+
+| what moved | frame dr | frame = inverse of the side | the change |
+|---|---|---|---|
+| entry improvement, summed | **-0.9054** | **+1.3540** | **+2.2594** |
+| realised as scored | -0.3915 | -2.4789 | **-2.0874** |
+| legs | 23 | 21 | -2 |
+| stops | 9 | 10 | +1 |
+| MFE/MAE | 1.21 | 0.94 | -0.27 |
+| minutes naked | 1255.6 | 1034.7 | -220.9 |
+
+- **the frame rule does exactly what it was aimed at: the entries stop being net-worse and become
+  net-better, by 2.2594 across the chain.**
+- **realised still falls.** The entry is one of four things the walk changes - it also changes which
+  bar each leg starts from, the leg count, and the time spent flat. The loss is not in the frame.
+- **the legs where the two frame rules agree are identical**, including both bars Joe reviewed:
+  10:56:40 is leg 6 in both arms (+3.5022 entry, exit 12:27:05) and 04:41:00 is leg 2 in both
+  (-0.6202 entry, exit 06:40:30).
+
+### THE LEGS THE FRAME RULE MOVED MOST, ARM 3
+
+| leg | side | the walk starts | frame dr | entry bar | naked min | entry better by % | exit | why |
+|---|---|---|---|---|---|---|---|---|
+| 6 | SHORT | 09-25 10:56:40 | +1 | 11:41:35 | 44.9 | **+3.5022** | 12:27:05 | x-cross |
+| 19 | SHORT | 09-26 14:17:35 | +1 | 15:45:15 | 87.7 | **+2.2295** | 16:25:40 | final stalled |
+| 11 | LONG | 09-26 02:55:50 | −1 | 03:21:25 | 25.6 | +0.5837 | 04:10:00 | x-cross |
+| 5 | LONG | 09-25 08:48:55 | −1 | 10:17:05 | 88.2 | -0.5724 | 10:56:40 | x-cross |
+| 10 | LONG | 09-25 22:27:35 | −1 | 23:52:25 | 84.8 | -0.6364 | 00:37:25 | mae breach |
+| 9 | LONG | 09-25 17:31:55 | −1 | 21:27:40 | **235.8** | **-3.4812** | 21:58:20 | mae breach |
+
+- **leg 9 is the single largest cost in BOTH arms and the frame rule cannot touch it**: it is a LONG
+  on a dr −1 bar, so `dr` and the inverse-of-side give the same −1. 235.8 min naked to an entry
+  3.4812% worse, then the stop.
+- leg 19, 09-26 14:17:35, is the gain the `dr` frame did not get: **+2.2295** on a SHORT.
