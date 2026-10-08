@@ -165,8 +165,15 @@ def run_leg(k0, d):
         if goob(TRIG_TF, j, d):
             if oob_a is None:
                 oob_a = j
-                for q in range(j + 1, min(N, j + SIG_WIN) + 1):
-                    if not goob(TRIG_TF, q, d): break
+                # DEAD LOOP DELETED 1008. It read
+                #     for q in range(j + 1, min(N, j + SIG_WIN) + 1):
+                #         if not oobf(TRIG_TF, q, d): break
+                # and assigned nothing, returned nothing and had no side effect - the branch-1
+                # scan immediately below is the real one. Its only behaviour was a CRASH: the
+                # bound is min(N, ...) + 1 where the real loop uses min(N - 1, ...) + 1, so q
+                # reached N and indexed one past the end of a 1,632,960-bar line. It killed the
+                # overnight sweep at the tape end on configs whose chain ran within SIG_WIN
+                # (72 bars) of the last bar. Deleting it changes no result.
                 u = lambda z: float(X[TRIG_TF][z]) < float(R[TRIG_TF][z])
                 for q in range(j + 1, min(N - 1, j + SIG_WIN) + 1):
                     if not goob(TRIG_TF, q, d): break

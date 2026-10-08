@@ -1715,3 +1715,94 @@ block and the two would not be comparable.
 **THE READING, and it is not a flattering one:** this is the shape of a config that is **right about
 direction and overfit on magnitude**. The 2.5 stop and the ws8 trigger genuinely reduce stops
 everywhere; the claim that the chain clears fees rests on 32 days.
+
+---
+
+## 27. THE OVERNIGHT RUN — THE CENTROID, THE WORST STOP DAY, AND THE LEGS THAT NEED THE BIG STOP
+
+Joe 1008: *"when you have a centroid, make very granular steps (eg 1, 0.05) around each knob to lock
+it in. in the morning I'll want to see the day with the most stops, and the five day window which
+holds the trades that need such a large stop loss"* / *"you've got 9 hours from now ... be thorough,
+the time is yours and so is the con"*.
+
+### `mae_stop_pct` 2.5 AND `reent_xwob` 18 WERE GRID EDGES. BOTH HOLD.
+
+| knob | the extension | result |
+|---|---|---|
+| `mae_stop_pct` | 2.5 / 2.75 / 3.0 / 3.25 / 3.5 / 4.0 / 5.0 | **2.5 is a real peak.** 2.75 loses **62 days to 22**; 5.0 is net -64.17 |
+| `reent_xwob` | 18 / 22 / 26 / 32 / 40 / 60 | 18 holds |
+
+### THE GRANULAR PASS, AND WHY THE CENTROID DOES NOT COMPOSE
+
+| knob | the staged best | its own granular best | its granular net |
+|---|---|---|---|
+| `oob_gate_fence` | 15.0 | **18.0** | **+34.2129** |
+| `oob_gate_bars` | 72 | **48** | **+26.7289** |
+| `ceil_trig_tf` | 8 | **5** | — |
+| `dip_dwell_bars` | 6 | **8** | — |
+| `dip_fence` | 53.0 | **51.0** | — |
+| `mae_stop_pct`, `reent_xwob`, `lin_hop`, `stall_n`, `rrev_wob`, `momo_fence_r`, `ceil_hi`, `div_lines` | — | unchanged | — |
+
+- `oob_gate_fence` **16 / 17 / 18** is a **three-value plateau** at +34.17 / +33.56 / +34.21 with gross
+  +209 to +211 - the widest stable band found anywhere, and **+30.15 above the 15.0 in use**.
+
+| | legs | stops | stop rate | MFE/MAE | gross | drag | NET |
+|---|---|---|---|---|---|---|---|
+| the staged winner | 1636 | 205 | 12.5% | 0.92 | +184.0227 | -179.9600 | **+4.0627** |
+| **the composed centroid** | **441** | 119 | 27.0% | 1.09 | +19.2124 | -48.5100 | **-29.2976** |
+
+- **five knobs each improved alone and together they collapse the chain to 441 legs** - it runs out
+  of re-entries and ends early. The script locked the staged winner for the two reports.
+- **a one-at-a-time sweep cannot be added up.** That is now measured twice: §25 stage 2 -> stage 3,
+  and here.
+
+### THE DAY WITH THE MOST STOPS: 2026-08-22, AND IT IS PROFITABLE
+
+| day | legs | stops | stop rate | realised |
+|---|---|---|---|---|
+| **2026-08-22** | 28 | **9** | 32.1% | **+14.7836** |
+| 2026-08-25 | 23 | 6 | 26.1% | -2.4229 |
+| 2026-09-21 | 22 | 6 | 27.3% | -4.3027 |
+| 2026-09-29 | 20 | 6 | 30.0% | -5.7528 |
+| 2026-08-21 | 21 | 5 | 23.8% | +5.8976 |
+
+- **the worst stop day of the 95 is one of the better days for realised.** 9 stops cost it roughly
+  23 and one leg - the 04:44:20 SHORT - returned **+12.6290** on its own.
+- **every stop on that day overshot 2.5**: measured MAE 2.5216, 2.6045, 2.6134, 2.6220, 2.6850 and
+  **3.3446**. The stop bounds the trigger, not the fill, and the worst overshoot is **0.84**.
+
+### THE LEGS THAT NEED THE LARGE STOP — AND AS A GROUP THEY LOSE
+
+A leg NEEDS the big stop when its own measured MAE went past the old 1.10 and it still came home,
+so a 1.10 stop would have killed it and the 2.50 stop kept it.
+
+| the measure | value |
+|---|---|
+| legs that need the large stop | **331** |
+| their share of all legs | **20.2% of 1636** |
+| **their summed realised** | **-22.6437** |
+| the whole chain's realised | +184.0227 |
+| their share of the gross | **-12.3%** |
+| their largest measured MAE | 2.4994 |
+| their median measured MAE | 1.5388 |
+
+- **the 2.5 stop's gain is NOT that it rescues winners.** The 331 legs it keeps alive lose **-22.64**
+  between them - about **-0.068 each**.
+- **the gain is that they are not charged 1.10 each.** -0.068 against -1.10 per leg across 331 legs
+  is where the stop's whole edge comes from, and it is an arithmetic saving, not a selection skill.
+
+| the five-day window | legs needing it | their realised | the window's whole realised | their share |
+|---|---|---|---|---|
+| **2026-08-18 to 2026-08-22** | 22 | **+33.3997** | +43.2294 | **77.3%** |
+| 2026-08-20 to 2026-08-24 | 22 | +32.0486 | +58.5487 | 54.7% |
+| 2026-08-19 to 2026-08-23 | 21 | +31.6591 | +51.7894 | 61.1% |
+| 2026-08-21 to 2026-08-25 | 22 | +26.3258 | +47.8826 | 55.0% |
+| 2026-08-22 to 2026-08-26 | 23 | +25.9577 | +47.6996 | 54.4% |
+
+- **2026-08-18 to 2026-08-22 is the window Joe asked for**: 22 legs needing the big stop carry
+  **77.3%** of everything the window made.
+- its biggest two are a **315.6 min** SHORT from 08-19 21:36:35 at MAE 2.2327 -> **+5.1510**, and a
+  **477.3 min** LONG from 08-20 02:52:10 at MAE 2.2579 -> **+3.8320**. Both exit on the >ws12
+  divergence and both would have been stopped twice over at 1.10.
+- **across the whole tape these legs lose; inside this window they ARE the profit.** Every window in
+  the top five sits in the same 11 days of August.
