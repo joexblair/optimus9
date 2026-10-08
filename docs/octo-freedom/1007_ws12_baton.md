@@ -645,6 +645,10 @@ band is unbroken, and the ws1/ws2/ws3 recency shape.
 
 ## 14. 15:41 AND ws6 — THE WALK ALREADY GETS THERE, ON THE OTHER FRAME
 
+> **READ §14b FIRST.** Joe corrected the frame of §14 and §14a: the walk is **naked**, and the bar
+> it lands on is a **LONG ENTRY**, not the exit of a short. Every `SHORT realised` figure in §14
+> and §14a is an **entry improvement**, not a trade. Nothing else in them changes.
+
 Joe 1008: *"tell me if there's a method that would lneage walk 15:41 to the more optimised bar at
 -dr ws6x-cross or stall (I can't recall if we're using x-cross or stall 😆)"*.
 
@@ -768,3 +772,36 @@ Joe 1008: *"what time does the x-cross happen if it's source from ws4x?"*
 - **all three `x crosses its own r` bars land within 0.0100 of each other**: ws4 +0.6963, ws5
   +0.7037, ws6 +0.7063. All three beat the xcond(ws6) exit the walk took at +0.5382 by 0.16-0.17.
   That is **task #61** - the x-cross target sweep - and it is not proposed here.
+
+### §14b — THE WALK IS NAKED, AND THE LANDING BAR IS A LONG ENTRY
+
+Joe 1008: *"the purpose of the lineage walk is not to create a SHORT trade and ride it. it's sole
+job in this context is to walk naked to a bar that is more optimised for the LONG trade. ie, we're
+not flipping short and long"*.
+
+- 15:41:00 is the bar the chain would have entered **LONG** on, pxs 0.187001.
+- the walk runs on the dr −1 frame carrying **NO POSITION**. There is **no MAE while it walks**, and
+  the 1.10 stop cannot fire on a flat book.
+- the LONG is entered at whatever bar the walk lands on.
+- every `SHORT realised` figure in §14 and §14a is **the entry improvement**: a LONG entered 0.5382%
+  lower is 0.5382% better off at every later bar. It is not realised P&L.
+
+| LONG entry bar | +min from 15:41 | entry pxs | entry better by % | what put the walk there | the LONG exits | hold min | why | leg MAE | leg MFE | realised |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 15:41:00 | +0.0 | 0.187001 | +0.0000 | no walk — enter LONG immediately (the chain as built) | 15:50:40 | 9.7 | **mae breach** | 1.1000 | 0.0000 | **-1.2981** |
+| 15:44:40 | +3.7 | 0.185699 | +0.6963 | ws4x crosses ws4r, inside the ws4 rider window | 16:33:10 | 48.5 | final stalled | 0.6867 | 1.9523 | **+1.9096** |
+| 15:45:35 | +4.6 | 0.185685 | +0.7037 | ws5x crosses ws5r, inside the ws5 rider window | 16:33:10 | 47.6 | final stalled | 0.6793 | 1.9599 | **+1.9172** |
+| 15:54:10 | +13.2 | 0.185680 | +0.7063 | ws6x crosses ws6r, inside the ws6 rider window | 16:33:10 | 39.0 | final stalled | 0.3195 | 1.9626 | **+1.9199** |
+| 15:55:05 | +14.1 | 0.185994 | +0.5382 | xcond(ws6) — the walk's own exit test, what it takes | 16:33:10 | 38.1 | final stalled | **0.0000** | 1.7902 | **+1.7476** |
+| 15:58:20 | +17.3 | 0.187330 | -0.1758 | xcond(ws4) and xcond(ws5), both outside their rider windows | 16:33:10 | 34.8 | final stalled | 0.4468 | 1.0647 | +1.0224 |
+| 16:05:00 | +24.0 | 0.188341 | -0.7168 | ws6 stall (stall_n 6) | 16:33:10 | 28.2 | final stalled | 0.9815 | 0.4807 | +0.4798 |
+
+- **all six landing bars exit on the same bar, 16:33:10 `final stalled`.** The LONG's own arm is
+  ws2Mage crossing over 85 at 16:33:05, and the rider it kickstarts stalls on the next bar.
+- **the walk's own rule - x-cross or stall, first to fire - lands 15:55:05 and the LONG makes
+  +1.7476 with MAE 0.0000.** Against the -1.2981 stop that is a **+3.0457 swing on one leg.**
+- **the stop never gets the chance to fire**, because nothing is open between 15:41:00 and the
+  landing bar. The walk's 14.1 min of flat replaces the 9.7 min that lost 1.2981.
+- `x crosses its own r` lands 0.9 min earlier at 15:54:10 and is 0.1723 better at +1.9199. Task #61.
+- the two landing bars that arrive AFTER the move - 15:58:20 and 16:05:00 - still beat the stop, at
+  +1.0224 and +0.4798, on a worse entry than 15:41:00 itself.
