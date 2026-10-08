@@ -51,7 +51,15 @@ def load(name):
     p = V['paths'][name]
     return np.asarray(np.load(p, mmap_mode='r'), float)
 
-if V['role'] == 'r':
+if V['role'] == 'x':
+    # THE x LINE. x drives the lineage walk's x-cross exit (`xcond`, `xund`) AND the re-entry
+    # router's hold, so both the exit and the open move. This is NOT task #61 - that is the
+    # x-cross TARGET (x X r vs x X m vs x X Mage/b/boundary), which stays untouched.
+    C.X = {t: load('ws%dx' % t)[:N] for t in C.ALL_TF}
+    T.X1 = C.X[1]
+    C.ST = {(t, dd): stall_mask(C.RL[t], dd, int(WIN['stall_n']), *_ST[t])
+            for t in C.ALL_TF for dd in (-1, +1)}
+elif V['role'] == 'r':
     C.RL = {t: load('ws%dr' % t) for t in range(1, 26)}
     C.R = {t: C.RL[t][:N] for t in C.RL}
     T.R1 = C.R[1]

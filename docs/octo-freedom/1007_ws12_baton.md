@@ -1964,3 +1964,57 @@ docstring names the hazard and exposes `WSF_TAPE_END` for it.
 `_buildlines.py` now **asserts** the LIVE key equals score39's at import, with both windows in the
 message. The first 22 results are kept as `lines_WRONGWINDOW.jsonl` and are not comparable to
 anything.
+
+---
+
+## 31. THE x LINE — THE MOST RESPONSIVE, AND STILL NOTHING SURVIVES BOTH HALVES
+
+The x line had never been swept. It drives the lineage walk's x-cross exit (`xcond`, `xund`) AND the
+re-entry router's hold, so both the exit and the open move with it.
+
+**THIS IS NOT TASK #61.** That is the x-cross TARGET - x X r against x X m against
+x X Mage / b / boundary - and it stays untouched. This is the x LINE's own spec,
+`('bb', 5, 0.35, 'close')`: Bollinger %B, length 5, mult 0.35.
+
+| the spec | variant | legs | stops | stop rate | MFE/MAE | ALL 95 NET | fit NET | hold NET | hold net per leg | beats LIVE on hold? |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `('bb', 4, 0.35)` | len=4 | 1677 | 214 | 12.8% | 0.911 | **+18.8572** | -45.7403 | **+64.5975** | +0.073323 | **YES** |
+| `('bb', 5, 0.20)` | mult=0.20 | 1600 | 200 | 12.5% | 0.933 | **+16.7596** | **-5.2174** | +21.9770 | +0.026607 | no |
+| `('bb', 5, 0.28)` | mult=0.28 | 1607 | 201 | 12.5% | 0.920 | +4.5622 | -16.8146 | +21.3768 | +0.025786 | no |
+| `('bb', 5, 0.35)` | **LIVE** | 1636 | 205 | 12.5% | 0.915 | +4.0625 | -32.6649 | +36.7274 | +0.043107 | — |
+| `('bb', 7, 0.35)` | len=7 | 1557 | 190 | 12.2% | 0.930 | +1.8059 | **-3.3889** | +5.1948 | +0.006429 | no |
+| `('bb', 5, 0.45)` | mult=0.45 | 1669 | 213 | 12.8% | 0.905 | +0.9413 | -47.6245 | **+48.5658** | +0.055631 | **YES** |
+| `('bb', 3, 0.35)` | len=3 | 1701 | 225 | 13.2% | 0.867 | -5.6434 | -59.8860 | **+54.2426** | +0.061153 | **YES** |
+| `('bb', 5, 0.60)` | mult=0.60 | 1692 | 222 | 13.1% | 0.884 | -19.9670 | -64.9414 | **+44.9744** | +0.050195 | **YES** |
+| `('bb', 9, 0.35)` | len=9 | 1390 | 171 | 12.3% | 0.921 | -44.1399 | -23.0848 | -21.0551 | -0.030383 | no |
+| `('bb', 12, 0.35)` | len=12 | 1049 | 131 | 12.5% | 0.887 | -80.5114 | -33.7644 | -46.7470 | -0.099462 | no |
+
+- the control passes: LIVE **+4.0627**.
+- **4 of 9 beat LIVE on the hold block** - len=4 by **+27.87** - and **4 of 9 beat it on the fit
+  block**. **The two sets are DISJOINT. Nothing beats LIVE on both halves.**
+- `x` len=4 is the largest single hold-block improvement found anywhere tonight, and it is
+  **13.08 worse on fit**. The mirror image of `r` stc=10.
+
+### A HYPOTHESIS OF MINE, TESTED AND WRONG
+
+I thought the fit/hold split was a leg-count effect - that fit rewards fewer legs and hold rewards
+more. **Measured across all 32 line variants it is not:**
+
+| the question | the answer |
+|---|---|
+| variants | 32 |
+| **Pearson r, legs vs (hold gross - fit gross)** | **-0.038** |
+| Pearson r, legs vs fit gross | +0.261 |
+| Pearson r, legs vs hold gross | +0.068 |
+
+### WHAT THE 32 VARIANTS DO SAY
+
+- **hold gross beats fit gross for 29 of the 32**, from +1.59 to +122.16. The four exceptions are
+  all at a grid extreme: `x` len=12, `r` rsi=8, `Mage` len=30 and `Mage` len=24.
+- **the hold half is simply a better half for this chain, nearly regardless of spec.** LIVE's own
+  hold-minus-fit gap is **+76.87**, mid-pack among 32.
+- so the variants that "beat LIVE on hold" are the ones that AMPLIFY a regime difference, not the
+  ones with a better mech. `x` len=3 has the largest gap at **+122.16** and the worst MFE/MAE at
+  0.867.
+- across r, Mage and x - **32 variants, 29 of them changes - not one beats the live spec on both
+  halves.** Every one of Joe's three line specs stands.
