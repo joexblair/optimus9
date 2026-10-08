@@ -1042,3 +1042,84 @@ seen the confirmation that the work was done"*.
   on a dr −1 bar, so `dr` and the inverse-of-side give the same −1. 235.8 min naked to an entry
   3.4812% worse, then the stop.
 - leg 19, 09-26 14:17:35, is the gain the `dr` frame did not get: **+2.2295** on a SHORT.
+
+---
+
+## 18. THE ws2 OVERRIDE AND THE REVERSED LINEAGE
+
+Joe 1008: *"we'll create a ws2 override, because `walking to a better opening` uses lineage walk in
+a different way, for a different purpose / -walking to a better entry does not need ws2: ws2 was
+introduced to get the trade started, to collect the big MFE / -optimising an entry carries no
+aspirations for a big trade - it just needs to move an open signal that is misplaced on the board /
+-waiting for ws2Mage will almost always ride over the optimal position, for 2 reasons: --1, the
+signal relocations are small --2, the very purpose of `walking the lineage walk to a more optimised
+location` requires the lineage to operate in reverse"*.
+
+### THE MECH, AND THE THREE READS THAT FIX IT
+
+| part | the rule | why this reading |
+|---|---|---|
+| the ws2 override | `exit-armed` is GONE. No ws2Mage gate at all. | Joe's words, verbatim |
+| the rider | the **top of the unbroken oob run from ws1** on the walk's frame | not max(oob): at 04:41 max(oob) is **ws10** while Joe read **ws1** |
+| the baton | **DOWNWARD** - an oob TF within `lin_hop` 2 below the rider, taken as far as it goes on the same bar. ws1 is the floor. | *"the lineage to operate in reverse"* |
+| the landing | the bar the downward lineage runs out on | Joe's *"zero bars"*, stated at 04:41 and again at 17:31 |
+
+| Joe's read | the ladder | what this mech gives |
+|---|---|---|
+| 04:41:00, frame +1 — *"the lineage stops at ws1 ... it walks zero bars"* | ws1r 100.00 oob, ws2r 70.97 in-fence → run is [ws1] | rider ws1, nothing below → **ZERO BARS** |
+| 17:31:55, frame −1 — *"zero bars, because there is no DOWNWARD lineage after ws2r"* | ws1r 12.80 and ws2r 3.19 oob, ws3r 39.57 in-fence → run is [ws1, ws2] | rider ws2, baton down to ws1 → **ZERO BARS** |
+| 15:41:00, frame −1 — the §14b case that must relocate | ws1r 26.71 in-fence → the run is **EMPTY** | no rider → **the walk WAITS** |
+
+- **the reduction, a consequence and not a choice**: the run is contiguous FROM ws1, so ws1 is
+  always in it, the baton always reaches ws1, and the lineage always runs out there. **The mech
+  lands on the first bar where ws1r is oob on the walk's frame.**
+- **confirmed in the run, not asserted**: `lineage exhausted below ws1` is what landed **29 of 29
+  legs**. `final stalled` and `x-cross` are never reached.
+
+### THE RESULT
+
+| arm | legs | positive | stops | re-entries | last exit | running MAE | running MFE | MFE/MAE | realised as scored | realised at -1.10 | minutes naked | entry improvement |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| arm 0 — baseline, no walk | 43 | 29 | 12 | 12 | 09-26 20:09:10 | 21.4877 | 41.1325 | **1.91** | **+13.3928** | +14.2207 | 0.0 | +0.0000 |
+| arm 1 — frame dr, no landing ends it | 23 | 12 | 9 | 8 | 09-26 20:40:00 | 12.2899 | 14.8420 | 1.21 | -0.3915 | +0.1173 | 1255.6 | -0.9054 |
+| arm 3 — frame = inverse of the side | 21 | 11 | 10 | 9 | 09-26 20:40:00 | 14.0879 | 13.2439 | 0.94 | -2.4789 | -1.9307 | 1034.7 | +1.3540 |
+| **arm 5 — REVERSED + ws2 override, frame = inverse of the side** | **29** | **18** | **8** | 7 | 09-26 20:09:10 | 17.2674 | 21.5827 | 1.25 | **+3.2694** | +4.2699 | **528.3** | +0.0185 |
+| arm 6 — REVERSED + ws2 override, frame = dr | 27 | 17 | 9 | 8 | 09-26 20:09:10 | 14.6256 | 18.9806 | 1.30 | +2.2872 | +3.2258 | 545.8 | +0.9419 |
+
+| arm | day | legs | positive | stops | MAE | MFE | MFE/MAE | realised | minutes naked |
+|---|---|---|---|---|---|---|---|---|---|
+| arm 0 | 2026-09-25 | 25 | 17 | 6 | 11.8959 | 27.8113 | 2.34 | +10.0229 | 0.0 |
+| arm 0 | 2026-09-26 | 18 | 12 | 6 | 9.5917 | 13.3212 | 1.39 | +3.3699 | 0.0 |
+| arm 5 | 2026-09-25 | 17 | 10 | 5 | 8.8735 | 15.5640 | 1.75 | +3.3372 | 206.9 |
+| arm 5 | 2026-09-26 | 12 | 8 | 3 | 8.3938 | 6.0187 | 0.72 | -0.0679 | 321.4 |
+| arm 6 | 2026-09-25 | 16 | 10 | 6 | 8.3785 | 13.3970 | 1.60 | +2.5591 | 247.7 |
+| arm 6 | 2026-09-26 | 11 | 7 | 3 | 6.2472 | 5.5836 | 0.89 | -0.2720 | 298.0 |
+
+| what moved, arm 1 -> arm 5 | arm 1, forward + ws2 arm | arm 5, reversed + ws2 override | the change |
+|---|---|---|---|
+| realised as scored | -0.3915 | **+3.2694** | **+3.6609** |
+| legs | 23 | 29 | +6 |
+| stops | 9 | 8 | -1 |
+| minutes naked | 1255.6 | **528.3** | **-727.3** |
+| MFE/MAE | 1.21 | 1.25 | +0.04 |
+
+- **arm 5 is the first walk arm that is positive.** It is still **-10.1234** under arm 0's +13.3928.
+- **the relocations are small, as Joe said they would be**: **14 of the 29 legs land at 0.0 min**,
+  and 528.3 min flat across two days against the forward walk's 1255.6.
+
+### THE TWO BARS JOE REVIEWED, UNDER THE REVERSED WALK
+
+| bar | arm | the walk | entry | exit | leg MAE | leg MFE | realised |
+|---|---|---|---|---|---|---|---|
+| 09-25 17:31:55 | arm 1, forward | 235.8 min naked, lands 21:27:40 | -3.4812 | 21:58:20 | 1.1000 | 0.0000 | **-1.2767** |
+| 09-25 17:31:55 | **arm 5, reversed** | **0.0 min — ZERO BARS** | +0.0000 | 18:59:10 | **0.0000** | **3.1380** | **+1.1253** |
+| 09-25 10:56:40 | arm 1, forward | 44.9 min naked, lands 11:41:35 | +3.5022 | 12:27:05 | 0.4377 | 3.9665 | **+1.9245** |
+| 09-25 10:56:40 | **arm 5, reversed** | 11.3 min, lands 11:08:00 | +1.3629 | 11:23:25 | **1.1000** | 0.0000 | **-1.1000** |
+
+- **17:31:55 is fixed exactly as Joe called it**: zero bars, and the LONG then runs to 18:59:10 on a
+  >ws12 divergence with **leg MAE 0.0000 and MFE 3.1380**.
+- **10:56:40 is lost.** The reversed walk relocates 11.3 min instead of 44.9, enters 1.3629% better
+  instead of 3.5022%, and takes the stop at 11:23:25. The forward walk's 44.9 min was what carried
+  that bar.
+- that trade is the open question the reversed mech creates: **ws1r oob arrives early enough to help
+  17:31 and too early to help 10:56.**

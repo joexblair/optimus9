@@ -85,6 +85,60 @@ def naked_walk(k0, d):
     return None, 'the walk never terminated', tr
 
 
+def rev_walk(k0, d):
+    """THE REVERSED LINEAGE WALK — Joe's entry-optimising walk. 1008.
+
+    Joe 1008: *"we'll create a ws2 override, because `walking to a better opening` uses lineage walk
+    in a different way, for a different purpose / -walking to a better entry does not need ws2: ws2
+    was introduced to get the trade started, to collect the big MFE / -optimising an entry carries
+    no aspirations for a big trade - it just needs to move an open signal that is misplaced on the
+    board / -waiting for ws2Mage will almost always ride over the optimal position, for 2 reasons:
+    --1, the signal relocations are small --2, the very purpose of `walking the lineage walk to a
+    more optimised location` requires the lineage to operate in reverse"*.
+
+      THE ws2 OVERRIDE   `exit-armed` is GONE. No ws2Mage gate at all.
+      THE RIDER          the TOP OF THE UNBROKEN oob RUN FROM ws1 on the walk's frame. Not
+                         max(oob): at 04:41 max(oob) is ws10 while Joe read ws1.
+      THE BATON          DOWNWARD - an oob TF within lin_hop BELOW the rider, taken as far as it
+                         goes on the same bar. ws1 is the floor; no line exists below it.
+      THE LANDING        the bar the downward lineage runs out on. Joe's *"zero bars"*.
+
+    THE THREE READS THIS REPRODUCES, which is why this is the reading taken:
+      04:41:00 frame +1   ws1r 100.00 oob, ws2r 70.97 in-fence -> run is [ws1] -> rider ws1 ->
+                          nothing below -> ZERO BARS. Joe: *"the lineage stops at ws1 ... it walks
+                          zero bars"*.
+      17:31:55 frame -1   ws1r 12.80 and ws2r 3.19 oob, ws3r 39.57 in-fence -> run is [ws1, ws2] ->
+                          rider ws2 -> baton down to ws1 -> ZERO BARS. Joe: *"my view is zero bars,
+                          because there is no DOWNWARD lineage after ws2r"*.
+      15:41:00 frame -1   ws1r 26.71 in-fence -> the run is EMPTY -> no rider -> the walk WAITS.
+                          This is the only shape that relocates at all.
+
+    NOTE THE REDUCTION, stated because it is a consequence and not a choice: because the run is
+    contiguous FROM ws1, ws1 is always in it, so the downward baton always reaches ws1 and the
+    lineage always runs out there. The mech therefore lands on THE FIRST BAR WHERE ws1r IS oob ON
+    THE WALK'S FRAME. `final stalled` and `x-cross` are never reached, because exhaustion fires on
+    the KICKSTART bar itself.
+    """
+    for j in range(k0, N):
+        run = []
+        for t in C.ALL_TF:
+            if t > C.BASE_HI: break
+            if C.oobf(t, j, d): run.append(t)
+            else: break
+        if not run:
+            continue
+        rider = run[-1]
+        tr = [(j, 'KICKSTART — rider ws%d, the top of the oob run ws1-ws%d (r %.2f)'
+               % (rider, rider, float(C.R[rider][j])))]
+        while True:
+            cand = [t for t in range(max(1, rider - C.LIN_HOP), rider) if C.oobf(t, j, d)]
+            if not cand: break
+            rider = min(cand)
+            tr.append((j, 'baton DOWN -> ws%d oob (r %.2f)' % (rider, float(C.R[rider][j]))))
+        return j, 'lineage exhausted below ws%d' % rider, tr
+    return None, 'the walk never terminated', tr
+
+
 def run_chain_naked(gate, noland, frame='dr'):
     """THE WALK'S FRAME.
 
@@ -96,8 +150,8 @@ def run_chain_naked(gate, noland, frame='dr'):
     rows = []; n = 0
     k, d, seg_n = T.K(T.START_D, '02:48:50'), +1, 0
     while True:
-        fr = (int(DRv[k]) or d) if frame == 'dr' else -d
-        lb, lw, ltr = naked_walk(k, fr)
+        fr = (int(DRv[k]) or d) if frame in ('dr', 'rev_dr') else -d
+        lb, lw, ltr = rev_walk(k, fr) if frame.startswith('rev') else naked_walk(k, fr)
         if lb is None or lb > T.LAST_OPEN:
             if noland == 'end':
                 rows.append(dict(brk=True, noland=k, nw=lw)); break
@@ -137,11 +191,17 @@ def main():
     print('# arm 4 — frame = INVERSE OF THE TRADE SIDE, no landing enters at the open ...',
           flush=True)
     A4 = run_chain_naked(T.gate_A, 'open', 'inv')
+    print('# arm 5 — REVERSED lineage, ws2 override, frame = inverse of the side ...', flush=True)
+    A5 = run_chain_naked(T.gate_A, 'end', 'rev_inv')
+    print('# arm 6 — REVERSED lineage, ws2 override, frame = dr ...', flush=True)
+    A6 = run_chain_naked(T.gate_A, 'end', 'rev_dr')
     ARMS = [('arm 0 — baseline, no walk', A0),
             ('arm 1 — frame dr, no landing ends it', A1),
             ('arm 2 — frame dr, no landing enters at the open', A2),
             ('arm 3 — frame = inverse of the side, no landing ends it', A3),
-            ('arm 4 — frame = inverse of the side, no landing enters at the open', A4)]
+            ('arm 4 — frame = inverse of the side, no landing enters at the open', A4),
+            ('arm 5 — REVERSED lineage + ws2 override, frame = inverse of the side', A5),
+            ('arm 6 — REVERSED lineage + ws2 override, frame = dr', A6)]
 
     print('\n# THE THREE ARMS, 09-25 02:48:50 TO THE END OF 09-26')
     rows = []
