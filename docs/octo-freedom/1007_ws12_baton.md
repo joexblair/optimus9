@@ -1571,3 +1571,104 @@ mirror"*.
   the ruling. They are history, not the live mech, and the spec's file list says so.
 - **also noted in §12**: `reent_xwob` 6 was chosen on ONE episode where it beat 8 by 0.6697. Over 95
   days 6 measures **1.5572 worse** than 8. That ruling is contradicted at scale and is open.
+
+---
+
+## 25. THE 95-DAY SWEEPS, AND THE COST COLUMN
+
+Joe 1008: *"sweep all of the knobs we have"* / *"reducing legs is important too - the bybit fess and
+slippage need to be contained if we can"* / *"agreed - combined sweep"* / *"we should have a knob for
+>12 oob"* / *"ceil_trig_tf: sweep 13 and 14 as well"*.
+
+### THE COST COLUMN, WHICH CHANGES EVERY VERDICT
+
+| the item | value |
+|---|---|
+| `fee_per_leg` | **0.11 %**, Joe 1007 *"0.11 is bybit's fees"*, a round trip |
+| drag | legs x 0.11, **its own column and its own total** |
+| slippage | **UNSET.** Joe named it separately and it has no measured value |
+
+- **the banked chain is net -151.9472** over 95 days: gross +78.5028 on 2095 legs against a drag of
+  -230.4500. **The drag is 2.9x the gross.**
+- every verdict below is on NET AFTER DRAG, and ranked on **realised per leg** where leg counts
+  differ, because a total rewards a knob for simply trading more.
+
+### WHICH KNOBS ARE LIVE
+
+**11 of the 23** move chain 0's rows. `ceil_scope`, `oob_gate_run`, `sig_dir`, `dip_confirm`,
+`div_combine`, `div_floor`, `floater_oob`, `dr_aligned`, `x_rev_xwob` and `sig_lookback_bars` are
+hardcoded behaviour, OFF, or read by nothing. `sig_window_bars` is live but branch 1 is RECORDED and
+not acted on, so it changes no outcome.
+
+- **`dip_mid` is now DEAD.** All five swept values gave identical results to six decimals: the band
+  Joe specified in §24 replaced the single level, and `dip_mid` 50 no longer changes an outcome.
+
+### THE STAGED RESULT
+
+| stage | the config | legs | stops | stop rate | MFE/MAE | gross | drag | NET |
+|---|---|---|---|---|---|---|---|---|
+| banked | — | 2095 | 714 | 34.1% | 1.10 | +78.5028 | -230.4500 | **-151.9472** |
+| stage 1, a 36-run grid on four knobs | `mae_stop_pct` 2.5, `dip_dwell_bars` 6, `reent_xwob` 18, `lin_hop` 2 | 1647 | 203 | 12.3% | 0.93 | +155.5627 | -181.1700 | **-25.6073** |
+| stage 2, every remaining knob against it | + `ceil_trig_tf` 8 | 1578 | 194 | 12.3% | 0.94 | +164.0113 | -173.5800 | **-9.5687** |
+| stage 3, composing stage 2's improvers | + `momo_fence_r` 20.0, `rrev_wob` 1, `stall_n` 4, `div_lines` ws1r,ws2r,ws3r | 1636 | 205 | 12.5% | 0.92 | **+184.0227** | -179.9600 | **+4.0627** |
+
+- **banked -151.9472 -> +4.0627, a +156.01 swing**, on 1636 legs against 2095 and a stop rate of
+  **12.5%** against 34.1%.
+- **49 won / 46 lost** on days. Barely distributed, and seven knobs are fitted to 95 days with
+  **no hold-out**.
+- MFE/MAE falls **1.10 -> 0.92**: the config holds losers longer relative to winners, which is what
+  a 2.5 stop does.
+
+### `oob_gate_fence` — THE NEW KNOB, AND THE ONLY ONE THAT CROSSED ZERO ALONE
+
+Joe 1008: *"we should have a knob for >12 oob"*. The 72-bar gate, the branch-1 window and the
+ceiling trigger were all borrowing the GLOBAL oob 15/85 out of `lazy_g` - the same shape as
+`reent_xwob` borrowing `x_rev_xwob`. `oob_gate_fence` 15.0 reproduces the old behaviour exactly.
+
+| value | the ws12r test | legs | stops | MFE/MAE | gross | drag | NET | days won / lost |
+|---|---|---|---|---|---|---|---|---|
+| 5 | r <= 5 or r >= 95 | 1714 | 203 | 0.93 | +161.4671 | -188.5400 | -27.0729 | 45 / 39 |
+| **10** | **r <= 10 or r >= 90** | 1631 | 194 | 0.95 | **+182.4522** | -179.4100 | **+3.0422** | **36 / 30** |
+| 15, banked | r <= 15 or r >= 85 | 1578 | 194 | 0.94 | +164.0113 | -173.5800 | -9.5687 | — |
+| 20 | r <= 20 or r >= 80 | 1511 | 192 | 0.93 | +136.9109 | -166.2100 | -29.2991 | 34 / 43 |
+| 40 | r <= 40 or r >= 60 | 1271 | 175 | 1.01 | +112.6336 | -139.8100 | -27.1764 | 44 / 51 |
+
+- a single peak at **10**, and it was the first positive number in the whole sweep.
+
+### `ceil_trig_tf` — ws13 AND ws14 ARE THE WORST VALUES ON THE BOARD
+
+| the trigger line | at fence 15, NET | at fence 10, NET | handovers at fence 15 |
+|---|---|---|---|
+| ws8r | **+4.0627** | -16.5204 | **177** |
+| ws10r | -13.7984 | **+1.0142** | 129 |
+| ws11r | -17.3932 | -7.9155 | 120 |
+| ws12r, banked | -15.2756 | -35.4603 | 106 |
+| **ws13r** | **-41.4109** | -49.2631 | 97 |
+| **ws14r** | **-84.4694** | -66.5088 | 105 |
+| ws15r | -47.4608 | -47.6320 | 107 |
+| ws20r | -64.7262 | -35.9128 | 124 |
+
+- **ws14r at fence 15 is the worst row anywhere**: gross +102.5306, MFE/MAE 0.86, net -84.4694.
+- **the fence and the TF trade against each other.** Tightening the fence from 15 to 10 moves the
+  best trigger UP from ws8 to ws10. They are not additive.
+- **the gross tracks the HANDOVER count, not the leg count** - legs sit between 1636 and 1777 across
+  the whole table while handovers run 49 to 177.
+- **`ceil_trig_tf` 8 is an INTERACTION, not a standalone improvement.** At the banked config ws12 is
+  the best trigger and ws8 is 0.005012 per leg worse; ws8 only wins once `mae_stop_pct` is 2.5 and
+  `reent_xwob` is 18.
+- **the mech's name no longer describes it.** `ceil_trig_tf` 8 puts BOTH the handover gate and the
+  ceiling trigger on **ws8r**, while the base ceiling stays ws12 and the extended one ws23. What the
+  ">ws12 oob mech" is called now is Joe's to say.
+
+### `mae_stop_pct` 2.5 IS A REAL PEAK, NOT A GRID EDGE
+
+| value | legs | stops | stop rate | MFE/MAE | gross | NET | vs 2.5 | days won / lost |
+|---|---|---|---|---|---|---|---|---|
+| **2.5** | 1636 | 205 | 12.5% | 0.92 | **+184.0227** | **+4.0627** | — | — |
+| 2.75 | 1596 | 184 | 11.5% | 0.89 | +157.1483 | -18.4117 | -22.4744 | **22 / 62** |
+| 3.0 | 1562 | 164 | 10.5% | 0.86 | +124.9896 | -46.8304 | -50.8931 | 30 / 55 |
+| 4.0 | 1494 | 97 | 6.5% | 0.81 | +123.9698 | -40.3702 | -44.4329 | 37 / 49 |
+| 5.0 | 1446 | 56 | 3.9% | 0.76 | +94.8930 | -64.1670 | -68.2297 | 32 / 53 |
+
+- 2.5 and 1.8 were the top of the original grid and both won, so the edge was extended. **2.5 holds
+  and 2.75 loses 62 days to 22.**

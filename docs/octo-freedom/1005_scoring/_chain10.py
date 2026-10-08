@@ -58,6 +58,19 @@ LIN_HOP = int(SC.LG['lin_hop']); BASE_HI = SC.TF[-1]
 TRIG_TF, CEIL_HI = int(W['ceil_trig_tf']), int(W['ceil_hi'])
 GATE_BARS, SIG_WIN = int(W['oob_gate_bars']), int(W['sig_window_bars'])
 DIP_MID, DIP_DWELL = float(W['dip_mid']), int(W['dip_dwell_bars'])
+# THE >ws12 MECH'S OWN oob FENCE, 1008. Joe: *"we should have a knob for >12 oob"*.
+#
+# The 72-bar gate, the branch-1 window and the ceiling trigger were all reading the GLOBAL oob
+# 15/85 out of lazy_g - the same shape as reent_xwob borrowing the divergence mech's x_rev_xwob.
+# `goob` is the >ws12 mech's test and nothing else uses it; the KICKSTART and the baton stay on
+# `oobf` and the global fence.
+#
+# oob_gate_fence 15.0 reproduces today's behaviour exactly, so the knob changes nothing until it is
+# swept. Symmetric: lo = the knob, hi = 100 - the knob.
+G_LO = float(W['oob_gate_fence']); G_HI = 100.0 - G_LO
+#   `goob` itself is defined beside `oobf`, once R exists.
+DIP_FENCE = float(W['dip_fence'])            # Joe 1008: the dip is a BAND, not a level
+DIP_HI, DIP_LO = DIP_FENCE, 100.0 - DIP_FENCE   # 53.0 and 47.0
 RREV, MAE_STOP = int(W['rrev_wob']), float(W['mae_stop_pct'])
 PASS = os.environ.get('W_PASS', 'oob')  # 'oob' (as built, Joe's tag ruling) or 'stalled'.
 #                                        THE BATON'S PASS TEST. Joe 1007: *"keeping the
@@ -82,14 +95,18 @@ for t in ALL_TF:
     for dd in (-1, +1):
         ST[(t, dd)] = stall_mask(RL[t], dd, int(SC.LG['stall_n']), s_, n_)
 REV = {t: _mage_rev(R[t], RREV) for t in DIV_TFS}
-_P('producers ready; ceiling ws%d->ws%d, gate %d bars, dip dwell %d, stop %.2f'
-   % (BASE_HI, CEIL_HI, GATE_BARS, DIP_DWELL, MAE_STOP))
+_P('producers ready; ceiling ws%d->ws%d, gate %d bars at oob %.0f/%.0f, dip band %.0f-%.0f '
+   'dwell %d, stop %.2f'
+   % (BASE_HI, CEIL_HI, GATE_BARS, G_LO, G_HI, DIP_LO, DIP_HI, DIP_DWELL, MAE_STOP))
 
 def bnd(t, k, d):
     v = float(R[t][k])
     if d > 0: return 'O' if v >= SC.HI else ('x' if v >= EXF_HI else '.')
     return 'O' if v <= SC.LO else ('x' if v <= EXF_LO else '.')
 oobf = lambda t, k, d: (float(R[t][k]) >= SC.HI) if d > 0 else (float(R[t][k]) <= SC.LO)
+# the >ws12 mech's own oob test, on the oob_gate_fence read above. Nothing else
+# uses it: the KICKSTART and the baton stay on `oobf` and the global 15/85.
+goob = lambda t, k, d: (float(R[t][k]) >= G_HI) if d > 0 else (float(R[t][k]) <= G_LO)
 def xcond(h, k, d):
     t1, t2 = h + 1, h + 2
     if t1 not in R or t2 not in R: return False
@@ -98,7 +115,27 @@ def xcond(h, k, d):
         (xv > float(R[t1][k]) and xv > float(R[t2][k]))
     return c and bnd(t1, k, d) == '.' and bnd(t2, k, d) == '.'
 xund = lambda t, k, d: (float(X[t][k]) < float(R[t][k])) if d > 0 else (float(X[t][k]) > float(R[t][k]))
-indip = lambda k, d: (float(G1[k]) < DIP_MID) if d > 0 else (float(G1[k]) > DIP_MID)
+# THE DIP IS A BAND, 1008. Joe: *"we'll use a small 100-{knob:53} fence, ie 47 to 53"* /
+# *"fence 53 + dwell 6"*.
+#
+# WAS: `indip = G1 < dip_mid 50` for a LONG leg, `> 50` for a SHORT. A single level, and the dwell
+# counted bars on the far side of it. At 17:54 on 09-25 that rejected the dip SEVEN times - the
+# longest sub-50 run is 4 bars against a dwell of 12.
+#
+# NOW: the dip region is the BAND dip_lo 47 to dip_hi 53, symmetric about dip_mid 50.
+#
+# THE ENTRY IS STILL dr-ALIGNED, which the band alone is not: a LONG leg must come DOWN into the
+# band from above DIP_HI, and a SHORT leg must come UP into it from below DIP_LO. Without this the
+# band test is direction-blind and `dr_aligned` 1 would be contradicted.
+#
+# ONE EDGE, STATED: a dip that goes DEEPER than DIP_LO leaves the band and breaks the dwell, so a
+# deeper dip can disqualify. The alternative - a one-sided `G1 <= DIP_HI` for a LONG - has no such
+# edge. Joe's words name the band, so the band is what is built.
+inband = lambda k: DIP_LO <= float(G1[k]) <= DIP_HI
+indip = lambda k, d: inband(k)
+entered = lambda k, d: (inband(k) and not inband(k - 1)
+                        and ((float(G1[k - 1]) > DIP_HI) if d > 0
+                             else (float(G1[k - 1]) < DIP_LO)))
 WANT = lambda d: (-1 if d > 0 else +1)
 def box(hdr, rr):
     w = [max(len(hdr[i]), max((len(str(x[i])) for x in rr), default=0)) for i in range(len(hdr))]
@@ -125,14 +162,14 @@ def run_leg(k0, d):
                            % (adv, MAE_STOP)))
                 return j, 'mae breach', mae, ceil_bar, hand, tr
         # the ws12r oob run on the leg's dr side, and the handover
-        if oobf(TRIG_TF, j, d):
+        if goob(TRIG_TF, j, d):
             if oob_a is None:
                 oob_a = j
                 for q in range(j + 1, min(N, j + SIG_WIN) + 1):
-                    if not oobf(TRIG_TF, q, d): break
+                    if not goob(TRIG_TF, q, d): break
                 u = lambda z: float(X[TRIG_TF][z]) < float(R[TRIG_TF][z])
                 for q in range(j + 1, min(N - 1, j + SIG_WIN) + 1):
-                    if not oobf(TRIG_TF, q, d): break
+                    if not goob(TRIG_TF, q, d): break
                     c = (u(q) and not u(q - 1)) if d > 0 else ((not u(q)) and u(q - 1))
                     if c:
                         tr.append((q, 'branch 1 cross — RECORDED, not acted on (ws%dx %.2f vs r %.2f)'
@@ -144,21 +181,23 @@ def run_leg(k0, d):
                            % (TRIG_TF, (int(SC.ts[j]) - int(SC.ts[oob_a])) / 60000.0)))
         else:
             oob_a = None
-        if ceil == BASE_HI and oobf(TRIG_TF, j, d) and not oobf(TRIG_TF, j - 1, d):
+        if ceil == BASE_HI and goob(TRIG_TF, j, d) and not goob(TRIG_TF, j - 1, d):
             ceil = CEIL_HI; ceil_bar = j
             tr.append((j, 'CEILING ws%d -> ws%d (ws%dr %.2f)'
                        % (BASE_HI, CEIL_HI, TRIG_TF, float(R[TRIG_TF][j]))))
         # ---- after the handover: the >ws12 mech owns the exit
         if hand is not None:
             if dip is None:
-                if indip(j, d) and not indip(j - 1, d):
+                if entered(j, d):
                     n = 0
                     while j + n <= N - 1 and indip(j + n, d):
                         n += 1
                     if n > DIP_DWELL:
                         dip, conf = j, j + DIP_DWELL - 1
-                        tr.append((j, '50 dip — ws1Mage %.2f, run %d bars (%.1f min), confirms %s'
-                                   % (float(G1[j]), n, n * 5 / 60.0, SC.U(conf))))
+                        tr.append((j, 'dip into %.0f-%.0f — ws1Mage %.2f, run %d bars (%.1f min),'
+                                   ' confirms %s'
+                                   % (DIP_LO, DIP_HI, float(G1[j]), n, n * 5 / 60.0,
+                                      SC.U(conf))))
                 continue
             if j <= conf:
                 continue

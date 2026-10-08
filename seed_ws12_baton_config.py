@@ -43,6 +43,11 @@ ROWS = [
  # ---- the gate, Joe 1007
  ('gate','oob_gate_bars','72','int','bars','joe',0,1,
   'Joe 1007 "apply this logic after ws12r is oob for >6 minutes"','6 min at the 5 s grid; STRICTLY more than'),
+ ('gate','oob_gate_fence','15.0','float','r-points','joe',0,1,
+  'Joe 1008 "we should have a knob for >12 oob". The >ws12 mech was borrowing the GLOBAL oob '
+  '15/85 from lazy_g, the same shape as reent_xwob borrowing x_rev_xwob',
+  'the oob fence for EVERY ws12r test in the >ws12 mech - the 72-bar gate, the branch-1 window and '
+  'the ceiling trigger. Symmetric: lo = this, hi = 100 - this. 15.0 reproduces today exactly'),
  ('gate','oob_gate_run','consecutive','str',None,'mine',0,1,
   'MINE 1007 - Joe said "oob for >6 minutes" and did not say whether a gap resets it',
   'leg 8 measured: a single 10 s gap at 08:26:20 split the run and moved the gate 2.4 min later'),
@@ -57,9 +62,15 @@ ROWS = [
  ('dip','dip_mid','50.0','float','r-points','joe',0,1,
   'Joe 1007 "wait for ws1Mage to dip over/under 50. if +dr, then Mage will cross under 50, inverted for -dr"',
   'the signal that pressure is weakening'),
- ('dip','dip_dwell_bars','12','int','bars','joe',0,1,
-  'Joe 1007 "we use a dwell > 12 bars"',
-  'MEASURED on leg 8: runs are 9,1,1,7,44,513,1,1 bars, so any value 9..43 gives the same answer'),
+ ('dip','dip_dwell_bars','6','int','bars','joe',0,1,
+  'Joe 1008 "fence 53 + dwell 6", replacing his 1007 "we use a dwell > 12 bars". At 12 the 17:54 '
+  'dip was rejected SEVEN times: the longest sub-50 run is 4 bars and the longest 47-53 run is 12, '
+  'and the test is n > dwell',
+  '1007 leg 8: runs 9,1,1,7,44,513,1,1 bars, so 9..43 were equivalent THERE. 6 changes leg 8 too'),
+ ('dip','dip_fence','53.0','float','r-points','joe',0,1,
+  'Joe 1008 "we\'ll use a small 100-{knob:53} fence, ie 47 to 53" / "fence 53 + dwell 6"',
+  'the dip region is the BAND 100-53=47 to 53, not the single level dip_mid 50. Entry into the '
+  'band is still dr-aligned: a LONG leg must enter from ABOVE 53, a SHORT leg from BELOW 47'),
  ('dip','dip_confirm','dwell-1','str',None,'mine',0,1,
   "MINE 1007, carried from jig.oob_ib_cross's conf convention",
   'the dip is knowable at dip + dwell - 1, not at the dip bar. 55 s on leg 8, changes no row there'),
