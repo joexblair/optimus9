@@ -1,0 +1,606 @@
+THE 24 WALKS — the legs that survive with MAE above 1.90 and whose ADVERSE extreme came FIRST
+=============================================================================================
+
+Build: the 1.06 build — the lineage walk exits on `final stalled` only (W_NOX=1), on the banked
+knob key ws12_baton_config.v1 with mae_stop_pct 2.5 and reent_xwob 18. 95 days, 1,632,960 bars,
+LG_TAPE_END=2026-10-05. Group totals: 24 legs, summed realised +11.8484, drag 2.6400.
+
+Reproduce:  cd docs/octo-freedom/1005_scoring
+            W_NOX=1 LG_TAPE_END=2026-10-05 python3 _walk24.py
+
+WHY THE INCOMING LEG IS ON THE SAME TIMELINE. The chain is always in the market, so a leg's OPEN
+BAR *is* the previous leg's EXIT BAR. Relocating an open therefore relocates the previous leg's
+exit. A leg that follows a STOP is the exception: there the incoming leg closed at its breach bar
+and the re-entry router chose the open, so the block carries three incoming timestamps — the
+breach, the ws1x return bar, and the conf bar that became this leg's open.
+
+`pct for THIS leg` is measured from THIS leg's own open on THIS leg's own side, so the incoming
+leg's rows read NEGATIVE where price was beyond this open. That gap is exactly what a relocated
+open gives up or gains on the incoming side.
+
+Rows marked `incoming:` are the previous leg's walk events. Rows with no prefix are this leg's.
+
+## 1 of 24 — 2026-07-03 SHORT   opens 11:03:00   exits 14:11:05 on >ws12 divergence on ws1r   MAE 2.1565 at +20.7 min   MFE 0.1763 at +76.7 min   realised -0.4437
+┌──────────┬────────────────────┬──────────────────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                                  event                                   │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼──────────────────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 10:56:25 │ -6.6               │ INCOMING LEG OPENS LONG                                                  │ 0.174078 │ +0.1339          │
+│ 10:57:55 │ -5.1               │ incoming: exit-armed — ws2Mage over 85 (88.41)                           │ 0.173627 │ +0.3928          │
+│ 10:57:55 │ -5.1               │ incoming: KICKSTART — rider ws4 (r 96.12 oob, ceiling ws12)              │ 0.173627 │ +0.3928          │
+│ 11:03:00 │ +0.0               │ incoming: final stalled on ws4 (r 91.69 O)                               │ 0.174312 │ -0.0000          │
+│ 11:03:00 │ +0.0               │ INCOMING LEG CLOSES on final stalled, realised +0.1341                   │ 0.174312 │ -0.0000          │
+│ 11:03:00 │ +0.0               │ >>> THIS LEG OPENS SHORT                                                 │ 0.174312 │ +0.0000          │
+│ 11:23:40 │ +20.7              │ the ADVERSE extreme — MAE 2.1565                                         │ 0.178071 │ -2.1565          │
+│ 12:19:35 │ +76.6              │ exit-armed — ws2Mage under 15 (10.72)                                    │ 0.174158 │ +0.0883          │
+│ 12:19:35 │ +76.6              │ KICKSTART — rider ws9 (r 2.15 oob, ceiling ws12)                         │ 0.174158 │ +0.0883          │
+│ 12:19:40 │ +76.7              │ the favourable extreme — MFE 0.1763                                      │ 0.174005 │ +0.1763          │
+│ 12:28:00 │ +85.0              │ baton -> ws11 oob (r 5.70)                                               │ 0.175039 │ -0.4172          │
+│ 12:36:00 │ +93.0              │ CEILING ws12 -> ws23 (ws12r 11.95)                                       │ 0.175416 │ -0.6336          │
+│ 12:36:00 │ +93.0              │ baton -> ws12 oob (r 11.95)                                              │ 0.175416 │ -0.6336          │
+│ 12:42:05 │ +99.1              │ HANDOVER — ws12r oob 6.1 min; the >ws12 mech owns the exit               │ 0.176063 │ -1.0046          │
+│ 13:39:30 │ +156.5             │ dip into 47-53 — ws1Mage 47.67, run 10 bars (0.8 min), confirms 13:39:55 │ 0.176064 │ -1.0050          │
+│ 14:11:05 │ +188.1             │ ws1r reversal + divergence, x under r (floater 13:35:20, d_osc +9.27)    │ 0.175085 │ -0.4437          │
+│ 14:11:05 │ +188.1             │ EXIT on >ws12 divergence on ws1r                                         │ 0.175085 │ -0.4437          │
+└──────────┴────────────────────┴──────────────────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 2 of 24 — 2026-07-09 SHORT   opens 13:41:25   exits 18:57:05 on >ws12 divergence on ws1r   MAE 2.2075 at +11.9 min   MFE 1.3678 at +191.1 min   realised -0.2591
+┌──────────┬────────────────────┬──────────────────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                                  event                                   │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼──────────────────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 13:41:00 │ -0.4               │ INCOMING LEG OPENS LONG                                                  │ 0.145707 │ +0.1493          │
+│ 13:41:20 │ -0.1               │ incoming: exit-armed — ws2Mage over 85 (87.02)                           │ 0.145901 │ +0.0164          │
+│ 13:41:20 │ -0.1               │ incoming: KICKSTART — rider ws1 (r 89.60 oob, ceiling ws12)              │ 0.145901 │ +0.0164          │
+│ 13:41:25 │ +0.0               │ incoming: final stalled on ws1 (r 89.85 O)                               │ 0.145924 │ -0.0000          │
+│ 13:41:25 │ +0.0               │ INCOMING LEG CLOSES on final stalled, realised +0.1496                   │ 0.145924 │ -0.0000          │
+│ 13:41:25 │ +0.0               │ >>> THIS LEG OPENS SHORT                                                 │ 0.145924 │ +0.0000          │
+│ 13:53:20 │ +11.9              │ the ADVERSE extreme — MAE 2.2075                                         │ 0.149146 │ -2.2075          │
+│ 15:24:00 │ +102.6             │ CEILING ws12 -> ws23 (ws12r 11.07)                                       │ 0.146704 │ -0.5339          │
+│ 15:26:00 │ +104.6             │ branch 1 cross — RECORDED, not acted on (ws12x 17.58 vs r 12.17)         │ 0.146774 │ -0.5824          │
+│ 15:28:45 │ +107.3             │ exit-armed — ws2Mage under 15 (-2.79)                                    │ 0.146119 │ -0.1332          │
+│ 15:28:45 │ +107.3             │ KICKSTART — rider ws13 (r 9.89 oob, ceiling ws23)                        │ 0.146119 │ -0.1332          │
+│ 15:30:05 │ +108.7             │ HANDOVER — ws12r oob 6.1 min; the >ws12 mech owns the exit               │ 0.146107 │ -0.1253          │
+│ 16:52:30 │ +191.1             │ the favourable extreme — MFE 1.3678                                      │ 0.143928 │ +1.3678          │
+│ 18:38:25 │ +297.0             │ dip into 47-53 — ws1Mage 51.03, run 12 bars (1.0 min), confirms 18:38:50 │ 0.146682 │ -0.5192          │
+│ 18:57:05 │ +315.7             │ ws1r reversal + divergence, x under r (floater 18:40:10, d_osc +12.02)   │ 0.146302 │ -0.2591          │
+│ 18:57:05 │ +315.7             │ EXIT on >ws12 divergence on ws1r                                         │ 0.146302 │ -0.2591          │
+└──────────┴────────────────────┴──────────────────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 3 of 24 — 2026-07-11 SHORT   opens 13:17:30   exits 16:55:30 on >ws12 divergence on ws1r   MAE 2.3661 at +87.6 min   MFE 0.1289 at +184.8 min   realised -0.0654
+┌──────────┬────────────────────┬─────────────────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                                  event                                  │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼─────────────────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 12:14:40 │ -62.8              │ INCOMING LEG OPENS LONG                                                 │ 0.151543 │ +0.0951          │
+│ 12:28:10 │ -49.3              │ incoming: CEILING ws12 -> ws23 (ws12r 85.31)                            │ 0.151320 │ +0.2418          │
+│ 13:13:10 │ -4.3               │ incoming: exit-armed — ws2Mage over 85 (89.40)                          │ 0.151879 │ -0.1262          │
+│ 13:14:00 │ -3.5               │ incoming: KICKSTART — rider ws2 (r 90.32 oob, ceiling ws23)             │ 0.151837 │ -0.0989          │
+│ 13:17:30 │ +0.0               │ incoming: final stalled on ws2 (r 85.68 O)                              │ 0.151687 │ -0.0000          │
+│ 13:17:30 │ +0.0               │ INCOMING LEG CLOSES on final stalled, realised +0.0952                  │ 0.151687 │ -0.0000          │
+│ 13:17:30 │ +0.0               │ >>> THIS LEG OPENS SHORT                                                │ 0.151687 │ +0.0000          │
+│ 14:45:05 │ +87.6              │ the ADVERSE extreme — MAE 2.3661                                        │ 0.155276 │ -2.3661          │
+│ 15:17:40 │ +120.2             │ exit-armed — ws2Mage under 15 (14.06)                                   │ 0.153718 │ -1.3391          │
+│ 15:17:40 │ +120.2             │ KICKSTART — rider ws9 (r 9.31 oob, ceiling ws12)                        │ 0.153718 │ -1.3391          │
+│ 15:30:00 │ +132.5             │ baton -> ws10 oob (r 8.71)                                              │ 0.153332 │ -1.0840          │
+│ 15:46:00 │ +148.5             │ baton -> ws11 oob (r 1.55)                                              │ 0.152017 │ -0.2176          │
+│ 15:48:00 │ +150.5             │ CEILING ws12 -> ws23 (ws12r 10.90)                                      │ 0.151767 │ -0.0523          │
+│ 15:48:00 │ +150.5             │ baton -> ws12 oob (r 10.90)                                             │ 0.151767 │ -0.0523          │
+│ 15:49:00 │ +151.5             │ baton -> ws13 oob (r 7.15)                                              │ 0.151689 │ -0.0009          │
+│ 15:52:25 │ +154.9             │ branch 1 cross — RECORDED, not acted on (ws12x 17.24 vs r 14.34)        │ 0.152523 │ -0.5508          │
+│ 15:54:05 │ +156.6             │ HANDOVER — ws12r oob 6.1 min; the >ws12 mech owns the exit              │ 0.152389 │ -0.4627          │
+│ 15:55:35 │ +158.1             │ dip into 47-53 — ws1Mage 47.52, run 8 bars (0.7 min), confirms 15:56:00 │ 0.152660 │ -0.6412          │
+│ 16:02:45 │ +165.2             │ branch 1 cross — RECORDED, not acted on (ws12x 18.15 vs r 9.97)         │ 0.152341 │ -0.4312          │
+│ 16:18:35 │ +181.1             │ branch 1 cross — RECORDED, not acted on (ws12x 14.61 vs r 14.29)        │ 0.151920 │ -0.1533          │
+│ 16:22:20 │ +184.8             │ the favourable extreme — MFE 0.1289                                     │ 0.151492 │ +0.1289          │
+│ 16:55:30 │ +218.0             │ ws1r reversal + divergence, x under r (floater 16:39:05, d_osc +36.57)  │ 0.151786 │ -0.0654          │
+│ 16:55:30 │ +218.0             │ EXIT on >ws12 divergence on ws1r                                        │ 0.151786 │ -0.0654          │
+└──────────┴────────────────────┴─────────────────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 4 of 24 — 2026-07-16 SHORT   opens 01:44:40   exits 07:24:10 on >ws12 divergence on ws1r   MAE 1.9369 at +78.6 min   MFE 1.8222 at +292.8 min   realised +1.3832
+┌──────────┬────────────────────┬─────────────────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                                  event                                  │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼─────────────────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 21:47:35 │ -237.1             │ INCOMING LEG OPENS LONG                                                 │ 0.151327 │ -1.2709          │
+│ 01:40:10 │ -4.5               │ incoming: exit-armed — ws2Mage over 85 (86.29)                          │ 0.149840 │ -0.2755          │
+│ 01:40:10 │ -4.5               │ incoming: KICKSTART — rider ws3 (r 86.32 oob, ceiling ws12)             │ 0.149840 │ -0.2755          │
+│ 01:44:40 │ +0.0               │ incoming: final stalled on ws3 (r 83.47 x)                              │ 0.149428 │ -0.0000          │
+│ 01:44:40 │ +0.0               │ INCOMING LEG CLOSES on final stalled, realised -1.2549                  │ 0.149428 │ -0.0000          │
+│ 01:44:40 │ +0.0               │ >>> THIS LEG OPENS SHORT                                                │ 0.149428 │ +0.0000          │
+│ 03:03:15 │ +78.6              │ the ADVERSE extreme — MAE 1.9369                                        │ 0.152322 │ -1.9369          │
+│ 04:09:25 │ +144.8             │ exit-armed — ws2Mage under 15 (12.23)                                   │ 0.149428 │ +0.0002          │
+│ 04:09:25 │ +144.8             │ KICKSTART — rider ws9 (r 12.88 oob, ceiling ws12)                       │ 0.149428 │ +0.0002          │
+│ 04:10:00 │ +145.3             │ baton -> ws10 oob (r 9.35)                                              │ 0.149380 │ +0.0319          │
+│ 04:13:00 │ +148.3             │ baton -> ws11 oob (r 13.66)                                             │ 0.150079 │ -0.4354          │
+│ 04:24:00 │ +159.3             │ CEILING ws12 -> ws23 (ws12r 10.62)                                      │ 0.149673 │ -0.1640          │
+│ 04:24:00 │ +159.3             │ baton -> ws12 oob (r 10.62)                                             │ 0.149673 │ -0.1640          │
+│ 04:24:50 │ +160.2             │ branch 1 cross — RECORDED, not acted on (ws12x 25.59 vs r 12.04)        │ 0.149790 │ -0.2424          │
+│ 04:30:05 │ +165.4             │ HANDOVER — ws12r oob 6.1 min; the >ws12 mech owns the exit              │ 0.149990 │ -0.3759          │
+│ 06:29:25 │ +284.8             │ branch 1 cross — RECORDED, not acted on (ws12x 12.32 vs r 7.19)         │ 0.148048 │ +0.9237          │
+│ 06:37:25 │ +292.8             │ the favourable extreme — MFE 1.8222                                     │ 0.146705 │ +1.8222          │
+│ 06:48:20 │ +303.7             │ dip into 47-53 — ws1Mage 50.65, run 8 bars (0.7 min), confirms 06:48:45 │ 0.147680 │ +1.1701          │
+│ 07:24:10 │ +339.5             │ ws1r reversal + divergence, x under r (floater 07:14:00, d_osc +8.86)   │ 0.147361 │ +1.3832          │
+│ 07:24:10 │ +339.5             │ EXIT on >ws12 divergence on ws1r                                        │ 0.147361 │ +1.3832          │
+└──────────┴────────────────────┴─────────────────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 5 of 24 — 2026-07-28 LONG   opens 22:23:05   exits 02:32:05 on >ws12 divergence on ws1r   MAE 1.9458 at +46.7 min   MFE 0.5162 at +142.8 min   realised -0.8450
+┌──────────┬────────────────────┬─────────────────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                                  event                                  │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼─────────────────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 21:59:45 │ -23.3              │ INCOMING LEG OPENS SHORT                                                │ 0.124974 │ +0.2167          │
+│ 22:13:50 │ -9.2               │ incoming: exit-armed — ws2Mage under 15 (14.36)                         │ 0.124578 │ -0.1007          │
+│ 22:13:50 │ -9.2               │ incoming: KICKSTART — rider ws3 (r 4.25 oob, ceiling ws12)              │ 0.124578 │ -0.1007          │
+│ 22:16:05 │ -7.0               │ incoming: baton -> ws4 oob (r 4.60)                                     │ 0.124743 │ +0.0312          │
+│ 22:23:05 │ +0.0               │ incoming: final stalled on ws4 (r 6.26 O)                               │ 0.124704 │ +0.0000          │
+│ 22:23:05 │ +0.0               │ INCOMING LEG CLOSES on final stalled, realised +0.2162                  │ 0.124704 │ +0.0000          │
+│ 22:23:05 │ +0.0               │ >>> THIS LEG OPENS LONG                                                 │ 0.124704 │ +0.0000          │
+│ 23:09:45 │ +46.7              │ the ADVERSE extreme — MAE 1.9458                                        │ 0.122277 │ -1.9458          │
+│ 23:53:10 │ +90.1              │ exit-armed — ws2Mage over 85 (85.08)                                    │ 0.124142 │ -0.4502          │
+│ 23:53:10 │ +90.1              │ KICKSTART — rider ws8 (r 92.74 oob, ceiling ws12)                       │ 0.124142 │ -0.4502          │
+│ 00:00:00 │ +96.9              │ baton -> ws9 oob (r 88.00)                                              │ 0.123962 │ -0.5947          │
+│ 00:10:00 │ +106.9             │ baton -> ws10 oob (r 93.61)                                             │ 0.124557 │ -0.1177          │
+│ 00:22:00 │ +118.9             │ baton -> ws11 oob (r 92.24)                                             │ 0.124462 │ -0.1939          │
+│ 00:36:00 │ +132.9             │ CEILING ws12 -> ws23 (ws12r 97.74)                                      │ 0.124484 │ -0.1759          │
+│ 00:36:00 │ +132.9             │ baton -> ws12 oob (r 97.74)                                             │ 0.124484 │ -0.1759          │
+│ 00:39:00 │ +135.9             │ baton -> ws13 oob (r 95.65)                                             │ 0.124994 │ +0.2330          │
+│ 00:42:00 │ +138.9             │ baton -> ws14 oob (r 94.39)                                             │ 0.124831 │ +0.1020          │
+│ 00:42:05 │ +139.0             │ HANDOVER — ws12r oob 6.1 min; the >ws12 mech owns the exit              │ 0.124831 │ +0.1020          │
+│ 00:45:55 │ +142.8             │ the favourable extreme — MFE 0.5162                                     │ 0.125347 │ +0.5162          │
+│ 01:25:15 │ +182.2             │ dip into 47-53 — ws1Mage 49.49, run 7 bars (0.6 min), confirms 01:25:40 │ 0.124759 │ +0.0444          │
+│ 02:32:05 │ +249.0             │ ws1r reversal + divergence, x under r (floater 02:07:20, d_osc -8.26)   │ 0.123650 │ -0.8450          │
+│ 02:32:05 │ +249.0             │ EXIT on >ws12 divergence on ws1r                                        │ 0.123650 │ -0.8450          │
+└──────────┴────────────────────┴─────────────────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 6 of 24 — 2026-08-20 LONG   opens 02:55:30   exits 10:48:25 on >ws12 divergence on ws1r   MAE 1.9708 at +98.7 min   MFE 5.0774 at +402.9 min   realised +4.1515
+┌──────────┬────────────────────┬─────────────────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                                  event                                  │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼─────────────────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 02:30:15 │ -25.2              │ INCOMING LEG OPENS SHORT                                                │ 0.154027 │ +2.7951          │
+│ 02:44:20 │ -11.2              │ incoming: exit-armed — ws2Mage under 15 (-18.99)                        │ 0.153634 │ +2.5333          │
+│ 02:48:00 │ -7.5               │ incoming: KICKSTART — rider ws1 (r 11.28 oob, ceiling ws12)             │ 0.150247 │ +0.2727          │
+│ 02:50:00 │ -5.5               │ incoming: baton -> ws2 oob (r 12.63)                                    │ 0.150068 │ +0.1534          │
+│ 02:55:30 │ +0.0               │ incoming: final stalled on ws2 (r 8.98 O)                               │ 0.149838 │ +0.0000          │
+│ 02:55:30 │ +0.0               │ INCOMING LEG CLOSES on final stalled, realised +2.7191                  │ 0.149838 │ +0.0000          │
+│ 02:55:30 │ +0.0               │ >>> THIS LEG OPENS LONG                                                 │ 0.149838 │ +0.0000          │
+│ 04:34:10 │ +98.7              │ the ADVERSE extreme — MAE 1.9708                                        │ 0.146885 │ -1.9708          │
+│ 05:12:00 │ +136.5             │ CEILING ws12 -> ws23 (ws12r 90.00)                                      │ 0.149230 │ -0.4062          │
+│ 05:13:40 │ +138.2             │ branch 1 cross — RECORDED, not acted on (ws12x 86.80 vs r 87.59)        │ 0.148965 │ -0.5831          │
+│ 05:18:05 │ +142.6             │ HANDOVER — ws12r oob 6.1 min; the >ws12 mech owns the exit              │ 0.149455 │ -0.2560          │
+│ 07:17:45 │ +262.2             │ branch 1 cross — RECORDED, not acted on (ws12x 65.31 vs r 85.46)        │ 0.151259 │ +0.9480          │
+│ 07:22:55 │ +267.4             │ branch 1 cross — RECORDED, not acted on (ws12x 77.02 vs r 86.55)        │ 0.151337 │ +1.0004          │
+│ 09:02:40 │ +367.2             │ branch 1 cross — RECORDED, not acted on (ws12x 91.80 vs r 92.49)        │ 0.156208 │ +4.2512          │
+│ 09:38:25 │ +402.9             │ the favourable extreme — MFE 5.0774                                     │ 0.157446 │ +5.0774          │
+│ 10:36:05 │ +460.6             │ dip into 47-53 — ws1Mage 51.75, run 8 bars (0.7 min), confirms 10:36:30 │ 0.155817 │ +3.9898          │
+│ 10:48:25 │ +472.9             │ ws1r reversal + divergence, x under r (floater 10:40:05, d_osc -14.33)  │ 0.156059 │ +4.1515          │
+│ 10:48:25 │ +472.9             │ EXIT on >ws12 divergence on ws1r                                        │ 0.156059 │ +4.1515          │
+└──────────┴────────────────────┴─────────────────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 7 of 24 — 2026-08-20 SHORT   opens 10:48:25   exits 13:15:00 on final stalled   MAE 1.9371 at +50.1 min   MFE 1.5652 at +119.9 min   realised -0.4860
+┌──────────┬────────────────────┬───────────────────────────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                                       event                                       │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼───────────────────────────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 02:55:30 │ -472.9             │ INCOMING LEG OPENS LONG                                                           │ 0.149838 │ +3.9860          │
+│ 05:13:40 │ -334.8             │ incoming: branch 1 cross — RECORDED, not acted on (ws12x 86.80 vs r 87.59)        │ 0.148965 │ +4.5458          │
+│ 05:12:00 │ -336.4             │ incoming: CEILING ws12 -> ws23 (ws12r 90.00)                                      │ 0.149230 │ +4.3760          │
+│ 05:18:05 │ -330.3             │ incoming: HANDOVER — ws12r oob 6.1 min; the >ws12 mech owns the exit              │ 0.149455 │ +4.2318          │
+│ 07:17:45 │ -210.7             │ incoming: branch 1 cross — RECORDED, not acted on (ws12x 65.31 vs r 85.46)        │ 0.151259 │ +3.0758          │
+│ 07:22:55 │ -205.5             │ incoming: branch 1 cross — RECORDED, not acted on (ws12x 77.02 vs r 86.55)        │ 0.151337 │ +3.0255          │
+│ 09:02:40 │ -105.8             │ incoming: branch 1 cross — RECORDED, not acted on (ws12x 91.80 vs r 92.49)        │ 0.156208 │ -0.0958          │
+│ 10:36:05 │ -12.3              │ incoming: dip into 47-53 — ws1Mage 51.75, run 8 bars (0.7 min), confirms 10:36:30 │ 0.155817 │ +0.1552          │
+│ 10:48:25 │ +0.0               │ incoming: ws1r reversal + divergence, x under r (floater 10:40:05, d_osc -14.33)  │ 0.156059 │ -0.0000          │
+│ 10:48:25 │ +0.0               │ INCOMING LEG CLOSES on >ws12 divergence on ws1r, realised +4.1515                 │ 0.156059 │ -0.0000          │
+│ 10:48:25 │ +0.0               │ >>> THIS LEG OPENS SHORT                                                          │ 0.156059 │ +0.0000          │
+│ 11:38:30 │ +50.1              │ the ADVERSE extreme — MAE 1.9371                                                  │ 0.159082 │ -1.9371          │
+│ 12:04:20 │ +75.9              │ exit-armed — ws2Mage under 15 (14.26)                                             │ 0.155720 │ +0.2171          │
+│ 12:04:20 │ +75.9              │ KICKSTART — rider ws3 (r 2.58 oob, ceiling ws12)                                  │ 0.155720 │ +0.2171          │
+│ 12:08:00 │ +79.6              │ baton -> ws4 oob (r 10.39)                                                        │ 0.155157 │ +0.5779          │
+│ 12:10:00 │ +81.6              │ baton -> ws5 oob (r 14.10)                                                        │ 0.154907 │ +0.7381          │
+│ 12:18:00 │ +89.6              │ baton -> ws6 oob (r 10.99)                                                        │ 0.154685 │ +0.8804          │
+│ 12:22:00 │ +93.6              │ baton -> ws7 oob (r 8.59)                                                         │ 0.155118 │ +0.6031          │
+│ 12:25:40 │ +97.2              │ baton -> ws8 oob (r 14.94)                                                        │ 0.155053 │ +0.6444          │
+│ 12:36:00 │ +107.6             │ baton -> ws9 oob (r 13.38)                                                        │ 0.154836 │ +0.7834          │
+│ 12:40:00 │ +111.6             │ baton -> ws10 oob (r 11.37)                                                       │ 0.154568 │ +0.9551          │
+│ 12:48:00 │ +119.6             │ CEILING ws12 -> ws23 (ws12r 10.91)                                                │ 0.154015 │ +1.3095          │
+│ 12:48:00 │ +119.6             │ baton -> ws12 oob (r 10.91)                                                       │ 0.154015 │ +1.3095          │
+│ 12:48:20 │ +119.9             │ the favourable extreme — MFE 1.5652                                               │ 0.153616 │ +1.5652          │
+│ 12:50:35 │ +122.2             │ branch 1 cross — RECORDED, not acted on (ws12x 17.47 vs r 13.20)                  │ 0.154464 │ +1.0220          │
+│ 13:00:00 │ +131.6             │ baton -> ws13 oob (r 14.20)                                                       │ 0.155840 │ +0.1404          │
+│ 13:04:40 │ +136.2             │ baton -> ws14 oob (r 14.95)                                                       │ 0.156099 │ -0.0253          │
+│ 13:15:00 │ +146.6             │ final stalled on ws14 (r 16.60 x)                                                 │ 0.156817 │ -0.4860          │
+│ 13:15:00 │ +146.6             │ EXIT on final stalled                                                             │ 0.156817 │ -0.4860          │
+└──────────┴────────────────────┴───────────────────────────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 8 of 24 — 2026-08-20 SHORT   opens 17:42:35   exits 18:51:15 on final stalled   MAE 1.9031 at +8.8 min   MFE 1.8988 at +52.4 min   realised -0.0070
+┌──────────┬────────────────────┬─────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                            event                            │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼─────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 17:32:25 │ -10.2              │ INCOMING LEG OPENS LONG                                     │ 0.167951 │ +0.5922          │
+│ 17:39:50 │ -2.8               │ incoming: exit-armed — ws2Mage over 85 (85.77)              │ 0.169413 │ -0.2730          │
+│ 17:41:00 │ -1.6               │ incoming: KICKSTART — rider ws1 (r 85.50 oob, ceiling ws12) │ 0.168979 │ -0.0160          │
+│ 17:42:35 │ +0.0               │ incoming: final stalled on ws1 (r 76.95 .)                  │ 0.168952 │ -0.0000          │
+│ 17:42:35 │ +0.0               │ INCOMING LEG CLOSES on final stalled, realised +0.5957      │ 0.168952 │ -0.0000          │
+│ 17:42:35 │ +0.0               │ >>> THIS LEG OPENS SHORT                                    │ 0.168952 │ +0.0000          │
+│ 17:51:20 │ +8.8               │ the ADVERSE extreme — MAE 1.9031                            │ 0.172167 │ -1.9031          │
+│ 18:34:20 │ +51.8              │ exit-armed — ws2Mage under 15 (13.49)                       │ 0.166089 │ +1.6943          │
+│ 18:34:20 │ +51.8              │ KICKSTART — rider ws11 (r 10.69 oob, ceiling ws12)          │ 0.166089 │ +1.6943          │
+│ 18:35:00 │ +52.4              │ the favourable extreme — MFE 1.8988                         │ 0.165744 │ +1.8988          │
+│ 18:51:15 │ +68.7              │ final stalled on ws11 (r 16.89 x)                           │ 0.168964 │ -0.0070          │
+│ 18:51:15 │ +68.7              │ EXIT on final stalled                                       │ 0.168964 │ -0.0070          │
+└──────────┴────────────────────┴─────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 9 of 24 — 2026-08-20 SHORT   opens 23:42:20   exits 01:59:00 on final stalled   MAE 2.1485 at +36.3 min   MFE 0.4194 at +100.9 min   realised -0.5623
+┌──────────┬────────────────────┬──────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                            event                             │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼──────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 20:05:15 │ -217.1             │ INCOMING LEG OPENS LONG                                      │ 0.168505 │ -0.3943          │
+│ 23:30:40 │ -11.7              │ incoming: exit-armed — ws2Mage over 85 (91.28)               │ 0.167521 │ +0.1918          │
+│ 23:30:40 │ -11.7              │ incoming: KICKSTART — rider ws2 (r 100.00 oob, ceiling ws12) │ 0.167521 │ +0.1918          │
+│ 23:33:10 │ -9.2               │ incoming: baton -> ws3 oob (r 85.03)                         │ 0.167681 │ +0.0970          │
+│ 23:42:20 │ +0.0               │ incoming: final stalled on ws3 (r 82.32 .)                   │ 0.167843 │ -0.0000          │
+│ 23:42:20 │ +0.0               │ INCOMING LEG CLOSES on final stalled, realised -0.3927       │ 0.167843 │ -0.0000          │
+│ 23:42:20 │ +0.0               │ >>> THIS LEG OPENS SHORT                                     │ 0.167843 │ +0.0000          │
+│ 00:18:40 │ +36.3              │ the ADVERSE extreme — MAE 2.1485                             │ 0.171450 │ -2.1485          │
+│ 01:21:55 │ +99.6              │ exit-armed — ws2Mage under 15 (14.35)                        │ 0.167410 │ +0.2583          │
+│ 01:21:55 │ +99.6              │ KICKSTART — rider ws10 (r 10.99 oob, ceiling ws12)           │ 0.167410 │ +0.2583          │
+│ 01:23:15 │ +100.9             │ the favourable extreme — MFE 0.4194                          │ 0.167139 │ +0.4194          │
+│ 01:39:00 │ +116.7             │ baton -> ws11 oob (r 10.04)                                  │ 0.167744 │ +0.0592          │
+│ 01:59:00 │ +136.7             │ final stalled on ws11 (r 30.76 .)                            │ 0.168787 │ -0.5623          │
+│ 01:59:00 │ +136.7             │ EXIT on final stalled                                        │ 0.168787 │ -0.5623          │
+└──────────┴────────────────────┴──────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 10 of 24 — 2026-08-22 LONG   opens 23:02:55   exits 01:21:20 on final stalled   MAE 2.1686 at +33.9 min   MFE 2.3746 at +109.9 min   realised +1.3141
+┌──────────┬────────────────────┬──────────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                              event                               │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼──────────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 21:51:25 │ -71.5              │ INCOMING LEG OPENS SHORT                                         │ 0.178367 │ -1.5479          │
+│ 22:16:45 │ -46.2              │ incoming: MAE BREACH 2.5465% over 2.50% - chain stops for review │ 0.182909 │ +0.9592          │
+│ 22:16:45 │ -46.2              │ INCOMING LEG CLOSES on mae breach, realised -2.5465              │ 0.182909 │ +0.9592          │
+│ 23:01:30 │ -1.4               │ re-entry: ws1x return, the 18-bar hold starts                    │ 0.180683 │ -0.2697          │
+│ 23:02:55 │ +0.0               │ >>> THIS LEG OPENS LONG (the re-entry conf bar)                  │ 0.181172 │ +0.0000          │
+│ 23:36:50 │ +33.9              │ the ADVERSE extreme — MAE 2.1686                                 │ 0.177243 │ -2.1686          │
+│ 00:27:30 │ +84.6              │ exit-armed — ws2Mage over 85 (88.80)                             │ 0.181099 │ -0.0403          │
+│ 00:28:00 │ +85.1              │ KICKSTART — rider ws2 (r 86.61 oob, ceiling ws12)                │ 0.181181 │ +0.0053          │
+│ 00:30:10 │ +87.2              │ baton -> ws3 oob (r 85.88)                                       │ 0.181687 │ +0.2843          │
+│ 00:35:00 │ +92.1              │ baton -> ws5 oob (r 86.20)                                       │ 0.181748 │ +0.3182          │
+│ 00:36:00 │ +93.1              │ baton -> ws6 oob (r 94.34)                                       │ 0.182279 │ +0.6113          │
+│ 00:36:05 │ +93.2              │ baton -> ws8 oob (r 86.49)                                       │ 0.182279 │ +0.6113          │
+│ 00:45:00 │ +102.1             │ baton -> ws9 oob (r 85.38)                                       │ 0.184253 │ +1.7009          │
+│ 00:52:50 │ +109.9             │ the favourable extreme — MFE 2.3746                              │ 0.185474 │ +2.3746          │
+│ 01:00:00 │ +117.1             │ baton -> ws10 oob (r 89.91)                                      │ 0.184270 │ +1.7102          │
+│ 01:12:00 │ +129.1             │ CEILING ws12 -> ws23 (ws12r 86.55)                               │ 0.184011 │ +1.5673          │
+│ 01:12:00 │ +129.1             │ baton -> ws12 oob (r 86.55)                                      │ 0.184011 │ +1.5673          │
+│ 01:16:00 │ +133.1             │ branch 1 cross — RECORDED, not acted on (ws12x 77.31 vs r 87.02) │ 0.184281 │ +1.7161          │
+│ 01:19:40 │ +136.8             │ baton -> ws13 oob (r 85.15)                                      │ 0.183725 │ +1.4094          │
+│ 01:21:20 │ +138.4             │ final stalled on ws13 (r 84.63 x)                                │ 0.183552 │ +1.3141          │
+│ 01:21:20 │ +138.4             │ EXIT on final stalled                                            │ 0.183552 │ +1.3141          │
+└──────────┴────────────────────┴──────────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 11 of 24 — 2026-08-24 LONG   opens 01:35:45   exits 03:18:00 on final stalled   MAE 2.1708 at +27.3 min   MFE 1.1696 at +66.7 min   realised -0.6321
+┌──────────┬────────────────────┬────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                           event                            │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 00:55:25 │ -40.3              │ INCOMING LEG OPENS SHORT                                   │ 0.176279 │ +0.5212          │
+│ 01:24:55 │ -10.8              │ incoming: exit-armed — ws2Mage under 15 (13.67)            │ 0.174703 │ -0.3777          │
+│ 01:24:55 │ -10.8              │ incoming: KICKSTART — rider ws2 (r 6.36 oob, ceiling ws12) │ 0.174703 │ -0.3777          │
+│ 01:27:00 │ -8.8               │ incoming: baton -> ws3 oob (r 11.59)                       │ 0.174683 │ -0.3887          │
+│ 01:35:45 │ +0.0               │ incoming: final stalled on ws3 (r 20.59 .)                 │ 0.175365 │ +0.0000          │
+│ 01:35:45 │ +0.0               │ INCOMING LEG CLOSES on final stalled, realised +0.5185     │ 0.175365 │ +0.0000          │
+│ 01:35:45 │ +0.0               │ >>> THIS LEG OPENS LONG                                    │ 0.175365 │ +0.0000          │
+│ 02:03:05 │ +27.3              │ the ADVERSE extreme — MAE 2.1708                           │ 0.171558 │ -2.1708          │
+│ 02:31:00 │ +55.2              │ exit-armed — ws2Mage over 85 (85.51)                       │ 0.176401 │ +0.5906          │
+│ 02:31:00 │ +55.2              │ KICKSTART — rider ws6 (r 85.71 oob, ceiling ws12)          │ 0.176401 │ +0.5906          │
+│ 02:41:00 │ +65.2              │ baton -> ws7 oob (r 96.27)                                 │ 0.177099 │ +0.9890          │
+│ 02:42:25 │ +66.7              │ the favourable extreme — MFE 1.1696                        │ 0.177416 │ +1.1696          │
+│ 02:48:00 │ +72.2              │ baton -> ws8 oob (r 86.70)                                 │ 0.175750 │ +0.2194          │
+│ 03:00:00 │ +84.2              │ baton -> ws10 oob (r 89.62)                                │ 0.176265 │ +0.5131          │
+│ 03:18:00 │ +102.2             │ final stalled on ws10 (r 75.91 .)                          │ 0.174256 │ -0.6321          │
+│ 03:18:00 │ +102.2             │ EXIT on final stalled                                      │ 0.174256 │ -0.6321          │
+└──────────┴────────────────────┴────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 12 of 24 — 2026-08-24 SHORT   opens 12:01:00   exits 14:04:25 on final stalled   MAE 2.1550 at +51.2 min   MFE 3.5834 at +112.7 min   realised +2.4474
+┌──────────┬────────────────────┬─────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                            event                            │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼─────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 11:53:55 │ -7.1               │ INCOMING LEG OPENS LONG                                     │ 0.179863 │ +0.9903          │
+│ 11:57:50 │ -3.2               │ incoming: exit-armed — ws2Mage over 85 (85.46)              │ 0.180858 │ +0.4423          │
+│ 11:58:00 │ -3.0               │ incoming: KICKSTART — rider ws1 (r 88.12 oob, ceiling ws12) │ 0.180977 │ +0.3770          │
+│ 12:01:00 │ +0.0               │ incoming: final stalled on ws1 (r 85.58 O)                  │ 0.181662 │ -0.0000          │
+│ 12:01:00 │ +0.0               │ INCOMING LEG CLOSES on final stalled, realised +1.0002      │ 0.181662 │ -0.0000          │
+│ 12:01:00 │ +0.0               │ >>> THIS LEG OPENS SHORT                                    │ 0.181662 │ +0.0000          │
+│ 12:52:15 │ +51.2              │ the ADVERSE extreme — MAE 2.1550                            │ 0.185577 │ -2.1550          │
+│ 13:32:55 │ +91.9              │ exit-armed — ws2Mage under 15 (12.89)                       │ 0.180564 │ +0.6043          │
+│ 13:32:55 │ +91.9              │ KICKSTART — rider ws5 (r 10.31 oob, ceiling ws12)           │ 0.180564 │ +0.6043          │
+│ 13:36:00 │ +95.0              │ baton -> ws6 oob (r 7.91)                                   │ 0.180827 │ +0.4598          │
+│ 13:39:00 │ +98.0              │ baton -> ws7 oob (r 8.12)                                   │ 0.179511 │ +1.1840          │
+│ 13:44:00 │ +103.0             │ baton -> ws8 oob (r 8.10)                                   │ 0.176828 │ +2.6611          │
+│ 13:48:10 │ +107.2             │ baton -> ws9 oob (r 14.54)                                  │ 0.176654 │ +2.7566          │
+│ 13:53:40 │ +112.7             │ the favourable extreme — MFE 3.5834                         │ 0.175152 │ +3.5834          │
+│ 14:04:25 │ +123.4             │ final stalled on ws9 (r 14.59 O)                            │ 0.177216 │ +2.4474          │
+│ 14:04:25 │ +123.4             │ EXIT on final stalled                                       │ 0.177216 │ +2.4474          │
+└──────────┴────────────────────┴─────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 13 of 24 — 2026-08-25 LONG   opens 13:35:00   exits 14:11:30 on final stalled   MAE 2.4889 at +16.4 min   MFE 1.3944 at +36.2 min   realised +1.0876
+┌──────────┬────────────────────┬─────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                            event                            │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼─────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 13:03:00 │ -32.0              │ INCOMING LEG OPENS SHORT                                    │ 0.179880 │ +0.4064          │
+│ 13:22:30 │ -12.5              │ incoming: exit-armed — ws2Mage under 15 (14.11)             │ 0.176816 │ -1.3039          │
+│ 13:22:30 │ -12.5              │ incoming: KICKSTART — rider ws3 (r 12.88 oob, ceiling ws12) │ 0.176816 │ -1.3039          │
+│ 13:28:00 │ -7.0               │ incoming: baton -> ws4 oob (r 7.57)                         │ 0.175405 │ -2.0914          │
+│ 13:35:00 │ +0.0               │ incoming: final stalled on ws4 (r 22.86 .)                  │ 0.179152 │ +0.0000          │
+│ 13:35:00 │ +0.0               │ INCOMING LEG CLOSES on final stalled, realised +0.4048      │ 0.179152 │ +0.0000          │
+│ 13:35:00 │ +0.0               │ >>> THIS LEG OPENS LONG                                     │ 0.179152 │ +0.0000          │
+│ 13:51:25 │ +16.4              │ the ADVERSE extreme — MAE 2.4889                            │ 0.174693 │ -2.4889          │
+│ 14:07:55 │ +32.9              │ exit-armed — ws2Mage over 85 (85.59)                        │ 0.180657 │ +0.8401          │
+│ 14:07:55 │ +32.9              │ KICKSTART — rider ws2 (r 94.13 oob, ceiling ws12)           │ 0.180657 │ +0.8401          │
+│ 14:11:15 │ +36.2              │ the favourable extreme — MFE 1.3944                         │ 0.181650 │ +1.3944          │
+│ 14:11:30 │ +36.5              │ final stalled on ws2 (r 95.70 O)                            │ 0.181100 │ +1.0876          │
+│ 14:11:30 │ +36.5              │ EXIT on final stalled                                       │ 0.181100 │ +1.0876          │
+└──────────┴────────────────────┴─────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 14 of 24 — 2026-08-26 SHORT   opens 04:14:05   exits 07:02:10 on >ws12 divergence on ws1r   MAE 2.2497 at +33.5 min   MFE 3.3492 at +144.8 min   realised +1.7802
+┌──────────┬────────────────────┬───────────────────────────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                                       event                                       │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼───────────────────────────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 01:49:20 │ -144.8             │ INCOMING LEG OPENS LONG                                                           │ 0.199187 │ +2.4959          │
+│ 01:55:30 │ -138.6             │ incoming: HANDOVER — ws12r oob 6.1 min; the >ws12 mech owns the exit              │ 0.198248 │ +2.9554          │
+│ 02:48:35 │ -85.5              │ incoming: branch 1 cross — RECORDED, not acted on (ws12x 86.56 vs r 87.14)        │ 0.203694 │ +0.2893          │
+│ 02:48:15 │ -85.8              │ incoming: CEILING ws12 -> ws23 (ws12r 87.18)                                      │ 0.203612 │ +0.3293          │
+│ 02:50:50 │ -83.2              │ incoming: branch 1 cross — RECORDED, not acted on (ws12x 84.20 vs r 87.01)        │ 0.203583 │ +0.3440          │
+│ 03:25:00 │ -49.1              │ incoming: dip into 47-53 — ws1Mage 48.15, run 7 bars (0.6 min), confirms 03:25:25 │ 0.203490 │ +0.3894          │
+│ 04:14:05 │ +0.0               │ incoming: ws1r reversal + divergence, x under r (floater 04:00:05, d_osc -23.73)  │ 0.204285 │ -0.0000          │
+│ 04:14:05 │ +0.0               │ INCOMING LEG CLOSES on >ws12 divergence on ws1r, realised +2.5597                 │ 0.204285 │ -0.0000          │
+│ 04:14:05 │ +0.0               │ >>> THIS LEG OPENS SHORT                                                          │ 0.204285 │ +0.0000          │
+│ 04:14:10 │ +0.1               │ CEILING ws12 -> ws23 (ws12r 14.72)                                                │ 0.204167 │ +0.0581          │
+│ 04:47:35 │ +33.5              │ the ADVERSE extreme — MAE 2.2497                                                  │ 0.208881 │ -2.2497          │
+│ 06:22:45 │ +128.7             │ exit-armed — ws2Mage under 15 (13.97)                                             │ 0.202370 │ +0.9376          │
+│ 06:22:45 │ +128.7             │ KICKSTART — rider ws21 (r 12.85 oob, ceiling ws23)                                │ 0.202370 │ +0.9376          │
+│ 06:31:00 │ +136.9             │ baton -> ws23 oob (r 10.87)                                                       │ 0.199644 │ +2.2719          │
+│ 06:31:40 │ +137.6             │ HANDOVER — ws12r oob 6.1 min; the >ws12 mech owns the exit                        │ 0.200656 │ +1.7765          │
+│ 06:38:50 │ +144.8             │ the favourable extreme — MFE 3.3492                                               │ 0.197443 │ +3.3492          │
+│ 06:54:35 │ +160.5             │ dip into 47-53 — ws1Mage 50.19, run 17 bars (1.4 min), confirms 06:55:00          │ 0.200618 │ +1.7950          │
+│ 07:02:10 │ +168.1             │ ws1r reversal + divergence, x under r (floater 06:27:10, d_osc +35.86)            │ 0.200649 │ +1.7802          │
+│ 07:02:10 │ +168.1             │ EXIT on >ws12 divergence on ws1r                                                  │ 0.200649 │ +1.7802          │
+└──────────┴────────────────────┴───────────────────────────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 15 of 24 — 2026-08-27 SHORT   opens 08:58:30   exits 10:39:35 on final stalled   MAE 2.0722 at +83.2 min   MFE 0.3631 at +98.7 min   realised -0.1099
+┌──────────┬────────────────────┬───────────────────────────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                                       event                                       │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼───────────────────────────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 06:02:25 │ -176.1             │ INCOMING LEG OPENS LONG                                                           │ 0.200534 │ +2.7691          │
+│ 07:13:10 │ -105.3             │ incoming: branch 1 cross — RECORDED, not acted on (ws12x 77.20 vs r 88.38)        │ 0.200888 │ +2.5976          │
+│ 07:12:00 │ -106.5             │ incoming: CEILING ws12 -> ws23 (ws12r 90.55)                                      │ 0.201424 │ +2.3375          │
+│ 07:18:05 │ -100.4             │ incoming: HANDOVER — ws12r oob 6.1 min; the >ws12 mech owns the exit              │ 0.200869 │ +2.6068          │
+│ 08:55:20 │ -3.2               │ incoming: dip into 47-53 — ws1Mage 48.42, run 9 bars (0.8 min), confirms 08:55:45 │ 0.205997 │ +0.1205          │
+│ 08:58:30 │ +0.0               │ incoming: ws1r reversal + divergence, x under r (floater 08:27:40, d_osc -34.98)  │ 0.206245 │ -0.0000          │
+│ 08:58:30 │ +0.0               │ INCOMING LEG CLOSES on >ws12 divergence on ws1r, realised +2.8480                 │ 0.206245 │ -0.0000          │
+│ 08:58:30 │ +0.0               │ >>> THIS LEG OPENS SHORT                                                          │ 0.206245 │ +0.0000          │
+│ 10:21:40 │ +83.2              │ the ADVERSE extreme — MAE 2.0722                                                  │ 0.210519 │ -2.0722          │
+│ 10:26:25 │ +87.9              │ exit-armed — ws2Mage under 15 (7.01)                                              │ 0.206211 │ +0.0168          │
+│ 10:34:00 │ +95.5              │ KICKSTART — rider ws2 (r 6.57 oob, ceiling ws12)                                  │ 0.206960 │ -0.3467          │
+│ 10:37:10 │ +98.7              │ the favourable extreme — MFE 0.3631                                               │ 0.205496 │ +0.3631          │
+│ 10:39:35 │ +101.1             │ final stalled on ws2 (r 17.69 .)                                                  │ 0.206472 │ -0.1099          │
+│ 10:39:35 │ +101.1             │ EXIT on final stalled                                                             │ 0.206472 │ -0.1099          │
+└──────────┴────────────────────┴───────────────────────────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 16 of 24 — 2026-09-03 LONG   opens 19:53:30   exits 21:45:15 on final stalled   MAE 1.9267 at +75.2 min   MFE 0.5992 at +101.2 min   realised -0.5605
+┌──────────┬────────────────────┬──────────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                              event                               │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼──────────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 15:58:05 │ -235.4             │ INCOMING LEG OPENS SHORT                                         │ 0.173124 │ -0.9835          │
+│ 19:26:20 │ -27.2              │ incoming: MAE BREACH 2.5413% over 2.50% - chain stops for review │ 0.177523 │ +1.5328          │
+│ 19:26:20 │ -27.2              │ INCOMING LEG CLOSES on mae breach, realised -2.5413              │ 0.177523 │ +1.5328          │
+│ 19:52:05 │ -1.4               │ re-entry: ws1x return, the 18-bar hold starts                    │ 0.174656 │ -0.1072          │
+│ 19:53:30 │ +0.0               │ >>> THIS LEG OPENS LONG (the re-entry conf bar)                  │ 0.174843 │ +0.0000          │
+│ 21:08:40 │ +75.2              │ the ADVERSE extreme — MAE 1.9267                                 │ 0.171475 │ -1.9267          │
+│ 21:31:05 │ +97.6              │ exit-armed — ws2Mage over 85 (85.97)                             │ 0.173354 │ -0.8518          │
+│ 21:32:20 │ +98.8              │ KICKSTART — rider ws4 (r 85.17 oob, ceiling ws12)                │ 0.172812 │ -1.1617          │
+│ 21:34:40 │ +101.2             │ the favourable extreme — MFE 0.5992                              │ 0.175891 │ +0.5992          │
+│ 21:35:00 │ +101.5             │ baton -> ws5 oob (r 90.13)                                       │ 0.174896 │ +0.0300          │
+│ 21:45:15 │ +111.8             │ final stalled on ws5 (r 65.88 .)                                 │ 0.173863 │ -0.5605          │
+│ 21:45:15 │ +111.8             │ EXIT on final stalled                                            │ 0.173863 │ -0.5605          │
+└──────────┴────────────────────┴──────────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 17 of 24 — 2026-09-06 LONG   opens 04:55:00   exits 08:35:00 on final stalled   MAE 2.2705 at +139.2 min   MFE 0.2724 at +200.8 min   realised -1.0108
+┌──────────┬────────────────────┬────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                           event                            │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 03:42:15 │ -72.8              │ INCOMING LEG OPENS SHORT                                   │ 0.179834 │ +1.6617          │
+│ 03:58:20 │ -56.7              │ incoming: exit-armed — ws2Mage under 15 (14.69)            │ 0.178023 │ +0.6378          │
+│ 03:58:20 │ -56.7              │ incoming: KICKSTART — rider ws2 (r 5.86 oob, ceiling ws12) │ 0.178023 │ +0.6378          │
+│ 04:00:00 │ -55.0              │ incoming: baton -> ws3 oob (r 12.88)                       │ 0.178194 │ +0.7342          │
+│ 04:08:00 │ -47.0              │ incoming: baton -> ws4 oob (r 11.49)                       │ 0.177331 │ +0.2466          │
+│ 04:15:00 │ -40.0              │ incoming: baton -> ws5 oob (r 10.18)                       │ 0.177494 │ +0.3388          │
+│ 04:18:00 │ -37.0              │ incoming: baton -> ws6 oob (r 9.41)                        │ 0.176867 │ -0.0157          │
+│ 04:18:05 │ -36.9              │ incoming: baton -> ws8 oob (r 11.43)                       │ 0.176867 │ -0.0156          │
+│ 04:20:00 │ -35.0              │ incoming: baton -> ws10 oob (r 12.03)                      │ 0.175844 │ -0.5940          │
+│ 04:35:00 │ -20.0              │ incoming: baton -> ws11 oob (r 13.85)                      │ 0.176437 │ -0.2589          │
+│ 04:55:00 │ +0.0               │ incoming: final stalled on ws11 (r 17.38 .)                │ 0.176895 │ +0.0000          │
+│ 04:55:00 │ +0.0               │ INCOMING LEG CLOSES on final stalled, realised +1.6345     │ 0.176895 │ +0.0000          │
+│ 04:55:00 │ +0.0               │ >>> THIS LEG OPENS LONG                                    │ 0.176895 │ +0.0000          │
+│ 07:14:10 │ +139.2             │ the ADVERSE extreme — MAE 2.2705                           │ 0.172878 │ -2.2705          │
+│ 07:52:05 │ +177.1             │ exit-armed — ws2Mage over 85 (89.04)                       │ 0.175277 │ -0.9147          │
+│ 07:52:05 │ +177.1             │ KICKSTART — rider ws10 (r 91.37 oob, ceiling ws12)         │ 0.175277 │ -0.9147          │
+│ 08:04:00 │ +189.0             │ baton -> ws11 oob (r 85.43)                                │ 0.175711 │ -0.6694          │
+│ 08:15:50 │ +200.8             │ the favourable extreme — MFE 0.2724                        │ 0.177377 │ +0.2724          │
+│ 08:35:00 │ +220.0             │ final stalled on ws11 (r 82.00 .)                          │ 0.175107 │ -1.0108          │
+│ 08:35:00 │ +220.0             │ EXIT on final stalled                                      │ 0.175107 │ -1.0108          │
+└──────────┴────────────────────┴────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 18 of 24 — 2026-09-07 LONG   opens 21:35:10   exits 05:04:20 on >ws12 divergence on ws1r   MAE 1.9017 at +65.0 min   MFE 2.5097 at +288.5 min   realised +0.1195
+┌──────────┬────────────────────┬──────────────────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                                  event                                   │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼──────────────────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 20:09:20 │ -85.8              │ INCOMING LEG OPENS SHORT                                                 │ 0.171202 │ -0.0956          │
+│ 21:35:05 │ -0.1               │ incoming: exit-armed — ws2Mage under 15 (11.22)                          │ 0.171540 │ +0.1020          │
+│ 21:35:05 │ -0.1               │ incoming: KICKSTART — rider ws4 (r 14.00 oob, ceiling ws12)              │ 0.171540 │ +0.1020          │
+│ 21:35:10 │ +0.0               │ incoming: final stalled on ws4 (r 14.00 O)                               │ 0.171366 │ +0.0000          │
+│ 21:35:10 │ +0.0               │ INCOMING LEG CLOSES on final stalled, realised -0.0957                   │ 0.171366 │ +0.0000          │
+│ 21:35:10 │ +0.0               │ >>> THIS LEG OPENS LONG                                                  │ 0.171366 │ +0.0000          │
+│ 22:40:10 │ +65.0              │ the ADVERSE extreme — MAE 1.9017                                         │ 0.168107 │ -1.9017          │
+│ 23:45:10 │ +130.0             │ exit-armed — ws2Mage over 85 (85.13)                                     │ 0.171080 │ -0.1669          │
+│ 23:45:10 │ +130.0             │ KICKSTART — rider ws10 (r 85.83 oob, ceiling ws12)                       │ 0.171080 │ -0.1669          │
+│ 23:50:00 │ +134.8             │ baton -> ws11 oob (r 85.94)                                              │ 0.171512 │ +0.0854          │
+│ 00:12:30 │ +157.3             │ CEILING ws12 -> ws23 (ws12r 85.01)                                       │ 0.170650 │ -0.4178          │
+│ 00:12:30 │ +157.3             │ baton -> ws12 oob (r 85.01)                                              │ 0.170650 │ -0.4178          │
+│ 00:13:00 │ +157.8             │ baton -> ws13 oob (r 86.05)                                              │ 0.170860 │ -0.2948          │
+│ 00:14:20 │ +159.2             │ baton -> ws14 oob (r 85.01)                                              │ 0.170814 │ -0.3218          │
+│ 00:17:10 │ +162.0             │ branch 1 cross — RECORDED, not acted on (ws12x 65.55 vs r 86.90)         │ 0.170987 │ -0.2209          │
+│ 00:32:55 │ +177.8             │ baton -> ws16 oob (r 85.45)                                              │ 0.170612 │ -0.4395          │
+│ 00:34:00 │ +178.8             │ baton -> ws17 oob (r 89.11)                                              │ 0.170981 │ -0.2241          │
+│ 00:38:00 │ +182.8             │ baton -> ws19 oob (r 86.63)                                              │ 0.171180 │ -0.1082          │
+│ 00:46:15 │ +191.1             │ HANDOVER — ws12r oob 6.1 min; the >ws12 mech owns the exit               │ 0.171491 │ +0.0735          │
+│ 02:23:40 │ +288.5             │ the favourable extreme — MFE 2.5097                                      │ 0.175666 │ +2.5097          │
+│ 03:55:35 │ +380.4             │ dip into 47-53 — ws1Mage 50.59, run 12 bars (1.0 min), confirms 03:56:00 │ 0.170955 │ -0.2399          │
+│ 05:04:20 │ +449.2             │ ws1r reversal + divergence, x under r (floater 04:39:00, d_osc -5.81)    │ 0.171570 │ +0.1195          │
+│ 05:04:20 │ +449.2             │ EXIT on >ws12 divergence on ws1r                                         │ 0.171570 │ +0.1195          │
+└──────────┴────────────────────┴──────────────────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 19 of 24 — 2026-09-18 LONG   opens 10:59:30   exits 13:21:00 on final stalled   MAE 1.9152 at +17.8 min   MFE 0.3460 at +112.3 min   realised -0.0559
+┌──────────┬────────────────────┬────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                           event                            │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 09:14:35 │ -104.9             │ INCOMING LEG OPENS SHORT                                   │ 0.152963 │ +0.2065          │
+│ 10:56:00 │ -3.5               │ incoming: exit-armed — ws2Mage under 15 (14.61)            │ 0.152845 │ +0.1290          │
+│ 10:56:00 │ -3.5               │ incoming: KICKSTART — rider ws3 (r 0.00 oob, ceiling ws12) │ 0.152845 │ +0.1290          │
+│ 10:59:30 │ +0.0               │ incoming: final stalled on ws3 (r 0.00 O)                  │ 0.152648 │ +0.0000          │
+│ 10:59:30 │ +0.0               │ INCOMING LEG CLOSES on final stalled, realised +0.2061     │ 0.152648 │ +0.0000          │
+│ 10:59:30 │ +0.0               │ >>> THIS LEG OPENS LONG                                    │ 0.152648 │ +0.0000          │
+│ 11:17:15 │ +17.8              │ the ADVERSE extreme — MAE 1.9152                           │ 0.149724 │ -1.9152          │
+│ 12:35:25 │ +95.9              │ exit-armed — ws2Mage over 85 (85.15)                       │ 0.152147 │ -0.3279          │
+│ 12:35:25 │ +95.9              │ KICKSTART — rider ws8 (r 86.22 oob, ceiling ws12)          │ 0.152147 │ -0.3279          │
+│ 12:36:00 │ +96.5              │ baton -> ws9 oob (r 87.68)                                 │ 0.152257 │ -0.2561          │
+│ 12:50:00 │ +110.5             │ baton -> ws10 oob (r 86.60)                                │ 0.152754 │ +0.0697          │
+│ 12:51:50 │ +112.3             │ the favourable extreme — MFE 0.3460                        │ 0.153176 │ +0.3460          │
+│ 13:01:00 │ +121.5             │ baton -> ws11 oob (r 85.19)                                │ 0.152773 │ +0.0820          │
+│ 13:21:00 │ +141.5             │ final stalled on ws11 (r 82.73 .)                          │ 0.152562 │ -0.0559          │
+│ 13:21:00 │ +141.5             │ EXIT on final stalled                                      │ 0.152562 │ -0.0559          │
+└──────────┴────────────────────┴────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 20 of 24 — 2026-09-21 SHORT   opens 00:07:45   exits 02:28:05 on final stalled   MAE 1.9171 at +39.8 min   MFE 1.7135 at +113.2 min   realised +0.3082
+┌──────────┬────────────────────┬─────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                            event                            │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼─────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 23:42:30 │ -25.2              │ INCOMING LEG OPENS LONG                                     │ 0.168141 │ +0.4401          │
+│ 00:02:20 │ -5.4               │ incoming: exit-armed — ws2Mage over 85 (88.13)              │ 0.168766 │ +0.0701          │
+│ 00:03:00 │ -4.8               │ incoming: KICKSTART — rider ws1 (r 85.79 oob, ceiling ws12) │ 0.168472 │ +0.2444          │
+│ 00:07:45 │ +0.0               │ incoming: final stalled on ws1 (r 75.16 .)                  │ 0.168884 │ -0.0000          │
+│ 00:07:45 │ +0.0               │ INCOMING LEG CLOSES on final stalled, realised +0.4420      │ 0.168884 │ -0.0000          │
+│ 00:07:45 │ +0.0               │ >>> THIS LEG OPENS SHORT                                    │ 0.168884 │ +0.0000          │
+│ 00:47:35 │ +39.8              │ the ADVERSE extreme — MAE 1.9171                            │ 0.172122 │ -1.9171          │
+│ 01:27:00 │ +79.2              │ exit-armed — ws2Mage under 15 (11.64)                       │ 0.169366 │ -0.2851          │
+│ 01:30:00 │ +82.2              │ KICKSTART — rider ws6 (r 13.20 oob, ceiling ws12)           │ 0.169973 │ -0.6444          │
+│ 01:38:10 │ +90.4              │ baton -> ws7 oob (r 14.77)                                  │ 0.169096 │ -0.1253          │
+│ 01:46:00 │ +98.2              │ baton -> ws8 oob (r 14.39)                                  │ 0.169482 │ -0.3539          │
+│ 02:00:00 │ +112.2             │ baton -> ws10 oob (r 12.26)                                 │ 0.166684 │ +1.3031          │
+│ 02:01:00 │ +113.2             │ the favourable extreme — MFE 1.7135                         │ 0.165991 │ +1.7135          │
+│ 02:28:05 │ +140.3             │ final stalled on ws10 (r 17.18 .)                           │ 0.168364 │ +0.3082          │
+│ 02:28:05 │ +140.3             │ EXIT on final stalled                                       │ 0.168364 │ +0.3082          │
+└──────────┴────────────────────┴─────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 21 of 24 — 2026-09-21 LONG   opens 13:53:00   exits 14:31:50 on final stalled   MAE 1.9380 at +13.3 min   MFE 0.5096 at +38.8 min   realised +0.4215
+┌──────────┬────────────────────┬────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                           event                            │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 13:01:00 │ -52.0              │ INCOMING LEG OPENS SHORT                                   │ 0.182334 │ -0.0755          │
+│ 13:31:05 │ -21.9              │ incoming: exit-armed — ws2Mage under 15 (5.76)             │ 0.180550 │ -1.0534          │
+│ 13:31:05 │ -21.9              │ incoming: KICKSTART — rider ws3 (r 7.96 oob, ceiling ws12) │ 0.180550 │ -1.0534          │
+│ 13:38:05 │ -14.9              │ incoming: baton -> ws4 oob (r 14.78)                       │ 0.180019 │ -1.3445          │
+│ 13:42:00 │ -11.0              │ incoming: baton -> ws6 oob (r 14.28)                       │ 0.180590 │ -1.0314          │
+│ 13:53:00 │ +0.0               │ incoming: final stalled on ws6 (r 23.43 .)                 │ 0.182472 │ +0.0000          │
+│ 13:53:00 │ +0.0               │ INCOMING LEG CLOSES on final stalled, realised -0.0755     │ 0.182472 │ +0.0000          │
+│ 13:53:00 │ +0.0               │ >>> THIS LEG OPENS LONG                                    │ 0.182472 │ +0.0000          │
+│ 14:06:20 │ +13.3              │ the ADVERSE extreme — MAE 1.9380                           │ 0.178936 │ -1.9380          │
+│ 14:31:45 │ +38.8              │ exit-armed — ws2Mage over 85 (85.72)                       │ 0.183402 │ +0.5096          │
+│ 14:31:45 │ +38.8              │ KICKSTART — rider ws2 (r 89.65 oob, ceiling ws12)          │ 0.183402 │ +0.5096          │
+│ 14:31:45 │ +38.8              │ the favourable extreme — MFE 0.5096                        │ 0.183402 │ +0.5096          │
+│ 14:31:50 │ +38.8              │ final stalled on ws2 (r 88.43 O)                           │ 0.183241 │ +0.4215          │
+│ 14:31:50 │ +38.8              │ EXIT on final stalled                                      │ 0.183241 │ +0.4215          │
+└──────────┴────────────────────┴────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 22 of 24 — 2026-09-22 LONG   opens 23:34:25   exits 00:17:00 on final stalled   MAE 1.9027 at +17.9 min   MFE 1.8485 at +42.6 min   realised +1.8485
+┌──────────┬────────────────────┬──────────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                              event                               │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼──────────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 22:40:55 │ -53.5              │ INCOMING LEG OPENS SHORT                                         │ 0.204701 │ -1.4233          │
+│ 23:20:55 │ -13.5              │ incoming: MAE BREACH 3.1171% over 2.50% - chain stops for review │ 0.211082 │ +1.6494          │
+│ 23:20:55 │ -13.5              │ INCOMING LEG CLOSES on mae breach, realised -3.1171              │ 0.211082 │ +1.6494          │
+│ 23:33:00 │ -1.4               │ re-entry: ws1x return, the 18-bar hold starts                    │ 0.206713 │ -0.4546          │
+│ 23:34:25 │ +0.0               │ >>> THIS LEG OPENS LONG (the re-entry conf bar)                  │ 0.207657 │ +0.0000          │
+│ 23:52:20 │ +17.9              │ the ADVERSE extreme — MAE 1.9027                                 │ 0.203705 │ -1.9027          │
+│ 00:16:45 │ +42.3              │ exit-armed — ws2Mage over 85 (86.60)                             │ 0.210967 │ +1.5942          │
+│ 00:16:45 │ +42.3              │ KICKSTART — rider ws1 (r 100.00 oob, ceiling ws12)               │ 0.210967 │ +1.5942          │
+│ 00:17:00 │ +42.6              │ final stalled on ws1 (r 100.00 O)                                │ 0.211495 │ +1.8485          │
+│ 00:17:00 │ +42.6              │ the favourable extreme — MFE 1.8485                              │ 0.211495 │ +1.8485          │
+│ 00:17:00 │ +42.6              │ EXIT on final stalled                                            │ 0.211495 │ +1.8485          │
+└──────────┴────────────────────┴──────────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 23 of 24 — 2026-09-24 LONG   opens 03:11:25   exits 05:38:00 on final stalled   MAE 2.1995 at +52.7 min   MFE 1.2894 at +116.8 min   realised -0.1409
+┌──────────┬────────────────────┬──────────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                              event                               │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼──────────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 02:18:00 │ -53.4              │ INCOMING LEG OPENS SHORT                                         │ 0.184338 │ -1.6970          │
+│ 02:48:05 │ -23.3              │ incoming: MAE BREACH 2.5205% over 2.50% - chain stops for review │ 0.188985 │ +0.7808          │
+│ 02:48:05 │ -23.3              │ INCOMING LEG CLOSES on mae breach, realised -2.5205              │ 0.188985 │ +0.7808          │
+│ 03:10:00 │ -1.4               │ re-entry: ws1x return, the 18-bar hold starts                    │ 0.187611 │ +0.0483          │
+│ 03:11:25 │ +0.0               │ >>> THIS LEG OPENS LONG (the re-entry conf bar)                  │ 0.187520 │ +0.0000          │
+│ 04:04:05 │ +52.7              │ the ADVERSE extreme — MAE 2.1995                                 │ 0.183396 │ -2.1995          │
+│ 04:56:10 │ +104.8             │ exit-armed — ws2Mage over 85 (86.16)                             │ 0.185943 │ -0.8413          │
+│ 04:56:10 │ +104.8             │ KICKSTART — rider ws7 (r 90.97 oob, ceiling ws12)                │ 0.185943 │ -0.8413          │
+│ 05:08:15 │ +116.8             │ the favourable extreme — MFE 1.2894                              │ 0.189938 │ +1.2894          │
+│ 05:12:00 │ +120.6             │ baton -> ws8 oob (r 96.67)                                       │ 0.189262 │ +0.9288          │
+│ 05:15:00 │ +123.6             │ baton -> ws9 oob (r 96.64)                                       │ 0.188989 │ +0.7833          │
+│ 05:20:00 │ +128.6             │ baton -> ws10 oob (r 85.92)                                      │ 0.188398 │ +0.4680          │
+│ 05:38:00 │ +146.6             │ final stalled on ws10 (r 80.96 .)                                │ 0.187256 │ -0.1409          │
+│ 05:38:00 │ +146.6             │ EXIT on final stalled                                            │ 0.187256 │ -0.1409          │
+└──────────┴────────────────────┴──────────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+
+## 24 of 24 — 2026-09-28 LONG   opens 07:39:00   exits 12:57:10 on >ws12 divergence on ws1r   MAE 2.0599 at +134.8 min   MFE 2.6796 at +316.3 min   realised +2.1653
+┌──────────┬────────────────────┬──────────────────────────────────────────────────────────────────────────┬──────────┬──────────────────┐
+│    ts    │ min from THIS open │                                  event                                   │   pxs    │ pct for THIS leg │
+├──────────┼────────────────────┼──────────────────────────────────────────────────────────────────────────┼──────────┼──────────────────┤
+│ 07:22:30 │ -16.5              │ INCOMING LEG OPENS SHORT                                                 │ 0.174263 │ +1.8994          │
+│ 07:24:25 │ -14.6              │ incoming: exit-armed — ws2Mage under 15 (7.56)                           │ 0.172660 │ +0.9616          │
+│ 07:24:25 │ -14.6              │ incoming: KICKSTART — rider ws3 (r 9.56 oob, ceiling ws12)               │ 0.172660 │ +0.9616          │
+│ 07:28:00 │ -11.0              │ incoming: baton -> ws4 oob (r 9.11)                                      │ 0.172049 │ +0.6047          │
+│ 07:39:00 │ +0.0               │ incoming: final stalled on ws4 (r 20.64 .)                               │ 0.171015 │ +0.0000          │
+│ 07:39:00 │ +0.0               │ INCOMING LEG CLOSES on final stalled, realised +1.8640                   │ 0.171015 │ +0.0000          │
+│ 07:39:00 │ +0.0               │ >>> THIS LEG OPENS LONG                                                  │ 0.171015 │ +0.0000          │
+│ 09:53:50 │ +134.8             │ the ADVERSE extreme — MAE 2.0599                                         │ 0.167492 │ -2.0599          │
+│ 10:52:20 │ +193.3             │ exit-armed — ws2Mage over 85 (86.65)                                     │ 0.170862 │ -0.0895          │
+│ 10:52:20 │ +193.3             │ KICKSTART — rider ws9 (r 91.63 oob, ceiling ws12)                        │ 0.170862 │ -0.0895          │
+│ 11:00:00 │ +201.0             │ baton -> ws11 oob (r 99.02)                                              │ 0.170713 │ -0.1765          │
+│ 11:12:00 │ +213.0             │ CEILING ws12 -> ws23 (ws12r 91.58)                                       │ 0.170586 │ -0.2506          │
+│ 11:12:00 │ +213.0             │ baton -> ws12 oob (r 91.58)                                              │ 0.170586 │ -0.2506          │
+│ 11:12:15 │ +213.2             │ branch 1 cross — RECORDED, not acted on (ws12x 58.17 vs r 91.12)         │ 0.170566 │ -0.2624          │
+│ 11:16:00 │ +217.0             │ baton -> ws13 oob (r 88.05)                                              │ 0.171088 │ +0.0426          │
+│ 11:18:05 │ +219.1             │ HANDOVER — ws12r oob 6.1 min; the >ws12 mech owns the exit               │ 0.171779 │ +0.4469          │
+│ 12:39:35 │ +300.6             │ dip into 47-53 — ws1Mage 52.97, run 12 bars (1.0 min), confirms 12:40:00 │ 0.173658 │ +1.5456          │
+│ 12:55:20 │ +316.3             │ the favourable extreme — MFE 2.6796                                      │ 0.175598 │ +2.6796          │
+│ 12:57:10 │ +318.2             │ ws1r reversal + divergence, x under r (floater 12:47:00, d_osc -14.84)   │ 0.174718 │ +2.1653          │
+│ 12:57:10 │ +318.2             │ EXIT on >ws12 divergence on ws1r                                         │ 0.174718 │ +2.1653          │
+└──────────┴────────────────────┴──────────────────────────────────────────────────────────────────────────┴──────────┴──────────────────┘
+
+- "pct for THIS leg" is measured from this leg's own open on this leg's own side, so the
+  incoming leg's rows read NEGATIVE where price was beyond this open - that gap is exactly
+  what a relocated open gives up or gains on the incoming side.
