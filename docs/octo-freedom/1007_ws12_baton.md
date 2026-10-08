@@ -1353,3 +1353,67 @@ it to the 12 days carrying sanctioned rows.
 **NOTHING IS RULED HERE.** Joe asked *"I'm not sure if this is a valuable mech"* and the 95-day
 answer is: it is not a distributed edge, it is five days; and the shape he designed - leave most
 signals alone - is the shape that loses.
+
+---
+
+## 22. 2026-09-22, CHAIN 0 — THE WORST STOP DAY IN SEPTEMBER OR OCTOBER
+
+Joe 1008: *"sticking with chain 0, pick the day in september or october that has the most stops and
+show them in the standard timestamped-rows event table"*.
+
+**2026-09-22: 12 stops on 18 legs, realised -7.4220.** The next worst are 09-21 at 11 stops and
+09-18 / 09-29 at 9. Across the 34 September-October days chain 0 takes **209 stops**.
+
+| leg | side | open | exit | hold min | why | handover | leg MAE | leg MFE | realised | running MAE | running MFE | running realised |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1326 | SHORT | 00:15:15 | 00:27:20 | 12.1 | mae breach | — | 1.1000 | 0.0000 | -1.1131 | 1.1000 | 0.0000 | -1.1131 |
+| 1327 | LONG | 01:00:40 | 01:05:10 | 4.5 | mae breach | — | 1.1000 | 0.0000 | -1.1653 | 2.2000 | 0.0000 | -2.2784 |
+| 1328 | LONG | 04:17:10 | 04:57:30 | 40.3 | mae breach | **04:23:20** | 1.1000 | 0.0000 | -1.1111 | 3.3000 | 0.0000 | -3.3894 |
+| 1329 | LONG | 05:57:55 | 06:21:15 | 23.3 | mae breach | — | 1.1000 | 0.0000 | -1.1100 | 4.4000 | 0.0000 | -4.4994 |
+| 1330 | LONG | 07:21:50 | 07:55:00 | 33.2 | x-cross | — | 0.0000 | 2.0130 | **+1.4959** | 4.4000 | 2.0130 | -3.0036 |
+| 1331 | SHORT | 07:55:00 | 08:26:30 | 31.5 | final stalled | — | 0.5194 | 1.7540 | **+1.6470** | 4.9194 | 3.7670 | -1.3566 |
+| 1332 | LONG | 08:26:30 | 08:33:35 | 7.1 | mae breach | — | 1.1000 | 0.0000 | -1.1339 | 6.0194 | 3.7670 | -2.4905 |
+| 1333 | LONG | 10:09:55 | 10:25:35 | 15.7 | mae breach | — | 1.1000 | 0.0000 | -1.1708 | 7.1194 | 3.7670 | -3.6613 |
+| 1334 | LONG | 12:44:45 | 13:06:50 | 22.1 | x-cross | — | 0.0569 | 1.4395 | +0.9517 | 7.1763 | 5.2064 | -2.7096 |
+| 1335 | SHORT | 13:06:50 | 14:05:10 | 58.3 | x-cross | — | 0.7480 | 1.1398 | +0.5862 | 7.9243 | 6.3462 | -2.1234 |
+| 1336 | LONG | 14:05:10 | 14:15:20 | 10.2 | x-cross | — | 0.4489 | 1.0289 | +0.7601 | 8.3732 | 7.3751 | -1.3633 |
+| 1337 | SHORT | 14:15:20 | 14:22:00 | 6.7 | x-cross | — | 0.0000 | 1.4134 | +0.7855 | 8.3732 | 8.7885 | -0.5778 |
+| 1338 | LONG | 14:22:00 | 14:30:55 | 8.9 | mae breach | — | 1.1000 | 0.0000 | -1.1247 | 9.4732 | 8.7885 | -1.7026 |
+| 1339 | LONG | 15:55:40 | 16:11:05 | 15.4 | mae breach | — | 1.1000 | 0.0000 | -1.1486 | 10.5732 | 8.7885 | -2.8511 |
+| 1340 | LONG | 18:31:05 | 18:48:50 | 17.8 | mae breach | — | 1.1000 | 0.0000 | -1.1326 | 11.6732 | 8.7885 | -3.9837 |
+| 1341 | LONG | 20:10:50 | 21:12:50 | 62.0 | mae breach | — | 1.1000 | 0.0000 | -1.1099 | 12.7732 | 8.7885 | -5.0936 |
+| 1342 | LONG | 21:16:15 | 21:21:30 | 5.2 | mae breach | — | 1.1000 | 0.0000 | -1.2268 | 13.8732 | 8.7885 | -6.3204 |
+| 1343 | LONG | 23:32:15 | 23:42:20 | 10.1 | mae breach | — | 1.1000 | 0.0000 | -1.1016 | 14.9732 | 8.7885 | **-7.4220** |
+
+| the stop bar | re-entry conf | gap min | the ws1x return bar |
+|---|---|---|---|
+| 00:27:20 | 09-22 01:00:40 | 33.3 | 01:00:05 |
+| 01:05:10 | 09-22 04:17:10 | **192.0** | 04:16:35 |
+| 04:57:30 | 09-22 05:57:55 | 60.4 | 05:57:20 |
+| 06:21:15 | 09-22 07:21:50 | 60.6 | 07:21:15 |
+| 08:33:35 | 09-22 10:09:55 | 96.3 | 10:09:20 |
+| 10:25:35 | 09-22 12:44:45 | 139.2 | 12:44:10 |
+| 14:30:55 | 09-22 15:55:40 | 84.8 | 15:55:05 |
+| 16:11:05 | 09-22 18:31:05 | 140.0 | 18:30:30 |
+| 18:48:50 | 09-22 20:10:50 | 82.0 | 20:10:15 |
+| 21:12:50 | 09-22 21:16:15 | **3.4** | 21:15:40 |
+| 21:21:30 | 09-22 23:32:15 | 130.8 | 23:31:40 |
+| 23:42:20 | 09-23 00:29:35 | 47.2 | 00:29:00 |
+
+### WHAT THE 12 EVENT TABLES SHOW
+
+- **11 of the 12 stops have NO WALK EVENTS AT ALL.** Only **04:17:10** arms: ws2Mage over 85 at
+  04:18:30, KICKSTART rider ws12 at r 100.00, HANDOVER at 04:23:20, a 50 dip at 04:44:50 and the
+  CEILING at 04:48:10 - and it still stops. **18:31:05** carries a CEILING row at +0.1 min and no
+  arm. The other ten open and breach with nothing in between.
+- this is §13's never-armed finding at 95-day scale, on the worst day: the stop fires before the
+  mech has anything to say.
+- **11 of the 12 stops are LONG.** Only 00:15:15 is SHORT. The 6 positive legs split 4 LONG / 2
+  SHORT.
+- **the 6 positive legs sit in two clusters**, 07:21:50-08:26:30 and 12:44:45-14:22:00, and every
+  one of them exits on `x-cross` or `final stalled`. Outside those two windows the day is all stops.
+- **the fastest re-entry on the day fails immediately**: the 21:12:50 stop re-enters at 21:16:15, a
+  3.4 min gap, and breaches again at 21:21:30 for the day's largest overshoot, **-1.2268**.
+- the 192.0 min gap after the 01:05:10 stop is the longest; the router sat out 3.2 hours.
+- running MAE **14.9732** against running MFE **8.7885** - MFE/MAE **0.59** on the day, against
+  1.09 over the 95.
