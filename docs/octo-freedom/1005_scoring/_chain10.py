@@ -78,6 +78,32 @@ PASS = os.environ.get('W_PASS', 'oob')  # 'oob' (as built, Joe's tag ruling) or 
 NOX = os.environ.get('W_NOX') == '1'   # 1 disables the lineage walk's x-cross exit, leaving
 #                                        `final stalled` as its only exit. Joe 1007 asked what
 #                                        the swap left behind; this is the switch that shows it.
+# ---- JOE'S DELEGATION GATE, 1008. ENV-SWITCHED AND OFF BY DEFAULT, so nothing is banked.
+#
+# Joe 1008: *"presently, whenever ws12r crosses to oob we automatically delegate to the >12 oob
+# mech. sometimes, the delegation is a bad move ... to gate the delegation, we can look at ws60r's
+# trajectory (per the traj spec). if ws60r's trajectory matches the oob side that ws12r is crossed
+# into ... then we open the delegation gate"*.
+#
+# W_DGATE   'off'    as built - the handover fires on the oob run alone. THE DEFAULT.
+#           'once'   tested ONCE, at the handover bar. If ws60r's trajectory is against the oob
+#                    side there, this oob RUN never delegates - the lineage walk keeps the exit.
+#           'retest' tested every bar while the oob run lasts; the handover fires on the first bar
+#                    the trajectory agrees.
+#
+# 'once' vs 'retest' IS NOT IN JOE'S SPEC. Both are arms, neither is decided.
+#
+# WHAT A CLOSED GATE DOES is also unspecified, and there is only one other mech in the leg: the
+# lineage walk keeps the exit (`final stalled` or the x-cross). Stated because it is a choice.
+#
+# THE TRAJECTORY IS READ AT THE BAR THE HANDOVER WOULD FIRE ON, never later. Reading it after that
+# bar would be information past the decision.
+#
+# THE SIDE: inside run_leg the ws12r oob test is `goob(TRIG_TF, j, d)` on the LEG's own direction,
+# so the oob side IS `d` and `TRAJ60[j] == d` is the test. _delegate.py measured dr to add nothing
+# - the oob side alone separated 71.3% / 37.5% against the three-way's 71.0% / 39.3%.
+DGATE = os.environ.get('W_DGATE', 'off')
+assert DGATE in ('off', 'once', 'retest'), 'W_DGATE must be off, once or retest'
 DIV_TFS = [int(s.strip().replace('ws', '').replace('r', '')) for s in W['div_lines'].split(',')]
 EXF_HI = 100.0 - float(SC.LG['momo_fence_r']); EXF_LO = float(SC.LG['momo_fence_r'])
 N = len(SC.ts)
@@ -98,6 +124,23 @@ REV = {t: _mage_rev(R[t], RREV) for t in DIV_TFS}
 _P('producers ready; ceiling ws%d->ws%d, gate %d bars at oob %.0f/%.0f, dip band %.0f-%.0f '
    'dwell %d, stop %.2f'
    % (BASE_HI, CEIL_HI, GATE_BARS, G_LO, G_HI, DIP_LO, DIP_HI, DIP_DWELL, MAE_STOP))
+
+# ws60r's TRAJECTORY, per the traj spec: the sign of (ws60r now - ws60r at its last step change).
+# No lookback window, no cap. Built only when the gate is on. Verified against `step_dir` in
+# _delegate.py at 16,815 sampled bars.
+if DGATE != 'off':
+    _R60 = np.asarray(SC.LD(60 * 60, 'r'), float)[:N]
+    TRAJ60 = np.zeros(N, np.int8)
+    _cur = _prev = np.nan
+    for _k in range(N):
+        _v = float(_R60[_k])
+        if np.isfinite(_v):
+            if not np.isfinite(_cur): _cur = _v
+            elif _v != _cur: _prev, _cur = _cur, _v
+        TRAJ60[_k] = 0 if not np.isfinite(_prev) else (1 if _cur > _prev else (-1 if _cur < _prev else 0))
+    _P('ws60r trajectory built; delegation gate %s' % DGATE)
+else:
+    TRAJ60 = None
 
 def bnd(t, k, d):
     v = float(R[t][k])
@@ -176,6 +219,7 @@ def run_leg(k0, d):
     armed = False; rider = None; mae = 0.0
     ceil = BASE_HI; ceil_bar = None
     oob_a = None; hand = None; dip = None; conf = None; ib_run = 0
+    gate_shut = False      # W_DGATE 'once': latched when the gate refused THIS oob run
     for j in range(k0 + 1, N):
         px = float(PX[j])
         if np.isfinite(px) and px > 0:
@@ -206,12 +250,21 @@ def run_leg(k0, d):
                         tr.append((q, 'branch 1 cross — RECORDED, not acted on (ws%dx %.2f vs r %.2f)'
                                    % (TRIG_TF, float(X[TRIG_TF][q]), float(R[TRIG_TF][q]))))
                         break
-            if hand is None and (j - oob_a) > GATE_BARS:
-                hand = j
-                tr.append((j, 'HANDOVER — ws%dr oob %.1f min; the >ws12 mech owns the exit'
-                           % (TRIG_TF, (int(SC.ts[j]) - int(SC.ts[oob_a])) / 60000.0)))
+            if hand is None and not gate_shut and (j - oob_a) > GATE_BARS:
+                tj = 0 if TRAJ60 is None else int(TRAJ60[j])
+                if DGATE == 'off' or tj == (1 if d > 0 else -1):
+                    hand = j
+                    tr.append((j, 'HANDOVER — ws%dr oob %.1f min; the >ws12 mech owns the exit%s'
+                               % (TRIG_TF, (int(SC.ts[j]) - int(SC.ts[oob_a])) / 60000.0,
+                                  '' if DGATE == 'off'
+                                  else ' (gate OPEN, ws60r traj %+d)' % tj)))
+                elif DGATE == 'once':
+                    gate_shut = True
+                    tr.append((j, 'DELEGATION REFUSED — ws60r traj %+d against the oob side %+d; '
+                                  'this oob run never delegates and the walk keeps the exit'
+                               % (tj, 1 if d > 0 else -1)))
         else:
-            oob_a = None
+            oob_a = None; gate_shut = False     # the oob run broke, so the latch clears with it
         if ceil == BASE_HI and goob(TRIG_TF, j, d) and not goob(TRIG_TF, j - 1, d):
             ceil = CEIL_HI; ceil_bar = j
             tr.append((j, 'CEILING ws%d -> ws%d (ws%dr %.2f)'
