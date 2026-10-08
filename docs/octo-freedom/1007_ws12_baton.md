@@ -739,3 +739,32 @@ uses only the walk's own mech, but the leg is open for those 35 seconds with no 
 
 **HALTED HERE.** Which frame an alternation open takes is a chain rule, not a walk rule, and it is
 Joe's. Both methods are stated so either can be run; neither is applied.
+
+### §14a — THE SAME EXIT SOURCED FROM ws4x AND ws5x
+
+Joe 1008: *"what time does the x-cross happen if it's source from ws4x?"*
+
+| the test | first fire | +min | pxs | SHORT realised | SHORT MAE | inside that TF's rider window? | fires to tape end |
+|---|---|---|---|---|---|---|---|
+| xcond(ws4) — the walk's exit test | 15:58:20 | +17.3 | 0.187330 | -0.1758 | 0.1758 | no | 68567 |
+| ws4x crosses ws4r | **15:44:40** | +3.7 | 0.185699 | **+0.6963** | 0.0000 | YES | 3129 |
+| ws4 stall (stall_n 6) | 15:55:10 | +14.2 | 0.186013 | +0.5282 | 0.0000 | no | 100351 |
+| xcond(ws5) — the walk's exit test | 15:58:20 | +17.3 | 0.187330 | -0.1758 | 0.1758 | no | 69112 |
+| ws5x crosses ws5r | **15:45:35** | +4.6 | 0.185685 | **+0.7037** | 0.0000 | YES | 2820 |
+| ws5 stall (stall_n 6) | 15:59:40 | +18.7 | 0.187724 | -0.3867 | 0.4294 | no | 99642 |
+| xcond(ws6) — the walk's exit test | 15:55:05 | +14.1 | 0.185994 | +0.5382 | 0.0000 | YES | 70633 |
+| ws6x crosses ws6r | 15:54:10 | +13.2 | 0.185680 | +0.7063 | 0.0000 | YES | 2681 |
+| ws6 stall (stall_n 6) | 16:05:00 | +24.0 | 0.188341 | -0.7168 | 1.2424 | no | 97939 |
+
+- rider windows on the dr −1 walk: **ws4 15:41:35-15:45:00, ws5 15:45:00-15:54:00, ws6
+  15:54:00-15:55:05**. The walk tests only the CURRENT rider, so a `no` is unreachable without a
+  different baton rule.
+- **xcond(ws4) cannot fire while ws4 is the rider.** dr −1 needs ws4x ABOVE both ws5r and ws6r. At
+  the open bar ws4x 38.06 was above ws5r 26.76 and ws6r 35.93 - **true at 15:41:00** - but 35 s
+  later at the KICKSTART bar ws4x had collapsed to 12.53 and it stays below both targets for the
+  whole window, going as low as −18.23 at 15:43:45 against ws5r 19.57 and ws6r 32.33.
+- xcond(ws4) and xcond(ws5) fire on the **same bar, 15:58:20**, 3.3 min after the walk has already
+  exited, at −0.1758.
+- **all three `x crosses its own r` bars land within 0.0100 of each other**: ws4 +0.6963, ws5
+  +0.7037, ws6 +0.7063. All three beat the xcond(ws6) exit the walk took at +0.5382 by 0.16-0.17.
+  That is **task #61** - the x-cross target sweep - and it is not proposed here.
