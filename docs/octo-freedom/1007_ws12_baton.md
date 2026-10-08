@@ -2018,3 +2018,47 @@ more. **Measured across all 32 line variants it is not:**
   0.867.
 - across r, Mage and x - **32 variants, 29 of them changes - not one beats the live spec on both
   halves.** Every one of Joe's three line specs stands.
+
+---
+
+## 32. THE THREE ONE-DAY DECISIONS, RE-MEASURED OVER 95 DAYS
+
+Three banked decisions each rested on a single episode. All three are now measured over the whole
+tape, held at §29's two surviving knobs - `mae_stop_pct` 2.5 and `reent_xwob` 18, everything else
+banked - because that is the config I would actually defend.
+
+| the arm | ALL 95 NET | fit NET | hold NET | MFE/MAE | legs | stops | stop rate |
+|---|---|---|---|---|---|---|---|
+| **A** gate A, pass `oob`, x-cross live — **banked** | -25.6072 | -36.6819 | **+11.0747** | 0.93 | 1647 | 203 | 12.3% |
+| **B** gate B instead of A | -33.9760 | -46.1661 | +12.1901 | 0.96 | 1759 | 213 | 12.1% |
+| **C** baton pass `stalled` instead of `oob` | **-59.7962** | -45.9743 | -13.8219 | **0.82** | 1671 | 215 | 12.9% |
+| **D** stall-only exit, x-cross **OFF** | **-4.0151** | **-0.7897** | -3.2254 | **1.06** | **1404** | 166 | 11.8% |
+
+| the decision | what chose it | the 95-day verdict |
+|---|---|---|
+| gate A vs gate B | §12, **2 days**: +13.3928 against +9.2482 | **CONFIRMED.** A beats B by 8.37 |
+| the baton pass, `oob` vs `stalled` | §15 swap 2, **1 day**: -4.6905 for stalled. Joe's tag ruling put `oob` in | **CONFIRMED, strongly.** `oob` beats `stalled` by **34.19**, and `stalled` carries the worst MFE/MAE measured anywhere tonight at 0.82 |
+| the walk's exit, x-cross vs stall-only | §15 swap 1, **1 leg**: +0.6115 for stall-only on 08:10. §14 measured the OPPOSITE on 15:41 by 1.2550 | **REVERSED.** Stall-only is **+21.59** better |
+
+### WHY D IS THE ROBUST ONE AND NOT JUST THE BIGGEST
+
+- **it is the only arm consistent across both halves**: -0.7897 on fit and -3.2254 on hold. A swings
+  from -36.68 to +11.07, which is the pattern every other result tonight has shown.
+- **MFE/MAE 1.06, the best number of any config measured tonight**, against A's 0.93. Turning the
+  x-cross off stops cutting winners short.
+- **243 fewer legs** - 1404 against 1647 - so **-26.73 of drag** disappears with it.
+- the exit mix shows the mechanism: the x-cross's **961** exits are replaced by **1019 `final
+  stalled` + 185 ws1r divergences**, so switching it off lets the >ws12 divergence fire **twice as
+  often, 89 -> 185**. The x-cross was pre-empting the mech that was built to take those exits.
+
+| the arm | exits by kind |
+|---|---|
+| A, banked | x-cross 961, final stalled 384, mae breach 203, >ws12 ws1r 89, >ws12 ws2r 10 |
+| **D, stall-only** | **final stalled 1019, >ws12 ws1r 185, mae breach 166, >ws12 ws2r 34** |
+| C, pass stalled | final stalled 1000, x-cross 374, mae breach 215, >ws12 ws1r 73, >ws12 ws2r 9 |
+| B, gate B | x-cross 1034, final stalled 378, mae breach 213, >ws12 ws1r 119, >ws12 ws2r 15 |
+
+**THIS IS THE ONE I WOULD PUT IN FRONT OF JOE AHEAD OF ANY KNOB.** `W_NOX=1` is a one-character
+switch that already exists in `_chain10`, it was built for exactly this question in §15, and it is
+worth more than every knob change except `mae_stop_pct` - with a BETTER MFE/MAE and fewer legs,
+which is the opposite of the trade-off every knob made.
