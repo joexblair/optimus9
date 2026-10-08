@@ -118,6 +118,10 @@ class OctoLoop:
                     self.dump.write('close', side, tr['closed_by'], r['ts'], now)
                 elif ev[0] == 'inert':
                     self.dump.write('open', side_of(ev[2]), 'non-trading octo-sig', ev[1] * BAR_MS, now)
+            if r.get('live') and r.get('fires') and not any(ev[0] in ('open', 'inert') for ev in r['events']):
+                # a signal on a bar the book's stop or dr-flip close already won (Joe 0929, "the STOP
+                # wins the bar"): nothing is placed, and it is noted like a same-dr signal (Joe 1008, "b")
+                self.dump.write('open', side_of(r['arm_dr']), 'non-trading octo-sig', r['ts'], now)
         return out
 
     # --- health hooks: O9LiveApp._write_phase calls these; they only report ------------------------

@@ -43,3 +43,11 @@ if __name__ == '__main__':
     print('R1 open -> octo-sig line, dr +1 Sell       OK  %d' % test_r1_open())
     print('R2 gap open: non-trading, no close line   OK  %d' % test_r2_gap_open_has_no_close())
     print('R3 inert -> non-trading octo-sig line     OK  %d' % test_r3_inert())
+
+
+def test_r4_signal_on_a_stop_bar_is_expected_as_noted():
+    from optimus9.live.octo_recon import _note_consumed
+    stop = ('close', dict(open=90, close=120, dr=-1, opened_by='octo-sig', closed_by='stop'))
+    ev = [(120 * B, e) for e in _note_consumed(120 * B, [stop], 1)]
+    assert expected_lines(ev, {}) == {120 * B: [('close', 'Buy', 'stop'), ('open', 'Sell', 'non-trading octo-sig')]}
+    assert _note_consumed(120 * B, [stop], None) == [stop]           # no signal on the bar: unchanged

@@ -147,6 +147,15 @@ def reference(db, cfg, bias_cfg, book_start, last_bar):
     return [r for r in recs if r['ts'] >= int(book_start)], inp, sha
 
 
+def _note_consumed(t, evs, fired_dr):
+    """Joe 1008 ("b"): a signal on a bar that a stop or dr-flip close already won (Joe 0929, "the STOP
+    wins the bar") is noted as a non-trading octo-sig, as o9-live's dump notes it (octo_loop.intents).
+    fired_dr = the signal's dr when the walk fired on this bar, else None."""
+    if fired_dr is not None and not any(e[0] in ('open', 'inert') for e in evs):
+        return list(evs) + [('inert', int(t) // BAR_MS, fired_dr)]
+    return evs
+
+
 def live_shaped(recs, inp, cfg, live_start):
     """The trade book o9-live SHOULD have run: empty at its first live bar (Joe 1002: stay flat), fed the
     reference's signals with the same rules. -> [(bar_ms, event)]."""
@@ -158,8 +167,9 @@ def live_shaped(recs, inp, cfg, live_start):
     for j in range(int(np.searchsorted(ts, live_start)), len(ts)):
         t = int(ts[j])
         sig = t in fires
-        for ev in book.step(t // BAR_MS, int(inp.DR[j]), int(inp.DR[j - 1]), float(inp.px[j]), sig,
-                            fires[t] if sig else None):
+        evs = book.step(t // BAR_MS, int(inp.DR[j]), int(inp.DR[j - 1]), float(inp.px[j]), sig,
+                        fires[t] if sig else None)
+        for ev in _note_consumed(t, evs, fires[t] if sig else None):
             out.append((t, ev))
     return out
 
@@ -224,7 +234,8 @@ def run(live_start=None, out=REPORT):
         cls = 'stop' if any(x[2] == 'stop' for x in e + g) else 'selection'
         mism.append((b, cls, json.dumps(e), json.dumps(g), 'action'))
     # C. PRE-START - Joe's 24-h-earlier trade list vs the live-start book, after the live start
-    joes = expected_lines([(r['ts'], ev) for r in recs if r['ts'] >= live_start for ev in r['events']], gap)
+    joes = expected_lines([(r['ts'], ev) for r in recs if r['ts'] >= live_start
+                           for ev in _note_consumed(r['ts'], r['events'], r['arm_dr'] if r['fires'] else None)], gap)
     pre = [(b, 'Joe\'s 24-h-earlier list %s vs live-start book %s' % (joes.get(b, []), exp.get(b, [])))
            for b in sorted(set(joes) | set(exp)) if joes.get(b, []) != exp.get(b, [])]
     prev = o9.execute('SELECT MAX(run_id) r FROM octo_recon_run', fetch=True)[0]['r']

@@ -157,3 +157,17 @@ if __name__ == '__main__':
     print('L4 feed gap <5 min placed, >=5 not        OK  %d intent' % test_l4_feed_gap())
     print('L5 position at startup stops the loop     OK' if test_l5_position_at_startup_stops() else 'FAIL')
     print('L6 dump lines carry the five fields only  OK  %d lines' % test_l6_dump_fields())
+
+
+def test_l7_signal_on_a_stop_bar_is_noted_not_placed():
+    """Joe 1008 "b": the stop wins the bar (Joe 0929); the walk's signal on that bar is noted."""
+    L, p = _loop()
+    T = 1_000_000 * B
+    _bar(L, T, [])
+    stop = ('close', dict(open=1, close=T // B + 1, dr=-1, opened_by='octo-sig', closed_by='stop'))
+    rec = dict(ts=T + B, events=[stop], live=True, fires=True, arm_dr=1)
+    out = _bar(L, T + B, [rec], positions={'Buy': {'side': 'Buy', 'size': 5.0}})
+    assert [(i.action, i.side, i.reason) for i in out] == [('close', 'Sell', 'stop')], out
+    d = [(x['action'], x['side'], x['reason'], x['bar_ms']) for x in _dump(p)]
+    assert d == [('close', 'Buy', 'stop', T + B), ('open', 'Sell', 'non-trading octo-sig', T + B)], d
+    return len(d)
