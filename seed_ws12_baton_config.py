@@ -82,6 +82,12 @@ ROWS = [
   'MINE 1007 - carried from lazy_g_config rev.rev_wob. Joe ruled the MAGE reversal wob, never r\'s',
   'sets how many r reversals exist at all: 144 on ws1r and 135 on ws2r in leg 8\'s 135 min'),
 
+ ('rev','ent_rev_wob','4','int','steps','joe',0,1,
+  'Joe 1008 "sorry - typo. use 4", correcting his own "rrev_wob 5"; his read is "10:17 walked down '
+  'to the reversl of ws1r at 10:21. at 10:21 it was infence - that\'s the end of the walk". 1007 SS19',
+  'TURN detector for the ENTRY-OPTIMISING walk ONLY; rrev_wob 2 still serves the >ws12 divergence. '
+  'at 4 the 10:17 turn lands 10:18:50 at entry +0.0891, the best of 2..40. wob 12 is the cliff'),
+
  # ---- the x-cross that precedes the reversal
  ('xcross','x_rev_xwob','8','int','bars','mine',1,1,
   'MEASURED knee 1007: spurious crosses reach 0 at 6 bars on ws1 and 8 on ws2, so 8 clears both',
@@ -112,6 +118,13 @@ def main():
     if n:
         db.execute('DELETE FROM %s WHERE %s_version=%%s' % (TABLE, PFX), (VER,))
         print('# replaced %d rows at v%d' % (n, VER))
+    bad = [(r[1], len(r[8]), len(r[9] or '')) for r in ROWS if len(r[8]) > 255
+           or len(r[9] or '') > 255]
+    if bad:
+        print('# REFUSED - source/note over VARCHAR(255):')
+        for k, ls, ln in bad:
+            print('#   %s source %d note %d' % (k, ls, ln))
+        db.disconnect(); sys.exit(1)
     db.executemany(
         'INSERT INTO %s (%s_version,%s_section,%s_key,%s_value,%s_type,%s_units,%s_owner,'
         '%s_fitted,%s_in_key,%s_source,%s_note) VALUES (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s)'

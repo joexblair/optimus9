@@ -34,6 +34,7 @@ Arm 0 is the committed baseline: T.run_chain(T.gate_A), 43 legs, +13.3928.
 import os, sys, datetime, collections
 import numpy as np
 sys.path.insert(0, '/home/joe/thecodes')
+from optimus9.analysis.lr_v2 import _mage_rev
 import _chain10 as C
 import _chain_2day as T
 
@@ -83,6 +84,53 @@ def naked_walk(k0, d):
         if C.xcond(rider, j, d):
             return j, 'x-cross on ws%d' % rider, tr
     return None, 'the walk never terminated', tr
+
+
+try:
+    TURN_WOB = int(C.W['ent_rev_wob'])
+except Exception:
+    TURN_WOB = 5
+REV1T = _mage_rev(C.R[1], TURN_WOB)
+WANT_TURN = lambda d: (-1 if d > 0 else +1)
+_EXF_LO = float(SC.LG['momo_fence_r']); _EXF_HI = 100.0 - _EXF_LO
+
+
+def _fen1(v, d):
+    if d > 0:
+        return 'hi oob' if v >= SC.HI else ('hi ex-f' if v >= _EXF_HI else 'in-fence')
+    return 'lo oob' if v <= SC.LO else ('lo ex-f' if v <= _EXF_LO else 'in-fence')
+
+
+def turn_walk(k0, d):
+    """THE TURN WALK — the entry-optimising walk, landing on ws1r's TURN. 1008.
+
+    Joe 1008: *"10:17 walked down to the reversl of ws1r at 10:21. at 10:21 it was infence - that's
+    the end of the walk"* / *"a r line that doesn't reach the bottom is weak, and weak lets pxs
+    climb"* / and his ruling on the detector: *"rrev_wob 5"*.
+
+      THE ws2 OVERRIDE  stands. No ws2Mage gate.
+      THE LINE          ws1r, which §18 proved is where the downward lineage always terminates.
+      THE LANDING       the first ws1r TURN AGAINST the walk's travel, by
+                        `_mage_rev(ws1r, ent_rev_wob 5)`. On frame -1 the downward travel ends on a
+                        turn UP; on frame +1 the upward travel ends on a turn DOWN. `WANT_TURN(d)`
+                        is _chain10's own convention, reused not reinvented.
+      WHY THE TURN      not the oob arrival. At 10:17 ws1r bottomed at 19.95, 4.95 above the 15
+                        fence, and turned without ever reaching oob - the §18 rule then waited
+                        19.0 min for an unrelated oob visit and gave up 0.5702% of entry. A line
+                        that turns while in-fence has no extension left, and that weakness is what
+                        lets pxs climb back.
+
+    `ent_rev_wob` 5 is a SECOND knob for a SECOND mech. `rrev_wob` 2 is untouched and still serves
+    the >ws12 divergence.
+    """
+    want = WANT_TURN(d)
+    for j in range(k0, N):
+        if int(REV1T[j]) == want:
+            v = float(C.R[1][j])
+            return j, ('ws1r turns %s (rrev_wob %d) at r %.2f, %s'
+                       % ('UP' if want > 0 else 'DOWN', TURN_WOB, v, _fen1(v, d))), \
+                   [(j, 'ws1r turn %s, r %.2f %s' % ('UP' if want > 0 else 'DOWN', v, _fen1(v, d)))]
+    return None, 'ws1r never turned before the tape end', []
 
 
 def rev_walk(k0, d):
@@ -150,8 +198,10 @@ def run_chain_naked(gate, noland, frame='dr'):
     rows = []; n = 0
     k, d, seg_n = T.K(T.START_D, '02:48:50'), +1, 0
     while True:
-        fr = (int(DRv[k]) or d) if frame in ('dr', 'rev_dr') else -d
-        lb, lw, ltr = rev_walk(k, fr) if frame.startswith('rev') else naked_walk(k, fr)
+        fr = (int(DRv[k]) or d) if frame in ('dr', 'rev_dr', 'turn_dr') else -d
+        lb, lw, ltr = (turn_walk(k, fr) if frame.startswith('turn')
+                       else rev_walk(k, fr) if frame.startswith('rev')
+                       else naked_walk(k, fr))
         if lb is None or lb > T.LAST_OPEN:
             if noland == 'end':
                 rows.append(dict(brk=True, noland=k, nw=lw)); break
@@ -195,13 +245,20 @@ def main():
     A5 = run_chain_naked(T.gate_A, 'end', 'rev_inv')
     print('# arm 6 — REVERSED lineage, ws2 override, frame = dr ...', flush=True)
     A6 = run_chain_naked(T.gate_A, 'end', 'rev_dr')
+    print('# arm 7 — the TURN walk, ent_rev_wob %d, frame = inverse of the side ...' % TURN_WOB,
+          flush=True)
+    A7 = run_chain_naked(T.gate_A, 'end', 'turn_inv')
+    print('# arm 8 — the TURN walk, ent_rev_wob %d, frame = dr ...' % TURN_WOB, flush=True)
+    A8 = run_chain_naked(T.gate_A, 'end', 'turn_dr')
     ARMS = [('arm 0 — baseline, no walk', A0),
             ('arm 1 — frame dr, no landing ends it', A1),
             ('arm 2 — frame dr, no landing enters at the open', A2),
             ('arm 3 — frame = inverse of the side, no landing ends it', A3),
             ('arm 4 — frame = inverse of the side, no landing enters at the open', A4),
             ('arm 5 — REVERSED lineage + ws2 override, frame = inverse of the side', A5),
-            ('arm 6 — REVERSED lineage + ws2 override, frame = dr', A6)]
+            ('arm 6 — REVERSED lineage + ws2 override, frame = dr', A6),
+            ('arm 7 — the TURN walk, ent_rev_wob %d, frame = inverse of the side' % TURN_WOB, A7),
+            ('arm 8 — the TURN walk, ent_rev_wob %d, frame = dr' % TURN_WOB, A8)]
 
     print('\n# THE THREE ARMS, 09-25 02:48:50 TO THE END OF 09-26')
     rows = []

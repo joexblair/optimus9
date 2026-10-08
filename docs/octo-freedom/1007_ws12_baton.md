@@ -1197,7 +1197,67 @@ UP, the first at 10:17:10** - one bar after the open. It cannot isolate the turn
 - **wob 12 is the cliff**: the landing jumps 2.5 min and the entry falls to -0.3732, and by wob 15
   it is -1.0664.
 
-**PROPOSED, NOT APPLIED: `rrev_wob` 5 for the entry-optimising walk**, anchored to Joe's own 10:21
-read, which is a measurement. `rrev_wob` 6 is the alternative, anchored to the six-value plateau and
-to being the first positive entry. **The banked `rrev_wob` 2 stays untouched for the >ws12
-divergence - this is a second knob for a second mech, not a change to the first.**
+**RULED BY JOE: `ent_rev_wob` 4.** He said *"rrev_wob 5"* and then *"sorry - typo. use 4"*. At 4 the
+10:17 turn lands **10:18:50, +1.6 min, entry +0.0891** - the best LONG entry of every value in 2..40.
+It is banked in `ws12_baton_config` v1 as `rev.ent_rev_wob`, owner joe. **The banked `rrev_wob` 2 is
+untouched and still serves the >ws12 divergence - a second knob for a second mech.**
+
+---
+
+## 20. THE TURN WALK — `ent_rev_wob` 4, AND THE CHAIN
+
+The §19 landing rule, built. No ws2Mage arm, no baton, no oob requirement: the walk watches **ws1r**
+and lands on its **first TURN against the walk's travel**, by `_mage_rev(ws1r, ent_rev_wob 4)`. On
+frame −1 the downward travel ends on a turn UP; on frame +1 the upward travel ends on a turn DOWN,
+reusing `_chain10`'s own `WANT` convention.
+
+| arm | legs | positive | stops | re-entries | last exit | running MAE | running MFE | MFE/MAE | realised as scored | realised at -1.10 | minutes naked | entry improvement |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| arm 0 — baseline, no walk | 43 | 29 | 12 | 12 | 09-26 20:09:10 | 21.4877 | 41.1325 | **1.91** | **+13.3928** | +14.2207 | 0.0 | +0.0000 |
+| arm 5 — reversed lineage + ws2 override | 29 | 18 | 8 | 7 | 09-26 20:09:10 | 17.2674 | 21.5827 | 1.25 | +3.2694 | +4.2699 | 528.3 | +0.0185 |
+| arm 7 — **TURN walk, wob 4**, frame = inverse of the side | 36 | 24 | 12 | 12 | 09-26 20:09:10 | 21.3500 | 30.8514 | 1.45 | +6.9682 | +7.3850 | **46.2** | -3.3229 |
+| arm 8 — **TURN walk, wob 4**, frame = dr | 39 | 28 | 11 | 11 | 09-26 20:09:10 | 22.1919 | 35.9626 | 1.62 | **+12.1798** | +12.7108 | **62.9** | -3.6620 |
+| arm 7 at wob 5, for the knob comparison | 37 | 26 | 11 | 11 | 09-26 20:09:15 | 21.2774 | 32.5237 | 1.53 | +9.3419 | +9.7060 | 61.1 | -3.3787 |
+| arm 8 at wob 5, for the knob comparison | 39 | 28 | 11 | 11 | 09-26 20:09:15 | 21.5190 | 35.7834 | 1.66 | +12.0026 | +12.5398 | 79.3 | -3.6223 |
+
+### PER DAY, WHICH IS WHERE THE RESULT ACTUALLY LIVES
+
+| arm | day | legs | positive | stops | MAE | MFE | MFE/MAE | realised | minutes naked |
+|---|---|---|---|---|---|---|---|---|---|
+| arm 0 | 2026-09-25 | 25 | 17 | 6 | 11.8959 | 27.8113 | 2.34 | +10.0229 | 0.0 |
+| arm 0 | 2026-09-26 | 18 | 12 | 6 | 9.5917 | 13.3212 | 1.39 | +3.3699 | 0.0 |
+| arm 7 | 2026-09-25 | 24 | **19** | **5** | 11.8805 | 26.1420 | 2.20 | **+11.3371** | 35.9 |
+| arm 7 | 2026-09-26 | 12 | 5 | 7 | 9.4695 | 4.7094 | 0.50 | **-4.3689** | 10.3 |
+| arm 8 | 2026-09-25 | 26 | **21** | **5** | 12.5112 | 29.4441 | **2.35** | **+14.1056** | 43.1 |
+| arm 8 | 2026-09-26 | 13 | 7 | 6 | 9.6807 | 6.5185 | 0.67 | **-1.9258** | 19.8 |
+
+- **arm 8 BEATS the baseline on 09-25 by +4.0827** (+14.1056 against +10.0229), with 21 of 26 legs
+  positive against 17 of 25, one fewer stop, and MFE/MAE 2.35 against 2.34.
+- **arm 8 LOSES 09-26 by 5.2957** (-1.9258 against +3.3699).
+- **two days is not a sample.** The direction is not called here; both days are reported and the
+  aggregate is the weaker number of the two readings, not a verdict.
+- the relocations are now tiny: **46.2 and 62.9 minutes flat across two days**, against the forward
+  walk's 1255.6. Joe: *"the signal relocations are small"*.
+
+### THE 10:17 CASE, REPRODUCED IN THE CHAIN
+
+| leg | side | the walk starts | frame | entry bar | naked min | entry better by % | what landed the walk | exit | why | realised |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 10 | LONG | 09-25 10:17:05 | −1 | **10:18:50** | **1.8** | **+0.0891** | ws1r turns UP (rrev_wob 4) at r 42.56, in-fence | 10:56:40 | x-cross | +1.1427 |
+| 17 | LONG | 09-25 15:41:00 | −1 | 15:46:25 | 5.4 | **+0.6912** | ws1r turns UP (rrev_wob 4) at r 66.12, in-fence | 16:33:10 | final stalled | +1.9043 |
+| 11 | SHORT | 09-25 10:56:40 | +1 | 10:56:45 | 0.1 | +0.0189 | ws1r turns DOWN (rrev_wob 4) at r 56.50, in-fence | 11:07:45 | **mae breach** | -1.1000 |
+| 19 | LONG | 09-25 17:32:35 | −1 | 17:34:55 | 2.3 | +0.0609 | ws1r turns UP (rrev_wob 4) at r 39.37, in-fence | 18:59:10 | >ws12 divergence | +1.7005 |
+
+- **10:17:05 lands exactly where the knob measurement said it would**: 10:18:50, +0.0891.
+- **15:41:00 is +0.6912 better on entry** and the leg makes +1.9043 against the baseline's -1.2981.
+- **10:56:40 relocates only 0.1 min and still takes the stop.** The turn fires immediately there.
+
+### THE TEST THAT STILL FAILS
+
+**Entry improvement is still NEGATIVE on net: -3.6620 on arm 8, -3.3229 on arm 7.** By Joe's own
+test the walk is still landing on the wrong side of the open pxs more often than not, and yet
+realised on 09-25 now beats the baseline. Those two facts sit together and are not reconciled.
+
+- a labelling note, not a defect: the `what landed the walk` column reports the fence state **on the
+  walk's own frame**. Leg 14's *"r 97.81, in-fence"* is on frame −1, where in-fence means "not at
+  the LOW fence". The same value is hi oob on frame +1.
