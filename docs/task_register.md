@@ -220,7 +220,33 @@ and the duplicate stands. That duplicate is what this task exists to spec.
 OPEN. No sizing model exists. `MAX_TRADES` = 2 is Joe 0825: *"allows pyramiding, max 2 trades"*.
 Nothing in the walk or the tables carries trade size, and slippage is not modelled anywhere.
 
-## #22 mage-cascade — PARKED 0918, rebuild dr-free before anything else
+## #22 mage-cascade — PARTIALLY UNPARKED 1007. The direction half is live; the tolerance half stays parked
+
+**1007 UPDATE.** Joe asked *"do you feel confident to unpark #22 and use it for the A/B?"* and the
+answer was yes to one half only.
+
+**UNPARKED — the direction read.** `ws12Mage > ws1Mage`, which is Joe's §3 verbatim 0918: *"the
+first thing I look at is the lowest TF's value, and the highest TF's value ... I can draw a mental
+downward line between those 2 numbers"*. It references NO dr, so the blocker below is satisfied by
+construction, and it carries zero knobs. It is live in `ws12_baton_config` v1 as the re-entry gate
+and scored +13.3928 over 09-25 and 09-26 against +9.2482 for "all Mages above 50".
+
+**STILL PARKED — the tolerance read.** The bump count and every threshold:
+- §7: bumps >= 8 / dr -1 was +0.340 on 12 clusters in-sample against **-0.478 on 127 clusters OOS**
+- §3's *"making allowances for the bumps"* - the allowance size is exactly what was fitted
+- §9: all three r tests null on 83 days, so no r-trajectory component
+- the ladder peak TF is unruled and noisy: ws5, ws9, ws9, ws4, ws12 across five measured bars
+
+**TWO 0918 SHAPE FINDINGS CONFIRMED on the 1007/1008 bars**, both dr-free:
+- §7's `clusters` as the effective-n device - the re-entry returns arrive in bursts, so 08:11's
+  three bars are ONE event sampled three times
+- §8's hump-at-the-mid-board versus the monotone procession - it separates 08:11 (peak ws5, falls
+  32-34 points to ws12) from 11:19 / 11:22 / 08:46 (climbing all the way), and §8's "at bumps >= 8
+  the r ladder cascades while the Mage humps" holds on all three 08:11 bars and neither 11:x bar
+
+See `docs/octo-freedom/1007_ws12_baton.md` §12 and §13.
+
+## The original 0918 park, kept verbatim
 
 Joe 0918, verbatim: *"I'm reviewing the charts and I see there is a lot more to unravel before we
 can turn mage-cascade into a reliable mech. I called on mage-cascade to solve a single trade, the

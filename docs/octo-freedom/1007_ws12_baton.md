@@ -511,3 +511,132 @@ Joe 1007: *"if mae1.1 was hit, then MFE is zero and MAE is 1.1"*.
 | 3 | is 1.10 the right size? The stops are all never-armed legs, so tightening it changes no arm |
 | 4 | the re-entry is LONG-only; the mirrored SHORT is unbuilt (spec open #3) |
 | 5 | neither gate reaches 08:10. The reopen mech's own definition is still Joe's two bars, not code |
+
+---
+
+## 13. WHY THE NEVER-ARMED LEGS NEVER ARMED — THE LINE STATE AT THEIR OPENS
+
+Joe 1007 took the `why` and asked for the raw state: *"I'll take this one - the never-armed legs'
+line state at their opens"*, plus three measures he named. Scripts: `_neverarmed.py`, `_peg2.py`,
+`_joereads.py`, `_front.py`, `_low3.py`, `_overlay.py`.
+
+### THE ARM WAS NEVER CLOSE
+
+| day | side | open | dr | ws2Mage | to its arm fence | ws1r | ws12r |
+|---|---|---|---|---|---|---|---|
+| 09-25 | SHORT | 10:56:40 | +1 | 76.88 | −61.9 | 56.50 | 31.90 |
+| 09-25 | LONG | 12:27:05 | −1 | 29.58 | −55.4 | 97.81 | 37.94 |
+| 09-25 | LONG | 15:41:00 | −1 | 27.51 | −57.5 | 26.71 | 60.87 |
+| 09-25 | SHORT | 18:59:10 | +1 | 61.30 | −46.3 | 76.81 | 85.47 |
+| 09-25 | LONG | 21:27:40 | −1 | 25.99 | −59.0 | 72.47 | 33.92 |
+| 09-25 | SHORT | 22:28:25 | +1 | 85.70 | −70.7 | 4.34 | 38.77 |
+| 09-26 | LONG | 04:30:55 | −1 | 11.91 | −73.1 | 0.37 | 52.99 |
+| 09-26 | LONG | 09:06:00 | −1 | 25.13 | −59.9 | 35.41 | 29.82 |
+| 09-26 | LONG | 11:46:35 | +1 | 33.59 | −51.4 | 9.39 | 62.63 |
+| 09-26 | SHORT | 14:17:35 | +1 | 70.80 | −55.8 | 69.09 | 66.14 |
+| 09-26 | LONG | 16:25:40 | −1 | 11.06 | −73.9 | 43.42 | 34.86 |
+| 09-26 | LONG | 18:37:00 | −1 | 0.25 | −84.8 | 2.48 | 3.83 |
+
+- **ws2Mage sits 46.3 to 84.8 points from its own arm fence at every open.** Not one leg was within
+  reach. The arm is not marginal on these legs; it is absent.
+- the leg's own side and the tape's dr **disagree on 7 of the 12**.
+- on the leg's side the r ladder is outside oob and ex-fence from ws1 or ws2 on all 12, and **7 of
+  12 have no TF in ws1..ws30 still inside**. On the TAPE's dr the same ladder reaches ws17-ws30.
+
+### THE ARRIVED BAND AND ITS FRONT — the fuzzy object
+
+Joe 1008 corrected a rigid read: *"ws10/11/12 belonged to a specific example. it could be
+ws14/15/16, or ws9/10, or so-on. use a more fuzzy approach"*.
+
+| open | dr | arrived band | front | trough | next 3 above | their distance to the ex-fence |
+|---|---|---|---|---|---|---|
+| 10:56:40 | +1 | ws6-ws30 | ws30 | ws29 | — at the top | — |
+| 12:27:05 | −1 | ws6-ws9 | ws9 | ws7 | ws10, ws11, ws12 | 13.1, 18.1, 20.9 |
+| 15:41:00 | −1 | ws4-ws30 | ws30 | ws29 | — at the top | — |
+| 18:59:10 | +1 | ws12-ws28 | ws28 | ws24 | ws29, ws30 | 4.2, 17.3 |
+| 21:27:40 | −1 | ws5-ws9 | ws9 | ws7 | ws10, ws11, ws12 | 14.0, 13.4, 16.9 |
+| 22:28:25 | +1 | ws3-ws4 | ws4 | ws3 | ws5, ws6, ws7 | 3.1, 2.9, 25.8 |
+| 04:30:55 | −1 | ws1-ws2 | ws2 | ws1 | ws3, ws4, ws5 | 6.3, 36.3, 31.3 |
+| 09:06:00 | −1 | ws3 | ws3 | ws3 | ws4, ws5, ws6 | 5.3, 21.6, 22.6 |
+| 11:46:35 | +1 | ws17 | ws17 | ws17 | ws18, ws19, ws20 | 5.6, 7.4, 16.0 |
+| 14:17:35 | +1 | ws6-ws8 | ws8 | ws7 | ws9, ws10, ws11 | 7.5, 12.9, 27.2 |
+| 16:25:40 | −1 | ws2 | ws2 | ws2 | ws3, ws4, ws5 | 23.1, 31.9, 17.3 |
+| 18:37:00 | −1 | ws1-ws23 | ws23 | ws18 | ws24, ws25, ws26 | 0.2, 5.5, 11.3 |
+
+- **the front sits anywhere from ws2 to ws30**; ws10/11/12 is simply the band above a ws9 front, and
+  only 12:27 and 21:27 have one.
+- **8 of 12 bands are unbroken, and 10 of 12 are NOT rooted at ws1** - the band is a travelling
+  block in the middle of the ladder, not a tide rising from the bottom.
+- **the ladder trough sits inside or at the edge of the band on every leg.** It is the band's centre.
+
+### PEGGING CARRIES TWO MEANINGS, AND BOTH READ AS A GRADIENT
+
+| the object | where it lives | what it looks like |
+|---|---|---|
+| the 10:56 read | the LOW TFs | a CLIFF in the counter-visit recency gradient |
+| the 12:27 read | the HIGH TFs | a FRONT in the time-since-the-fence gradient |
+
+- Joe 1007 at 10:56: *"Mage has not crossed into counter-dr ex-fence before returning to dr
+  ex-fence"* - a NON-VISIT. The ws1-anchored test reproduces his **ws3**.
+- Joe 1007 at 12:27: *"coming off a high ex-fence pegging that started at ~08:14"* - a LONG
+  RESIDENCE, and at dr -1 the high fence IS the counter side, so those Mages did visit it.
+- **THE ws1-ANCHORED TEST, as ruled by his worked example:**
+  - anchor = ws1Mage's most recent counter-dr ex-fence bar at or before the open
+  - pegged(t) = ws{t}Mage has NO counter-dr ex-fence bar in [anchor, open]
+  - the answer = the lowest pegged TF. Knob-free, and reproduces ws3 at 10:56:40.
+- **the low three, both legs, is the usable comparison Joe pointed at:**
+
+| open | dr | counter side | ws1 | ws2 | ws3 | shape |
+|---|---|---|---|---|---|---|
+| 10:56:40 | +1 | LOW ≤17 | 48.1 min | 40.5 min | **195.2 min** | a cliff at ws3, 4.8× |
+| 12:27:05 | −1 | HIGH ≥83 | 51.2 min | 45.8 min | 39.8 min | even, ~5 min steps |
+
+- at 12:27 the de-pegging front on the high TFs is at **ws17**: ws10-ws16 left the high fence
+  11.5-14.1 min before the open, ws17 0.7 min before, ws18-ws24 are still on it.
+
+### THE FUZZY OVERLAY — three templates against the other nine
+
+Six tests, all signs/orderings/TF-proximity, never absolute levels: the ws1r→ws12r direction, the
+ws3x→ws12x direction, the ws3m→ws12m direction, the arrival front within 3 TFs, whether the arrived
+band is unbroken, and the ws1/ws2/ws3 recency shape.
+
+| template | near-match | side | dr | matched | the tests that did NOT match |
+|---|---|---|---|---|---|
+| 12:27:05 | 21:27:40 | LONG | −1 | **5 of 6** | recency shape |
+| 21:27:40 | 12:27:05 | LONG | −1 | **5 of 6** | recency shape |
+| 12:27:05 | 09:06:00 | LONG | −1 | 4 of 6 | front within 3, recency shape |
+| 21:27:40 | 09:06:00 | LONG | −1 | 4 of 6 | front within 3, recency shape |
+| 21:27:40 | 04:30:55 | LONG | −1 | 4 of 6 | ws1r→ws12r direction, front within 3 |
+| 10:56:40 | 14:17:35 | SHORT | +1 | 4 of 6 | front within 3, band unbroken |
+| 10:56:40 | 16:25:40 | LONG | −1 | 4 of 6 | front within 3, band unbroken |
+
+- **12:27 ↔ 21:27 is mutual at 5 of 6**, missing only the recency shape: 12:27 is even steps
+  (51.2 / 45.8 / 39.8), 21:27 is all three equal (41.9 / 41.9 / 41.9). Joe's own note on the
+  difference: *"ws1r has dominated the lineage walk at 21:27 and the short trade is opened
+  immediately"*.
+- **the arrival front is the test that fails most** - 6 of the 7 near-misses. It moves far more
+  between legs than the ladder directions do.
+- the 4-of-6 line for "near-match" is MINE; the per-test grid is in the run.
+
+### MY OWN DEFECTS IN THIS SECTION, ALL FOUND AND FIXED
+
+- **the first pegging coding was degenerate**: it found the previous dr-ex-fence BAR rather than
+  EPISODE, so ws1Mage's 10 s chatter made the window vacuous. It returned ws1 on 11 of 12 legs and
+  failed Joe's ws3 self-check.
+- **the angle column was `nan`** where a leave move's extreme sat on the fence bar - no move at all.
+  Excluded and counted: 10 of 60 on the never-armed legs, 34 of 155 on the armed.
+- **the recency shape discarded ties as `n/a`**, which threw away 4 of 12 legs including 21:27,
+  where all three TFs touched the counter fence on the SAME bar - the tightest matryoshka there is.
+- **`F1`..`F6` was coined shorthand that only existed in a docstring.** Joe: *"replace the jargon so
+  that I'm able to help. I can't find a table anywhere that explains F{x}"*. The tests now carry
+  plain names and the run prints its own legend.
+- the only surviving thresholds of mine in this section: the 2.00 r-point turn detector on the leave
+  move, and the 3× ratio that separates "even steps" from "one big step".
+
+### STILL OPEN FROM THIS SECTION
+
+| # | question |
+|---|---|
+| 1 | which "pegging" the mech takes - the low-TF non-visit, the high-TF residence, or both as separate mechs |
+| 2 | why 12 of 43 legs open with ws2Mage 46-85 points from its arm fence. JOE'S |
+| 3 | the arrival front moves more than anything else between legs - is it the discriminator or the noise |
