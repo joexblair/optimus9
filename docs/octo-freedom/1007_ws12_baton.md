@@ -640,3 +640,102 @@ band is unbroken, and the ws1/ws2/ws3 recency shape.
 | 1 | which "pegging" the mech takes - the low-TF non-visit, the high-TF residence, or both as separate mechs |
 | 2 | why 12 of 43 legs open with ws2Mage 46-85 points from its arm fence. JOE'S |
 | 3 | the arrival front moves more than anything else between legs - is it the discriminator or the noise |
+
+---
+
+## 14. 15:41 AND ws6 — THE WALK ALREADY GETS THERE, ON THE OTHER FRAME
+
+Joe 1008: *"tell me if there's a method that would lneage walk 15:41 to the more optimised bar at
+-dr ws6x-cross or stall (I can't recall if we're using x-cross or stall 😆)"*.
+
+### WHICH ONE THE MECH USES — BOTH, AND THE STALL IS TESTED FIRST
+
+`_chain10.run_leg`, in source order inside the per-bar loop:
+
+```python
+        if ST[(rider, d)][j]:                       # 'final stalled'  — tested FIRST
+            return j, 'final stalled', ...
+        if (not NOX) and xcond(rider, j, d):        # 'x-cross'        — tested SECOND
+            return j, 'x-cross', ...
+```
+
+Both are live exits; on the same bar the stall wins. `W_NOX=1` is the switch that leaves the stall
+alone, and that is swap 1 — **+0.6115 like-for-like on the 08:10 chain, MAE 3.5312 against 4.9518**.
+**On 15:41 the ranking inverts: the x-cross beats the stall by 1.2550.** One leg each way, so the
+swap is still unsettled and §12's open question stands.
+
+### WHY 15:41 NEVER REACHED ws6: IT NEVER ARMED ON ITS OWN SIDE
+
+The leg opened **LONG on a dr −1 tape**, and every r line at the open is low:
+
+| TF | r | at d +1 (LONG) | at d −1 (SHORT) | ws{TF}Mage |
+|---|---|---|---|---|
+| ws1 | 26.71 | in-fence | in-fence | 24.22 |
+| ws2 | 32.83 | in-fence | in-fence | **27.51** |
+| ws3 | 18.98 | in-fence | in-fence | 35.21 |
+| ws4 | 11.74 | in-fence | **oob** | 32.00 |
+| ws5 | 26.76 | in-fence | in-fence | 30.50 |
+| ws6 | 35.93 | in-fence | in-fence | 27.33 |
+| ws12 | 60.87 | in-fence | in-fence | 27.70 |
+
+Nothing on the `d +1` column is oob, so there is no KICKSTART to make and no rider to carry a baton.
+The arm is the gate in front of all of it, and **ws2Mage 27.51 is 57.5 points from the ≥85 it needs
+on the leg's side** — the never-armed figure already banked in §13.
+
+### THE SAME WALK, THE SAME KNOBS, THE OTHER FRAME
+
+| ts | +min | event | pxs | pct |
+|---|---|---|---|---|
+| 15:41:00 | +0.0 | OPEN | 0.187001 | +0.0000 |
+| 15:41:35 | +0.6 | exit-armed — ws2Mage under 15 (14.72) | 0.186480 | +0.2782 |
+| 15:41:35 | +0.6 | KICKSTART — rider ws4 (r 9.65 oob, ceiling ws12) | 0.186480 | +0.2782 |
+| 15:45:00 | +4.0 | baton -> ws5 oob (r 5.38) | 0.185533 | +0.7848 |
+| 15:54:00 | +13.0 | baton -> ws6 oob (r 5.90) | 0.185270 | +0.9255 |
+| 15:55:05 | +14.1 | **EXIT — x-cross on ws6** | 0.185994 | **+0.5382** |
+
+**ws4 → ws5 → ws6, two baton passes, and the ws6 x-cross is the exit.** No new mech, no new knob,
+no change to `lin_hop` or the ceiling. The arm fires **35 seconds** after the open against 52.1 min
+on the leg's own side.
+
+### EVERY CANDIDATE BAR, AND WHAT IT IS WORTH
+
+| the test | frame | first fire | +min | LONG realised | LONG MAE | SHORT realised | SHORT MAE | fires to tape end |
+|---|---|---|---|---|---|---|---|---|
+| ws2Mage arms the walk | d +1 | 16:33:05 | +52.1 | +1.2009 | 1.3782 | -1.2009 | 1.2424 | 978 |
+| ws2Mage arms the walk | d −1 | **15:41:35** | +0.6 | -0.2782 | 0.2782 | +0.2782 | 0.0000 | 1036 |
+| ws6 stall (stall_n 6) | d +1 | 15:41:05 | +0.1 | -0.0430 | 0.0430 | +0.0430 | 0.0000 | 99819 |
+| ws6 stall (stall_n 6) | d −1 | 16:05:00 | +24.0 | +0.7168 | 1.3782 | **-0.7168** | 1.2424 | 97939 |
+| ws6 x-cross, the walk's exit test | d +1 | 15:41:05 | +0.1 | -0.0430 | 0.0430 | +0.0430 | 0.0000 | 70269 |
+| ws6 x-cross, the walk's exit test | d −1 | **15:55:05** | +14.1 | -0.5382 | 1.3782 | **+0.5382** | 0.0000 | 70633 |
+| ws6x crosses ws6r | d +1 | 15:54:15 | +13.2 | -0.8358 | 1.3782 | +0.8358 | 0.0000 | 2680 |
+| ws6x crosses ws6r | d −1 | 15:54:10 | +13.2 | -0.7063 | 1.3782 | +0.7063 | 0.0000 | 2681 |
+
+- the walk exits on the FIRST fire, so the first-fire column is the only one it could ever take.
+- the stall and `xcond` are **states**, not crossings, which is why they count in the tens of
+  thousands of bars; `ws6x crosses ws6r` is an event and counts 2681. Nothing is truncated - the
+  counts run to the tape end at 23:59:55.
+- **the ws6 stall on d −1 arrives 9.9 min after the x-cross and 1.2550 worse.** On this leg the
+  x-cross is the one carrying it.
+
+| frame | 1.10 stop | +min | realised at the stop | overshoot |
+|---|---|---|---|---|
+| LONG, as the chain ran it | 15:50:40 | +9.7 | **-1.2981** | 0.1981 |
+| SHORT, the −dr frame | 16:03:35 | +22.6 | -1.1180 | 0.0180 |
+
+The SHORT frame's stop sits at 16:03:35, **8.5 min after the walk has already exited**, and the
+SHORT's MAE to 15:55:05 is **0.0000** - the trade is never adverse for a single bar. Against the
+LONG leg's -1.2981 the leg swings **+1.8363**.
+
+### THE TWO METHODS, AND WHAT IS NOT SPECIFIED
+
+**Method 1 — take the open's side from the tape dr.** `d = int(DRv[k])` in place of `d = -d`. At
+15:41 that is −1 and the walk does everything above. Needs **no new mech and no new knob**; it is
+one line. It also changes the side of every alternation open in the chain, so it is not a 15:41 fix.
+
+**Method 2 — take the side from whichever ws2Mage arm crosses first.** Both sides' arm tests already
+exist in `run_leg`. At 15:41 the −1 arm is 15:41:35 and the +1 arm is 16:33:05, a 51.5 min gap. It
+uses only the walk's own mech, but the leg is open for those 35 seconds with no side set, and
+**nothing in the spec says what an always-in-market chain holds in that window.** That is the gap.
+
+**HALTED HERE.** Which frame an alternation open takes is a chain rule, not a walk rule, and it is
+Joe's. Both methods are stated so either can be run; neither is applied.
