@@ -1806,3 +1806,53 @@ so a 1.10 stop would have killed it and the 2.50 stop kept it.
   divergence and both would have been stopped twice over at 1.10.
 - **across the whole tape these legs lose; inside this window they ARE the profit.** Every window in
   the top five sits in the same 11 days of August.
+
+---
+
+## 28. THE REFIT — 97 CONFIGS, CHOSEN ON DAYS 1-47, SCORED ON 48-95
+
+§26 scored the already-fitted config on a hold block, which is the weak form of the test: the config
+had already seen all 95 days. This is the strong form. **97 configs ran over the whole tape with
+their per-day realised kept, and only days 1-47 were allowed to choose.**
+
+### DOES THE SEARCH GENERALISE?
+
+| the question | the answer |
+|---|---|
+| configs | 97 |
+| **Spearman rank correlation, fit vs hold** | **+0.195** |
+| the fit winner's rank on hold | **33 of 97** |
+| the hold winner's rank on fit | 12 of 97 |
+| the fit winner's NET on hold | **+4.3757** |
+| the best possible NET on hold | +49.9777 |
+| the banked control's NET on hold | **-93.4667** |
+| **what choosing on fit bought, on hold** | **+97.8424** |
+| what perfect hindsight would have bought | +143.4444 |
+| **configs beating the banked control on hold** | **89 of 97 (92%)** |
+
+### WHICH KNOBS SURVIVE THE SPLIT
+
+| knob | fit-best | hold-best | verdict | the hold-best's mean hold NET |
+|---|---|---|---|---|
+| `mae_stop_pct` | **2.5** | **2.5** | **AGREE** | **+8.0894** - the only positive mean of any value of any knob |
+| `reent_xwob` | **18** | **18** | **AGREE** | -11.4498 |
+| `oob_gate_fence` | **15.0** | **15.0** | **AGREE** | -26.0345 |
+| `ceil_trig_tf` | 8 | **12** | **DISAGREE** | -21.3633 against ws8's -32.9772 |
+| `stall_n` | 6 | **4** | **DISAGREE** | -7.5925 against 6's -46.7480 |
+| `rrev_wob` | 2 | **1** | **DISAGREE** | -24.2735 against 2's -30.0669 |
+
+### WHAT IT SAYS, AND IT IS THE FINDING OF THE NIGHT
+
+- **the gain is from LEAVING 1.1, not from finding a good config.** 92% of the grid beats the banked
+  control on the hold block, and `mae_stop_pct` 2.5 is the only value of any knob with a positive
+  mean hold net. The +97.84 is a floor effect.
+- **`ceil_trig_tf` 12 - Joe's original - wins on the hold half.** ws8 wins only on fit. §25 already
+  flagged ws8 as *"an INTERACTION, not a standalone improvement"*; the split confirms it. The
+  ">ws12 oob mech" keeps its name.
+- **3 of 6 knobs reverse across the split.** `ceil_trig_tf`, `stall_n` and `rrev_wob` each pick the
+  opposite value on the two halves, so none of the three has a measured value yet - only a measured
+  uncertainty.
+- **Spearman +0.195.** The search is better than a coin flip and not much better. Fit's rank 1 is
+  hold's rank 33, and hold's rank 1 was only fit's rank 12.
+- the one structural result that is stable everywhere: **the stop rate.** Every config in the grid
+  runs 8% to 16% where the banked one runs 26% to 40%.
