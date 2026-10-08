@@ -1123,3 +1123,81 @@ location` requires the lineage to operate in reverse"*.
   that bar.
 - that trade is the open question the reversed mech creates: **ws1r oob arrives early enough to help
   17:31 and too early to help 10:56.**
+
+---
+
+## 19. JOE'S TEST, THE WEAKNESS MECHANISM, AND THE TURN DETECTOR
+
+### THE SELF-TEST, AND IT FAILS
+
+Joe 1008: *"before you show it to me, test yourself first. the test is simple: is the pxs of the
+open signal located at or near a pivot that supports my trade (eg low pxs pivot for a LONG trade)?
+if yes, no lineage walk is needed, if no walk the lineage path that takes me to a better pxs (ie go
+lower in pxs if the open is a LONG trade). if the lineage walk takes you to a higher pxs (ie with
+the LONG trade), the lineage walk is facing the wrong direction"*.
+
+| the outcome | legs | what it means |
+|---|---|---|
+| no walk — zero bars | **14** | the open signal was left alone. Cannot help or hurt. |
+| moved BETTER | 7 | the walk found a better pxs. The direction was right. |
+| **moved WORSE — WRONG DIRECTION** | **8** | **FAILS Joe's test.** |
+
+- *"most open signals don't need to move"* **holds**: 14 of 29 are zero bars.
+- 15 relocated; **8 of those 15 moved the wrong way.** Summed entry improvement +0.0185 - the 7 good
+  moves and the 8 bad ones nearly cancel.
+- **the frame is not the fault.** The opposite frame won only 6 of 15, and on legs 9, 18, 25 and 28
+  the frame in use fails the test AND the opposite frame is worse still.
+- the walk hit the span's best pxs on **5 of 15** legs.
+- **leg 18, 09-26 00:27:10, is the cleanest failure**: the open bar already held the best pxs in the
+  span and the walk moved off it anyway, landing 0.7707% worse.
+
+### THE MECHANISM, IN JOE'S WORDS
+
+Joe 1008: *"this is why I called out the direction of pxs - it can only go down to satisfy a LONG
+entry, but a r line that doesn't reach the bottom is weak, and weak lets pxs climb"*.
+
+And the case that showed it, Joe 1008: *"10:17 walked down to the reversl of ws1r at 10:21. at 10:21
+it was infence - that's the end of the walk"*.
+
+| 09-25 10:17:05, LONG, frame −1 | the value |
+|---|---|
+| ws1r minimum, 10:17:05 → 10:25:00 | **19.95 at 10:20:05** |
+| the oob-low fence my landing rule waits for | 15 |
+| did ws1r reach it? | **no — it turned back up 4.95 points short** |
+| so the rule waited | to **10:36:05, 19.0 min past the turn** |
+| the LONG entry there | **-0.5702** |
+| the best LONG entry in the span | +0.1627 at 10:18:00 |
+| the LONG entry at Joe's 10:21 | ≈ -0.02 |
+
+- **the terminus is the rider's TURN, not its arrival at oob.** In-fence is what makes the turn
+  terminal: a line that turns while still inside the fences has no extension left to give, and by
+  Joe's mechanism that weakness is precisely what lets pxs climb back against the entry.
+- the §18 landing rule - the first bar ws1r is oob on the frame - **waits for an arrival that may
+  never come.** At 10:17 it came 4.95 points short and cost 19 minutes and 0.5702% of entry.
+
+### THE TURN DETECTOR — `rrev_wob` 5 IS THE ONLY VALUE THAT REPRODUCES JOE'S 10:21
+
+`_mage_rev(ws1r, rrev_wob 2)` as banked fires **23 turns in the 8 minutes after 10:17:05, 12 of them
+UP, the first at 10:17:10** - one bar after the open. It cannot isolate the turn Joe reads.
+
+| rrev_wob | seconds | the first UP turn after 10:17:05 | +min | LONG entry better by % | UP turns in the 8 min window |
+|---|---|---|---|---|---|
+| 2, as banked | 10 | 10:17:10 | +0.1 | -0.0299 | 12 |
+| 4 | 20 | 10:18:50 | +1.6 | **+0.0891** | 5 |
+| **5** | **25** | **10:20:30** | **+3.4** | **-0.0234** | **3** |
+| 6 | 30 | 10:22:20 | +4.9 | +0.0801 | 3 |
+| 11 | 55 | 10:22:45 | +5.3 | +0.0199 | 2 |
+| 12 | 60 | 10:25:15 | +8.2 | -0.3732 | 1 |
+| 15 | 75 | 10:43:40 | +26.6 | -1.0664 | 0 |
+
+- **wob 5 is the only value in 2..40 that lands inside 10:20:00-10:22:00**, Joe's read. It lands
+  10:20:30 and cuts the UP turns from 12 to 3.
+- **wob 6 to 11 is a six-value plateau**, all landing 10:22:20-10:22:45, entry +0.0801 down to
+  +0.0199. It is the widest stable band and the first POSITIVE entry.
+- **wob 12 is the cliff**: the landing jumps 2.5 min and the entry falls to -0.3732, and by wob 15
+  it is -1.0664.
+
+**PROPOSED, NOT APPLIED: `rrev_wob` 5 for the entry-optimising walk**, anchored to Joe's own 10:21
+read, which is a measurement. `rrev_wob` 6 is the alternative, anchored to the six-value plateau and
+to being the first positive entry. **The banked `rrev_wob` 2 stays untouched for the >ws12
+divergence - this is a second knob for a second mech, not a change to the first.**
