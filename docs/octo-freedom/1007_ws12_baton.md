@@ -921,8 +921,16 @@ still unmeasured.
 - **the walk rides UPWARD**: 0.190005 at the start to 0.199043 at the ws10 baton, **+4.76% of price
   against the SHORT while nothing is open.** The SHORT then enters 3.5022% higher.
 - **-1.1504 becomes +1.9245, a +3.0749 swing, and the 1.10 stop never fires.**
-- this walk is **arm-1 leg 6 in §15, the chain's single largest gain**. The spec Joe laid out is
-  already running at this bar.
+- **10:56:40 IS THE SAME BAR IN BOTH CHAINS - the previous leg's exit - and the two chains do
+  different things with it:**
+
+| chain | what 10:56:40 is | the entry | the exit | result |
+|---|---|---|---|---|
+| **arm 0**, the baseline, and **§12's stop list Joe is reviewing** | the leg's OPEN bar | 10:56:40 at 0.190005 | 11:07:45 | **mae breach, -1.1504** |
+| **arm 1**, §15's naked walk | leg 6's WALK START - nothing is opened | 11:41:35 at 0.196660 | 12:27:05 | x-cross, **+1.9245** |
+
+- §12's stop table and §15's arm-1 table are both correct. 10:56:40 is a stop in the baseline and
+  is not a stop in arm 1, because arm 1 never opens a position at that bar.
 - **the arm is what makes it work.** With `exit-armed` REMOVED the walk lands 10:58:00 (+1.3 min)
   at an entry **0.0087% worse** and takes the same stop at 11:07:45 for **-1.1592**.
 
