@@ -110,9 +110,12 @@ while True:
 
 mae = mfe = real = 0.0
 per = collections.defaultdict(float)
+perl = collections.Counter(); pers = collections.Counter()
 for r in legs:
     a_, f_ = (C.MAE_STOP, 0.0) if r['why'] == 'mae breach' else mm(r['open'], r['exit'], r['d'])
     mae += a_; mfe += f_; real += r['real']; per[r['day']] += r['real']
+    perl[r['day']] += 1
+    pers[r['day']] += 1 if r['why'] == 'mae breach' else 0
 n = len(legs); st = sum(1 for r in legs if r['why'] == 'mae breach'); drag = n * FEE
 days = sorted(per)
 print(json.dumps(dict(key=KEY, role=V['role'], label=V['label'], spec=V['spec'],
@@ -126,4 +129,6 @@ print(json.dumps(dict(key=KEY, role=V['role'], label=V['label'], spec=V['spec'],
                       third1=round(sum(per[x] for x in days[:len(days)//3]), 4),
                       third2=round(sum(per[x] for x in days[len(days)//3:2*len(days)//3]), 4),
                       third3=round(sum(per[x] for x in days[2*len(days)//3:]), 4),
-                      perday={x: round(per[x], 4) for x in days})), flush=True)
+                      perday={x: round(per[x], 4) for x in days},
+                      perlegs={x: perl[x] for x in days},
+                      perstops={x: pers[x] for x in days})), flush=True)

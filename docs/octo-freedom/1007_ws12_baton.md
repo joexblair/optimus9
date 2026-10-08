@@ -1904,3 +1904,63 @@ The §28 split left three knobs winning on both halves: `mae_stop_pct` 2.5, `ree
   fees, and nothing measured tonight does so out of sample.
 - the stop rate falls **34.1% -> 12.3%**, and that is the only structural result stable across every
   block and every config tested.
+
+---
+
+## 30. THE r AND Mage LINE SPECS — JOE'S ARE CONFIRMED
+
+Joe 1008: *"if you want to sweep the Mage and r configs, go for it"*.
+
+**THE LIVE SPECS, read from `mech_lines(db, 'wsf')` and not from literals:**
+
+| role | spec | what it is |
+|---|---|---|
+| `r` | `('k', 5, 8, 7, 'close')` | a stochastic-K, rsi 5, stc 8, k_len 7 |
+| `Mage` | `('bb', 38, 0.93, 'close')` | Bollinger %B, length 38, mult 0.93 |
+
+**21 variants built and scored**, one knob at a time around each live spec: r at rsi 3/4/6/8, stc
+5/6/10/14 and k_len 4/5/9/12; Mage at length 24/30/48/60 and mult 0.85/0.90/1.00/1.10. 420 line
+files, built in 6 minutes, then 22 chain runs in parallel across the 16 cores.
+
+### THE WHOLE-TAPE RESULT
+
+| line | variants beating LIVE on net | variants beating it in all three thirds |
+|---|---|---|
+| `r` | **1 of 12** - stc=10, +12.09 against +4.06 | **0 of 12** |
+| `Mage` | **1 of 8** - len=60, +15.46 against +4.06 | **0 of 8** |
+
+### THE SPLIT KILLS BOTH
+
+| line | variant | fit NET | hold NET | hold net per leg | hold legs | hold stop rate |
+|---|---|---|---|---|---|---|
+| `r` | **LIVE** | -32.6649 | **+36.7274** | +0.043107 | 852 | 16.4% |
+| `r` | stc=10 | -14.5711 | **+26.6570** | +0.029784 | 895 | 16.4% |
+| `Mage` | **LIVE** | -32.6649 | **+36.7274** | +0.043107 | 852 | 16.4% |
+| `Mage` | len=60 | -21.5571 | **+37.0138** | **+0.059412** | **623** | 20.4% |
+
+- **`r` stc=10 was a fit-half artefact.** It gains +18.09 on fit and gives back **10.07** on hold.
+- **`Mage` len=60 is a dead heat**: +0.2864 of hold net on **27% fewer legs** and a better per-leg
+  number, against a worse stop rate. +0.29 over 48 days is noise.
+- **Joe's r and Mage specs are confirmed at or above every variant measured, out of sample.** This
+  is the one place tonight where the banked value is simply right.
+
+### A DEFECT OF MINE, CAUGHT BY ITS OWN CONTROL ROW
+
+The first run of this sweep built all 421 lines through `build_wsf_role_lines`, which inherits
+`build_ws_lines`' `END_MS` at **2026-09-30**, while `score39` keys on `LG_TAPE_END` at
+**2026-10-05**. The cache key is `md5(end|hours|warmup|spec)`, so the same spec at a different
+window is a **different file**:
+
+| | ws1r cache key |
+|---|---|
+| score39, end 1791158400000 | `dedc3afc8c29d63937f0` |
+| the builder, end 1790726400000 | `5ee41b83d3a29ce1a33d` |
+
+Every file was a real, correctly built r line. None was the line the chain reads. Right shape, right
+length, plausible values, no exception - **the sweep's LIVE control row scored -113.3843 where the
+identical config scores +4.0627, and that is the only signal that existed.** The builder's own
+docstring names the hazard and exposes `WSF_TAPE_END` for it.
+
+`_buildlines.py` now **asserts** the LIVE key equals score39's at import, with both windows in the
+message. The first 22 results are kept as `lines_WRONGWINDOW.jsonl` and are not comparable to
+anything.
