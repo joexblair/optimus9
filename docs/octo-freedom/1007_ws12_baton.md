@@ -2062,3 +2062,84 @@ banked - because that is the config I would actually defend.
 switch that already exists in `_chain10`, it was built for exactly this question in §15, and it is
 worth more than every knob change except `mae_stop_pct` - with a BETTER MFE/MAE and fewer legs,
 which is the opposite of the trade-off every knob made.
+
+---
+
+## 33. THE STOP AND THE HOLD RE-TUNED UNDER THE STALL-ONLY EXIT
+
+Turning the x-cross off replaces 961 exits, so the two surviving knobs were re-tuned under the new
+exit. 18 configs, everything else banked.
+
+| `mae_stop_pct` | `reent_xwob` | legs | stops | stop rate | MFE/MAE | gross | drag | ALL 95 NET | fit NET | hold NET |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **2.5** | **26** | 1382 | 157 | 11.4% | **1.08** | +171.5117 | -152.0200 | **+19.4917** | **+24.4502** | **-4.9585** |
+| 3.3 | 18 | 1349 | 108 | **8.0%** | 1.02 | +148.3953 | -148.3900 | **+0.0053** | +27.1882 | -27.1829 |
+| 3.3 | 26 | 1335 | 108 | 8.1% | 1.02 | +145.1510 | -146.8500 | -1.6990 | +25.1559 | -26.8549 |
+| **2.5** | **18** — **D** | 1404 | 166 | 11.8% | 1.06 | +150.4249 | -154.4400 | **-4.0151** | **-0.7897** | **-3.2254** |
+| 2.5 | 12 | 1418 | 172 | 12.1% | 1.07 | +151.8938 | -155.9800 | -4.0862 | +6.6601 | -10.7463 |
+| 2.9 | 26 | 1363 | 133 | 9.8% | 1.04 | +140.0534 | -149.9300 | -9.8766 | +11.2117 | -21.0883 |
+| 1.8 | 26 | 1430 | 263 | 18.4% | **1.13** | +147.2595 | -157.3000 | -10.0405 | +18.2769 | -28.3174 |
+| 1.4 | 26 | 1493 | 365 | 24.4% | **1.17** | +146.1683 | -164.2300 | -18.0617 | -10.1221 | -7.9396 |
+| 1.4 | 12 | 1668 | 450 | 27.0% | 1.11 | +77.7039 | -183.4800 | **-105.7761** | -20.8857 | -84.8904 |
+
+(the nine middle rows are in the run file; the table above keeps the extremes and the two
+candidates)
+
+- **2 of 18 are net positive over the full 95 days.** `mae_stop_pct` 2.5 with `reent_xwob` 26 at
+  **+19.4917** is the best net measured anywhere tonight.
+- **0 of 18 are positive on BOTH halves.**
+- **`mae_stop_pct` 2.5 is the best stop at every one of the three hold values.** It is the single
+  most stable knob in the whole exercise.
+- **`reent_xwob` 26 is a fit-half artefact**, and a clear one: +24.4502 on fit against **-4.9585** on
+  hold, where 18 runs -0.7897 / -3.2254. The 95-day total prefers 26; the split does not.
+- turning the x-cross off lifts MFE/MAE to **1.02 - 1.17 across all 18 configs**, against 0.85 - 0.99
+  for every x-cross-live config measured tonight. That is the most consistent single effect found.
+
+---
+
+# THE 1008 SUMMARY — WHAT I WOULD CHANGE, AND WHAT I WOULD NOT
+
+### THE ONE RECOMMENDATION
+
+| # | the change | from | to | 95-day net | fit | hold | why it survives |
+|---|---|---|---|---|---|---|---|
+| 1 | `mae_stop_pct` | 1.1 | **2.5** | — | — | — | best on fit AND hold; best stop at every hold value; the only knob value with a positive mean hold net (+8.0894); 2.75 loses 62 days to 22 |
+| 2 | **the walk's x-cross exit** | live | **OFF** (`W_NOX=1`) | — | — | — | +21.59 over the banked arm; the ONLY change consistent across both halves; MFE/MAE 0.93 -> 1.06; 243 fewer legs |
+| 3 | `reent_xwob` | 6 | **18** | — | — | — | best on fit AND hold; the curve is flat 2-12 and steps up at 18 |
+| | **the three together** | | | **-4.0151** | **-0.7897** | **-3.2254** | the most consistent config measured; MFE/MAE 1.06 |
+
+### WHAT I WOULD NOT CHANGE, AND WHY
+
+| the thing | the evidence against changing it |
+|---|---|
+| the `r` line spec `('k', 5, 8, 7)` | 12 variants, **0** beat it on both halves. stc=10 gains +18.09 on fit and gives back 10.07 on hold |
+| the `Mage` line spec `('bb', 38, 0.93)` | 8 variants, **0** beat it on both halves. len=60 is a +0.29 dead heat on hold |
+| the `x` line spec `('bb', 5, 0.35)` | 9 variants. 4 beat it on fit, 4 beat it on hold, **and the two sets are disjoint** |
+| the baton pass `oob` | `stalled` is **34.19 worse** over 95 days and carries the worst MFE/MAE measured, 0.82. Joe's tag ruling stands |
+| gate A | gate B is 8.37 worse over 95 days. §12's 2-day choice holds |
+| `oob_hi` / `oob_lo` 85 / 15 | two isolated peaks with a trough between them is noise, not a knee |
+| `ceil_trig_tf` 12 | ws8 wins on fit and **ws12 - Joe's value - wins on hold.** The ">ws12 oob mech" keeps its name |
+| `oob_gate_fence` 15.0 | 18 measured +34.21 in one context and is 14.17 WORSE once the other knobs return to banked |
+| `dip_fence` 53 / `dip_dwell_bars` 6 | 50.5 more than halves the legs and collapses gross to +5.09 |
+| `stall_n`, `rrev_wob` | each picks the OPPOSITE value on the two halves. No measured value, only a measured uncertainty |
+
+### THE FIVE THINGS THAT ARE TRUE REGARDLESS OF CONFIG
+
+- **the chain does not pay its fees.** The best consistent config is **-4.0151** over 95 days, which
+  is **-0.0029 per leg** against a 0.11 round trip. Nothing measured tonight clears it out of
+  sample, and **slippage is still unset on top of that**.
+- **one knob is two thirds of everything.** `mae_stop_pct` 1.1 -> 2.5 is +103.30 of the +156.01 that
+  seven knobs bought. The other six are worth +52.71 between them.
+- **92% of a 97-config grid beats the banked config out of sample.** The gain is a floor effect from
+  leaving 1.1, not a search result. Spearman fit-vs-hold is **+0.195**.
+- **one-at-a-time bests do not compose.** Measured three times: stage 2 -> stage 3, the granular
+  centroid collapsing to 441 legs at -29.30, and `oob_gate_fence` 18 reversing sign with context.
+- **the stop rate is the only structurally stable result.** Every config tested runs **8% to 16%**
+  where the banked one runs **26% to 40%**.
+
+### WHAT I BROKE AND FIXED TONIGHT
+
+| the defect | how it was caught | the guard now in place |
+|---|---|---|
+| all 421 variant lines built at the wrong cache window (2026-09-30 vs 2026-10-05) | the sweep's own **LIVE control row** scored -113.3843 where the known config scores +4.0627 | `_buildlines.py` **asserts** the LIVE key equals score39's at import, both windows in the message |
+| a dead loop in `_chain10`'s branch-1 scan that assigned nothing and crashed at the tape end | it killed the overnight sweep with an IndexError at bar 1,632,960 | deleted; the real loop beside it already had the correct `min(N - 1, ...)` bound |
