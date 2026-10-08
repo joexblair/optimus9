@@ -350,3 +350,46 @@ been invisible here. They are NOT duplicated into this file — the single durab
 
 Results: `docs/octo-freedom/1005_scored_outcomes.md`. Runnable chain + the 298 octo-sig inputs:
 `docs/octo-freedom/1005_scoring/`. Per-trade P&L: MySQL `lazyg_compound`.
+
+---
+
+## #62 THE 1008 SWEEP — WHAT IS MEASURED AND WHAT IS NOT. ADDED 1008.
+
+Nine hours of unattended sweeping over the full 95-day tape. Full detail in
+`docs/octo-freedom/1007_ws12_baton.md` §25-§33 and the summary section at its end.
+
+**THE THREE CHANGES I WOULD MAKE**, together -4.0151 over 95 days with fit -0.7897 / hold -3.2254,
+MFE/MAE 1.06, and every component passing an out-of-sample test:
+
+| the change | from | to |
+|---|---|---|
+| `mae_stop_pct` | 1.1 | **2.5** |
+| the walk's x-cross exit | live | **OFF** (`W_NOX=1`, the switch already exists) |
+| `reent_xwob` | 6 | **18** |
+
+**THE CHAIN STILL DOES NOT PAY ITS FEES.** -0.0029 per leg against a 0.11 round trip, and slippage
+is unset on top. No config measured clears it out of sample.
+
+**WHAT IS SETTLED AND NEEDS NO FURTHER SWEEPING:** the `r`, `Mage` and `x` line specs (32 variants,
+**0** beat the live spec on both halves), the baton pass `oob` (`stalled` is 34.19 worse, worst
+MFE/MAE at 0.82), gate A over gate B (8.37), `oob_hi`/`oob_lo` 85/15, `dip_fence` 53,
+`dip_dwell_bars` 6.
+
+**WHAT HAS NO MEASURED VALUE, ONLY A MEASURED UNCERTAINTY** - each picks the opposite value on the
+two halves of the tape: `ceil_trig_tf` (fit 8, hold 12 - Joe's), `stall_n` (fit 6, hold 4),
+`rrev_wob` (fit 2, hold 1), `oob_gate_fence` (+34.21 in one context, -14.17 in another).
+
+**STILL UNTOUCHED AND STILL HELD:** #60 (the stall sampling width, TFs 1-8) and #61 (the x-cross
+TARGET - x X r vs x X m vs x X Mage/b/boundary). The 1008 sweep moved the x LINE's own spec, never
+the target.
+
+**THE HARNESS IS BUILT AND VERIFIED** for tomorrow's sweep, in `docs/octo-freedom/1005_scoring/`:
+`_cfgworker.py` (one knob config -> per-day realised, so any block scores from one run),
+`_lineworker.py` (one line variant, r / Mage / x), `_buildlines.py` and `_buildlinesx.py` (line
+variants, with an **assert** that the cache window matches score39's), `_holdout.py`, `_sweep.py`,
+`_sweep2.py`, `_overnight.py`, `_onedaydecisions.py`. Chain runs parallelise cleanly at `-P 6` on
+the 16 cores; the line BUILDS must stay sequential.
+
+**THE METHOD LESSON, measured three times:** one-at-a-time bests do not compose. The granular
+centroid collapsed the chain to 441 legs at -29.30 where each of its five knobs improved alone.
+Any future sweep needs its winner re-measured as a whole, and a hold-out block that chooses nothing.
