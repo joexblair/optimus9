@@ -53,11 +53,11 @@ def base_chain(gate, seed, last):
                          real=(float(PX[xk]) - p0) / p0 * 100.0 * sgn, why=why, hand=hand, d=d,
                          naked=0.0, imp=0.0, walkfrom=k, land=k, frame=d, lw='no walk'))
         if why == 'mae breach':
-            rb, cf = T.find_reentry(xk, gate, last)
+            rb, cf, sd = T.find_reentry(xk, gate, last)
             if cf is None:
                 rows.append(dict(brk=True, a=xk, b=None)); break
-            rows.append(dict(brk=True, a=xk, b=cf, rb=rb))
-            k, d, seg_n = cf, +1, 0
+            rows.append(dict(brk=True, a=xk, b=cf, rb=rb, sd=sd))
+            k, d, seg_n = cf, sd, 0
             continue
         if xk >= last: break
         k = xk; d = -d

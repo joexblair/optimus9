@@ -13,7 +13,7 @@ THE MECH, as those rulings fix it:
 
   the walk's frame     int(DRv[k]) - the tape dr at the open bar. Joe's "towards dr".
   the trade's side     untouched: the alternation for an alternation open, +1 for a re-entry open.
-  the re-entry router  untouched. The ws1x pierce / return / x_rev_xwob 6 conf bar is found exactly
+  the re-entry router  untouched. The ws1x hold / reent_xwob 6 conf bar is found exactly
                        as the baseline finds it, and the walk starts FROM that conf bar.
   while naked          NO MAE, NO 1.10 stop. Nothing is open, so nothing can be stopped.
   the entered leg      the unchanged composed mech, C.run_leg(landing, native side) - lineage walk
@@ -263,11 +263,11 @@ def run_chain_naked(gate, noland, frame='dr', seed=None, last_open=None, conflue
                          why=why, hand=hand, mae_meas=mae,
                          tr=(tr if why == 'mae breach' else None)))
         if why == 'mae breach' or (seg_n == 7 and n == 7):
-            rb, cf = T.find_reentry(xk, gate, LAST)
+            rb, cf, sd = T.find_reentry(xk, gate, LAST)
             if cf is None:
                 rows.append(dict(brk=True, a=xk, b=None)); break
-            rows.append(dict(brk=True, a=xk, b=cf, rb=rb))
-            k, d, seg_n = cf, +1, 0
+            rows.append(dict(brk=True, a=xk, b=cf, rb=rb, sd=sd))
+            k, d, seg_n = cf, sd, 0
             continue
         if xk >= LAST: break
         k = xk; d = -d

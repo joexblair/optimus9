@@ -36,24 +36,59 @@ START_D, END_D = '2026-09-25', '2026-09-26'
 LAST_OPEN = K(END_D, '23:59:55')
 DAYOF = lambda k: datetime.datetime.utcfromtimestamp(int(SC.ts[k]) / 1000).strftime('%Y-%m-%d')
 
-below = (X1 < R1) & np.isfinite(X1) & np.isfinite(R1)
+# THE RE-ENTRY ROUTER, 1008. Joe: *"I advised you to drop the pierce. delete it from every doc
+# and the code"* and *"apply the mirror"*.
+#
+# NO PIERCE. The router no longer requires ws1x to have dipped the other side of ws1r first. A HOLD
+# is the whole signal.
+#
+# TWO MIRRORED BRANCHES, first to fire wins:
+#   LONG   ws1x holds AT OR ABOVE ws1r for reent_xwob bars; ws1r <= momo_fence_r 17 at the hold's
+#          first bar; ws12Mage > ws1Mage at conf.
+#   SHORT  ws1x holds AT OR BELOW ws1r for reent_xwob bars; ws1r >= 100 - momo_fence_r = 83 at the
+#          hold's first bar; ws12Mage < ws1Mage at conf.
+#
+# conf = the hold's first bar + reent_xwob - 1, the first bar the hold is knowable, and the only bar
+# a re-entry can be placed on.
+#
+# FIRST-TO-FIRE IS MINE, stated so it can be flipped: the two branches cannot fire on the same bar
+# because ws1x cannot be both sides of ws1r, so the chain takes whichever conf comes first.
+EXF_HI = 100.0 - EXF_LO
+_fin = np.isfinite(X1) & np.isfinite(R1)
 idx = np.arange(N)
-above_run = (idx + 1) - np.maximum.accumulate(np.where(below, 0, idx + 1))
-held = above_run >= XWOB
-CONF = held & ~np.r_[False, held[:-1]]
-RETURNS = [(int(c) - (XWOB - 1), int(c)) for c in np.flatnonzero(CONF) if int(c) - (XWOB - 1) >= 1]
 
-gate_A = lambda rb, cf: (float(R1[rb]) <= EXF_LO
-                         and float(MG[SC.TF[-1]][cf]) > float(MG[1][cf]))
-gate_B = lambda rb, cf: all(float(MG[t][cf]) > 50.0 for t in SC.TF)
+
+def _holds(mask):
+    """conf bars where `mask` has held reent_xwob bars, and the first bar of each hold."""
+    run = (idx + 1) - np.maximum.accumulate(np.where(mask, 0, idx + 1))
+    held = run >= XWOB
+    conf = held & ~np.r_[False, held[:-1]]
+    return [(int(c) - (XWOB - 1), int(c)) for c in np.flatnonzero(conf)
+            if int(c) - (XWOB - 1) >= 1]
+
+
+RET_L = [(rb, cf, +1) for rb, cf in _holds((X1 >= R1) & _fin)]
+RET_S = [(rb, cf, -1) for rb, cf in _holds((X1 <= R1) & _fin)]
+RETURNS = sorted(RET_L + RET_S, key=lambda z: z[1])
+# THE INVARIANT, not a comment: every hold bar must sit on the side its branch claims.
+assert all((float(X1[rb]) >= float(R1[rb])) if sd > 0 else (float(X1[rb]) <= float(R1[rb]))
+           for rb, _, sd in RETURNS[:4000]), 'a hold bar is on the wrong side of ws1r'
+
+gate_A = lambda rb, cf, sd: ((float(R1[rb]) <= EXF_LO
+                              and float(MG[SC.TF[-1]][cf]) > float(MG[1][cf])) if sd > 0
+                             else (float(R1[rb]) >= EXF_HI
+                                   and float(MG[SC.TF[-1]][cf]) < float(MG[1][cf])))
+gate_B = lambda rb, cf, sd: (all(float(MG[t][cf]) > 50.0 for t in SC.TF) if sd > 0
+                             else all(float(MG[t][cf]) < 50.0 for t in SC.TF))
 
 def find_reentry(stop_bar, gate, last_open=None):
+    """the first conf bar after the stop whose branch's gate passes. Returns (rb, cf, side)."""
     lim = LAST_OPEN if last_open is None else last_open
-    for rb, cf in RETURNS:
+    for rb, cf, sd in RETURNS:
         if cf <= stop_bar: continue
-        if cf > lim: return None, None
-        if gate(rb, cf): return rb, cf
-    return None, None
+        if cf > lim: return None, None, 0
+        if gate(rb, cf, sd): return rb, cf, sd
+    return None, None, 0
 
 def mm(s_, e_, dd):
     seg = PX[s_:e_ + 1]
@@ -76,11 +111,11 @@ def run_chain(gate):
                          real=(float(PX[xk]) - p0) / p0 * 100.0 * sgn, why=why, hand=hand, d=d,
                          mae_meas=mae, tr=(tr if why == 'mae breach' else None)))
         if why == 'mae breach' or (seg_n == 7 and n == 7):
-            rb, cf = find_reentry(xk, gate)
+            rb, cf, sd = find_reentry(xk, gate)
             if cf is None:
                 rows.append(dict(brk=True, a=xk, b=None)); break
-            rows.append(dict(brk=True, a=xk, b=cf, rb=rb))
-            k, d, seg_n = cf, +1, 0
+            rows.append(dict(brk=True, a=xk, b=cf, rb=rb, sd=sd))
+            k, d, seg_n = cf, sd, 0
             continue
         if xk >= LAST_OPEN: break
         k = xk; d = -d

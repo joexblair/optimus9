@@ -397,20 +397,28 @@ tables), `_reentry_x.py` / `_reentry_x2.py` (the cross and the gates), `_pierce0
 Joe 1007: *"we're only wobbing the cross back towards 50. this makes it possible to allow a thin
 ws1x spike to pierce down through ws1r before reversing back towards 50"*.
 
-- **the pierce**: ws1x drops below ws1r. NO WOB - a thin spike qualifies. The 08:46:15 pierce is
-  **2 bars** and the 08:11:20 pierce is **1 bar**; both returned with long runs.
-- **the return**: ws1x crosses back above ws1r and HOLDS `x_rev_xwob` bars.
+- **NO PIERCE.** Joe 1007: *"the pierces aren't important to the mech"*; Joe 1008: *"I advised you
+  to drop the pierce. delete it from every doc and the code"*. **A HOLD IS THE WHOLE SIGNAL** - the
+  router no longer asks whether ws1x came from the other side of ws1r.
+- **the hold, LONG**: ws1x sits AT OR ABOVE ws1r for `reent_xwob` 6 bars.
+- **the hold, SHORT** - THE MIRROR, Joe 1008 *"apply the mirror"*: ws1x sits AT OR BELOW ws1r for
+  `reent_xwob` 6 bars.
+- **the branches cannot collide** - ws1x cannot be both sides of ws1r - so the chain takes whichever
+  conf bar comes first. FIRST-TO-FIRE IS MINE, stated so it can be flipped.
 - **conf = return + xwob - 1**, the first bar the return is knowable, and the only bar a re-entry
   can be placed on.
-- **xwob 6, not 8**: the 11:19:05 return holds 6 bars and not 8, so xwob 8 falls back to 11:14:30 -
-  5.9 min early at 0.6697 worse.
+- **`reent_xwob` 6, not 8**: the 11:19:05 hold runs 6 bars and not 8, so 8 falls back to 11:14:30 -
+  5.9 min early at 0.6697 worse. **It is its own knob since 1008** - §23. Over 95 days 6 measured
+  1.5572 WORSE than 8, so this one-episode ruling is contradicted at scale and is open.
 
 ### THE TWO GATES A/B'd
 
 | | gate |
 |---|---|
-| **A** | ws1r <= `momo_fence_r` 17 at the RETURN bar, AND ws12Mage > ws1Mage at conf |
-| **B** | every Mage ws1..ws12 > 50 at conf. No ws1r fence - Joe said *"only require"* |
+| **A**, LONG | ws1r <= `momo_fence_r` 17 at the hold's first bar, AND ws12Mage > ws1Mage at conf |
+| **A**, SHORT | ws1r >= 100 - `momo_fence_r` = 83 at the hold's first bar, AND ws12Mage < ws1Mage at conf |
+| **B**, LONG | every Mage ws1..ws12 > 50 at conf. No ws1r fence - Joe said *"only require"* |
+| **B**, SHORT | every Mage ws1..ws12 < 50 at conf |
 
 | option | legs | positive | stops | re-entries | last exit | MAE | MFE | MFE/MAE | realised | at -1.10 |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -817,7 +825,7 @@ trade entry'"*, with his three rulings:
 |---|---|---|
 | 1 | *"every open"* | the walk runs from every bar the chain would have entered on, with no exception |
 | 2 | *"native, ie we don't mangle the side"* | the trade's side is untouched - the alternation for an alternation open, +1 for a re-entry open. Only the walk's FRAME comes from dr |
-| 3 | *"the walk runs from the re-entry's conf bar - no lineage walk for an optimised opening"* | the ws1x pierce / return / `x_rev_xwob` 6 router is untouched and still picks the conf bar; the walk starts FROM it |
+| 3 | *"the walk runs from the re-entry's conf bar - no lineage walk for an optimised opening"* | the ws1x hold / `reent_xwob` 6 router is untouched and still picks the conf bar; the walk starts FROM it |
 
 - the walk's frame is `int(DRv[k])`, the tape dr at the open bar - Joe's *"towards dr"*.
 - while naked there is **no MAE and no 1.10 stop**. Nothing is open, so nothing can be stopped.
@@ -1490,3 +1498,76 @@ Joe 1008: *"defintely separate them"*. **`reent_xwob` 6 is now its own knob** in
 - **every re-entry open is LONG** - the router forces `d = +1`, which is §12's open question.
 - the lowest stop rate on the board is **alternation LONG at 29.3%**; the highest are the two 34%
   buckets. A forced-LONG re-entry stops 4.7 points more often than an alternation LONG.
+
+---
+
+## 24. THE PIERCE DELETED, THE ROUTER MIRRORED
+
+Joe 1008: *"I advised you to drop the pierce. delete it from every doc and the code"* / *"apply the
+mirror"*.
+
+### WHAT THE ROUTER IS NOW
+
+| the step | LONG branch | SHORT branch |
+|---|---|---|
+| the pierce | **GONE** | **GONE** |
+| the hold | ws1x sits **at or above** ws1r for `reent_xwob` **6** bars | ws1x sits **at or below** ws1r for 6 bars |
+| conf | the hold's first bar + 5 = **25 s later**, the only bar a re-entry can be placed on | same |
+| the fence, at the hold's first bar | ws1r **<= 17** (`momo_fence_r`) | ws1r **>= 83** (100 − `momo_fence_r`) |
+| the Mage line, at conf | ws12Mage **>** ws1Mage | ws12Mage **<** ws1Mage |
+| the open | **LONG** | **SHORT** |
+
+- **a hold is the whole signal.** The router no longer asks whether ws1x came from the other side.
+- **the branches cannot collide** - ws1x cannot be both sides of ws1r - so the chain takes whichever
+  conf bar comes first. FIRST-TO-FIRE IS MINE, stated so it can be flipped.
+- **the invariant is an assert, not a comment**: every hold bar must sit on the side its branch
+  claims, or the run fails.
+- ws1x holds on the whole tape: **29,541 one-sided -> 59,229 with both branches.**
+
+### THE THREE STATES OF THE ROUTER, 95 DAYS, CHAIN 0
+
+| the router | legs | positive | stops | stop rate | MAE | MFE | MFE/MAE | realised | per leg |
+|---|---|---|---|---|---|---|---|---|---|
+| the inverted bug, long-only, pierce required | 1627 | 957 | 533 | 32.8% | 1010.1553 | 1096.9700 | 1.09 | +74.7537 | +0.045946 |
+| the spec's recovery hold, long-only, pierce required | 1755 | 1022 | 587 | 33.4% | 1097.1429 | 1162.9352 | 1.06 | +44.7233 | +0.025483 |
+| **no pierce, MIRRORED** | **2201** | **1296** | **731** | **33.2%** | 1372.4413 | 1510.5120 | **1.10** | **+95.1818** | +0.043245 |
+
+- **the mirror recovers everything the fix cost and more**: +44.7233 -> **+95.1818**, a **+50.46**
+  swing, and **+20.43** above even the inverted bug's number.
+- MFE/MAE **1.10**, the best of the three.
+- the stop rate is unchanged at **33.2%** - the mirror adds legs, not risk per leg.
+
+| how the open bar was chosen | side | legs | stops | stop rate | realised |
+|---|---|---|---|---|---|
+| re-entry open | LONG | 411 | 146 | 35.5% | +12.8508 |
+| re-entry open | **SHORT** | **320** | 118 | **36.9%** | **+3.2375** |
+| alternation | LONG | 708 | 212 | **29.9%** | +39.3811 |
+| alternation | SHORT | 761 | 255 | 33.5% | +37.7254 |
+
+- **the SHORT branch fires 320 times and earns +3.2375** - thin per leg, but it is 320 legs the
+  router could not place before.
+- re-entry opens are now **731 of 2201 legs (33.2%)** and **264 of 731 stops (36.1%)**.
+- the lowest stop rate on the board is still **alternation LONG at 29.9%**; the highest is the new
+  **re-entry SHORT at 36.9%**.
+
+| the re-entry opens that stopped | value |
+|---|---|
+| count | 264 |
+| fastest stop | 0.2 min, 2026-08-26 12:32:45 |
+| median hold to the stop | 26.2 min |
+| slowest stop | 195.2 min, 2026-09-11 23:49:35 |
+| stopped within 10 min | 52 of 264 (19.7%) |
+
+### WHAT WAS DELETED
+
+- **the spec**: §12's *"the pierce: ws1x drops below ws1r. NO WOB"* bullet is replaced by **NO
+  PIERCE**, carrying Joe's 1007 *"the pierces aren't important to the mech"* and his 1008 ruling.
+  The gate-A and gate-B tables now carry both branches. Every *"ws1x pierce / return / `x_rev_xwob`
+  6 router"* phrase is now *"ws1x hold / `reent_xwob` 6 router"* - the old phrase also named the
+  wrong knob, per §23.
+- **the code**: `pierce_of()` deleted from `_opens0922.py` and `_reent0922.py`, the pierce assert
+  dropped from `_chain_2day.py`, and the pierce columns removed from both report tables.
+- **kept on purpose**: `_pierce0810.py` and `_retest0849.py` are the 1007 measurements that led to
+  the ruling. They are history, not the live mech, and the spec's file list says so.
+- **also noted in §12**: `reent_xwob` 6 was chosen on ONE episode where it beat 8 by 0.6697. Over 95
+  days 6 measures **1.5572 worse** than 8. That ruling is contradicted at scale and is open.

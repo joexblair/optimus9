@@ -40,9 +40,9 @@ def chain0(gate, seed, last):
         rows.append(dict(leg=n, side='LONG' if d > 0 else 'SHORT', open=k, exit=xk, tag=tag,
                          real=(float(PX[xk]) - p0) / p0 * 100.0 * sgn, why=why, d=d, hand=hand))
         if why == 'mae breach':
-            rb, cf = T.find_reentry(xk, gate, last)
+            rb, cf, sd = T.find_reentry(xk, gate, last)
             if cf is None: break
-            k, d, tag = cf, +1, 're-entry open'
+            k, d, tag = cf, sd, 're-entry open'
             continue
         if xk >= last: break
         k = xk; d = -d; tag = 'alternation'
@@ -103,7 +103,7 @@ box(('the measure', 'value'),
      ('stopped within 10 min', '%d of %d (%.1f%%)'
       % (sum(1 for h in hold if h <= 10), len(hold), 100.0 * sum(1 for h in hold if h <= 10) / len(hold)))])
 
-print('\n# SIDE SPLIT — the router forces LONG on every re-entry open')
+print('\n# SIDE SPLIT — the router is MIRRORED now, Joe 1008')
 rows = []
 for tag in ('re-entry open', 'alternation'):
     G = [r for r in L if r['tag'] == tag]

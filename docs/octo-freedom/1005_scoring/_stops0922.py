@@ -8,7 +8,7 @@ October day in the 95-day run. The next are 09-21 at 11 and 09-18 / 09-29 at 9.
 
 CHAIN 0 is the banked mech, no entry-optimising walk: the lineage walk with the baton passing on
 **oob** and exiting on **x-cross** or **final stalled**, the >ws12 oob mech taking the exit after the
-handover, and the 1.10 MAE stop per leg. Gate A's ws1x pierce / return / `x_rev_xwob` 6 router finds
+handover, and the 1.10 MAE stop per leg. Gate A's ws1x hold / `reent_xwob` 6 router finds
 the re-entry after each stop.
 
 THE CHAIN IS SEEDED AT THE TAPE'S FIRST BAR, as the 95-day run was, so these legs are the ones the
@@ -39,11 +39,11 @@ def chain0(gate, seed, last):
                          real=(float(PX[xk]) - p0) / p0 * 100.0 * sgn, why=why, hand=hand, d=d,
                          mae=mae, tr=tr))
         if why == 'mae breach':
-            rb, cf = T.find_reentry(xk, gate, last)
+            rb, cf, sd = T.find_reentry(xk, gate, last)
             if cf is None:
                 rows.append(dict(brk=True, a=xk, b=None, rb=None)); break
-            rows.append(dict(brk=True, a=xk, b=cf, rb=rb))
-            k, d, seg_n = cf, +1, 0
+            rows.append(dict(brk=True, a=xk, b=cf, rb=rb, sd=sd))
+            k, d, seg_n = cf, sd, 0
             continue
         if xk >= last: break
         k = xk; d = -d
