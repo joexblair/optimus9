@@ -23,6 +23,18 @@ import _chain_2day as T
 
 GB = int(os.environ['X_GB'])
 C.GATE_BARS = GB                   # run_leg reads it as a module global
+# X_CEIL overrides ceil_hi. 23 is Joe's banked ceiling rule; 12 turns the EXTENSION OFF, so the
+# baton can never climb above lazy_g band_hi 12. Joe 1008: *"didn't think to turn off 'if ws12r
+# crosses into oob, then extend the max TF to ws23'"*. The lines and stall masks for ws13..ws23 are
+# still built at import - `t <= ceil` just never selects them - so the only thing that changes is
+# the walk's reach.
+CEIL = int(os.environ.get('X_CEIL', C.CEIL_HI))
+C.CEIL_HI = CEIL
+# X_DIPDWELL overrides dip_dwell_bars - the ws1Mage dip dwell INSIDE the >ws12 mech, banked at 6
+# bars = 30 s. Joe 1008: *"with the associated and secondary dwell sweep"*. Which of the two dwells
+# he meant is not stated, so both are swept and neither is chosen.
+DD = int(os.environ.get('X_DIPDWELL', C.DIP_DWELL))
+C.DIP_DWELL = DD
 SC, PX = C.SC, C.PX
 N = len(SC.ts); FEE = 0.11
 DAYOF = lambda k: datetime.datetime.fromtimestamp(int(SC.ts[k]) / 1000,
@@ -40,7 +52,8 @@ def mm(s_, e_, dd):
     return (max(0.0, -((g - p_) / p_ * 100.0 * dd)), (f - p_) / p_ * 100.0 * dd)
 
 legs = []; k, d, g = 1, +1, 0
-nhand = nref = 0
+nhand = nref = nceil = 0
+rid = collections.Counter()
 while True:
     g += 1
     if g > 20000: break
@@ -48,6 +61,10 @@ while True:
     if xk is None: break
     p0 = float(PX[k]); sgn = 1 if d > 0 else -1
     if hand is not None: nhand += 1
+    if cb is not None: nceil += 1
+    for _b, _l in tr:
+        if _l.startswith('KICKSTART'): rid[int(_l.split('rider ws')[1].split(' ')[0])] += 1
+        elif _l.startswith('baton -> ws'): rid[int(_l.split('baton -> ws')[1].split(' ')[0])] += 1
     nref += sum(1 for _, lbl in tr if lbl.startswith('DELEGATION REFUSED'))
     legs.append(dict(day=DAYOF(k), why=why, open=k, exit=xk, dd=d,
                      real=(float(PX[xk]) - p0) / p0 * 100.0 * sgn))
@@ -65,7 +82,8 @@ for r in legs:
     e[0] += r['real']; e[1] += 1; e[2] += 1 if r['why'] == 'mae breach' else 0
     e[3] += a_; e[4] += f_
     whys[r['why']] += 1
-print(json.dumps(dict(dgate=C.DGATE, gb=GB, mins=round(GB * 5 / 60.0, 1), legs=len(legs),
-                      handovers=nhand, refusals=nref, whys=dict(whys),
+print(json.dumps(dict(dgate=C.DGATE, gb=GB, ceil=CEIL, dd=DD, mins=round(GB * 5 / 60.0, 1),
+                      legs=len(legs), handovers=nhand, refusals=nref, nceil=nceil,
+                      riders={str(t): c for t, c in sorted(rid.items())}, whys=dict(whys),
                       per={k_: [round(v[0], 4), v[1], v[2], round(v[3], 4), round(v[4], 4)]
                            for k_, v in sorted(per.items())})), flush=True)

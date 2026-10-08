@@ -265,7 +265,11 @@ def run_leg(k0, d):
                                % (tj, 1 if d > 0 else -1)))
         else:
             oob_a = None; gate_shut = False     # the oob run broke, so the latch clears with it
-        if ceil == BASE_HI and goob(TRIG_TF, j, d) and not goob(TRIG_TF, j - 1, d):
+        # CEIL_HI > BASE_HI guards the ceil_hi 12 arm: with CEIL_HI == BASE_HI the assignment
+        # leaves `ceil == BASE_HI` true, so this branch re-fired on EVERY later oob crossing and
+        # appended a duplicate 'CEILING ws12 -> ws12' line. Behaviour was always identical.
+        if CEIL_HI > BASE_HI and ceil == BASE_HI \
+           and goob(TRIG_TF, j, d) and not goob(TRIG_TF, j - 1, d):
             ceil = CEIL_HI; ceil_bar = j
             tr.append((j, 'CEILING ws%d -> ws%d (ws%dr %.2f)'
                        % (BASE_HI, CEIL_HI, TRIG_TF, float(R[TRIG_TF][j]))))
