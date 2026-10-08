@@ -1417,3 +1417,76 @@ show them in the standard timestamped-rows event table"*.
 - the 192.0 min gap after the 01:05:10 stop is the longest; the router sat out 3.2 hours.
 - running MAE **14.9732** against running MFE **8.7885** - MFE/MAE **0.59** on the day, against
   1.09 over the 95.
+
+---
+
+## 23. THE KNOBS SEPARATED, AND WHAT OPENS THE STOPS
+
+### THE DEFECT, FOUND IN MY OWN OUTPUT
+
+`_chain_2day.py:31` read `XWOB = int(C.W['x_rev_xwob'])` = **8**. That knob is the x-cross that
+precedes the r reversal in the **>ws12 divergence mech**, on ws1/ws2, owner mine, fitted=1. The
+**re-entry router's hold** was ruled at **6** in §12 - *"xwob 6, not 8: the 11:19:05 return holds 6
+bars and not 8, so xwob 8 falls back to 11:14:30 - 5.9 min early at 0.6697 worse"*. I wired one mech
+to the other mech's knob, and §12 and §15 both wrote "`x_rev_xwob` 6 router", naming it at a value
+it never held.
+
+Joe 1008: *"defintely separate them"*. **`reent_xwob` 6 is now its own knob** in
+`ws12_baton_config` v1, section `reentry`, owner joe. `x_rev_xwob` 8 is untouched.
+
+### WHAT THE SEPARATION COST
+
+| chain 0, 95 days | at the old hold 8 | at `reent_xwob` 6 | the change |
+|---|---|---|---|
+| legs | 1542 | **1627** | +85 |
+| positive | 914 | 957 | +43 |
+| stops | 501 | **533** | +32 |
+| stop rate | 32.5% | 32.8% | +0.3 pt |
+| running MAE | 954.6947 | 1010.1553 | +55.46 |
+| running MFE | 1036.4464 | 1096.9700 | +60.52 |
+| MFE/MAE | 1.09 | 1.09 | 0.00 |
+| realised | **+76.3109** | **+74.7537** | **-1.5572** |
+| realised per leg | +0.049488 | +0.045946 | -0.003542 |
+
+- **6 is worse than 8 over 95 days**, by 1.5572, and it is thinner per leg. §12 chose 6 on **one
+  episode** (the 11:19:05 return) where it was 0.6697 better. The 95-day reading reverses that.
+- 29,688 ws1x returns exist on the whole tape at hold 6.
+
+### JOE'S SUSPICION — "a lot of the stops in the full window are re-entry"
+
+| how the open bar was chosen | legs | positive | stops | stop rate | MAE | MFE | MFE/MAE | realised | realised per leg |
+|---|---|---|---|---|---|---|---|---|---|
+| re-entry open | 533 | 299 | **181** | **34.0%** | 332.1390 | 398.3005 | **1.20** | +25.0098 | +0.046923 |
+| alternation | 1093 | 657 | **352** | **32.2%** | 676.9390 | 696.3592 | 1.03 | +47.7570 | +0.043693 |
+| seed | 1 | 1 | 0 | 0.0% | 1.0773 | 2.3104 | 2.14 | +1.9870 | +1.986986 |
+| ALL LEGS | 1627 | 957 | 533 | 32.8% | 1010.1553 | 1096.9700 | 1.09 | +74.7537 | +0.045946 |
+
+| how the stopped leg was opened | stops | share of all stops |
+|---|---|---|
+| alternation | 352 | **66.0%** |
+| re-entry open | 181 | **34.0%** |
+
+- **the suspicion does not hold.** Re-entry opens are **32.8% of legs** and **34.0% of stops** - the
+  same share. Their stop RATE is 34.0% against the alternation legs' 32.2%, a 1.8 point difference.
+- **re-entry opens are the BETTER half on quality**: MFE/MAE **1.20** against 1.03, and +0.046923
+  realised per leg against +0.043693.
+- **the stop is not a re-entry problem. It is a chain-wide problem**: roughly one leg in three
+  stops regardless of how its open bar was chosen.
+
+| the re-entry opens that stopped | value |
+|---|---|
+| count | 181 |
+| fastest stop | **0.2 min**, 2026-08-22 18:02:55 |
+| median hold to the stop | 26.7 min |
+| slowest stop | 212.6 min, 2026-07-07 01:04:50 |
+| stopped within 10 min | 27 of 181 (14.9%) |
+
+| how the open bar was chosen | side | legs | stops | stop rate | realised |
+|---|---|---|---|---|---|
+| re-entry open | LONG | 533 | 181 | 34.0% | +25.0098 |
+| alternation | LONG | 434 | 127 | **29.3%** | +17.5107 |
+| alternation | SHORT | 659 | 225 | 34.1% | +30.2463 |
+
+- **every re-entry open is LONG** - the router forces `d = +1`, which is §12's open question.
+- the lowest stop rate on the board is **alternation LONG at 29.3%**; the highest are the two 34%
+  buckets. A forced-LONG re-entry stops 4.7 points more often than an alternation LONG.

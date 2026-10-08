@@ -28,7 +28,9 @@ R1, X1 = C.R[1], C.X[1]
 N = len(SC.ts)
 MG = {t: SC.Mg[t][:N] for t in SC.TF}
 EXF_LO = float(SC.LG['momo_fence_r'])
-XWOB = int(C.W['x_rev_xwob'])
+XWOB = int(C.W['reent_xwob'])   # THE RE-ENTRY ROUTER'S OWN HOLD, Joe 1007 "xwob 6, not 8".
+#                                Joe 1008 "defintely separate them": this used to read
+#                                x_rev_xwob, which is the >ws12 divergence mech's knob at 8.
 K = lambda d, t: SC.K('%s %s' % (d, t))
 START_D, END_D = '2026-09-25', '2026-09-26'
 LAST_OPEN = K(END_D, '23:59:55')

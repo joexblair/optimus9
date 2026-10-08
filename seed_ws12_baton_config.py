@@ -93,6 +93,13 @@ ROWS = [
   'MEASURED knee 1007: spurious crosses reach 0 at 6 bars on ws1 and 8 on ws2, so 8 clears both',
   'at 8 the cross LEADS the reversal by a 5 s median on ws2 and 10 s on ws1 - Joe: "BBs lead Ks"'),
 
+ # ---- the re-entry router, SEPARATED from the divergence mech 1008
+ ('reentry','reent_xwob','6','int','bars','joe',0,1,
+  'Joe 1007 "xwob 6, not 8"; SS12. Joe 1008 "defintely separate them" after the code was found '
+  'reading x_rev_xwob 8, which belongs to the >ws12 divergence mech, not this router',
+  'the ws1x return must HOLD this many bars above ws1r. conf = return + reent_xwob - 1. '
+  '30 s at the 5 s grid. At 8 the 11:19:05 return is missed and the router falls back 5.9 min'),
+
  # ---- the mage-rev tests
  ('mage_rev','dr_aligned','1','int','bool','joe',0,1,
   'Joe 1007 "all mage-rev tests are dr aligned: +dr requires a hi oob Mage"',
