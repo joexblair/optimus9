@@ -1261,3 +1261,95 @@ realised on 09-25 now beats the baseline. Those two facts sit together and are n
 - a labelling note, not a defect: the `what landed the walk` column reports the fence state **on the
   walk's own frame**. Leg 14's *"r 97.81, in-fence"* is on frame −1, where in-fence means "not at
   the LOW fence". The same value is hi oob on frame +1.
+
+---
+
+## 21. 15:41 CONFIRMED, AND THE FULL WINDOW — 95 DAYS
+
+Joe 1008: *"what happened to the 15:41 signal? it was on my stopped list and the reason I bought up
+the idea of walking signals for optimisation"* / *"honestly, I'm not sure if this is a valualble
+mech. after 15:41 is confirmed, let's test across the full window"*.
+
+### 15:41 IS CONFIRMED
+
+| | the walk | entry bar | entry better by % | exit | why | leg MAE | leg MFE | realised |
+|---|---|---|---|---|---|---|---|---|
+| **the turn walk, arm 8 leg 17** | 5.4 min naked | 15:46:25 | **+0.6912** | 16:33:10 | final stalled | 0.6919 | 1.9470 | **+1.9043** |
+| the baseline at the same bar | none | 15:41:00 | +0.0000 | 15:50:40 | **mae breach** | 1.1000 | 0.0000 | **-1.2981** |
+
+- **+3.2024 on the bar that started this**, and the 1.10 stop never fires.
+
+### JOE'S NO-OP CONFLUENCE, BUILT
+
+Joe 1008 on arm-8 leg 1: *"we could confluence that further by looking at ws1r's trajectory +
+infence. in this case it's upward so the walk is immediately a no-op"*.
+
+- the walk's travel is the frame's sign: frame −1 travels DOWN and ends on a turn UP; frame +1
+  travels UP and ends on a turn DOWN.
+- **no-op when ws1r's trajectory is AGAINST the travel AND ws1r is in-fence on the frame.** Both
+  halves are needed; against-the-travel alone is a wiggle, and in-fence is what says no extension is
+  in progress to ride. **Zero new knobs.**
+- trajectory is the sign of (ws1r now − ws1r at its last step change), the same reading as §13's
+  `step_dir`, so it needs no lookback window.
+- **it does not cover leg 2's shape** (04:41:00, ws1r pinned at 100.00 hi oob): that leg is at the
+  extreme, not in-fence, so the test never fires on it.
+
+### THE FULL WINDOW — 2026-07-02 TO 2026-10-04, 95 DAYS, THE WHOLE CONTIGUOUS TAPE
+
+MY READING of *"the full window"*, stated so it can be corrected: the whole tape, 1,632,960 bars at
+5 s, seeded at its first bar with side +1. The chain needs no octo-sig to open, so nothing restricts
+it to the 12 days carrying sanctioned rows.
+
+| arm | legs | positive | stops | re-entries | running MAE | running MFE | MFE/MAE | realised as scored | minutes naked | entry improvement | legs not moved |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| arm 0 — baseline, no walk | 1542 | 914 | 501 | 501 | 954.6954 | 1036.4465 | 1.09 | **+76.3108** | 0.0 | +0.0000 | 1542 |
+| **arm 8 — TURN walk, frame dr** | 1513 | 908 | **475** | 475 | 935.8284 | 1019.9250 | 1.09 | **+91.1220** | 2366.8 | -5.4948 | **63** |
+| arm 9 — TURN walk, frame dr **+ Joe's confluence** | 1518 | 899 | 490 | 490 | 941.6690 | 1018.7519 | 1.08 | **+71.2483** | 948.9 | -4.9350 | **929** |
+| arm 10 — TURN walk, frame = inverse of the side + confluence | 1525 | 914 | 487 | 487 | 945.4821 | 1034.7770 | 1.09 | +83.7766 | 1379.6 | -15.0313 | 725 |
+
+| arm | days | days it BEAT the baseline | days it LOST | realised vs the baseline |
+|---|---|---|---|---|
+| arm 8 | 95 | **50** | 45 | **+14.8112** |
+| arm 9 | 95 | 40 | **55** | **-5.0625** |
+| arm 10 | 95 | 36 | 59 | +7.4658 |
+
+### THE EDGE IS FIVE DAYS, NOT NINETY-FIVE
+
+| the measure | arm 8 against the baseline |
+|---|---|
+| total over 95 days | **+14.8109** |
+| days positive / negative | **50 / 45**, none equal |
+| **median daily delta** | **+0.0671** |
+| the best 5 days contribute | **+37.6929** |
+| the worst 5 days contribute | **-29.6443** |
+| **the total without the best 5 days** | **-22.8820** |
+
+| rank | day | arm 8 − arm 0 |
+|---|---|---|
+| best 1 | 2026-07-06 | **+10.4569** |
+| best 2 | 2026-08-27 | +8.9328 |
+| best 3 | 2026-08-28 | +8.0777 |
+| best 4 | 2026-09-22 | +5.1854 |
+| best 5 | 2026-09-19 | +5.0401 |
+| worst 1 | 2026-09-16 | **-7.9256** |
+| worst 2 | 2026-08-30 | -6.2006 |
+| worst 3 | 2026-09-20 | -5.4644 |
+| worst 4 | 2026-09-26 | -5.2957 |
+| worst 5 | 2026-08-26 | -4.7580 |
+
+### WHAT THE 95 DAYS SAY
+
+- **the whole +14.8112 is carried by 5 of 95 days.** Removing them leaves **-22.8820**. The median
+  day is **+0.0671** - effectively zero.
+- **50 of 95 days positive** is a 52.6% day rate on an n of 95.
+- **arm 8 does remove 26 stops**, 475 against 501, and that is distributed rather than concentrated.
+- **the version that matches Joe's design intent loses.** arm 9 leaves **929 of 1518 legs
+  untouched** - his *"most open signals don't need to move"* - and comes in at **-5.0625 against the
+  baseline**. arm 8 moves **1450 of 1513** legs by a median of about 1.6 min each and is the only
+  arm with a positive total.
+- **the entry improvement is NEGATIVE on every walk arm**: -5.4948, -4.9350, -15.0313. Joe's pxs
+  test is failed across 95 days, not just across two.
+
+**NOTHING IS RULED HERE.** Joe asked *"I'm not sure if this is a valuable mech"* and the 95-day
+answer is: it is not a distributed edge, it is five days; and the shape he designed - leave most
+signals alone - is the shape that loses.

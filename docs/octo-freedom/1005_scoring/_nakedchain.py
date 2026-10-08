@@ -101,7 +101,47 @@ def _fen1(v, d):
     return 'lo oob' if v <= SC.LO else ('lo ex-f' if v <= _EXF_LO else 'in-fence')
 
 
-def turn_walk(k0, d):
+def _traj1(k):
+    """ws1r's TRAJECTORY: the sign of (ws1r now - ws1r at its last step change at or before k).
+
+    The higher-TF r lines are step functions, so the last step is well defined and this needs no
+    lookback window. Same reading as _joereads.py's step_dir.
+    """
+    v = C.R[1]
+    cur = float(v[k]); j = k
+    while j > 0 and (not np.isfinite(v[j - 1]) or float(v[j - 1]) == cur):
+        j -= 1
+    if j <= 0:
+        return 0
+    prev = float(v[j - 1])
+    return 1 if cur > prev else (-1 if cur < prev else 0)
+
+
+def _noop_confluence(k, d):
+    """JOE'S CONFLUENCE — when the walk is an immediate no-op. 1008.
+
+    Joe 1008, on arm-8 leg 1 (02:48:50, LONG, frame -1, ws1r 54.33 in-fence and rising):
+    *"we could confluence that further by looking at ws1r's trajectory + infence. in this case it's
+    upward so the walk is immediately a no-op"*.
+
+    THE WALK'S TRAVEL IS THE FRAME'S SIGN: on frame -1 the travel is DOWN toward the low fence and
+    the terminal turn is UP; on frame +1 the travel is UP and the terminal turn is DOWN.
+
+      no-op when   ws1r's trajectory is AGAINST the travel  AND  ws1r is IN-FENCE on the frame.
+
+    Both halves are needed. Against-the-travel alone is just a wiggle; in-fence is what says there is
+    no extension in progress to ride. Zero knobs - the fences are oob 15/85 and the ex-fence
+    momo_fence_r 17/83, both already settled.
+
+    IT DOES NOT COVER LEG 2's SHAPE (04:41:00, ws1r pinned at 100.00 hi oob). That leg is at the
+    extreme, not in-fence, so this test does not fire on it.
+    """
+    v = float(C.R[1][k])
+    infence = not (v >= SC.HI or v >= _EXF_HI) if d > 0 else not (v <= SC.LO or v <= _EXF_LO)
+    return _traj1(k) != d and infence
+
+
+def turn_walk(k0, d, confluence=False):
     """THE TURN WALK — the entry-optimising walk, landing on ws1r's TURN. 1008.
 
     Joe 1008: *"10:17 walked down to the reversl of ws1r at 10:21. at 10:21 it was infence - that's
@@ -123,6 +163,10 @@ def turn_walk(k0, d):
     `ent_rev_wob` 5 is a SECOND knob for a SECOND mech. `rrev_wob` 2 is untouched and still serves
     the >ws12 divergence.
     """
+    if confluence and _noop_confluence(k0, d):
+        v = float(C.R[1][k0])
+        return k0, ('NO-OP — ws1r %.2f is %s on frame %+d and its trajectory is %+d, against the '
+                    'travel' % (v, _fen1(v, d), d, _traj1(k0))), []
     want = WANT_TURN(d)
     for j in range(k0, N):
         if int(REV1T[j]) == want:
@@ -187,7 +231,7 @@ def rev_walk(k0, d):
     return None, 'the walk never terminated', tr
 
 
-def run_chain_naked(gate, noland, frame='dr'):
+def run_chain_naked(gate, noland, frame='dr', seed=None, last_open=None, confluence=False):
     """THE WALK'S FRAME.
 
       'dr'   int(DRv[k]), the tape dr at the open bar, the native side when dr is 0. Arms 1 and 2.
@@ -196,13 +240,14 @@ def run_chain_naked(gate, noland, frame='dr'):
              `d > 0` in the code, so a SHORT trade (side -1) walks on frame +1. Arms 3 and 4.
     """
     rows = []; n = 0
-    k, d, seg_n = T.K(T.START_D, '02:48:50'), +1, 0
+    LAST = T.LAST_OPEN if last_open is None else last_open
+    k, d, seg_n = (T.K(T.START_D, '02:48:50') if seed is None else seed), +1, 0
     while True:
         fr = (int(DRv[k]) or d) if frame in ('dr', 'rev_dr', 'turn_dr') else -d
-        lb, lw, ltr = (turn_walk(k, fr) if frame.startswith('turn')
+        lb, lw, ltr = (turn_walk(k, fr, confluence) if frame.startswith('turn')
                        else rev_walk(k, fr) if frame.startswith('rev')
                        else naked_walk(k, fr))
-        if lb is None or lb > T.LAST_OPEN:
+        if lb is None or lb > LAST:
             if noland == 'end':
                 rows.append(dict(brk=True, noland=k, nw=lw)); break
             lb, lw = k, 'no landing — entered at the open bar'
@@ -218,13 +263,13 @@ def run_chain_naked(gate, noland, frame='dr'):
                          why=why, hand=hand, mae_meas=mae,
                          tr=(tr if why == 'mae breach' else None)))
         if why == 'mae breach' or (seg_n == 7 and n == 7):
-            rb, cf = T.find_reentry(xk, gate)
+            rb, cf = T.find_reentry(xk, gate, LAST)
             if cf is None:
                 rows.append(dict(brk=True, a=xk, b=None)); break
             rows.append(dict(brk=True, a=xk, b=cf, rb=rb))
             k, d, seg_n = cf, +1, 0
             continue
-        if xk >= T.LAST_OPEN: break
+        if xk >= LAST: break
         k = xk; d = -d
     return rows
 

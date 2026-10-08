@@ -45,10 +45,11 @@ gate_A = lambda rb, cf: (float(R1[rb]) <= EXF_LO
                          and float(MG[SC.TF[-1]][cf]) > float(MG[1][cf]))
 gate_B = lambda rb, cf: all(float(MG[t][cf]) > 50.0 for t in SC.TF)
 
-def find_reentry(stop_bar, gate):
+def find_reentry(stop_bar, gate, last_open=None):
+    lim = LAST_OPEN if last_open is None else last_open
     for rb, cf in RETURNS:
         if cf <= stop_bar: continue
-        if cf > LAST_OPEN: return None, None
+        if cf > lim: return None, None
         if gate(rb, cf): return rb, cf
     return None, None
 
