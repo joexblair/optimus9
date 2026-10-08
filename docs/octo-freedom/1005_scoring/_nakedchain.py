@@ -13,11 +13,11 @@ THE MECH, as those rulings fix it:
 
   the walk's frame     int(DRv[k]) - the tape dr at the open bar. Joe's "towards dr".
   the trade's side     untouched: the alternation for an alternation open, +1 for a re-entry open.
-  the re-entry router  untouched. The ws1x hold / reent_xwob 6 conf bar is found exactly
+  the re-entry router  untouched. The ws1x hold / reent_xwob conf bar is found exactly
                        as the baseline finds it, and the walk starts FROM that conf bar.
-  while naked          NO MAE, NO 1.10 stop. Nothing is open, so nothing can be stopped.
+  while naked          NO MAE, NO stop at all. Nothing is open, so nothing can be stopped.
   the entered leg      the unchanged composed mech, C.run_leg(landing, native side) - lineage walk
-                       + the >ws12 oob mech + the 1.10 stop.
+                       + the >ws12 oob mech + the mae_stop_pct stop, whatever it is banked at.
 
 THE NAKED WALK IS THE LINEAGE WALK ONLY - arm, KICKSTART, baton, then `final stalled` or `x-cross`,
 with the ws12r ceiling rule live. It does NOT carry the >ws12 handover: that mech exists to exit an
@@ -317,7 +317,8 @@ def main():
                      '%.2f' % (t['mfe'] / t['mae']) if t['mae'] else 'inf',
                      '%+.4f' % t['real'], '%+.4f' % t['conv'], '%.1f' % nk, '%+.4f' % im))
     box(('arm', 'legs', 'positive', 'stops', 're-entries', 'last exit', 'running MAE', 'running MFE',
-         'MFE/MAE', 'realised as scored', 'realised at -1.10', 'minutes naked', 'entry improvement'),
+         'MFE/MAE', 'realised as scored', 'realised at -%.2f' % MAE_STOP, 'minutes naked',
+         'entry improvement'),
         rows)
     print('- "minutes naked" is time with NOTHING OPEN while a walk walks. It is its own column and')
     print('  its own total; it is not folded into any other number.')

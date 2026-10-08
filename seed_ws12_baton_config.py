@@ -121,10 +121,9 @@ ROWS = [
   '12 arms against -20.3635 across the 12 with it on. It REVERSES on the fit half (-32.82 vs -22.18)'),
 
  # ---- the re-entry router, SEPARATED from the divergence mech 1008
- ('reentry','reent_xwob','18','int','bars','mine',1,1,
-  'SWEPT 1008 over 95 days: 18 bars = 90 s. Joe 1007 ruled 6 ("xwob 6, not 8"; SS12) on ONE leg; '
-  'the sweep is the wider measurement and 18 is its peak. Joe 1008 "defintely separate them" keeps '
-  'this off the >ws12 mech\'s x_rev_xwob 8',
+ ('reentry','reent_xwob','18','int','bars','joe',1,1,
+  'Joe 1007 ruled 6 ("xwob 6, not 8"; SS12) on ONE leg. SWEPT 1008 over 95 days, peak at 18 bars '
+  '= 90 s, and Joe 1008 accepted it with B: "leave it banked"',
   'the ws1x return must HOLD this many bars at-or-beyond ws1r. conf = return + reent_xwob - 1. '
   'At 6 the router fires earlier and more often; at 18 it waits 90 s for the hold to prove out'),
 
@@ -137,9 +136,9 @@ ROWS = [
   'IN NO CONFIG TABLE BEFORE THIS. jig.mage_rev_walk defaults to 0; entry_ab.py:102 passes 48'),
 
  # ---- the review stop
- ('stop','mae_stop_pct','2.5','float','pct','mine',1,1,
-  'SWEPT 1008 over 95 days. Joe 1007 ruled 1.1 ("stop the chain when MAE is >1.1"). At 1.1 the 331 '
-  'legs the wider stop keeps alive are each charged -1.10; between them they only lose -22.64',
+ ('stop','mae_stop_pct','2.5','float','pct','joe',1,1,
+  'Joe 1007 ruled 1.1 ("stop the chain when MAE is >1.1"). SWEPT 1008 over 95 days to 2.5, and Joe '
+  '1008 accepted it with B: "leave it banked". At 1.1 the 331 legs 2.5 keeps alive lose only -22.64',
   "per LEG, from that leg's own open. The leg closes AT the breach bar. Joe 1008's goal is to bring "
   "this DOWN by relocating the opens that need it, so 2.5 is a staging post, not a destination"),
 ]
