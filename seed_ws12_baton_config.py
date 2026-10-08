@@ -104,12 +104,29 @@ ROWS = [
   'MEASURED knee 1007: spurious crosses reach 0 at 6 bars on ws1 and 8 on ws2, so 8 clears both',
   'at 8 the cross LEADS the reversal by a 5 s median on ws2 and 10 s on ws1 - Joe: "BBs lead Ks"'),
 
+ # ---- the lineage walk's x-cross TARGET, swept 1008 (#61)
+ ('xcross','x_tgt_role','b','str',None,'mine',1,1,
+  'SWEPT 1008 (#61, 25 arms x 95 days). Joe "go for B". Ranked on the FIT half alone this arm is '
+  'rank 1 of 25 at +0.7511 and then +4.0801 on the hold half',
+  "the LINE the rider's x must cross. b is bb 49/0.95, the slowest of the five wsf roles; r (k "
+  "5/8/7) is what the walk crossed before. CAVEAT: Spearman fit-vs-hold across the 25 arms is "
+  "-0.137, so the ranking itself does not transfer"),
+ ('xcross','x_tgt_tfs','next','str',None,'mine',1,1,
+  'SWEPT 1008 (#61). next = h+1 only. both = h+1 AND h+2, which is what the walk used before; '
+  'self = h itself, #61\'s own structure',
+  'h is the rider TF. At both/fence-on the same arm scores -36.6819 on the fit half'),
+ ('xcross','x_tgt_fence','0','int','bool','mine',1,1,
+  'SWEPT 1008 (#61). 0 = the target line needs no in-fence test; 1 is what `bnd(t,k,d)=="."` did',
+  'the only #61 result that is a PATTERN and not a pick: fence OFF means hold NET -4.9272 across '
+  '12 arms against -20.3635 across the 12 with it on. It REVERSES on the fit half (-32.82 vs -22.18)'),
+
  # ---- the re-entry router, SEPARATED from the divergence mech 1008
- ('reentry','reent_xwob','6','int','bars','joe',0,1,
-  'Joe 1007 "xwob 6, not 8"; SS12. Joe 1008 "defintely separate them" after the code was found '
-  'reading x_rev_xwob 8, which belongs to the >ws12 divergence mech, not this router',
-  'the ws1x return must HOLD this many bars above ws1r. conf = return + reent_xwob - 1. '
-  '30 s at the 5 s grid. At 8 the 11:19:05 return is missed and the router falls back 5.9 min'),
+ ('reentry','reent_xwob','18','int','bars','mine',1,1,
+  'SWEPT 1008 over 95 days: 18 bars = 90 s. Joe 1007 ruled 6 ("xwob 6, not 8"; SS12) on ONE leg; '
+  'the sweep is the wider measurement and 18 is its peak. Joe 1008 "defintely separate them" keeps '
+  'this off the >ws12 mech\'s x_rev_xwob 8',
+  'the ws1x return must HOLD this many bars at-or-beyond ws1r. conf = return + reent_xwob - 1. '
+  'At 6 the router fires earlier and more often; at 18 it waits 90 s for the hold to prove out'),
 
  # ---- the mage-rev tests
  ('mage_rev','dr_aligned','1','int','bool','joe',0,1,
@@ -120,9 +137,11 @@ ROWS = [
   'IN NO CONFIG TABLE BEFORE THIS. jig.mage_rev_walk defaults to 0; entry_ab.py:102 passes 48'),
 
  # ---- the review stop
- ('stop','mae_stop_pct','1.1','float','pct','joe',0,1,
-  'Joe 1007 "stop the chain when MAE is >1.1" / "for each run, stop the chain when MAE is >1.1 and start again on the next octo-sig"',
-  'per LEG, from that leg\'s own open. The leg closes AT the breach bar'),
+ ('stop','mae_stop_pct','2.5','float','pct','mine',1,1,
+  'SWEPT 1008 over 95 days. Joe 1007 ruled 1.1 ("stop the chain when MAE is >1.1"). At 1.1 the 331 '
+  'legs the wider stop keeps alive are each charged -1.10; between them they only lose -22.64',
+  "per LEG, from that leg's own open. The leg closes AT the breach bar. Joe 1008's goal is to bring "
+  "this DOWN by relocating the opens that need it, so 2.5 is a staging post, not a destination"),
 ]
 
 

@@ -107,13 +107,37 @@ oobf = lambda t, k, d: (float(R[t][k]) >= SC.HI) if d > 0 else (float(R[t][k]) <
 # the >ws12 mech's own oob test, on the oob_gate_fence read above. Nothing else
 # uses it: the KICKSTART and the baton stay on `oobf` and the global 15/85.
 goob = lambda t, k, d: (float(R[t][k]) >= G_HI) if d > 0 else (float(R[t][k]) <= G_LO)
+# THE LINEAGE WALK'S x-CROSS TARGET, NOW KNOB-DRIVEN. 1008. Joe: *"go for B"*.
+#
+# WAS, and it is still what x_tgt_role r + x_tgt_tfs both + x_tgt_fence 1 reproduces:
+#     the rider's x against the r of h+1 AND h+2, with BOTH targets in-fence.
+# NOW, #61 arm B:
+#     the rider's x against the `b` line of h+1 ONLY, with no in-fence test on it.
+#
+# THE THREE KNOBS, and what each value means:
+#   x_tgt_role   'b'     the LINE the x must cross. The five wsf roles are the same oscillator at
+#                        five speeds - r is k 5/8/7, x is bb 5/0.35, m is bb 6/0.4, Mage is
+#                        bb 38/0.93, and b is bb 49/0.95, the SLOWEST of them.
+#   x_tgt_tfs    'next'  which TFs above the rider carry the target. 'both' = h+1 and h+2,
+#                        'next' = h+1 only, 'self' = h itself.
+#   x_tgt_fence  0       1 = the target must also be in-fence (neither oob nor past the ex-fence),
+#                        which is what `bnd(t, k, d) == '.'` tested. 0 = no such test.
+#
+# THE IN-FENCE TEST IS READ ON THE TARGET LINE, not on r, so that it keeps testing the same lines
+# it crosses when the role moves. Stated because #61 does not say.
+XT_ROLE, XT_TFS = str(W['x_tgt_role']), str(W['x_tgt_tfs'])
+XT_FENCE = int(W['x_tgt_fence'])
+XT_OFF = {'both': (1, 2), 'next': (1,), 'self': (0,)}[XT_TFS]
+TGT = R if XT_ROLE == 'r' else {t: SC.LD(t * 60, XT_ROLE)[:N] for t in RL}
 def xcond(h, k, d):
-    t1, t2 = h + 1, h + 2
-    if t1 not in R or t2 not in R: return False
+    tt = [h + o for o in XT_OFF]
+    if any(t not in TGT for t in tt): return False
     xv = float(X[h][k])
-    c = (xv < float(R[t1][k]) and xv < float(R[t2][k])) if d > 0 else \
-        (xv > float(R[t1][k]) and xv > float(R[t2][k]))
-    return c and bnd(t1, k, d) == '.' and bnd(t2, k, d) == '.'
+    if not all((xv < float(TGT[t][k])) if d > 0 else (xv > float(TGT[t][k])) for t in tt):
+        return False
+    if not XT_FENCE: return True
+    return all(((float(TGT[t][k]) < EXF_HI) if d > 0 else (float(TGT[t][k]) > EXF_LO))
+               for t in tt)
 xund = lambda t, k, d: (float(X[t][k]) < float(R[t][k])) if d > 0 else (float(X[t][k]) > float(R[t][k]))
 # THE DIP IS A BAND, 1008. Joe: *"we'll use a small 100-{knob:53} fence, ie 47 to 53"* /
 # *"fence 53 + dwell 6"*.

@@ -393,3 +393,44 @@ the 16 cores; the line BUILDS must stay sequential.
 **THE METHOD LESSON, measured three times:** one-at-a-time bests do not compose. The granular
 centroid collapsed the chain to 441 legs at -29.30 where each of its five knobs improved alone.
 Any future sweep needs its winner re-measured as a whole, and a hold-out block that chooses nothing.
+
+---
+
+## #61 CLOSED 1008 — THE x-CROSS TARGET IS SWEPT, AND ARM B IS BANKED
+
+25 arms over 95 days: target role (`r` / `m` / `Mage` / `b` / the ex-fence LEVEL) x target TFs
+(h+1 AND h+2 / h+1 only / h itself) x the in-fence test on the target (on / off). `mae_stop_pct`
+2.5, `reent_xwob` 18, everything else banked. Output `xt.jsonl`, driver
+`docs/octo-freedom/1005_scoring/_xtarget.py`.
+
+**BANKED, on Joe 1008 "go for B":**
+
+| knob | from | to | what it means |
+|---|---|---|---|
+| `x_tgt_role` | `r` | **`b`** | the line the rider's x must cross. `b` is bb 49/0.95, the slowest of the five wsf roles; `r` is k 5/8/7 |
+| `x_tgt_tfs` | `both` | **`next`** | h+1 only, not h+1 AND h+2 |
+| `x_tgt_fence` | 1 | **0** | the target no longer has to be in-fence |
+| `mae_stop_pct` | 1.1 | **2.5** | B's measured context; Joe 1008's goal is to bring it back down by relocating the opens that need it |
+| `reent_xwob` | 6 | **18** | B's measured context. 90 s of ws1x hold |
+
+**VERIFIED**: the seeded build reproduces the arm exactly — fit **+0.7510**, hold **+4.0797**,
+all-95 **+4.8307**, 1623 legs, 201 stops, MFE/MAE 0.9527.
+
+| the choice | all-95 NET | MFE/MAE | legs | stops |
+|---|---|---|---|---|
+| A — the x-cross OFF (`W_NOX=1`) | -4.0149 | **1.0649** | 1404 | 166 |
+| **B — the x-cross on ws{h+1}b, no in-fence** | **+4.8307** | 0.9527 | 1623 | 201 |
+| as built — the x-cross on ws{h+1}r AND ws{h+2}r, in-fence | -25.6072 | 0.9346 | 1647 | 203 |
+
+**WHAT GENERALISES AND WHAT DOES NOT, stated so the knobs are not over-read:**
+
+| the claim | the evidence |
+|---|---|
+| B is the fit-half winner, chosen without the hold block | rank **1 of 25** on fit alone |
+| the fit ranking itself transfers | **no** — Spearman fit vs hold across the 25 arms is **-0.137** |
+| the in-fence test OFF is a pattern, not a pick | mean hold NET **-4.9272** across the 12 arms with it off vs **-20.3635** across the 12 with it on. It REVERSES on fit (-32.82 vs -22.18) |
+| `b` is the right target line at role level | **no** — `b`'s mean hold NET is the worst of the four roles (-19.24); `r`'s is the best (-3.74). B's strength is arm-specific |
+
+**B IS THE STRUCTURAL CHOICE, NOT A PROVEN SCORE.** +4.83 over 95 days is +0.003 per leg against a
+0.11 drag. It is banked because it keeps 979 tunable exits that A deletes, and because it is the
+only arm that is positive on both halves after being picked on one. Nothing here says it will hold.
