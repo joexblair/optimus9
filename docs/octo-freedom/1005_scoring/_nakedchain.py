@@ -118,98 +118,104 @@ def run_chain_naked(gate, noland):
     return rows
 
 
-print('# arm 0 — the committed baseline, no naked walk ...', flush=True)
-A0 = T.run_chain(T.gate_A)
-print('# arm 1 — naked walk, no landing ends the chain ...', flush=True)
-A1 = run_chain_naked(T.gate_A, 'end')
-print('# arm 2 — naked walk, no landing enters at the open ...', flush=True)
-A2 = run_chain_naked(T.gate_A, 'open')
-ARMS = [('arm 0 — baseline, no walk', A0), ('arm 1 — naked walk, no landing ends it', A1),
-        ('arm 2 — naked walk, no landing enters at the open', A2)]
+def main():
+    print('# arm 0 — the committed baseline, no naked walk ...', flush=True)
+    A0 = T.run_chain(T.gate_A)
+    print('# arm 1 — naked walk, no landing ends the chain ...', flush=True)
+    A1 = run_chain_naked(T.gate_A, 'end')
+    print('# arm 2 — naked walk, no landing enters at the open ...', flush=True)
+    A2 = run_chain_naked(T.gate_A, 'open')
+    ARMS = [('arm 0 — baseline, no walk', A0), ('arm 1 — naked walk, no landing ends it', A1),
+            ('arm 2 — naked walk, no landing enters at the open', A2)]
 
-print('\n# THE THREE ARMS, 09-25 02:48:50 TO THE END OF 09-26')
-rows = []
-for lbl, rr in ARMS:
-    t = T.tally(rr)
-    nk = sum(r.get('naked', 0.0) for r in rr if not r['brk'])
-    im = sum(r.get('imp', 0.0) for r in rr if not r['brk'])
-    rows.append((lbl, str(t['legs']), str(t['pos']), str(t['stops']), str(t['reent']),
-                 '%s %s' % (DAYOF(t['last'])[5:], U(t['last'])) if t['last'] else '—',
-                 '%.4f' % t['mae'], '%.4f' % t['mfe'],
-                 '%.2f' % (t['mfe'] / t['mae']) if t['mae'] else 'inf',
-                 '%+.4f' % t['real'], '%+.4f' % t['conv'], '%.1f' % nk, '%+.4f' % im))
-box(('arm', 'legs', 'positive', 'stops', 're-entries', 'last exit', 'running MAE', 'running MFE',
-     'MFE/MAE', 'realised as scored', 'realised at -1.10', 'minutes naked', 'entry improvement'),
-    rows)
-print('- "minutes naked" is time with NOTHING OPEN while a walk walks. It is its own column and')
-print('  its own total; it is not folded into any other number.')
-print('- "entry improvement" sums (open bar price -> landing bar price) in the native side\'s')
-print('  favour. It is an entry, not P&L, and it is already inside realised.')
-print('- a stopped leg scores MAE %.4f and MFE 0.0000, Joe 1007.' % MAE_STOP)
+    print('\n# THE THREE ARMS, 09-25 02:48:50 TO THE END OF 09-26')
+    rows = []
+    for lbl, rr in ARMS:
+        t = T.tally(rr)
+        nk = sum(r.get('naked', 0.0) for r in rr if not r['brk'])
+        im = sum(r.get('imp', 0.0) for r in rr if not r['brk'])
+        rows.append((lbl, str(t['legs']), str(t['pos']), str(t['stops']), str(t['reent']),
+                     '%s %s' % (DAYOF(t['last'])[5:], U(t['last'])) if t['last'] else '—',
+                     '%.4f' % t['mae'], '%.4f' % t['mfe'],
+                     '%.2f' % (t['mfe'] / t['mae']) if t['mae'] else 'inf',
+                     '%+.4f' % t['real'], '%+.4f' % t['conv'], '%.1f' % nk, '%+.4f' % im))
+    box(('arm', 'legs', 'positive', 'stops', 're-entries', 'last exit', 'running MAE', 'running MFE',
+         'MFE/MAE', 'realised as scored', 'realised at -1.10', 'minutes naked', 'entry improvement'),
+        rows)
+    print('- "minutes naked" is time with NOTHING OPEN while a walk walks. It is its own column and')
+    print('  its own total; it is not folded into any other number.')
+    print('- "entry improvement" sums (open bar price -> landing bar price) in the native side\'s')
+    print('  favour. It is an entry, not P&L, and it is already inside realised.')
+    print('- a stopped leg scores MAE %.4f and MFE 0.0000, Joe 1007.' % MAE_STOP)
 
-print('\n# PER DAY, BY THE LEG\'S ENTRY BAR')
-rows = []
-for lbl, rr in ARMS:
-    pd = collections.OrderedDict()
-    for r in rr:
-        if r['brk']: continue
-        e = pd.setdefault(DAYOF(r['open']), dict(n=0, pos=0, st=0, mae=0.0, mfe=0.0, real=0.0,
-                                                 nk=0.0))
-        a_, f_ = (MAE_STOP, 0.0) if r['why'] == 'mae breach' else T.mm(r['open'], r['exit'], r['d'])
-        e['n'] += 1; e['pos'] += 1 if r['real'] > 0 else 0
-        e['st'] += 1 if r['why'] == 'mae breach' else 0
-        e['mae'] += a_; e['mfe'] += f_; e['real'] += r['real']; e['nk'] += r.get('naked', 0.0)
-    for dd, e in pd.items():
-        rows.append((lbl, dd, str(e['n']), str(e['pos']), str(e['st']), '%.4f' % e['mae'],
-                     '%.4f' % e['mfe'], '%.2f' % (e['mfe'] / e['mae']) if e['mae'] else 'inf',
-                     '%+.4f' % e['real'], '%.1f' % e['nk']))
-box(('arm', 'day', 'legs', 'positive', 'stops', 'MAE', 'MFE', 'MFE/MAE', 'realised',
-     'minutes naked'), rows)
+    print('\n# PER DAY, BY THE LEG\'S ENTRY BAR')
+    rows = []
+    for lbl, rr in ARMS:
+        pd = collections.OrderedDict()
+        for r in rr:
+            if r['brk']: continue
+            e = pd.setdefault(DAYOF(r['open']), dict(n=0, pos=0, st=0, mae=0.0, mfe=0.0, real=0.0,
+                                                     nk=0.0))
+            a_, f_ = (MAE_STOP, 0.0) if r['why'] == 'mae breach' else T.mm(r['open'], r['exit'], r['d'])
+            e['n'] += 1; e['pos'] += 1 if r['real'] > 0 else 0
+            e['st'] += 1 if r['why'] == 'mae breach' else 0
+            e['mae'] += a_; e['mfe'] += f_; e['real'] += r['real']; e['nk'] += r.get('naked', 0.0)
+        for dd, e in pd.items():
+            rows.append((lbl, dd, str(e['n']), str(e['pos']), str(e['st']), '%.4f' % e['mae'],
+                         '%.4f' % e['mfe'], '%.2f' % (e['mfe'] / e['mae']) if e['mae'] else 'inf',
+                         '%+.4f' % e['real'], '%.1f' % e['nk']))
+    box(('arm', 'day', 'legs', 'positive', 'stops', 'MAE', 'MFE', 'MFE/MAE', 'realised',
+         'minutes naked'), rows)
 
-for lbl, rr in ARMS[1:]:
-    print('\n\n# %s — EVERY LEG, ONE PER ROW' % lbl.upper())
-    rows = []; rr_ = 0.0
-    for r in rr:
-        if r['brk']:
-            if r.get('noland') is not None:
-                rows.append(('—', 'NO LANDING', '%s %s' % (DAYOF(r['noland'])[5:], U(r['noland'])),
-                             '—', '—', '—', '—', '—', '—', '—', '—', '—', r['nw'], '—'))
-            else:
-                rows.append(('—', 'STOP — re-entry router', '%s %s' % (DAYOF(r['a'])[5:], U(r['a'])),
-                             '—', ('%s %s' % (DAYOF(r['b'])[5:], U(r['b']))) if r.get('b')
-                             else 'NONE', '—', '—', '—', '—', '—', '—', '—',
-                             'the walk restarts from the conf bar' if r.get('b') else
-                             'no re-entry found', '—'))
-            continue
-        a_, f_ = (MAE_STOP, 0.0) if r['why'] == 'mae breach' else T.mm(r['open'], r['exit'], r['d'])
-        rr_ += r['real']
-        rows.append((str(r['leg']), r['side'], '%s %s' % (DAYOF(r['walkfrom'])[5:], U(r['walkfrom'])),
-                     '%+d' % r['frame'], U(r['land']), '%.1f' % r['naked'], '%+.4f' % r['imp'],
-                     U(r['exit']), '%.1f' % ((int(SC.ts[r['exit']]) - int(SC.ts[r['open']])) / 60000.0),
-                     r['why'], '%.4f' % a_, '%.4f' % f_, r['lw'], '%+.4f' % rr_))
-    box(('leg', 'side', 'the walk starts', 'frame dr', 'entry bar', 'naked min',
-         'entry better by %', 'exit', 'hold min', 'why', 'leg MAE', 'leg MFE',
-         'what landed the walk', 'running realised'), rows)
+    for lbl, rr in ARMS[1:]:
+        print('\n\n# %s — EVERY LEG, ONE PER ROW' % lbl.upper())
+        rows = []; rr_ = 0.0
+        for r in rr:
+            if r['brk']:
+                if r.get('noland') is not None:
+                    rows.append(('—', 'NO LANDING', '%s %s' % (DAYOF(r['noland'])[5:], U(r['noland'])),
+                                 '—', '—', '—', '—', '—', '—', '—', '—', '—', r['nw'], '—'))
+                else:
+                    rows.append(('—', 'STOP — re-entry router', '%s %s' % (DAYOF(r['a'])[5:], U(r['a'])),
+                                 '—', ('%s %s' % (DAYOF(r['b'])[5:], U(r['b']))) if r.get('b')
+                                 else 'NONE', '—', '—', '—', '—', '—', '—', '—',
+                                 'the walk restarts from the conf bar' if r.get('b') else
+                                 'no re-entry found', '—'))
+                continue
+            a_, f_ = (MAE_STOP, 0.0) if r['why'] == 'mae breach' else T.mm(r['open'], r['exit'], r['d'])
+            rr_ += r['real']
+            rows.append((str(r['leg']), r['side'], '%s %s' % (DAYOF(r['walkfrom'])[5:], U(r['walkfrom'])),
+                         '%+d' % r['frame'], U(r['land']), '%.1f' % r['naked'], '%+.4f' % r['imp'],
+                         U(r['exit']), '%.1f' % ((int(SC.ts[r['exit']]) - int(SC.ts[r['open']])) / 60000.0),
+                         r['why'], '%.4f' % a_, '%.4f' % f_, r['lw'], '%+.4f' % rr_))
+        box(('leg', 'side', 'the walk starts', 'frame dr', 'entry bar', 'naked min',
+             'entry better by %', 'exit', 'hold min', 'why', 'leg MAE', 'leg MFE',
+             'what landed the walk', 'running realised'), rows)
 
-print('\n# EVERY STOP, ALL THREE ARMS')
-rows = []
-for lbl, rr in ARMS:
-    for r in rr:
-        if r['brk'] or r['why'] != 'mae breach': continue
-        rows.append((lbl, DAYOF(r['open'])[5:], r['side'],
-                     U(r.get('walkfrom', r['open'])), U(r['open']), U(r['exit']),
-                     '%.1f' % ((int(SC.ts[r['exit']]) - int(SC.ts[r['open']])) / 60000.0),
-                     '%+.4f' % r['real'], '%.4f' % (abs(r['real']) - MAE_STOP)))
-box(('arm', 'day', 'side', 'the walk started', 'entry bar', 'exit', 'hold min', 'realised',
-     'overshoot past %.2f' % MAE_STOP), rows)
+    print('\n# EVERY STOP, ALL THREE ARMS')
+    rows = []
+    for lbl, rr in ARMS:
+        for r in rr:
+            if r['brk'] or r['why'] != 'mae breach': continue
+            rows.append((lbl, DAYOF(r['open'])[5:], r['side'],
+                         U(r.get('walkfrom', r['open'])), U(r['open']), U(r['exit']),
+                         '%.1f' % ((int(SC.ts[r['exit']]) - int(SC.ts[r['open']])) / 60000.0),
+                         '%+.4f' % r['real'], '%.4f' % (abs(r['real']) - MAE_STOP)))
+    box(('arm', 'day', 'side', 'the walk started', 'entry bar', 'exit', 'hold min', 'realised',
+         'overshoot past %.2f' % MAE_STOP), rows)
 
-print('\n# WHERE dr WAS 0 AT AN OPEN BAR, AND WHERE THE WALK NEVER TERMINATED')
-rows = []
-for lbl, rr in ARMS[1:]:
-    z = [r for r in rr if not r['brk'] and r.get('dr0')]
-    nl = [r for r in rr if r['brk'] and r.get('noland') is not None]
-    nlo = [r for r in rr if not r['brk'] and 'no landing' in r.get('lw', '')]
-    rows.append((lbl, str(len(z)), ', '.join(U(r['walkfrom']) for r in z) or 'none',
-                 str(len(nl) + len(nlo)),
-                 ', '.join(U(r.get('noland', r.get('walkfrom'))) for r in nl + nlo) or 'none'))
-box(('arm', 'opens with dr 0', 'which', 'opens the walk never landed', 'which'), rows)
+    print('\n# WHERE dr WAS 0 AT AN OPEN BAR, AND WHERE THE WALK NEVER TERMINATED')
+    rows = []
+    for lbl, rr in ARMS[1:]:
+        z = [r for r in rr if not r['brk'] and r.get('dr0')]
+        nl = [r for r in rr if r['brk'] and r.get('noland') is not None]
+        nlo = [r for r in rr if not r['brk'] and 'no landing' in r.get('lw', '')]
+        rows.append((lbl, str(len(z)), ', '.join(U(r['walkfrom']) for r in z) or 'none',
+                     str(len(nl) + len(nlo)),
+                     ', '.join(U(r.get('noland', r.get('walkfrom'))) for r in nl + nlo) or 'none'))
+    box(('arm', 'opens with dr 0', 'which', 'opens the walk never landed', 'which'), rows)
+
+
+
+if __name__ == '__main__':
+    main()

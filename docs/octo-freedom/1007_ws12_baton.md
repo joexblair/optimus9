@@ -879,3 +879,87 @@ trade entry'"*, with his three rulings:
 **HALTED.** The mech is built, run and banked as specified. Where it goes next is Joe's: the
 measured fact is that *"every open"* relocates the walk one leg upstream of the case it was built
 for, and the chain gives back 13.7843 of realised to do it.
+
+---
+
+## 16. THE INVERSION TEST — 10:56:40 AND 04:41:00, WALKED UPWARD
+
+Joe 1008: *"my perspective on the inversion: I think code is walking a downward lineage when it
+should be walking upward (to improve the entry)"* / on 10:56:40: *"this needs exactly the spec I
+just laid out - it must lineage walk upward so that it does not attract mae1.1"*.
+
+**THE FRAME RULE, PER JOE:** *"the direction of the x cross is defined by the trade"*. A downward
+cross is `d > 0` in the code, so a **SHORT trade walks on frame +1** and a LONG trade on frame −1 -
+**the frame is the inverse of the trade side.** Arm 1 took the frame from `int(DRv[k])` instead.
+
+**BOTH BARS ARE SHORT AND BOTH HAVE dr +1, so at these two bars the two frame rules AGREE.** The
+walk already ran on frame +1 at both. The frame rules differ on 6 of the 23 arm-1 legs, which is
+still unmeasured.
+
+### 10:56:40 — THE SPEC IS ALREADY IN THE CHAIN, AND IT IS ARM 1's BEST LEG
+
+| ts | +min | event | pxs | pct from 10:56:40 | pct from entry |
+|---|---|---|---|---|---|
+| 10:56:40 | +0.0 | WALK STARTS — naked, nothing open | 0.190005 | +0.0000 | — |
+| 11:06:30 | +9.8 | walk: armed — ws2Mage 88.86 crosses into oob | 0.190883 | -0.4618 | — |
+| 11:06:30 | +9.8 | walk: KICKSTART — rider ws8 (r 87.91 hi oob) | 0.190883 | -0.4618 | — |
+| 11:15:00 | +18.3 | walk: baton -> ws9 oob (r 93.90) | 0.193406 | -1.7899 | — |
+| 11:30:00 | +33.3 | walk: baton -> ws10 oob (r 88.17) | 0.199043 | **-4.7563** | — |
+| 11:41:35 | +44.9 | LANDING — x-cross on ws10 (targets ws11r 73.89, ws12r 76.02, both in-fence) | 0.196660 | -3.5022 | — |
+| 11:41:35 | +44.9 | **ENTER SHORT** | 0.196660 | **-3.5022** | +0.0000 |
+| 12:16:40 | +80.0 | exit-armed — ws2Mage under 15 (14.64) | 0.191439 | -0.7544 | +2.6548 |
+| 12:16:40 | +80.0 | KICKSTART — rider ws7 (r 13.23 oob, ceiling ws12) | 0.191439 | -0.7544 | +2.6548 |
+| 12:24:00 | +87.3 | baton -> ws8 oob (r 3.27) | 0.192052 | -1.0769 | +2.3432 |
+| 12:27:00 | +90.3 | baton -> ws9 oob (r 14.25) | 0.192709 | -1.4228 | +2.0090 |
+| 12:27:05 | +90.4 | **EXIT — x-cross on ws9** | 0.192875 | -1.5103 | **+1.9245** |
+
+| ts | +min | event | pxs | pct |
+|---|---|---|---|---|
+| 10:56:40 | +0.0 | OPEN SHORT — the baseline, no walk | 0.190005 | +0.0000 |
+| 11:07:45 | +11.1 | MAE BREACH 1.1504% over 1.10% | 0.192191 | **-1.1504** |
+
+- **the walk rides UPWARD**: 0.190005 at the start to 0.199043 at the ws10 baton, **+4.76% of price
+  against the SHORT while nothing is open.** The SHORT then enters 3.5022% higher.
+- **-1.1504 becomes +1.9245, a +3.0749 swing, and the 1.10 stop never fires.**
+- this walk is **arm-1 leg 6 in §15, the chain's single largest gain**. The spec Joe laid out is
+  already running at this bar.
+- **the arm is what makes it work.** With `exit-armed` REMOVED the walk lands 10:58:00 (+1.3 min)
+  at an entry **0.0087% worse** and takes the same stop at 11:07:45 for **-1.1592**.
+
+| the walk at 10:56:40 | the arm | landing | +min | entry pxs | SHORT entry better by % | what landed it |
+|---|---|---|---|---|---|---|
+| frame +1, Joe's | live | 11:41:35 | +44.9 | 0.196660 | **+3.5022** | x-cross on ws10 |
+| frame +1, Joe's | removed | 10:58:00 | +1.3 | 0.189989 | -0.0087 | x-cross on ws6 |
+| frame −1, the inverse | live | 12:27:05 | +90.4 | 0.192875 | +1.5103 | x-cross on ws9 |
+| frame −1, the inverse | removed | 11:01:10 | +4.5 | 0.190074 | +0.0362 | x-cross on ws1 |
+
+### 04:41:00 — JOE'S LADDER READ, CLAUSE BY CLAUSE
+
+| the claim | the test | the value at 04:41:00 | holds? |
+|---|---|---|---|
+| ws1r is hi oob | ws1r >= 85 | **100.00** | **YES** |
+| ws1x has crossed under r | ws1x < ws1r | **104.81 vs 100.00** | **no — x is OVER r** |
+| ws2r is in-fence | 17 < ws2r < 83 | 70.97 | YES |
+| ws3r is in-fence | 17 < ws3r < 83 | 78.84 | YES |
+| the lineage stops at ws1 | neither ws2r nor ws3r oob on frame +1 | in-fence / in-fence | **YES** |
+| the x-cross fires on ws1, zero bars | xcond(ws1) on frame +1 | ws1x 104.81 vs ws2r 70.97, ws3r 78.84 | **no** |
+
+- **five of the six clauses hold.** The one that does not is the cross itself: at 04:41:00 ws1x
+  **104.81** sits ABOVE ws1r 100.00, so the downward cross has not happened on that bar.
+- **the 103.0 min delay is the ARM, not the frame.** `ws2Mage is 117.03 at 04:41:00` - already past
+  its own 85 fence - and the arm needs a **CROSSING** into oob. ws2Mage has to leave oob and come
+  back before the walk can pick any rider, which does not happen until **06:20:05, +99.1 min**.
+- this is the same shape as §13's never-armed legs, from the other side: there ws2Mage was 46-85
+  points SHORT of its fence; here it is already PAST it.
+- **04:41:00 was never a losing leg.** The baseline exits 05:16:15 on an x-cross at **+1.0132**. The
+  walk's entry is **0.6202% worse** and it realises **+0.5839** - the walk costs 0.4293 here.
+- on frame +1 at 04:41 the price goes **DOWN** (0.185031 -> 0.183884) while at 10:56:40 the same
+  frame goes **UP**. The frame sets which fence the r lines are tested against; it does not set the
+  direction the price then takes.
+
+**WHAT THE MEASUREMENT SAYS ABOUT THE INVERSION.** At both bars the walk already used frame +1,
+which is both `dr` and the inverse of the SHORT side, so neither bar shows a frame inversion. At
+10:56:40 the walk rode upward and produced exactly the asked-for outcome. At 04:41:00 the walk's
+problem is the arm's CROSSING test against a line already past its fence. **The 6 legs where `dr`
+and the inverse-of-side rules disagree are not yet measured** - that is where a frame inversion
+could still be hiding.
