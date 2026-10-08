@@ -97,82 +97,88 @@ def tally(rows):
                 last=L[-1]['exit'] if L else None,
                 noreent=sum(1 for r in rows if r['brk'] and r.get('b') is None))
 
-RES = {}
-for lbl, g in (('OPTION A', gate_A), ('OPTION B', gate_B)):
-    RES[lbl] = run_chain(g)
+def main():
+    RES = {}
+    for lbl, g in (('OPTION A', gate_A), ('OPTION B', gate_B)):
+        RES[lbl] = run_chain(g)
 
-print('\n# BOTH OPTIONS, 09-25 02:48:50 TO THE END OF 09-26')
-box(('option', 'legs', 'positive', 'stops', 're-entries', 'no re-entry', 'last exit',
-     'running MAE', 'running MFE', 'MFE/MAE', 'realised as scored', 'realised at -1.10'),
-    [(lbl, str(t['legs']), str(t['pos']), str(t['stops']), str(t['reent']), str(t['noreent']),
-      '%s %s' % (DAYOF(t['last'])[5:], SC.U(t['last'])) if t['last'] else '—',
-      '%.4f' % t['mae'], '%.4f' % t['mfe'],
-      '%.2f' % (t['mfe'] / t['mae']) if t['mae'] else 'inf',
-      '%+.4f' % t['real'], '%+.4f' % t['conv'])
-     for lbl, rows in RES.items() for t in [tally(rows)]])
+    print('\n# BOTH OPTIONS, 09-25 02:48:50 TO THE END OF 09-26')
+    box(('option', 'legs', 'positive', 'stops', 're-entries', 'no re-entry', 'last exit',
+         'running MAE', 'running MFE', 'MFE/MAE', 'realised as scored', 'realised at -1.10'),
+        [(lbl, str(t['legs']), str(t['pos']), str(t['stops']), str(t['reent']), str(t['noreent']),
+          '%s %s' % (DAYOF(t['last'])[5:], SC.U(t['last'])) if t['last'] else '—',
+          '%.4f' % t['mae'], '%.4f' % t['mfe'],
+          '%.2f' % (t['mfe'] / t['mae']) if t['mae'] else 'inf',
+          '%+.4f' % t['real'], '%+.4f' % t['conv'])
+         for lbl, rows in RES.items() for t in [tally(rows)]])
 
-print('\n# PER DAY, BY THE LEG\'S OPEN BAR')
-rows = []
-for lbl, rr in RES.items():
-    pd = collections.OrderedDict()
-    for r in rr:
-        if r['brk']: continue
-        e = pd.setdefault(DAYOF(r['open']), dict(n=0, pos=0, st=0, mae=0.0, mfe=0.0, real=0.0))
-        a_, f_ = (MAE_STOP, 0.0) if r['why'] == 'mae breach' else mm(r['open'], r['exit'], r['d'])
-        e['n'] += 1; e['pos'] += 1 if r['real'] > 0 else 0
-        e['st'] += 1 if r['why'] == 'mae breach' else 0
-        e['mae'] += a_; e['mfe'] += f_; e['real'] += r['real']
-    for dd, e in pd.items():
-        rows.append((lbl, dd, str(e['n']), str(e['pos']), str(e['st']), '%.4f' % e['mae'],
-                     '%.4f' % e['mfe'], '%.2f' % (e['mfe'] / e['mae']) if e['mae'] else 'inf',
-                     '%+.4f' % e['real']))
-box(('option', 'day', 'legs', 'positive', 'stops', 'MAE', 'MFE', 'MFE/MAE', 'realised'), rows)
+    print('\n# PER DAY, BY THE LEG\'S OPEN BAR')
+    rows = []
+    for lbl, rr in RES.items():
+        pd = collections.OrderedDict()
+        for r in rr:
+            if r['brk']: continue
+            e = pd.setdefault(DAYOF(r['open']), dict(n=0, pos=0, st=0, mae=0.0, mfe=0.0, real=0.0))
+            a_, f_ = (MAE_STOP, 0.0) if r['why'] == 'mae breach' else mm(r['open'], r['exit'], r['d'])
+            e['n'] += 1; e['pos'] += 1 if r['real'] > 0 else 0
+            e['st'] += 1 if r['why'] == 'mae breach' else 0
+            e['mae'] += a_; e['mfe'] += f_; e['real'] += r['real']
+        for dd, e in pd.items():
+            rows.append((lbl, dd, str(e['n']), str(e['pos']), str(e['st']), '%.4f' % e['mae'],
+                         '%.4f' % e['mfe'], '%.2f' % (e['mfe'] / e['mae']) if e['mae'] else 'inf',
+                         '%+.4f' % e['real']))
+    box(('option', 'day', 'legs', 'positive', 'stops', 'MAE', 'MFE', 'MFE/MAE', 'realised'), rows)
 
-print('\n# EVERY STOP AND ITS OVERSHOOT PAST %.2f' % MAE_STOP)
-rows = []
-for lbl, rr in RES.items():
-    for r in rr:
-        if r['brk'] or r['why'] != 'mae breach': continue
-        rows.append((lbl, DAYOF(r['open'])[5:], r['side'], SC.U(r['open']), SC.U(r['exit']),
-                     '%.1f' % ((int(SC.ts[r['exit']]) - int(SC.ts[r['open']])) / 60000.0),
-                     '%+.4f' % r['real'], '%.4f' % (abs(r['real']) - MAE_STOP)))
-box(('option', 'day', 'side', 'open', 'exit', 'hold min', 'realised', 'overshoot'), rows)
-ov = [abs(r['real']) - MAE_STOP for lbl, rr in RES.items() for r in rr
-      if not r['brk'] and r['why'] == 'mae breach']
-print('- %d stops across both options; overshoot min %.4f, median %.4f, max %.4f'
-      % (len(ov), min(ov), sorted(ov)[len(ov) // 2], max(ov)))
-print('- the stop bounds the TRIGGER, not the FILL: the exit is the first bar past %.2f at that'
-      % MAE_STOP)
-print('  bar\'s price, so the overshoot is one bar of movement and is not bounded by the knob.')
+    print('\n# EVERY STOP AND ITS OVERSHOOT PAST %.2f' % MAE_STOP)
+    rows = []
+    for lbl, rr in RES.items():
+        for r in rr:
+            if r['brk'] or r['why'] != 'mae breach': continue
+            rows.append((lbl, DAYOF(r['open'])[5:], r['side'], SC.U(r['open']), SC.U(r['exit']),
+                         '%.1f' % ((int(SC.ts[r['exit']]) - int(SC.ts[r['open']])) / 60000.0),
+                         '%+.4f' % r['real'], '%.4f' % (abs(r['real']) - MAE_STOP)))
+    box(('option', 'day', 'side', 'open', 'exit', 'hold min', 'realised', 'overshoot'), rows)
+    ov = [abs(r['real']) - MAE_STOP for lbl, rr in RES.items() for r in rr
+          if not r['brk'] and r['why'] == 'mae breach']
+    print('- %d stops across both options; overshoot min %.4f, median %.4f, max %.4f'
+          % (len(ov), min(ov), sorted(ov)[len(ov) // 2], max(ov)))
+    print('- the stop bounds the TRIGGER, not the FILL: the exit is the first bar past %.2f at that'
+          % MAE_STOP)
+    print('  bar\'s price, so the overshoot is one bar of movement and is not bounded by the knob.')
 
-print('\n# THE RE-ENTRIES')
-rows = []
-for lbl, rr in RES.items():
-    for r in rr:
-        if not r['brk']: continue
-        rows.append((lbl, DAYOF(r['a'])[5:], SC.U(r['a']),
-                     ('%s %s' % (DAYOF(r['b'])[5:], SC.U(r['b']))) if r.get('b') else 'NONE',
-                     ('%.1f' % ((int(SC.ts[r['b']]) - int(SC.ts[r['a']])) / 60000.0))
-                     if r.get('b') else '—',
-                     SC.U(r['rb']) if r.get('b') else '—'))
-box(('option', 'day of stop', 'stop bar', 're-entry conf', 'gap min', 'return bar'), rows)
+    print('\n# THE RE-ENTRIES')
+    rows = []
+    for lbl, rr in RES.items():
+        for r in rr:
+            if not r['brk']: continue
+            rows.append((lbl, DAYOF(r['a'])[5:], SC.U(r['a']),
+                         ('%s %s' % (DAYOF(r['b'])[5:], SC.U(r['b']))) if r.get('b') else 'NONE',
+                         ('%.1f' % ((int(SC.ts[r['b']]) - int(SC.ts[r['a']])) / 60000.0))
+                         if r.get('b') else '—',
+                         SC.U(r['rb']) if r.get('b') else '—'))
+    box(('option', 'day of stop', 'stop bar', 're-entry conf', 'gap min', 'return bar'), rows)
 
 
-# ---- the stopped trades, as timestamp-per-row event tables. Joe 1007: *"print all of the stopped
-# trades. use the established timestamp-per-row event tables, print them sequentially"*.
-for lbl, rr in RES.items():
-    st = [r for r in rr if not r['brk'] and r['why'] == 'mae breach']
-    print('\n\n' + '=' * 78)
-    print('# %s — ALL %d STOPPED TRADES' % (lbl, len(st)))
-    print('=' * 78)
-    for r in st:
-        k, xk, d = r['open'], r['exit'], r['d']
-        p0 = float(PX[k]); sgn = 1 if d > 0 else -1
-        pct = lambda j: '%+.4f' % ((float(PX[j]) - p0) / p0 * 100.0 * sgn)
-        mn = lambda j: '%+.1f' % ((int(SC.ts[j]) - int(SC.ts[k])) / 60000.0)
-        print('\n## %s %s   %s   open %s   pxs %.6f'
-              % (DAYOF(k)[5:], SC.U(k), r['side'], SC.U(k), p0))
-        box(('ts', '+min', 'event', 'pxs', 'pct'),
-            [(SC.U(k), '+0.0', 'OPEN %s' % r['side'], '%.6f' % p0, '+0.0000')]
-            + [(SC.U(j), mn(j), lab, '%.6f' % float(PX[j]), pct(j)) for j, lab in (r['tr'] or [])]
-            + [(SC.U(xk), mn(xk), 'EXIT — mae breach', '%.6f' % float(PX[xk]), pct(xk))])
+    # ---- the stopped trades, as timestamp-per-row event tables. Joe 1007: *"print all of the stopped
+    # trades. use the established timestamp-per-row event tables, print them sequentially"*.
+    for lbl, rr in RES.items():
+        st = [r for r in rr if not r['brk'] and r['why'] == 'mae breach']
+        print('\n\n' + '=' * 78)
+        print('# %s — ALL %d STOPPED TRADES' % (lbl, len(st)))
+        print('=' * 78)
+        for r in st:
+            k, xk, d = r['open'], r['exit'], r['d']
+            p0 = float(PX[k]); sgn = 1 if d > 0 else -1
+            pct = lambda j: '%+.4f' % ((float(PX[j]) - p0) / p0 * 100.0 * sgn)
+            mn = lambda j: '%+.1f' % ((int(SC.ts[j]) - int(SC.ts[k])) / 60000.0)
+            print('\n## %s %s   %s   open %s   pxs %.6f'
+                  % (DAYOF(k)[5:], SC.U(k), r['side'], SC.U(k), p0))
+            box(('ts', '+min', 'event', 'pxs', 'pct'),
+                [(SC.U(k), '+0.0', 'OPEN %s' % r['side'], '%.6f' % p0, '+0.0000')]
+                + [(SC.U(j), mn(j), lab, '%.6f' % float(PX[j]), pct(j)) for j, lab in (r['tr'] or [])]
+                + [(SC.U(xk), mn(xk), 'EXIT — mae breach', '%.6f' % float(PX[xk]), pct(xk))])
+
+
+
+if __name__ == '__main__':
+    main()

@@ -805,3 +805,77 @@ not flipping short and long"*.
 - `x crosses its own r` lands 0.9 min earlier at 15:54:10 and is 0.1723 better at +1.9199. Task #61.
 - the two landing bars that arrive AFTER the move - 15:58:20 and 16:05:00 - still beat the stop, at
   +1.0224 and +0.4798, on a worse entry than 15:41:00 itself.
+
+---
+
+## 15. THE NAKED LINEAGE WALK AT EVERY OPEN — THE WHOLE CHAIN, 09-25 + 09-26
+
+Joe 1008: *"now we need to test the entire chain for 'lineage walking towards dr to optimise the
+trade entry'"*, with his three rulings:
+
+| # | the ruling, verbatim | how it is built |
+|---|---|---|
+| 1 | *"every open"* | the walk runs from every bar the chain would have entered on, with no exception |
+| 2 | *"native, ie we don't mangle the side"* | the trade's side is untouched - the alternation for an alternation open, +1 for a re-entry open. Only the walk's FRAME comes from dr |
+| 3 | *"the walk runs from the re-entry's conf bar - no lineage walk for an optimised opening"* | the ws1x pierce / return / `x_rev_xwob` 6 router is untouched and still picks the conf bar; the walk starts FROM it |
+
+- the walk's frame is `int(DRv[k])`, the tape dr at the open bar - Joe's *"towards dr"*.
+- while naked there is **no MAE and no 1.10 stop**. Nothing is open, so nothing can be stopped.
+- the entered leg runs the unchanged composed mech: `C.run_leg(landing, native side)`.
+- the naked walk is **the lineage walk only** - arm, KICKSTART, baton, then `final stalled` or
+  `x-cross`, ws12r ceiling rule live. It does not carry the >ws12 handover, which exists to exit an
+  open position. MY STRUCTURAL CALL; it is the walk that produced 15:55:05 in §14b.
+
+### THE RESULT
+
+| arm | legs | positive | stops | re-entries | last exit | running MAE | running MFE | MFE/MAE | realised as scored | realised at -1.10 | minutes naked | entry improvement |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| arm 0 — baseline, no walk | 43 | 29 | 12 | 12 | 09-26 20:09:10 | 21.4877 | 41.1325 | **1.91** | **+13.3928** | +14.2207 | 0.0 | +0.0000 |
+| arm 1 — naked walk, no landing ends it | 23 | 12 | 9 | 8 | 09-26 20:40:00 | 12.2899 | 14.8420 | 1.21 | **-0.3915** | +0.1173 | **1255.6** | **-0.9054** |
+| arm 2 — naked walk, no landing enters at the open | 23 | 12 | 9 | 8 | 09-26 20:40:00 | 12.2899 | 14.8420 | 1.21 | -0.3915 | +0.1173 | 1255.6 | -0.9054 |
+
+| arm | day | legs | positive | stops | MAE | MFE | MFE/MAE | realised | minutes naked |
+|---|---|---|---|---|---|---|---|---|---|
+| arm 0 | 2026-09-25 | 25 | 17 | 6 | 11.8959 | 27.8113 | 2.34 | +10.0229 | 0.0 |
+| arm 0 | 2026-09-26 | 18 | 12 | 6 | 9.5917 | 13.3212 | 1.39 | +3.3699 | 0.0 |
+| arm 1 | 2026-09-25 | 11 | 5 | 5 | 6.8846 | 7.2865 | 1.06 | **-1.4826** | 692.0 |
+| arm 1 | 2026-09-26 | 12 | 7 | 4 | 5.4053 | 7.5555 | 1.40 | +1.0911 | 563.6 |
+
+- **the one gap the rulings left open turned out to be moot.** `dr` was **0 at 0 of 23 opens** and
+  the walk **landed at 23 of 23**, so arms 1 and 2 are the same chain, figure for figure.
+- **legs fall 43 -> 23** and **1255.6 min is spent flat** - 43.6% of the 2880 min in the two days.
+- **the entry improvement is NEGATIVE on net, -0.9054 across 23 legs.** The walk lands on a worse
+  entry more often than a better one.
+- **the stop rate rises**: 9 of 23 legs (39.1%) against 12 of 43 (27.9%).
+- **MFE/MAE falls 1.91 -> 1.21.**
+
+### THE MECH DOES NOT REACH ITS OWN MOTIVATING CASE
+
+| what | arm 0 | arm 1 |
+|---|---|---|
+| 15:41:00 is | an **open** - the walk in §14b runs FROM it and lands 15:55:05 at +1.7476 | a **landing** - the walk starts at 14:43:55, frame dr −1, and lands ON 15:41:00 |
+| the entry at 15:41:00 | taken, stopped 15:50:40 at -1.2981 | taken, 0.5225% **worse** than 14:43:55, stopped 15:50:40 |
+
+- **the walk at every open moves the walk one leg EARLIER than the case that motivated it.** Under
+  arm 1 the leg before 15:41 is never held, so 15:41:00 arrives as a landing bar instead of an open
+  bar, and the §14b gain is not available.
+- §14b's +3.0457 swing needs the walk to start AT 15:41:00, which requires the leg before it to be
+  held exactly as the baseline holds it.
+
+### THE WORST AND BEST SINGLE LEGS, ARM 1
+
+| leg | side | the walk starts | frame dr | entry bar | naked min | entry better by % | exit | why | realised contribution |
+|---|---|---|---|---|---|---|---|---|---|
+| 9 | LONG | 09-25 17:31:55 | −1 | 21:27:40 | **235.8** | **-3.4812** | 21:58:20 | mae breach | -1.2767 |
+| 5 | LONG | 09-25 08:48:55 | +1 | 10:25:00 | 96.1 | -0.8814 | 10:56:40 | x-cross | +1.0355 |
+| 6 | SHORT | 09-25 10:56:40 | +1 | 11:41:35 | 44.9 | **+3.5022** | 12:27:05 | x-cross | +1.9245 |
+| 20 | LONG | 09-26 11:46:35 | +1 | 14:17:35 | 151.0 | +0.1139 | 16:07:25 | >ws12 divergence on ws1r | +2.4479 |
+
+- leg 9 walks **235.8 min** to an entry **3.4812% worse** and then takes the stop. It is the single
+  largest cost in the arm.
+- leg 6 is the single largest gain and it comes from a **+3.5022% better entry** - the same
+  mechanism that costs leg 9.
+
+**HALTED.** The mech is built, run and banked as specified. Where it goes next is Joe's: the
+measured fact is that *"every open"* relocates the walk one leg upstream of the case it was built
+for, and the chain gives back 13.7843 of realised to do it.
