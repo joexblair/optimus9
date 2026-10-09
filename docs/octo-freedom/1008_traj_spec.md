@@ -262,9 +262,22 @@ only on `dir 0` and carries no tail-life rule, so the 1009 numbers stand without
 
 Positive on both halves in all 15 rows, and all 15 again at swing_detect 0.9%.
 
-## WHAT IS STILL NOT BUILT
+## WHAT IS STILL NOT BUILT — AND IT NEEDS NO CLOSE RULE
 
-A `TRUE` return prints a trade signal at ws12r's stalled or x-cross event, and **that trade has no
-close rule**. It is the same unanswered question branch 1 has been parked on - spec open #4,
-*"what closes a branch-1 trade in an always-in-market chain"*. Until it is ruled, a TRUE row can be
-reported and charted but not scored, and `traj` cannot enter the chain.
+A `TRUE` return exits the current leg at ws12r's stalled or x-cross event. **That is all it needs.**
+
+CORRECTED 1009. This section used to say a TRUE trade was blocked on *"spec open #4, what closes a
+branch-1 trade in an always-in-market chain"*. **That wording was MINE, not Joe's** - it appears
+only in my own files - and the question was never real. Joe 1009: *"the query on a close rule is
+confusing - our chain is continuous"*.
+
+The chain is always in the market, so every exit IS the next leg's open on the flipped side.
+`final stalled`, `x-cross` and `>ws12 divergence on ws1r` all work that way and none of them has a
+close rule. A ws12r reversal signal is one more exit reason of the same kind:
+
+    FALSE  ->  `hand = j`, the >ws12 mech owns the exit, as today
+    TRUE   ->  the leg runs on until ws12r's own stalled or x-cross inside the oob run, and
+               RETURNS there. The chain alternates into the next leg, which is the trade signal.
+
+So `traj` can enter the chain now, and the report is the ordinary per-leg one:
+`leg / side / open / exit / hold min / why / leg MAE / leg MFE / realised / running realised`.

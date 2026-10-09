@@ -82,6 +82,22 @@ RREV, MAE_STOP = int(W['rrev_wob']), float(W['mae_stop_pct'])
 PASS = os.environ.get('W_PASS', 'oob')  # 'oob' (as built, Joe's tag ruling) or 'stalled'.
 #                                        THE BATON'S PASS TEST. Joe 1007: *"keeping the
 #                                        x-cross and swapping oob with stalled"*.
+# W_TRACE_NOX=1 records the x-cross exits that W_NOX=1 SUPPRESSES, and names them at the bar the
+# ws12r oob run ends. Joe 1009: *"squashed was my shorthand - I was refering to the x-cross that we
+# disabled 2 or 3 turns back"*. REPORTING ONLY - no branch reads it. Off by default because it
+# restores the per-bar `xcond` call that W_NOX=1 saves.
+TRACE_NOX = os.environ.get('W_TRACE_NOX', '0') == '1'
+# W_SQX=1 TURNS JOE'S 1009 RULE ON. *"if oob ended before dwell completed, and a x-cross was
+# squashed during the oob, then a B-trade is created and the A-trade is closed"*, and on the exit
+# bar: *"re the causal oversight - we use the run ends timestamp to keep us live-ready"* - so A
+# closes on the bar ws12r RETURNS IN-BOUNDS, the first bar where "the run ended short of the dwell"
+# is knowable. Not the cross bar, which would need 3 bars of lookahead.
+#
+# ANY squashed cross inside the run counts - edge or already standing. RULED by Joe 1009 once the
+# edge option was put to him with its count: *"I don't know how to handle x-cross correctly yet -
+# the data will make it obvious in time so more hits are better than less"*. So the wide reading
+# stands: 23 A-trades on the 94-day tape, against 10 for an EDGE-only test.
+SQX = os.environ.get('W_SQX', '0') == '1'
 NOX = os.environ.get('W_NOX') == '1'   # 1 disables the lineage walk's x-cross exit, leaving
 #                                        `final stalled` as its only exit. Joe 1007 asked what
 #                                        the swap left behind; this is the switch that shows it.
@@ -92,6 +108,9 @@ NOX = os.environ.get('W_NOX') == '1'   # 1 disables the lineage walk's x-cross e
 # trajectory (per the traj spec). if ws60r's trajectory matches the oob side that ws12r is crossed
 # into ... then we open the delegation gate"*.
 #
+assert not (SQX and not NOX), 'W_SQX=1 needs W_NOX=1 - with the x-cross live there is nothing ' \
+                              'squashed for the rule to read'
+
 # W_DGATE   'off'    as built - the handover fires on the oob run alone. THE DEFAULT.
 #           'once'   tested ONCE, at the handover bar. If ws60r's trajectory is against the oob
 #                    side there, this oob RUN never delegates - the lineage walk keeps the exit.
@@ -138,12 +157,79 @@ NOX = os.environ.get('W_NOX') == '1'   # 1 disables the lineage walk's x-cross e
 # so the oob side IS `d`. _delegate.py measured dr to add nothing
 # - the oob side alone separated 71.3% / 37.5% against the three-way's 71.0% / 39.3%.
 DGATE = os.environ.get('W_DGATE', 'off')
-assert DGATE in ('off', 'once'), 'W_DGATE must be off or once; retest is gone, 1009'
+assert DGATE in ('off', 'once', 'traj', 'vote'), 'W_DGATE must be off, once, traj or vote'
+# ---- W_DGATE='vote', Joe 1009. THE THREE-STEP DIRECTION, every step his.
+# 1  THE 40-MINUTE VOTE on ws60r. *"let's replace diff weight with a simple how many UPS vs how
+#    many DOWNS are in the tail"* / *"I meant the last 40 minutes"*. 40.0 min / the 5.0-min block =
+#    8 diffs, counted not weighted. It replaces `travel` as the primary.
+# 2  C3 BREAKS A TIE. *"maybe C3 is all we need - 1 miss out of 8 isn't trivial"* / *"we landed here
+#    because of a tie in our test walk. let's apply C3"*. C3 is the traj majority across ws5-ws11,
+#    which scored 7 of 8 on the 8 measured ties against Joe's own chart read - against 5 of 8 for
+#    the 36-sample diff, 5 of 8 for the Mage count and 5 of 8 for the always-UP constant.
+#    NOTE: on a tied bar the direction no longer comes from ws60r at all; it comes from ws5-ws11.
+# 3  IF C3 ALSO TIES -> `travel`. NOT RULED BY JOE. C3 reads 7 lines so it can only tie on a flat
+#    (3D 3U 1F); it did not tie once in the 56 readings measured across the 8 ties. Falling back to
+#    `travel` is the minimum-change option and keeps a verdict always available. STATED, not chosen
+#    by him.
+#
+# WHAT IS NOT CARRIED OVER: the 36-sample earliest-to-latest diff was built as a tie-breaker and
+# C3 replaces it in that job, so it is not read here. `W_TRAJ_LOOK` 36 still bounds how far the
+# flat-span deferral inside `travel` can reach, which is its only remaining effect.
+VOTE_MIN = float(os.environ.get('W_VOTE_MIN', 40))
+C3_LO = int(os.environ.get('W_C3_LO', 5))
+C3_HI = int(os.environ.get('W_C3_HI', 11))
+# W_VOTE_TIE picks what breaks a 4-4 vote: 'c3' is Joe's ruling, 'travel' is the ISOLATION ARM -
+# the same 40-min vote with the old reading as the tie-break, so the vote's effect and C3's effect
+# can be read apart instead of being one number.
+VOTE_TIE = os.environ.get('W_VOTE_TIE', 'c3')
+assert VOTE_TIE in ('c3', 'travel'), 'W_VOTE_TIE must be c3 or travel'
+# W_TRACE_DGATE=1 adds ws60r's OWN reading to the trace at every bar the gate is or would be
+# consulted. Joe 1009: *"there's also no events recorded from ws60r - they need to be visible to
+# understnad its return"*. REPORTING ONLY - the extra rows carry no branch, so a run with the flag
+# on and a run with it off take the same exits. It is off by default because it costs a `traj` call
+# per oob-run OPENING (~5,700 over the 95-day tape) that the mech itself does not need.
+TRACE_DG = os.environ.get('W_TRACE_DGATE', '0') == '1'
+# ---- THE FULL SPEC, W_DGATE='traj', Joe 1009. OFF BY DEFAULT.
+#
+# 1  ws12r crosses to oob on the LEG's side. A-trade is already open. The dwell clock starts at
+#    `oob_a` and RESETS whenever ws12r returns in-bounds.
+# 2  an x-cross INSIDE the exhaustion window -> EXHAUSTION. Joe 1009: *"EXHAUSTION is the same as
+#    weakness, and weakness signals a reveral. so if we get an x-cross inside ws12r's dwell, it
+#    overrides ws60r (because ws60r is in a future that won't come) and creates a B-trade after
+#    closing A-trade"*. ws60r is NOT consulted on this path.
+# 3  the window completes with no x-cross -> ws12r is ESTABLISHED -> ws60r is consulted at the
+#    dwell-ending (`oob_gate_bars`):
+#      3a traj MATCHES the oob side  -> A stays open, the >ws12 mech owns the exit
+#      3b traj AGAINST the oob side  -> wait for ws12r's own stall or x-cross AFTER the dwell, then
+#                                       close A there. Joe 1009: *"we test ws60r at the end of the
+#                                       dwell, and act on the stall/x-cross"*
+# 4  the oob run ends before the dwell-ending -> no decision; the lineage walk keeps the exit.
+#
+# A's CLOSE IS B's OPEN. The chain alternates on every exit (`k = xk; d = -d` in the driver), so
+# returning at the B bar closes A and opens B on the opposite side with no new driver code. Joe
+# 1009: *"the traj decision allows for only one trade to exist"*.
+#
+# THE EXHAUSTION RULE IS JOE'S 0728/0729 MECH, `build_exhaust.py`: *"if x crosses r in the first 1/4
+# seam"*. r oob and HOLDING past the 1/4 seam is ESTABLISHED -> continuation; x crossing back inside
+# it means r never established -> exhaustion. 1/4 seam = TF minutes / 4 = TF x 3 bars.
+#   W_EXH_FRAC  0.25   the window as a fraction of the trigger TF. Joe 1009: *"needs a metric-based
+#                      sweep, but I don't hink it will be far from 0.25"*. SWEEPABLE, not settled.
+#   XWOB_WS12X  4      bars the crossed side must HOLD before the cross is acted on. Joe 1009:
+#                      *"let's pick a number between raw and safe - wob {knob:4, `XWOB_WS12X`}"*,
+#                      between the raw cross bar and `build_exhaust.py`'s wob_n-1 = 8 bars.
+#                      Joe 0729 in that file: *"Line values must be read at the RAW bar; a live
+#                      system can only act at the CONFIRMED bar"*.
+# THE CROSS IS THE STANDARD dr-BASED ONE, Joe 1009 *"yes - the standard dr based cross"*: on a leg
+# with d > 0 the cross is ws12x going UNDER ws12r, on d < 0 it is ws12x going OVER. Identical to
+# branch 1's condition at :300 and to the x-cross direction ruling of 0818.
+EXH_FRAC = float(os.environ.get('W_EXH_FRAC', 0.25))
+XW12 = int(os.environ.get('XWOB_WS12X', 4))
 TRAJ_BLOCK = int(os.environ.get('W_TRAJ_BLOCK', 60))
 TRAJ_TAIL = int(os.environ.get('W_TRAJ_TAIL', 2))
 TRAJ_LOOK = int(os.environ.get('W_TRAJ_LOOK', 24))
 TRAJ_KIND = os.environ.get('W_TRAJ_KIND', 'close')
 assert TRAJ_KIND in ('close', 'extreme'), 'W_TRAJ_KIND must be close or extreme'
+EXH_BARS = int(round(TRIG_TF * EXH_FRAC * 60.0 / 5.0))   # TF12 x 0.25 = 3.0 min = 36 bars
 DIV_TFS = [int(s.strip().replace('ws', '').replace('r', '')) for s in W['div_lines'].split(',')]
 EXF_HI = 100.0 - float(SC.LG['momo_fence_r']); EXF_LO = float(SC.LG['momo_fence_r'])
 N = len(SC.ts)
@@ -152,6 +238,13 @@ RL = {t: SC.LD(t * 60, 'r') for t in range(SC.TF[0], CEIL_HI + 3)}
 R = {t: RL[t][:N] for t in RL}
 X = {t: SC.LD(t * 60, 'x')[:N] for t in ALL_TF}
 M2 = SC.Mg[2][:N]; G1 = SC.MTD['ws1'][:N]; PX = SC.PX[:N]
+# THE ARMING LINE IS A KNOB, 1009. Joe: *"exit-armed needs ws2Mage crossing into oob ... this is a
+# constant thorn in our side. let's swap ws2Mage with ws1Mage"*. The walk cannot exit before it
+# arms, and 206 of 1,593 legs never armed at all - they summed -417.09, with 162 of them exiting on
+# `mae breach`. W_ARM_TF 2 is the banked line; 1 is Joe's swap.
+ARM_TF = int(os.environ.get('W_ARM_TF', 2))
+MARM = SC.Mg[ARM_TF][:N] if ARM_TF in SC.Mg else np.asarray(SC.LD(ARM_TF * 60, 'Mage'), float)[:N]
+_P('the arming line is ws%dMage (banked ws2Mage)' % ARM_TF)
 BANK = {t: momo_bank(db, t) for t in ALL_TF}; db.disconnect()
 ST = {}
 for t in ALL_TF:
@@ -169,13 +262,35 @@ _P('producers ready; ceiling ws%d->ws%d, gate %d bars at oob %.0f/%.0f, dip band
 # precomputed: the block walk reads at most TRAJ_LOOK x TRAJ_BLOCK bars and there are ~130
 # handovers in a 95-day run, so the cost is nothing and nothing is cached that could drift.
 if DGATE != 'off':
-    from _trajmech import traj as _traj
+    from _trajmech import traj as _traj, sample_series as _samp
     R60 = np.asarray(SC.LD(60 * 60, 'r'), float)[:N]
     M60 = np.asarray(SC.LD(60 * 60, 'Mage'), float)[:N]
     _P('ws60r + ws60Mage loaded; gate %s, traj block %d tail %d look %d kind %s'
        % (DGATE, TRAJ_BLOCK, TRAJ_TAIL, TRAJ_LOOK, TRAJ_KIND))
 else:
-    _traj = R60 = M60 = None
+    _traj = _samp = R60 = M60 = None
+VOTE_ND = int(round(VOTE_MIN / (TRAJ_BLOCK * 5 / 60.0)))
+_sgn = lambda z: 0 if z == 0 else (1 if z > 0 else -1)
+
+def vote40(j, d):
+    """Joe's 40-minute UP/DOWN COUNT on ws60r. -> (dir, ups, downs, flats). Counted, not weighted."""
+    sm = _samp(R60, j, TRAJ_BLOCK, TRAJ_LOOK, TRAJ_KIND, d)
+    if len(sm) < VOTE_ND + 1:
+        return 0, 0, 0, 0
+    u = dn = fl = 0
+    for i in range(VOTE_ND):
+        z = _sgn(float(R60[sm[i][0]]) - float(R60[sm[i + 1][0]]))
+        u += z > 0; dn += z < 0; fl += z == 0
+    return _sgn(u - dn), u, dn, fl
+
+def c3dir(j, d):
+    """C3 - the traj majority across ws{C3_LO}r..ws{C3_HI}r. -> (dir, downs, ups, flats)."""
+    u = dn = fl = 0
+    for t in range(C3_LO, C3_HI + 1):
+        if t not in R: continue
+        r = _traj(np.asarray(R[t], float), j, TRAJ_BLOCK, TRAJ_TAIL, TRAJ_LOOK, TRAJ_KIND, d)
+        u += r['dir'] > 0; dn += r['dir'] < 0; fl += r['dir'] == 0
+    return _sgn(u - dn), dn, u, fl
 
 def dgate_dir(j, d):
     """The delegation direction at bar j for a leg on side d. -> (dir, source, travel)
@@ -184,13 +299,53 @@ def dgate_dir(j, d):
     1008's 4 mage/r rules supply it from sign(ws60Mage - ws60r), which is the direction his rule
     implies: the Mage pulls r towards itself.
     """
+    if DGATE == 'vote':
+        v, u, dn, fl = vote40(j, d)
+        if v != 0:
+            return v, ('the %.0f-min vote, %d UP vs %d DOWN' % (VOTE_MIN, u, dn)), float(u - dn), \
+                   _dgdet(j, d)
+        c, cd, cu, cf = (0, 0, 0, 0) if VOTE_TIE == 'travel' else c3dir(j, d)
+        if c != 0:
+            return c, ('C3 broke the %d-%d tie — ws%d-ws%d traj %dD %dU %dF'
+                       % (u, dn, C3_LO, C3_HI, cd, cu, cf)), float(cu - cd), _dgdet(j, d)
+        r = _traj(R60, j, TRAJ_BLOCK, TRAJ_TAIL, TRAJ_LOOK, TRAJ_KIND, d)
+        return r['dir'], (('the vote tied %d-%d — travel decides (W_VOTE_TIE=travel)' % (u, dn))
+                          if VOTE_TIE == 'travel' else
+                          ('the vote AND C3 both tied (%d-%d, %dD %dU %dF) — travel decides'
+                           % (u, dn, cd, cu, cf))), r['travel'], _dgdet(j, d, r)
     r = _traj(R60, j, TRAJ_BLOCK, TRAJ_TAIL, TRAJ_LOOK, TRAJ_KIND, d)
     if r['dir'] != 0:
-        return r['dir'], 'traj', r['travel']
+        return r['dir'], 'traj', r['travel'], _dgdet(j, d, r)
     g = float(M60[j]) - float(R60[j])
     if g == 0:
-        return 0, 'flat and Mage == r', 0.0
-    return (1 if g > 0 else -1), 'the 4 mage/r rules', g
+        return 0, 'flat and Mage == r', 0.0, _dgdet(j, d, r)
+    return (1 if g > 0 else -1), 'the 4 mage/r rules', g, _dgdet(j, d, r)
+
+DG_READ = {}      # (bar, side) -> ws60r's reading as ONE SHORT CELL, for the report's own
+                  # column. Written only by `_dgdet`, read only by a report. Nothing branches on
+                  # it, and it is keyed by side because the traj is read on the leg's dr.
+
+def _dgdet(j, d, r=None):
+    """EVERY NUMBER WS60r RETURNED AT BAR j, as one trace string. Joe 1009.
+
+    Nothing branches on this. It exists so a walk shows what ws60r SAID, not only what the gate
+    did with it - in particular the three readings that are invisible otherwise: the reading at
+    the oob-run opening, the reading at a run that ends before the dwell completes, and the tail
+    the traj actually used.
+    """
+    if r is None:
+        r = _traj(R60, j, TRAJ_BLOCK, TRAJ_TAIL, TRAJ_LOOK, TRAJ_KIND, d)
+    f = lambda v: ('%+.4f' % v) if np.isfinite(v) else 'n/a'
+    rb = r['reversal_bar']
+    DG_READ[(j, d)] = '%.2f %s %s' % (float(R60[j]),
+                                      {1: 'UP +1', -1: 'DOWN -1', 0: 'FLAT 0'}[int(r['dir'])],
+                                      f(float(r['travel'])))
+    return ('ws60r %.2f, ws60Mage %.2f, Mage-r %+.2f | traj dir %s, travel %s over its tail of %d '
+            'samples = %.1f min (run %d same-signed, %d deferred, the dr-opposed extremum at %s)'
+            % (float(R60[j]), float(M60[j]), float(M60[j]) - float(R60[j]),
+               {1: 'UP +1', -1: 'DOWN -1', 0: 'FLAT 0'}[int(r['dir'])], f(float(r['travel'])),
+               int(r['tail_used']), r['tail_used'] * TRAJ_BLOCK * 5 / 60.0, int(r['run']),
+               int(r['deferred']), SC.U(rb) if rb is not None else 'none'))
 
 def bnd(t, k, d):
     v = float(R[t][k])
@@ -269,7 +424,13 @@ def run_leg(k0, d):
     armed = False; rider = None; mae = 0.0
     ceil = BASE_HI; ceil_bar = None
     oob_a = None; hand = None; dip = None; conf = None; ib_run = 0
-    gate_shut = False      # W_DGATE 'once': latched when the gate refused THIS oob run
+    gate_shut = False      # latched when the gate refused THIS oob run
+    exh_x = None           # W_DGATE 'traj': the bar an in-window x-cross fired, awaiting XW12
+    b_armed = False        # path 3b: traj said reverse, waiting for ws12r's stall or x-cross
+    b_x = None             # that post-dwell x-cross, awaiting XW12
+    nox_x = None           # W_TRACE_NOX: the first SUPPRESSED walk x-cross inside this oob run
+    nox_r = None           # the rider it fired on
+    nox_e = None           # was that cross an EDGE on its rider, or already standing?
     for j in range(k0 + 1, N):
         px = float(PX[j])
         if np.isfinite(px) and px > 0:
@@ -300,11 +461,57 @@ def run_leg(k0, d):
                         tr.append((q, 'branch 1 cross — RECORDED, not acted on (ws%dx %.2f vs r %.2f)'
                                    % (TRIG_TF, float(X[TRIG_TF][q]), float(R[TRIG_TF][q]))))
                         break
-            if hand is None and not gate_shut and (j - oob_a) > GATE_BARS:
+                if DGATE in ('traj', 'vote') and TRACE_DG:
+                    tr.append((j, 'ws60r READ at the oob-run opening — NOT a consultation, the '
+                                  'dwell has not run. %s' % _dgdet(j, d)))
+            if DGATE in ('traj', 'vote') and hand is None:
+                xu = lambda z: float(X[TRIG_TF][z]) < float(R[TRIG_TF][z])
+                held = xu(j) if d > 0 else (not xu(j))
+                xc = (xu(j) and not xu(j - 1)) if d > 0 else ((not xu(j)) and xu(j - 1))
+                # ---- 2: the EXHAUSTION window
+                if (j - oob_a) <= EXH_BARS:
+                    if exh_x is None and xc:
+                        exh_x = j
+                        tr.append((j, 'ws%dx crossed ws%dr inside the %d-bar exhaustion window '
+                                      '(%.1f min of %.1f) — awaiting %d bars of hold'
+                                   % (TRIG_TF, TRIG_TF, EXH_BARS,
+                                      (j - oob_a) * 5 / 60.0, EXH_BARS * 5 / 60.0, XW12)))
+                    elif exh_x is not None and not held:
+                        tr.append((j, 'the exhaustion cross did NOT hold %d bars — cancelled'
+                                   % XW12)); exh_x = None
+                if exh_x is not None and held and (j - exh_x + 1) >= XW12:
+                    tr.append((j, 'EXHAUSTION CONFIRMED — ws%dr never established, ws60r is '
+                                  'overridden. A closes here and B opens on the opposite side%s'
+                               % (TRIG_TF, (' | THE READING IT OVERRODE: %s' % _dgdet(j, d))
+                                  if TRACE_DG else '')))
+                    return j, 'ws%dr exhaustion' % TRIG_TF, mae, ceil_bar, hand, tr
+                # ---- 3b: traj said reverse; act on ws12r's own stall or x-cross
+                if b_armed:
+                    if ST[(TRIG_TF, d)][j]:
+                        tr.append((j, 'ws%dr STALLED after the dwell — A closes here and B opens '
+                                      'on the opposite side' % TRIG_TF))
+                        return j, 'ws%dr reversal on stalled' % TRIG_TF, mae, ceil_bar, hand, tr
+                    if b_x is None and xc:
+                        b_x = j
+                        tr.append((j, 'ws%dx crossed ws%dr after the dwell — awaiting %d bars '
+                                      'of hold' % (TRIG_TF, TRIG_TF, XW12)))
+                    elif b_x is not None and not held:
+                        tr.append((j, 'the post-dwell cross did NOT hold %d bars — cancelled'
+                                   % XW12)); b_x = None
+                    if b_x is not None and held and (j - b_x + 1) >= XW12:
+                        tr.append((j, 'ws%dx CROSS CONFIRMED after the dwell — A closes here and B '
+                                      'opens on the opposite side' % TRIG_TF))
+                        return j, 'ws%dr reversal on x-cross' % TRIG_TF, mae, ceil_bar, hand, tr
+            if hand is None and not gate_shut and not b_armed and (j - oob_a) > GATE_BARS:
                 if DGATE == 'off':
-                    tj, src, tv = 0, 'the gate is off', 0.0
+                    tj, src, tv, det = 0, 'the gate is off', 0.0, ''
                 else:
-                    tj, src, tv = dgate_dir(j, d)
+                    tj, src, tv, det = dgate_dir(j, d)
+                    if TRACE_DG:
+                        tr.append((j, 'ws60r CONSULTED at the dwell-ending — ws%dr oob %.1f min of '
+                                      'the %.1f required. %s'
+                                   % (TRIG_TF, (j - oob_a) * 5 / 60.0,
+                                      (GATE_BARS + 1) * 5 / 60.0, det)))
                 if DGATE == 'off' or tj == d:
                     hand = j
                     tr.append((j, 'HANDOVER — ws%dr oob %.1f min; the >ws12 mech owns the exit%s'
@@ -312,13 +519,47 @@ def run_leg(k0, d):
                                   '' if DGATE == 'off'
                                   else ' (gate OPEN — ws60r traj %+d matches the oob side %+d,'
                                        ' travel %+.4f, from %s)' % (tj, d, tv, src))))
+                elif DGATE in ('traj', 'vote'):
+                    b_armed = True
+                    tr.append((j, 'DELEGATION REFUSED at the dwell-ending — ws60r traj %+d against '
+                                  'the oob side %+d (travel %+.4f, from %s). ARMED: B opens on '
+                                  'ws%dr\'s next stall or x-cross inside this oob run'
+                               % (tj, d, tv, src, TRIG_TF)))
                 else:
                     gate_shut = True
                     tr.append((j, 'DELEGATION REFUSED — ws60r traj %+d against the oob side %+d '
                                   '(travel %+.4f, from %s); this oob run never delegates and the '
                                   'walk keeps the exit' % (tj, d, tv, src)))
         else:
-            oob_a = None; gate_shut = False     # the oob run broke, so the latch clears with it
+            # the oob run broke, so every latch clears with it. Joe 1009: the dwell clock is
+            # continuous - any bar where ws12r returns in-bounds resets it.
+            if oob_a is not None and DGATE in ('traj', 'vote') and TRACE_DG and hand is None \
+               and not b_armed and not gate_shut:
+                tr.append((j, 'ws60r NEVER CONSULTED on this oob run — ws%dr returned in-bounds at '
+                              '%.2f after %.1f min, and the dwell-ending needs %.1f. The run ended '
+                              '%.1f min short, so there was no delegation decision to make. Its '
+                              'reading HERE, had it been asked: %s'
+                           % (TRIG_TF, float(R[TRIG_TF][j]), (j - oob_a) * 5 / 60.0,
+                              (GATE_BARS + 1) * 5 / 60.0,
+                              (oob_a + GATE_BARS + 1 - j) * 5 / 60.0, _dgdet(j, d))))
+            if oob_a is not None and TRACE_NOX and NOX and j < oob_a + GATE_BARS + 1:
+                tr.append((j, 'THE RUN ENDED SHORT OF THE DWELL and %s'
+                           % (('a SQUASHED x-cross fired in it at %s on ws%d — Joe 1009\'s rule '
+                               'would close A here and open B [the cross was %s]'
+                               % (SC.U(nox_x), nox_r,
+                                  'an EDGE on ws%d' % nox_r if nox_e
+                                  else 'ALREADY STANDING when it entered the run'))
+                              if nox_x is not None
+                              else 'NO squashed x-cross fired in it — the rule does not fire')))
+            if SQX and nox_x is not None and hand is None and j < oob_a + GATE_BARS + 1:
+                tr.append((j, 'A CLOSES — ws%dr returned in-bounds at %.2f after %.1f min, short '
+                              'of the %.1f-min dwell-ending, and a walk x-cross was squashed in '
+                              'the run at %s on ws%d. B opens here on the opposite side.'
+                           % (TRIG_TF, float(R[TRIG_TF][j]), (j - oob_a) * 5 / 60.0,
+                              (GATE_BARS + 1) * 5 / 60.0, SC.U(nox_x), nox_r)))
+                return j, 'ws%dr run short on a squashed x-cross' % TRIG_TF, mae, ceil_bar, hand, tr
+            oob_a = None; gate_shut = False; exh_x = None; b_armed = False; b_x = None
+            nox_x = None; nox_r = None; nox_e = None
         # CEIL_HI > BASE_HI guards the ceil_hi 12 arm: with CEIL_HI == BASE_HI the assignment
         # leaves `ceil == BASE_HI` true, so this branch re-fired on EVERY later oob crossing and
         # appended a duplicate 'CEILING ws12 -> ws12' line. Behaviour was always identical.
@@ -353,12 +594,12 @@ def run_leg(k0, d):
             continue
         # ---- before the handover: the lineage walk
         if not armed:
-            if (d > 0 and float(M2[j]) >= SC.HI and float(M2[j - 1]) < SC.HI) or \
-               (d < 0 and float(M2[j]) <= SC.LO and float(M2[j - 1]) > SC.LO):
+            if (d > 0 and float(MARM[j]) >= SC.HI and float(MARM[j - 1]) < SC.HI) or \
+               (d < 0 and float(MARM[j]) <= SC.LO and float(MARM[j - 1]) > SC.LO):
                 armed = True
-                tr.append((j, 'exit-armed — ws2Mage %s %.0f (%.2f)'
-                           % ('over' if d > 0 else 'under', SC.HI if d > 0 else SC.LO,
-                              float(M2[j]))))
+                tr.append((j, 'exit-armed — ws%dMage %s %.0f (%.2f)'
+                           % (ARM_TF, 'over' if d > 0 else 'under', SC.HI if d > 0 else SC.LO,
+                              float(MARM[j]))))
             else:
                 continue
         if rider is None:
@@ -381,6 +622,25 @@ def run_leg(k0, d):
         if (not NOX) and xcond(rider, j, d):
             tr.append((j, 'x-cross on ws%d' % rider))
             return j, 'x-cross', mae, ceil_bar, hand, tr
+        if NOX and (TRACE_NOX or SQX) and xcond(rider, j, d):
+            # the bar the W_NOX=0 build would have EXITED on. Everything after the FIRST one is a
+            # path that build never had, so only the first per oob run is named at the run's end.
+            first = nox_x is None
+            # EDGE vs LEVEL: `xcond` is a level test - ws{rider}x BELOW its target - so it stays
+            # true for long stretches. An EDGE is its first true bar after a false one on the same
+            # rider. The W_NOX=0 build exits on the first true bar it meets, which need not be an
+            # edge: the baton can hand to a rider whose x is ALREADY across.
+            edge = not xcond(rider, j - 1, d)
+            if first and oob_a is not None:
+                nox_x, nox_r, nox_e = j, rider, edge
+            if not TRACE_NOX:
+                continue
+            tr.append((j, 'x-cross SQUASHED on ws%d — W_NOX=1, so the walk did NOT exit here '
+                          '(ws%dx %.2f vs its target; %s)'
+                       % (rider, rider, float(X[rider][j]),
+                          ('inside the ws%dr oob run that opened %s'
+                           % (TRIG_TF, SC.U(oob_a))) if oob_a is not None
+                          else 'ws%dr is NOT oob on this bar' % TRIG_TF)))
     return None, 'tape end', mae, ceil_bar, hand, tr
 
 def main():

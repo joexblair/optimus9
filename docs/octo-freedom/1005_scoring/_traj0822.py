@@ -9,10 +9,13 @@ turns it into the return Joe specified:
            stalled or x-cross event
     dir 0  the wholly-flat fallback, ws60Mage vs ws60r
 
-WHAT IS NOT WIRED, AND WHY. On a TRUE the signal's CLOSE RULE does not exist. It is the same
-unanswered question as branch 1 - spec open #4, *"what closes a branch-1 trade in an
-always-in-market chain"*. So this run REPORTS the signal bar and does not score the trade. Nothing
-touches the chain; `W_DGATE` stays off and the knobs are untouched.
+WHAT THIS RUN DOES NOT DO. It reports the signal bar and does not run the chain, so nothing is
+scored. `W_DGATE` stays off and the knobs are untouched.
+
+CORRECTED 1009: this docstring used to claim a TRUE trade was blocked on a missing close rule.
+MY WORDS, and wrong - Joe 1009: *"the query on a close rule is confusing - our chain is
+continuous"*. A signal bar is the current leg's exit and the next leg's open, like every other
+exit in the chain.
 
 ws12r's OWN stalled and x-cross events are located for the signal bar, per Joe's *"ws12r will print
 a trade signal on it's stalled or x-cross event"*:
