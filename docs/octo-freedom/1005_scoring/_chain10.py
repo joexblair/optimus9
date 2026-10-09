@@ -23,9 +23,16 @@ ONE LEG, with both mechs composed:
                 the first ws1r or ws2r reversal carrying a divergence with x under r (dr +1).
 
   BRANCH 1      a counter-dr ws12x cross of ws12r inside the first 6 min of an oob run is RECORDED
-                and NOT ACTED ON. It is a trade SIGNAL and spec open question #4 - what closes a
-                branch-1 trade in an always-in-market chain - is unanswered. Acting on it here
-                would be me answering it.
+                and NOT ACTED ON. It is a trade SIGNAL, and acting on it would change the leg set,
+                which Joe has not asked for.
+
+                CORRECTED 1009. This block used to say the signal was blocked on "spec open
+                question #4 - what closes a branch-1 trade in an always-in-market chain". THOSE
+                WERE MY WORDS, NOT JOE'S, and the question was never real: the chain is CONTINUOUS,
+                so a signal bar is the current leg's EXIT and the next leg's OPEN on the flipped
+                side, exactly like `final stalled`, `x-cross` and the >ws12 divergence. None of
+                those has a close rule either. Joe 1009: *"the query on a close rule is confusing -
+                our chain is continuous"*.
 
 Knobs from ws12_baton_config v1 and lazy_g_config v1.
 """
@@ -88,22 +95,55 @@ NOX = os.environ.get('W_NOX') == '1'   # 1 disables the lineage walk's x-cross e
 # W_DGATE   'off'    as built - the handover fires on the oob run alone. THE DEFAULT.
 #           'once'   tested ONCE, at the handover bar. If ws60r's trajectory is against the oob
 #                    side there, this oob RUN never delegates - the lineage walk keeps the exit.
-#           'retest' tested every bar while the oob run lasts; the handover fires on the first bar
-#                    the trajectory agrees.
 #
-# 'once' vs 'retest' IS NOT IN JOE'S SPEC. Both are arms, neither is decided.
+# 'retest' IS GONE, 1009. It was tested every bar while the oob run lasted and measured ZERO
+# refusals at every width and both ceilings, so it was never a gate - it only delayed.
 #
-# WHAT A CLOSED GATE DOES is also unspecified, and there is only one other mech in the leg: the
+# THE DIRECTION SOURCE WAS REPLACED, 1009. It used to be `step_dir` - the sign of (ws60r now vs
+# ws60r before its last step change) - a definition I wrote in 1007 for ws1r and then reused here
+# "per the traj spec". JOE'S ESTABLISHED MECH IS `optimus9/compute/rule2_trajectory.py`, Joe 0924,
+# task #22's first mechanism, and ITS OWN DOCSTRING diagnoses the bug: *"WHY THE BAR-TO-BAR READING
+# WAS WRONG ... an unbroken-climb test returns 0 bars on every line"*. Measured on ws60r at
+# 2026-08-22 13:33:50: step_dir's reference bar was 13:33:45, FIVE SECONDS back, on a line that had
+# climbed +13.94 since 11:03. Every ws60r number taken before 1009 used step_dir and is void.
+#
+# `_trajmech.traj` is the ruled replacement - block samples, the run of same-signed sample diffs,
+# the run's far end truncating the tail, a one-sample-at-a-time deferral through a flat tail, and
+# `dir 0` on a wholly flat lookback. Its knobs, all Joe's unless marked:
+#   W_TRAJ_BLOCK  60 bars = 5 min   Joe 1009 *"I think 5 minutes stays"*
+#   W_TRAJ_TAIL   2 samples = 10 min   TRAJ_TAIL_TF_SAMP. Swept 1/2/3/6/12; all within 2.2 pts
+#   W_TRAJ_LOOK   24 samples = 120 min  TRAJ_MULTI_TF_SAMP 2 x the 60 min TF-width
+#   W_TRAJ_KIND   'close'   MINE - what one sample IS. Beats 'extreme' +22.4 vs +17.8
+# TRAJ_MIN_TAIL_LIFE IS NOT HERE: Joe 1009 *"drop the tail-life deferral and keep #7 for dir 0
+# only"*, after it overrode a correct call on 08-22's only paying reversal.
+#
+# ON `dir 0` the 4 mage/r rules decide, Joe 1008's #7: TRUE - pxs reverses - iff
+# sign(ws60Mage - ws60r) == -(the oob side). It fired 1 time in 764 dwell-endings, and its own
+# premise measured as a coin flip (sign(Mage-r) predicts ws60r's next move 49.7-53.6%), so it is
+# recorded as Joe's rule with that caveat attached and nothing more.
+#
+# WHAT A CLOSED GATE DOES is unspecified, and there is only one other mech in the leg: the
 # lineage walk keeps the exit (`final stalled` or the x-cross). Stated because it is a choice.
 #
 # THE TRAJECTORY IS READ AT THE BAR THE HANDOVER WOULD FIRE ON, never later. Reading it after that
 # bar would be information past the decision.
 #
+# THE BAR IS THE LEG'S OWN. `oob_a` is set inside `run_leg` and resets at the leg's open, so a leg
+# that opens mid-oob-run gets its own 6-minute clock. Measured on 08-22 leg 853: the global oob run
+# starts 01:24:00 and my offline scripts put the dwell-ending at 01:30:05, but the leg opens
+# 01:37:25 and THE CHAIN'S HANDOVER IS 01:43:35 - 13.5 min apart. The gate here has always read the
+# leg's bar; it is the offline event lists that were wrong, including the one behind the +22.4.
+#
 # THE SIDE: inside run_leg the ws12r oob test is `goob(TRIG_TF, j, d)` on the LEG's own direction,
-# so the oob side IS `d` and `TRAJ60[j] == d` is the test. _delegate.py measured dr to add nothing
+# so the oob side IS `d`. _delegate.py measured dr to add nothing
 # - the oob side alone separated 71.3% / 37.5% against the three-way's 71.0% / 39.3%.
 DGATE = os.environ.get('W_DGATE', 'off')
-assert DGATE in ('off', 'once', 'retest'), 'W_DGATE must be off, once or retest'
+assert DGATE in ('off', 'once'), 'W_DGATE must be off or once; retest is gone, 1009'
+TRAJ_BLOCK = int(os.environ.get('W_TRAJ_BLOCK', 60))
+TRAJ_TAIL = int(os.environ.get('W_TRAJ_TAIL', 2))
+TRAJ_LOOK = int(os.environ.get('W_TRAJ_LOOK', 24))
+TRAJ_KIND = os.environ.get('W_TRAJ_KIND', 'close')
+assert TRAJ_KIND in ('close', 'extreme'), 'W_TRAJ_KIND must be close or extreme'
 DIV_TFS = [int(s.strip().replace('ws', '').replace('r', '')) for s in W['div_lines'].split(',')]
 EXF_HI = 100.0 - float(SC.LG['momo_fence_r']); EXF_LO = float(SC.LG['momo_fence_r'])
 N = len(SC.ts)
@@ -125,22 +165,32 @@ _P('producers ready; ceiling ws%d->ws%d, gate %d bars at oob %.0f/%.0f, dip band
    'dwell %d, stop %.2f'
    % (BASE_HI, CEIL_HI, GATE_BARS, G_LO, G_HI, DIP_LO, DIP_HI, DIP_DWELL, MAE_STOP))
 
-# ws60r's TRAJECTORY, per the traj spec: the sign of (ws60r now - ws60r at its last step change).
-# No lookback window, no cap. Built only when the gate is on. Verified against `step_dir` in
-# _delegate.py at 16,815 sampled bars.
+# ws60r AND ws60Mage, loaded only when the gate is on. `traj` is called per handover bar, not
+# precomputed: the block walk reads at most TRAJ_LOOK x TRAJ_BLOCK bars and there are ~130
+# handovers in a 95-day run, so the cost is nothing and nothing is cached that could drift.
 if DGATE != 'off':
-    _R60 = np.asarray(SC.LD(60 * 60, 'r'), float)[:N]
-    TRAJ60 = np.zeros(N, np.int8)
-    _cur = _prev = np.nan
-    for _k in range(N):
-        _v = float(_R60[_k])
-        if np.isfinite(_v):
-            if not np.isfinite(_cur): _cur = _v
-            elif _v != _cur: _prev, _cur = _cur, _v
-        TRAJ60[_k] = 0 if not np.isfinite(_prev) else (1 if _cur > _prev else (-1 if _cur < _prev else 0))
-    _P('ws60r trajectory built; delegation gate %s' % DGATE)
+    from _trajmech import traj as _traj
+    R60 = np.asarray(SC.LD(60 * 60, 'r'), float)[:N]
+    M60 = np.asarray(SC.LD(60 * 60, 'Mage'), float)[:N]
+    _P('ws60r + ws60Mage loaded; gate %s, traj block %d tail %d look %d kind %s'
+       % (DGATE, TRAJ_BLOCK, TRAJ_TAIL, TRAJ_LOOK, TRAJ_KIND))
 else:
-    TRAJ60 = None
+    _traj = R60 = M60 = None
+
+def dgate_dir(j, d):
+    """The delegation direction at bar j for a leg on side d. -> (dir, source, travel)
+
+    dir is ws60r's trajectory per `_trajmech.traj`. On `dir 0` - a wholly flat lookback - Joe
+    1008's 4 mage/r rules supply it from sign(ws60Mage - ws60r), which is the direction his rule
+    implies: the Mage pulls r towards itself.
+    """
+    r = _traj(R60, j, TRAJ_BLOCK, TRAJ_TAIL, TRAJ_LOOK, TRAJ_KIND, d)
+    if r['dir'] != 0:
+        return r['dir'], 'traj', r['travel']
+    g = float(M60[j]) - float(R60[j])
+    if g == 0:
+        return 0, 'flat and Mage == r', 0.0
+    return (1 if g > 0 else -1), 'the 4 mage/r rules', g
 
 def bnd(t, k, d):
     v = float(R[t][k])
@@ -251,18 +301,22 @@ def run_leg(k0, d):
                                    % (TRIG_TF, float(X[TRIG_TF][q]), float(R[TRIG_TF][q]))))
                         break
             if hand is None and not gate_shut and (j - oob_a) > GATE_BARS:
-                tj = 0 if TRAJ60 is None else int(TRAJ60[j])
-                if DGATE == 'off' or tj == (1 if d > 0 else -1):
+                if DGATE == 'off':
+                    tj, src, tv = 0, 'the gate is off', 0.0
+                else:
+                    tj, src, tv = dgate_dir(j, d)
+                if DGATE == 'off' or tj == d:
                     hand = j
                     tr.append((j, 'HANDOVER — ws%dr oob %.1f min; the >ws12 mech owns the exit%s'
                                % (TRIG_TF, (int(SC.ts[j]) - int(SC.ts[oob_a])) / 60000.0,
                                   '' if DGATE == 'off'
-                                  else ' (gate OPEN, ws60r traj %+d)' % tj)))
-                elif DGATE == 'once':
+                                  else ' (gate OPEN — ws60r traj %+d matches the oob side %+d,'
+                                       ' travel %+.4f, from %s)' % (tj, d, tv, src))))
+                else:
                     gate_shut = True
-                    tr.append((j, 'DELEGATION REFUSED — ws60r traj %+d against the oob side %+d; '
-                                  'this oob run never delegates and the walk keeps the exit'
-                               % (tj, 1 if d > 0 else -1)))
+                    tr.append((j, 'DELEGATION REFUSED — ws60r traj %+d against the oob side %+d '
+                                  '(travel %+.4f, from %s); this oob run never delegates and the '
+                                  'walk keeps the exit' % (tj, d, tv, src)))
         else:
             oob_a = None; gate_shut = False     # the oob run broke, so the latch clears with it
         # CEIL_HI > BASE_HI guards the ceil_hi 12 arm: with CEIL_HI == BASE_HI the assignment
