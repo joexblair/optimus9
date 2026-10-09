@@ -92,3 +92,103 @@ No code is written against this spec. Every ws60r number reported on 1008 - the 
 separation, the 48-arm grid, the 40 gated pairs, the paired per-leg test and the 08-22..08-27 list -
 used `step_dir`, the bar-to-bar reading Joe ruled out on 0924. All of it is void and must be
 re-derived once the seven opens are closed.
+
+---
+
+# THE SEVEN OPENS, CLOSED BY JOE 1008/1009
+
+| # | the ruling | status |
+|---|---|---|
+| 1 | `TRAJ_MULTI_TF_SAMP` — *"confirmed"* | the knob stands. Joe wrote **2** then **2.5**; both go in the sweep rather than one being picked |
+| 2 | the tail's form — *"already covered"* | a knob, as a multiple of TF-width, truncated per #6. The "current forming TF bar" reading is OUT |
+| 3 | *"5 minutes stays - it will catch more data to evaluate. this is also a knob"* | `block` 60 bars stays, and becomes a knob |
+| 4 | *"exactly equal"* | flat = exactly equal. No tolerance, so no `min_travel` by another name |
+| 5 | *"unsure - your preference"* | MINE: step back ONE sample at a time until a non-flat sample, staying inside the lookback. See below |
+| 6 | *"the first sample that broke the prior direction, then confirmed on the following sample"* | the reversal is confirmed at sample i+1; the tail starts at sample i |
+| 7 | the ws60Mage vs ws60r fallback, four cases | **SPECIFIED AND MEASURED — the model does not hold. See below** |
+
+## THE AMBIGUITY #6 REMOVED, AND WHY IT MATTERED
+
+Joe 1008: *"if the reversal happened 25 minutes before the event, then the tail is reduced to 25
+minutes"*. So the reversal TRUNCATES the tail; it does not have to be contained by it.
+
+Applied to RAW BARS this collapses to the reading Joe ruled out on 0924: ws60r makes **847 turns in
+the 153 minutes** before 2026-08-22 13:33:50, the most recent at **13:33:45 — 5 seconds back**, so
+the tail would truncate to one bar.
+
+#6's *"the first SAMPLE"* is what prevents that. The mech runs on the 5-minute block samples, not
+on bars: 847 raw turns become a handful of samples, and the block absorbs the wiggles. That is the
+work `min_travel` was patching, which is why dropping it and fixing the sampling are one change.
+
+## OPEN 5, MY DECISION, STATED SO IT CAN BE OVERTURNED
+
+**Step back one sample at a time until a non-flat sample is found, and stop at the lookback bound.**
+
+- it is the minimal rule: nothing new is introduced, and the lookback already bounds how far it goes.
+- it preserves *"follow the tail"* — the NEAREST usable sample wins, not the furthest.
+- the alternative, jumping straight to the whole-lookback extrema, discards the tail concept on
+  exactly the bars the tail was invented for.
+- at 2026-08-22 15:26:15 one sample back is still 63.9604; the first non-flat sample is ~21 min back
+  at 14:55, value 50.8287, travel **+13.1317** — Joe's eyeball UP.
+
+## OPEN 7 — THE SPEC IS CONSISTENT. THE MODEL IT RESTS ON IS NOT.
+
+Joe's rule, in one line: **TRUE when the Mage's pull OPPOSES the oob side**, i.e.
+`TRUE iff sign(ws60Mage - ws60r) == -(the oob side)`. All four of his cases agree with that, so
+**the logic is not inverted** — checked case by case.
+
+| ws60Mage vs ws60r | ws12r | Joe: does pxs reverse | Joe's RETURN | what the chain does |
+|---|---|---|---|---|
+| HIGHER | HIGH oob | no | FALSE | delegate to `>ws12r oob` |
+| LOWER | HIGH oob | yes | **TRUE** | ws12r prints a trade signal on stalled / x-cross |
+| LOWER | LOW oob | no | FALSE | delegate to `>ws12r oob` |
+| HIGHER | LOW oob | yes | **TRUE** | ws12r prints a trade signal on stalled / x-cross |
+
+**THE POLARITY HAZARD, NAMED:** Joe's `TRUE` is a REVERSAL answer. `rule2_trajectory.trajectory`'s
+`True` is a CONTINUATION answer — "the line is travelling towards dr". They are OPPOSITE in sign.
+Any single function returning both must negate one of them.
+
+### THE TWO LINKS, MEASURED ACROSS 95 DAYS
+
+| link 2 — *"pxs follows r"* | samples | sign(ws60r move) agrees with sign(pxs move) |
+|---|---|---|
+| 5 min ahead | 20,472 | **94.5%** |
+| 15 min | 22,423 | **88.4%** |
+| 30 min | 24,322 | **80.5%** |
+| 60 min | 26,607 | 68.9% |
+| 120 min | 26,875 | 69.0% |
+
+| link 1 — *"the Mage is pulling r"* | samples | sign(Mage-r) agrees with sign(r move) | with \|Mage-r\| >= 10 |
+|---|---|---|---|
+| 5 min ahead | 20,311 | **50.7%** | 50.8% |
+| 15 min | 22,245 | **50.6%** | 51.0% |
+| 30 min | 24,128 | **50.7%** | 51.3% |
+| 60 min | 26,391 | **49.7%** | 50.3% |
+| 120 min | 26,647 | 51.1% | 52.4% |
+| 180 min | 26,717 | 51.7% | 53.6% |
+
+**Link 2 is strong. Link 1 is a coin flip**, including where the gap is widest.
+
+### THE RULE END TO END, AT THE BARS IT WOULD FIRE ON
+
+swing_detect 1.0% as the scorer, never an input.
+
+| the bar | block | events | Joe TRUE | of those, DID reverse | Joe FALSE | reversed anyway | spread |
+|---|---|---|---|---|---|---|---|
+| the oob crossing | all | 3795 | 1723 | 39.6% | 2072 | 41.1% | **-1.5** |
+| the oob crossing | fit | 1754 | 799 | 35.5% | 955 | 42.6% | **-7.1** |
+| the oob crossing | hold | 2041 | 924 | 43.1% | 1117 | 39.8% | **+3.2** |
+| the dwell-ending | all | 764 | 344 | 31.4% | 420 | 29.0% | **+2.3** |
+| the dwell-ending | fit | 375 | 179 | 26.3% | 196 | 26.0% | **+0.2** |
+| the dwell-ending | hold | 389 | 165 | 37.0% | 224 | 31.7% | **+5.3** |
+
+- **the best spread is +5.3 points and the sign flips across the halves.** For scale, the void
+  `step_dir` gate separated **36.4** points on the same events.
+- the `TRUE mean pxs move against the oob side` is NEGATIVE on 11 of 12 rows, i.e. on the bars the
+  rule calls a reversal, price on average kept going WITH the oob side.
+- `ws60Mage == ws60r` exactly: **0 events**, so no tie case to rule.
+
+### SO #7 IS SPECIFIED BUT NOT SUPPORTED
+
+Nothing is built against it. The spec is recorded exactly as Joe wrote it, with the measurement
+beside it, and the decision is his.
