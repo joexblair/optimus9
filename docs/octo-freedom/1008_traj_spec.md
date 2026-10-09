@@ -192,3 +192,79 @@ swing_detect 1.0% as the scorer, never an input.
 
 Nothing is built against it. The spec is recorded exactly as Joe wrote it, with the measurement
 beside it, and the decision is his.
+
+---
+
+# RULED 1009 — TRAJ_MIN_TAIL_LIFE DROPPED, #7 FOR `dir 0` ONLY
+
+Joe 1009 proposed it: *"if the tail's life is < ({knob:0.5,'TRAJ_MIN_TAIL_LIFE'} * TF), defer to
+the 4 mage/r rules"*. Measured on 08-22, then Joe 1009: *"drop the tail-life deferral and keep #7
+for dir 0 only / agreed"*.
+
+## WHY IT WAS DROPPED — 08-22, 5 dwell-endings
+
+| the dwell-ending | side | traj dir | tail's life | #7 says | traj says | Joe's eye |
+|---|---|---|---|---|---|---|
+| 01:30:05 | high oob | UP | 10 min | FALSE | FALSE | FALSE |
+| **07:42:05** | high oob | **DOWN** | 10 min | **FALSE** | **TRUE** | **TRUE** |
+| **13:39:55** | low oob | DOWN | 10 min | **TRUE** | **FALSE** | **TRUE** |
+| 15:32:20 | high oob | UP | 30 min | FALSE | FALSE | FALSE |
+| 19:06:05 | low oob | DOWN | 10 min | FALSE | FALSE | FALSE |
+
+The rule deferred on 4 of the 5 and scored **4 of 5**, the same count as `traj` alone — but it
+moved the miss from 13:39:55 to 07:42:05, and the consequences are not equal:
+
+| the rule | matches | what the miss costs |
+|---|---|---|
+| `traj` alone, #7 on `dir 0` only | 4 of 5, misses 13:39:55 | **nothing** — 13:39:55 produced no signal bar at all, *"neither inside the oob run"* |
+| `TRAJ_MIN_TAIL_LIFE` 0.5 | 4 of 5, misses 07:42:05 | **-4.28%** — see below |
+
+Both misses have a **10-minute tail life**, so no value of the knob separates them.
+
+## WHAT 07:36 ACTUALLY DID — the measurement that settled it
+
+Joe 1009: *"would 07:36 result in a ws12r reversal? if so, then it's accurate"*. It did, and large.
+
+| ws12r | ts | value | min from the dwell-ending |
+|---|---|---|---|
+| at the oob crossing | 07:36:00 | 91.91 | -6.1 |
+| at the dwell-ending | 07:42:05 | 88.10 | +0.0 |
+| its highest in the next 4 h | 07:36:05 | 92.10 | **-6.0 — the top was in before the dwell-ending** |
+| it leaves high oob | 08:00:00 | 78.11 | +17.9 |
+| its lowest in the next 4 h | 09:04:35 | **33.15** | +82.5 |
+
+- a **58.8-point** ws12r reversal, and it never returned to high oob.
+- the next swing_detect pivot, identical at 1.0% and 0.9%: an **L at 07:50:10, -0.7778%** from the
+  dwell-ending. Then -1.5038% at 08:05:30, -2.1217% by 08:36, **-4.7547% by 10:26**.
+- the signal TRUE would have printed: **07:57:30, `ws12r stalled`, SHORT at 0.194457**, against
+  0.186139 at 10:26:00 — **-4.28% in the SHORT's favour**.
+
+So the tail-life deferral overrode a correct `traj` call on the only event of the day that paid.
+
+## THE RULED SHAPE
+
+| the piece | the ruling |
+|---|---|
+| `TRAJ_MIN_TAIL_LIFE` | **DROPPED.** Never seeded, never in the mech |
+| the 4 mage/r rules (#7) | **`dir 0` only** — a wholly flat lookback, which fires **1 time in 764** dwell-endings |
+| everything else | as ruled 1008/1009 and already in `_trajmech.py` |
+
+**THE BANKED VALIDATION ALREADY MEASURES THIS EXACT CONFIGURATION.** `_trajval.py` falls back to #7
+only on `dir 0` and carries no tail-life rule, so the 1009 numbers stand without a re-run:
+
+| TRAJ_TAIL_TF_SAMP | all-95 spread | fit | hold |
+|---|---|---|---|
+| 1 / 5 min | +20.2 | +11.8 | +26.7 |
+| **2 / 10 min** | **+22.4** | **+17.5** | **+27.4** |
+| 3 / 15 min | +22.3 | +17.5 | +27.4 |
+| 6 / 30 min | +21.9 | +15.9 | +28.5 |
+| 12 / 60 min | +22.4 | +15.8 | +30.5 |
+
+Positive on both halves in all 15 rows, and all 15 again at swing_detect 0.9%.
+
+## WHAT IS STILL NOT BUILT
+
+A `TRUE` return prints a trade signal at ws12r's stalled or x-cross event, and **that trade has no
+close rule**. It is the same unanswered question branch 1 has been parked on - spec open #4,
+*"what closes a branch-1 trade in an always-in-market chain"*. Until it is ruled, a TRUE row can be
+reported and charted but not scored, and `traj` cannot enter the chain.
