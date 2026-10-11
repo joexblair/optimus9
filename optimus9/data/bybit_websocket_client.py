@@ -67,10 +67,16 @@ class BybitWebSocketClient:
     async def _stream_loop(self, topic: str, on_message: Callable) -> None:
         delay = 1
         while True:
+            n_before = self._n_connects
             try:
                 await self._connect(topic, on_message)
                 delay = 1
             except Exception as exc:
+                if self._n_connects > n_before:
+                    # Joe 1011: "the reset to 1s is logical, bake it in". The connection came up (subscribed)
+                    # before it dropped, so the wait starts over at 1 s; only attempts that never come up
+                    # keep doubling. Before this, a book socket's wait grew 1 -> 60 s across drops days apart.
+                    delay = 1
                 self._log.error(f'WebSocket error: {exc} — reconnecting in {delay}s')
                 if self._live is not None:
                     self._live.error(f'{exc} — reconnecting in {delay}s')

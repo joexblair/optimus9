@@ -5,6 +5,8 @@ S1  a socket with no topic message for stall_s is aborted and reconnected; on_co
 S2  ping replies do NOT count as liveness (they arrived on 22:06's dead sockets' last connection too)
 S3  two sockets sharing a RestartGate never restart within its offset of each other
 S4  with stall_s None the client never restarts (fakeAPI tests, the default)
+S5  a connection that came up and then drops waits 1 s every time (Joe 1011: the wait resets on a good connect)
+S6  attempts that never come up still back off 1, 2, 4 s
 """
 import asyncio
 import json
@@ -95,3 +97,68 @@ def test_s4_no_stall_s_never_restarts():
     _client('ws://127.0.0.1:%d' % srv.port)
     time.sleep(4.0)
     assert len(srv.connects) == 1, srv.connects
+
+
+class DroppingServer:
+    """Accepts the websocket and the subscribe, then aborts the TCP connection - an error, not a clean close."""
+
+    def __init__(self):
+        self.connects = []
+        self.loop = asyncio.new_event_loop()
+        self.port = None
+        ready = threading.Event()
+        threading.Thread(target=self._run, args=(ready,), daemon=True).start()
+        ready.wait(5)
+
+    async def _handler(self, ws):
+        self.connects.append(time.monotonic())
+        await ws.recv()                                             # the subscribe
+        await asyncio.sleep(0.2)
+        ws.transport.abort()
+
+    def _run(self, ready):
+        asyncio.set_event_loop(self.loop)
+
+        async def main():
+            srv = await websockets.serve(self._handler, '127.0.0.1', 0)
+            self.port = srv.sockets[0].getsockname()[1]
+            ready.set()
+            await asyncio.Future()
+        self.loop.run_until_complete(main())
+
+
+class RefusingServer:
+    """Accepts TCP and closes at once, so the websocket handshake never completes."""
+
+    def __init__(self):
+        import socket
+        self.accepts = []
+        self.sock = socket.socket()
+        self.sock.bind(('127.0.0.1', 0))
+        self.sock.listen(16)
+        self.port = self.sock.getsockname()[1]
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self):
+        while True:
+            conn, _ = self.sock.accept()
+            self.accepts.append(time.monotonic())
+            conn.close()
+
+
+def test_s5_wait_resets_after_a_connection_that_came_up():
+    srv = DroppingServer()
+    _client('ws://127.0.0.1:%d' % srv.port)
+    time.sleep(7.5)
+    gaps = [b - a for a, b in zip(srv.connects, srv.connects[1:])]
+    assert len(srv.connects) >= 5, srv.connects                 # the old doubling gave 4: 0, 1.2, 3.4, 7.6
+    assert all(g <= 1.8 for g in gaps), gaps                   # 0.2 s up + the 1 s wait, every time
+
+
+def test_s6_attempts_that_never_come_up_still_back_off():
+    srv = RefusingServer()
+    _client('ws://127.0.0.1:%d' % srv.port)
+    time.sleep(7.8)
+    gaps = [b - a for a, b in zip(srv.accepts, srv.accepts[1:])]
+    assert len(gaps) >= 3, srv.accepts
+    assert 0.8 <= gaps[0] <= 1.6 and 1.8 <= gaps[1] <= 2.6 and 3.8 <= gaps[2] <= 4.6, gaps
