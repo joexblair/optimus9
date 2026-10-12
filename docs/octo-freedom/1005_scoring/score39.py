@@ -84,7 +84,11 @@ for k in range(min(len(ts), len(G1), len(M13))):
     DRv[k] = cur
 REV = _mage_rev(MTD['g5'], REV_WOB)
 TAPE_LAST = len(ts) - 1
-U = lambda k: dt.datetime.fromtimestamp(int(ts[k]) / 1000, dt.timezone.utc).strftime('%H:%M:%S')
+# EVERY TIMESTAMP CARRIES ITS DATE. Joe 1012: *"you're printing times with no dates - it's
+# impossible to work with"*. The work spans days and legs run past midnight, so a bare
+# HH:MM:SS is ambiguous inside a single table. This is the ONE place the format is set.
+U = lambda k: dt.datetime.fromtimestamp(int(ts[k]) / 1000, dt.timezone.utc).strftime(
+    '%Y-%m-%d %H:%M:%S')
 K = lambda s: int(np.searchsorted(ts, int(dt.datetime.strptime(s, '%Y-%m-%d %H:%M:%S').replace(tzinfo=dt.timezone.utc).timestamp() * 1000)))
 
 # ---------------- mtd, verbatim from mtd_lens.py

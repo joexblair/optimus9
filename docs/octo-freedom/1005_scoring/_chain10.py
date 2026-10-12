@@ -249,7 +249,18 @@ assert GC_HOLD in ('wait', 'walk'), 'W_GC_HOLD must be wait or walk'
 LOOP_END = os.environ.get('W_LOOP_END', 'cp')
 assert LOOP_END in ('cp', 'oob'), 'W_LOOP_END must be cp or oob'
 LOOP_LB = int(os.environ.get('W_LOOP_LB', 48))      # 4 min at the 5 s grid
-CP = os.environ.get('W_CP', '0') == '1'
+# W_CP — WHAT A ws1-cp DOES TO THE RIDER.
+#   '0'    nothing. The cp only ARMS (under W_ARM=cp) and ENDS a W_LOOP.
+#   '1'    only a COMPLETING cp resets the rider to ws1. Joe 1012: *"drop the reset at every
+#          ws1-cp"*, against his banked *"at 05:42, the w_loop is complete and we start the lineage
+#          again from ws1"* - the completion, not every checkpoint.
+#   'all'  EVERY cp resets the rider to ws1. Joe 1012 reopened this: *"I must have agreed to the
+#          wrong thing - I'm expecting rider to be reset (ie back to ws1)"*. Built so the impact on
+#          the banked trades can be measured before he commits to it. NOT the default.
+CP_RIDER = os.environ.get('W_CP', '0')
+assert CP_RIDER in ('0', '1', 'all'), 'W_CP must be 0, 1 or all'
+CP = CP_RIDER in ('1', 'all')
+CP_ALL = CP_RIDER == 'all'
 CP_DWELL = int(os.environ.get('W_CP_DWELL', 4))
 # ws1-cp MODE 2 — THE DIVERGENCE MODE. BAKED 1012, Joe: *"we need mode 2 baked in so that jumpstart
 # can fire on the 14:33 ws1-cp"*. Default 'both': either mode arms, which is what he meant by
@@ -257,6 +268,9 @@ CP_DWELL = int(os.environ.get('W_CP_DWELL', 4))
 #   '1'     mode 1 only - ws1r AND ws1Mage both oob on the target board. The pre-1012 build.
 #   '2'     mode 2 only.
 #   'both'  either one. THE DEFAULT.
+# RE-ENABLED 1012, Joe: *"re-enable mode 2"*. He disabled it one turn earlier to see what it was
+# holding up; disabling it cost the 14:46:20 and 18:56:10 finishers on the 07-17 14:10 SHORT, which
+# never arms on mode 1 in time.
 CP_MODE = os.environ.get('W_CP_MODE', 'both')
 assert CP_MODE in ('1', '2', 'both'), "W_CP_MODE must be 1, 2 or both"
 # THE MODE-2 TRIGGER, Joe 1012 verbatim: *"to set the anchor and initiate the divergence test, use
@@ -283,6 +297,49 @@ assert CP_MODE in ('1', '2', 'both'), "W_CP_MODE must be 1, 2 or both"
 #   THE 0921 DWELL RULE IS IGNORED FOR THIS CALLER. Joe 1012: *"the dwell rule, your 0921 spec
 #   -ignore"*. Not a knob here, not an open point.
 CP_XWOB = int(os.environ.get('W_CP_XWOB', 2))
+# W_EXIT_FIN — THE LEG EXITS ON THE g15r LINEAGE FINISHER. Joe 1012: *"walk a LONG trade that opens
+# at 07-17 08:49:45 and exits on the finisher's g15 signal"*. 1 closes the leg at the first finisher
+# the walk reaches; 0 is the banked behaviour, where the finisher ends the gc hold and the walk
+# carries on. DEFAULT 0 - a new exit must not move the walks already banked, so it is passed per run
+# until Joe says otherwise.
+EXIT_FIN = os.environ.get('W_EXIT_FIN', '0') == '1'
+# W_HTF_MOM — THE HTF MOMENTUM HOLD. Joe 1012, his words for the test: *"the leg does not close
+# while N consecutive lines above the rider are mom-true toward the board"* / *"I agree"*, and on
+# the sweep that set N: *"the gap of 1 feels more like a coin-toss than science - let's see how it
+# looks across the other exits"* / *"that's good news"*.
+#
+# AT A LEG CLOSE: the longest run of CONSECUTIVE mom-true lines strictly ABOVE the rider, from
+# rider+1 to W_HTF_MOM_TOP. If that run is >= W_HTF_MOM_N the leg does NOT close.
+#
+# N = 9 IS THE ONLY INTEGER THAT FITS, measured over 29 candidate bars in 10 legs on 2 days:
+#   the highest run Joe wants to exit on   8   07-18 06:59:40
+#   the lowest run Joe wants blocked      10   07-18 04:17:45, and 07-18 17:28:00 also sits at 10
+#   bars at 9                              0   of 29
+# 4 bars at 10 or above, 25 at 8 or below, nothing between. The boundary rests on two bars and the
+# gap is one integer wide; widening from 19 to 29 bars did not fill it. Stated because it is thin.
+#
+# DEFAULT OFF, Joe 1012: *"put it in a knob, default off"*.
+#
+# IT DOES NOT TOUCH THE MAE STOP. The stop is a risk limit, not the walk deciding it has run out of
+# momentum, and Joe's sentence is about the walk. Stated as a choice, not ruled.
+#
+# IT OWNS ITS OWN BAND (SRP). The run was measured over ws4..ws30, but ALL_TF stops at the ceiling -
+# ws23 in the banked config, ws12 for lineage. Truncating at ws23 would change the numbers: the
+# 06:59:40 run is ws23-ws30, which reads as 1 instead of 8. So the test loads its own mom-true masks
+# up to W_HTF_MOM_TOP and does not borrow lineage's band. That build is minutes long, so it only
+# happens when the knob is on.
+# W_STALL_N — THE STALL SAMPLE COUNT. Joe 1012: *"`stalled` could be firing sooner than we need -
+# 3 was an arbitrary number of samples to prove stalled, but it was never swept"*. The spec table's
+# value is 6, not 3, and it is the DEFAULT here so an unset run is unchanged.
+# THE RULE: a line is stalled when its last fresh extreme is W_STALL_N or more lattice samples back.
+# The lattice is each TF's OWN momo bank - MOMO_SAMPLES points, MOMO_STEP_BARS apart - so the same
+# count is a different wall-clock span on every line.
+STALL_N = int(os.environ.get('W_STALL_N', SC.LG['stall_n']))
+assert STALL_N >= 1, 'W_STALL_N is a sample count and must be at least 1'
+HTF_MOM = os.environ.get('W_HTF_MOM', '0') == '1'
+HTF_MOM_N = int(os.environ.get('W_HTF_MOM_N', 9))
+HTF_MOM_TOP = int(os.environ.get('W_HTF_MOM_TOP', 30))
+assert HTF_MOM_N >= 1, 'W_HTF_MOM_N is a count of lines and must be at least 1'
 # THE MICROLOOP IS DELETED. Joe named it *"double dipping"* and dropped it 1012: *"ok, drop the
 # 'double dipping' idea. I'm too attached to 06:59"*. It restarted the lineage walk at a g15r
 # lineage finisher - rider to ws1, holder list cleared - and it cost the 06:59:40 finisher on the
@@ -594,7 +651,7 @@ for t in ALL_TF:
         with momo_window(int(BANK[t]['k_window']) * t):
             s_, n_ = int(MC.MOMO_STEP_BARS), int(MC.MOMO_SAMPLES)
     for dd in (-1, +1):
-        _raw = stall_mask(RL[t], dd, int(SC.LG['stall_n']), s_, n_)
+        _raw = stall_mask(RL[t], dd, STALL_N, s_, n_)
         # STALL IS EX-FENCE, SAME SIDE. Joe 1012: *"stall should be ex-fence (same-side)"*, after
         # confirming `jig.stall_mask` has NO fence condition at all - it only asks whether the line
         # made a new extreme in the last stall_n samples, so a line at 45.42 reads as stalled.
@@ -607,7 +664,7 @@ for t in ALL_TF:
         ST[(t, dd)] = _raw[:N] & _ok
         STALL_RAW[(t, dd)] = _raw[:N]      # the ungated mask, for reporting only
 REV = {t: _mage_rev(R[t], RREV) for t in DIV_TFS}
-_P('stall gated to the same-side ex-fence %.0f/%.0f; %d of %d ws2 LONG stall bars survive the gate'
+_P('stall_n ' + str(STALL_N) + '; stall gated to the same-side ex-fence %.0f/%.0f; %d of %d ws2 LONG stall bars survive the gate'
    % (EXF_LO, EXF_HI, int(ST[(2, +1)].sum()), int(STALL_RAW[(2, +1)].sum())))
 _P('producers ready; LINEAGE ceiling ws%d (loopTF ws%s + lin_hop %d), >ws12 ceiling ws%d->ws%d, '
    'band ws%d-ws%d, gate %d bars at oob %.0f/%.0f, dip %.0f-%.0f dwell %d, stop %.2f'
@@ -732,6 +789,46 @@ def baton_ok(t, j, d):
     if BATON == 'rpred':
         return int(RPRED[t][j]) == (1 if d > 0 else -1)
     return bool(MOMT[t][d][j]) or int(RPRED[t][j]) == (1 if d > 0 else -1)
+
+HTF_M = {}
+if HTF_MOM:
+    from _momtrue import momtrue_mask as _mtm
+    from optimus9.orchestration.build_ws_lines import HOURS as _H, WARMUP as _WU
+    _db2 = DatabaseManager(**get_db_config()); _db2.connect()
+    for _ht in range(2, HTF_MOM_TOP + 1):
+        try:
+            _hr = np.asarray(SC.LD(_ht * 60, 'r'), float)[:N]
+            HTF_M[_ht] = _mtm(_hr, _ht, momo_bank(_db2, _ht), SC.EM, _H, _WU, 'gated', N,
+                              log=lambda z: None)
+        except Exception as _e:
+            _P('W_HTF_MOM: ws%d has no mom-true mask (%s)' % (_ht, str(_e)[:50]))
+    _db2.disconnect()
+    _P('W_HTF_MOM ready — ws%d-ws%d, N %d consecutive lines above the rider'
+       % (min(HTF_M), max(HTF_M), HTF_MOM_N))
+
+def htf_hold(rider, j, d):
+    """Does the HTF momentum hold stop the leg closing at bar `j`? -> a trace string, or None.
+
+    The longest run of CONSECUTIVE mom-true lines strictly above `rider`, up to HTF_MOM_TOP. A run
+    of HTF_MOM_N or more holds the leg open. CAUSAL: every mask read is at bar `j`.
+    """
+    if not HTF_MOM or rider is None:
+        return None
+    best = 0; cur = 0; b0 = b1 = None; s0 = None
+    for t in range(rider + 1, HTF_MOM_TOP + 1):
+        if t not in HTF_M:
+            cur = 0; continue
+        if bool(HTF_M[t][d][j]):
+            if cur == 0: s0 = t
+            cur += 1
+            if cur > best: best, b0, b1 = cur, s0, t
+        else:
+            cur = 0
+    if best < HTF_MOM_N:
+        return None
+    return ('HTF MOMENTUM HOLD — ws%d-ws%d, %d consecutive lines above the rider ws%d are mom-true '
+            'toward the %s board (N %d). the leg does NOT close here.'
+            % (b0, b1, best, rider, 'HIGH' if d > 0 else 'LOW', HTF_MOM_N))
 
 def cp2(j, d):
     """ws1-cp MODE 2 at bar `j`: the ws1x/ws1Mage cross, its wob hold, and the divergence.
@@ -1133,6 +1230,12 @@ def run_leg(k0, trade_side):
                                   'ENDS. the walk carries on'
                                % (float(GCG.r15[j]), float(GCG.m15[j]), SC.U(gc_hold),
                                   (int(SC.ts[j]) - int(SC.ts[gc_hold])) / 60000.0)))
+                    if EXIT_FIN:
+                        _hh = htf_hold(rider, j, d)
+                        if _hh is not None:
+                            tr.append((j, _hh))
+                        else:
+                            return j, 'g15r lineage finisher', mae, ceil_bar, hand, tr
                     gc_hold = None
                 else:
                     if _side == -d and not gc_said:
@@ -1220,6 +1323,12 @@ def run_leg(k0, trade_side):
                            % (cp_n, cp_why, ALL_TF[0], rider)))
                 rider = ALL_TF[0]
                 continue
+            if CP_ALL:
+                tr.append((j, 'ws1-cp %d — %s. No W_LOOP completes here, but W_CP=all so the '
+                              'rider RESETS to ws%d from ws%d.'
+                           % (cp_n, cp_why, ALL_TF[0], rider)))
+                rider = ALL_TF[0]
+                continue
             tr.append((j, 'ws1-cp %d — %s. No W_LOOP completes here, so the rider stays on '
                           'ws%d.' % (cp_n, cp_why, rider)))
             continue
@@ -1286,6 +1395,9 @@ def run_leg(k0, trade_side):
                                   'it (began %s)' % (rider, looped, SC.U(loop_open))))
                     continue
                 tr.append((j, 'EXHAUSTED on ws%d%s — %s' % (rider, _lp(looped), e)))
+                _hh = htf_hold(rider, j, d)
+                if _hh is not None:
+                    tr.append((j, _hh)); continue
                 return j, 'loop exhaustion', mae, ceil_bar, hand, tr
         if rider is None:
             if KICK == 'off':
@@ -1380,7 +1492,11 @@ def run_leg(k0, trade_side):
                                       'and waits for the ws1-cp that ends it (began %s)'
                                    % (looped, SC.U(loop_open))))
                     else:
-                        return j, 'loop exhaustion', mae, ceil_bar, hand, tr
+                        _hh = htf_hold(rider, j, d)
+                        if _hh is not None:
+                            tr.append((j, _hh))
+                        else:
+                            return j, 'loop exhaustion', mae, ceil_bar, hand, tr
                 continue
         if ST[(rider, d)][j]:
             if EXH_LOOP == 'on_stall' and EXH_WHO == 'rider':
@@ -1406,6 +1522,9 @@ def run_leg(k0, trade_side):
                         continue
                     tr.append((j, 'EXHAUSTED on ws%d at its own stall%s — %s'
                                % (rider, _lp(looped), e)))
+                    _hh = htf_hold(rider, j, d)
+                    if _hh is not None:
+                        tr.append((j, _hh)); continue
                     return j, 'loop exhaustion', mae, ceil_bar, hand, tr
             if STALL_UP and rider < LIN_CEIL:
                 rider += 1

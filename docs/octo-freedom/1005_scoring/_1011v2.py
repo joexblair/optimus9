@@ -63,15 +63,25 @@ while k < kE:
                      % ('past the tape end' if xk is None else '%s, %s' % (U(xk), why))))
         break
     rows.append((xk, 'EXIT — %s' % why))
+    # AN EXIT DOES NOT OPEN ANYTHING. Joe 1012: *"exits no longer create an open. they are two
+    # different mechs, and I haven't shared the open mech yet"*. The old `k = xk; d = -d` chained a
+    # new leg onto every exit on the opposite side - that was THIS SCRIPT'S invention, not a mech,
+    # and every "leg 2 of this window" row it produced was mine. The report now stops at the exit.
+    # V_CHAIN=1 restores the old chaining for comparison only; it is not a mech.
+    if os.environ.get('V_CHAIN', '0') != '1':
+        break
     k = xk; d = -d
 
 W = int(os.environ.get('V_W', 200))
 rows.sort(key=lambda r: r[0])
 print()
-print('┌' + '─' * 10 + '┬' + '─' * (W + 2) + '┐')
-print('│ ' + 'ts'.center(8) + ' │ ' + 'event'.center(W) + ' │')
-print('├' + '─' * 10 + '┼' + '─' * (W + 2) + '┤')
+# THE ts COLUMN IS 19 WIDE, for 'YYYY-MM-DD HH:MM:SS'. Joe 1012 on the 8-wide version:
+# *"you're printing times with no dates - it's impossible to work with"*.
+TSW = 19
+print('┌' + '─' * (TSW + 2) + '┬' + '─' * (W + 2) + '┐')
+print('│ ' + 'ts'.center(TSW) + ' │ ' + 'event'.center(W) + ' │')
+print('├' + '─' * (TSW + 2) + '┼' + '─' * (W + 2) + '┤')
 for j, t in rows:
-    print('│ ' + U(j).ljust(8) + ' │ ' + t[:W].ljust(W) + ' │')
-print('└' + '─' * 10 + '┴' + '─' * (W + 2) + '┘')
+    print('│ ' + U(j).ljust(TSW) + ' │ ' + t[:W].ljust(W) + ' │')
+print('└' + '─' * (TSW + 2) + '┴' + '─' * (W + 2) + '┘')
 print('- %d rows, %d leg open(s) in the window.' % (len(rows), leg))
