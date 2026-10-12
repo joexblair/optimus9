@@ -51,6 +51,13 @@ def cache_jig_perline(end_ms, hours, warmup, ovr, pxs_cfg=None, rebuild=False):
                     evt = j.W.base['volume'].to_numpy(dtype=float) > 0
                     td = {'__ts__': np.asarray(j.ts, np.int64), '__evt__': evt}
                     if pxs_cfg: td['__pxs__'] = _px_smooth_evt(j.W.base, evt, pxs_cfg['src'], int(pxs_cfg['len']))
+                    # __close__ = the RAW price source, UNSMOOTHED. Added 1011 for jig.divergence,
+                    # whose docstring requires it: "DEMA-smoothing the price slope DESTROYS it
+                    # (MAE 0.15 -> 0.35-0.85). The raw price slope is correct." __pxs__ is this same
+                    # series with the DEMA applied, so the two differ only by the smoother.
+                    # OPTIONAL ON READ: a tape cached before 1011 has no __close__ and every
+                    # consumer must tolerate its absence.
+                    if pxs_cfg: td['__close__'] = np.asarray(IC.build_source(j.W.base, pxs_cfg['src']), float)
                     np.savez(tp, **td); need_tape = False
     # READ-ONLY MEMORY MAP, not a copy. Joe 1003 approved it on the measurement: 40 files /
     # 513 MB loaded in 0.005 s against 0.315 s, and 0 MB resident against 513 MB. The arrays
@@ -59,6 +66,7 @@ def cache_jig_perline(end_ms, hours, warmup, ovr, pxs_cfg=None, rebuild=False):
     d = {n: np.load(lp[n], mmap_mode='r') for n in ovr}
     td = np.load(tp); d['__ts__'] = td['__ts__']; d['__evt__'] = td['__evt__']
     if '__pxs__' in td.files: d['__pxs__'] = td['__pxs__']
+    if '__close__' in td.files: d['__close__'] = td['__close__']
     return JigCache(d)
 
 def _px_smooth_evt(base, evt, src, length):
@@ -90,6 +98,7 @@ class JigCache:
         self.ts = d['__ts__']; self.W = _W(d); self.causal = _Cau()
         self.evt = d['__evt__'] if '__evt__' in d else None
         self.pxs = d['__pxs__'] if '__pxs__' in d else None   # event-tape px_smooth (DEMA close, filler-invisible)
+        self.close = d['__close__'] if '__close__' in d else None  # RAW price source, unsmoothed, 1011
     def __enter__(self): return self
     def __exit__(self, *a): return False
 
@@ -105,6 +114,7 @@ def cache_jig(end_ms, hours, warmup, ovr, pxs_cfg=None, rebuild=False):
         for name in ovr: out[name] = np.asarray(j.W.line(name), float)
         out['__evt__'] = j.W.base['volume'].to_numpy(dtype=float) > 0   # event bars (real trades); index-vs-event gotcha
         if pxs_cfg: out['__pxs__'] = _px_smooth_evt(j.W.base, out['__evt__'], pxs_cfg['src'], int(pxs_cfg['len']))
+        if pxs_cfg: out['__close__'] = np.asarray(IC.build_source(j.W.base, pxs_cfg['src']), float)
     np.savez(p, **out)
     return JigCache(out)
 

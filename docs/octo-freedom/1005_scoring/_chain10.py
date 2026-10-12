@@ -63,6 +63,219 @@ db = DatabaseManager(**get_db_config()); db.connect()
 W = spec_config(db, 'ws12_baton_config')
 LIN_HOP = int(SC.LG['lin_hop']); BASE_HI = SC.TF[-1]
 TRIG_TF, CEIL_HI = int(W['ceil_trig_tf']), int(W['ceil_hi'])
+# W_CEIL - the FLAT active ceiling. Joe 1009: *"if we set _CEIL 30 so that ws12r is allowed to pass
+# the baton up per lineages mechs"*. It overrides BOTH base_hi and ceil_hi, so the ceiling does NOT
+# start at ws12 and rise on the ws12r oob crossing - it is the given number from the leg's open.
+# That is how `_linonly.py` ran the two walks Joe has been reading, so this keeps them comparable.
+# STATED because the banked build's ceiling is a two-step base_hi -> ceil_hi.
+_CEIL = os.environ.get('W_CEIL')
+if _CEIL:
+    BASE_HI = CEIL_HI = int(_CEIL)
+# W_NO_GT12=1 turns the whole >ws12r oob mech OFF. Joe 1009: *">ws12r oob off"*. No oob run is
+# tracked, so there is no HANDOVER, no dwell, no exhaustion window, no ws12x reversal and no
+# dip + divergence exit. The lineage walk owns every exit. The MAE stop is untouched.
+NO12 = os.environ.get('W_NO_GT12', '0') == '1'
+# THE LINES STOP AT ws30 IN THE CACHE. `xcond` needs the rider's h+1 and h+2 target lines, so a
+# rider at ws29 or ws30 has no target and CANNOT take the x-cross exit - it can only exit on
+# `final stalled`. Stated, not worked around.
+MAXTF = int(os.environ.get('W_MAXTF', 30))
+# W_STALL_UP=1 - the rider ADVANCES one TF on its own stalled event instead of exiting the leg.
+# Joe 1009: *"drop x-cross, advance rider tf on stalled event"*.
+#
+#   WHICH TF: rider + 1, one rung. The advance carries NO qualifying test. An oob test would make
+#     it identical to the oob baton already above it, so the mech would not exist. `lin_hop` 2 is
+#     the oob baton's reach for SKIPPING a dead rung, and an unconditional step has nothing to
+#     skip. MY READING, stated.
+#   ONE PER BAR: the new rider is NOT re-tested for its own stall on the same bar - the same shape
+#     as the oob baton's pass, which also ends the bar. Without it a run of stalls walks the rider
+#     from ws3 to the ceiling inside one bar.
+#   THE EXIT: at the ceiling there is nowhere to advance, so the stall THERE exits as
+#     `final stalled`. With `W_NOX=1` dropping the x-cross, that and the MAE stop are the only
+#     exits the lineage walk has left.
+#   THE OOB BATON STAYS. Joe said advance ON A STALL, which adds a path; it does not replace the
+#     oob pass, so a higher oob rung within lin_hop still takes the baton first.
+STALL_UP = os.environ.get('W_STALL_UP', '0') == '1'
+# W_KICK - what the walk's FIRST rider is. Joe 1009: *"disable kickstart. let lineage advance
+# naturally"*.
+#   'high'  the banked KICKSTART: the HIGHEST oob TF at or under the ceiling. A one-time jump.
+#   'low'   the LOWEST oob TF at or under the ceiling - the jump removed, the oob test kept.
+#   'off'   the lowest loaded TF, ws1, with NO oob test. Lineage climbs from the bottom.
+# RULED BY JOE 1010: *"W_KICK off"*. 'off' is the default from here. 'high' is the banked
+# KICKSTART, kept only so the old build is still reachable by one env var.
+KICK = os.environ.get('W_KICK', 'off')
+# ---- THE LOOPED WALK, Joe 1010. *"looping the lineage walk when it reaches ws10 or ws15, instead
+# of climbing all the way up the tfs. ie when the walk crosses into ws10 or ws15 OOB (all sweep
+# able), loop back to ws1 and continue lineage walking until exhaustion (ie the 2 tfs above are in
+# fence)"*.
+#
+# W_LOOP_TF  '' = off. A comma list of loop TFs, e.g. '10' or '15' or '10,15'. Sweepable, as asked.
+#
+#   THE TRIGGER is the rider reaching a loop TF **or jumping past it**, with that loop TF's OWN r
+#     oob at the bar. `lin_hop` 2 skips rungs - leg 1 went ws14 -> ws16 and was never ws15 - so a
+#     `rider == t` test would never fire for ws15. MY READING, stated.
+#   THE RESET puts the rider back on ws1, the lowest loaded TF, and the walk carries on under the
+#     same baton and stall rules.
+#   IT LOOPS AGAIN if the walk climbs back to a loop TF that is still oob. No cap - Joe set none.
+#   THE LOOP IS CHECKED BEFORE EXHAUSTION on the same bar, because his sentence makes exhaustion
+#     the thing that ends the POST-loop walk.
+LOOP_TFS = sorted(int(z) for z in os.environ.get('W_LOOP_TF', '').replace(' ', '').split(',') if z)
+# ---- TWO CEILINGS, SPLIT 1012. SRP.
+#
+# Joe 1012: *"yes they need to be split. CEIL might need 10 +2 - the +2 allows for correct
+# exhaustion calcs"*, after finding that pinning lineage's ceiling to the loop TF had bounded
+# lineage out of existence: the rider reached the loop TF, its reach became EMPTY, and exhaustion
+# was structurally impossible for 40 minutes while ws8 sat stalled with its own reach in fence.
+#
+#   LOOP_TF    the loop's trigger line. W_LOOP's business, and the jumpstart's start bound (Joe
+#              1011: *"the max jumpstart reach must be <= loopTF"*). It does NOT bound the walk.
+#   LIN_CEIL   LINEAGE's ceiling: the top of the band the rider may climb and the top its reach may
+#              read. LOOP_TF + LIN_HOP, so a rider sitting ON the loop TF still has a full
+#              rider+1..rider+LIN_HOP reach and exhaustion can be computed there. That is Joe's
+#              "+2" - written as LIN_HOP, not a literal 2, so it tracks the knob.
+#
+# WHO MAY READ WHICH: lineage reads LIN_CEIL only. W_LOOP reads LOOP_TF only. The >ws12 mech keeps
+# its own per-leg `ceil` (BASE_HI -> CEIL_HI on a ws12r oob crossing) and neither of the others
+# touches it. The invariant is an assert, not a comment.
+LOOP_TF = min(LOOP_TFS) if LOOP_TFS else None
+if LOOP_TFS:
+    LIN_CEIL = min(MAXTF, LOOP_TF + LIN_HOP)
+    assert LIN_CEIL >= LOOP_TF + LIN_HOP, (
+        'LIN_CEIL %d leaves a rider on the loop TF ws%d without a full %d-rung reach, so '
+        'exhaustion cannot be computed there. Raise W_MAXTF or lower W_LOOP_TF.'
+        % (LIN_CEIL, LOOP_TF, LIN_HOP))
+else:
+    LIN_CEIL = CEIL_HI
+# `ws1-cp` — JOE'S NAME, 1011. The ws1 CHECKPOINT. It has two jobs.
+#
+#   W_ARM 'cp'     the ws1-cp REPLACES the ws2Mage arm as the walk's qualifier. Joe 1011:
+#                  *"replace the current ws2Mage lineage walk qualifier with ws1-cp"*. The walk
+#                  arms at the cp and the rider starts on ws1 on that same bar.
+#   W_ARM 'mage'   the banked arm: `W_ARM_TF`Mage crossing into oob. Kept so the old build runs.
+#   W_CP=1         the cp also RESETS the rider to ws1 whenever it fires mid-walk.
+#
+#   AT THE CP THE RIDER IS ws1, so its reach is rider+1 .. rider+LIN_HOP like any other rider -
+#   nothing about the cp names particular lines. Joe 1011: *"ws2 and ws3 are only an example for
+#   this 05:43 walk"*.
+#
+#   MODE 1, the only one built: ws1Mage AND ws1r both oob on the LEG's side. Same-side is Joe's
+#     1010 ruling. MODE 2 (ws1Mage oob + an r divergence, bullish at dr -1 / bearish at dr +1) is
+#     NOT built - `jig.divergence` is the mech and its docstring requires the RAW close, which the
+#     tape cache does not hold. Raised with Joe, not worked around.
+#   THE EDGE: the cp fires ONCE per run of the condition, so a cp that stays true for many bars
+#     arms or resets once, not every bar.
+#   W_CP_DWELL — THE DWELL. Joe 1012: *"add a 4 bar dwell to ws1cp"*. The condition must hold
+#     `W_CP_DWELL` CONSECUTIVE bars for the cp to count. Default 4 bars = 20 s at the 5 s grid.
+#     W_CP_DWELL=1 reproduces the pre-dwell build exactly.
+#     WHY IT WAS ASKED FOR: the 02:33 07-18 SHORT's first low ws1-cp, 02:43:25, held ONE bar - both
+#     lines were only just under the 15 line (ws1r 12.82, ws1Mage 14.28) and were back over on the
+#     next bar. Joe: *"the 02:43 might be troublesome, its firing on a low-dwell ws1-cp"*.
+#     THE STAMP IS THE LAST BAR OF THE HOLD, not the first. Stamping the first bar would act on a
+#     bar whose 4-bar hold is not knowable for another 3 bars, which is lookahead. Same stamp rule
+#     as `_linonly.py` on the x-cross hold, `ws_strat.candidates` (conf = cross + xwob - 1) and
+#     `build_s46_event.sx_series`. So a cp whose condition first goes true at T is stamped
+#     T + W_CP_DWELL - 1.
+#     CONSECUTIVE, not cumulative - one false bar restarts the count at zero.
+#     STILL OPEN, NOT DECIDED HERE: what a leg does when the condition is ALREADY standing at the
+#     trade's open. The dwell counter starts at zero on the open bar, so a standing condition is
+#     counted from the open and stamps a cp W_CP_DWELL bars in, even though nothing crossed. Raised
+#     with Joe on the 07-18 03:41 legs; his ruling is outstanding.
+# W_GC=1 — THE gc DEFERRAL OF EXHAUSTION. Joe 1011, spec in docs/octo-freedom/1011_gc_defer.md.
+# At an exhaustion verdict, if BOTH gc gates pass the verdict is DEFERRED, not cancelled. The gates
+# themselves live in `_gcgate.py` (SRP); this file owns the leg decision.
+#
+# THE HOLD'S END, Joe 1012, two separate rulings:
+#   *"both g15r and g15Mage are needed to complete the walk"* - the pair arriving on the TARGET
+#     BOARD ends the hold and the walk carries on. This is kept.
+#   *"the only banked back stop is dr-flip ... remove g15 as an exit option"* - the 1011 branch
+#     where the pair arriving AGAINST the board closed the leg is DELETED, with its opposing-g15
+#     exit stamp. Nothing in the g15 pair can close a leg now.
+# The dr-flip backstop is not wired yet; the one unspecified point is at the hold in run_leg.
+#
+# W_GC_HOLD — the one fork I could not resolve from Joe's words, so BOTH are built:
+#   'wait'  during the hold ONLY the backstop is read. Joe's sequencing: *"there is momentum to
+#           unwind BEFORE making the final baton-pass test"*. A baton candidate appearing mid-hold
+#           is IGNORED under this arm, which is a consequence he should see.
+#   'walk'  the walk carries on normally and the exhaustion exit is merely suppressed, so the baton
+#           can still pass mid-hold. Joe's word *"keep walking"* points here.
+# BAKED IN 1011. Joe: *"if the test retains 04:50 then bake the new mech in"*. After the
+# re-exhaust guard both hold modes land on 04:50:35 / +0.9083, so the fork no longer bites on this
+# leg and 'wait' is the default. W_GC=0 still reaches the pre-gc build.
+# THE TRADE'S SIDE SETS THE TARGET BOARD. Joe 1012, ruling both halves after the 07-18 02:33
+# trade armed four legs on the wrong board:
+#   *"the trade's direction/'side' is what sets the target: SHORT trades use a low board target,
+#   LONG trades use a high board target"*
+#   *"always the end the trade is heading to"*
+#   *"it can only be set once at the open of the trade"*
+#
+#   trade_side +1  = a SHORT (the banked `dr +1 = SHORT`), so the TARGET BOARD is LOW.
+#   trade_side -1  = a LONG, so the TARGET BOARD is HIGH.
+#   board = -trade_side, resolved ONCE at the trade's open bar.
+#
+# `d` INSIDE run_leg IS THE TARGET BOARD, NOT THE TRADE'S SIDE. Every test in the walk already
+# takes `d` as "which end of the board am I working on" - the ws1-cp, the jumpstart, the baton, the
+# stall, exhaustion, the loop end and the gc gates. Setting `d` to the board at the open is
+# therefore the whole fix; none of those seven tests needed its own change. Joe 1012 on why that
+# matters: *"this notion is more powerful than it might seem on the surface"*.
+#
+# WHAT THIS REPLACES. W_DR=global read `SC.DRv` on EVERY bar and reassigned `d` when it moved.
+# `SC.DRv` moved 3 times inside the 02:33 trade (02:41:45, 03:11:35, 04:08:45), so the board moved
+# with it and the walk hunted HIGH ws1-cps at 03:41. The knob is gone - Joe: the side *"can only be
+# set once at the open of the trade"*.
+#
+# THE LEG'S pct SIGN READS THE TRADE'S SIDE, not the board, and 1012 corrected its direction - see
+# the sgn block in run_leg. Adverse is the move AGAINST the trade.
+GC = os.environ.get('W_GC', '1') == '1'
+GC_HOLD = os.environ.get('W_GC_HOLD', 'wait')
+assert GC_HOLD in ('wait', 'walk'), 'W_GC_HOLD must be wait or walk'
+# W_LOOP_END — where the loop event ENDS. Joe 1011: *"the next mech extends the loop event: at
+# ws{w loop tf}r oob - lookback 4 minutes for a same-side ws1-cp -- if found, stop (stub it for
+# now) - walk forward to ws1-cp - this is the new `end of w_loop`"*, and on the target:
+# *"and its target is 05:42:00, and beyond if lineage decrees"* - so the cp COMPLETES the loop and
+# lineage carries on from ws1; it is not where the leg ends.
+#
+#   'cp'   (default) the ws{loopTF}r oob OPENS the loop and the rider is NOT reset there. The walk
+#          carries on and the loop ENDS at the next ws1-cp, where the cp does the reset it already
+#          does. Joe: *"at 05:42, the w_loop is complete and we start the lineage again from ws1"*.
+#   'oob'  the pre-1011 behaviour: the rider resets to ws1 on the oob bar itself.
+#
+#   THE 4-MINUTE LOOKBACK IS A STUB, Joe's word. A same-side ws1-cp inside W_LOOP_LB bars before
+#   the oob bar is DETECTED and TRACED, and nothing else happens - the forward walk proceeds as if
+#   it were absent. Joe said *"if found, stop"*, and "stop" has more than one reading (stop the
+#   loop, or stop the leg), so no behaviour is attached to it.
+#
+#   EXITS ARE UNTOUCHED during the forward walk. Joe 1011 parked exit entirely, so suppressing one
+#   here would be me altering a mech he has not ruled on. The consequence on the 07-18 03:41 leg is
+#   stated in my reply: the gc backstop still closes it before the forward cp arrives.
+LOOP_END = os.environ.get('W_LOOP_END', 'cp')
+assert LOOP_END in ('cp', 'oob'), 'W_LOOP_END must be cp or oob'
+LOOP_LB = int(os.environ.get('W_LOOP_LB', 48))      # 4 min at the 5 s grid
+CP = os.environ.get('W_CP', '0') == '1'
+CP_DWELL = int(os.environ.get('W_CP_DWELL', 4))
+assert CP_DWELL >= 1, 'W_CP_DWELL is the ws1-cp hold in bars and must be at least 1, got %d' % CP_DWELL
+ARM = os.environ.get('W_ARM', 'mage')
+assert ARM in ('mage', 'cp'), 'W_ARM must be mage or cp'
+# W_LOOP_EXH  when the exhaustion exit is live.
+#
+#   RULED BY JOE 1010, correcting my 'after_loop': *"this is only true if the lineage walks to the
+#   loop-tf. if the lineage sees exhaustion before it reaches loop-tf (ie the swing is small so
+#   doesn't attract a loop-tf OOB event), then act on the smaller exhaustion tf per our usual
+#   process"*. So exhaustion is LIVE FROM THE ARM, loop or no loop, and a small swing exhausts on a
+#   low TF and reverses there.
+#
+#   'on_stall'    (default) the exhaustion test runs on the bar the RIDER STALLS. *"per our usual
+#                 process"* - a stall is what the walk already acts on, and the oob baton is tested
+#                 before it, so reaching this point already means the baton had nothing to take.
+#   'always'      the test runs on EVERY bar, stall or not. The other reading of the same ruling.
+#   'after_loop'  DEAD, kept only to reproduce the first 1010 run. Joe ruled it out.
+#   'off'         no exhaustion exit; the loop still runs and the old exits own the leg.
+EXH_LOOP = os.environ.get('W_LOOP_EXH', 'on_stall')
+assert EXH_LOOP in ('on_stall', 'always', 'after_loop', 'off'), \
+    'W_LOOP_EXH must be on_stall, always, after_loop or off'
+# "IN FENCE" IS THE BAKED EX-FENCE, NOT A KNOB. Joe 1010, when I offered it as a choice: *"this
+# should already be the mech's baked code"*. So the test is the '.' tag from `bnd` - inside
+# momo_fence_r 17/83 - and the weaker "just not oob" reading is gone. The two were measured before
+# the ruling and gave BYTE-IDENTICAL legs on the 03:13:15 chain, so nothing moved with it.
+assert KICK in ('high', 'low', 'off'), 'W_KICK must be high, low or off'
 GATE_BARS, SIG_WIN = int(W['oob_gate_bars']), int(W['sig_window_bars'])
 DIP_MID, DIP_DWELL = float(W['dip_mid']), int(W['dip_dwell_bars'])
 # THE >ws12 MECH'S OWN oob FENCE, 1008. Joe: *"we should have a knob for >12 oob"*.
@@ -79,6 +292,28 @@ G_LO = float(W['oob_gate_fence']); G_HI = 100.0 - G_LO
 DIP_FENCE = float(W['dip_fence'])            # Joe 1008: the dip is a BAND, not a level
 DIP_HI, DIP_LO = DIP_FENCE, 100.0 - DIP_FENCE   # 53.0 and 47.0
 RREV, MAE_STOP = int(W['rrev_wob']), float(W['mae_stop_pct'])
+# ---- THE BATON'S CANDIDATE TEST, 1009. Joe's 1006 spec row for `lin_hop` reads *"jump no more
+# than 2 higher TFs to find the next TF WITH MOMENTUM"*. The hop limit was built; the momentum
+# clause never was - `oobf` stands in its place, and nothing in the file flagged the substitution.
+# Measured 1009 on the banked build: the baton dies on ws1 34.0% of stalls and on ws1-ws4 76.7%,
+# and at 326 of 326 stalls a higher line was trending with the leg while 0 were oob.
+#
+# W_BATON picks what a line must show to take the baton. Joe 1009: *"if a lin_hop line has
+# momentum, lineage needs to make that line the rider"*, and *"r-pred and lineage need to be AB'd"*.
+#
+#   'oob'       r is out of bounds at this bar. AS BUILT, THE DEFAULT.
+#   'momentum'  the line is mom-true - momo OR curl, Joe's 1009 definition, side-aware via momo_g's
+#               own gate 1. His 1006 clause, finally built.
+#   'rpred'     the line is PREDICTED to breach - Joe's 0730 mech, `predict_breach`: r in-bounds,
+#               the anchor max(m, Mage) out of bounds, and the anchor's distance past the boundary
+#               greater than r's distance short of it. Joe 1009: *"climbing r lines is a very old
+#               mech that I've iterated and evolved over time"*.
+#   'either'    momentum OR rpred. Joe 1009 agreed to this fourth arm.
+#
+# `stalled` stays reachable through W_PASS for the 1007 variant.
+BATON = os.environ.get('W_BATON', 'oob')
+assert BATON in ('oob', 'momentum', 'rpred', 'either'), \
+    'W_BATON must be oob, momentum, rpred or either'
 PASS = os.environ.get('W_PASS', 'oob')  # 'oob' (as built, Joe's tag ruling) or 'stalled'.
 #                                        THE BATON'S PASS TEST. Joe 1007: *"keeping the
 #                                        x-cross and swapping oob with stalled"*.
@@ -87,6 +322,36 @@ PASS = os.environ.get('W_PASS', 'oob')  # 'oob' (as built, Joe's tag ruling) or 
 # disabled 2 or 3 turns back"*. REPORTING ONLY - no branch reads it. Off by default because it
 # restores the per-bar `xcond` call that W_NOX=1 saves.
 TRACE_NOX = os.environ.get('W_TRACE_NOX', '0') == '1'
+TRACE_LIN = os.environ.get('W_TRACE_LIN', '0') == '1'
+# W_TRACE_HOLD=1 — REPORTING ONLY. Joe 1012: *"for each baton holder, add the stalled events"*.
+# Every line that has HELD the baton on this leg keeps being watched after the baton leaves it, and
+# its stall RISING EDGES are reported for the rest of the leg. His 1012 finding was ws8 stalling at
+# 14:30:30 with its own reach in fence while the rider was ws10 - an exhaustion-shaped event the
+# mech never looks at, because exhaustion is only ever tested on the CURRENT rider.
+# The row carries the line's own r, its fence tag, its reach, and whether it is the rider, so the
+# stall can be read against his definition: exhaustion is ws{tf} stalled, oob by design.
+# EDGE-TRIGGERED per line. No branch reads it.
+TRACE_HOLD = os.environ.get('W_TRACE_HOLD', '0') == '1'
+# W_EXH_WHO — WHICH lines the exhaustion test is applied to.
+#
+# Joe 1012, closing the RCA: *"through the troubleshooting process you've been able to see why the
+# current rider isn't the correct choice - sometimes lines printing momentum true don't make it to
+# oob. remove the restriction"*. On the 07-17 leg ws6 stalled oob at 14:05:00 with ws7 73.25 and
+# ws8 79.81 both in fence - exhaustion by the definition - and the mech never looked, because the
+# rider was ws12.
+#
+#   'holders'  (default) every line that has HELD the baton on this leg is tested, the rider
+#              included. A line stops being tested only when the leg ends.
+#   'rider'    the pre-1012 behaviour, kept so the old runs reproduce.
+#
+# ORDER, MY CHOICE, STATED: the scan runs AFTER the rider's baton test, so a rider that can still
+# hop advances instead of the leg exhausting. The alternative - scanning BEFORE the baton - would
+# let a holder's exhaustion close a leg while lineage is actively climbing. Joe has not ruled it.
+#
+# WHEN SEVERAL HOLDERS EXHAUST ON ONE BAR every one is reported and the verdict is taken once. The
+# verdict is "lineage is exhausted"; which line raised it is reporting, not a branch.
+EXH_WHO = os.environ.get('W_EXH_WHO', 'holders')
+assert EXH_WHO in ('holders', 'rider'), 'W_EXH_WHO must be holders or rider'
 # W_SQX=1 TURNS JOE'S 1009 RULE ON. *"if oob ended before dwell completed, and a x-cross was
 # squashed during the oob, then a B-trade is created and the A-trade is closed"*, and on the exit
 # bar: *"re the causal oversight - we use the run ends timestamp to keep us live-ready"* - so A
@@ -98,7 +363,11 @@ TRACE_NOX = os.environ.get('W_TRACE_NOX', '0') == '1'
 # the data will make it obvious in time so more hits are better than less"*. So the wide reading
 # stands: 23 A-trades on the 94-day tape, against 10 for an EDGE-only test.
 SQX = os.environ.get('W_SQX', '0') == '1'
-NOX = os.environ.get('W_NOX') == '1'   # 1 disables the lineage walk's x-cross exit, leaving
+# X-CROSS IS NOT AN EXIT. DELETED BY JOE 1011: *"'x-cross on ws1 · EXIT'. not good. drop this bias
+# and delete 'x-cross as an exit' in the spec and related durable docs that are hindering you"*.
+# The default is now OFF. The branch is left reachable by W_NOX=0 ONLY so pre-1011 runs can be
+# reproduced; it is not part of the mech and must not be presented as one.
+NOX = os.environ.get('W_NOX', '1') == '1'   # 1 disables the lineage walk's x-cross exit, leaving
 #                                        `final stalled` as its only exit. Joe 1007 asked what
 #                                        the swap left behind; this is the switch that shows it.
 # ---- JOE'S DELEGATION GATE, 1008. ENV-SWITCHED AND OFF BY DEFAULT, so nothing is banked.
@@ -222,22 +491,45 @@ TRACE_DG = os.environ.get('W_TRACE_DGATE', '0') == '1'
 # THE CROSS IS THE STANDARD dr-BASED ONE, Joe 1009 *"yes - the standard dr based cross"*: on a leg
 # with d > 0 the cross is ws12x going UNDER ws12r, on d < 0 it is ws12x going OVER. Identical to
 # branch 1's condition at :300 and to the x-cross direction ruling of 0818.
+# W_EXH_WIN picks what window the ws12x cross must land inside. Joe 1009 REVISED this: *"apply the
+# 6 minute dwell gate to ws12r oob / if ws12x crosses ws12r during the dwell period, reverse the
+# trade"*. So the window is the FULL DWELL, not the 1/4 seam it was built with.
+#   'seam'   the 1/4 seam, TRIG_TF x W_EXH_FRAC = 3.0 min. As first built, Joe 0728/0729.
+#   'dwell'  the whole oob_gate_bars dwell, 6.1 min. Joe 1009's revision. THE DEFAULT NOW.
+EXH_WIN = os.environ.get('W_EXH_WIN', 'dwell')
+assert EXH_WIN in ('seam', 'dwell'), 'W_EXH_WIN must be seam or dwell'
 EXH_FRAC = float(os.environ.get('W_EXH_FRAC', 0.25))
-XW12 = int(os.environ.get('XWOB_WS12X', 4))
+# Joe 1009 raised the hold from 4 to 6: *"let's use 6 - it's safer"*. His 1009 words for the 4
+# were *"let's pick a number between raw and safe"*; 6 is the safer end of that same choice. The 6
+# he half-remembered was reent_xwob's 1007 ruling on one leg, which the 1008 sweep moved to 18 -
+# a different knob, recorded so the two do not get conflated again.
+XW12 = int(os.environ.get('XWOB_WS12X', 6))
 TRAJ_BLOCK = int(os.environ.get('W_TRAJ_BLOCK', 60))
 TRAJ_TAIL = int(os.environ.get('W_TRAJ_TAIL', 2))
 TRAJ_LOOK = int(os.environ.get('W_TRAJ_LOOK', 24))
 TRAJ_KIND = os.environ.get('W_TRAJ_KIND', 'close')
 assert TRAJ_KIND in ('close', 'extreme'), 'W_TRAJ_KIND must be close or extreme'
-EXH_BARS = int(round(TRIG_TF * EXH_FRAC * 60.0 / 5.0))   # TF12 x 0.25 = 3.0 min = 36 bars
+EXH_BARS = (GATE_BARS + 1 if EXH_WIN == 'dwell'
+            else int(round(TRIG_TF * EXH_FRAC * 60.0 / 5.0)))
+_P('the exhaustion window is %r = %d bars = %.1f min; the ws%dx hold is %d bars = %.0f s'
+   % (EXH_WIN, EXH_BARS, EXH_BARS * 5 / 60.0, TRIG_TF, XW12, XW12 * 5.0))
 DIV_TFS = [int(s.strip().replace('ws', '').replace('r', '')) for s in W['div_lines'].split(',')]
 EXF_HI = 100.0 - float(SC.LG['momo_fence_r']); EXF_LO = float(SC.LG['momo_fence_r'])
 N = len(SC.ts)
-ALL_TF = list(range(SC.TF[0], CEIL_HI + 1))
-RL = {t: SC.LD(t * 60, 'r') for t in range(SC.TF[0], CEIL_HI + 3)}
+# the loaded band must reach LIN_CEIL, which sits ABOVE the loop TF by LIN_HOP.
+ALL_TF = list(range(SC.TF[0], max(CEIL_HI, LIN_CEIL) + 1))
+RL = {t: SC.LD(t * 60, 'r')
+      for t in range(SC.TF[0], min(max(CEIL_HI, LIN_CEIL) + 3, MAXTF + 1))}
 R = {t: RL[t][:N] for t in RL}
 X = {t: SC.LD(t * 60, 'x')[:N] for t in ALL_TF}
 M2 = SC.Mg[2][:N]; G1 = SC.MTD['ws1'][:N]; PX = SC.PX[:N]
+MG1 = SC.Mg[1][:N]        # ws1Mage, for the W_CP checkpoint. Same array as G1; named for the mech.
+if GC:
+    import _gcgate
+    GCG = _gcgate.GC(SC.LD(15, 'r'), SC.LD(30, 'r'), SC.LD(15, 'Mage'), SC.HI, SC.LO, N)
+    _P('gc gate ready — gcws15r / gcws30r / gcws15Mage, step %d bars, span %d bars, gap %d bars, '
+       'flip hold %d bars, hold mode %r'
+       % (_gcgate.STEP, _gcgate.SPAN, _gcgate.GAP, _gcgate.FLIP_HOLD, GC_HOLD))
 # THE ARMING LINE IS A KNOB, 1009. Joe: *"exit-armed needs ws2Mage crossing into oob ... this is a
 # constant thorn in our side. let's swap ws2Mage with ws1Mage"*. The walk cannot exit before it
 # arms, and 206 of 1,593 legs never armed at all - they summed -417.09, with 162 of them exiting on
@@ -247,16 +539,31 @@ MARM = SC.Mg[ARM_TF][:N] if ARM_TF in SC.Mg else np.asarray(SC.LD(ARM_TF * 60, '
 _P('the arming line is ws%dMage (banked ws2Mage)' % ARM_TF)
 BANK = {t: momo_bank(db, t) for t in ALL_TF}; db.disconnect()
 ST = {}
+STALL_RAW = {}        # the ungated stall mask per (tf, side). REPORTING ONLY, no branch reads it.
 for t in ALL_TF:
     with momo_config(BANK[t]):
         with momo_window(int(BANK[t]['k_window']) * t):
             s_, n_ = int(MC.MOMO_STEP_BARS), int(MC.MOMO_SAMPLES)
     for dd in (-1, +1):
-        ST[(t, dd)] = stall_mask(RL[t], dd, int(SC.LG['stall_n']), s_, n_)
+        _raw = stall_mask(RL[t], dd, int(SC.LG['stall_n']), s_, n_)
+        # STALL IS EX-FENCE, SAME SIDE. Joe 1012: *"stall should be ex-fence (same-side)"*, after
+        # confirming `jig.stall_mask` has NO fence condition at all - it only asks whether the line
+        # made a new extreme in the last stall_n samples, so a line at 45.42 reads as stalled.
+        #
+        # GATED HERE, NOT IN THE PRODUCER. `jig.stall_mask` is shared with s46, ws5-fifo and the
+        # other mechs; adding a fence inside it would change all of them at once. This build owns
+        # its own gate and the producer stays untouched. STATED.
+        _v = np.asarray(RL[t], float)[:N]
+        _ok = (_v >= EXF_HI) if dd > 0 else (_v <= EXF_LO)
+        ST[(t, dd)] = _raw[:N] & _ok
+        STALL_RAW[(t, dd)] = _raw[:N]      # the ungated mask, for reporting only
 REV = {t: _mage_rev(R[t], RREV) for t in DIV_TFS}
-_P('producers ready; ceiling ws%d->ws%d, gate %d bars at oob %.0f/%.0f, dip band %.0f-%.0f '
-   'dwell %d, stop %.2f'
-   % (BASE_HI, CEIL_HI, GATE_BARS, G_LO, G_HI, DIP_LO, DIP_HI, DIP_DWELL, MAE_STOP))
+_P('stall gated to the same-side ex-fence %.0f/%.0f; %d of %d ws2 LONG stall bars survive the gate'
+   % (EXF_LO, EXF_HI, int(ST[(2, +1)].sum()), int(STALL_RAW[(2, +1)].sum())))
+_P('producers ready; LINEAGE ceiling ws%d (loopTF ws%s + lin_hop %d), >ws12 ceiling ws%d->ws%d, '
+   'band ws%d-ws%d, gate %d bars at oob %.0f/%.0f, dip %.0f-%.0f dwell %d, stop %.2f'
+   % (LIN_CEIL, LOOP_TF if LOOP_TF is not None else 'off', LIN_HOP, BASE_HI, CEIL_HI,
+      ALL_TF[0], ALL_TF[-1], GATE_BARS, G_LO, G_HI, DIP_LO, DIP_HI, DIP_DWELL, MAE_STOP))
 
 # ws60r AND ws60Mage, loaded only when the gate is on. `traj` is called per handover bar, not
 # precomputed: the block walk reads at most TRAJ_LOOK x TRAJ_BLOCK bars and there are ~130
@@ -347,6 +654,36 @@ def _dgdet(j, d, r=None):
                int(r['tail_used']), r['tail_used'] * TRAJ_BLOCK * 5 / 60.0, int(r['run']),
                int(r['deferred']), SC.U(rb) if rb is not None else 'none'))
 
+# ---- THE TWO NEW BATON PREDICATES. Built only when asked for, so the default run is untouched.
+MOMT = {}
+RPRED = {}
+if BATON in ('momentum', 'either'):
+    from _momtrue import momtrue_mask
+    from optimus9.orchestration.build_ws_lines import HOURS, WARMUP
+    for _bt in ALL_TF:          # NOT `_t` - that is the module's `time` handle, used by _P
+        MOMT[_bt] = momtrue_mask(RL[_bt], _bt, BANK[_bt], SC.EM, HOURS, WARMUP, 'gated', N,
+                                 log=lambda z: None)
+    _P('mom-true masks ready for ws%d-ws%d' % (ALL_TF[0], ALL_TF[-1]))
+if BATON in ('rpred', 'either'):
+    from optimus9.compute.breaching_line import predict_breach as _pb
+    from optimus9.constants import FENCE_HI as _FH, FENCE_LO as _FL
+    for _bt in ALL_TF:          # NOT `_t` - see above
+        RPRED[_bt] = _pb(np.asarray(RL[_bt], float)[:N],
+                         np.asarray(SC.LD(_bt * 60, 'm'), float)[:N],
+                         np.asarray(SC.LD(_bt * 60, 'Mage'), float)[:N],
+                         SC.HI, SC.LO, _FH, _FL)
+    _P('r-pred ready for ws%d-ws%d, fence %.0f/%.0f' % (ALL_TF[0], ALL_TF[-1], _FH, _FL))
+
+def baton_ok(t, j, d):
+    """May line `t` take the baton at bar `j` on side `d`? ONE place, so an arm is one knob."""
+    if BATON == 'oob':
+        return ST[(t, d)][j] if PASS == 'stalled' else oobf(t, j, d)
+    if BATON == 'momentum':
+        return bool(MOMT[t][d][j])
+    if BATON == 'rpred':
+        return int(RPRED[t][j]) == (1 if d > 0 else -1)
+    return bool(MOMT[t][d][j]) or int(RPRED[t][j]) == (1 if d > 0 else -1)
+
 def bnd(t, k, d):
     v = float(R[t][k])
     if d > 0: return 'O' if v >= SC.HI else ('x' if v >= EXF_HI else '.')
@@ -386,6 +723,54 @@ def xcond(h, k, d):
     if not XT_FENCE: return True
     return all(((float(TGT[t][k]) < EXF_HI) if d > 0 else (float(TGT[t][k]) > EXF_LO))
                for t in tt)
+_lp = lambda n: ' (after %d loop%s)' % (n, '' if n == 1 else 's') if n else ' (no loop yet)'
+
+
+def gc_defer(j, d, hist):
+    """Do both gc gates pass at bar `j` for a leg on side `d`? -> a trace string, or None.
+
+    Gate 1 position: gcws15r AND gcws30r both on the wrong side of 50 for the leg.
+    Gate 2 trajectory: the QUALIFIED sign of the g15r anchor-to-now diff equals the leg side.
+    """
+    if not GCG.pos(j, d):
+        return None
+    sg = GCG.qualified_sign(j, d, hist)
+    if sg != d:
+        return None
+    a = GCG.anchor(j, d)
+    if a is None:
+        return None
+    ab, vb, diff, gaps = a
+    # the position gate reads gcws30r ONLY (Joe 1012). gcws15r is printed for context because it
+    # is the TRAJECTORY line, and it may sit anywhere in fence - the old string claimed both were
+    # on the wrong side of 50, which was wrong the moment the gate stopped testing g15r.
+    return ('gcws30r %.2f is %s 50 (position gate, g30r only); g15r %s from its %s extrema %.2f at '
+            '%s (validated %s, %d gap%s walked), diff %+.2f; g15r is %.2f now'
+            % (float(GCG.r30[j]), 'under' if d > 0 else 'over',
+               'falling' if d < 0 else 'rising', 'high' if d < 0 else 'low',
+               float(GCG.r15[ab]), SC.U(ab), SC.U(vb), gaps, '' if gaps == 1 else 's', diff,
+               float(GCG.r15[j])))
+
+
+def exhausted(rider, j, d, lin_ceil):
+    """Is the walk exhausted at bar `j`? -> a trace string, or None.
+
+    Joe 1010: *"the 2 tfs above are in fence"*. The reach is the baton's own, rider+1 ..
+    rider+LIN_HOP, bounded by LINEAGE's ceiling - never by the loop TF. IN FENCE is the baked
+    ex-fence 17/83 - the '.' tag -
+    ruled by Joe 1010: *"this should already be the mech's baked code"*.
+    """
+    up = [t for t in range(rider + 1, min(rider + LIN_HOP, lin_ceil) + 1) if t in R]
+    if not up:
+        return None
+    if not all(bnd(t, j, d) == '.' for t in up):
+        return None
+    word = 'all inside the ex-fence %.0f/%.0f' % (EXF_LO, EXF_HI)
+    return 'the %d above are %s (%s)' \
+        % (len(up), word, ', '.join('ws%d %.2f %s' % (t, float(R[t][j]), bnd(t, j, d))
+                                    for t in up))
+
+
 xund = lambda t, k, d: (float(X[t][k]) < float(R[t][k])) if d > 0 else (float(X[t][k]) > float(R[t][k]))
 # THE DIP IS A BAND, 1008. Joe: *"we'll use a small 100-{knob:53} fence, ie 47 to 53"* /
 # *"fence 53 + dwell 6"*.
@@ -419,9 +804,41 @@ def box(hdr, rr):
         print('│' + '│'.join(' ' + str(x[i]).ljust(w[i]) + ' ' for i in range(len(hdr))) + '│')
     print(B('└', '┴', '┘'))
 
-def run_leg(k0, d):
-    tr = []; p0 = float(PX[k0]); sgn = 1 if d > 0 else -1
+def run_leg(k0, trade_side):
+    # trade_side is the dr at the trade's open: +1 a SHORT, -1 a LONG. The board the walk works on
+    # is the end the trade is HEADING TO, which is the opposite end. Resolved here, once.
+    assert int(trade_side) in (-1, 1), (
+        "run_leg needs the trade's side at its open, +1 (SHORT) or -1 (LONG), got %r. A side of 0 "
+        "means global dr has not resolved yet and the target board cannot be set." % (trade_side,))
+    d = -int(trade_side)
+    _board0 = d            # the board is set once; this is what the per-bar invariant checks
+    # THE ADVERSE DIRECTION IS AGAINST THE TRADE. Joe 1012: the MAE stop *"is incorrect, likely
+    # to be a casualty of wrong side. I'm basing it your 2.5% being almost exactly the profit we've
+    # claimed in this SHORT trade"*. He is right: on the 07-18 02:33 SHORT the stop fired at
+    # 05:55:10 on a 2.5036% PRICE FALL, which is that short's profit, not its drawdown.
+    #   trade_side +1 = a SHORT, so ADVERSE is price RISING  -> sgn -1
+    #   trade_side -1 = a LONG,  so ADVERSE is price FALLING -> sgn +1
+    # i.e. sgn = -trade_side, and `adv = -((px - p0) / p0 * 100 * sgn)` is then the move AGAINST
+    # the trade. The same sgn gives the realised number its sign.
+    sgn = -int(trade_side)
+    assert sgn in (-1, 1)
+    tr = []; p0 = float(PX[k0])
     armed = False; rider = None; mae = 0.0
+    looped = 0             # W_LOOP_TF: how many times the rider has been reset to ws1
+    exh_armed = False      # W_LOOP_EXH 'after_loop': the exhaustion exit goes live on the 1st loop
+    hit_from = None        # the rider the loop fired from, for the trace line only
+    lin_prev = None        # W_TRACE_LIN: the last (rider, baton available, stalled) reported
+    held = []              # W_TRACE_HOLD: every line that has held the baton, in order
+    held_st = {}           # W_TRACE_HOLD: each held line's stall state on the previous bar
+    loop_open = None       # the bar the current W_LOOP BEGAN on - its arming or completing ws1-cp
+    loop_end_armed = False  # True once the walk has REACHED the loop TF. Only then does a ws1-cp
+#                             END the W_LOOP, and only then are a stall and an exhaustion held.
+    loop_stall_said = False  # the held-stall row is emitted once per open loop, not per stall bar
+    gc_hold = None         # W_GC: the bar an exhaustion verdict was deferred on
+    gc_said = False        # the no-backstop row is emitted once per hold, not per bar
+    gc_hist = {}           # W_GC: bar -> the raw g15r trajectory sign, for the 12-bar blip rule
+    cp_run = 0             # how many CONSECUTIVE bars the ws1-cp condition has held, for W_CP_DWELL
+    cp_n = 0               # how many ws1-cp resets this leg has taken
     ceil = BASE_HI; ceil_bar = None
     oob_a = None; hand = None; dip = None; conf = None; ib_run = 0
     gate_shut = False      # latched when the gate refused THIS oob run
@@ -432,6 +849,12 @@ def run_leg(k0, d):
     nox_r = None           # the rider it fired on
     nox_e = None           # was that cross an EDGE on its rider, or already standing?
     for j in range(k0 + 1, N):
+        # THE BOARD NEVER MOVES INSIDE A TRADE. Joe 1012: the side *"can only be set once at the
+        # open of the trade"*. This is an assert and not a comment because the bug it replaces was
+        # exactly a mid-walk reassignment of `d`, and it was invisible in the rows it produced.
+        assert d == _board0, (
+            'the target board moved mid-walk, %+d -> %+d. It is set once at the trade open and '
+            'every test downstream reads it.' % (_board0, d))
         px = float(PX[j])
         if np.isfinite(px) and px > 0:
             adv = -((px - p0) / p0 * 100.0 * sgn)
@@ -441,7 +864,7 @@ def run_leg(k0, d):
                            % (adv, MAE_STOP)))
                 return j, 'mae breach', mae, ceil_bar, hand, tr
         # the ws12r oob run on the leg's dr side, and the handover
-        if goob(TRIG_TF, j, d):
+        if (not NO12) and goob(TRIG_TF, j, d):
             if oob_a is None:
                 oob_a = j
                 # DEAD LOOP DELETED 1008. It read
@@ -481,15 +904,14 @@ def run_leg(k0, d):
                                    % XW12)); exh_x = None
                 if exh_x is not None and held and (j - exh_x + 1) >= XW12:
                     tr.append((j, 'EXHAUSTION CONFIRMED — ws%dr never established, ws60r is '
-                                  'overridden. A closes here and B opens on the opposite side%s'
+                                  'overridden%s'
                                % (TRIG_TF, (' | THE READING IT OVERRODE: %s' % _dgdet(j, d))
                                   if TRACE_DG else '')))
                     return j, 'ws%dr exhaustion' % TRIG_TF, mae, ceil_bar, hand, tr
                 # ---- 3b: traj said reverse; act on ws12r's own stall or x-cross
                 if b_armed:
                     if ST[(TRIG_TF, d)][j]:
-                        tr.append((j, 'ws%dr STALLED after the dwell — A closes here and B opens '
-                                      'on the opposite side' % TRIG_TF))
+                        tr.append((j, 'ws%dr STALLED after the dwell' % TRIG_TF))
                         return j, 'ws%dr reversal on stalled' % TRIG_TF, mae, ceil_bar, hand, tr
                     if b_x is None and xc:
                         b_x = j
@@ -499,8 +921,7 @@ def run_leg(k0, d):
                         tr.append((j, 'the post-dwell cross did NOT hold %d bars — cancelled'
                                    % XW12)); b_x = None
                     if b_x is not None and held and (j - b_x + 1) >= XW12:
-                        tr.append((j, 'ws%dx CROSS CONFIRMED after the dwell — A closes here and B '
-                                      'opens on the opposite side' % TRIG_TF))
+                        tr.append((j, 'ws%dx CROSS CONFIRMED after the dwell' % TRIG_TF))
                         return j, 'ws%dr reversal on x-cross' % TRIG_TF, mae, ceil_bar, hand, tr
             if hand is None and not gate_shut and not b_armed and (j - oob_a) > GATE_BARS:
                 if DGATE == 'off':
@@ -554,7 +975,7 @@ def run_leg(k0, d):
             if SQX and nox_x is not None and hand is None and j < oob_a + GATE_BARS + 1:
                 tr.append((j, 'A CLOSES — ws%dr returned in-bounds at %.2f after %.1f min, short '
                               'of the %.1f-min dwell-ending, and a walk x-cross was squashed in '
-                              'the run at %s on ws%d. B opens here on the opposite side.'
+                              'the run at %s on ws%d.'
                            % (TRIG_TF, float(R[TRIG_TF][j]), (j - oob_a) * 5 / 60.0,
                               (GATE_BARS + 1) * 5 / 60.0, SC.U(nox_x), nox_r)))
                 return j, 'ws%dr run short on a squashed x-cross' % TRIG_TF, mae, ceil_bar, hand, tr
@@ -593,7 +1014,10 @@ def run_leg(k0, d):
                 return j, '>ws12 divergence on ws%dr' % t, mae, ceil_bar, hand, tr
             continue
         # ---- before the handover: the lineage walk
-        if not armed:
+        # NO `continue` ON THE ARMING BAR, EITHER ARM. The jumpstart block below gets the same
+        # bar the arm fired on, so the two arms are timed identically and neither one advantages
+        # the other by a bar. Joe 1011's decoupling is about OWNERSHIP, not about forcing a delay.
+        if ARM == 'mage' and not armed:
             if (d > 0 and float(MARM[j]) >= SC.HI and float(MARM[j - 1]) < SC.HI) or \
                (d < 0 and float(MARM[j]) <= SC.LO and float(MARM[j - 1]) > SC.LO):
                 armed = True
@@ -602,22 +1026,305 @@ def run_leg(k0, d):
                               float(MARM[j]))))
             else:
                 continue
-        if rider is None:
-            c = [t for t in ALL_TF if t <= ceil and oobf(t, j, d)]
-            if c:
-                rider = max(c)
-                tr.append((j, 'KICKSTART — rider ws%d (r %.2f oob, ceiling ws%d)'
-                           % (rider, float(R[rider][j]), ceil)))
+        if GC:
+            gc_hist[j] = GCG.raw_sign(j, d)
+            if gc_hold is not None:
+                # g15 COMPLETES THE WALK. IT DOES NOT CLOSE A LEG. Joe 1012 ruled both halves:
+                #   *"both g15r and g15Mage are needed to complete the walk"*
+                #   *"the only banked back stop is dr-flip. I asked you earlier to remove g15 as an
+                #   exit option. now I need you to delete it from the spec completely"*
+                # So the pair arriving on the TARGET BOARD ends the hold and the walk carries on -
+                # that is the completion. The 1011 branch where the pair arriving AGAINST the board
+                # closed the leg at the opposing g15 bar is DELETED: not knobbed off, deleted. The
+                # only thing that closes a leg from a hold is the dr-flip backstop.
+                _side = GCG.oob_side(j, d)
+                if _side == d:
+                    tr.append((j, 'g15 COMPLETES THE WALK — g15r %.2f and g15Mage %.2f both oob on '
+                                  'the target board here; the hold opened at %s, %.1f min ago, and '
+                                  'ENDS. the walk carries on'
+                               % (float(GCG.r15[j]), float(GCG.m15[j]), SC.U(gc_hold),
+                                  (int(SC.ts[j]) - int(SC.ts[gc_hold])) / 60000.0)))
+                    gc_hold = None
+                else:
+                    if _side == -d and not gc_said:
+                        gc_said = True
+                        tr.append((j, 'g15 arrived AGAINST the target board — g15r %.2f and '
+                                      'g15Mage %.2f both oob. this does NOT close the leg any '
+                                      'more (Joe 1012); the hold from %s stays open. reported '
+                                      'once per hold.'
+                                   % (float(GCG.r15[j]), float(GCG.m15[j]), SC.U(gc_hold))))
+                    if GC_HOLD == 'wait':
+                        continue
+        cp_now = (oobf(1, j, d)
+                  and ((float(MG1[j]) >= SC.HI) if d > 0 else (float(MG1[j]) <= SC.LO)))
+        # THE DWELL IS CAUSAL BY CONSTRUCTION: the count only ever reads bars at or before j, and
+        # the cp fires on the bar the hold COMPLETES. An assert, not a comment, because the whole
+        # point of the stamp is that it cannot be the first bar of the hold.
+        cp_run = (cp_run + 1) if cp_now else 0
+        cp_edge = (cp_run == CP_DWELL)
+        assert not cp_edge or cp_run == CP_DWELL, 'the ws1-cp fired off its own hold count'
+        # DECOUPLED, Joe 1011: *"were they coupled? if so, that was incorrect. make sure that it
+        # is now decoupled from ws1-cp"*. The cp ARMS and nothing else - it does NOT choose the
+        # first rider. That is the jumpstart's job and it runs as its own step below, under W_KICK,
+        # on whatever bar its own test passes. The first version of this arm assigned
+        # `rider = ws1` here, which did the jumpstart's work inside the cp.
+        if ARM == 'cp' and not armed:
+            if not cp_edge:
+                continue
+            armed = True; cp_n += 1
+            loop_open = j; loop_end_armed = False; loop_stall_said = False; looped += 1
+            tr.append((j, 'ws1-cp %d ARMS THE WALK and BEGINS W_LOOP %d — ws1r %.2f and ws1Mage '
+                          '%.2f both oob on the %s board, held %d bars (%.2f min) from %s. The '
+                          'rider is not set here; the jumpstart owns that.'
+                       % (cp_n, looped, float(R[1][j]), float(MG1[j]),
+                          'HIGH' if d > 0 else 'LOW', CP_DWELL, CP_DWELL * 5 / 60.0,
+                          SC.U(j - CP_DWELL + 1))))
+        # the cp RESET is a different job from the cp ARM: it only applies once a rider exists.
+        if CP and rider is not None and cp_edge:
+            cp_n += 1
+            # A CP COMPLETES THE W_LOOP ONLY ONCE THE END IS ARMED by the ws{loopTF}r oob. A cp
+            # BEFORE that oob is inside the loop and only resets the rider. Joe 1011 banked both
+            # boundaries: the arming cp BEGINS the loop, the cp after the oob ENDS it.
+            # A COMPLETING CP ALSO BEGINS *A* W_LOOP - not "the next one". Joe 1011 corrected the
+            # wording: *"if you bank 'begins the next', you're opening up ambiguity if the
+            # trade/walk hasn't made it to ws{w_loop_tf}r oob"*. A W_LOOP that never reaches the
+            # loop TF never gets an end condition, so there is no sequence to be next in.
+            #
+            # THE A/B TRADE FLIP IS DISABLED. Joe 1011: *"this is disabled now"*. The old exhaustion
+            # text said "A closes here and B opens on the opposite side"; it is deleted from every
+            # trace string. The replacement is lineage taking over after a completed W_LOOP.
+            if loop_open is not None and loop_end_armed:
+                # A COMPLETING CP DOES NOT RESTART THE LOOP. Joe 1012: *"drop the loop reset on
+                # ws1cp. from now on, loop only restarts on ws{w_loop_tf}r oob"*, and on the
+                # distinction: *"I said 'restarts' and you're saying 'begins'. they're different
+                # events - ws1cp is still the first checkpoint of any trade walk"*. So the arming
+                # cp BEGINS the walk's first W_LOOP, a cp ENDS one, and only the loop TF going oob
+                # RESTARTS one.
+                tr.append((j, 'W_LOOP %d COMPLETE at this ws1-cp — it began %s, %.1f min ago; '
+                              'lineage starts again from ws%d. No W_LOOP is open now; the next one '
+                              'restarts when ws%dr goes oob.'
+                           % (looped, SC.U(loop_open),
+                              (int(SC.ts[j]) - int(SC.ts[loop_open])) / 60000.0, ALL_TF[0],
+                              LOOP_TF if LOOP_TF is not None else 0)))
+                loop_open = None; loop_end_armed = False; loop_stall_said = False
+                # THE RIDER RESETS ONLY ON A COMPLETING CP. Joe 1012: *"drop the reset at every
+                # ws1-cp"*. His banked rule is *"at 05:42, the w_loop is complete and we start the
+                # lineage again from ws1"* - that is the COMPLETION, not every checkpoint. The
+                # unconditional reset was mine.
+                tr.append((j, 'ws1-cp %d completes it — the rider resets to ws%d from ws%d'
+                           % (cp_n, ALL_TF[0], rider)))
+                rider = ALL_TF[0]
+                continue
+            tr.append((j, 'ws1-cp %d — ws1r %.2f and ws1Mage %.2f both oob on the target '
+                          'board, held %d bars from %s. No W_LOOP completes here, so the rider '
+                          'stays on ws%d.'
+                       % (cp_n, float(R[1][j]), float(MG1[j]), CP_DWELL,
+                          SC.U(j - CP_DWELL + 1), rider)))
             continue
-        cand = [t for t in range(rider + 1, min(rider + LIN_HOP, ceil) + 1)
-                if (ST[(t, d)][j] if PASS == 'stalled' else oobf(t, j, d))]
+        # THE LOOP TF GOING oob does one of two jobs: it ARMS the end of an open W_LOOP, or it
+        # RESTARTS a W_LOOP when none is open. A restarted loop arms its end on the same bar,
+        # because that bar IS the loop TF oob.
+        if rider is not None and LOOP_TFS and (loop_open is None or not loop_end_armed):
+            hit = [t for t in LOOP_TFS if rider >= t and t in R and oobf(t, j, d)]
+            if hit:
+                lt = max(hit)
+                hit_from = rider
+                skipped = rider > lt
+                exh_armed = True
+                where = ('ws%d%s and ws%dr is %.2f oob'
+                         % (lt, ' (jumped past it, rider was ws%d)' % hit_from if skipped else '',
+                            lt, float(R[lt][j])))
+                if LOOP_END == 'oob':
+                    rider = ALL_TF[0]; loop_end_armed = False
+                    tr.append((j, 'W_LOOP %d — the walk reached %s; the rider resets to ws%d and '
+                                  'lineage carries on' % (looped, where, rider)))
+                    continue
+                # THE 4-MINUTE LOOKBACK, stubbed
+                lb = None
+                for i in range(max(1, j - LOOP_LB), j + 1):
+                    now_ = (oobf(1, i, d) and ((float(MG1[i]) >= SC.HI) if d > 0
+                                               else (float(MG1[i]) <= SC.LO)))
+                    prv_ = (oobf(1, i - 1, d) and ((float(MG1[i - 1]) >= SC.HI) if d > 0
+                                                   else (float(MG1[i - 1]) <= SC.LO)))
+                    if now_ and not prv_:
+                        lb = i
+                _restart = loop_open is None
+                if _restart:
+                    loop_open = j; looped += 1
+                loop_end_armed = True; loop_stall_said = False
+                tr.append((j, 'W_LOOP %d %s — the walk reached %s. %s The rider is NOT '
+                              'reset here; the next ws1-cp ends the loop.'
+                           % (looped,
+                              'RESTARTS HERE and its end is ARMED' if _restart else 'END ARMED',
+                              where,
+                              ('LOOKBACK HIT: a same-side ws1-cp at %s, inside the %d-bar window '
+                               '— STUBBED, no action taken.' % (SC.U(lb), LOOP_LB)) if lb
+                              else ('no same-side ws1-cp in the %d bars before it.' % LOOP_LB))))
+        if rider is not None and (EXH_LOOP == 'always'
+                                  or (EXH_LOOP == 'after_loop' and exh_armed)):
+            e = exhausted(rider, j, d, LIN_CEIL)
+            if e is not None:
+                # A HELD LEG CANNOT BE RE-EXHAUSTED. Joe 1011, on the W_GC_HOLD='walk' run that
+                # deferred at 04:14:30 and then died at 04:15:05: that exit was my plumbing, not
+                # his logic. While a deferral is open the ONLY thing that can close the leg is the
+                # g15 backstop (or the MAE stop, which is above this and untouched).
+                if GC and gc_hold is not None:
+                    tr.append((j, 'exhaustion on ws%d SUPPRESSED — the %s deferral is still open, '
+                                  'waiting on the g15 backstop' % (rider, SC.U(gc_hold))))
+                    continue
+                g = gc_defer(j, d, gc_hist) if GC else None
+                if g is not None:
+                    gc_hold = j
+                    tr.append((j, 'EXHAUSTED on ws%d%s — %s | gc DEFERS IT: %s'
+                               % (rider, _lp(looped), e, g)))
+                    continue
+                if loop_end_armed:
+                    tr.append((j, 'lineage ruled ws%d EXHAUSTED; W_LOOP %d DEFERS acting on it — '
+                                  'it has reached its loop TF and waits for the ws1-cp that ends '
+                                  'it (began %s)' % (rider, looped, SC.U(loop_open))))
+                    continue
+                tr.append((j, 'EXHAUSTED on ws%d%s — %s' % (rider, _lp(looped), e)))
+                return j, 'loop exhaustion', mae, ceil_bar, hand, tr
+        if rider is None:
+            if KICK == 'off':
+                rider = ALL_TF[0]
+                tr.append((j, 'WALK STARTS on ws%d — KICKSTART disabled, no oob test, lineage '
+                              'climbs from the bottom (r %.2f %s, lineage ceiling ws%d)'
+                           % (rider, float(R[rider][j]), bnd(rider, j, d), LIN_CEIL)))
+                continue
+            # THE JUMPSTART'S REACH IS BOUNDED BY THE LOOP TF. Joe 1011: *"the max jumpstart
+            # reach must be <= loopTF ... it's the max lineage walk before we loop back to ws1"*.
+            # Without this the jumpstart could land ABOVE the loop point and the loop could never
+            # fire on that rider. The BATON is deliberately NOT bounded - it has to be able to
+            # climb to the loop TF or the loop never triggers at all.
+            # UNRULED: with W_LOOP_TF off there is no loop TF, so the bound falls back to the
+            # ceiling. Joe has not said what he wants there.
+            # THE JUMPSTART'S BOUND IS THE LOOP TF, not a ceiling. Joe 1011: *"the max jumpstart
+            # reach must be <= loopTF"*. With no loop TF it falls back to lineage's own ceiling.
+            # This is the ONE place W_LOOP constrains lineage, and it is a START condition, not a
+            # reach - lineage's reach is LIN_CEIL throughout.
+            jmax = LOOP_TF if LOOP_TF is not None else LIN_CEIL
+            c = [t for t in ALL_TF if t <= jmax and oobf(t, j, d)]
+            if c:
+                rider = min(c) if KICK == 'low' else max(c)
+                tr.append((j, 'JUMPSTART — rider ws%d (%s oob line at or under ws%d, r %.2f; '
+                              'start bounded by loopTF ws%s; lineage ceiling ws%d)'
+                           % (rider, 'LOWEST' if KICK == 'low' else 'highest', jmax,
+                              float(R[rider][j]),
+                              LOOP_TF if LOOP_TF is not None else 'off', LIN_CEIL)))
+            continue
+        # W_TRACE_HOLD — the held set, and each held line's stall rising edge. REPORTING ONLY.
+        if TRACE_HOLD:
+            if rider not in held:
+                held.append(rider); held_st[rider] = bool(ST[(rider, d)][j])
+            for _h in held:
+                _now = bool(ST[(_h, d)][j])
+                if _now and not held_st.get(_h, False):
+                    _rc = [t for t in range(_h + 1, min(_h + LIN_HOP, LIN_CEIL) + 1) if t in R]
+                    tr.append((j, 'HOLDER STALL — ws%d (r %.2f %s) stalled. %s. its reach %s'
+                               % (_h, float(R[_h][j]), bnd(_h, j, d),
+                                  'IT IS THE RIDER' if _h == rider
+                                  else 'the rider is ws%d, so lineage does NOT test this' % rider,
+                                  ', '.join('ws%d %.2f %s' % (t, float(R[t][j]), bnd(t, j, d))
+                                            for t in _rc) or 'none, at lineage\'s ceiling')))
+                held_st[_h] = _now
+        cand = [t for t in range(rider + 1, min(rider + LIN_HOP, LIN_CEIL) + 1)
+                if baton_ok(t, j, d)]
+        # W_TRACE_LIN — REPORTING ONLY, no branch reads it. Joe 1011, on the silence after a w_loop
+        # recycled the rider to ws1: *"there's no events, no line data, and no reasons stating why
+        # the lineage stopped at ws1"*. A resting walk emits nothing, so this says what lineage
+        # asked and what the answer was. EDGE-TRIGGERED on (rider, baton available, rider stalled),
+        # so a long rest is one row, not one row per bar.
+        if TRACE_LIN:
+            _st = bool(ST[(rider, d)][j])
+            _key = (rider, bool(cand), _st)
+            if _key != lin_prev:
+                _reach = [t for t in range(rider + 1, min(rider + LIN_HOP, LIN_CEIL) + 1)
+                          if t in R]
+                tr.append((j, 'lineage on ws%d — %s. reach %s. ws%d %s'
+                           % (rider,
+                              ('baton available: ws%s' % ', ws'.join(str(t) for t in cand))
+                              if cand else 'NO baton available',
+                              ', '.join('ws%d %.2f %s' % (t, float(R[t][j]), bnd(t, j, d))
+                                        for t in _reach) or 'none, at the ceiling',
+                              rider, 'STALLED' if _st else 'not stalled')))
+                lin_prev = _key
         if cand:
             rider = max(cand)
             tr.append((j, 'baton -> ws%d %s (r %.2f)'
-                       % (rider, PASS, float(R[rider][j])))); continue
+                       % (rider, BATON if BATON != 'oob' else PASS,
+                          float(R[rider][j])))); continue
+        # THE EXHAUSTION SCAN, over every baton HOLDER. See W_EXH_WHO.
+        if EXH_LOOP == 'on_stall' and EXH_WHO == 'holders':
+            _who = held if held else [rider]
+            _ex = [(t, exhausted(t, j, d, LIN_CEIL)) for t in _who if ST[(t, d)][j]]
+            _ex = [(t, e) for t, e in _ex if e is not None]
+            if _ex:
+                for _t, _e in _ex:
+                    tr.append((j, 'EXHAUSTED on ws%d%s%s — %s'
+                               % (_t, '' if _t == rider else ' (a holder, not the rider ws%d)' % rider,
+                                  _lp(looped), _e)))
+                if GC and gc_hold is not None:
+                    tr.append((j, 'the %s deferral is still open, waiting on the g15 backstop — '
+                                  'this verdict is SUPPRESSED' % SC.U(gc_hold)))
+                else:
+                    g = gc_defer(j, d, gc_hist) if GC else None
+                    if g is not None:
+                        gc_hold = j
+                        tr.append((j, 'gc DEFERS IT: %s' % g))
+                    elif loop_end_armed:
+                        tr.append((j, 'W_LOOP %d DEFERS acting on it — it has reached its loop TF '
+                                      'and waits for the ws1-cp that ends it (began %s)'
+                                   % (looped, SC.U(loop_open))))
+                    else:
+                        return j, 'loop exhaustion', mae, ceil_bar, hand, tr
+                continue
         if ST[(rider, d)][j]:
-            tr.append((j, 'final stalled on ws%d (r %.2f %s)'
-                       % (rider, float(R[rider][j]), bnd(rider, j, d))))
+            if EXH_LOOP == 'on_stall' and EXH_WHO == 'rider':
+                e = exhausted(rider, j, d, LIN_CEIL)
+                if e is not None:
+                    # A HELD LEG CANNOT BE RE-EXHAUSTED - see the note at the other site.
+                    if GC and gc_hold is not None:
+                        tr.append((j, 'exhaustion on ws%d at its own stall SUPPRESSED — the %s '
+                                      'deferral is still open, waiting on the g15 backstop'
+                                   % (rider, SC.U(gc_hold))))
+                        continue
+                    g = gc_defer(j, d, gc_hist) if GC else None
+                    if g is not None:
+                        gc_hold = j
+                        tr.append((j, 'EXHAUSTED on ws%d at its own stall%s — %s | gc DEFERS IT: %s'
+                                   % (rider, _lp(looped), e, g)))
+                        continue
+                    if loop_end_armed:
+                        tr.append((j, 'lineage ruled ws%d EXHAUSTED at its own stall; W_LOOP %d '
+                                      'DEFERS acting on it — it has reached its loop TF and waits '
+                                      'for the ws1-cp that ends it (began %s)'
+                                   % (rider, looped, SC.U(loop_open))))
+                        continue
+                    tr.append((j, 'EXHAUSTED on ws%d at its own stall%s — %s'
+                               % (rider, _lp(looped), e)))
+                    return j, 'loop exhaustion', mae, ceil_bar, hand, tr
+            if STALL_UP and rider < LIN_CEIL:
+                rider += 1
+                tr.append((j, 'stalled -> rider advances to ws%d (r %.2f %s)'
+                           % (rider, float(R[rider][j]), bnd(rider, j, d))))
+                continue
+            # AN OPEN w_loop IS NOT CLOSED BY `final stalled`. Joe 1011: *"you've dropped the
+            # ws1-cp event that follows ws{loop_tf}r oob"* - with the ceiling at the loop TF the
+            # parked rider has an empty reach, so `final stalled` was ending the leg before the
+            # forward ws1-cp could end the loop. His spec puts the loop's end AT the cp, so the
+            # walk waits for it.
+            if loop_end_armed:
+                if not loop_stall_said:          # ONE row per open loop, not one per stall bar
+                    loop_stall_said = True
+                    tr.append((j, 'lineage ruled ws%d STALLED; W_LOOP %d DEFERS acting on it — it '
+                                  'has reached its loop TF (began %s) and waits for the ws1-cp '
+                                  'that ends it. Reported once per loop, not per bar.'
+                               % (rider, looped, SC.U(loop_open))))
+                continue
+            tr.append((j, 'final stalled on ws%d (r %.2f %s)%s'
+                       % (rider, float(R[rider][j]), bnd(rider, j, d),
+                          " - AT LINEAGE'S CEILING ws%d" % LIN_CEIL if STALL_UP else '')))
             return j, 'final stalled', mae, ceil_bar, hand, tr
         if (not NOX) and xcond(rider, j, d):
             tr.append((j, 'x-cross on ws%d' % rider))
@@ -653,7 +1360,7 @@ def main():
         if xk is None:
             print('\n- leg %d found no exit before the tape end. the chain ends.' % (n + 1)); break
         n += 1
-        p0 = float(PX[k]); sgn = 1 if d > 0 else -1
+        p0 = float(PX[k]); sgn = -int(d)   # d is main()'s TRADE side; adverse is against it
         real = (float(PX[xk]) - p0) / p0 * 100.0 * sgn
         legs.append(dict(leg=n, side='LONG' if d > 0 else 'SHORT', open=k, exit=xk, real=real,
                          mae=mae, why=why, hand=hand))

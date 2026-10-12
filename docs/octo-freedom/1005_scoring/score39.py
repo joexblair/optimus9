@@ -65,6 +65,10 @@ sy = db.execute('SELECT pxsmooth_dema_src s, pxsmooth_dema_len l FROM optimus9_s
 db.disconnect()
 tp = np.load(os.path.join(TAPE_DIR, _tape_key(EM, HOURS, WARMUP, {'src': sy['s'], 'len': sy['l']}) + '.npz'))
 ts = tp['__ts__']; PX = np.asarray(tp['__pxs__'], float)
+# RAW CLOSE, added to the tape cache 1011 for jig.divergence, whose docstring requires it:
+# "DEMA-smoothing the price slope DESTROYS it (MAE 0.15 -> 0.35-0.85)." PX is this same series with
+# DEMA(pxsmooth_dema_len) applied. None on a tape cached before 1011 - callers must check.
+CLOSE = np.asarray(tp['__close__'], float) if '__close__' in tp.files else None
 LD = lambda tfs, role: np.asarray(np.load(os.path.join(LINE_DIR, _line_key(EM, HOURS, WARMUP, override(tfs, *spec[role])) + '.npy'), mmap_mode='r'), float)
 MTD = {'g5': LD(5, 'Mage'), 'g15': LD(15, 'Mage'), 'g30': LD(30, 'Mage'), 'ws1': LD(60, 'Mage')}
 TF = list(range(int(LG['band_lo']), int(LG['band_hi']) + 1))

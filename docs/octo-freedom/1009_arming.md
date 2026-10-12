@@ -84,3 +84,33 @@ how recent "recent" is - the p90 lag says 17 min for r, 26 min for m at wob 24.
 
 NOTE ON SCALE: ws60m is NOT on the 0-100 board. Its values on 07-15 run 109.39-127.43 and ws60x
 tracks it within +-0.5, so m behaves like a smoothed ws60x rather than like r.
+
+## STASHED 1009: THE MOMENTUM MASKS, ALL 23 LINES
+
+Joe 1009: *"great. please stash, I'll call for it later"*.
+
+Built and cached on disk for ws1-ws23, mom-true = momo OR curl, curl gates ON, strip-at-fence OFF.
+About 4 1/4 min per line, ~1 h 40 m for the set. They do not need rebuilding.
+
+  cache dir   /home/joe/.claude/jobs/6eb9931e/tmp/momt_cache
+  keyed on    score39's EM + HOURS + WARMUP, the TF, its banked k_window, and the fn name, so a
+              tape-window change rebuilds rather than silently loading the wrong array
+  the control ws2 measured 26.82% LONG / 26.96% SHORT. A different number on a later run means the
+              cache or the bank moved and the masks must not be trusted
+
+HOW TO CALL FOR IT: `W_BATON=momentum` on `_chain10.py` loads them and makes the baton take a
+lin_hop line that has momentum - Joe's 1006 clause. `W_BATON=either` is momentum OR r-pred.
+`_batonab.py` runs the arms; the oob arm is the control and must return 1623 legs / NET +4.8307.
+
+WHAT IS ALREADY MEASURED ON THE OTHER ARMS, so the momentum arm has something to beat:
+
+| arm | legs | NET | baton hops | mean hold |
+|---|---|---|---|---|
+| oob, as built | 1623 | +4.8307 | 1038 | 78.3 min |
+| rpred | 1583 | -0.4530 | 3017 | 80.8 min |
+| oob, x-cross off | 1404 | -4.0149 | 1792 | 91.8 min |
+| rpred, x-cross off | 1282 | -56.0315 | 3991 | 100.7 min |
+
+AND THE REACH QUESTION IS ALREADY ANSWERED - lin_hop 2 is NOT the limit. At 326 stalls the nearest
+line above the rider with momentum was 1 rung up on 251 = 77.0%, 2 rungs on 25 = 7.7%, and
+reachable by lin_hop 2 on 276 = 84.7%. The momentum was next door; the baton could not see it.
