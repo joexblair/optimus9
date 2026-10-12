@@ -31,7 +31,14 @@ cp = lambda j, s: (((float(R[1][j]) >= HI) and (float(MG1[j]) >= HI)) if s > 0
 # THE SIDE IS READ ONCE, AT THE TRADE'S OPEN. Joe 1012: *"it can only be set once at the open of
 # the trade"*. `SC.DRv` at the open bar is the TRADE's side: +1 a SHORT, -1 a LONG. The board the
 # walk hunts is the end the trade is heading to, so a SHORT hunts LOW and a LONG hunts HIGH.
-d0 = int(SC.DRv[k0]); src = "global dr at the trade's open"
+# V_SIDE FORCES THE TRADE'S SIDE. Joe 1012 asked for a SHORT opened at the 07-17 14:10:45 g15r
+# lineage finisher, where global dr reads the other way. The side is still set ONCE, at the open -
+# this only changes WHERE that one read comes from, and the row says which.
+_vs = os.environ.get('V_SIDE', '')
+if _vs:
+    d0 = int(_vs); src = 'V_SIDE, forced'
+else:
+    d0 = int(SC.DRv[k0]); src = "global dr at the trade's open"
 assert d0 != 0, 'global dr is 0 at the open bar - it has not resolved a side yet'
 print('# 1011-v2  %s  %s -> %s   dr %+d at the open (from %s) = a %s, hunting the %s board'
       % (D, U(k0), U(kE), d0, src, 'SHORT' if d0 > 0 else 'LONG',

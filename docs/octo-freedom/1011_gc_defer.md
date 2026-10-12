@@ -60,7 +60,7 @@ the leg. BEFORE that verdict is accepted:
 4. THE HOLD'S END — SPLIT IN TWO BY JOE 1012. The 1011 step 4 did two jobs with one test; he ruled
    them separately and they do not both survive.
 
-   a. g15 COMPLETES THE WALK. KEPT. Joe 1012: *"both g15r and g15Mage are needed to complete the
+   a. THE g15r `LINEAGE FINISHER` - Joe's name, 1012. It COMPLETES THE WALK. KEPT. Joe 1012: *"both g15r and g15Mage are needed to complete the
       walk"*. The pair arriving oob on the TARGET BOARD ends the hold and the walk carries on,
       lineage tests the baton. His 1011 words for the same thing: *"if we receive a low oob
       qualifier in our 04:14:30 example then the walk is still facing downward"*.

@@ -11,6 +11,8 @@ with no env var set. Where a knob belongs to a mech, the doc that specs it is na
 | `W_ARM_TF` | 2 | which Mage line the `mage` arm reads | 1009 |
 | `W_CP` | 0 | 1 lets a COMPLETING ws1-cp reset the rider to ws1 mid-walk | 1011 |
 | `W_CP_DWELL` | 4 | the ws1-cp hold in bars, 20 s. Consecutive; the cp is stamped at the LAST bar of the hold. 1 reproduces the pre-dwell build | 1011 |
+| `W_CP_MODE` | both | which ws1-cp modes arm. `1` = mode 1 only (ws1r AND ws1Mage both oob), `2` = mode 2 only (the divergence), `both` = either | 1012 |
+| `W_CP_XWOB` | 2 | mode 2's ws1x/ws1Mage cross hold in bars, 10 s. Stamped at the last bar of the hold | 1012 |
 | `W_KICK` | off | the walk's FIRST rider. `high` = highest oob line at or under the loop TF, `low` = lowest, `off` = start on ws1 with no oob test | 1009 |
 | `W_BATON` | oob | what a line must show to take the baton. `oob` = r out of bounds. `momentum` = mom-true, momo OR curl. `rpred` = `predict_breach`. `either` = momentum OR rpred | 1009 |
 | `W_PASS` | oob | the 1007 variant's own pass test. `oob` or `stalled` | 1007 |
@@ -81,7 +83,8 @@ with no env var set. Where a knob belongs to a mech, the doc that specs it is na
 | `W_LEG0` | 7 | the leg counter's start, for labelling only |
 
 `_1011v2.py` takes `V_DAY`, `V_OPEN`, `V_END` and `V_W` instead, and reads the trade's side from
-global dr at the open bar.
+global dr at the open bar. `V_SIDE` forces that side when global dr reads the other way; the side is
+still set once, at the open.
 
 ## NOT A KNOB
 

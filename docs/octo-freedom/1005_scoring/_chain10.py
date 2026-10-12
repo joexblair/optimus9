@@ -251,6 +251,48 @@ assert LOOP_END in ('cp', 'oob'), 'W_LOOP_END must be cp or oob'
 LOOP_LB = int(os.environ.get('W_LOOP_LB', 48))      # 4 min at the 5 s grid
 CP = os.environ.get('W_CP', '0') == '1'
 CP_DWELL = int(os.environ.get('W_CP_DWELL', 4))
+# ws1-cp MODE 2 — THE DIVERGENCE MODE. BAKED 1012, Joe: *"we need mode 2 baked in so that jumpstart
+# can fire on the 14:33 ws1-cp"*. Default 'both': either mode arms, which is what he meant by
+# *"your ws1cp mech has both modes baked"*.
+#   '1'     mode 1 only - ws1r AND ws1Mage both oob on the target board. The pre-1012 build.
+#   '2'     mode 2 only.
+#   'both'  either one. THE DEFAULT.
+CP_MODE = os.environ.get('W_CP_MODE', 'both')
+assert CP_MODE in ('1', '2', 'both'), "W_CP_MODE must be 1, 2 or both"
+# THE MODE-2 TRIGGER, Joe 1012 verbatim: *"to set the anchor and initiate the divergence test, use
+# ws1x crossing ws1Mage while ws1Mage is oob (crossing under for a LONG trade/high oob, crossing
+# over for a SHORT trade/low oob)"*, and his 1012 sidenote: *"every ws1Mage oob + ws1x-cross-Mage,
+# wob 2"*.
+#   THE BOARD ANCHORS THE CROSS DIRECTION, not the trade label. Joe pairs them himself - "LONG
+#   trade/high oob" and "SHORT trade/low oob" - so the rule reads off the board:
+#     board HIGH -> ws1x crosses UNDER ws1Mage
+#     board LOW  -> ws1x crosses OVER  ws1Mage
+#   which is the banked x-cross direction rule with the board as its subject.
+#   THE STAMP IS THE LAST BAR OF THE wob HOLD, cross + W_CP_XWOB - 1, the first bar the hold is
+#   knowable. Same rule as W_CP_DWELL and every other hold in this build.
+#   THE ANCHOR IS THAT STAMP BAR. `anchor_floater` step 1 takes it, step 2 finds the pivot, step 3
+#   walks back for the floater, step 4 compares. The cp needs the comparison to FIRE on the board's
+#   own sign - Joe's mode-2 wording was *"bullish at dr -1 / bearish at dr +1"*, and the board is
+#   that sign. An anchor that does not fire is not a cp.
+#   STEP 2 IS ON THE 50 RULE, AGREED BY JOE 1012 — and he corrected how it should be described:
+#   *"the 50 rule (what I ran, the producer's default)" -agreed. honestly: its not a default, it's
+#   lore"*. So it is not a fallback that happens when no `xn` is passed; it is the rule, carried
+#   forward because it has always been there. `anchor_floater`'s own docstring still calls it
+#   "MINE, and unruled" because Joe named a timestamp (~17:32:30) rather than a rule in 0912 - that
+#   line is now out of date and his 1012 "agreed" settles it.
+#   THE 0921 DWELL RULE IS IGNORED FOR THIS CALLER. Joe 1012: *"the dwell rule, your 0921 spec
+#   -ignore"*. Not a knob here, not an open point.
+CP_XWOB = int(os.environ.get('W_CP_XWOB', 2))
+# THE MICROLOOP IS DELETED. Joe named it *"double dipping"* and dropped it 1012: *"ok, drop the
+# 'double dipping' idea. I'm too attached to 06:59"*. It restarted the lineage walk at a g15r
+# lineage finisher - rider to ws1, holder list cleared - and it cost the 06:59:40 finisher on the
+# 07-18 02:33 SHORT by changing the path before the 05:48:05 defer could happen. There is no
+# W_MICRO knob and no stub. Nothing here to re-enable.
+#
+# WHAT SURVIVED IT, because neither belongs to it: the baton-holder list is now walk state rather
+# than being built only under W_TRACE_HOLD, and the >ws12 mech's x-side boolean is renamed `x_side`
+# so it no longer collides with that list. Both were latent defects the microloop work exposed.
+assert CP_XWOB >= 1, 'W_CP_XWOB is the ws1x cross hold in bars and must be at least 1'
 assert CP_DWELL >= 1, 'W_CP_DWELL is the ws1-cp hold in bars and must be at least 1, got %d' % CP_DWELL
 ARM = os.environ.get('W_ARM', 'mage')
 assert ARM in ('mage', 'cp'), 'W_ARM must be mage or cp'
@@ -524,6 +566,13 @@ R = {t: RL[t][:N] for t in RL}
 X = {t: SC.LD(t * 60, 'x')[:N] for t in ALL_TF}
 M2 = SC.Mg[2][:N]; G1 = SC.MTD['ws1'][:N]; PX = SC.PX[:N]
 MG1 = SC.Mg[1][:N]        # ws1Mage, for the W_CP checkpoint. Same array as G1; named for the mech.
+# RAW CLOSE for ws1-cp mode 2. `jig.divergence`'s docstring requires it - docs/o9-live/
+# divergence_research.md:201, "DEMA-smoothing the price slope DESTROYS it ... The raw price slope is
+# correct." It reached the tape cache on 1011 as `__close__`.
+CLOSE_RAW = None if SC.CLOSE is None else np.asarray(SC.CLOSE, float)[:N]
+assert CP_MODE == '1' or CLOSE_RAW is not None, (
+    'ws1-cp mode 2 needs the RAW close and `__close__` is not on this tape. Rebuild the tape cache '
+    'or set W_CP_MODE=1.')
 if GC:
     import _gcgate
     GCG = _gcgate.GC(SC.LD(15, 'r'), SC.LD(30, 'r'), SC.LD(15, 'Mage'), SC.HI, SC.LO, N)
@@ -684,6 +733,38 @@ def baton_ok(t, j, d):
         return int(RPRED[t][j]) == (1 if d > 0 else -1)
     return bool(MOMT[t][d][j]) or int(RPRED[t][j]) == (1 if d > 0 else -1)
 
+def cp2(j, d):
+    """ws1-cp MODE 2 at bar `j`: the ws1x/ws1Mage cross, its wob hold, and the divergence.
+
+    -> the `anchor_floater` dict when bar `j` is a confirmed mode-2 cp, else None.
+
+    CAUSAL BY CONSTRUCTION: the cross sits at `j - CP_XWOB + 1`, the hold runs forward to `j`, and
+    `anchor_floater` reads nothing past `j`. The assert below is the invariant, not a comment -
+    stamping the cross bar itself would act on a hold that is not knowable for CP_XWOB-1 more bars.
+    """
+    c = j - CP_XWOB + 1
+    if c < 1:
+        return None
+    assert c <= j, 'the mode-2 cross bar is ahead of its own stamp bar'
+    # ws1Mage oob on the TARGET BOARD at the cross
+    if not ((float(MG1[c]) >= SC.HI) if d > 0 else (float(MG1[c]) <= SC.LO)):
+        return None
+    x, m = X[1], MG1
+    if d > 0:        # HIGH board: ws1x crosses UNDER ws1Mage
+        if not (float(x[c]) < float(m[c]) and float(x[c - 1]) >= float(m[c - 1])):
+            return None
+        if not all(float(x[c + q]) < float(m[c + q]) for q in range(CP_XWOB)):
+            return None
+    else:            # LOW board: ws1x crosses OVER ws1Mage
+        if not (float(x[c]) > float(m[c]) and float(x[c - 1]) <= float(m[c - 1])):
+            return None
+        if not all(float(x[c + q]) > float(m[c + q]) for q in range(CP_XWOB)):
+            return None
+    res = anchor_floater(R[1], CLOSE_RAW, d, j)
+    if res is None or int(res['fired']) != d:
+        return None
+    return res
+
 def bnd(t, k, d):
     v = float(R[t][k])
     if d > 0: return 'O' if v >= SC.HI else ('x' if v >= EXF_HI else '.')
@@ -828,8 +909,11 @@ def run_leg(k0, trade_side):
     exh_armed = False      # W_LOOP_EXH 'after_loop': the exhaustion exit goes live on the 1st loop
     hit_from = None        # the rider the loop fired from, for the trace line only
     lin_prev = None        # W_TRACE_LIN: the last (rider, baton available, stalled) reported
-    held = []              # W_TRACE_HOLD: every line that has held the baton, in order
-    held_st = {}           # W_TRACE_HOLD: each held line's stall state on the previous bar
+    held = []              # every line that has held the baton, in order. WALK STATE, not
+#                            reporting: W_EXH_WHO='holders' scans it. It used to be filled only
+#                            under `if TRACE_HOLD`, so the holder scan silently fell back to the
+#                            rider alone whenever W_TRACE_HOLD was 0. Fixed 1012.
+    held_st = {}           # each held line's stall state on the previous bar, for the trace rows
     loop_open = None       # the bar the current W_LOOP BEGAN on - its arming or completing ws1-cp
     loop_end_armed = False  # True once the walk has REACHED the loop TF. Only then does a ws1-cp
 #                             END the W_LOOP, and only then are a stall and an exhaustion held.
@@ -889,7 +973,10 @@ def run_leg(k0, trade_side):
                                   'dwell has not run. %s' % _dgdet(j, d)))
             if DGATE in ('traj', 'vote') and hand is None:
                 xu = lambda z: float(X[TRIG_TF][z]) < float(R[TRIG_TF][z])
-                held = xu(j) if d > 0 else (not xu(j))
+                # RENAMED FROM `held`, 1012: it collided with the baton-holder
+                # LIST of the same name and would have wiped it. Only
+                # W_NO_GT12=0 reaches here, which is why it never bit.
+                x_side = xu(j) if d > 0 else (not xu(j))
                 xc = (xu(j) and not xu(j - 1)) if d > 0 else ((not xu(j)) and xu(j - 1))
                 # ---- 2: the EXHAUSTION window
                 if (j - oob_a) <= EXH_BARS:
@@ -899,10 +986,10 @@ def run_leg(k0, trade_side):
                                       '(%.1f min of %.1f) — awaiting %d bars of hold'
                                    % (TRIG_TF, TRIG_TF, EXH_BARS,
                                       (j - oob_a) * 5 / 60.0, EXH_BARS * 5 / 60.0, XW12)))
-                    elif exh_x is not None and not held:
+                    elif exh_x is not None and not x_side:
                         tr.append((j, 'the exhaustion cross did NOT hold %d bars — cancelled'
                                    % XW12)); exh_x = None
-                if exh_x is not None and held and (j - exh_x + 1) >= XW12:
+                if exh_x is not None and x_side and (j - exh_x + 1) >= XW12:
                     tr.append((j, 'EXHAUSTION CONFIRMED — ws%dr never established, ws60r is '
                                   'overridden%s'
                                % (TRIG_TF, (' | THE READING IT OVERRODE: %s' % _dgdet(j, d))
@@ -917,10 +1004,10 @@ def run_leg(k0, trade_side):
                         b_x = j
                         tr.append((j, 'ws%dx crossed ws%dr after the dwell — awaiting %d bars '
                                       'of hold' % (TRIG_TF, TRIG_TF, XW12)))
-                    elif b_x is not None and not held:
+                    elif b_x is not None and not x_side:
                         tr.append((j, 'the post-dwell cross did NOT hold %d bars — cancelled'
                                    % XW12)); b_x = None
-                    if b_x is not None and held and (j - b_x + 1) >= XW12:
+                    if b_x is not None and x_side and (j - b_x + 1) >= XW12:
                         tr.append((j, 'ws%dx CROSS CONFIRMED after the dwell' % TRIG_TF))
                         return j, 'ws%dr reversal on x-cross' % TRIG_TF, mae, ceil_bar, hand, tr
             if hand is None and not gate_shut and not b_armed and (j - oob_a) > GATE_BARS:
@@ -1029,7 +1116,9 @@ def run_leg(k0, trade_side):
         if GC:
             gc_hist[j] = GCG.raw_sign(j, d)
             if gc_hold is not None:
-                # g15 COMPLETES THE WALK. IT DOES NOT CLOSE A LEG. Joe 1012 ruled both halves:
+                # THE g15r `LINEAGE FINISHER` - JOE'S NAME, 1012: *"at the g15r `lineage
+                # finisher` timestamp"*. It COMPLETES THE WALK. IT DOES NOT CLOSE A LEG. Joe 1012
+                # ruled both halves:
                 #   *"both g15r and g15Mage are needed to complete the walk"*
                 #   *"the only banked back stop is dr-flip. I asked you earlier to remove g15 as an
                 #   exit option. now I need you to delete it from the spec completely"*
@@ -1039,7 +1128,7 @@ def run_leg(k0, trade_side):
                 # only thing that closes a leg from a hold is the dr-flip backstop.
                 _side = GCG.oob_side(j, d)
                 if _side == d:
-                    tr.append((j, 'g15 COMPLETES THE WALK — g15r %.2f and g15Mage %.2f both oob on '
+                    tr.append((j, 'g15r LINEAGE FINISHER — g15r %.2f and g15Mage %.2f both oob on '
                                   'the target board here; the hold opened at %s, %.1f min ago, and '
                                   'ENDS. the walk carries on'
                                % (float(GCG.r15[j]), float(GCG.m15[j]), SC.U(gc_hold),
@@ -1055,14 +1144,32 @@ def run_leg(k0, trade_side):
                                    % (float(GCG.r15[j]), float(GCG.m15[j]), SC.U(gc_hold))))
                     if GC_HOLD == 'wait':
                         continue
+        # MODE 1 — ws1r AND ws1Mage both oob on the target board, held W_CP_DWELL bars.
         cp_now = (oobf(1, j, d)
-                  and ((float(MG1[j]) >= SC.HI) if d > 0 else (float(MG1[j]) <= SC.LO)))
+                  and ((float(MG1[j]) >= SC.HI) if d > 0 else (float(MG1[j]) <= SC.LO))
+                  ) if CP_MODE in ('1', 'both') else False
         # THE DWELL IS CAUSAL BY CONSTRUCTION: the count only ever reads bars at or before j, and
         # the cp fires on the bar the hold COMPLETES. An assert, not a comment, because the whole
         # point of the stamp is that it cannot be the first bar of the hold.
         cp_run = (cp_run + 1) if cp_now else 0
-        cp_edge = (cp_run == CP_DWELL)
-        assert not cp_edge or cp_run == CP_DWELL, 'the ws1-cp fired off its own hold count'
+        cp_1 = (cp_run == CP_DWELL)
+        assert not cp_1 or cp_run == CP_DWELL, 'the ws1-cp fired off its own hold count'
+        # MODE 2 — the ws1x/ws1Mage cross plus the divergence. Tested only when mode 1 has not
+        # already fired on this bar, so one bar is one cp and the row names which mode made it.
+        cp_2 = None if (cp_1 or CP_MODE == '1') else cp2(j, d)
+        cp_edge = bool(cp_1) or cp_2 is not None
+        cp_why = ('mode 1, ws1r %.2f and ws1Mage %.2f both oob on the target board, held %d bars '
+                  'from %s' % (float(R[1][j]), float(MG1[j]), CP_DWELL, SC.U(j - CP_DWELL + 1))
+                  ) if cp_1 else ''
+        if cp_2 is not None:
+            _a, _p, _f = cp_2['anchor'], cp_2['pivot'], cp_2['floater']
+            cp_why = ('mode 2, ws1x crossed %s ws1Mage at %s with ws1Mage %.2f oob, held %d bars; '
+                      'divergence FIRED %+d — anchor %s ws1r %.2f close %.6f, pivot %s ws1r %.2f, '
+                      'floater %s ws1r %.2f close %.6f, d_osc %+.2f d_px %+.6f'
+                      % ('UNDER' if d > 0 else 'OVER', SC.U(j - CP_XWOB + 1),
+                         float(MG1[j - CP_XWOB + 1]), CP_XWOB, int(cp_2['fired']),
+                         SC.U(int(_a[0])), _a[1], _a[2], SC.U(int(_p[0])), _p[1],
+                         SC.U(int(_f[0])), _f[1], _f[2], cp_2['d_osc'], cp_2['d_px']))
         # DECOUPLED, Joe 1011: *"were they coupled? if so, that was incorrect. make sure that it
         # is now decoupled from ws1-cp"*. The cp ARMS and nothing else - it does NOT choose the
         # first rider. That is the jumpstart's job and it runs as its own step below, under W_KICK,
@@ -1073,12 +1180,8 @@ def run_leg(k0, trade_side):
                 continue
             armed = True; cp_n += 1
             loop_open = j; loop_end_armed = False; loop_stall_said = False; looped += 1
-            tr.append((j, 'ws1-cp %d ARMS THE WALK and BEGINS W_LOOP %d — ws1r %.2f and ws1Mage '
-                          '%.2f both oob on the %s board, held %d bars (%.2f min) from %s. The '
-                          'rider is not set here; the jumpstart owns that.'
-                       % (cp_n, looped, float(R[1][j]), float(MG1[j]),
-                          'HIGH' if d > 0 else 'LOW', CP_DWELL, CP_DWELL * 5 / 60.0,
-                          SC.U(j - CP_DWELL + 1))))
+            tr.append((j, 'ws1-cp %d ARMS THE WALK and BEGINS W_LOOP %d — %s. The rider is not '
+                          'set here; the jumpstart owns that.' % (cp_n, looped, cp_why)))
         # the cp RESET is a different job from the cp ARM: it only applies once a rider exists.
         if CP and rider is not None and cp_edge:
             cp_n += 1
@@ -1111,15 +1214,14 @@ def run_leg(k0, trade_side):
                 # ws1-cp"*. His banked rule is *"at 05:42, the w_loop is complete and we start the
                 # lineage again from ws1"* - that is the COMPLETION, not every checkpoint. The
                 # unconditional reset was mine.
-                tr.append((j, 'ws1-cp %d completes it — the rider resets to ws%d from ws%d'
-                           % (cp_n, ALL_TF[0], rider)))
+                # THE MODE GOES IN THE ROW. Without it the completion row does not say which
+                # mode ended the loop, and the loop's end is the number Joe reads.
+                tr.append((j, 'ws1-cp %d completes it (%s) — the rider resets to ws%d from ws%d'
+                           % (cp_n, cp_why, ALL_TF[0], rider)))
                 rider = ALL_TF[0]
                 continue
-            tr.append((j, 'ws1-cp %d — ws1r %.2f and ws1Mage %.2f both oob on the target '
-                          'board, held %d bars from %s. No W_LOOP completes here, so the rider '
-                          'stays on ws%d.'
-                       % (cp_n, float(R[1][j]), float(MG1[j]), CP_DWELL,
-                          SC.U(j - CP_DWELL + 1), rider)))
+            tr.append((j, 'ws1-cp %d — %s. No W_LOOP completes here, so the rider stays on '
+                          'ws%d.' % (cp_n, cp_why, rider)))
             continue
         # THE LOOP TF GOING oob does one of two jobs: it ARMS the end of an open W_LOOP, or it
         # RESTARTS a W_LOOP when none is open. A restarted loop arms its end on the same bar,
@@ -1213,10 +1315,11 @@ def run_leg(k0, trade_side):
                               float(R[rider][j]),
                               LOOP_TF if LOOP_TF is not None else 'off', LIN_CEIL)))
             continue
-        # W_TRACE_HOLD — the held set, and each held line's stall rising edge. REPORTING ONLY.
+        # THE HOLDER LIST IS BUILT EVERY BAR, whatever W_TRACE_HOLD says - W_EXH_WHO='holders'
+        # reads it. Only the ROWS below are reporting.
+        if rider not in held:
+            held.append(rider); held_st[rider] = bool(ST[(rider, d)][j])
         if TRACE_HOLD:
-            if rider not in held:
-                held.append(rider); held_st[rider] = bool(ST[(rider, d)][j])
             for _h in held:
                 _now = bool(ST[(_h, d)][j])
                 if _now and not held_st.get(_h, False):
