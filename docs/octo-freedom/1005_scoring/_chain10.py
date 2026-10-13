@@ -236,6 +236,10 @@ assert GC_HOLD in ('wait', 'walk'), 'W_GC_HOLD must be wait or walk'
 #   'cp'   (default) the ws{loopTF}r oob OPENS the loop and the rider is NOT reset there. The walk
 #          carries on and the loop ENDS at the next ws1-cp, where the cp does the reset it already
 #          does. Joe: *"at 05:42, the w_loop is complete and we start the lineage again from ws1"*.
+#          ATTRIBUTION CORRECTED 1013, Joe: *"this was an observation, not a mech"*. That quote is
+#          him reading one bar, not ruling where the loop ends. THE 'cp' DEFAULT IS MINE. His 1013
+#          description of the mech is 'oob' below: *"the mech fires on ws{loop-tf}r crossing to oob
+#          ... ws{loop-tf}r recyling the loop (to ws1) on its oob event"*.
 #   'oob'  the pre-1011 behaviour: the rider resets to ws1 on the oob bar itself.
 #
 #   THE 4-MINUTE LOOKBACK IS A STUB, Joe's word. A same-side ws1-cp inside W_LOOP_LB bars before
@@ -351,8 +355,43 @@ assert HTF_MOM_N >= 1, 'W_HTF_MOM_N is a count of lines and must be at least 1'
 # so it no longer collides with that list. Both were latent defects the microloop work exposed.
 assert CP_XWOB >= 1, 'W_CP_XWOB is the ws1x cross hold in bars and must be at least 1'
 assert CP_DWELL >= 1, 'W_CP_DWELL is the ws1-cp hold in bars and must be at least 1, got %d' % CP_DWELL
+# W_ARM 'lastmile' - THE LAST-MILE MODE, 1013. Joe: *"create a last-mile mode that doesn't rely on
+# ws1cp and fires kickstart at the last-mile handoff"*, after *"when the extension fires, walk the
+# last mile using lineage"*.
+#   THE WALK IS ARMED AT ITS FIRST BAR. There is no arming event to wait for, because the trade is
+#   already open - the extension handed the walk a live leg. Measured on the 07-18 17:39:10 handoff:
+#   the banked ws2Mage arm does not fire until 2026-07-18 18:25:10, 46.0 min later, which is already
+#   past the ~18:09 ending Joe named. No kickstart setting reaches it, because arming gates the walk.
+#   NO ws1-cp IS READ on this path: the cp arms only under W_ARM='cp', and with W_LOOP_TF off there
+#   is no loop for a cp to end. Joe: *"doesn't rely on ws1cp"*.
+#   THE KICKSTART FIRES AT THE HANDOFF. `W_KICK` defaults to 'high' in this mode - the banked
+#   KICKSTART, the highest oob TF at or under the bound, taken as a one-time jump on the first bar.
+#   Joe's 1010 ruling *"W_KICK off"* governs the ARMED walk, which climbs from ws1 after its own
+#   arming event; it is not a ruling about a walk handed a live leg mid-move. W_KICK still overrides.
+#   THE >ws12 MECH IS OFF in this mode. Joe: *"walk the last mile using lineage"* - the >ws12 mech
+#   is not lineage, and when it fires it takes ownership of the exit ('the >ws12 mech owns the
+#   exit'), which would end the last mile on a non-lineage branch. On this handoff ws12r is already
+#   oob, so the handover fires 6.1 min in at ~17:45:20 and the lineage walk never climbs at all.
+#   W_NO_GT12 still overrides. MY READING OF "using lineage", STATED.
 ARM = os.environ.get('W_ARM', 'mage')
-assert ARM in ('mage', 'cp'), 'W_ARM must be mage or cp'
+assert ARM in ('mage', 'cp', 'lastmile'), 'W_ARM must be mage, cp or lastmile'
+LASTMILE = ARM == 'lastmile'
+# JOE'S KNOB, HIS NAME, 1013: *"I think for last-mile work, the kickstart TF should be limited to
+# {knob:5, 'LIN_LASTMILE_KCKSTRT_TFCAP'}"*. It caps the KICKSTART's reach in last-mile mode only -
+# the baton is NOT capped by it, exactly as the loopTF bound works for the armed walk.
+# WHY IT WAS NEEDED: uncapped, the kickstart at the 2026-07-18 17:39:15 handoff takes the highest
+# oob line at or under the lineage ceiling ws30, which is ws12 (r 90.72). ws7 sits below that and
+# can never become the rider, so the ~18:09 ending on ws7 was unreachable. Under the cap the
+# highest oob line at or under ws5 is ws1 (r 95.74).
+LASTMILE_KICK_TFCAP = int(os.environ.get('LIN_LASTMILE_KCKSTRT_TFCAP', 5))
+if LASTMILE:
+    # BOTH DEFAULTS FLIP HERE, AND BOTH STAY OVERRIDABLE - an explicitly set env var always wins,
+    # so every number below can be re-measured against the other setting. KICK and NO12 are read
+    # near the top of this file, before ARM exists, which is why the flip lives here.
+    if 'W_KICK' not in os.environ:
+        KICK = 'high'
+    if 'W_NO_GT12' not in os.environ:
+        NO12 = True
 # W_LOOP_EXH  when the exhaustion exit is live.
 #
 #   RULED BY JOE 1010, correcting my 'after_loop': *"this is only true if the lineage walks to the
@@ -413,7 +452,41 @@ RREV, MAE_STOP = int(W['rrev_wob']), float(W['mae_stop_pct'])
 BATON = os.environ.get('W_BATON', 'oob')
 assert BATON in ('oob', 'momentum', 'rpred', 'either'), \
     'W_BATON must be oob, momentum, rpred or either'
-PASS = os.environ.get('W_PASS', 'oob')  # 'oob' (as built, Joe's tag ruling) or 'stalled'.
+# W_PASS 'crossing_to_ib' - JOE'S THIRD BATON MODE, 1013, HIS NAME: *"this scenario invites a new
+# mech to sit along side the 'oob' and 'stalled' modes / the new mode is 'crossing to ib'. instead
+# of baton passing on oob or stalled, lineage-last-mile will baton pass on rider-tf returning to
+# ib"*.
+#   THE TRIGGER IS ON THE RIDER, NOT ON THE CANDIDATES. 'oob' and 'stalled' both ask a question of
+#   the lines ABOVE the rider; this mode asks one of the rider itself, so it is handled at the
+#   baton site rather than inside `baton_ok`.
+#   THE RIDER MUST HAVE BEEN OOB FIRST. Joe's own example pins this: *"in this ~17:39 example, this
+#   new mode would walk ws2r to a baton-pass at ~18:07"*. ws2r is 73.41 and already IN-FENCE when
+#   it takes the baton at the 17:39 handoff; it climbs to 91.42 oob by 18:05:00 and is back to
+#   77.14 in-fence by 18:08:00. Only "went oob, then returned" lands on ~18:07. A bare "is IB now"
+#   test would pass the baton on the bar it received it.
+#   THE RECEIVER IS THE NEXT TF UP, consecutively - his example walks ws1 -> ws2, and the rider
+#   does not pick the highest of a reach the way 'oob' mode does.
+#   NO DWELL AND NO WOB ON THE CROSS. He has not specified one, so the pass is the bar the rider
+#   crosses back inside the fence.
+#   THE SIDE-AWARE TEST IS THE WALK'S OWN `oobf`, so "ib" means inside the fence at the end of the
+#   board the walk is working - for a HIGH board, r back under 85.
+PASS = os.environ.get('W_PASS', 'oob')  # 'oob' (as built, Joe's tag ruling), 'stalled'
+#                                        or 'crossing_to_ib' (Joe 1013).
+assert PASS in ('oob', 'stalled', 'crossing_to_ib'), \
+    'W_PASS must be oob, stalied or crossing_to_ib'.replace('stalied', 'stalled')
+# THE EXHAUSTION EXIT IS SUPPRESSED IN THIS MODE, AND THIS IS THE ONE PIECE JOE DID NOT STATE.
+# It is forced by his example. Exhaustion fires when the rider stalls and the 2 lines above it are
+# inside the ex-fence 17/83 - which is EXACTLY the scenario he opened the mode with: *"Both lower
+# kickstarts die on the next bar - ws2 73.41 and ws3 59.44 are already in-fence at the handoff /
+# -this scenario invites a new mech to sit along side the 'oob' and 'stalled' modes"*. Measured: at
+# the 17:39:10 handoff with the cap on, the kickstart takes ws1 at 17:39:15 and exhaustion ends the
+# walk at 17:39:20, 5 s later, before any baton can pass. His ws2 pass at ~18:07 is unreachable
+# with it live. So in this mode an in-fence line above the rider is not a dead end - it is the next
+# rider, which is the whole point of the mode.
+# WHAT ENDS THE WALK IS THEN THE WALK'S OTHER EXISTING EXITS - the ceiling, `final stalled`, the
+# MAE stop, the >ws12 branch when it is on. NO END CONDITION OF HIS OWN HAS BEEN RULED FOR THIS
+# MODE. Flagged, not invented.
+XIB = PASS == 'crossing_to_ib'
 #                                        THE BATON'S PASS TEST. Joe 1007: *"keeping the
 #                                        x-cross and swapping oob with stalled"*.
 # W_TRACE_NOX=1 records the x-cross exits that W_NOX=1 SUPPRESSES, and names them at the bar the
@@ -769,7 +842,10 @@ RPRED = {}
 # the doubled one its r-config stands in for. So dws8r takes BANK[8] and the momo window
 # k_window x 8 = 48 min, exactly as ws8r does.
 DWS_TF = {_n: int(_v[0]) // 60 for _n, _v in SC.DWS_SPEC.items()}
-if BATON in ('momentum', 'either'):
+# LAST-MILE NEEDS MOMT WHATEVER W_BATON SAYS. Joe 1013's `towards dr` is *"has momentum"* AND not
+# tagged, and "has momentum" is the mom-true mask. Without this the mode would silently read an
+# empty MOMT and call every line not-towards-dr, which exhausts the walk on its first bar.
+if BATON in ('momentum', 'either') or LASTMILE:
     from _momtrue import momtrue_mask
     from optimus9.orchestration.build_ws_lines import HOURS, WARMUP
     for _bt in ALL_TF:          # NOT `_t` - that is the module's `time` handle, used by _P
@@ -965,6 +1041,58 @@ def exhausted(rider, j, d, lin_ceil):
                                     for t in up))
 
 
+def towards_dr(t, j, d, xtag):
+    """JOE 1013, HIS TWO STATES: *"I'd calculate 'towards dr' based on states: has momentum / has
+    not been tagged as 'crossed to ib'"*. Nothing about the line's position is read - a line can be
+    in-fence and still be heading to the target end, which is what qualified ws7 on the 07-18 16:07
+    walk at 18:05:35 when it sat at 79.93.
+    """
+    return bool(MOMT[t][d][j]) and t not in xtag
+
+
+def exhausted_cycle(rider, j, d, xtag):
+    """THE LAST MILE'S EXHAUSTION. -> a trace string, or None.
+
+    JOE 1013: *"the end is the EXHAUSTION event. I'm sure that this is the existing mech"* - and it
+    is. This is `exhausted()` with ONE substitution: its inner test changes from "all the reach is
+    inside the ex-fence" to "none of the reach is towards-dr". The reach is unchanged, rider+1 ..
+    rider+LIN_HOP, which is Joe's 1010 *"the 2 tfs above are in fence"*.
+
+    WHY THE SUBSTITUTION. Measured on the 07-18 16:07 LONG's last mile, board HIGH:
+        2026-07-18 17:39:20  rider ws1, reach ws2 73.41 and ws3 59.44, both inside the ex-fence, so
+                             the EXISTING test fires 5 s after the kickstart and the walk is over.
+                             Both are untagged and mom-true - they are climbing to oob, reaching
+                             95.64 and 100.00 within 9 min - so the cycle test does NOT fire.
+        2026-07-18 18:12:00  rider ws4, reach ws5 71.72 and ws6 84.38. ws6 is above the ex-fence 83
+                             so the EXISTING test does NOT fire. Both are tagged `left-target-dr`,
+                             so the cycle test DOES.
+    One change, both bars corrected.
+
+    THE STALL GATE IS DROPPED, Joe 1013 verbatim: the cycle test *"replaces the stall gate ONLY for
+    the last mile mech"*. Measured: at 2026-07-18 18:12:00 the rider ws4 is NOT stalled, so the
+    `on_stall` gate alone would block the end. The armed walk keeps its stall gate untouched.
+
+    THE REACH IS CAPPED AT THE LOOP TF HERE, Joe 1013: *"no line in the rider's reach passes
+    loop-tf"*, and his reason - *"ws{loop-tf}r recyling the loop (to ws1) on its oob event"* means
+    the lines above it are never the walk's business. An empty reach at that cap IS exhaustion.
+    """
+    top = min(rider + LIN_HOP, LIN_CEIL)
+    if LOOP_TF is not None:
+        top = min(top, LOOP_TF)
+    up = [t for t in range(rider + 1, top + 1) if t in R]
+    if not up:
+        return ('the reach is empty at the loop TF ws%s - nothing above ws%d is this walk\'s '
+                'business' % (LOOP_TF, rider))
+    live = [t for t in up if towards_dr(t, j, d, xtag)]
+    if live:
+        return None
+    return 'none of the %d above is towards-dr (%s)' % (
+        len(up), ', '.join('ws%d %.2f %s' % (
+            t, float(R[t][j]),
+            'tagged `left-target-dr` %s' % SC.U(xtag[t]) if t in xtag else 'no momentum')
+            for t in up))
+
+
 xund = lambda t, k, d: (float(X[t][k]) < float(R[t][k])) if d > 0 else (float(X[t][k]) > float(R[t][k]))
 # THE DIP IS A BAND, 1008. Joe: *"we'll use a small 100-{knob:53} fence, ie 47 to 53"* /
 # *"fence 53 + dwell 6"*.
@@ -1017,7 +1145,23 @@ def run_leg(k0, trade_side):
     sgn = -int(trade_side)
     assert sgn in (-1, 1)
     tr = []; p0 = float(PX[k0])
-    armed = False; rider = None; mae = 0.0
+    # ARMED AT THE HANDOFF in last-mile mode. The trade is already open - the extension handed this
+    # walk a live leg, so there is no arming event to wait for. Every other mode arms on its own
+    # event and this stays False. Joe 1013: *"fires kickstart at the last-mile handoff"*.
+    armed = LASTMILE
+    rider = None; mae = 0.0
+    rider_oob = False      # W_PASS 'crossing_to_ib': has THIS rider been oob since it took over
+    xib_stall_said = False  # one trace row per rider when crossing_to_ib ignores a stall
+    # JOE 1013'S `left-target-dr` TAG SET. *"it would be less cost to tag {TFs < loop-tp} lines with
+    # 'left-target-dr' as they cross to ib, and then clear all tags when lineage finishes its walk.
+    # your code, your call"*. A dict {tf: the bar it crossed}, LOCAL TO THE WALK, so it is cleared
+    # when the walk returns - no reset code and no state that can leak into the next leg. One
+    # comparison per TF per bar, and nothing is computed for TFs at or above the loop TF.
+    xtag = {}
+    if LASTMILE:
+        tr.append((k0, 'LAST MILE — armed at the handoff, no ws1-cp and no %sMage arm; the '
+                       'KICKSTART takes the next bar (W_KICK %r, >ws12 mech %s)'
+                   % (ARM_TF, KICK, 'off' if NO12 else 'ON')))
     looped = 0             # W_LOOP_TF: how many times the rider has been reset to ws1
     exh_armed = False      # W_LOOP_EXH 'after_loop': the exhaustion exit goes live on the 1st loop
     hit_from = None        # the rider the loop fired from, for the trace line only
@@ -1052,6 +1196,16 @@ def run_leg(k0, trade_side):
         assert d == _board0, (
             'the target board moved mid-walk, %+d -> %+d. It is set once at the trade open and '
             'every test downstream reads it.' % (_board0, d))
+        # JOE 1013'S `left-target-dr` TAG, MAINTAINED AT THE TOP OF THE BAR, BEFORE ANY `continue`.
+        # IT HAS TO BE HERE. Placed lower down - after the baton block - it was skipped on every bar
+        # that `continue`s, and a baton pass is one of those bars. Measured on the 07-18 16:07
+        # LONG: ws6 crossed oob -> ib at 2026-07-18 18:12:00, the same bar the baton passed to ws5,
+        # so the cross was missed and ws6 was not tagged until its NEXT cross at 18:13:15. Same
+        # class of bug as the `held` holder list, fixed 1012 for the same reason.
+        if LASTMILE:
+            for _tt in range(1, LOOP_TF if LOOP_TF is not None else LIN_CEIL):
+                if _tt in R and _tt not in xtag and oobf(_tt, j - 1, d) and not oobf(_tt, j, d):
+                    xtag[_tt] = j
         px = float(PX[j])
         if np.isfinite(px) and px > 0:
             adv = -((px - p0) / p0 * 100.0 * sgn)
@@ -1387,8 +1541,9 @@ def run_leg(k0, trade_side):
                               ('LOOKBACK HIT: a same-side ws1-cp at %s, inside the %d-bar window '
                                '— STUBBED, no action taken.' % (SC.U(lb), LOOP_LB)) if lb
                               else ('no same-side ws1-cp in the %d bars before it.' % LOOP_LB))))
-        if rider is not None and (EXH_LOOP == 'always'
-                                  or (EXH_LOOP == 'after_loop' and exh_armed)):
+        if (rider is not None and not XIB
+                and (EXH_LOOP == 'always'
+                     or (EXH_LOOP == 'after_loop' and exh_armed))):
             e = exhausted(rider, j, d, LIN_CEIL)
             if e is not None:
                 # A HELD LEG CANNOT BE RE-EXHAUSTED. Joe 1011, on the W_GC_HOLD='walk' run that
@@ -1434,6 +1589,8 @@ def run_leg(k0, trade_side):
             # This is the ONE place W_LOOP constrains lineage, and it is a START condition, not a
             # reach - lineage's reach is LIN_CEIL throughout.
             jmax = LOOP_TF if LOOP_TF is not None else LIN_CEIL
+            if LASTMILE:
+                jmax = min(jmax, LASTMILE_KICK_TFCAP)   # Joe 1013's cap, last-mile mode only
             c = [t for t in ALL_TF if t <= jmax and oobf(t, j, d)]
             if c:
                 rider = min(c) if KICK == 'low' else max(c)
@@ -1459,8 +1616,29 @@ def run_leg(k0, trade_side):
                                   ', '.join('ws%d %.2f %s' % (t, float(R[t][j]), bnd(t, j, d))
                                             for t in _rc) or 'none, at lineage\'s ceiling')))
                 held_st[_h] = _now
-        cand = [t for t in range(rider + 1, min(rider + LIN_HOP, LIN_CEIL) + 1)
-                if baton_ok(t, j, d)]
+        if PASS == 'crossing_to_ib':
+            # JOE 1013'S MODE. The trigger is the RIDER returning inside the fence, so this does not
+            # ask `baton_ok` of the lines above - it asks one question of the rider.
+            #   `rider_oob` is per-rider state, reset on every pass. A rider that is already IB when
+            #   it arrives therefore waits for its OWN oob excursion before it can hand over, which
+            #   is what puts his ws2 pass at ~18:07 instead of on the bar ws2 received the baton.
+            if oobf(rider, j, d):
+                rider_oob = True
+            # THE RECEIVER MUST ITSELF BE towards-dr, Joe 1013: *"#1 apply the towards-dr test"*,
+            # after the measurement. Until this the baton went to rider+1 whatever its state, so a
+            # line already tagged `left-target-dr` could take it: on the 07-18 16:07 LONG the baton
+            # went to ws5 at 2026-07-18 18:12:00 and exhaustion then fired a bar later on ws5's own
+            # reach, ending at 18:13:00 and +1.7511% instead of 18:12:00 and +1.7205%.
+            # THE CAP IS THE LOOP TF, the same bound exhaustion's reach carries - a receiver above
+            # it would be a line this walk has no business with (Joe 1013).
+            _top = min(LIN_CEIL, LOOP_TF) if LOOP_TF is not None else LIN_CEIL
+            _nxt = rider + 1
+            cand = [_nxt] if (rider_oob and not oobf(rider, j, d)
+                              and _nxt <= _top and _nxt in R
+                              and towards_dr(_nxt, j, d, xtag)) else []
+        else:
+            cand = [t for t in range(rider + 1, min(rider + LIN_HOP, LIN_CEIL) + 1)
+                    if baton_ok(t, j, d)]
         # W_TRACE_LIN — REPORTING ONLY, no branch reads it. Joe 1011, on the silence after a w_loop
         # recycled the rider to ws1: *"there's no events, no line data, and no reasons stating why
         # the lineage stopped at ws1"*. A resting walk emits nothing, so this says what lineage
@@ -1481,12 +1659,24 @@ def run_leg(k0, trade_side):
                               rider, 'STALLED' if _st else 'not stalled')))
                 lin_prev = _key
         if cand:
+            _was = rider
             rider = max(cand)
-            tr.append((j, 'baton -> ws%d %s (r %.2f)'
+            rider_oob = False      # per-rider, so the new rider owes its own oob excursion
+            xib_stall_said = False
+            tr.append((j, 'baton -> ws%d %s (r %.2f%s)'
                        % (rider, BATON if BATON != 'oob' else PASS,
-                          float(R[rider][j])))); continue
+                          float(R[rider][j]),
+                          ', ws%d crossed back inside the fence at %.2f' % (_was, float(R[_was][j]))
+                          if PASS == 'crossing_to_ib' else ''))); continue
+        # ---- JOE 1013'S CYCLE EXHAUSTION, LAST-MILE ONLY. The tag itself is maintained at the TOP
+        # of this loop, not here - see the note there.
+        if LASTMILE:
+            _xe = exhausted_cycle(rider, j, d, xtag)
+            if _xe is not None:
+                tr.append((j, 'EXHAUSTED on ws%d%s — %s' % (rider, _lp(looped), _xe)))
+                return j, 'exhaustion', mae, ceil_bar, hand, tr
         # THE EXHAUSTION SCAN, over every baton HOLDER. See W_EXH_WHO.
-        if EXH_LOOP == 'on_stall' and EXH_WHO == 'holders':
+        if EXH_LOOP == 'on_stall' and EXH_WHO == 'holders' and not XIB:
             _who = held if held else [rider]
             _ex = [(t, exhausted(t, j, d, LIN_CEIL)) for t in _who if ST[(t, d)][j]]
             _ex = [(t, e) for t, e in _ex if e is not None]
@@ -1515,7 +1705,7 @@ def run_leg(k0, trade_side):
                             return j, 'loop exhaustion', mae, ceil_bar, hand, tr
                 continue
         if ST[(rider, d)][j]:
-            if EXH_LOOP == 'on_stall' and EXH_WHO == 'rider':
+            if EXH_LOOP == 'on_stall' and EXH_WHO == 'rider' and not XIB:
                 e = exhausted(rider, j, d, LIN_CEIL)
                 if e is not None:
                     # A HELD LEG CANNOT BE RE-EXHAUSTED - see the note at the other site.
@@ -1550,8 +1740,11 @@ def run_leg(k0, trade_side):
             # AN OPEN w_loop IS NOT CLOSED BY `final stalled`. Joe 1011: *"you've dropped the
             # ws1-cp event that follows ws{loop_tf}r oob"* - with the ceiling at the loop TF the
             # parked rider has an empty reach, so `final stalled` was ending the leg before the
-            # forward ws1-cp could end the loop. His spec puts the loop's end AT the cp, so the
-            # walk waits for it.
+            # forward ws1-cp could end the loop.
+            # ATTRIBUTION CORRECTED 1013. This used to read "His spec puts the loop's end AT the
+            # cp, so the walk waits for it". Joe 1013: *"this was an observation, not a mech"*. He
+            # described what he saw at one bar; MAKING THE WALK WAIT FOR THE cp IS MINE. It is
+            # reachable as W_LOOP_END='oob' if the recycle should fire on the oob bar instead.
             if loop_end_armed:
                 if not loop_stall_said:          # ONE row per open loop, not one per stall bar
                     loop_stall_said = True
@@ -1560,10 +1753,23 @@ def run_leg(k0, trade_side):
                                   'that ends it. Reported once per loop, not per bar.'
                                % (rider, looped, SC.U(loop_open))))
                 continue
-            tr.append((j, 'final stalled on ws%d (r %.2f %s)%s'
-                       % (rider, float(R[rider][j]), bnd(rider, j, d),
-                          " - AT LINEAGE'S CEILING ws%d" % LIN_CEIL if STALL_UP else '')))
-            return j, 'final stalled', mae, ceil_bar, hand, tr
+            # `final stalled` IS ALSO SUPPRESSED IN crossing_to_ib MODE, for the same reason the
+            # exhaustion exit is - both are STALL-BASED ENDS, and in this mode a stalled rider is
+            # not an end, it is a rider that still owes its oob -> IB cross. Measured: with
+            # exhaustion suppressed and this one live, the 17:39:10 handoff still ended at 17:39:20
+            # on `final stalled on ws1 (r 88.98 O)`, 5 s in, so Joe's ws2 pass at ~18:07 stayed
+            # unreachable. These are the ONLY two exits this mode suppresses; the ceiling, the MAE
+            # stop, the x-cross and the >ws12 branch are untouched.
+            if not XIB:
+                tr.append((j, 'final stalled on ws%d (r %.2f %s)%s'
+                           % (rider, float(R[rider][j]), bnd(rider, j, d),
+                              " - AT LINEAGE'S CEILING ws%d" % LIN_CEIL if STALL_UP else '')))
+                return j, 'final stalled', mae, ceil_bar, hand, tr
+            if not xib_stall_said:
+                xib_stall_said = True
+                tr.append((j, 'lineage ruled ws%d STALLED; crossing_to_ib IGNORES it — the baton '
+                              'moves on the rider\'s oob -> IB cross, not on its stall. Reported '
+                              'once per rider.' % rider))
         if (not NOX) and xcond(rider, j, d):
             tr.append((j, 'x-cross on ws%d' % rider))
             return j, 'x-cross', mae, ceil_bar, hand, tr

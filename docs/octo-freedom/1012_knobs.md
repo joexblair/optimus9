@@ -100,6 +100,22 @@ still set once, at the open.
 — `stall` +7.1028%, `n` +7.1898%, `first` +7.0684%, against the standing +6.4370%. The default is
 the proposal Joe banked. He has not ruled between them. See `1013_mom_extend.md`.
 
+## THE LAST MILE, 1013
+
+| knob | default | what it does |
+|---|---|---|
+| `W_ARM` | mage | gains **`lastmile`**: the walk is ARMED at its first bar, with no ws1-cp and no ws{ARM_TF}Mage arm, because the extension handed it a live leg |
+| `LIN_LASTMILE_KCKSTRT_TFCAP` | 5 | Joe's knob, his name. Caps the KICKSTART's reach in last-mile mode only. The baton is not capped by it |
+| `W_PASS` | oob | gains **`crossing_to_ib`**: the baton moves on the RIDER's own oob → ib cross, not on a test of the lines above. No wob on the cross |
+| `W_KICK` | off | defaults to **high** in last-mile mode, still overridable |
+| `W_NO_GT12` | 0 | defaults to **1** in last-mile mode, still overridable — the last mile is lineage, and the >ws12 mech would take ownership of the exit |
+
+In last-mile mode the EXHAUSTION event is the walk's end, with two changes that apply **only** to
+this mech: its inner test becomes "none of the reach is towards-dr" in place of "all the reach is
+inside the ex-fence", and that test replaces the stall gate. Joe 1013: the cycle test *"replaces the
+stall gate ONLY for the last mile mech"*. `towards-dr` is his pair of states — has momentum, and has
+not been tagged `left-target-dr` by crossing oob → ib. See `1013_last_mile.md`.
+
 ## NOT A KNOB
 
 The target board. Joe 1012: *"it can only be set once at the open of the trade"*. There is no env
