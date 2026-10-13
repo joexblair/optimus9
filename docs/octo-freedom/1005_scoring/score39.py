@@ -37,7 +37,11 @@ sys.stderr = _e
 # a day AFTER this date is NOT in the cache, and K() would searchsorted past the end of ts and
 # index the last bar instead of failing. 2026-10-04 covers 09-25..10-03. For 10-04 use 2026-10-05
 # (build it first: build_tape.py 2026-10-05).
-EM = int(dt.datetime.strptime(_os.environ.get('LG_TAPE_END', '2026-10-04'), '%Y-%m-%d')
+# DEFAULT MOVED TO THE MACHINE'S TAPE, 1013. Joe: *"I need full state in the live machine without
+# needing multiple versions of the same arg"*. Every run of the chain passed LG_TAPE_END=2026-10-05
+# by hand, and a run that forgot it silently read a tape 1 day short - and, for the dws lines, a
+# tape with no dws cache on it at all. 2026-10-04 is still reachable by setting the env var.
+EM = int(dt.datetime.strptime(_os.environ.get('LG_TAPE_END', '2026-10-05'), '%Y-%m-%d')
         .replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
 # HI, LO, REV_WOB, GAP_MAX, G5EXTREMA_LOOKBACK_BARS and TOL are read from `lazy_g_config`
 # below, once `db` exists. Joe 1006: *"anything that's currently hardcoded in lazy-g and

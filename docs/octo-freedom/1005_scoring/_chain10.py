@@ -68,7 +68,7 @@ TRIG_TF, CEIL_HI = int(W['ceil_trig_tf']), int(W['ceil_hi'])
 # start at ws12 and rise on the ws12r oob crossing - it is the given number from the leg's open.
 # That is how `_linonly.py` ran the two walks Joe has been reading, so this keeps them comparable.
 # STATED because the banked build's ceiling is a two-step base_hi -> ceil_hi.
-_CEIL = os.environ.get('W_CEIL')
+_CEIL = os.environ.get('W_CEIL', '30')
 if _CEIL:
     BASE_HI = CEIL_HI = int(_CEIL)
 # W_NO_GT12=1 turns the whole >ws12r oob mech OFF. Joe 1009: *">ws12r oob off"*. No oob run is
@@ -118,7 +118,7 @@ KICK = os.environ.get('W_KICK', 'off')
 #   IT LOOPS AGAIN if the walk climbs back to a loop TF that is still oob. No cap - Joe set none.
 #   THE LOOP IS CHECKED BEFORE EXHAUSTION on the same bar, because his sentence makes exhaustion
 #     the thing that ends the POST-loop walk.
-LOOP_TFS = sorted(int(z) for z in os.environ.get('W_LOOP_TF', '').replace(' ', '').split(',') if z)
+LOOP_TFS = sorted(int(z) for z in os.environ.get('W_LOOP_TF', '10').replace(' ', '').split(',') if z)
 # ---- TWO CEILINGS, SPLIT 1012. SRP.
 #
 # Joe 1012: *"yes they need to be split. CEIL might need 10 +2 - the +2 allows for correct
@@ -145,6 +145,26 @@ if LOOP_TFS:
         % (LIN_CEIL, LOOP_TF, LIN_HOP))
 else:
     LIN_CEIL = CEIL_HI
+# ============================================================================================
+# THE MACHINE, 1013. Joe: *"make it the machine"* / *"I need full state in the live machine without
+# needing multiple versions of the same arg"* / *"the history is in the past for us now. the machine
+# we're building now is the only one - if we choose to bring a historical machine into our working
+# machine, then we can modify it to work with the live machine"*.
+#
+# FOUR DEFAULTS MOVED TO THEIR RULED VALUES. Before this, every ruling of his lived as a knob while
+# the default kept the superseded value, so an unset run was the OLD mech. His words, and what the
+# default was:
+#     W_ARM       mage -> cp    Joe 1011: "replace the current ws2Mage lineage walk qualifier
+#                               with ws1-cp"
+#     W_ARM_TF    2    -> 1     Joe 1009: "let's swap ws2Mage with ws1Mage"
+#     W_LOOP_TF   off  -> 10    Joe 1013: "ws10 is the loop tf"
+#     W_CEIL      unset-> 30    Joe 1013: "ws30 is the ceiling"
+# THE HISTORY MOVES WITH THEM, on his ruling: every lineage-walk figure banked before 1013 was
+# produced on the ws2Mage arm with no loop TF and no flat ceiling. Those numbers are the past.
+# NOT AFFECTED: the +8.0377% chain. `_ibmech` and `_extmom` contain no arm reference, and in
+# last-mile mode `armed` is True at the first bar so neither arming block runs. Proven by reading
+# every MARM / ARM == read in this file.
+# ============================================================================================
 # `ws1-cp` — JOE'S NAME, 1011. The ws1 CHECKPOINT. It has two jobs.
 #
 #   W_ARM 'cp'     the ws1-cp REPLACES the ws2Mage arm as the walk's qualifier. Joe 1011:
@@ -373,7 +393,7 @@ assert CP_DWELL >= 1, 'W_CP_DWELL is the ws1-cp hold in bars and must be at leas
 #   exit'), which would end the last mile on a non-lineage branch. On this handoff ws12r is already
 #   oob, so the handover fires 6.1 min in at ~17:45:20 and the lineage walk never climbs at all.
 #   W_NO_GT12 still overrides. MY READING OF "using lineage", STATED.
-ARM = os.environ.get('W_ARM', 'mage')
+ARM = os.environ.get('W_ARM', 'cp')
 assert ARM in ('mage', 'cp', 'lastmile'), 'W_ARM must be mage, cp or lastmile'
 LASTMILE = ARM == 'lastmile'
 # JOE'S KNOB, HIS NAME, 1013: *"I think for last-mile work, the kickstart TF should be limited to
@@ -713,9 +733,42 @@ if GC:
 # constant thorn in our side. let's swap ws2Mage with ws1Mage"*. The walk cannot exit before it
 # arms, and 206 of 1,593 legs never armed at all - they summed -417.09, with 162 of them exiting on
 # `mae breach`. W_ARM_TF 2 is the banked line; 1 is Joe's swap.
-ARM_TF = int(os.environ.get('W_ARM_TF', 2))
+ARM_TF = int(os.environ.get('W_ARM_TF', 1))
 MARM = SC.Mg[ARM_TF][:N] if ARM_TF in SC.Mg else np.asarray(SC.LD(ARM_TF * 60, 'Mage'), float)[:N]
-_P('the arming line is ws%dMage (banked ws2Mage)' % ARM_TF)
+_P('the arming line is ws%dMage (ruled ws1Mage, Joe 1009)' % ARM_TF)
+# THE RULED CHECK, 1013. Joe: *"does this mean that when I say 'bank', you're not fixing the config
+# as 'confirmed and in-use'?"* - it did not, and this is the guard. It only PRINTS: no default moves
+# here, so no banked number shifts. An off-ruled run now says so before it reports a figure.
+import _ruled
+_EXP = os.environ.get('W_EXPERIMENT', '0') == '1'
+for _rl in _ruled.line({'W_ARM': ARM, 'W_ARM_TF': ARM_TF,
+                        'W_CEIL': _CEIL,
+                        'W_LOOP_TF': LOOP_TF if LOOP_TF is not None else 'off',
+                        'W_KICK': KICK, 'W_NO_GT12': '1' if NO12 else '0', 'W_PASS': PASS,
+                        'W_CP_DWELL': CP_DWELL, 'W_CP_MODE': CP_MODE, 'W_STALL_N': STALL_N,
+                        'W_LOOP_EXH': EXH_LOOP,
+                        'LIN_LASTMILE_KCKSTRT_TFCAP': LASTMILE_KICK_TFCAP},
+                       lastmile=LASTMILE):
+    _P(_rl)
+# THE GATE, 1013. A printed warning only works if someone reads it, and the run that went wrong was
+# one I did not read. An off-ruled run now REFUSES unless W_EXPERIMENT=1 says the deviation is
+# deliberate - and that flag is itself printed, so a deliberate run says so in its own output.
+_OFF = _ruled.check({'W_ARM': ARM, 'W_ARM_TF': ARM_TF,
+                     'W_CEIL': _CEIL,
+                     'W_LOOP_TF': LOOP_TF if LOOP_TF is not None else 'off',
+                     'W_KICK': KICK, 'W_NO_GT12': '1' if NO12 else '0', 'W_PASS': PASS,
+                     'W_CP_DWELL': CP_DWELL, 'W_CP_MODE': CP_MODE, 'W_STALL_N': STALL_N,
+                     'W_LOOP_EXH': EXH_LOOP,
+                     'LIN_LASTMILE_KCKSTRT_TFCAP': LASTMILE_KICK_TFCAP},
+                    lastmile=LASTMILE)
+if _OFF and not _EXP:
+    raise SystemExit(
+        'REFUSED: %d knob(s) are off-ruled and W_EXPERIMENT is not set.\n%s\n'
+        'Set W_EXPERIMENT=1 to run a deliberate deviation.'
+        % (len(_OFF), '\n'.join('  %s running %s, ruled %s (%s)' % (k, a, v, w)
+                                 for k, a, v, w, _q in _OFF)))
+if _EXP:
+    _P('W_EXPERIMENT=1 — this run is a DELIBERATE deviation from the ruled set')
 BANK = {t: momo_bank(db, t) for t in ALL_TF}; db.disconnect()
 ST = {}
 STALL_RAW = {}        # the ungated stall mask per (tf, side). REPORTING ONLY, no branch reads it.
