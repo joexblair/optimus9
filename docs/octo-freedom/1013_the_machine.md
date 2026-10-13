@@ -16,12 +16,23 @@ multiple versions of the same arg"*.
 | # | link | mech | computed here? |
 |---|---|---|---|
 | 1 | the trade opens | Joe's open mech | **not shared yet** — the four opens are declared |
-| 2 | the close event fires | `_ibmech`, the ws1Mage IB-cross mech | **declared input**, from the walk banked in `2fa091e` / `ba38629` |
+| 2 | the close event fires | `_ibmech`, the ws1Mage IB-cross mech | **yes** — `IBMech.walk(open_bar, dr)`, closed 1013 |
 | 3 | the close is held and extended | `_extmom`, the momentum extension | **yes** — `exit_bar` is called, the extension bar is no longer a literal |
 | 4 | the last mile walks | `_chain10` under `W_ARM=lastmile` | **yes** |
 
-Link 2 is the one hand-stitch left. Wiring the IB-cross walk into `machine.py` is the next step, and
-until it is done this is not an end-to-end run. Stated so it is not mistaken for one.
+LINK 2 CLOSED, 1013. Joe: *"close link 2"*. `IBMech.walk` scans forward from the open on the target
+board's side only, takes the decision bar at each target-side ws1-cp (the g30 delegation when it
+fires, else the ws1Mage IB bar) and reads the 5-minute grace window; the first REVERSE is the close.
+All four close bars are now COMPUTED and each is asserted against the bar banked in `2fa091e` /
+`ba38629` — all four match. Its class docstring promised `entries()` and `walk()` and neither
+existed; the walk lived in throwaway drivers, which is how a lineage walk got substituted for it at
+the 2026-07-18 18:12:00 bar.
+
+`machine.chain(open_bar, dr)` runs all three live links as ONE function, so a caller cannot stitch a
+different mech into the middle of it.
+
+THE ONLY DECLARED INPUT LEFT IS LINK 1: the trade's open bar and side. Joe has not shared the open
+mech.
 
 ## THE RESULT, FROZEN AND ASSERTED
 

@@ -89,7 +89,12 @@ LADDER_ALL = list(range(1, 25)) + [30, 45, 60, 90]
 
 
 class IBMech:
-    """The mech over one tape. Build once, then `entries()` and `walk()`."""
+    """The mech over one tape. Build once, then `walk()`.
+
+    DOCSTRING CORRECTED 1013: it promised `entries()` and `walk()` and neither existed - the walk
+    lived in throwaway drivers, which is how a lineage walk got substituted for it at the
+    2026-07-18 18:12:00 bar. `walk()` is now here, the one place that owns it.
+    """
 
     def __init__(self, sc):
         self.sc = sc
@@ -182,6 +187,50 @@ class IBMech:
             if self.xl < self.mg[t][cp] < self.xh:
                 return t
         return None
+
+    def walk(self, k0, dr):
+        """THE CLOSE EVENT FOR AN OPEN TRADE. -> (close bar, why, rows). 1013, closing link 2.
+
+            k0   the bar the trade opened on
+            dr   the trade's side at its open. +1 a SHORT, -1 a LONG.
+
+        The board is -dr, the end the trade is heading to, set once at the open - the same rule
+        `_chain10.run_leg` carries. DECISIONS HAPPEN ONLY AT TARGET-SIDE cps, Joe 1012: *"03:45 is
+        same-side as 02:17, so it can't be the exit because it is not on the target side"*. A cp on
+        the trade's own side is skipped without a decision.
+
+        At each target-side cp the decision bar is taken (the g30 delegation when it fires, else the
+        ws1Mage IB bar) and the 5-minute grace window gives the verdict. The FIRST REVERSE closes
+        the trade, at the bar it printed on. RIDE and SILENT carry the walk to the next cp.
+
+        CAUSAL, AND A FORWARD LOOP - Joe's form: the cp dwell is counted forward from `k0`, bar by
+        bar, and nothing is read past the bar being decided. `cps()` is not used here because it
+        materialises every cp on the tape for both sides; this scans the board's side only, from the
+        open, and stops at the close.
+        """
+        d = -int(dr)
+        assert d in (-1, 1), 'the trade side must be +1 SHORT or -1 LONG, got %r' % (dr,)
+        rows = []
+        run = 0
+        j = max(int(k0), 1)
+        while j < self.n:
+            run = run + 1 if self._mode1(j, d) else 0
+            if run != DWELL:
+                j += 1
+                continue
+            cp = j
+            dec, via = self.decision_bar(cp, d)
+            if dec is None:
+                rows.append((cp, 'no decision bar on the tape', None, None))
+                break
+            kind, t, bar, move = self.verdict(cp, dec, d)
+            rows.append((cp, '%s via %s' % (kind, via), dec,
+                         None if t is None else ('ws%dMage %+.2f' % (t, move))))
+            if kind == 'REVERSE':
+                return bar, 'REVERSE at a target-side ws1-cp', rows
+            j = max(j, dec) + 1
+            run = 0
+        return None, 'no REVERSE on the tape after the open', rows
 
     def verdict(self, cp, dec, tgt):
         """THE 5-MINUTE GRACE IS THE VERDICT. -> (kind, T, bar, move).

@@ -18,11 +18,15 @@ THE CHAIN, four links:
     3  the close is HELD and extended       `_extmom`, the momentum extension
     4  the last mile walks                  `_chain10` under W_ARM=lastmile
 
-LINK 2 IS STILL DECLARED INPUT, NOT COMPUTED HERE. The four close bars below were produced by the
-IB-cross walk banked in 2fa091e / ba38629, and wiring that walk into this entry point is the one
-hand-stitch left. STATED so it is not mistaken for an end-to-end run.
+LINK 2 IS COMPUTED, 1013. Joe: *"close link 2"*. `_ibmech.IBMech.walk(open_bar, dr)` returns the
+close bar, so it is no longer a literal. The four bars banked in 2fa091e / ba38629 are kept below as
+the EXPECTED values and asserted - if the mech and the banked walk ever disagree, this says so
+rather than quietly taking the mech's answer.
 
 LINK 3 IS COMPUTED. `_extmom.exit_bar` is called here, so the extension bar is no longer a literal.
+
+LINK 1 IS THE ONLY DECLARED INPUT LEFT: the trade's open bar and side. Joe has not shared the open
+mech.
 
 THE FROZEN REFERENCE is asserted at the end. A regression fails this script rather than waiting to
 be spotted in a table.
@@ -43,13 +47,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 import _chain10 as C
 import _extmom as X
+import _ibmech as IB
 
 SC = C.SC
 U = SC.U
 N = C.N
 PX = np.asarray(SC.PX, float)[:N]
 
-# THE FOUR TRADES. (label, entry, the IB-cross close bar, dr)   dr +1 = SHORT, dr -1 = LONG.
+# THE FOUR TRADES. (label, entry, the EXPECTED close bar, dr)   dr +1 = SHORT, dr -1 = LONG.
+# The close bar is COMPUTED by _ibmech.walk; the value here is the banked one it is checked against.
 TRADES = [
     ('07-17 21:58 LONG', '2026-07-17 21:58:00', '2026-07-18 01:15:20', -1),
     ('07-18 02:31 SHORT', '2026-07-18 02:31:00', '2026-07-18 10:40:40', +1),
@@ -72,16 +78,52 @@ def gross(e, x, dr):
     return (PX[e] - PX[x]) / PX[e] * 100.0 if dr > 0 else (PX[x] - PX[e]) / PX[e] * 100.0
 
 
-def main():
+def build():
+    """The machine's three live links, built once. -> (ib, em, rows)"""
     ws = (12, 15, 20, 30)
     dn = [k for k, _ in sorted(C.DWS_TF.items(), key=lambda kv: kv[1])]
     rows = [('ws%d' % t, C.MOMT[t]) for t in ws] + [(k, C.MOMD[k]) for k in dn]
     rn = X.ride_name()
     ride = SC.LDN(rn) if rn.startswith('dws') else SC.LD(X.TF * 60, 'r')
     em = X.ExtMom(rows, ride, C.BANK[X.TF], X.TF, C.EXF_HI, C.EXF_LO, N, C.STALL_N)
+    ib = IB.IBMech(SC)
+    C._P('link 2 live: IB-cross ceiling ws%d, cp dwell %d bars, IB wob %d bars, grace %d bars, '
+         'g30 delegation %s at %d bars'
+         % (IB.CEIL, IB.DWELL, IB.WOB, IB.REVWALK, 'ON' if IB.G30 else 'off', IB.G30BARS))
     C._P('the machine: extension on %s, n >= %d of %d, exit %r | last mile: kick cap ws%d, '
          'loopTF ws%s, lineage ceiling ws%d'
          % (rn, X.N_MIN, len(rows), X.EXIT, C.LASTMILE_KICK_TFCAP, C.LOOP_TF, C.LIN_CEIL))
+    return ib, em, rows
+
+
+def chain(e, dr, ib, em, rows):
+    """THE WHOLE CHAIN FOR ONE OPEN. -> dict, or None at link 2.
+
+        e    the open bar.   dr  +1 a SHORT, -1 a LONG.
+
+    Link 2 the close event, link 3 the hold and extension, link 4 the last mile. Every bar is
+    computed; the only input is the open. ONE function, so no caller can stitch a different mech
+    into the middle of it - that substitution is what produced the wrong 18:12:00 answer on 1013.
+    """
+    board = dr                      # the close column's board is the FLIPPED dr
+    c, why_c, ib_rows = ib.walk(e, dr)
+    if c is None:
+        return {'open': e, 'dr': dr, 'close': None, 'why_close': why_c, 'ib_rows': ib_rows}
+    n = em.n_at(c, board)
+    held = em.holds(c, board)
+    xb, why_x = em.exit_bar(c, board)
+    xb = c if xb is None else xb
+    k, why, mae, cb, hand, tr = C.run_leg(xb, dr)
+    kk = xb if k is None else k
+    return {'open': e, 'dr': dr, 'close': c, 'why_close': why_c, 'ib_rows': ib_rows,
+            'n': n, 'held': held, 'ext': xb, 'why_ext': why_x,
+            'end': kk, 'why_end': why, 'mae': mae, 'tr': tr,
+            'gross_close': gross(e, c, dr), 'gross_ext': gross(e, xb, dr),
+            'gross_end': gross(e, kk, dr)}
+
+
+def main():
+    ib, em, rows = build()
 
     print()
     print('| trade | close event | n of %d | held? | extension fires | last mile ends | why | '
@@ -90,19 +132,19 @@ def main():
     t0 = t1 = 0.0
     bad = []
     for lbl, ets, cts, dr in TRADES:
-        e, c = SC.K(ets), SC.K(cts)
-        board = dr                      # the close column's board is the FLIPPED dr
-        n = em.n_at(c, board)
-        xb, why_x = em.exit_bar(c, board)
-        xb = c if xb is None else xb
-        k, why, mae, cb, hand, tr = C.run_leg(xb, dr)
-        kk = xb if k is None else k
-        g0, g1 = gross(e, xb, dr), gross(e, kk, dr)
+        e = SC.K(ets)
+        r = chain(e, dr, ib, em, rows)
+        if r['close'] is None:
+            bad.append('%s link 2 found no close event: %s' % (lbl, r['why_close']))
+            continue
+        if r['close'] != SC.K(cts):
+            bad.append('%s computed close %s, banked %s' % (lbl, U(r['close']), U(SC.K(cts))))
+        g0, g1 = r['gross_ext'], r['gross_end']
         t0 += g0
         t1 += g1
         print('| %s | %s | %d | %s | %s | %s | %s | %+.4f%% | %+.4f%% | %+.4f%% |'
-              % (lbl, U(c), n, 'YES' if em.holds(c, board) else 'no', U(xb), U(kk),
-                 str(why).replace('|', '·'), g0, g1, g1 - g0))
+              % (lbl, U(r['close']), r['n'], 'YES' if r['held'] else 'no', U(r['ext']),
+                 U(r['end']), str(r['why_end']).replace('|', '·'), g0, g1, g1 - g0))
         f = FROZEN.get(lbl)
         if f is not None:
             if abs(g0 - f[0]) > TOL:
