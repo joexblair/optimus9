@@ -91,6 +91,54 @@ exhaustion line around where-ever it is on the board"*.
 - NOT MONOTONE ACROSS THE WHOLE LADDER, stated: ws9 and ws10 tagged before ws7 did, and ws8 never
   reached oob at all. The cascade is monotone for ws1 through ws7 only.
 
+## THE BLAST-RADIUS GATE ON THE JUMPSTART — 1013
+
+Joe 1013: *"the last mile mech need an update. it shouldn't have fired, for blast-radius reasons: at
+18:44:15 ws1 and ws2 are tagged ib, and ws4 is oob and heading away from target-dr / blast-radius
+says that the TFs above ws1,2,4 will follow the lower lines / this means the jumpstart should not
+fire - the blast-radius + ws1-cp crossing to ib tells the mech that there is no momentum left"* /
+*"it's r"* / *"a 12-bar walk forward would likely settle the verdict with more votes"* / *"we bank
+the {knob:12,'LINFIN_WALK_DELAy'}-bar gate"*.
+
+**IT IS A DELAY, NOT A PEEK.** His own word. The verdict needs the 12 bars to form, so the walk is
+HELD for them and the verdict lands at handoff + 12. Deciding at the handoff bar on bars that come
+after it would be lookahead.
+
+A line votes `AWAY` at a bar when it is oob on the target end AND further from that end than it was
+at the handoff. The gate fires when `LINFIN_WALK_AWAY_MIN` lines have voted at least once. Lines are
+the TFs under the loop TF, matching the tag rule.
+
+### why `AWAY` alone — the full vote count is useless
+
+| handoff | the last mile did | votes of 108 | LEFT | AWAY | lines voting AWAY |
+|---|---|---|---|---|---|
+| 07-18 18:12 SHORT | -0.1849% | 29 | 12 | **17** | **3 of 9** |
+| 07-17 21:58 LONG | +0.0304% | 28 | 27 | 1 | 1 of 9 |
+| 07-18 08:46 LONG | +0.0084% | 38 | 37 | 1 | 1 of 9 |
+| 07-18 16:07 LONG | +0.9238% | 97 | 96 | 1 | 1 of 9 |
+| 07-18 02:31 SHORT | -0.0277% | 67 | 67 | **0** | **0 of 9** |
+
+- `LEFT` — been oob, now in-fence — is the **winner's** signature: 96 of 16:07's 97 votes. It is not
+  a stand-down signal, and the combined count reads highest on the biggest winner.
+- `AWAY` separates 3 lines from 1, cleanly.
+- JOE'S ws2r CALL WAS RIGHT: at the handoff bar ws2r 10.61 is oob and moving toward the target, a
+  blip. Walked 12 bars it votes AWAY on 7 of them.
+- IT CATCHES 1 OF THE 2 LOSERS. 07-18 02:31 lost 0.0277% with 0 AWAY votes, and nothing in this
+  measurement explains that one. Stated.
+
+### what the gate is worth
+
+| | the 07-18 18:12 SHORT |
+|---|---|
+| no gate — the last mile runs to exhaustion at 2026-07-18 18:58:55 | +0.2592% |
+| with the gate — the held close goes at 2026-07-18 18:45:15 | **+0.3769%** |
+| the gross at the handoff bar 18:44:15, for reference only | +0.4441% |
+
+- the 12-bar delay costs 0.0672% against the handoff bar. That bar is NOT available as an exit — the
+  verdict does not exist there.
+- the four banked trades sit at 1, 0, 1, 1 AWAY lines, so the gate fires on none of them and
+  **+8.0377% does not move**. Verified by a full run.
+
 ## ALL FOUR TRADES
 
 | trade | momentum test held the close? | last mile starts | ends at | +min | why | riders walked | gross at the start | gross at the end | moved |

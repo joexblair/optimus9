@@ -404,6 +404,40 @@ LASTMILE = ARM == 'lastmile'
 # can never become the rider, so the ~18:09 ending on ws7 was unreachable. Under the cap the
 # highest oob line at or under ws5 is ws1 (r 95.74).
 LASTMILE_KICK_TFCAP = int(os.environ.get('LIN_LASTMILE_KCKSTRT_TFCAP', 5))
+# JOE'S KNOB, HIS NAME AND HIS SPELLING, 1013: *"we bank the {knob:12,'LINFIN_WALK_DELAy'}-bar
+# gate"*. THE BLAST-RADIUS GATE ON THE JUMPSTART. Joe: *"it shouldn't have fired, for blast-radius
+# reasons: at 18:44:15 ws1 and ws2 are tagged ib, and ws4 is oob and heading away from target-dr /
+# blast-radius says that the TFs above ws1,2,4 will follow the lower lines / this means the
+# jumpstart should not fire - the blast-radius + ws1-cp crossing to ib tells the mech that there is
+# no momentum left"*.
+#
+# IT IS A DELAY, NOT A PEEK. His own word. The verdict needs the 12 bars to form, so the walk is
+# HELD for them and the verdict lands at handoff + 12. Deciding at the handoff bar on bars that come
+# after it would be lookahead - information later than the acting bar.
+#
+# A LINE VOTES `AWAY` at a bar when it is oob on the target end AND further from that end than it
+# was at the handoff. The gate fires when AWAY_MIN or more lines have voted at least once across
+# the walk. Lines are the TFs under the loop TF, matching the `left-target-dr` tag rule.
+#
+# WHY `AWAY` ALONE, MEASURED over the five handoffs - the full vote count is useless, the biggest
+# winner carries the most votes:
+#     handoff            the last mile did   votes/108   LEFT   AWAY   lines voting AWAY
+#     07-18 18:12 SHORT  -0.1849%                   29     12     17   3 of 9
+#     07-17 21:58 LONG   +0.0304%                   28     27      1   1 of 9
+#     07-18 08:46 LONG   +0.0084%                   38     37      1   1 of 9
+#     07-18 16:07 LONG   +0.9238%                   97     96      1   1 of 9
+#     07-18 02:31 SHORT  -0.0277%                   67     67      0   0 of 9
+# `LEFT` - been oob, now in-fence - is the WINNER's signature: 96 of 16:07's 97 votes. It is not a
+# stand-down signal. `AWAY` separates 3 lines from 1, cleanly.
+# JOE'S ws2r CALL WAS RIGHT: at the handoff bar ws2r 10.61 is oob and moving toward the target, a
+# blip; walked 12 bars it votes AWAY on 7 of them.
+#
+# AWAY_MIN 2 IS MINE, AND ANCHORED, NOT PREFERRED: every one of the three winners sits at exactly 1
+# line and the loser at 3, so 2 is the only value between them. Its name is mine too.
+# IT CATCHES 1 OF THE 2 LOSERS. 07-18 02:31 lost 0.0277% with 0 AWAY votes and nothing in this
+# measurement explains it. Stated.
+LINFIN_WALK = int(os.environ.get('LINFIN_WALK_DELAy', 12))
+LINFIN_AWAY_MIN = int(os.environ.get('LINFIN_WALK_AWAY_MIN', 2))
 if LASTMILE:
     # BOTH DEFAULTS FLIP HERE, AND BOTH STAY OVERRIDABLE - an explicitly set env var always wins,
     # so every number below can be re-measured against the other setting. KICK and NO12 are read
@@ -1103,6 +1137,36 @@ def towards_dr(t, j, d, xtag):
     return bool(MOMT[t][d][j]) and t not in xtag
 
 
+def blast_radius(k0, d):
+    """JOE 1013'S BLAST-RADIUS GATE. -> (fires, verdict bar, a trace string).
+
+    Walked from the handoff `k0` for LINFIN_WALK bars. A line votes AWAY at a bar when it is oob on
+    the target end AND further from that end than it was at `k0`. The gate fires when
+    LINFIN_AWAY_MIN or more lines have voted at least once.
+
+    CAUSAL: the verdict bar is k0 + LINFIN_WALK, so every bar read is at or before the bar the
+    verdict acts on. The walk is a DELAY, which is Joe's own word for it.
+    """
+    top = (LOOP_TF if LOOP_TF is not None else LIN_CEIL)
+    end = min(k0 + LINFIN_WALK, N - 1)
+    votes = {}
+    for t in range(1, top):
+        if t not in R:
+            continue
+        a = R[t]
+        for k in range(k0, end):
+            if oobf(t, k, d) and ((float(a[k]) < float(a[k0])) if d > 0
+                                  else (float(a[k]) > float(a[k0]))):
+                votes[t] = votes.get(t, 0) + 1
+    assert end >= k0, 'the blast-radius walk ran backwards'
+    fired = len(votes) >= LINFIN_AWAY_MIN
+    txt = ('%d line(s) voted AWAY over the %d-bar walk, min %d (%s)'
+           % (len(votes), LINFIN_WALK, LINFIN_AWAY_MIN,
+              ', '.join('ws%d %d of %d' % (t, v, LINFIN_WALK) for t, v in sorted(votes.items()))
+              or 'none'))
+    return fired, end, txt
+
+
 def exhausted_cycle(rider, j, d, xtag):
     """THE LAST MILE'S EXHAUSTION. -> a trace string, or None.
 
@@ -1202,6 +1266,16 @@ def run_leg(k0, trade_side):
     # walk a live leg, so there is no arming event to wait for. Every other mode arms on its own
     # event and this stays False. Joe 1013: *"fires kickstart at the last-mile handoff"*.
     armed = LASTMILE
+    # JOE 1013'S BLAST-RADIUS GATE, before the jumpstart can place a rider. The walk is HELD for
+    # LINFIN_WALK bars; if the lines under the loop TF have left the target end, the jumpstart does
+    # not fire and the held close goes at the verdict bar.
+    if LASTMILE:
+        _bf, _bv, _bt = blast_radius(k0, -int(trade_side))
+        if _bf:
+            return _bv, 'blast radius - the jumpstart did not fire', 0.0, None, None, [
+                (k0, 'LAST MILE HELD — the blast-radius walk opens'),
+                (_bv, 'BLAST RADIUS — %s. the jumpstart does not fire and the held close goes '
+                      'here' % _bt)]
     rider = None; mae = 0.0
     rider_oob = False      # W_PASS 'crossing_to_ib': has THIS rider been oob since it took over
     xib_stall_said = False  # one trace row per rider when crossing_to_ib ignores a stall

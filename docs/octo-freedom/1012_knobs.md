@@ -110,6 +110,9 @@ the proposal Joe banked. He has not ruled between them. See `1013_mom_extend.md`
 | `W_KICK` | off | defaults to **high** in last-mile mode, still overridable |
 | `W_NO_GT12` | 0 | defaults to **1** in last-mile mode, still overridable — the last mile is lineage, and the >ws12 mech would take ownership of the exit |
 
+| `LINFIN_WALK_DELAy` | 12 | Joe's knob, his name and his spelling. The blast-radius walk, in bars = 60 s. The last mile is HELD for it and the verdict lands at handoff + 12 |
+| `LINFIN_WALK_AWAY_MIN` | 2 | MINE, name and value. How many lines must vote AWAY for the gate to fire. Anchored: all three winning handoffs sit at exactly 1 line, the loser at 3 |
+
 In last-mile mode the EXHAUSTION event is the walk's end, with two changes that apply **only** to
 this mech: its inner test becomes "none of the reach is towards-dr" in place of "all the reach is
 inside the ex-fence", and that test replaces the stall gate. Joe 1013: the cycle test *"replaces the
