@@ -47,12 +47,20 @@ CACHE = '/home/joe/.claude/jobs/6eb9931e/tmp/momt_cache'
 STATES = ('momo', 'curl')      # Joe 1009. In the cache key, so changing it invalidates the cache.
 
 
-def _key(em, hours, warmup, tf, kw, fn):
-    return hashlib.md5(json.dumps([int(em), int(hours), int(warmup), int(tf), int(kw),
-                                   str(fn), list(STATES)]).encode()).hexdigest()[:20]
+def _key(em, hours, warmup, tf, kw, fn, line_id=None):
+    """THE LINE'S IDENTITY IS IN THE KEY, 1013. Until today the key carried the tape window, the
+    timeframe and the banked k_window but NOTHING about WHICH line was measured, so a second line
+    family on the same timeframe - the dws lines sit on tf 8, 10 and 15, same as ws8/ws10/ws15 -
+    would collide and silently load the ws mask. That is the 1008 cache-drift failure exactly.
+    ADDITIVE: line_id None reproduces the pre-1013 key, so every mask already on disk stays valid.
+    """
+    base = [int(em), int(hours), int(warmup), int(tf), int(kw), str(fn), list(STATES)]
+    if line_id is not None:
+        base.append(str(line_id))
+    return hashlib.md5(json.dumps(base).encode()).hexdigest()[:20]
 
 
-def momtrue_mask(line, tf, bank, em, hours, warmup, fn='gated', n=None, log=print):
+def momtrue_mask(line, tf, bank, em, hours, warmup, fn='gated', n=None, log=print, line_id=None):
     """Per bar, is this line mom-true, for each side. -> {+1: bool array, -1: bool array}
 
     The mask is cached on disk under a key that carries the TAPE WINDOW. Causal: `momo` fits a
@@ -61,7 +69,7 @@ def momtrue_mask(line, tf, bank, em, hours, warmup, fn='gated', n=None, log=prin
     n = len(line) if n is None else int(n)
     os.makedirs(CACHE, exist_ok=True)
     kw = int(bank['k_window'])
-    k = _key(em, hours, warmup, tf, kw, fn)
+    k = _key(em, hours, warmup, tf, kw, fn, line_id)
     p = os.path.join(CACHE, 'momt_%s.npz' % k)
     if os.path.exists(p):
         z = np.load(p)

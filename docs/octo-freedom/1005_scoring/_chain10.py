@@ -762,7 +762,13 @@ def _dgdet(j, d, r=None):
 
 # ---- THE TWO NEW BATON PREDICATES. Built only when asked for, so the default run is untouched.
 MOMT = {}
+MOMD = {}
 RPRED = {}
+# THE dws TIMEFRAMES, read off the registered config, not written here. Joe ruled the timeframe
+# 1013: *"timeframe 8 ,10,15"* - each dws line is measured on the timeframe it is BUILT on, not on
+# the doubled one its r-config stands in for. So dws8r takes BANK[8] and the momo window
+# k_window x 8 = 48 min, exactly as ws8r does.
+DWS_TF = {_n: int(_v[0]) // 60 for _n, _v in SC.DWS_SPEC.items()}
 if BATON in ('momentum', 'either'):
     from _momtrue import momtrue_mask
     from optimus9.orchestration.build_ws_lines import HOURS, WARMUP
@@ -770,6 +776,16 @@ if BATON in ('momentum', 'either'):
         MOMT[_bt] = momtrue_mask(RL[_bt], _bt, BANK[_bt], SC.EM, HOURS, WARMUP, 'gated', N,
                                  log=lambda z: None)
     _P('mom-true masks ready for ws%d-ws%d' % (ALL_TF[0], ALL_TF[-1]))
+    # KEYED BY NAME, never by timeframe. MOMT is keyed by the timeframe int and dws8r sits on tf 8,
+    # so a shared dict would have dws8r overwrite ws8. `line_id` puts the name in the mask cache
+    # key too, for the same reason.
+    for _dn, _dtf in sorted(DWS_TF.items(), key=lambda kv: kv[1]):
+        MOMD[_dn] = momtrue_mask(SC.LDN(_dn), _dtf, BANK[_dtf], SC.EM, HOURS, WARMUP, 'gated', N,
+                                 log=lambda z: None, line_id=_dn)
+    if MOMD:
+        _P('mom-true masks ready for ' + ', '.join('%s on tf %d (window %d min)'
+           % (_dn, _dtf, int(BANK[_dtf]['k_window']) * _dtf)
+           for _dn, _dtf in sorted(DWS_TF.items(), key=lambda kv: kv[1])))
 if BATON in ('rpred', 'either'):
     from optimus9.compute.breaching_line import predict_breach as _pb
     from optimus9.constants import FENCE_HI as _FH, FENCE_LO as _FL

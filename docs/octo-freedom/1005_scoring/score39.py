@@ -61,6 +61,18 @@ TOL = {n: int(LG['tol_' + n]) for n in ('g5', 'g15', 'g30', 'ws1')}
 spec = {}
 for g in mech_lines(db, 'wsf'):
     if g['role'] not in spec: _t, s_, m_ = g['override']; spec[g['role']] = (s_, m_)
+# THE dws LINES, 1013. Joe: *"add the 3 lines to the mech that consumes ws{any TF that carries
+# momentum}r"*. They are NOT reachable through LD below: LD swaps a timeframe into a wsf ROLE's
+# config, and the dws r-config is DOUBLED - k_len 14 / rsi_len 10 / stc_len 16 against the r role's
+# 7 / 5 / 8 - so it hashes to a different cache key and no LD(tfs, 'r') call can ever land on it.
+# LineStore.resolve + LineStore.value_mode is the sanctioned reader (the same two calls
+# build_ws_lines.overrides() makes), and the NAMES come from the live view, so there is no literal
+# line name here and a row change in indicator_configs moves this with it.
+from optimus9.compute.line_config import LineStore as _LS
+_ls = _LS(db)
+DWS_SPEC = {r['ind_name']: (*_ls.resolve(r['ind_name']), _ls.value_mode(r['ind_name']))
+            for r in db.execute("SELECT ind_name FROM vw_indicator_configs_live "
+                                "WHERE ind_name LIKE 'dws%' ORDER BY itf_seconds", fetch=True)}
 sy = db.execute('SELECT pxsmooth_dema_src s, pxsmooth_dema_len l FROM optimus9_system WHERE sys_pk=1', fetch=True)[0]
 db.disconnect()
 tp = np.load(os.path.join(TAPE_DIR, _tape_key(EM, HOURS, WARMUP, {'src': sy['s'], 'len': sy['l']}) + '.npz'))
@@ -70,6 +82,9 @@ ts = tp['__ts__']; PX = np.asarray(tp['__pxs__'], float)
 # DEMA(pxsmooth_dema_len) applied. None on a tape cached before 1011 - callers must check.
 CLOSE = np.asarray(tp['__close__'], float) if '__close__' in tp.files else None
 LD = lambda tfs, role: np.asarray(np.load(os.path.join(LINE_DIR, _line_key(EM, HOURS, WARMUP, override(tfs, *spec[role])) + '.npy'), mmap_mode='r'), float)
+# LDN reads a line by its REGISTERED NAME, for the families that are not a wsf role. Same tape key
+# construction as LD, so a missing cache file raises here rather than reading the wrong array.
+LDN = lambda name: np.asarray(np.load(os.path.join(LINE_DIR, _line_key(EM, HOURS, WARMUP, DWS_SPEC[name]) + '.npy'), mmap_mode='r'), float)
 MTD = {'g5': LD(5, 'Mage'), 'g15': LD(15, 'Mage'), 'g30': LD(30, 'Mage'), 'ws1': LD(60, 'Mage')}
 TF = list(range(int(LG['band_lo']), int(LG['band_hi']) + 1))
 Rl = {t: LD(t * 60, 'r') for t in TF}

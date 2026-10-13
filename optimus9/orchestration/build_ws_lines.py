@@ -30,6 +30,7 @@ bug rpl_walk.py:48-58 documents.
 
     python3 -m optimus9.orchestration.build_ws_lines [--rebuild] [--prefix ws]
 """
+import os
 import sys
 import datetime as dt
 from datetime import timezone
@@ -90,11 +91,17 @@ from optimus9.orchestration.rpl_cache import cache_jig_perline
 # REVERSIBLE: cache files are keyed on END_MS, so the 06-05, 05-17 and 05-07 windows all stay on
 # disk. Moving this constant only changes which one the 26 importers read; moving it back restores
 # every number banked against the 06-05 window, including the 894 trades / +0.3911.
-TAPE_END = dt.datetime(2026, 9, 30, 0, 0, tzinfo=timezone.utc)
+# TAPE_END NOW READS LG_TAPE_END, 1013, for Joe's dws build. score39.py:40 already reads this env
+# var with its own default, so a build run without it writes a cache key score39 never reads - the
+# three dws lines would land on the 09-30 key while every scoring run reads 10-05, and the lines
+# would simply be missing. This is NOT a fourth tape literal: the default below IS the literal this
+# line already held, so no importer moves unless LG_TAPE_END is set in the environment.
+TAPE_END = dt.datetime.strptime(os.environ.get('LG_TAPE_END', '2026-09-30'),
+                                '%Y-%m-%d').replace(tzinfo=timezone.utc)
 END_MS = int(TAPE_END.timestamp() * 1000)
 HOURS = 40
 WARMUP = 1114
-PREFIXES = ('ws', 'gcws')
+PREFIXES = ('ws', 'gcws')   # 'dws' is built on demand with --prefix dws, Joe 1013
 
 
 def line_names(db, prefixes=PREFIXES):
@@ -125,7 +132,7 @@ def main(rebuild=False, prefixes=PREFIXES):
     ovr = overrides(db, names)
     db.disconnect()
 
-    print(f'tape 08-09  end {TAPE_END:%Y-%m-%d %H:%M} UTC  hours {HOURS}  warmup {WARMUP}  '
+    print(f'tape end {TAPE_END:%Y-%m-%d %H:%M} UTC  hours {HOURS}  warmup {WARMUP}  '
           f'span {HOURS + 2 * WARMUP} h')
     print(f'{len(ovr)} lines: ' + ', '.join(names))
     for n in names:
