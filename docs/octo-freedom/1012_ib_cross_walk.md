@@ -98,3 +98,58 @@ real in all of them; only the direction convention was wrong.
 | a minimum on the TF's move | the -1.54 that produced RIDE is small. No level set, and one leg cannot anchor one |
 | two cps resolving to one decision bar | a known defect in my sweep code - the later cp's verdict won by loop order. Not yet fixed |
 | a verdict of none | when no ws2-ws10 Mage is in-fence at the cp there is no verdict. 7 of 3,377 cps. Unhandled |
+
+## THE CONFIGURATION, BANKED 1012
+
+| setting | value | Joe's words |
+|---|---|---|
+| the entry | a ws1-cp's ws1Mage oob -> IB cross. HIGH cp = SHORT, LOW cp = LONG | *"a high oob ws1Mage to IB cross ... is absolutely a SHORT position"* |
+| the target board | the opposite side from the entry cp | *"the 02:17 SHORT trade is targetting a low side OOB"* |
+| which cps decide | TARGET-side only. Same-side cps are ignored | *"03:45 is same-side as 02:17, so it can't be the exit"* |
+| the line | the FIRST in-fence ws{T}Mage above ws1, read AT THE cp BAR | — |
+| the reading | its move from the cp bar to the IB bar. Toward the target = RIDE, away = REVERSE | — |
+| the reference | **the cp**, not the line's window peak | *"the reference is the cp"* |
+| the ceiling | **ws30**. Ladder above ws1 is ws2..ws24, ws30 | *"lets make 30 the ceiling"* |
+| silence | **RIDES** | *"silence rides ... that weakness shows up on the Mage scan at at least one ws1-cp-ib event per leg"* |
+| cp dwell | 4 bars = 20 s | 1012, W_CP_DWELL |
+| IB-cross wob | 24 bars = 120 s | — |
+| two cps on one IB bar | the earlier cp's verdict stands | mine, stated |
+| a retest past the IB bar | 5 min is acceptable, 10 min is not | *"I was ok with 5min past ws1cp, but I feel that 10min is pushing it too far"* |
+
+THE LADDER. Joe 1012: *"the lines run from g5 to ws24, then 30,45,60,90"*. The cache also holds
+ws25-ws29 and ws120, which are NOT in the design and are excluded. g5, g15 and g30 exist
+sub-minute; they sit below ws1 so they are never scan candidates.
+
+## THE THREE LEGS UNDER THAT CONFIGURATION
+
+| leg | entry | close | made | net after 0.22% drag | ran min | rides | silences |
+|---|---|---|---|---|---|---|---|
+| 07-17 21:58:00 LONG | 2026-07-17 21:58:00 | 2026-07-18 01:19:05 | +0.8453% | +0.6253% | 201.1 | 0 | 0 |
+| 07-18 02:31:00 SHORT | 2026-07-18 02:31:00 | 2026-07-18 11:07:00 | +4.7330% | +4.5130% | 516.0 | 2 | 3 |
+| 07-18 08:46:55 LONG | 2026-07-18 08:46:55 | 2026-07-18 16:41:00 | +0.2278% | +0.0078% | 474.1 | 2 | 0 |
+| TOTAL | — | — | **+5.8061%** | **+5.1461%** | 1191.2 | 4 | 3 |
+
+## THE GIVE-BACK, AND ITS NAMED CAUSE ON ONE LEG
+
+| leg | peak | close | given back |
+|---|---|---|---|
+| 07-17 21:58:00 LONG | +1.1435% at 2026-07-18 01:14:00 | +0.8453% | 0.2982% |
+| 07-18 02:31:00 SHORT | +5.5809% at 2026-07-18 08:42:55 | +4.7330% | 0.8479% |
+| 07-18 08:46:55 LONG | +1.1811% at 2026-07-18 14:53:10 | +0.2278% | 0.9532% |
+
+The 08:46:55 LONG's peak at 2026-07-18 14:53:10 HAS NO ws1-cp. Joe called it before it was measured.
+ws1r reaches 89.74 at 14:53:00, clear of the 85 line; ws1Mage tops at 80.82, **4.18 short of it**. The
+pair never both reach high oob between 14:45 and 15:05, so no mode-1 cp can form and the peak cannot
+be read. The next three cps - 15:15:15, 15:16:55, 15:58:50 - are all LOW side, same-side for this
+LONG, so all three are ignored. The trade ran 107.8 min past its high.
+
+## THE PATH THE cp REFERENCE CANNOT SEE — recorded, ruled against
+
+At the 2026-07-18 12:02:15 cp, the cp->IB diff read **+35.95 on ws6**, the strongest line on the
+board, and **24 of 24 lines positive**. Measured from each line's own peak inside that window,
+**24 of 24 were negative**: ws6 topped at 103.34 at 12:12:50 and was 86.94 at the 12:15:45 IB bar.
+23 of the 24 lines share a peak bar of 12:06:45, nine minutes before the IB bar, and pxs peaked
+there too at +1.0899% against +0.5135% at the IB bar.
+
+Joe ruled the reference stays the cp. Recorded because the diff and the path disagree completely on
+that bar, and a peak->IB reference would have REVERSED that decision.
