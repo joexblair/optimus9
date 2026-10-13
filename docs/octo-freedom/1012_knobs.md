@@ -86,6 +86,20 @@ with no env var set. Where a knob belongs to a mech, the doc that specs it is na
 global dr at the open bar. `V_SIDE` forces that side when global dr reads the other way; the side is
 still set once, at the open.
 
+## THE MOMENTUM EXTENSION, `_extmom.py`, 1013
+
+| knob | default | what it does |
+|---|---|---|
+| `W_EXT_N` | 4 | the n-of-7 threshold. Joe: *"if n >=4 then ride"* |
+| `W_EXT_TF` | 10 | `mom_cont_tf`, in minutes |
+| `W_EXT_LINE` | dws | the ride line's family. `dws` -> dws10r, `ws` -> ws10r |
+| `W_EXT_EXIT` | stall | `stall` the ride ends at the first ride-line stall · `n` it ends when n falls under `W_EXT_N` · `first` whichever comes first |
+| `W_EXT_FENCE` | 0 | the stall's ex-fence gate. OFF per Joe: *"the ws{mom-cont-tf}r stall can fire infence"*. 1 only to re-measure the difference |
+
+`W_EXT_EXIT`'s three values are three different numbers on the two qualifying closes of 07-17/07-18
+— `stall` +7.1028%, `n` +7.1898%, `first` +7.0684%, against the standing +6.4370%. The default is
+the proposal Joe banked. He has not ruled between them. See `1013_mom_extend.md`.
+
 ## NOT A KNOB
 
 The target board. Joe 1012: *"it can only be set once at the open of the trade"*. There is no env
