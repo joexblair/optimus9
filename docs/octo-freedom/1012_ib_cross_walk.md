@@ -153,3 +153,91 @@ there too at +1.0899% against +0.5135% at the IB bar.
 
 Joe ruled the reference stays the cp. Recorded because the diff and the path disagree completely on
 that bar, and a peak->IB reference would have REVERSED that decision.
+
+## THE g30Mage DELEGATION, BANKED 1012
+
+Joe: *"I want to use g30Mage's oob cross to ib to bring the ws1-cp-ib event closer to the peak. the
+delegation to g30 would happen as soon as ws1Mage has reversed by 6 bars. I feel that it's safe,
+because if ws1Mage turns back away from 50, g30 will also feel the same adversion from IB"*, and
+after the three legs: *"I'm happy with it"*.
+
+THE DELEGATION MOMENT is `W_IB_G30_BARS` 6 bars past the bar that set ws1Mage's RUNNING extreme on
+the cp side, tracked forward from the cp. From there the decision bar is the first g30Mage oob -> IB
+cross. CAUSAL: the running extreme only looks back and the cross is found forward of the moment.
+
+FALLBACK: when g30Mage is already in-fence at the delegation moment there is no cross to take and
+the decision bar stays the ws1Mage IB bar.
+
+HIS SAFETY ARGUMENT IS MEASURED. On every firing g30Mage crossed into the fence while ws1Mage was
+still oob, 3.4 to 6.8 min ahead of it. Nothing moved later.
+
+| the cp | decision bar | via | min earlier than the ws1Mage IB bar |
+|---|---|---|---|
+| 2026-07-18 01:14:15 | 2026-07-18 01:15:20 | g30 cross | +3.8 |
+| 2026-07-18 04:11:40 | 2026-07-18 04:16:50 | **ws1Mage IB — the fallback** | — |
+| 2026-07-18 05:42:15 | 2026-07-18 05:44:35 | g30 cross | +3.4 |
+| 2026-07-18 05:56:15 | 2026-07-18 05:57:05 | g30 cross | +3.8 |
+| 2026-07-18 08:37:55 | 2026-07-18 08:43:30 | g30 cross | +3.4 |
+| 2026-07-18 10:05:55 | 2026-07-18 10:07:10 | g30 cross | +6.8 |
+| 2026-07-18 10:39:20 | 2026-07-18 10:40:40 | g30 cross | +6.8 |
+
+6 of 7 decisions delegated. The fallback at 04:11:40 preserved the -1.54 RIDE that carried the
+07-18 02:31 SHORT.
+
+THE READING THAT LOST. "reversed by 6 bars" could also mean the first adverse 6-bar 2-point diff. On
+the 07-18 12:02:15 cp that fires at 12:03:00 on a -1.95 blip while ws1Mage is still climbing to
+135.73 - 4.25 min before the extreme. Both readings reached the same g30 cross there, but the diff
+reading triggers on noise. The running-extreme reading is what is built.
+
+## THE THREE LEGS WITH THE DELEGATION
+
+| leg | close | made | net | ran min | closed via |
+|---|---|---|---|---|---|
+| 07-17 21:58 LONG | 2026-07-18 01:15:20 | +1.0517% | +0.8317% | 197.3 | g30 cross |
+| 07-18 02:31 SHORT | 2026-07-18 10:40:40 | +4.5067% | +4.2867% | 489.7 | g30 cross |
+| 07-18 08:46 LONG | 2026-07-18 10:07:10 | +0.3929% | +0.1729% | 80.2 | g30 cross |
+| TOTAL | — | **+5.9513%** | **+5.2913%** | — | — |
+
+Against the ws1Mage-IB decision bar: +5.8061% gross, +5.1461% net. So **+0.1452%**, and it is not a
+clean win - two legs gain 0.372% between them and one loses 0.226%:
+
+| leg | change | why |
+|---|---|---|
+| 07-17 21:58 LONG | +0.2064% | the REVERSE reads ws11 -0.27 instead of -7.51, 3.8 min earlier |
+| 07-18 08:46 LONG | +0.1651% | closes 10:07:10 on ws3 -0.96 instead of running 394 more minutes |
+| 07-18 02:31 SHORT | **-0.2263%** | the 10:39:20 decision moves to 10:40:40 where ws2 reads +7.35; at 10:47:25 it was the -8.39 RIDE |
+
+Seven decisions in three legs. The direction is right on 2 of 3 and the mechanism is measured, but
+the gross gain is built from one +0.372 and one -0.226.
+
+## JOE'S 10:40 OBSERVATION — RECORDED, NOT ACTED ON
+
+Joe 1012: *"there's a happy accident in 07-18 10:40... the lineage walk would extend the close to
+11:43"*. The IB mech closes the 02:31 SHORT at 2026-07-18 10:40:40 and lineage would carry it to
+11:43. This is the first concrete sighting of the two mechs meeting - Joe 1012 earlier: *"we're
+heading to a machine that relies on lineage plus this new Mage based mech. I don't have a roadmap
+yet"*. No join is built; the two files stay separate.
+
+## THE KNOBS
+
+| knob | default | what it is |
+|---|---|---|
+| `W_IB_CEIL` | 30 | the in-fence scan ceiling |
+| `W_IB_DWELL` | 4 | the mode-1 cp hold, bars |
+| `W_IB_WOB` | 24 | the ws1Mage IB-cross hold, bars |
+| `W_IB_REVWALK` | 60 | the 5-minute grace window. 0 gives the snapshot verdict. **STILL UNSETTLED** |
+| `W_IB_G30` | 1 | the g30Mage delegation |
+| `W_IB_G30_BARS` | 6 | bars past ws1Mage's running extreme |
+
+THE GRACE WINDOW IS STILL OPEN. Joe 1012: *"let's test this before I decide on the grace window"*.
+At 60 bars on the ws1Mage-IB decision bar it cost 0.2284% gross across the three legs, all of it on
+the 07-18 08:46 LONG. It has not been re-measured against the delegated decision bar.
+
+## THE SUB-wsf RETROFIT, DROPPED
+
+Joe 1012: *"drop the sub-wsf retrofit"*. It qualified a cp from ws1r oob + ws1Mage within 8 points
+of a boundary + 2 of g5/g15/g30Mage oob-and-beyond. Measured 07-10 to 07-24 the scenario it targets
+occurs **1641 times** and reverses **635, 38.7%**; with the g 2-of-3 filter **228 of 560, 40.7%**
+against 37.7% without - 3.0 points of separation, median forward move -0.0827%. Retrofitting it also
+cut the 07-18 02:31 SHORT from +4.7330% to +0.3081% by filling the silences that carried it. The
+knobs W_IB_BND, W_IB_NEAR and W_IB_GN are gone and no g-line is read by the qualifier.
