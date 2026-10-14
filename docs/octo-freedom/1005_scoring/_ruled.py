@@ -43,6 +43,12 @@ RULED = {
     'W_EXT_LINE': ('dws', 'Joe 1013', "your proposal is good, let's bank it"),
     'W_EXT_FENCE': ('0', 'Joe 1013', 'the ws{mom-cont-tf}r stall can fire infence'),
     'W_EXT_EXIT': ('stall', 'Joe 1013', 'the numbers are fine. bank them as knobs'),
+    'W_HTF_GATE': ('1', 'Joe 1013',
+                   'if a trade closes when ws{>=30}r is oob, only open trades that are towards '
+                   'the oob HTF line'),
+    'W_HTF_X_WOB': ('48', 'Joe 1013',
+                    'the restriction ends when ws30r is IB after ws60x-crosses r with a 48 wob'),
+    'W_HTF_TFS': ('30,45,60,90', 'Joe 1013', 'ws{>=30}r'),
     'LG_TAPE_END': ('2026-10-05', 'Joe 1013',
                     'I need full state in the live machine without needing multiple versions of '
                     'the same arg'),

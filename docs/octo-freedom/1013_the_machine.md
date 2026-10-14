@@ -139,3 +139,61 @@ RULED CHECK — 18 of 65 knob reads are covered by the ruled set, 12 of them rea
 The 2026-07-18 18:12:00 chain walk. It ran `run_leg` from a new open with no last-mile mode, so the
 arm applied and took the `mage` default — the SHORT armed on ws2Mage, never armed at all, and ran to
 the MAE stop at -2.5571%. With the gate in place that run refuses before it reports a figure.
+
+## THE HTF oob GATE — BANKED 1013
+
+`_htfgate.py`. Joe 1013: *"I'm going to use a hack to get us past the 21:17 short ... -if a trade
+closes when ws{>=30}r is oob, only open trades that are towards the oob HTF line / -the restriction
+ends when ws30r is IB after ws60x-crosses r with a 48 wob"*, and the form built is his
+clarification: *"if the HTF line is high OOB, then only long trades sourced from low oob ws1cp's
+are allowed. the inverse is true for an HTF low oob: only high oob ws1cp's are allowed to place a
+SHORT trade"*.
+
+| the HTF | the cp permitted | the trade it places |
+|---|---|---|
+| ws{30,45,60,90}r HIGH oob | a **LOW**-oob ws1cp | a LONG |
+| ws{30,45,60,90}r LOW oob | a **HIGH**-oob ws1cp | a SHORT |
+| none oob | any cp | either |
+
+THE RELEASE: ws60x crosses **UNDER** ws60r — Joe: *"it's always x-crossing under on a high oob"* —
+holds `W_HTF_X_WOB` 48 bars = 4.0 min, then the first bar ws30r is inside the oob fence 15/85.
+MEASURED from the 2026-07-18 21:17:55 exit: 57 ws60x/ws60r crosses before 03:09 and only 8 hold the
+wob, the rest being 5-to-45-second flickers. UNDER-only makes the first qualifying cross
+2026-07-19 01:00:00, its wob completes 01:03:55, and the release lands **2026-07-19 01:05:45** —
+the row Joe banked.
+
+SRP: the gate opens no trade and closes none. `_ibmech` stamps the cps, `_extmom` holds the close,
+`_chain10` walks, and none of them knows the gate exists — the caller asks it before it opens.
+
+### THE WALK FROM 2026-07-18 21:17:55, THE GATE LIVE
+
+Stop 2026-07-19 11:22 unless carrying a trade; if carrying, walk it to the end then stop.
+
+| step | exit bar | the oob HTF line | the cp permitted | the release | the cp taken |
+|---|---|---|---|---|---|
+| 1 | 2026-07-18 21:17:55 | ws30r 86.58 HIGH | LOW-oob, a LONG | 2026-07-19 01:05:45 | LOW cp 03:58:05, ib 04:11:55 |
+| 2 | 2026-07-19 05:22:55 | ws30r 7.05 LOW | HIGH-oob, a SHORT | 2026-07-19 06:33:20 | HIGH cp 05:51:45, ib 05:53:30 |
+| 3 | 2026-07-19 08:03:10 | ws45r 3.78 LOW | HIGH-oob, a SHORT | 2026-07-19 08:22:15 | LOW cp 09:15:10, ib 09:16:15 |
+
+| open | side | close event | ws30 mode | the walk ends | why | gross |
+|---|---|---|---|---|---|---|
+| 2026-07-19 04:11:55 | LONG | 2026-07-19 05:05:25 | no | 2026-07-19 05:22:55 | exhaustion | +0.3741% |
+| 2026-07-19 05:53:30 | SHORT | 2026-07-19 07:53:25 | no | 2026-07-19 08:03:10 | exhaustion | +0.5390% |
+| 2026-07-19 09:16:15 | LONG | 2026-07-19 09:54:25 | YES | 2026-07-19 22:04:35 | exhaustion | -0.7911% |
+| **TOTAL** | — | — | — | — | — | **+0.1220%** |
+
+- step 1 carries NOTHING for 6 h 54 m: every HIGH cp between 21:17:55 and the release is blocked,
+  and the walk waits for the LOW cp at 03:58:05 - the cp the `W_IB_DWELL` 2 ruling unlocked.
+- step 3 opens a LONG off a LOW cp although the restriction wanted a SHORT: its ib bar 09:16:15 is
+  past the release at 08:22:15, so the restriction had already lapsed. It is the only losing leg.
+- THE UNRESTRICTED WALK FROM THE SAME BAR LOST 3.3111% over three alternating-side links. The gate
+  is +3.4331% against it on this stretch.
+
+### WHAT IS STILL OPEN
+
+- leg 3 ran **12 h 10 m** on the ws30 mode, 09:16:15 to 22:04:35, and that single hold is the whole
+  negative. The ws30 mode has no time bound. Same shape seen on the 07:59 LONG.
+- `oob_side` takes the FIRST oob line in TF order. Joe named no tie-break and the lines have not
+  been seen oob on opposite ends at the same bar. Stated in the module.
+- the knob NAMES `W_HTF_GATE`, `W_HTF_TFS`, `W_HTF_X_TF`, `W_HTF_IB_TF`, `W_HTF_X_WOB` are mine;
+  every value is his.
