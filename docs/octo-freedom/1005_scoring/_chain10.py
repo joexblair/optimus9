@@ -804,6 +804,7 @@ for _rl in _ruled.line({'W_ARM': ARM, 'W_ARM_TF': ARM_TF,
                         'W_KICK': KICK, 'W_NO_GT12': '1' if NO12 else '0', 'W_PASS': PASS,
                         'W_CP_DWELL': CP_DWELL, 'W_CP_MODE': CP_MODE, 'W_STALL_N': STALL_N,
                         'W_LOOP_EXH': EXH_LOOP,
+                        'W_IB_DWELL': os.environ.get('W_IB_DWELL', '2'),
                         'LIN_LASTMILE_KCKSTRT_TFCAP': LASTMILE_KICK_TFCAP},
                        lastmile=LASTMILE):
     _P(_rl)
@@ -816,6 +817,7 @@ _OFF = _ruled.check({'W_ARM': ARM, 'W_ARM_TF': ARM_TF,
                      'W_KICK': KICK, 'W_NO_GT12': '1' if NO12 else '0', 'W_PASS': PASS,
                      'W_CP_DWELL': CP_DWELL, 'W_CP_MODE': CP_MODE, 'W_STALL_N': STALL_N,
                      'W_LOOP_EXH': EXH_LOOP,
+                     'W_IB_DWELL': os.environ.get('W_IB_DWELL', '2'),
                      'LIN_LASTMILE_KCKSTRT_TFCAP': LASTMILE_KICK_TFCAP},
                     lastmile=LASTMILE)
 if _OFF and not _EXP:

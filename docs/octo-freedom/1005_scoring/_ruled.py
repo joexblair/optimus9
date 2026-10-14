@@ -33,6 +33,7 @@ RULED = {
     'W_LOOP_TF': ('10', 'Joe 1013', 'ws10 is the loop tf'),
     'W_CEIL': ('30', 'Joe 1013', 'ws30 is the ceiling'),
     'W_CP_DWELL': ('4', 'Joe 1012', 'add a 4 bar dwell to ws1cp'),
+    'W_IB_DWELL': ('2', 'Joe 1013', 'bank, commit and push, make this machine live'),
     'W_CP_MODE': ('both', 'Joe 1012',
                   'we need mode 2 baked in so that jumpstart can fire on the 14:33 ws1-cp'),
     'W_STALL_N': ('6', 'Joe 1012', 'add the knob, sweep with 7 to 11'),

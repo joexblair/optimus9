@@ -58,15 +58,15 @@ PX = np.asarray(SC.PX, float)[:N]
 # The close bar is COMPUTED by _ibmech.walk; the value here is the banked one it is checked against.
 TRADES = [
     ('07-17 21:58 LONG', '2026-07-17 21:58:00', '2026-07-18 01:15:20', -1),
-    ('07-18 02:31 SHORT', '2026-07-18 02:31:00', '2026-07-18 10:40:40', +1),
+    ('07-18 02:31 SHORT', '2026-07-18 02:31:00', '2026-07-18 06:34:30', +1),
     ('07-18 08:46 LONG', '2026-07-18 08:46:55', '2026-07-18 10:07:10', -1),
-    ('07-18 16:07 LONG', '2026-07-18 16:11:10', '2026-07-18 16:38:15', -1),
+    ('07-18 16:07 LONG', '2026-07-18 16:11:10', '2026-07-18 16:38:00', -1),
     # ADDED 1013, Joe: *"re-freeze the reference and add both trades, for 10.2784%"*. These two are
     # the 07-18 chain's own links - each opens on the bar the one before it ended, so the chain from
     # 16:11:10 is now asserted end to end: 16:07 ends 18:12:00, 18:12 opens there and ends 18:45:15,
     # 18:45 opens there.
-    ('07-18 18:12 SHORT', '2026-07-18 18:12:00', '2026-07-18 18:44:15', +1),
-    ('07-18 18:45 LONG', '2026-07-18 18:45:15', '2026-07-18 20:04:00', -1),
+    ('07-18 18:12 SHORT', '2026-07-18 18:12:00', '2026-07-18 18:44:35', +1),
+    ('07-18 18:45 LONG', '2026-07-18 18:45:15', '2026-07-18 20:05:40', -1),
 ]
 
 # THE FROZEN REFERENCE, RE-FROZEN 1013. Joe: *"re-freeze the reference and add both trades, for
@@ -79,15 +79,19 @@ TRADES = [
 #     07-17 21:58 LONG   end  1.0821 -> 1.3666   the ws30 mode
 #     the other three    end  unchanged
 #     two trades ADDED   the 07-18 chain's own links
+# RE-FROZEN AGAIN 1013 for W_IB_DWELL 2, Joe: *"bank, commit and push, make this machine live"*.
+# Four of the six close events move with the dwell - 02:31 10:40:40 -> 06:34:30, 16:07 16:38:15 ->
+# 16:38:00, 18:12 18:44:15 -> 18:44:35, 18:45 20:04:00 -> 20:05:40 - so TRADES' expected bars moved
+# with them. Five of the six end figures move; only 18:45 is unchanged.
 FROZEN = {
-    '07-17 21:58 LONG': (1.3061, 1.3666),
-    '07-18 02:31 SHORT': (4.8615, 4.7703),
+    '07-17 21:58 LONG': (1.1199, 1.3945),
+    '07-18 02:31 SHORT': (5.2666, 4.9508),
     '07-18 08:46 LONG': (0.3929, 0.3934),
     '07-18 16:07 LONG': (0.7967, 1.7205),
-    '07-18 18:12 SHORT': (0.4441, 0.3769),
+    '07-18 18:12 SHORT': (0.4362, 0.4083),
     '07-18 18:45 LONG': (1.4948, 1.5793),
 }
-FROZEN_TOTAL = (9.2961, 10.2069)
+FROZEN_TOTAL = (9.5071, 10.4467)
 # RE-FROZEN AGAIN 1013 for the kickstart cap at ws7, Joe: *"let's fix the cap at 7"*. Two trades
 # moved and both got worse - 02:31 +4.8337 -> +4.7703 and 08:46 +0.4014 -> +0.3934 - so the total
 # fell +10.2783 -> +10.2069. HIS CALL, taken with the cost on the table; the gate caught all three

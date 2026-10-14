@@ -82,10 +82,17 @@ CEIL     = int(os.environ.get('W_IB_CEIL', 30))       # the highest TF the in-fe
 # 1013 when he asked *"what's the dwell for?"* and called it *"your `4`"*. He is right: his 1012
 # ruling *"add a 4 bar dwell to ws1cp"* set `W_CP_DWELL` in `_chain10`, and I mirrored the number
 # onto this mech's own cp without saying so.
-# MEASURED 1013 over seven trades, this knob alone: dwell 4 +11.2050%, dwell 2 +11.3814%. Three
-# trades gain at 2 and none loses, and the 2026-07-19 03:58 cp stamps at 03:58:05 - at 4 it never
-# stamps, because ws1r held under 15 for 15 s and needed 20.
-DWELL    = int(os.environ.get('W_IB_DWELL', 4))       # the mode-1 cp hold, bars
+# RULED 2 BY JOE 1013, after he queried the 4 and the sweep ran: *"bank, commit and push, make this
+# machine live"* on the dwell-2 row. MEASURED, this knob alone, seven trades:
+#     dwell 4   +11.1335%   the 01:24 SHORT ends 2026-07-19 07:25:40 on ws4
+#     dwell 2   +11.7946%   the 01:24 SHORT ends 2026-07-19 07:59:55 on ws7
+# +0.6611%. The 2026-07-19 03:58 cp stamps at 03:58:05 at 2 and never at 4, because ws1r held under
+# 15 for 15 s and needed 20. At 2 the 01:24 SHORT's close event moves to 04:12:50, the ws30 mode then
+# holds to 07:18:00, and at that bar ws7 is oob so the cap-7 kickstart takes it instead of ws4 - ws7
+# was oob and mom-true toward the low end the whole time and the dwell was what hid it.
+# UNEXPLAINED, FLAGGED: dwell 1 gives +7.1176% and dwell 3 gives +6.7785%, both far below 2 and 4.
+# The 01:24 SHORT is identical at 1 and 2, so the collapse is on the other six and is untraced.
+DWELL    = int(os.environ.get('W_IB_DWELL', 2))       # the mode-1 cp hold, bars
 WOB      = int(os.environ.get('W_IB_WOB', 24))        # the ws1Mage IB-cross hold, bars
 REVWALK  = int(os.environ.get('W_IB_REVWALK', 60))    # the grace window, bars = 5 min
 G30     = os.environ.get('W_IB_G30', '1') == '1'      # delegate the decision bar to g30Mage
