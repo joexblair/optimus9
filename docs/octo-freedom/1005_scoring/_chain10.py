@@ -436,6 +436,19 @@ LASTMILE_KICK_TFCAP = int(os.environ.get('LIN_LASTMILE_KCKSTRT_TFCAP', 5))
 # line and the loser at 3, so 2 is the only value between them. Its name is mine too.
 # IT CATCHES 1 OF THE 2 LOSERS. 07-18 02:31 lost 0.0277% with 0 AWAY votes and nothing in this
 # measurement explains it. Stated.
+# THE MAX JUMPSTART GAP, 1013. Joe: *"I saw that too, and it doesn't align with the spirit of the
+# mech. find the max gap we've seen so far, and create an approatiate (maybe max-seen-gap*1.2) knob
+# for it. apply the max-gap knob to the mech"* / *"set it to 24"*.
+# THE KNOB'S NAME IS MINE; the value 24 is his.
+# MEASURED, and the sample has NO VARIANCE: 6 of the 7 last-mile handoffs placed a rider on the very
+# NEXT bar - 01:15:20, 11:11:15, 10:07:10, 17:39:10, 18:44:15 and 20:04:00 all gap 1 bar. The only
+# outlier is the ws30-ride handoff at 2026-07-18 21:24:05, where the jumpstart sat 506 bars = 42.2
+# min before ws3 went oob. So max-seen x 1.2 rounds back to 1 bar, which would mean the jumpstart
+# fires on the next bar or never; Joe set 24 instead. Stated because the formula was his first idea
+# and the data could not support it.
+# WHEN THE GAP EXPIRES the walk ends at the expiry bar and the held close fires there - causal, that
+# is the bar on which "no rider appeared" becomes known.
+LASTMILE_MAX_GAP = int(os.environ.get('LIN_LASTMILE_MAX_GAP', 24))
 LINFIN_WALK = int(os.environ.get('LINFIN_WALK_DELAy', 12))
 LINFIN_AWAY_MIN = int(os.environ.get('LINFIN_WALK_AWAY_MIN', 2))
 if LASTMILE:
@@ -1697,6 +1710,11 @@ def run_leg(k0, trade_side):
                 if _hh is not None:
                     tr.append((j, _hh)); continue
                 return j, 'loop exhaustion', mae, ceil_bar, hand, tr
+        if rider is None and LASTMILE and (j - k0) > LASTMILE_MAX_GAP:
+            tr.append((j, 'MAX GAP — no line at or under ws%d went oob within %d bars (%.1f min) '
+                          'of the handoff; the jumpstart never fired and the held close goes here'
+                       % (LASTMILE_KICK_TFCAP, LASTMILE_MAX_GAP, LASTMILE_MAX_GAP * 5 / 60.0)))
+            return j, 'max jumpstart gap', mae, ceil_bar, hand, tr
         if rider is None:
             if KICK == 'off':
                 rider = ALL_TF[0]

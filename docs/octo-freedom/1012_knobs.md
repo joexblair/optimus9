@@ -110,6 +110,7 @@ the proposal Joe banked. He has not ruled between them. See `1013_mom_extend.md`
 | `W_KICK` | off | defaults to **high** in last-mile mode, still overridable |
 | `W_NO_GT12` | 0 | defaults to **1** in last-mile mode, still overridable — the last mile is lineage, and the >ws12 mech would take ownership of the exit |
 
+| `LIN_LASTMILE_MAX_GAP` | 24 | the max bars the jumpstart may wait for a line at or under the kickstart cap to go oob. On expiry the walk ends and the held close fires there. The KNOB NAME is mine, the value 24 is Joe's — max-seen x 1.2 was degenerate, 6 of 7 handoffs gap 1 bar and the outlier was 506 |
 | `LINFIN_WALK_DELAy` | 12 | Joe's knob, his name and his spelling. The blast-radius walk, in bars = 60 s. The last mile is HELD for it and the verdict lands at handoff + 12 |
 | `LINFIN_WALK_AWAY_MIN` | 2 | MINE, name and value. How many lines must vote AWAY for the gate to fire. Anchored: all three winning handoffs sit at exactly 1 line, the loser at 3 |
 

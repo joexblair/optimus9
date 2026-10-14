@@ -250,5 +250,18 @@ class IBMech:
                 continue          # the no-delay bar: a zero move is the window opening, not a verdict
             toward = (mv < 0) if tgt < 0 else (mv > 0)
             if not toward:
+                # CAUSALITY, ASSERTED, 1013. Joe asked of the 1012 scan's wording - *"read ws{T}
+                # Mage's move from the cp bar to the decision bar"* - *"this is lookahead, no?"*.
+                # It is not, and this is why: the two bars the move is built from are `cp` and `q`,
+                # and `q` IS the bar the verdict acts on. The latest value read equals the acting
+                # bar, so no information is later than the action. It WOULD be lookahead if the
+                # verdict were applied at the cp bar instead - which is how the 1012 scan's sentence
+                # reads, because there the label was attached to the cp for classification. Nothing
+                # in the machine acts at the cp. This was true by construction and unenforced until
+                # now; a causality claim belongs in an assert, not a comment.
+                assert cp <= q and dec <= q, (
+                    'the IB-cross verdict acted on bar %d using cp %d and decision bar %d - one of '
+                    'them is later than the bar it acted on' % (q, cp, dec))
                 return 'REVERSE', t, q, mv
+        assert cp <= end and dec <= end, 'the RIDE verdict read past its own window'
         return 'RIDE', t, end, self.mg[t][end] - self.mg[t][cp]
