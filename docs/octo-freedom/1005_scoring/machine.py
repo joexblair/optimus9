@@ -81,13 +81,17 @@ TRADES = [
 #     two trades ADDED   the 07-18 chain's own links
 FROZEN = {
     '07-17 21:58 LONG': (1.3061, 1.3666),
-    '07-18 02:31 SHORT': (4.8615, 4.8337),
-    '07-18 08:46 LONG': (0.3929, 0.4014),
+    '07-18 02:31 SHORT': (4.8615, 4.7703),
+    '07-18 08:46 LONG': (0.3929, 0.3934),
     '07-18 16:07 LONG': (0.7967, 1.7205),
     '07-18 18:12 SHORT': (0.4441, 0.3769),
     '07-18 18:45 LONG': (1.4948, 1.5793),
 }
-FROZEN_TOTAL = (9.2961, 10.2783)
+FROZEN_TOTAL = (9.2961, 10.2069)
+# RE-FROZEN AGAIN 1013 for the kickstart cap at ws7, Joe: *"let's fix the cap at 7"*. Two trades
+# moved and both got worse - 02:31 +4.8337 -> +4.7703 and 08:46 +0.4014 -> +0.3934 - so the total
+# fell +10.2783 -> +10.2069. HIS CALL, taken with the cost on the table; the gate caught all three
+# mismatches before the re-freeze, as it is meant to.
 TOL = 0.0002          # the 4-decimal printing precision, not a tolerance on the mech
 
 

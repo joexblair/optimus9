@@ -403,7 +403,17 @@ LASTMILE = ARM == 'lastmile'
 # oob line at or under the lineage ceiling ws30, which is ws12 (r 90.72). ws7 sits below that and
 # can never become the rider, so the ~18:09 ending on ws7 was unreachable. Under the cap the
 # highest oob line at or under ws5 is ws1 (r 95.74).
-LASTMILE_KICK_TFCAP = int(os.environ.get('LIN_LASTMILE_KCKSTRT_TFCAP', 5))
+# FIXED AT 7, Joe 1013: *"let's fix the cap at 7"*, after the sweep. WAS 5.
+# MEASURED over seven trades, this knob alone: ws5 +11.2050%, ws6 +11.1355%, ws7 +11.1335%. Raising
+# it COSTS 0.0715% - only two trades move and both get worse, because W_KICK is 'high' so the
+# kickstart always takes the highest oob line available and the walk then starts further up the
+# ladder and exhausts on a shallower reach:
+#     07-18 02:31 SHORT   ws5 ends 11:13:35 +4.8337%  ->  ws7 ends 11:15:30 +4.7703%
+#     07-18 08:46 LONG    ws5 ends 10:07:10 +0.4014%  ->  ws7 ends 10:20:05 +0.3934%
+# The 07-19 01:24 SHORT, which prompted the sweep, does not move at all: ws6-ws9 carried momentum at
+# its handoff but only ws7 was oob, and at dwell 4 its handoff bar is 07:12:15, a different ladder.
+# HIS CALL, TAKEN WITH THE COST STATED.
+LASTMILE_KICK_TFCAP = int(os.environ.get('LIN_LASTMILE_KCKSTRT_TFCAP', 7))
 # JOE'S KNOB, HIS NAME AND HIS SPELLING, 1013: *"we bank the {knob:12,'LINFIN_WALK_DELAy'}-bar
 # gate"*. THE BLAST-RADIUS GATE ON THE JUMPSTART. Joe: *"it shouldn't have fired, for blast-radius
 # reasons: at 18:44:15 ws1 and ws2 are tagged ib, and ws4 is oob and heading away from target-dr /

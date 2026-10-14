@@ -78,6 +78,13 @@ import numpy as np
 
 # ---- knobs
 CEIL     = int(os.environ.get('W_IB_CEIL', 30))       # the highest TF the in-fence scan may reach
+# W_IB_DWELL — THE MODE-1 cp HOLD, in bars. THE 4 IS MINE, NOT JOE'S, and it was unlabelled until
+# 1013 when he asked *"what's the dwell for?"* and called it *"your `4`"*. He is right: his 1012
+# ruling *"add a 4 bar dwell to ws1cp"* set `W_CP_DWELL` in `_chain10`, and I mirrored the number
+# onto this mech's own cp without saying so.
+# MEASURED 1013 over seven trades, this knob alone: dwell 4 +11.2050%, dwell 2 +11.3814%. Three
+# trades gain at 2 and none loses, and the 2026-07-19 03:58 cp stamps at 03:58:05 - at 4 it never
+# stamps, because ws1r held under 15 for 15 s and needed 20.
 DWELL    = int(os.environ.get('W_IB_DWELL', 4))       # the mode-1 cp hold, bars
 WOB      = int(os.environ.get('W_IB_WOB', 24))        # the ws1Mage IB-cross hold, bars
 REVWALK  = int(os.environ.get('W_IB_REVWALK', 60))    # the grace window, bars = 5 min
