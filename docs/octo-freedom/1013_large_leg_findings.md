@@ -123,6 +123,71 @@ the worst row in the table.
 The two improvements are real but they ride on a walk that loses 3.3177% over the set. Splitting them
 out needs a ruling on what replaces the end condition, which Joe has not given.
 
+## THE FIVE INTER-TF SPACING TESTS — BANKED 1013
+
+Joe 1013, after the 18:12 RCA showed test 2 reading Mage while his r evidence was invisible to it:
+*"this is what I was expecting, and it should be easy to resolve: the mages that form a large-leg
+verdict print close inter-TF values, and mostly spawn from their source side in a cascade / the
+mages we're seeing at ~18:45 are different - they're not ~evenly spaced between TFs, and they all
+spawned from source side inside a tight window"*, then *"I think it's inter-TF spacing"* and
+*"agreed, drop it"* on the spawn half, and *"bank the five inter-TF spacing tests"*.
+
+`_ibmech.IBMech.inter_tf_spacing(bar, d, top)` measures the Mage ladder at one bar:
+
+| test | 07-18 02:31 SHORT at 04:16:50, the TRUE large leg | 07-18 18:12 SHORT at 18:44:10, the FALSE one |
+|---|---|---|
+| mean gap | +4.72 | +5.64 |
+| std dev of the gaps | 4.53 | **7.78** |
+| largest gap | +14.67 | **+26.42** |
+| the first gap, ws1 -> ws2 | +14.67 | **+26.42** |
+| the first two gaps summed | +18.66 | **+41.44** |
+| negative gaps, derivable from `gaps` | 0 | **2** — ws7 -1.21, ws10 -0.24 |
+
+- the false one is FRONT-LOADED: 41.44 of its ladder spread sits in the bottom two steps against
+  18.66 on the true one.
+- the true ladder is monotone; the false one is not.
+- NO THRESHOLD AND NO VERDICT. Joe: *"hard to tell on a only 2 examples - I guess time will tell us
+  the answer"*. The five are collected, not gated on, and the raw `gaps` list is returned so any
+  other statistic can be derived without re-measuring.
+
+## THE SPAWN HALF — DROPPED
+
+Measured and dropped the same day. The spawn bar was the last 50-midline cross toward the target -
+50 being Joe's own reference, *"its not a default, it's lore"*, so no constant was invented. It
+separated the two events the wrong way round from his words: the total spawn window was **214.2 min**
+on the true leg against **100.6 min** on the false one, because the true leg's high TFs had spawned
+3 h earlier while the false one's spawned 57 min earlier. Joe: *"agreed, drop it"*. Nothing to
+re-enable - the measurement is recorded here and the code carries none of it.
+
+## THE 18:12 RCA — WHY THE TWO MECHS DISAGREED
+
+At the ws1cp-ib 2026-07-18 18:44:10, board LOW, the two mechs read DIFFERENT LINE ROLES:
+
+| mech | reads | its reading | its verdict |
+|---|---|---|---|
+| test 2, the block | **Mage** | 11 lines in-fence above ws1, all lagging and heading to the low end, deepest ws12Mage +61.99 | LARGE LEG, keep walking |
+| the blast-radius gate | **r** | 3 lines voted AWAY over the 12-bar walk: ws2 11 of 12, ws4 11 of 12, ws5 2 of 12 | the jumpstart must not fire |
+
+Nothing overrode Joe's r evidence - THE LARGE-LEG DETECTION NEVER LOOKED AT IT. Test 2 runs first
+and owns the close, so the close never fires and the r-based gate at link 4 is never reached.
+On r at that bar ws2 8.55, ws3 14.30, ws4 7.78 and ws5 7.11 are already oob with ws4 and ws5
+drifting back out; on Mage, ws1Mage 12.34 is oob alone and all 11 above it are still travelling.
+The r cascade is a full cycle ahead of the Mage cascade.
+
+## THE COMPOSED CONFIGURATIONS, MEASURED
+
+| configuration | six-trade total |
+|---|---|
+| the frozen four as banked, before today | +8.0377% |
+| **ws30 mode only** | **+10.2784%** |
+| ws30 mode + large-leg, g30 validation DISABLED | +9.0430% |
+| ws30 mode + large-leg, g30 validation on | +7.7767% |
+| large-leg alone, replacing the ws30 mode and the move test | +3.0128% |
+
+Disabling the g30 validation bought +1.2664%, all on 08:46. It did NOT fix the 18:12 SHORT: that
+trade's own ws1cp-ib events are **13 h 9 m** apart, so the unbounded wait is between the cp events
+themselves, not inside the validation. A large-leg verdict has no time bound at all.
+
 ## THE DRIVERS
 
 Throwaway, in the scratch dir, not in the repo: `_0414.py` the acid test, `_blk.py` the block

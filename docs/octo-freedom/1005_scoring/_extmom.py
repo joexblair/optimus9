@@ -74,6 +74,16 @@ N_MIN = int(os.environ.get('W_EXT_N', 4))            # n of 7 toward the board
 TF = int(os.environ.get('W_EXT_TF', 10))             # mom_cont_tf, in minutes
 FAMILY = os.environ.get('W_EXT_LINE', 'dws')         # 'dws' -> dws{TF}r, 'ws' -> ws{TF}r
 EXIT = os.environ.get('W_EXT_EXIT', 'stall')         # 'stall' | 'n' | 'first'
+# JOE 1013'S ws30 MODE. *"I think the `ws30 -> oob -> ws1cp-ib` flow is the best option for a
+# surgical way to use a line as wide as ws30"* / *"let ws30 fire the hold and ride it"*.
+# When ws30 is mom-true toward the TRADE'S OWN board at the close event, the close is HELD and fires
+# at the first target-side ws1cp-ib after ws30r goes oob - NOT at the dws10r stall. The switch is per
+# trade, taken at the close event and not re-tested, per *"dynamically means the switch is made for
+# the current trade only"*.
+# THE LARGE-LEG TESTS ARE NOT PART OF THIS. The sampling match and the cascade validation are
+# measured in docs/octo-freedom/1013_large_leg_findings.md and shipped nowhere - this mode reaches
+# the same 2026-07-18 21:17:45 bar on the 18:45 LONG without them.
+WS30 = os.environ.get('W_EXT_WS30', '1') == '1'
 FENCE = os.environ.get('W_EXT_FENCE', '0') == '1'    # the ex-fence gate, OFF per Joe
 assert EXIT in ('stall', 'n', 'first'), 'W_EXT_EXIT must be stall, n or first'
 
@@ -125,6 +135,33 @@ class ExtMom:
     def stalled(self, j, board):
         """Is the ride line stalled at bar `j`, on the board being ridden."""
         return bool(self._st[int(board)][int(j)])
+
+    # ---- JOE 1013'S ws30 MODE
+    def ws30_aligned(self, close_bar, own_board, tf=30):
+        """Does ws{tf} print in the voting table AND align with the TRADE's own direction?
+
+        Joe 1013: *"if ws30 prints in the momentum voting table and aligns with the trade's
+        direction / dynamically set ws30 as the 'hold and ride it' line. dynamically means the
+        switch is made for the current trade only"*.
+
+        `own_board` is the end the TRADE is heading to, which is NOT link 3's usual board - link 3
+        normally reads the flipped dr. Joe 1013: *"we can only use the trades side for link 3"*.
+        """
+        key = 'ws%d' % int(tf)
+        for k, mask in self.rows:
+            if k == key:
+                return bool(mask[int(own_board)][int(close_bar)])
+        return False
+
+    def ws30_oob(self, close_bar, own_board, r30, hi, lo):
+        """Walk forward to the bar ws30r is oob at the trade's own end. -> bar, or None.
+        Joe 1013: *"-walk to ws30r oob"*. FORWARD LOOP, causal.
+        """
+        a = np.asarray(r30, float)
+        for k in range(int(close_bar) + 1, self.n):
+            if (a[k] >= float(hi)) if int(own_board) > 0 else (a[k] <= float(lo)):
+                return k
+        return None
 
     # ---- the ride
     def exit_bar(self, close_bar, board, exit_rule=None):

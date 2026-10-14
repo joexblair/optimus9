@@ -106,17 +106,38 @@ def chain(e, dr, ib, em, rows):
     into the middle of it - that substitution is what produced the wrong 18:12:00 answer on 1013.
     """
     board = dr                      # the close column's board is the FLIPPED dr
+    own = -dr                       # the end the TRADE is heading to
     c, why_c, ib_rows = ib.walk(e, dr)
     if c is None:
         return {'open': e, 'dr': dr, 'close': None, 'why_close': why_c, 'ib_rows': ib_rows}
     n = em.n_at(c, board)
     held = em.holds(c, board)
-    xb, why_x = em.exit_bar(c, board)
-    xb = c if xb is None else xb
+    # JOE 1013'S ws30 MODE, link 3. When ws30 is mom-true toward the TRADE'S OWN board at the close
+    # event, ws30 becomes the hold-and-ride line for THIS trade and the close fires at the first
+    # target-side ws1cp-ib after ws30r goes oob - not at the dws10r stall. Joe: *"let ws30 fire the
+    # hold and ride it"* / *"I think the `ws30 -> oob -> ws1cp-ib` flow is the best option for a
+    # surgical way to use a line as wide as ws30"*.
+    # The large-leg tests are NOT in this path - see 1013_large_leg_findings.md.
+    ws30 = X.WS30 and em.ws30_aligned(c, own)
+    ws30_bars = None
+    if ws30:
+        w = em.ws30_oob(c, own, C.R[30], SC.HI, SC.LO)
+        cp2 = dec2 = None
+        if w is not None:
+            cp2, dec2, _v2 = ib.next_cp_ib(w, own)
+        if dec2 is not None:
+            xb, why_x = dec2, 'ws30 mode: ws30r oob %s, then the ws1cp-ib' % U(w)
+            ws30_bars = (w, cp2, dec2)
+        else:
+            ws30 = False
+    if not ws30:
+        xb, why_x = em.exit_bar(c, board)
+        xb = c if xb is None else xb
     k, why, mae, cb, hand, tr = C.run_leg(xb, dr)
     kk = xb if k is None else k
     return {'open': e, 'dr': dr, 'close': c, 'why_close': why_c, 'ib_rows': ib_rows,
             'n': n, 'held': held, 'ext': xb, 'why_ext': why_x,
+            'ws30': ws30, 'ws30_bars': ws30_bars,
             'end': kk, 'why_end': why, 'mae': mae, 'tr': tr,
             'gross_close': gross(e, c, dr), 'gross_ext': gross(e, xb, dr),
             'gross_end': gross(e, kk, dr)}

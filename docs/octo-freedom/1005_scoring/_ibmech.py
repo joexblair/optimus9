@@ -188,6 +188,70 @@ class IBMech:
                 return t
         return None
 
+    def inter_tf_spacing(self, k, d, top):
+        """JOE'S FIVE INTER-TF SPACING TESTS, measured on the Mage ladder at one bar. 1013.
+
+        Joe 1013: *"the mages that form a large-leg verdict print close inter-TF values, and mostly
+        spawn from their source side in a cascade / the mages we're seeing at ~18:45 are different -
+        they're not ~evenly spaced between TFs, and they all spawned from source side inside a tight
+        window"*, then *"I think it's inter-TF spacing"* and *"agreed, drop it"* on the spawn half.
+
+        -> a dict of the five, plus the raw gaps so nothing else needs re-measuring:
+             mean      the mean inter-TF gap, ws1 to ws{top}
+             std       its standard deviation
+             largest   the largest single gap
+             first     the ws1 -> ws2 gap
+             first2    the first two gaps summed
+             gaps      the raw list, ws2-ws1 .. ws{top}-ws{top-1}
+
+        A gap is Mage[t] - Mage[t-1], unsigned by the board - the ladder's own spacing, not a
+        direction. `d` is taken for the caller's own bookkeeping and is not read.
+
+        NO THRESHOLD, NO VERDICT. Joe 1013: *"hard to tell on a only 2 examples - I guess time will
+        tell us the answer"*. These are collected, not gated on.
+
+        THE TWO MEASURED EXAMPLES, both board LOW, both at their ws1cp-ib:
+                                        TRUE large leg      FALSE large leg
+                                        07-18 02:31 SHORT   07-18 18:12 SHORT
+                                        at 04:16:50         at 18:44:10
+            mean                        +4.72               +5.64
+            std                          4.53                7.78
+            largest                    +14.67              +26.42
+            first  (ws1 -> ws2)        +14.67              +26.42
+            first2 (ws1 -> ws3)        +18.66              +41.44
+            negative gaps in the ladder     0                   2   (ws7 -1.21, ws10 -0.24)
+        The false one is FRONT-LOADED: 41.44 of its spread sits in the bottom two steps against
+        18.66 on the true one, and its ladder is not monotone. Derivable from `gaps`.
+
+        CAUSAL: one bar, read at that bar.
+        """
+        vals = []
+        for t in range(1, int(top) + 1):
+            if t in self.mg:
+                vals.append(float(self.mg[t][int(k)]))
+        gaps = [vals[i] - vals[i - 1] for i in range(1, len(vals))]
+        if not gaps:
+            return {'mean': None, 'std': None, 'largest': None, 'first': None,
+                    'first2': None, 'gaps': []}
+        g = np.asarray(gaps, float)
+        return {'mean': float(g.mean()), 'std': float(g.std()),
+                'largest': float(g.max()), 'first': float(g[0]),
+                'first2': float(g[0] + g[1]) if len(g) > 1 else float(g[0]),
+                'gaps': gaps}
+
+    def next_cp_ib(self, frm, d):
+        """The next mode-1 cp on side `d` after `frm`, and its decision bar. -> (cp, dec, via) or
+        (None, None, None). Used by the ws30 mode, which needs the cp-ib bar and not a verdict.
+        FORWARD LOOP, causal: the dwell is counted forward and the decision bar is taken from it.
+        """
+        run = 0
+        for j in range(int(frm) + 1, self.n):
+            run = run + 1 if self._mode1(j, d) else 0
+            if run == DWELL:
+                dec, via = self.decision_bar(j, d)
+                return j, dec, via
+        return None, None, None
+
     def walk(self, k0, dr):
         """THE CLOSE EVENT FOR AN OPEN TRADE. -> (close bar, why, rows). 1013, closing link 2.
 
