@@ -61,16 +61,33 @@ TRADES = [
     ('07-18 02:31 SHORT', '2026-07-18 02:31:00', '2026-07-18 10:40:40', +1),
     ('07-18 08:46 LONG', '2026-07-18 08:46:55', '2026-07-18 10:07:10', -1),
     ('07-18 16:07 LONG', '2026-07-18 16:11:10', '2026-07-18 16:38:15', -1),
+    # ADDED 1013, Joe: *"re-freeze the reference and add both trades, for 10.2784%"*. These two are
+    # the 07-18 chain's own links - each opens on the bar the one before it ended, so the chain from
+    # 16:11:10 is now asserted end to end: 16:07 ends 18:12:00, 18:12 opens there and ends 18:45:15,
+    # 18:45 opens there.
+    ('07-18 18:12 SHORT', '2026-07-18 18:12:00', '2026-07-18 18:44:15', +1),
+    ('07-18 18:45 LONG', '2026-07-18 18:45:15', '2026-07-18 20:04:00', -1),
 ]
 
-# THE FROZEN REFERENCE, measured 1013 with every default in place and nothing passed.
+# THE FROZEN REFERENCE, RE-FROZEN 1013. Joe: *"re-freeze the reference and add both trades, for
+# 10.2784%"*.
+# WHAT MOVED AND WHY. The ws30 mode fires on TWO trades, not the one I estimated: 07-17 21:58 LONG
+# as well as 07-18 18:45 LONG. ws30 was mom-true toward 21:58's own board at its 01:15:20 close, so
+# that trade now holds to 03:41:10 and ends at +1.3666% against the +1.0821% of the previous freeze.
+# The gate caught it and refused to run rather than let the number drift - that is the whole point
+# of it, and the re-freeze is Joe's call, taken here.
+#     07-17 21:58 LONG   end  1.0821 -> 1.3666   the ws30 mode
+#     the other three    end  unchanged
+#     two trades ADDED   the 07-18 chain's own links
 FROZEN = {
-    '07-17 21:58 LONG': (1.0517, 1.0821),
+    '07-17 21:58 LONG': (1.3061, 1.3666),
     '07-18 02:31 SHORT': (4.8615, 4.8337),
     '07-18 08:46 LONG': (0.3929, 0.4014),
     '07-18 16:07 LONG': (0.7967, 1.7205),
+    '07-18 18:12 SHORT': (0.4441, 0.3769),
+    '07-18 18:45 LONG': (1.4948, 1.5793),
 }
-FROZEN_TOTAL = (7.1028, 8.0377)
+FROZEN_TOTAL = (9.2961, 10.2783)
 TOL = 0.0002          # the 4-decimal printing precision, not a tolerance on the mech
 
 

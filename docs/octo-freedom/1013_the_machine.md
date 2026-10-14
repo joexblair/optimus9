@@ -34,7 +34,53 @@ different mech into the middle of it.
 THE ONLY DECLARED INPUT LEFT IS LINK 1: the trade's open bar and side. Joe has not shared the open
 mech.
 
-## THE RESULT, FROZEN AND ASSERTED
+## THE RESULT, FROZEN AND ASSERTED — RE-FROZEN 1013
+
+Joe 1013: *"re-freeze the reference and add both trades, for 10.2784%"*.
+
+| trade | close event | n of 7 | held? | extension fires | last mile ends | why | gross at the close | gross at the end |
+|---|---|---|---|---|---|---|---|---|
+| 07-17 21:58 LONG | 2026-07-18 01:15:20 | 0 | no | 2026-07-18 03:41:10 | 2026-07-18 03:42:05 | exhaustion | +1.3061% | +1.3666% |
+| 07-18 02:31 SHORT | 2026-07-18 10:40:40 | 6 | YES | 2026-07-18 11:11:15 | 2026-07-18 11:13:35 | exhaustion | +4.8615% | +4.8337% |
+| 07-18 08:46 LONG | 2026-07-18 10:07:10 | 0 | no | 2026-07-18 10:07:10 | 2026-07-18 10:07:20 | exhaustion | +0.3929% | +0.4014% |
+| 07-18 16:07 LONG | 2026-07-18 16:38:15 | 5 | YES | 2026-07-18 17:39:10 | 2026-07-18 18:12:00 | exhaustion | +0.7967% | +1.7205% |
+| 07-18 18:12 SHORT | 2026-07-18 18:44:15 | 3 | no | 2026-07-18 18:44:15 | 2026-07-18 18:45:15 | blast radius | +0.4441% | +0.3769% |
+| 07-18 18:45 LONG | 2026-07-18 20:04:00 | 2 | no | 2026-07-18 21:17:45 | 2026-07-18 21:17:55 | exhaustion | +1.4948% | +1.5793% |
+| **TOTAL** | — | — | — | — | — | — | **+9.2961%** | **+10.2783%** |
+
+All 14 figures asserted on every run. `machine.py` exits non-zero on any mismatch.
+
+### THE ws30 MODE, link 3
+
+Joe 1013: *"let ws30 fire the hold and ride it"* / *"I think the `ws30 -> oob -> ws1cp-ib` flow is
+the best option for a surgical way to use a line as wide as ws30"*. When ws30 is mom-true toward the
+TRADE'S OWN board at the close event - *"we can only use the trades side for link 3"* - ws30 becomes
+the hold-and-ride line for that trade alone and the close fires at the first target-side ws1cp-ib
+after ws30r goes oob, not at the dws10r stall. `W_EXT_WS30`, default on.
+
+IT FIRES ON TWO TRADES, NOT ONE. My estimate of +9.9939% assumed it touched only 18:45; it also
+fires on 21:58 LONG, whose 01:15:20 close now holds to 03:41:10. That is why the total is +10.2783%.
+
+| trade | ws30r goes oob | the held close fires | gross at the end, before -> after |
+|---|---|---|---|
+| 07-17 21:58 LONG | 2026-07-18 02:30:00 | 2026-07-18 03:41:10 | +1.0821% -> +1.3666% |
+| 07-18 18:45 LONG | 2026-07-18 20:30:05 | 2026-07-18 21:17:45 | +0.3956% -> +1.5793% |
+
+THE LARGE-LEG TESTS ARE NOT IN THIS PATH. The ws30 mode reaches 2026-07-18 21:17:45 on the 18:45
+LONG without them; the large-leg walk reached the same bar by another route and is shipped nowhere.
+See `1013_large_leg_findings.md`.
+
+### THE CHAIN IS ASSERTED END TO END
+
+The last three trades are the 07-18 chain's own links, each opening on the bar the one before it
+ended:
+
+| link | ends | the next link opens | same bar? |
+|---|---|---|---|
+| 07-18 16:07 LONG | 2026-07-18 18:12:00 | 2026-07-18 18:12:00 | yes |
+| 07-18 18:12 SHORT | 2026-07-18 18:45:15 | 2026-07-18 18:45:15 | yes |
+
+## THE PREVIOUS FREEZE, FOR THE RECORD
 
 | trade | close event | n of 7 | held? | extension fires | last mile ends | why | gross at the close | gross at the end | moved |
 |---|---|---|---|---|---|---|---|---|---|
@@ -44,9 +90,8 @@ mech.
 | 07-18 16:07 LONG | 2026-07-18 16:38:15 | 5 | YES | 2026-07-18 17:39:10 | 2026-07-18 18:12:00 | exhaustion | +0.7967% | +1.7205% | +0.9238% |
 | **TOTAL** | — | — | — | — | — | — | **+7.1028%** | **+8.0377%** | **+0.9349%** |
 
-`machine.py` asserts all 10 of those figures and exits non-zero on a mismatch, so a regression fails
-the script instead of waiting to be noticed in a table. The hold adds no leg boundary, so drag is
-unchanged — these are gross figures.
+That was the freeze before the ws30 mode, four trades at +8.0377%. The hold adds no leg boundary, so
+drag is unchanged — every figure in this file is gross.
 
 ## THE FOUR DEFAULTS THAT MOVED
 
