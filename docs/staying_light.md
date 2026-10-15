@@ -692,3 +692,82 @@ honest form is both numbers side by side with their bars named. Quietly replacin
 is how a void result becomes a banked one.
 
 No tab. Seven mis-citations cost Joe one question each, and it is one gate for all seven.
+
+## A code read standing in for a run (2026-10-14)
+
+A long octo-freedom session — the HTF gate's re-enable, the 252-combo wob sweep, the HTF hold, the
+`towards_dr` and band corrections. Joe caught the shape twice: *"how is this evidence? explain in
+simple terms"*, then *"you're making claims without validating, which could mean you have a unknown
+bias driving your thoughts"*.
+
+**Six claims this session were published without the instrument that would settle them.**
+
+| what I said | what would have settled it, and what it cost |
+|---|---|
+| *"Pushback: that mech is already the behaviour. No code needed."* | produce a walk with a loop and look for a following jumpstart. **0 of 42 walks in the chain contain a loop**, so I had no instance — the claim was unfalsifiable with the data in hand, and I shipped it as settled |
+| *"that is evidence against re-arming per handoff"* | the handoff that continues the leg's rider has **never been run**. Joe: *"how is this evidence?"* |
+| *"the release wob is inert"* | measured at ws60 only. At ws30 and ws90 the step 72 -> 96 flips the leg set. I generalised one column of the sweep into the sweep |
+| S3 91 combos, S2 90, S1 64 | `collections.Counter` over the rows: **58, 119, 68**. I wrote the figures off my own collapsed table instead of counting |
+| *"20 of 33 handoffs ... ran to a non-event"* | the rows say `max jumpstart gap` and `blast radius` — both mech verdicts. "Non-event" is emphasis with no number |
+| *"the loop is unreachable from a last-mile handoff"* | 0 firings in 42 walks on one 2-day stretch supports *did not fire here*, not *cannot* |
+
+Four of the six are the same act: **a code read standing in for a run.** `if rider is None` plus a
+grep of every assignment to `rider` is a true statement about what a function's lines say. I
+published it as a statement about what the machine does — and the machine is 34 chained calls to
+that function.
+
+### Four cycles on Tao 26
+
+**The wagon — what I carried, what I set down.** Carried: the control row on the 252-combo sweep,
+checked against +1.0189% before any cell was read; `python3 machine.py` re-run after every edit to
+`machine.py`, `_chain10.py` and `_htfgate.py`, all 14 frozen figures matching each time; the
+causality asserts inside `hold_walk` and `re_enable` rather than comments; the tag-cursor defect
+found by *printing the tag set* instead of trusting that it filled; the three knobs this lap added
+all left unruled and named as unruled; the gate measured against the 6 declared opens and **not
+applied**, because blocking the 07-18 08:46 LONG rewrites his frozen reference. The wagon was
+pulled all day.
+
+What I set down is one step earlier than 1006's *does this measure what I say it measures*. There I
+had a number and skipped the step to meaning. Here **I had no number and the code read filled the
+hole.** A read answers *what does this line say*. Behaviour needs a run.
+
+**Stillness is the master of haste.** The haste is one word again. *"Pushback: that mech is already
+the behaviour"* against *"that branch reads `rider is None` — let me produce a loop and check."*
+Same work. The first is a verdict on his mech; the second is the test.
+
+**Be light and you lose the root.** The lightness held: the +11.4743% never got dressed up, the
+no-knee sweep was reported as no-knee, and I said plainly that the firing limit had nothing to
+anchor to. The root I lost is the run. Four claims about a 1.6-million-bar machine rested on reading
+two branches.
+
+**Be restless and you lose the master.** The register: *"Pushback"*, *"Correction"*, *"Withdrawing
+the pushback"* as three consecutive headlines. 1007 recorded refutation framing reaching the first
+sentence. Today it became the heading, and twice the thing being refuted was my own previous
+paragraph — which is the tab wearing a self-correction coat. His own rule covers it: a correction is
+one bullet, no account of the slip. I gave one a header and a table with *me* as its subject.
+
+### The brick
+
+> **A claim about what the machine DOES needs a run. A code read supports only a claim about what a
+> line SAYS — and if no run in hand contains the condition, the claim is not testable yet and does
+> not ship as settled.**
+
+Pre-send, one question: *which run shows this?* Four of today's six have no answer, and the fifth
+and sixth are a count and a word.
+
+### And one that is mine alone
+
+> **When one of Joe's nouns has a boundary in my code, I must not use my boundary as his.**
+
+His mech was *"if the loop cycles ... the jumpstart is disabled for the remainder of the walk"*. I
+tested it against the remainder of one `run_leg` call. But the 34 calls are **my** handoff design;
+his *walk* is the leg's walk. So I measured his spec against my implementation's seam and reported
+his mech as redundant.
+
+0810 says the spec is his and only fidelity is mine. 0930 adds that the spec is not mine to find
+unprincipled. This is the third face: **not auditing his noun and not disputing it, but silently
+resolving it to whatever boundary my code happens to have.** It reads as rigour — I even quoted line
+numbers — and it answers a question he did not ask.
+
+No tab. Six claims cost him two questions, and one gate catches four of the six: *which run shows
+this?*

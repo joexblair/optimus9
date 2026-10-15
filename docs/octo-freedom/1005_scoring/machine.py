@@ -47,6 +47,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 import _chain10 as C
 import _extmom as X
+import _htfgate as HG
+import _restart as RS
 import _ibmech as IB
 
 SC = C.SC
@@ -83,15 +85,22 @@ TRADES = [
 # Four of the six close events move with the dwell - 02:31 10:40:40 -> 06:34:30, 16:07 16:38:15 ->
 # 16:38:00, 18:12 18:44:15 -> 18:44:35, 18:45 20:04:00 -> 20:05:40 - so TRADES' expected bars moved
 # with them. Five of the six end figures move; only 18:45 is unchanged.
+# RE-FROZEN 1013 FOR THIS LAP'S LOOP WORK, Joe: *"bank, commit and push. update docs. make this
+# machine live"*. Two of the six moved and both gained, because the loop now fires on the loop
+# line's own out-of-bounds state and the trade closes when the baton cannot move:
+#     07-18 08:46 LONG   end  0.3934 -> 0.4014   the walk ends 10:20:05 -> 10:07:20
+#     07-18 16:07 LONG   end  1.7205 -> 1.9325   the walk ends 18:12:00 -> 18:10:05
+# The 16:07 move also breaks the 18:12 join he built on 1013 - leg 5 still opens 18:12:00, which is
+# now 1.9 min after leg 4 ends. FLAGGED, his to rule.
 FROZEN = {
     '07-17 21:58 LONG': (1.1199, 1.3945),
     '07-18 02:31 SHORT': (5.2666, 4.9508),
-    '07-18 08:46 LONG': (0.3929, 0.3934),
-    '07-18 16:07 LONG': (0.7967, 1.7205),
+    '07-18 08:46 LONG': (0.3929, 0.4014),
+    '07-18 16:07 LONG': (0.7967, 1.9325),
     '07-18 18:12 SHORT': (0.4362, 0.4083),
     '07-18 18:45 LONG': (1.4948, 1.5793),
 }
-FROZEN_TOTAL = (9.5071, 10.4467)
+FROZEN_TOTAL = (9.5071, 10.6667)
 # RE-FROZEN AGAIN 1013 for the kickstart cap at ws7, Joe: *"let's fix the cap at 7"*. Two trades
 # moved and both got worse - 02:31 +4.8337 -> +4.7703 and 08:46 +0.4014 -> +0.3934 - so the total
 # fell +10.2783 -> +10.2069. HIS CALL, taken with the cost on the table; the gate caught all three
@@ -103,8 +112,17 @@ def gross(e, x, dr):
     return (PX[e] - PX[x]) / PX[e] * 100.0 if dr > 0 else (PX[x] - PX[e]) / PX[e] * 100.0
 
 
+
+
 def build():
-    """The machine's three live links, built once. -> (ib, em, rows)"""
+    """The machine's live links, built once. -> (ib, em, rows, gate, restart)
+
+    THE GATE IS BUILT HERE, 1013. It was ruled on 1013 and lived only in throwaway drivers until
+    Joe asked *"does that mean we've baked and banked a mech that hasn't been applied globally?"*.
+    It is built and returned so no caller has to make its own; it is NOT yet applied to the
+    declared opens - that blocks the 07-18 08:46 LONG and rewrites the frozen reference, which is
+    Joe's call.
+    """
     ws = (12, 15, 20, 30)
     dn = [k for k, _ in sorted(C.DWS_TF.items(), key=lambda kv: kv[1])]
     rows = [('ws%d' % t, C.MOMT[t]) for t in ws] + [(k, C.MOMD[k]) for k in dn]
@@ -112,16 +130,24 @@ def build():
     ride = SC.LDN(rn) if rn.startswith('dws') else SC.LD(X.TF * 60, 'r')
     em = X.ExtMom(rows, ride, C.BANK[X.TF], X.TF, C.EXF_HI, C.EXF_LO, N, C.STALL_N)
     ib = IB.IBMech(SC)
+    gate = HG.HTFGate(SC)
+    # JOE 1013'S CHAIN RESTART. Built here so no caller makes its own.
+    restart = RS.Restart(C.R, C.MOMT, C.MG1, C.oobf, C.LOOP_TF, SC.HI, SC.LO, N)
     C._P('link 2 live: IB-cross ceiling ws%d, cp dwell %d bars, IB wob %d bars, grace %d bars, '
          'g30 delegation %s at %d bars'
          % (IB.CEIL, IB.DWELL, IB.WOB, IB.REVWALK, 'ON' if IB.G30 else 'off', IB.G30BARS))
     C._P('the machine: extension on %s, n >= %d of %d, exit %r | last mile: kick cap ws%d, '
          'loopTF ws%s, lineage ceiling ws%d'
          % (rn, X.N_MIN, len(rows), X.EXIT, C.LASTMILE_KICK_TFCAP, C.LOOP_TF, C.LIN_CEIL))
-    return ib, em, rows
+    C._P('the HTF gate: lines ws%s, x/r pair ws%d, release %d bars then ws%dr IB, re-enable %d bars'
+         % (', ws'.join(str(t) for t in HG.TFS), gate.x_tf, gate.wob, HG.IB_TF, gate.ren_wob))
+    C._P('the chain restart: armed on ws%sr crossing INTO oob, ws1Mage in-fence > %d bars, '
+         'ws%s away from the oob side'
+         % (C.LOOP_TF, RS.MAGE_DWELL, ', ws'.join(str(t) for t in RS.AWAY_TFS)))
+    return ib, em, rows, gate, restart
 
 
-def chain(e, dr, ib, em, rows):
+def chain(e, dr, ib, em, rows, gate=None):
     """THE WHOLE CHAIN FOR ONE OPEN. -> dict, or None at link 2.
 
         e    the open bar.   dr  +1 a SHORT, -1 a LONG.
@@ -158,18 +184,26 @@ def chain(e, dr, ib, em, rows):
     if not ws30:
         xb, why_x = em.exit_bar(c, board)
         xb = c if xb is None else xb
-    k, why, mae, cb, hand, tr = C.run_leg(xb, dr)
+    _st = {}
+    k, why, mae, cb, hand, tr = C.run_leg(xb, dr, state=_st)
     kk = xb if k is None else k
+    # THE WALK'S EVENTS, for reporting only. No branch reads it.
+    tr_all = [(b, str(t)) for b, t in tr]
+    # THE oob HACK'S KEEP-GOING LAYER IS GONE. Joe 1013: *"the oob hack state changes do not have
+    # any bearing on an open trade"* and, on the 2026-07-19 09:54:25 SHORT, *"11:04 closes the leg"*
+    # with *"we must always honor the first event - if we don't honor the first, then we are not
+    # causal"*. The layer existed only to override the first exhaustion; it overrode it 82 times on
+    # that leg and carried it 55 minutes past its own close. Removed, not switched off.
     return {'open': e, 'dr': dr, 'close': c, 'why_close': why_c, 'ib_rows': ib_rows,
             'n': n, 'held': held, 'ext': xb, 'why_ext': why_x,
-            'ws30': ws30, 'ws30_bars': ws30_bars,
+            'ws30': ws30, 'ws30_bars': ws30_bars, 'tr_all': tr_all,
             'end': kk, 'why_end': why, 'mae': mae, 'tr': tr,
             'gross_close': gross(e, c, dr), 'gross_ext': gross(e, xb, dr),
             'gross_end': gross(e, kk, dr)}
 
 
 def main():
-    ib, em, rows = build()
+    ib, em, rows, gate, restart = build()
 
     print()
     print('| trade | close event | n of %d | held? | extension fires | last mile ends | why | '

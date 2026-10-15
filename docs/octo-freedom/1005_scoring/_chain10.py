@@ -110,15 +110,49 @@ KICK = os.environ.get('W_KICK', 'off')
 #
 # W_LOOP_TF  '' = off. A comma list of loop TFs, e.g. '10' or '15' or '10,15'. Sweepable, as asked.
 #
-#   THE TRIGGER is the rider reaching a loop TF **or jumping past it**, with that loop TF's OWN r
-#     oob at the bar. `lin_hop` 2 skips rungs - leg 1 went ws14 -> ws16 and was never ws15 - so a
-#     `rider == t` test would never fire for ws15. MY READING, stated.
+#   THE TRIGGER is ws{loop TF}r's OWN oob state, and NOTHING ELSE. Joe 1013, after finding the
+#     loop had fired 0 times in 42 walks: *"we take the first signal - I haven't specified any
+#     delays on ws{loop-tf}r crossing to oob"*, and on the state: *"I think this is ok. the event
+#     becomes the state until a counter-event removes the state"*.
+#     So the loop fires on the FIRST bar of an oob state and re-arms when ws{loop TF}r leaves oob.
+#     WHAT WAS REMOVED, 1013: a `rider >= t` clause - the walk's current line had to be ws10 or
+#     higher. It was MY READING of his 1010 sentence and it appears in none of his four
+#     descriptions of this mech. It is why the loop never fired: on 2026-07-19 the 11:56:05 walk
+#     was following ws7 for the whole 12:00:00-12:16:25 stretch of ws10r oob.
 #   THE RESET puts the rider back on ws1, the lowest loaded TF, and the walk carries on under the
 #     same baton and stall rules.
 #   IT LOOPS AGAIN if the walk climbs back to a loop TF that is still oob. No cap - Joe set none.
 #   THE LOOP IS CHECKED BEFORE EXHAUSTION on the same bar, because his sentence makes exhaustion
 #     the thing that ends the POST-loop walk.
+# RULED 10 BY JOE 1013: *"ws10 is the loop tf"*, and after the 8-to-14 sweep *"we'll keep loop-tf
+# at 10"*. 12 was tried and read +10.9666% against 10's +12.2632%; the curve breaks between ws10
+# and ws11 by 1.3816% in one step - ws8/9/10 all above +12, ws11 to ws14 all below +11.6.
 LOOP_TFS = sorted(int(z) for z in os.environ.get('W_LOOP_TF', '10').replace(' ', '').split(',') if z)
+# ---- THE SIX SWITCHES FOR THIS LAP'S LOOP BEHAVIOURS. Joe 1013: *"each of those changes are a
+# knob - please bank them in spec. we'll sweep everything when we reach the first END in 07-20"*.
+# Every default is what he ruled; the names are mine.
+#
+#   W_LOOP_RIDER_GATE  1 restores the pre-1013 gate - the loop only fires when the walk's current
+#     line is at or above the loop TF. Joe 1013: *"delete this. ws{loop-tf}r oob is the only
+#     qualification needed to send the walk to ws1"*. 0 is his.
+#   W_LOOP_ONCE        the reset to ws1 fires once per LEG. Joe 1013: *"the 'rider reset to ws1' is
+#     a one-time event"*.
+#   W_LOOP_JUMP_OFF    the jumpstart is disabled for the rest of the walk after that reset. Joe
+#     1013: *"if the loop cycles from loop-tf to ws1, the jumpstart is disabled for the remainder
+#     of the walk"*.
+#   W_LOOP_STATE_CARRY the loop line's oob state carries across a walk boundary, so the edge is not
+#     re-detected. Joe 1013 on the 8 firings in 9 minutes: *"we take the first signal"*.
+#   W_LOOP_CLEAR_OOB   the per-line "has been out and back" memory is cleared at every reset to
+#     ws1. Joe 1013: *"repair as needed"*.
+#   W_LOOP_CLOSE       the trade closes when the walk lands on a weak ws1 with no baton available.
+#     Joe 1013: *"the baton pass is load-bearing - it must move up through the TFs ONLY IF IT CAN.
+#     if it cannot ... then EXHAUSTION is printed immediately and the walk ends"*.
+LOOP_RIDER_GATE = os.environ.get('W_LOOP_RIDER_GATE', '0') == '1'
+LOOP_ONCE = os.environ.get('W_LOOP_ONCE', '1') == '1'
+LOOP_JUMP_OFF = os.environ.get('W_LOOP_JUMP_OFF', '1') == '1'
+LOOP_STATE_CARRY = os.environ.get('W_LOOP_STATE_CARRY', '1') == '1'
+LOOP_CLEAR_OOB = os.environ.get('W_LOOP_CLEAR_OOB', '1') == '1'
+LOOP_CLOSE = os.environ.get('W_LOOP_CLOSE', '1') == '1'
 # ---- TWO CEILINGS, SPLIT 1012. SRP.
 #
 # Joe 1012: *"yes they need to be split. CEIL might need 10 +2 - the +2 allows for correct
@@ -270,7 +304,11 @@ assert GC_HOLD in ('wait', 'walk'), 'W_GC_HOLD must be wait or walk'
 #   EXITS ARE UNTOUCHED during the forward walk. Joe 1011 parked exit entirely, so suppressing one
 #   here would be me altering a mech he has not ruled on. The consequence on the 07-18 03:41 leg is
 #   stated in my reply: the gc backstop still closes it before the forward cp arrives.
-LOOP_END = os.environ.get('W_LOOP_END', 'cp')
+# RULED 'oob' BY JOE 1013: *"our machine updates for this lap: ... lineage last-mile loops to ws1
+# on ws{loop-tf}r oob"*. The 'cp' default was MINE and it is gone - his 1013 description of the mech
+# was 'oob' all along: *"the mech fires on ws{loop-tf}r crossing to oob ... ws{loop-tf}r recyling the
+# loop (to ws1) on its oob event"*.
+LOOP_END = os.environ.get('W_LOOP_END', 'oob')
 assert LOOP_END in ('cp', 'oob'), 'W_LOOP_END must be cp or oob'
 LOOP_LB = int(os.environ.get('W_LOOP_LB', 48))      # 4 min at the 5 s grid
 # W_CP — WHAT A ws1-cp DOES TO THE RIDER.
@@ -506,7 +544,12 @@ G_LO = float(W['oob_gate_fence']); G_HI = 100.0 - G_LO
 #   `goob` itself is defined beside `oobf`, once R exists.
 DIP_FENCE = float(W['dip_fence'])            # Joe 1008: the dip is a BAND, not a level
 DIP_HI, DIP_LO = DIP_FENCE, 100.0 - DIP_FENCE   # 53.0 and 47.0
-RREV, MAE_STOP = int(W['rrev_wob']), float(W['mae_stop_pct'])
+RREV = int(W['rrev_wob'])
+# THE MAE STOP. Joe 1013: *"the ensuing LONG trade stops at 1.1 (we don't need 2.5 MAE now - that
+# was for a different era with different mechs)"*. The DB's `ws12_baton_config.mae_stop_pct` still
+# holds 2.5 and is NOT touched - this overrides it in the machine. The knob name is mine.
+MAE_STOP = float(os.environ.get('W_MAE_STOP', 1.1))
+_DB_MAE = float(W['mae_stop_pct'])
 # ---- THE BATON'S CANDIDATE TEST, 1009. Joe's 1006 spec row for `lin_hop` reads *"jump no more
 # than 2 higher TFs to find the next TF WITH MOMENTUM"*. The hop limit was built; the momentum
 # clause never was - `oobf` stands in its place, and nothing in the file flagged the substitution.
@@ -1268,7 +1311,26 @@ def box(hdr, rr):
         print('│' + '│'.join(' ' + str(x[i]).ljust(w[i]) + ' ' for i in range(len(hdr))) + '│')
     print(B('└', '┴', '┘'))
 
-def run_leg(k0, trade_side):
+def run_leg(k0, trade_side, jump_off=False, state=None, rider0=None, looped_once=False,
+            loop_oob0=None):
+    """JOE 1013'S JUMPSTART-DISABLED FLAG. *"new mech to live inside of lineage last-mile: if the
+    loop cycles from loop-tf to ws1, the jumpstart is disabled for the remainder of the walk"*, and
+    on the one way it may be set: *"the jumpstart-disabled flag can only be enabled on 'ws{loop-tf}r
+    going oob and redirecting the walk to ws1'"*.
+
+        jump_off   True on entry means the jumpstart may not arm this walk.
+        state      a dict this walk writes `jump_off` and `rider` into, so a caller that continues
+                   the leg across more than one call can carry both forward. Passed as a dict and
+                   not a 7th return value because ~100 scripts unpack this function's 6-tuple and
+                   13 return points sit inside it. MY CHOICE, stated.
+        rider0     the line this walk STARTS on, instead of hunting for one. Joe 1013, on the
+                   handoff: *"the alternative is to carry on with the line the walk was already
+                   following" -- "this is the correct behaviour"*. With a line handed in, the arm
+                   block never runs, so no jumpstart and no ws1-cp arm.
+
+    THE FLAG IS SET IN EXACTLY ONE PLACE - the W_LOOP reset under LOOP_END 'oob'. Nothing else
+    touches it and nothing clears it; Joe named no clear.
+    """
     # trade_side is the dr at the trade's open: +1 a SHORT, -1 a LONG. The board the walk works on
     # is the end the trade is HEADING TO, which is the opposite end. Resolved here, once.
     assert int(trade_side) in (-1, 1), (
@@ -1301,7 +1363,11 @@ def run_leg(k0, trade_side):
                 (k0, 'LAST MILE HELD — the blast-radius walk opens'),
                 (_bv, 'BLAST RADIUS — %s. the jumpstart does not fire and the held close goes '
                       'here' % _bt)]
-    rider = None; mae = 0.0
+    rider = rider0; mae = 0.0
+    jump_said = False      # the JUMPSTART DISABLED row is edge-triggered, one per walk
+    loop_oob = dict(loop_oob0 or {}) if LOOP_STATE_CARRY else {}
+    loop_oob_prev = dict(loop_oob)     # so the edge is NOT re-detected at a piece boundary
+    loop_close = False     # the loop reset ws1 in; test its weakness on the next bar
     rider_oob = False      # W_PASS 'crossing_to_ib': has THIS rider been oob since it took over
     xib_stall_said = False  # one trace row per rider when crossing_to_ib ignores a stall
     # JOE 1013'S `left-target-dr` TAG SET. *"it would be less cost to tag {TFs < loop-tp} lines with
@@ -1358,6 +1424,14 @@ def run_leg(k0, trade_side):
             for _tt in range(1, LOOP_TF if LOOP_TF is not None else LIN_CEIL):
                 if _tt in R and _tt not in xtag and oobf(_tt, j - 1, d) and not oobf(_tt, j, d):
                     xtag[_tt] = j
+        # THE oob-STATE SNAPSHOT, TAKEN AT THE TOP OF THE BAR BEFORE ANY `continue`, for the same
+        # reason the `left-target-dr` tag is maintained here: a bar that `continue`s must not skip
+        # it, or the edge is missed. `loop_oob` for THIS bar is computed below, just before the
+        # loop block; this carries the PREVIOUS bar's reading forward.
+        loop_oob_prev = dict(loop_oob)
+        if state is not None:
+            state['rider'] = rider      # the line this walk is on, for a caller that continues it
+            state['loop_oob'] = dict(loop_oob)   # the oob state, so the edge survives the boundary
         px = float(PX[j])
         if np.isfinite(px) and px > 0:
             adv = -((px - p0) / p0 * 100.0 * sgn)
@@ -1644,12 +1718,16 @@ def run_leg(k0, trade_side):
                 tr.append((j, 'ws1-cp %d completes it (%s) — the rider resets to ws%d from ws%d'
                            % (cp_n, cp_why, ALL_TF[0], rider)))
                 rider = ALL_TF[0]
+                if LOOP_CLEAR_OOB:
+                    rider_oob = False   # a new line owes its OWN trip out and back
                 continue
             if CP_ALL:
                 tr.append((j, 'ws1-cp %d — %s. No W_LOOP completes here, but W_CP=all so the '
                               'rider RESETS to ws%d from ws%d.'
                            % (cp_n, cp_why, ALL_TF[0], rider)))
                 rider = ALL_TF[0]
+                if LOOP_CLEAR_OOB:
+                    rider_oob = False   # a new line owes its OWN trip out and back
                 continue
             tr.append((j, 'ws1-cp %d — %s. No W_LOOP completes here, so the rider stays on '
                           'ws%d.' % (cp_n, cp_why, rider)))
@@ -1657,20 +1735,47 @@ def run_leg(k0, trade_side):
         # THE LOOP TF GOING oob does one of two jobs: it ARMS the end of an open W_LOOP, or it
         # RESTARTS a W_LOOP when none is open. A restarted loop arms its end on the same bar,
         # because that bar IS the loop TF oob.
-        if rider is not None and LOOP_TFS and (loop_open is None or not loop_end_armed):
-            hit = [t for t in LOOP_TFS if rider >= t and t in R and oobf(t, j, d)]
+        # THE STATE IS EDGE-TRIGGERED, Joe 1013: the first bar of the oob state fires it, and it
+        # re-arms only when ws{loop TF}r leaves oob. `loop_oob` carries the state per loop TF.
+        for _lt in LOOP_TFS:
+            if _lt in R:
+                loop_oob[_lt] = bool(oobf(_lt, j, d))
+        # NO RIDER QUALIFICATION. Joe 1013: *"ws{loop-tf}r oob is the only qualification needed to
+        # send the walk to ws1"*, and *"delete this"* of the `rider >= t` row. So a walk that has
+        # not armed yet is ARMED by the loop - the rider becomes ws1 on the oob bar.
+        if (LOOP_TFS and not (looped_once and LOOP_ONCE)
+                and (not LOOP_RIDER_GATE or rider is not None)
+                and (loop_open is None or not loop_end_armed)):
+            hit = [t for t in LOOP_TFS
+                   if t in R and loop_oob.get(t) and not loop_oob_prev.get(t)
+                   and (not LOOP_RIDER_GATE or (rider is not None and rider >= t))]
             if hit:
                 lt = max(hit)
                 hit_from = rider
-                skipped = rider > lt
+                skipped = rider is not None and rider > lt
                 exh_armed = True
                 where = ('ws%d%s and ws%dr is %.2f oob'
-                         % (lt, ' (jumped past it, rider was ws%d)' % hit_from if skipped else '',
+                         % (lt,
+                            (' (jumped past it, rider was ws%d)' % hit_from) if skipped
+                            else (' (the walk had no rider yet)' if hit_from is None else ''),
                             lt, float(R[lt][j])))
                 if LOOP_END == 'oob':
                     rider = ALL_TF[0]; loop_end_armed = False
-                    tr.append((j, 'W_LOOP %d — the walk reached %s; the rider resets to ws%d and '
-                                  'lineage carries on' % (looped, where, rider)))
+                    if LOOP_CLEAR_OOB:
+                        rider_oob = False   # a new line owes its OWN trip out and back
+                    # JOE 1013: the ONLY place the jumpstart-disabled flag is enabled.
+                    jump_off = LOOP_JUMP_OFF
+                    # JOE 1013: *"the constant W_LOOP ws10r events are a result of me saying
+                    # 'ws{loop-tf}r oob', without stating that the 'rider reset to ws1' is a
+                    # one-time event"*. ONE reset per LEG, carried across the pieces.
+                    looped_once = True
+                    loop_close = LOOP_CLOSE
+                    if state is not None:
+                        state['jump_off'] = True
+                        state['looped_once'] = True
+                    tr.append((j, 'W_LOOP %d — the walk reached %s; the rider resets to ws%d, the '
+                                  'JUMPSTART IS DISABLED for the rest of the walk, and lineage '
+                                  'carries on' % (looped, where, rider)))
                     continue
                 # THE 4-MINUTE LOOKBACK, stubbed
                 lb = None
@@ -1730,6 +1835,8 @@ def run_leg(k0, trade_side):
         if rider is None:
             if KICK == 'off':
                 rider = ALL_TF[0]
+                if LOOP_CLEAR_OOB:
+                    rider_oob = False   # a new line owes its OWN trip out and back
                 tr.append((j, 'WALK STARTS on ws%d — KICKSTART disabled, no oob test, lineage '
                               'climbs from the bottom (r %.2f %s, lineage ceiling ws%d)'
                            % (rider, float(R[rider][j]), bnd(rider, j, d), LIN_CEIL)))
@@ -1745,6 +1852,15 @@ def run_leg(k0, trade_side):
             # reach must be <= loopTF"*. With no loop TF it falls back to lineage's own ceiling.
             # This is the ONE place W_LOOP constrains lineage, and it is a START condition, not a
             # reach - lineage's reach is LIN_CEIL throughout.
+            if jump_off:
+                # JOE 1013: a loop has already recycled this walk to ws1, so the jumpstart may not
+                # arm it. The ws1-cp arm and W_KICK 'off' are untouched - he disabled the jumpstart
+                # and nothing else.
+                if not jump_said:
+                    tr.append((j, 'JUMPSTART DISABLED — a W_LOOP cycle has already recycled this '
+                                  'walk to ws1, so the jumpstart may not arm it (Joe 1013)'))
+                    jump_said = True
+                continue
             jmax = LOOP_TF if LOOP_TF is not None else LIN_CEIL
             if LASTMILE:
                 jmax = min(jmax, LASTMILE_KICK_TFCAP)   # Joe 1013's cap, last-mile mode only
@@ -1815,6 +1931,35 @@ def run_leg(k0, trade_side):
                                         for t in _reach) or 'none, at the ceiling',
                               rider, 'STALLED' if _st else 'not stalled')))
                 lin_prev = _key
+        # JOE 1013'S IMMEDIATE CLOSE AFTER THE LOOP. His words: *"the bigger (and most important)
+        # problem is that ws1 is printing weakness (ie is not low oob or is not printing momentum)
+        # at the first W_LOOP (12:00), but the code doesn't react. the code's reaction at 12:00,
+        # when it sees ws1 printing weak, and with no baton-pass opportunity, should be an immediate
+        # close of the trade"*.
+        #   WEAK  = ws1 is NOT oob on the target end, OR ws1 is NOT mom-true. Either one.
+        #   NO BATON OPPORTUNITY = `cand` is empty, computed by the real baton block above, not
+        #     duplicated here.
+        # THE BAR: the loop resets ws1 in and `continue`s, so the first bar on which the new rider's
+        # baton opportunity is KNOWABLE is the next one. On the 2026-07-19 09:54:25 SHORT that is
+        # 12:00:05, 5 s after the loop at 12:00:00. Reading it on the loop bar itself would be a
+        # verdict on a `cand` that has not been computed. STATED.
+        if loop_close:
+            loop_close = False
+            _w_oob = oobf(ALL_TF[0], j, d)
+            _w_mom = bool(MOMT[ALL_TF[0]][d][j]) if ALL_TF[0] in MOMT else False
+            if not cand and (not _w_oob or not _w_mom):
+                tr.append((j, 'LOOP CLOSE — the loop recycled the walk to ws%d and it is weak here '
+                              '(r %.2f %s, %s) with no baton available. the trade closes.'
+                           % (ALL_TF[0], float(R[ALL_TF[0]][j]),
+                              'oob' if _w_oob else 'NOT oob',
+                              'mom-true' if _w_mom else 'NO momentum')))
+                return j, 'loop close - ws%d weak, no baton' % ALL_TF[0], mae, ceil_bar, hand, tr
+            tr.append((j, 'LOOP CLOSE not taken — ws%d r %.2f %s, %s, baton %s'
+                       % (ALL_TF[0], float(R[ALL_TF[0]][j]),
+                          'oob' if _w_oob else 'NOT oob',
+                          'mom-true' if _w_mom else 'NO momentum',
+                          'available: ws%s' % ', ws'.join(str(t) for t in cand) if cand
+                          else 'not available')))
         if cand:
             _was = rider
             rider = max(cand)
