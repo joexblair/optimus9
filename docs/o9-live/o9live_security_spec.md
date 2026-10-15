@@ -111,7 +111,7 @@ and 10-11 21:51–21:54, 0 missing bars.
 
 | item | state |
 |---|---|
-| the WAN reload also fires in a quiet market: Bybit had no trades, so the 50 s check cannot tell a quiet market from a dead link. Both automatic reloads so far (10-10 22:29:51, 10-11 04:47:06) were quiet markets | recorded; no limit by Joe's ruling |
+| the WAN reload also fires in a quiet market: Bybit had no trades, so the 50 s check cannot tell a quiet market from a dead link. The first two automatic reloads (10-10 22:29:51, 10-11 04:47:06) were quiet markets; the 3rd (10-15 05:45:49) was a real outage - DNS and the internet unreachable 05:44:00-05:46:40, trades back 05:47:03 | recorded; no limit by Joe's ruling |
 | UI server socket errors are not copied into `o9live_errors.log`, so UI book drops do not reach /rc | found 10-11 |
 | o9-live and fakeAPI are not under systemd | waits on Joe's ruling |
 | a wide backstop stop-loss is built (`adapter.set_backstop`; fakeAPI's StopMonitor honours it) but o9-live does not set one | built, not wired |
@@ -122,3 +122,4 @@ and 10-11 21:51–21:54, 0 missing bars.
 | date | change |
 |---|---|
 | 10-11 | written (Joe 1011). Reconnect wait resets to 1 s on a good connect (2c79963); fakeAPI, UI server and klinecollect restarted onto it 21:51–21:54, flat |
+| 10-15 | open items: the 3rd automatic WAN reload (05:45:49) was a real outage, not a quiet market |
