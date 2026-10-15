@@ -47,17 +47,49 @@ CACHE = '/home/joe/.claude/jobs/6eb9931e/tmp/momt_cache'
 STATES = ('momo', 'curl')      # Joe 1009. In the cache key, so changing it invalidates the cache.
 
 
-def _key(em, hours, warmup, tf, kw, fn, line_id=None):
-    """THE LINE'S IDENTITY IS IN THE KEY, 1013. Until today the key carried the tape window, the
+# THE TWELVE MOMO KNOBS THE OLD KEY DID NOT CARRY, 1014. `momo_config` holds thirteen; only
+# `k_window` was in the key, so a sweep that moved any of the other twelve wrote a new bank,
+# recomputed nothing, and LOADED THE OLD MASK OFF DISK. Every combination would have returned the
+# banked numbers and the sweep would have read flat. Joe 1014 ruled the fix: *"go for 1 and 2"*.
+# This is the 1008 cache-drift failure in a second place.
+BANK_KEYS = ('momo_slope_min', 'momo_slack_ref', 'momo_seam', 'momo_r2_min', 'momo_window_min',
+             'momo_step_min', 'level_slack', 'curl_arc_min', 'curl_vtx_lo', 'curl_vtx_hi',
+             'momo_fixed_samples', 'curl_r2_min')
+
+
+def _key(em, hours, warmup, tf, kw, fn, line_id=None, bank=None):
+    """THE LINE'S IDENTITY IS IN THE KEY, 1013. Until 1013 the key carried the tape window, the
     timeframe and the banked k_window but NOTHING about WHICH line was measured, so a second line
     family on the same timeframe - the dws lines sit on tf 8, 10 and 15, same as ws8/ws10/ws15 -
     would collide and silently load the ws mask. That is the 1008 cache-drift failure exactly.
-    ADDITIVE: line_id None reproduces the pre-1013 key, so every mask already on disk stays valid.
+
+    AND THE WHOLE BANK IS IN THE KEY, 1014. See BANK_KEYS above.
+    ADDITIVE TWICE OVER: line_id None reproduces the pre-1013 key, and a bank whose twelve knobs
+    match the live bank reproduces the pre-1014 key - so every mask already on disk stays valid and
+    only a CHANGED bank pays a recompute. The live values are read once at import, below.
     """
     base = [int(em), int(hours), int(warmup), int(tf), int(kw), str(fn), list(STATES)]
     if line_id is not None:
         base.append(str(line_id))
+    if bank is not None:
+        delta = [(c, bank[c]) for c in BANK_KEYS
+                 if c in bank and _LIVE.get(c) is not None
+                 and repr(bank[c]) != repr(_LIVE[c])]
+        if delta:
+            base.append(sorted((c, repr(v)) for c, v in delta))
     return hashlib.md5(json.dumps(base).encode()).hexdigest()[:20]
+
+
+# THE LIVE BANK'S VALUES, so an unchanged bank keys exactly as it did before 1014 and no mask on
+# disk is invalidated. Populated by the first `momtrue_mask` call that is handed a bank.
+_LIVE = {}
+
+
+def _seed_live(bank):
+    if not _LIVE and bank:
+        for c in BANK_KEYS:
+            if c in bank:
+                _LIVE[c] = bank[c]
 
 
 def momtrue_mask(line, tf, bank, em, hours, warmup, fn='gated', n=None, log=print, line_id=None):
@@ -69,7 +101,8 @@ def momtrue_mask(line, tf, bank, em, hours, warmup, fn='gated', n=None, log=prin
     n = len(line) if n is None else int(n)
     os.makedirs(CACHE, exist_ok=True)
     kw = int(bank['k_window'])
-    k = _key(em, hours, warmup, tf, kw, fn, line_id)
+    _seed_live(bank)
+    k = _key(em, hours, warmup, tf, kw, fn, line_id, bank)
     p = os.path.join(CACHE, 'momt_%s.npz' % k)
     if os.path.exists(p):
         z = np.load(p)

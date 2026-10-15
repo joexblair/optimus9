@@ -123,9 +123,31 @@ def build():
     declared opens - that blocks the 07-18 08:46 LONG and rewrites the frozen reference, which is
     Joe's call.
     """
-    ws = (12, 15, 20, 30)
-    dn = [k for k, _ in sorted(C.DWS_TF.items(), key=lambda kv: kv[1])]
-    rows = [('ws%d' % t, C.MOMT[t]) for t in ws] + [(k, C.MOMD[k]) for k in dn]
+    # THE MOMENTUM REPORT'S LINE SET IS A KNOB, 1014. Joe: *"create a mode in the momentum report
+    # that allows for different TFs"*, then *"reduce each TF by half (eg tf20 becomes tf10)"* and
+    # *"int() all of them"*.
+    #   W_MOM_LINES  a comma list of names. Default is the banked seven: ws12, ws15, ws20, ws30,
+    #                dws8r, dws10r, dws15r.
+    #   THE HALVED SET under int() is ws6, ws7, ws10, ws15, dws4r, dws5r, dws7r - and dws4r, dws5r
+    #     and dws7r ARE NOT IN THE CACHE. Only dws8r, dws10r and dws15r exist. A name that cannot be
+    #     loaded is REPORTED AND SKIPPED, never silently dropped.
+    _spec = os.environ.get('W_MOM_LINES', 'ws12,ws15,ws20,ws30,dws8r,dws10r,dws15r')
+    rows, missing = [], []
+    for nm in [z.strip() for z in _spec.split(',') if z.strip()]:
+        if nm.startswith('dws'):
+            if nm in C.MOMD:
+                rows.append((nm, C.MOMD[nm]))
+            else:
+                missing.append(nm)
+        else:
+            t = int(nm[2:])
+            if t in C.MOMT:
+                rows.append((nm, C.MOMT[t]))
+            else:
+                missing.append(nm)
+    C._P('the momentum report: %d line(s) - %s%s'
+         % (len(rows), ', '.join(n for n, _m in rows),
+            ' | NOT IN THE CACHE, skipped: ' + ', '.join(missing) if missing else ''))
     rn = X.ride_name()
     ride = SC.LDN(rn) if rn.startswith('dws') else SC.LD(X.TF * 60, 'r')
     em = X.ExtMom(rows, ride, C.BANK[X.TF], X.TF, C.EXF_HI, C.EXF_LO, N, C.STALL_N)

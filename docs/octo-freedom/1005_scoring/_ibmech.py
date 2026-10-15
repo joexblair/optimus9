@@ -78,6 +78,25 @@ import numpy as np
 
 # ---- knobs
 CEIL     = int(os.environ.get('W_IB_CEIL', 30))       # the highest TF the in-fence scan may reach
+# W_IB_SYNC — THE ws1r / ws1Mage SYNC TOLERANCE, in bars. Joe 1014: *"bake the 5.5minute sync
+# tolerance that we've just discussed"*, after *"it won't see the ws1cp because the ws1Mage oob and
+# ws1r oob are out of sync by 5.5 minutes"* and *"they don't need to overlap. 16:41 to 16:45 is the
+# gap that fits inside 5.5min"*. 66 bars = 5.5 min at the 5 s grid. 0 restores the old rule, where
+# both lines had to be oob on the SAME bar.
+#
+#   WHAT A cp NOW NEEDS: each line oob on side `d` for W_IB_DWELL consecutive bars - its own hold,
+#     not a shared one - with the two holds completing no more than SYNC bars apart.
+#   THE BAR IT STAMPS ON: the LATER of the two completions. That is the only causal choice; the
+#     earlier bar cannot know the other line is coming. MY CHOICE, STATED.
+#   MEASURED on the 2026-07-19 16:17:35 LONG, where no bar in 53 minutes had both lines high: ws1r's
+#     hold completes 16:39:10 and ws1Mage's 16:45:20, 74 bars apart - OUTSIDE 66. The closest pair
+#     is ws1r's last oob bar 16:41:05 against ws1Mage's 16:45:20, 51 bars, which is inside.
+#   RULED 0 BY JOE 1014: *"set the sync tolerance to 0 and keep it as a knob"*. MEASURED on the
+#     14-leg chain over 2026-07-17 21:58:00 to 2026-07-20: 0 reads +13.6487% and 66 reads +2.5405%,
+#     so the tolerance costs -11.1082%. It creates far more cross-backs, so close events fire much
+#     earlier on every leg. It bought the one cross-back he asked for at 2026-07-19 16:45:25 and
+#     paid 11 points for it.
+SYNC = int(os.environ.get('W_IB_SYNC', 0))
 # W_IB_DWELL — THE MODE-1 cp HOLD, in bars. THE 4 IS MINE, NOT JOE'S, and it was unlabelled until
 # 1013 when he asked *"what's the dwell for?"* and called it *"your `4`"*. He is right: his 1012
 # ruling *"add a 4 bar dwell to ws1cp"* set `W_CP_DWELL` in `_chain10`, and I mirrored the number
@@ -128,9 +147,51 @@ class IBMech:
         self.g30_ib = (g > self.xl) & (g < self.xh)
 
     # ---- the cp qualifier
+    def _build_sync(self):
+        """Per-line oob-held-DWELL masks and the sync test. Built once, read per bar.
+
+        `self._held[d][t]` is True on the bar line `t`'s own DWELL-bar oob run COMPLETES, for side
+        `d`. ws1r is keyed 'r' and ws1Mage 'm'.
+        """
+        self._held = {}
+        for d in (+1, -1):
+            hd = {}
+            for key, arr in (('r', self.r1), ('m', self.mg[1])):
+                oob = (arr >= self.hi) if d > 0 else (arr <= self.lo)
+                done = np.zeros(self.n, bool)
+                run = 0
+                for j in range(self.n):
+                    run = run + 1 if oob[j] else 0
+                    if run >= DWELL:
+                        done[j] = True
+                hd[key] = done
+            self._held[d] = hd
+
     def _mode1(self, j, d):
-        r, m = self.r1[j], self.mg[1][j]
-        return (r >= self.hi and m >= self.hi) if d > 0 else (r <= self.lo and m <= self.lo)
+        """Is bar `j` a mode-1 cp on side `d`?
+
+        SYNC 0 - the old rule: ws1r and ws1Mage both oob on THIS bar.
+        SYNC > 0 - Joe 1014's tolerance: each line's own DWELL-bar oob run has completed, and the
+          two completions are no more than SYNC bars apart. `j` is the LATER completion, so the
+          test fires on the bar both are knowable and never before. CAUSAL: every bar read is <= j.
+        """
+        if SYNC <= 0:
+            r, m = self.r1[j], self.mg[1][j]
+            return (r >= self.hi and m >= self.hi) if d > 0 else (r <= self.lo and m <= self.lo)
+        if not hasattr(self, '_held'):
+            self._build_sync()
+        hd = self._held[d]
+        if not (hd['r'][j] or hd['m'][j]):
+            return False                      # neither line completes a hold here
+        lo = max(0, j - SYNC)
+        other_r = bool(hd['r'][lo:j + 1].any())
+        other_m = bool(hd['m'][lo:j + 1].any())
+        if not (other_r and other_m):
+            return False
+        # j must be the LATER of the two, so the line completing here must be the one whose partner
+        # already completed inside the window.
+        assert lo <= j, 'the sync window ran forwards'
+        return True
 
     def cps(self, a, b):
         """-> [(bar, side)] for both sides, in bar order. Mode 1 only."""

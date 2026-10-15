@@ -57,6 +57,7 @@ RULED = {
     'W_LOOP_CLEAR_OOB': ('1', 'Joe 1013', 'repair as needed'),
     'W_LOOP_CLOSE': ('1', 'Joe 1013',
                      'if it cannot, then EXHAUSTION is printed immediately and the walk ends'),
+    'W_IB_SYNC': ('0', 'Joe 1014', 'set the sync tolerance to 0 and keep it as a knob'),
     # ---- THE CHAIN RESTART. His mech, his name 'restart-chain-on-loop-tf-oob'.
     'W_RESTART': ('1', 'Joe 1013', "A confirmed - build it and run the chain"),
     'W_RESTART_MAGE_DWELL': ('24', 'Joe 1013', 'ws1Mage has been IB for >24 bars'),
