@@ -184,8 +184,7 @@ def chain(e, dr, ib, em, rows, gate=None):
     if not ws30:
         xb, why_x = em.exit_bar(c, board)
         xb = c if xb is None else xb
-    _st = {}
-    k, why, mae, cb, hand, tr = C.run_leg(xb, dr, state=_st)
+    k, why, mae, cb, hand, tr = C.run_leg(xb, dr)
     kk = xb if k is None else k
     # THE WALK'S EVENTS, for reporting only. No branch reads it.
     tr_all = [(b, str(t)) for b, t in tr]

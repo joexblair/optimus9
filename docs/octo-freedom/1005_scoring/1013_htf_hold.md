@@ -278,3 +278,47 @@ built on 1013 - *"18:12 is the exit and the open"* - is 1.9 min broken by the lo
 |---|---|
 | ruled, his value with his words | 31 |
 | recorded as unruled, with whose number each is | 14 |
+
+## THE DIFF REVIEW, 1014. Five dead items stripped, all left by the hold removal.
+
+Joe asked for a review of the committed chain diff. Every one of these is mine.
+
+| # | the defect | the fix |
+|---|---|---|
+| 1 | `run_leg`'s docstring opened with "JOE 1013'S JUMPSTART-DISABLED FLAG" - one small flag had taken over the function's own description | the docstring describes the leg walk, and records what was removed |
+| 2 | `rider0`, `looped_once`, `loop_oob0`, `jump_off`, `state` had no caller | removed; they carried state across the keep-going layer's pieces |
+| 3 | `W_LOOP_STATE_CARRY` could not change anything - it guarded `loop_oob0` | removed from the code AND from the ruled set, where it sat as Joe's ruling with his words |
+| 4 | the "JUMPSTART DISABLED" trace row was unreachable | the branch stays because the flag is his mech; the reason it cannot print is now written next to it rather than left silent |
+| 5 | `_DB_MAE` assigned and never read | removed |
+
+| check after the strip | result |
+|---|---|
+| `python3 machine.py` | all 14 frozen figures match |
+| the chain, 14 legs | +13.6487%, unchanged |
+| ruled knobs | 30 |
+| unruled knobs recorded | 14 |
+
+Defect 3 is the one that mattered: a knob banked as Joe's ruling that could not affect the machine.
+It is the same shape as `W_LOOP_END` sitting at my own 'cp' default for two days while his words
+said 'oob'.
+
+## JOE'S 16:46 READ ON THE 2026-07-19 16:17:35 LONG - VALIDATED
+
+His view: it should end ~16:46, and does not because ws1Mage oob and ws1r oob are out of sync by
+about 5.5 minutes. A cross-back needs ws1r >= 85 AND ws1Mage >= 85 held 2 bars.
+
+| line | its high-oob runs, 16:17 to 17:10 |
+|---|---|
+| ws1r | 16:17:05-16:18:55, 16:39:05-16:39:15, 16:40:05-16:40:10, 16:40:20-16:40:55, 16:41:05, 17:07:00-17:09:55 |
+| ws1Mage | 16:45:15-16:46:10, 16:46:20-16:47:40, 16:48:00-16:50:10, 16:50:40-16:50:55, 16:51:20 |
+
+| what | figure |
+|---|---|
+| bars where both are high oob, 16:17 to 17:10 | none |
+| ws1r's last high bar before ws1Mage turns | 2026-07-19 16:41:05 at 87.36 |
+| ws1Mage's first high bar | 2026-07-19 16:45:15 at 147.85 |
+| the gap | 4 min 10 s, inside his 5.5 min |
+| so the leg ran to | 2026-07-19 19:29:20, exhaustion, -0.2531% |
+
+HIS READ IS CORRECT. No mech is built for it - a sync tolerance between the two lines does not
+exist and he has not asked for one.

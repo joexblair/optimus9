@@ -54,7 +54,6 @@ RULED = {
     'W_LOOP_ONCE': ('1', 'Joe 1013', "the 'rider reset to ws1' is a one-time event"),
     'W_LOOP_JUMP_OFF': ('1', 'Joe 1013',
                         'if the loop cycles from loop-tf to ws1, the jumpstart is disabled'),
-    'W_LOOP_STATE_CARRY': ('1', 'Joe 1013', 'we take the first signal'),
     'W_LOOP_CLEAR_OOB': ('1', 'Joe 1013', 'repair as needed'),
     'W_LOOP_CLOSE': ('1', 'Joe 1013',
                      'if it cannot, then EXHAUSTION is printed immediately and the walk ends'),
