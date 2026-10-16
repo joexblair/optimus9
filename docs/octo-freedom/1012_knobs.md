@@ -122,5 +122,5 @@ not been tagged `left-target-dr` by crossing oob → ib. See `1013_last_mile.md`
 
 ## NOT A KNOB
 
-The target board. Joe 1012: *"it can only be set once at the open of the trade"*. There is no env
+The target-side oob. Joe 1012: *"it can only be set once at the open of the trade"*. There is no env
 var and no fork — `W_DR` was deleted. See `1012_target_board.md`.

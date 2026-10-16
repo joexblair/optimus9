@@ -78,7 +78,7 @@ the leg. BEFORE that verdict is accepted:
    the hold on its first bar? On the 07-18 02:33 SHORT global dr was already -1 from 04:08:45, so
    the 05:48:05 hold closes on its own bar under the second reading and runs on under the first.
    WHILE IT IS PARKED a hold ends only on the walk-completion test at 4a. If the g15 pair never
-   arrives on the target board, the hold does not end.
+   arrives on the target-side oob, the hold does not end.
 5. BLIP RULE — a FLIP IN THE TRAJECTORY'S SIGN must survive 12 bars (1 minute) before it counts.
    Joe: *"that's what I mean"*. SHORT-CIRCUIT: *"if the 12 bars follow the line into oob then the
    qualification is automatically given and the lineage tests for baton-pass"*.

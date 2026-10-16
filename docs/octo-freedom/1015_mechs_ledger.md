@@ -41,7 +41,7 @@ STATE VOCABULARY — existing project words, no new coinage:
 | A19 | the NON-OOB band read — Joe 1015: *"don't use oob. if the TF lines less than ws5Mage (g5 to ws4) print mostly higher values, and the TF lines greater than ws5Mage (ws6 to ws60) print mostly lower values, then the next move is downward / the inverse is true"*, with his condition *"I _think_ this method only works when ws5Mage is infence"* | MEASURED | TWO BARS. 2026-07-22 17:48:00: g5-to-ws4 median 73.85 vs ws6-to-ws60 median 48.83, 84 of 84 pairs with the lower line above, ws5Mage 57.49 IN-FENCE, verdict DOWN. Next pivot H 18:20:55 +0.2185%, then L 19:13:15 -1.1535%. 2026-07-22 21:34:00: medians 28.01 vs 33.54, 33 of 84 pairs (39.3%), ws5Mage 39.73 IN-FENCE, verdict UP. Next pivot H 22:15:30 +0.9328% | the horizon. "the next move" is undefined - 17:48 goes +0.2185% the wrong way first, then -1.1535%. And separation strength did not predict immediacy: 100% clean at 17:48 went wrong first, 39.3% at 21:34 went right immediately |
 | A20 | the confluence at 17:48 — Joe's hypothesis *"the non-oob oob band and the lineage EXHAUTION confluence each other"* plus his question *"has the turn-predictor recently fired?"* | MEASURED | ONE BAR. Four events inside 2 min: the 5-line HIGH-side matr-rev conjunction at 17:47:05 (span 60 bars = 5 min, all five of g15/g30/ws1/ws2/ws3 in); ws3x crossing UNDER ws3r at 17:48:00 with ws3r HIGH oob at 98.31, its oob 1.67 min old; the band separated 84 of 84 with ws5Mage in-fence at 17:48:00; the ws1cp-ib at 17:49:55 from the cps at 17:40:15 and 17:41:35. Members' own confs: ws3Mage 17:47:55 (0.08 min before), ws1Mage 17:47:30, g5Mage 17:47:05, ws2Mage 17:45:50, g30Mage 17:42:55, g15Mage 17:42:20 | a base rate. AND the span: the 5-line conjunction fires here ONLY at a 5-min span - at 1, 2 and 3 min it has not fired since 16:00. Gap 14 decides whether this confluence exists |
 | A21 | the 17:48 band compared with the 18:20:55 band — the two are opposite structures | MEASURED | at 18:20:55, 7 lines faster than ws5 are at or past oob 85 and the 12 slower are not; ws5Mage is the edge. At 17:48:00 only ws2Mage (91.18) is past 85 — 19 of 20 are in-fence, and 0 of 20 are past 85 continuously from 17:46 to 18:16, half an hour. The split at 17:48 is a DIRECTION split at ws3: g5Mage through ws2Mage all FALLING, ws3Mage through ws60Mage all RISING | nothing. It answers Joe's question "do you see the same band split at ~17:48" with NO, and names what is there instead |
-| A22 | "riding ws5Mage 101" — Joe's name, 1015, for the qualified set: the four confluence events plus the lineage exhaust, then the walk to low target-side | MEASURED | ONE LEG. Qualified at 2026-07-22 17:48 by A20's four events. The walk ends 18:32:55 when ws5Mage reaches the low board at 14.79, 44.92 min. THE NEXT PIVOT the walk marks is L 2026-07-22 19:13:15 at 0.13506047. The SHORT from 17:48: MAE 0.2185%, MFE 1.1535%, MFE over MAE 5.28, realised +1.1535%. Entering at 17:48 beats the 17:49:55 ws1cp-ib, which gives MAE 0.4320% and +0.9428% | a base rate. AND the walk-end definition — gap 30 |
+| A22 | "riding ws5Mage 101" — Joe's name, 1015, for the qualified set: the four confluence events plus the lineage exhaust, then the walk to low target-side | MEASURED | ONE LEG. Qualified at 2026-07-22 17:48 by A20's four events. The walk ends 18:32:55 when ws5Mage reaches the low oob at 14.79, 44.92 min. THE NEXT PIVOT the walk marks is L 2026-07-22 19:13:15 at 0.13506047. The SHORT from 17:48: MAE 0.2185%, MFE 1.1535%, MFE over MAE 5.28, realised +1.1535%. Entering at 17:48 beats the 17:49:55 ws1cp-ib, which gives MAE 0.4320% and +0.9428% | a base rate. AND the walk-end definition — gap 30 |
 | A23b | EXHAUSTION'S PREMISE — Joe 1015: *"this statement can only apply to high-side. it's saying that at least one r line is HIGH oob, so exhaustion fires if a slower line has not made it to HIGH oob"*, and the inverse for LOW OOB | MEASURED, and it is in the code | ONE BAR, 2026-07-22 19:12:30, on the RULED config W_KICK=high. 0 of 30 r lines at HIGH oob; ws1r 9.50 and ws2r 7.54 at LOW oob. THE LONG, toward HIGH oob: ends 19:14:35 on "max jumpstart gap" - *"no line at or under ws7 went oob within 24 bars (2.0 min) of the handoff; the jumpstart never fired"*. NO EXHAUSTION TEST IS REACHED. THE SHORT, toward LOW oob: the jumpstart fires 19:12:35 on rider ws2, *"highest oob line at or under ws7, r 7.54"*, then EXHAUSTED on ws2 at 19:13:50 - ws3r 39.60 and ws4r 55.60 no momentum. The premise is enforced BY THE JUMPSTART, which requires an oob line | nothing. It is the mech as built |
 | A23 | LINEAGE AS A CLOCK — `run_leg` sampled from successive bars, which measures how long a leg opened at that bar is carried | MEASURED | ONE LEG, the LONG side from the 2026-07-22 19:12:30 signal, sampled every 60 s for an hour. 19:12:30 to 19:21:30 all close in 2 bars. The first carry is 19:22:30, 90 bars = 7.50 min, +0.1798%, when ws2r goes 7.54 to 51.22. The longest is 19:57:30, 392 bars = 32.67 min, +0.7267%. CARRYING IS NOT BEING RIGHT: the 19:30:30 to 19:39:30 opens all carry, up to 113 bars, and every one realises negative, -0.12% to -0.26% | a base rate. And a ruling on whether a lineage carry is a confluence item at all, given the negative-carry window |
 | A24 | the turn-predictor's ws1Mage gate — Joe 1015: *"the turn signal can only fire if ws1Mage is same-side oob"* | MEASURED | Applied as the literal reading: at the conjunction's fire bar ws1Mage is oob on the turn's own side, >= 85 HIGH or <= 15 LOW. SATISFIABLE - the conjunction can be driven by other members while ws1Mage is still extended, as at 17:47:05 where ws1Mage had not yet crossed to ib. DECISIVE at the 19:12:30 signal, where ws1Mage is 19.43 IN-FENCE and so a LOW-side turn signal is blocked | the alternate readings are not measured: ws1Mage oob anywhere inside the span, or ws1Mage required to be one of the k crossing members |
@@ -107,7 +107,7 @@ edited except the evidence doc and this ledger.
 | 26 | CUMULATIVE versus SPANNED. 0.54 points apart on the 5-line family, opposite verdicts |
 | 27 | the family tops out at +2.0036% against a +4.6026% ceiling with 0.0000% MAE |
 | 28 | the race targets are not independent — their order is their level order |
-| 30 | what "low target-side" ends the walk at. The low board (ex-fence 17 / oob 15, the same bar here) gives a 44.92 min walk ending 18:32:55 and marks the L pivot. Under 50 — Joe's own divergence-spec phrase — the walk ends 17:48:15, 15 seconds in, on a flicker: ws5Mage goes 49.73 then 52.77, 53.44, 47.70, 45.43, 50.51, 54.92 and on to 70.93 |
+| 30 | what "low target-side" ends the walk at. The low oob (ex-fence 17 / oob 15, the same bar here) gives a 44.92 min walk ending 18:32:55 and marks the L pivot. Under 50 — Joe's own divergence-spec phrase — the walk ends 17:48:15, 15 seconds in, on a flicker: ws5Mage goes 49.73 then 52.77, 53.44, 47.70, 45.43, 50.51, 54.92 and on to 70.93 |
 | 29 | two holds in one mech: xwob 8 for the ws5x cross, `boundary_xwob` 4 for the members |
 
 ---
@@ -120,7 +120,7 @@ edited except the evidence doc and this ledger.
 | "the BULLISH divergence at the LOW cp is wrong" | I scored it only to the next L pivot, which is the adverse leg by construction | MAE -0.4198%, MFE +0.8664%, ratio 2.06, closing +0.8664% at the next favourable swing. The divergence was right |
 | "no single line is a pivot warning" | that was the FORWARD framing, which asks a confirming detector to forecast | backward, g30Mage is 3.9x and ws1Mage 4.1x the baseline |
 | "the band that converges is ws1 to ws15, not the higher TFs" | measured on boundary crossings only | on the price-pivot measure ws20-ws60 are the best of all 17, topping on the pivot without ever going oob |
-| "THE NEXT PIVOT is H 2026-07-22 18:20:55, +0.2185% the wrong way" | I marked the next pivot after the WALK START, 17:48. Joe said mark the next pivot after the WALK ENDS | the walk ends 2026-07-22 18:32:55 when ws5Mage reaches the low board at 14.79. THE NEXT PIVOT is L 2026-07-22 19:13:15 at 0.13506047, -1.1535% from 17:48. The H at 18:20:55 sits INSIDE the walk, with ws5Mage at 70.93 still on the high side of 50 |
+| "THE NEXT PIVOT is H 2026-07-22 18:20:55, +0.2185% the wrong way" | I marked the next pivot after the WALK START, 17:48. Joe said mark the next pivot after the WALK ENDS | the walk ends 2026-07-22 18:32:55 when ws5Mage reaches the low oob at 14.79. THE NEXT PIVOT is L 2026-07-22 19:13:15 at 0.13506047, -1.1535% from 17:48. The H at 18:20:55 sits INSIDE the walk, with ws5Mage at 70.93 still on the high side of 50 |
 | "lineage refuses, 10 seconds in" at the 2026-07-22 19:12:30 signal | `run_leg` is an EXIT mech, so "refuses" was the wrong word | the mech that fired is `exhausted_cycle`, titled "THE LAST MILE'S EXHAUSTION", whose docstring quotes Joe 1013: *"the end is the EXHAUSTION event. I'm sure that this is the existing mech"*. The correct sentence: THE LAST-MILE EXHAUSTION FIRED |
 | "at 19:12:30 lineage has nothing above ws1 to walk on" explained as a TIMING fact because the lines were near the bottom of their range | Joe 1015: *"isn't that the very definition of EXHAUSTION?"* - it is. And I explained it by POSITION while the mech decides on MOMENTUM. `towards_dr`'s own docstring: *"Nothing about the line's position is read - a line can be in-fence and still be heading to the target end"*. The trace said "no momentum" for both lines and I overrode it | ON THE RULED CONFIG THE LONG NEVER REACHES AN EXHAUSTION TEST - it ends 19:14:35 on "max jumpstart gap". See the next row |
 | "the last-mile exhaustion fired at 19:12:30 because neither ws2 nor ws3 was momentum-true toward the HIGH board" | I ran `W_KICK=off` under `W_EXPERIMENT=1` and read its output as the machine's behaviour. The trace said what I had done: *"KICKSTART disabled, no oob test, lineage climbs from the bottom"*. With no oob test there is no established climb, so the exhaustion fired on an empty premise | on the RULED config W_KICK=high: the LONG ends on "max jumpstart gap"; the SHORT's jumpstart rides ws2 at LOW oob 7.54 and exhausts at 19:13:50 when ws3r 39.60 and ws4r 55.60 do not follow down |
@@ -432,3 +432,56 @@ THE CONCLUSION IS CONDITIONAL ON THE FILL MODEL. Under maker/maker the ordering 
 fixed arm is +376.13% against the g15 grid's +354.02%, because 396 extra trades cost little when
 drag is 0.040%. Post-only entry is recorded at docs/arm_delay_book.md:128 as *"the single largest
 untested lever in this work"*, and it changes no signal.
+
+### J5. 1016 — the causality repair, and `veto-on-momentum` banked
+
+**THE CAUSALITY REPAIR.** Joe: *"repair the lookahead as needed"*. Found by the first dev-cache
+test: the x-cross is searched BACKWARD from the conjunction fire, so its confirmation bar can sit
+earlier than the fire — and an unheld turn-predictor event was stamped there. 2026-08-24 10:28:05
+was recorded 26 bars = 130 s before its own fire at 10:30:15, and it opened a real trade.
+The stamp now takes the LATER of the cross confirmation and the fire, the hold's start bar takes it
+too, and an assert stops the run if any event is ever stamped before its own fire. Silent on all 94.
+
+    gross  +399.7394% -> +408.8044%   trades 1143 -> 1142   net +173.9969% -> +183.2594%
+
+IT WENT UP. I predicted a drop from the one trade I had looked at and was wrong — starting those
+trades late means starting at a price that has already moved, and on balance it had moved the
+machine's way. One trade is not a sample, which I had already been told twice the same day.
+
+**`veto-on-momentum` — JOE NAMED IT.** *"the ws3 ws4 ws5 lines that we've chosen for the new
+`veto-on-momentum`"*. An exit-side mech: the verdict's power to close the opposite side is
+suspended while ws3r/ws4r/ws5r are travelling against it; the trade rides ws5r; the handover fires
+when ws5Mage reaches the riding trade's target-side oob; bounce-pred walks and its reverse is the
+exit. Lineage decides nothing — Joe: *"that was banning lineage as a decision route"*.
+
+    gross  +408.8044% -> +423.4278%   trades 1142 -> 1146   net +183.2594% -> +197.0928%
+    the veto fired 35 times over the 94 days
+
+THE DRAWDOWN DID NOT MOVE, AND THAT IS WHAT HE ASKED IT FOR. mean MAE 1.3075% -> 1.3104%, worst MAE
+15.3586% unchanged, trades over 5% MAE 51 unchanged, worst day -15.4539% unchanged. It is a GROSS
+mech. The 2026-08-22 02:07:15 trade still takes its 5.78% adverse excursion.
+
+**HIS PASS-50 CLAIM, MEASURED AND HELD.** *"it is very rare for a ws4r and ws5r line to leave its
+source oob and then reverse and return to source oob without passing 50 first"*. My first count said
+55-75% and called it the opposite way; that count treated fence jitter as a departure - half of its
+"episodes" lasted 15 to 55 seconds. With his own two filters (a minimum time out, and a dwell so a
+spike cannot count as a return) the rate is 9.3% at a 5-minute minimum. The decisive evidence: the
+`passed 50` count is IDENTICAL at every minimum-time-out setting, so the filter never removes an
+episode that passed 50 - every one it drops is a no-50 return.
+
+**THE FLIP WAS MEASURED AND REJECTED.** Joe asked how many signals would do better flipped. The
+pattern fires on 36 of 2799 events = 1.29% at a 20-min lookback, and flipping is a coin toss on
+money (39.8% to 52.8% better across the lookbacks) while halving mean MAE. At 30 and 60 min it
+destroys the gross: +21.19% -> +1.56%, +65.63% -> +25.50%. Holding beat both on his own example:
++10.17% gross with 1.70% MAE, against taking it (+6.56%/5.78%) and flipping it (+0.01%/0.24%).
+
+**TERMINOLOGY FIXED, Joe 1016:** *"its "high oob" and "low oob". board refers to the full range
+(0 to 100 for r, unlimited for MAge)"*. `low board` / `high board` / `target board` replaced with
+`low oob` / `high oob` / `target-side oob` across 10 files and 20 lines. HIS SEVEN VERBATIM QUOTES
+WERE NOT REWRITTEN - each now carries a note giving the current term. The source of the error was my
+own memory file, named for the wrong word, which spread it into 9 repo files.
+
+**THE `dev-cache`, JOE NAMED IT:** *"when I need this rebuilt for another window, I'll refer to it
+as our `dev-cache`"*. `1005_scoring/_win3.py`. 0.24 s to load against a ~250 s rebuild; 548 arrays
+over a 51,840-bar window; keyed on the window plus the banked knobs with a control re-checked on
+load. Its first test found the causality fault above.

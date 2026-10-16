@@ -49,6 +49,27 @@ RULED = {
     # MOM-XFER IS OFF BY HIS RULING, not by omission. Measured first: its best arm netted
     # +157.3814% against the banked g15 grid's +173.9969%, and he ruled it out.
     'W_MX_ON': ('0', 'Joe 1016', 'no mom-xfer'),
+    # ---- `veto-on-momentum`, Joe 1016. HIS NAME, HIS MECH. The two VALUES are MINE and stated in
+    # _vetomom.py; he named the filters, not the numbers.
+    'W_VOM_ON': ('1', 'Joe 1016',
+                'your "it is a veto on the close. The verdict\'s power to close the opposite '
+                'side is suspended" is the correct view'),
+    'W_VOM_TFS': ('3,4,5', 'Joe 1016',
+                 'lost momentum is signalled by {knob:ws3-6} leading AWAY from oob and carrying '
+                 'the ib tag, in a matryoshka pattern'),
+    # THE TWO VALUES INSIDE veto-on-momentum ARE MINE, ruled here as MINE so the coverage count
+    # does not pretend Joe set them. He named the filters; the numbers came from the measurement.
+    'W_VOM_MIN_OUT': ('60', 'MINE 1016',
+                      'the measured knee in his pass-50 claim: the no-50 rate runs 36.7% at 1 min, '
+                      '23.4% at 2 min, 9.3% at 5 min, 6.3% at 10 min - 5 min is where it halves '
+                      'and flattens. HIS CLAIM, which the filter confirmed: "it is very rare for a '
+                      'ws4r and ws5r line to leave its source oob and then reverse and return to '
+                      'source oob without passing 50 first"'),
+    'W_VOM_LOOKBACK': ('240', 'MINE 1016',
+                       'how far back the three departures may sit. At 5 min only 1 event of 2799 '
+                       'matched; at 60 min the pattern fires on 9.50% of events; 20 min gives '
+                       '36 = 1.29%. TWEAKABLE, and the fire count is thin at 35 over 94 days'),
+    'W_VOM_XWOB': ('4', 'Joe 0911', 'use these values, reversal:2, boundary:4. both are knobs'),
     'W_CONJ_GATE_SLACK': ('4', 'Joe 1016',
                           'I agree. bake it along with all of the mechs that create the 7.9887'),
     'W_CONJ_K': ('5', 'Joe 1016',

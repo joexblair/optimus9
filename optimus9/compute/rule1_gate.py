@@ -27,6 +27,7 @@ THE SCENARIO, JOE 0924:
   `anchor_floater` can only return the dr's own sign or zero — its step 4 fires bearish at dr +1
   and bullish at dr -1, never the opposite — so "diverging away from dr" is exactly a non-zero
   verdict. Joe 0924 confirmed the direction: "-1dr = low board = launchpad for a long postion".
+#   TERMINOLOGY, Joe 1016: *"its \"high oob\" and \"low oob\". board refers to the full range (0 to 100 for r, unlimited for MAge)"*. The quote above keeps his original wording; the term in use now is low oob / high oob / target-side oob.
 
 OOB IS 15/85. Always. 27/73 is rule#1's fence, 25/75 is the Mage fence, 17/83 is the r-momo
 fence. They are four different numbers and this module keeps them apart by never defaulting one.

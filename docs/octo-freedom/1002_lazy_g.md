@@ -3,6 +3,8 @@
 Joe's words, verbatim, on the bar that opened the first live trade:
 
 > *"btw, that setup is exactly lazy-g. at the bar, the Mage goes from a low board position at
+>
+> TERMINOLOGY, Joe 1016: *"its \"high oob\" and \"low oob\". board refers to the full range (0 to 100 for r, unlimited for MAge)"*. The quote above keeps his original wording; the term in use now is low oob / high oob / target-side oob.
 > g15Mage, to a higher board position in the HTF Mages, and along the way the `r` swaps its
 > positioning with the Mage. you can see this in ws4Mage vs ws4r: Mage has shifted from under r at
 > g15, and over r at ws4"*

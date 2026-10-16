@@ -254,6 +254,7 @@ else:
 # THE TRADE'S SIDE SETS THE TARGET BOARD. Joe 1012, ruling both halves after the 07-18 02:33
 # trade armed four legs on the wrong board:
 #   *"the trade's direction/'side' is what sets the target: SHORT trades use a low board target,
+#   TERMINOLOGY, Joe 1016: *"its \"high oob\" and \"low oob\". board refers to the full range (0 to 100 for r, unlimited for MAge)"*. The quote above keeps his original wording; the term in use now is low oob / high oob / target-side oob.
 #   LONG trades use a high board target"*
 #   *"always the end the trade is heading to"*
 #   *"it can only be set once at the open of the trade"*
@@ -324,7 +325,7 @@ CP_DWELL = int(os.environ.get('W_CP_DWELL', 4))
 # ws1-cp MODE 2 — THE DIVERGENCE MODE. BAKED 1012, Joe: *"we need mode 2 baked in so that jumpstart
 # can fire on the 14:33 ws1-cp"*. Default 'both': either mode arms, which is what he meant by
 # *"your ws1cp mech has both modes baked"*.
-#   '1'     mode 1 only - ws1r AND ws1Mage both oob on the target board. The pre-1012 build.
+#   '1'     mode 1 only - ws1r AND ws1Mage both oob on the target-side oob. The pre-1012 build.
 #   '2'     mode 2 only.
 #   'both'  either one. THE DEFAULT.
 # RE-ENABLED 1012, Joe: *"re-enable mode 2"*. He disabled it one turn earlier to see what it was
@@ -1325,7 +1326,7 @@ def run_leg(k0, trade_side):
     # is the end the trade is HEADING TO, which is the opposite end. Resolved here, once.
     assert int(trade_side) in (-1, 1), (
         "run_leg needs the trade's side at its open, +1 (SHORT) or -1 (LONG), got %r. A side of 0 "
-        "means global dr has not resolved yet and the target board cannot be set." % (trade_side,))
+        "means global dr has not resolved yet and the target-side oob cannot be set." % (trade_side,))
     d = -int(trade_side)
     _board0 = d            # the board is set once; this is what the per-bar invariant checks
     # THE ADVERSE DIRECTION IS AGAINST THE TRADE. Joe 1012: the MAE stop *"is incorrect, likely
@@ -1403,7 +1404,7 @@ def run_leg(k0, trade_side):
         # open of the trade"*. This is an assert and not a comment because the bug it replaces was
         # exactly a mid-walk reassignment of `d`, and it was invisible in the rows it produced.
         assert d == _board0, (
-            'the target board moved mid-walk, %+d -> %+d. It is set once at the trade open and '
+            'the target-side oob moved mid-walk, %+d -> %+d. It is set once at the trade open and '
             'every test downstream reads it.' % (_board0, d))
         # JOE 1013'S `left-target-dr` TAG, MAINTAINED AT THE TOP OF THE BAR, BEFORE ANY `continue`.
         # IT HAS TO BE HERE. Placed lower down - after the baton block - it was skipped on every bar
@@ -1610,7 +1611,7 @@ def run_leg(k0, trade_side):
                 _side = GCG.oob_side(j, d)
                 if _side == d:
                     tr.append((j, 'g15r LINEAGE FINISHER — g15r %.2f and g15Mage %.2f both oob on '
-                                  'the target board here; the hold opened at %s, %.1f min ago, and '
+                                  'the target-side oob here; the hold opened at %s, %.1f min ago, and '
                                   'ENDS. the walk carries on'
                                % (float(GCG.r15[j]), float(GCG.m15[j]), SC.U(gc_hold),
                                   (int(SC.ts[j]) - int(SC.ts[gc_hold])) / 60000.0)))
@@ -1624,14 +1625,14 @@ def run_leg(k0, trade_side):
                 else:
                     if _side == -d and not gc_said:
                         gc_said = True
-                        tr.append((j, 'g15 arrived AGAINST the target board — g15r %.2f and '
+                        tr.append((j, 'g15 arrived AGAINST the target-side oob — g15r %.2f and '
                                       'g15Mage %.2f both oob. this does NOT close the leg any '
                                       'more (Joe 1012); the hold from %s stays open. reported '
                                       'once per hold.'
                                    % (float(GCG.r15[j]), float(GCG.m15[j]), SC.U(gc_hold))))
                     if GC_HOLD == 'wait':
                         continue
-        # MODE 1 — ws1r AND ws1Mage both oob on the target board, held W_CP_DWELL bars.
+        # MODE 1 — ws1r AND ws1Mage both oob on the target-side oob, held W_CP_DWELL bars.
         cp_now = (oobf(1, j, d)
                   and ((float(MG1[j]) >= SC.HI) if d > 0 else (float(MG1[j]) <= SC.LO))
                   ) if CP_MODE in ('1', 'both') else False
@@ -1645,7 +1646,7 @@ def run_leg(k0, trade_side):
         # already fired on this bar, so one bar is one cp and the row names which mode made it.
         cp_2 = None if (cp_1 or CP_MODE == '1') else cp2(j, d)
         cp_edge = bool(cp_1) or cp_2 is not None
-        cp_why = ('mode 1, ws1r %.2f and ws1Mage %.2f both oob on the target board, held %d bars '
+        cp_why = ('mode 1, ws1r %.2f and ws1Mage %.2f both oob on the target-side oob, held %d bars '
                   'from %s' % (float(R[1][j]), float(MG1[j]), CP_DWELL, SC.U(j - CP_DWELL + 1))
                   ) if cp_1 else ''
         if cp_2 is not None:

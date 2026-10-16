@@ -164,7 +164,7 @@ print('| readings that DISAGREE - the gate would stop these | %d |' % _dis)
 # ---- THE MOMENTUM REPORT AT EACH OPEN. Joe 1014: *"how many of the losers/winners were trading
 # against/with the dws/ws momentum report?"*. The report is the machine's own 7-line vote - ws12,
 # ws15, ws20, ws30, dws8r, dws10r, dws15r - read through `rows`, which `machine.build()` returns.
-# WITH = more lines mom-true toward the trade's OWN target board than toward the other.
+# WITH = more lines mom-true toward the trade's OWN target-side oob than toward the other.
 def mom_at(bar, dr):
     """-> (toward the trade own board, toward the other, 'with'/'against'/'level')."""
     own = -dr

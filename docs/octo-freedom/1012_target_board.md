@@ -3,6 +3,8 @@
 Joe 1012, ruling three things in his own words:
 
 > the trade's direction/"side" is what sets the target: SHORT trades use a low board target, LONG
+>
+> TERMINOLOGY, Joe 1016: *"its \"high oob\" and \"low oob\". board refers to the full range (0 to 100 for r, unlimited for MAge)"*. The quote above keeps his original wording; the term in use now is low oob / high oob / target-side oob.
 > trades use a high board target
 
 > always the end the trade is heading to
@@ -225,7 +227,7 @@ THE 14:33:05 CP, in full:
 | floater | 14:25:55, ws1r 5.62, close 0.133470 |
 | d_osc | +27.25 |
 | d_px | -0.000390 |
-| fired | -1, the low board's sign |
+| fired | -1, the low oob's sign |
 
 WHAT IT MOVED on the banked 02:33 walk: the arm 04:11:40 -> 04:11:00 and W_LOOP 1's end
 05:42:15 -> 05:12:05. The three gc deferrals, their three finishers and the leg's exit are all

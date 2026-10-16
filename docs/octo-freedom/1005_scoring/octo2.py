@@ -141,6 +141,12 @@ class Octo2:
         self.x5 = np.asarray(sc.LD(BP.TRIG_TF * 60, 'x'), float)[:n]
         self.m5 = self.bp.trig
         self.oob = (self.m5 >= self.hi) | (self.m5 <= self.lo)
+        # `veto-on-momentum`, Joe 1016. BUILT AFTER m5, which it reads - it needs both the hold object
+        # that takes over at the handover and the ws5Mage line. It vetoes a CLOSE; it never gates
+        # an entry.
+        import _vetomom as VOM
+        self.vom = VOM.VetoOnMomentum(sc, self.hold, self.m5) if VOM.ON else None
+        self.vom_rows = []                 # every bar the veto fired, for the report
         self.mxgate = mxgate
         self.mx_blocked = []                  # every (bar, side, src, why) the gate withheld
 
@@ -195,14 +201,26 @@ class Octo2:
                 c, cf, dirn = self.conj.cross_for(j, side, self.x5, self.m5)
                 if cf is None or cf > until:
                     continue
-                how = 'the fire was %s, the cross ran %s; %s' % (self.sc.U(j), dirn,
-                                                                 ', '.join(mem))
+                # NOTHING MAY BE STAMPED BEFORE THE INFORMATION THAT PRODUCED IT. The x-cross is
+                # found by looking BACKWARD from the fire, so its confirmation bar can sit EARLIER
+                # than the fire - and the event used to be stamped there. Measured on
+                # 2026-08-24 10:28:05: the event was recorded 26 bars = 130 s before its own fire
+                # at 10:30:15, which in a live run would be placing a trade two minutes ago.
+                # THE STAMP TAKES THE LATER BAR, which is the banked stamp rule: additive, max(),
+                # never swap. Joe 1016: *"repair the lookahead as needed"*.
+                # The HOLD's start bar takes it too - a hold that begins before the fire could
+                # sample a bar the machine had not yet earned.
+                know = max(int(cf), int(j))
+                if know > until:
+                    continue
+                how = ('the fire was %s, the cross ran %s, confirmed %s, knowable %s; %s'
+                       % (self.sc.U(j), dirn, self.sc.U(cf), self.sc.U(know), ', '.join(mem)))
                 # BOUNCE-PRED HAS PRIORITY. Joe 1016. The hold applies whenever ws5Mage is oob at
                 # the event bar - the mech's own firing condition, Joe 1016: *"it will only fire
                 # when ws5Mage is oob"*. When ws5Mage is in-fence there is nothing to hold and the
                 # event stands on its own bar.
-                if USE_BP and BP_PRIORITY and self.bp.trig_oob(cf, side):
-                    w = self.hold.walk(cf, side, until=until)
+                if USE_BP and BP_PRIORITY and self.bp.trig_oob(know, side):
+                    w = self.hold.walk(know, side, until=until)
                     if not w:
                         continue
                     rb, v, ka, med, pos, why = w[-1]
@@ -216,9 +234,19 @@ class Octo2:
                     if ka <= until:
                         ev.append((ka, side, 'the turn-predictor + bounce-pred reverse',
                                    '%s | held from %s, the reversal was %s; %s'
-                                   % (how, self.sc.U(cf), self.sc.U(rb), why)))
+                                   % (how, self.sc.U(know), self.sc.U(rb), why)))
                     continue
-                ev.append((cf, side, 'the turn-predictor', how))
+                ev.append((know, side, 'the turn-predictor', how))
+        # THE CAUSALITY INVARIANT, ASSERTED. Every turn-predictor event bar must be at or after
+        # its own fire bar. A comment would not have caught the 2026-08-24 10:28:05 fault; this
+        # does, on every run.
+        for _b, _s, _src, _nt in ev:
+            if 'turn-predictor' in _src:
+                _m = _nt.split('the fire was ')
+                if len(_m) > 1:
+                    _fb = self.sc.K(_m[1][:19])
+                    assert _b >= _fb, ('event %s is stamped before its own fire %s'
+                                       % (self.sc.U(_b), self.sc.U(_fb)))
         # DEDUPE ON (bar, side). A bar is one side-event however many triggers landed on it.
         #   found 1016, run 1: several ws5Mage oob entries inside one bounce-pred walk resolve to
         #     the SAME knowable bar - 2026-07-22 01:04:05 printed four times
@@ -254,25 +282,73 @@ class Octo2:
         `exit reason` column"*. A report prints `exit reason` beside the exit, never `source`.
         """
         rows, live, last_print = [], [], None
+        riding = []                       # trades whose close was vetoed; each carries ride_exit
         for bar, side, src, note in self.events(frm, until):
+            # A RIDE EXITS ON ITS OWN BAR, before this event is applied. Its exit bar was fixed
+            # when the ride began and is knowable at itself.
+            for t in list(riding):
+                if t['ride_exit'] is not None and t['ride_exit'] <= bar:
+                    t['exit'] = t['ride_exit']
+                    t['exit_reason'] = 'veto-on-momentum ride, ' + t['ride_why']
+                    riding.remove(t)
+                    if t in live:
+                        live.remove(t)
+                    rows.append((t['exit'], -t['dr'], 'veto-on-momentum ride exit',
+                                 t['ride_why'], [t], None, len(live)))
             if last_print is not None and bar - last_print < STANDDOWN:
                 continue
             closing = +1 if side < 0 else -1
             opening = -1 if side < 0 else +1
+            # THE VETO, Joe 1016. When the r lines are travelling against this verdict, the
+            # verdict's power to close the opposite side is suspended and that trade rides.
+            veto = None if self.vom is None else self.vom.holds(int(bar), int(side))
             closed = []
-            for t in list(live):
-                if t['dr'] == closing:
-                    t['exit'] = bar
-                    t['exit_reason'] = src
-                    closed.append(t)
-                    live.remove(t)
+            if veto is not None:
+                for t in list(live):
+                    if t['dr'] == closing and t not in riding:
+                        h, xb, why = self.vom.ride_exit(int(bar), t['dr'], until=until)
+                        t['ride_exit'], t['ride_why'] = xb, why
+                        t['riding_from'] = int(bar)
+                        riding.append(t)
+                self.vom_rows.append((int(bar), int(side), 'veto: the close is suspended',
+                                     'the departures were %s'
+                                     % ', '.join(self.sc.U(z) for z in veto)))
+            else:
+                for t in list(live):
+                    if t['dr'] == closing:
+                        t['exit'] = bar
+                        t['exit_reason'] = src
+                        closed.append(t)
+                        live.remove(t)
+            # THE OPEN. Normally the verdict's own side. Under the veto with NOTHING open, Joe
+            # 1016: *"the OPEN would be at 02:07, towards the direction that the r lines are
+            # facing"* - which is the side the verdict would have CLOSED.
+            open_dr = opening
+            if veto is not None and not live:
+                open_dr = closing
             opened = None
-            if sum(1 for t in live if t['dr'] == opening) < CAP:
-                opened = {'dr': opening, 'entry': bar, 'exit': None, 'source': src,
-                          'exit_reason': None}
+            if sum(1 for t in live if t['dr'] == open_dr) < CAP:
+                opened = {'dr': open_dr, 'entry': bar, 'exit': None, 'source': src,
+                          'exit_reason': None, 'ride_exit': None, 'ride_why': None}
+                if veto is not None and open_dr == closing:
+                    h, xb, why = self.vom.ride_exit(int(bar), open_dr, until=until)
+                    opened['ride_exit'], opened['ride_why'] = xb, why
+                    opened['riding_from'] = int(bar)
+                    opened['source'] = 'veto-on-momentum open, ' + src
+                    riding.append(opened)
                 live.append(opened)
                 last_print = bar
             rows.append((bar, side, src, note, closed, opened, len(live)))
+        # ANY RIDE STILL OPEN AT THE END exits on its own bar if that bar has arrived.
+        for t in list(riding):
+            if t['ride_exit'] is not None and t['ride_exit'] <= until:
+                t['exit'] = t['ride_exit']
+                t['exit_reason'] = 'veto-on-momentum ride, ' + t['ride_why']
+                if t in live:
+                    live.remove(t)
+                rows.append((t['exit'], -t['dr'], 'veto-on-momentum ride exit', t['ride_why'],
+                             [t], None, len(live)))
+        rows.sort(key=lambda z: z[0])
         return rows, live
 
     def gross(self, t):

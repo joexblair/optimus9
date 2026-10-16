@@ -168,6 +168,89 @@ bars, so the mech stays causal however long the wait runs.
 
 ---
 
+## 5b. `veto-on-momentum` — JOE NAMED IT, JOE'S MECH
+
+**His name, 1016:** *"the ws3 ws4 ws5 lines that we've chosen for the new `veto-on-momentum`"*. He
+first called the idea a *"lost-momentum check"*; `veto-on-momentum` is the name that stuck.
+
+**His spec, assembled from one session, verbatim:**
+- *"I think we need a lost-momentum check to fire at `OPEN` or bounce-pred's 'verdict' ... lost
+  momentum is signalled by {knob:ws3-6} leading AWAY from oob and carrying the ib tag, in a
+  matryoshka pattern"*
+- *"ride ws5r until lineage sees momentum and takes over the last mile"*
+- *"the INCOMING trade (the LONG trade that was opened before 02:07's SHORT verdict) remains open"*
+- *"your 'it is a veto on the close. The verdict's power to close the opposite side is suspended'
+  is the correct view"*
+- *"if there is no incoming trade (chain gap), then the OPEN would be at 02:07, towards the
+  direction that the r lines are facing (LONG for this example)"*
+- *"lineage will hand over to the bounce-pred mech when ws5Mage crosses to target-side oob"*
+
+**IT IS AN EXIT-SIDE MECH.** It vetoes a CLOSE; it never gates an entry.
+
+| step | what happens |
+|---|---|
+| 1 | the verdict's power to CLOSE the opposite side is suspended — that trade rides |
+| 1a | with nothing open, the OPEN fires on the side the r lines FACE, the opposite of the verdict's |
+| 2 | the trade rides ws5r |
+| 3 | handover when ws5Mage reaches the riding trade's target-side oob |
+| 4 | bounce-pred walks from the handover |
+| 5 | its REVERSE is the exit, at the verdict's knowable bar |
+
+**LINEAGE DECIDES NOTHING.** Joe 1016: *"that was banning lineage as a decision route"*. It names
+the state the trade is in while riding. `_lineage_conf.py` is untouched and still returns no bar.
+
+**THE PATTERN, and the measurement that set its filter.** At the event bar ws3r, ws4r and ws5r have
+each left the oob OPPOSITE the event, in ascending timeframe order, within the lookback, all still
+out. A departure counts only if the line stays out at least `W_VOM_MIN_OUT` — without that filter
+71% of "departures" were fence jitter lasting 15 to 55 s.
+
+His claim that motivated it: *"it is very rare for a ws4r and ws5r line to leave its source oob and
+then reverse and return to source oob without passing 50 first"*. **MEASURED and it holds** — at a
+5-minute minimum it is 9.3% across four arms. The strongest evidence is a column that does not move:
+the `passed 50` count is identical at every minimum-time-out setting, so **the filter never removes
+a single episode that passed 50 — every episode it drops is a no-50 return**.
+
+| min time out | the no-50 rate, mean of four arms |
+|---|---|
+| none | 50.6% |
+| 1 min | 36.7% |
+| 2 min | 23.4% |
+| **5 min** | **9.3%** |
+| 10 min | 6.3% |
+| 30 min | 2.6% |
+
+**THE 94-DAY DIFF, applied:**
+
+| measure | OFF | ON | change |
+|---|---|---|---|
+| gross | +408.8044% | +423.4278% | +14.6235 pp |
+| trades | 1142 | 1146 | +4 |
+| **net** | **+183.2594%** | **+197.0928%** | **+13.8335 pp** |
+| win rate | 72.4% | 72.7% | +0.3 pt |
+| days positive | 63 of 94 | 65 of 94 | +2 |
+| the veto fired | — | 35 times | — |
+
+**IT IS A GROSS IMPROVEMENT, NOT A RISK IMPROVEMENT, AND THAT IS NOT WHAT IT WAS ASKED FOR.** Joe
+raised this because of what the 2026-08-22 02:07:15 trade put the account through — MAE 5.78% on a
++6.56% result. Measured over 94 days, NONE of the drawdown columns moved:
+
+| measure | OFF | ON |
+|---|---|---|
+| mean MAE | 1.3075% | 1.3104% |
+| worst MAE | 15.3586% | 15.3586% |
+| trades with MAE over 5% | 51 | 51 |
+| worst day | −15.4539% | −15.4539% |
+
+It earns its money by holding winners to a bounce-pred reverse instead of letting the opposing
+verdict cut them — the median hold moves 2:02:37 to 2:04:05. The 02:07 trade still takes its 5.78%.
+
+**TWO VALUES INSIDE IT ARE MINE** and are ruled as MINE in `_ruled.py` so the coverage count does
+not pretend otherwise: `W_VOM_MIN_OUT` 60 bars = 5 min (the measured knee) and `W_VOM_LOOKBACK`
+240 bars = 20 min (at 5 min only 1 event of 2799 matched; at 60 min it fires on 9.50%). NOT SWEPT —
+35 fires over 94 days is thin.
+
+---
+
 ## 6. THE CONJUNCTION — `_conj.py`
 
 **Joe's five lines, 1015/1016:** g15Mage, g30Mage, ws1Mage, ws2Mage, ws3Mage, each confirming an
@@ -259,6 +342,7 @@ asserts `known_at >= the later sample bar`; `_bouncepred.read_bars` asserts no r
 
 | # | the decision | state |
 |---|---|---|
+| 0 | **A LOOKAHEAD ON THE UNHELD TURN-PREDICTOR PATH.** Found 1016 by the first dev-cache test. `cross_for`'s BACKWARD branch asserts the x-cross confirmation is at or before the fire, and `octo2.events` then emits the unheld event at that confirmation bar — so the event can be stamped BEFORE the conjunction that justified it. Measured over 2026-08-22..24: 3 backward crosses, 2 masked because bounce-pred held them past the fire, **1 exposed — 2026-08-24 10:28:05 is 26 bars = 130 s before its own fire at 10:30:15**, and it opened a real trade (+0.15%). The fix is `max(the cross confirmation, the fire)` per the banked stamp rule — additive, take max, never swap. IT MOVES THE BANKED NUMBER, so it is Joe's call | **REPORTED, NOT FIXED** |
 | 1 | **what ends the hold** | `walk` stops at the FIRST reverse. On the 00:02:10 to 01:10:30 episode the verdict flips 25 times and the first reverse is a 1-of-30 flicker at 00:06:00. Every causal rule I can state lands before Joe's named bar. **The single highest-value open ruling** — it blocks both of his grid readings |
 | 2 | the maker-first fill config | `_fill.py` is built; the sweep of offset × backup wait × maker-exit has not run. Joe 1016: *"the three things all live in the data - the goal is the config that produces the best overal pnl"* |
 | 3 | `W_BP_MIN_LINES` 15 of 30 | MINE. The only number in bounce-pred Joe did not give. Not load-bearing at any of his named bars — every reading there is 0–1 of 30 or 30 of 30 |

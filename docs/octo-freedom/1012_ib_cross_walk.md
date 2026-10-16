@@ -12,7 +12,7 @@ one that made it work.
 | HIGH | high oob -> in-fence | a SHORT | **LOW** |
 | LOW | low oob -> in-fence | a LONG | **HIGH** |
 
-The trade direction is the OPPOSITE of the cp side. The target board is the opposite of the cp side.
+The trade direction is the OPPOSITE of the cp side. The target-side oob is the opposite of the cp side.
 This is [[trade-side-sets-the-target-board]] applied to the cp: the trade heads away from the board
 its cp fired on.
 
@@ -40,7 +40,7 @@ CAUSAL: every value is read at or before the decision bar.
 |---|---|---|---|
 | 2026-07-18 02:17:15 | the HIGH-side ws1-cp, ws1r 89.68 ws1Mage 99.39 | 0.134828 | — |
 | 2026-07-18 02:31:00 | high-oob ws1Mage -> IB, held 24 bars = **ENTRY** | 0.134920 | 0.0000% |
-| 2026-07-18 03:45:20 | a HIGH-side cp - SAME side, not the target board, **IGNORED** | 0.135061 | -0.1044% |
+| 2026-07-18 03:45:20 | a HIGH-side cp - SAME side, not the target-side oob, **IGNORED** | 0.135061 | -0.1044% |
 | 2026-07-18 04:11:40 | the first TARGET-side LOW cp, ws1r 11.59 ws1Mage 8.95 | 0.134573 | +0.2574% |
 | 2026-07-18 04:16:50 | its IB cross, ws1Mage 8.95 -> 18.44 (+9.48 away from LOW) | 0.134431 | +0.3626% |
 | 2026-07-18 04:16:50 | ws2Mage 34.66 -> 33.11, **-1.54 TOWARD LOW** -> **RIDE** | — | — |
@@ -104,7 +104,7 @@ real in all of them; only the direction convention was wrong.
 | setting | value | Joe's words |
 |---|---|---|
 | the entry | a ws1-cp's ws1Mage oob -> IB cross. HIGH cp = SHORT, LOW cp = LONG | *"a high oob ws1Mage to IB cross ... is absolutely a SHORT position"* |
-| the target board | the opposite side from the entry cp | *"the 02:17 SHORT trade is targetting a low side OOB"* |
+| the target-side oob | the opposite side from the entry cp | *"the 02:17 SHORT trade is targetting a low side OOB"* |
 | which cps decide | TARGET-side only. Same-side cps are ignored | *"03:45 is same-side as 02:17, so it can't be the exit"* |
 | the line | the FIRST in-fence ws{T}Mage above ws1, read AT THE cp BAR | — |
 | the reading | its move from the cp bar to the IB bar. Toward the target = RIDE, away = REVERSE | — |

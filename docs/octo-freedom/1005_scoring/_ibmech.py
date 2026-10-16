@@ -7,7 +7,7 @@ Mage based mech. I don't have a roadmap yet"* - so the two stay separate until h
 THE ENTRY
   a ws1-cp's ws1Mage oob -> IB cross. Joe 1012: *"the 03:45 signal was created by a high oob
   ws1Mage to IB cross. it is absolutely a SHORT position"*.
-    HIGH-side cp -> SHORT, target board LOW.   LOW-side cp -> LONG, target board HIGH.
+    HIGH-side cp -> SHORT, target-side oob LOW.   LOW-side cp -> LONG, target-side oob HIGH.
   The trade heads AWAY from the board its own cp fired on.
 
 THE cp, TWO QUALIFIERS
@@ -41,7 +41,7 @@ THE DECISION, at TARGET-side cps only
   Joe 1012: *"03:45 is same-side as 02:17, so it can't be the exit because it is not on the target
   side"*. At a target-side cp, walk to the bar ws1Mage reaches in-fence held W_IB_WOB bars - the
   decision bar - and read the FIRST in-fence ws{T}Mage above ws1, chosen AT THE cp BAR:
-    moving TOWARD the target board -> RIDE.   AWAY from it -> REVERSE.
+    moving TOWARD the target-side oob -> RIDE.   AWAY from it -> REVERSE.
   THE REFERENCE IS THE cp, Joe 1012: *"the reference is the cp"*. He tried the line's own window
   extreme and rolled it back: it reversed every leg on its first decision, 0 rides in 3 legs.
   NO DELAY WHEN ws1Mage IS ALREADY IB, Joe 1012: *"because ws1Mage is already IB at ~14:53, there
