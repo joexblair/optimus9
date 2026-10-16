@@ -22,6 +22,61 @@ in the conversation, the knob does not go in here, it stays uncovered and the co
 
 # knob -> (ruled value, when he ruled it, his words)
 RULED = {
+    'W_BP_ON': ('1', 'Joe 1016', 'bake the bounce-pred knobs, and the current state'),
+    'W_BP_OFF_A': ('60', 'Joe 1016',
+                   "landing on the 5TF seam gives us the most accurate picture of the lines, and "
+                   "keeps us clear of the 'emerging bar jump at TF seam' issue / this leans us "
+                   'towards using clean 5 minute bars'),
+    'W_BP_OFF_B': ('120', 'Joe 1016',
+                   'the 10 minute delay needed to mesaure the action of the higher TF\'s journey '
+                   'is a necessary sacrifice of gross'),
+    'W_BP_TRIG_TF': ('5', 'Joe 1016',
+                     'it will only fire when ws5Mage is oob, and will fire on each ws5Mage '
+                     'reversing until `continuance` is no longer printed'),
+    'W_BP_LADDER_HI': ('30', 'Joe 1016', 'all TFs, thanks. step=1'),
+    'W_BP_LADDER_LO': ('1', 'Joe 1016', 'all TFs, thanks. step=1'),
+    'W_OCTO2_BP_PRIORITY': ('1', 'Joe 1016',
+                            'bounce-pred has prioirty over turn-predictor'),
+    # ---- THE 1016 BANK. Joe: *"g15 ws5/fwd/ex/xwob1/step1 +173.9969%. bank this as our state and make the machine live. no mom-xfer"*
+    'W_OCTO2_GRID': ('g15ib', 'Joe 1016', 'g15 ws5/fwd/ex/xwob1/step1 +173.9969%. bank this as our state and make the machine live. no mom-xfer'),
+    'W_G15_SIDE': ('ws5', 'Joe 1016',
+                   'instead of a fixed width, collect samples on each g15Mage crossing back to '
+                   'ib (on the target side)'),
+    'W_G15_PAIR': ('fwd', 'Joe 1016', 'g15 ws5/fwd/ex/xwob1/step1 +173.9969%. bank this as our state and make the machine live. no mom-xfer'),
+    'W_G15_FENCE': ('ex', 'Joe 1016', 'g15 ws5/fwd/ex/xwob1/step1 +173.9969%. bank this as our state and make the machine live. no mom-xfer'),
+    'W_G15_XWOB': ('1', 'Joe 1016', 'g15 ws5/fwd/ex/xwob1/step1 +173.9969%. bank this as our state and make the machine live. no mom-xfer'),
+    'W_G15_STEP': ('1', 'Joe 1016', 'g15 ws5/fwd/ex/xwob1/step1 +173.9969%. bank this as our state and make the machine live. no mom-xfer'),
+    # MOM-XFER IS OFF BY HIS RULING, not by omission. Measured first: its best arm netted
+    # +157.3814% against the banked g15 grid's +173.9969%, and he ruled it out.
+    'W_MX_ON': ('0', 'Joe 1016', 'no mom-xfer'),
+    'W_CONJ_GATE_SLACK': ('4', 'Joe 1016',
+                          'I agree. bake it along with all of the mechs that create the 7.9887'),
+    'W_CONJ_K': ('5', 'Joe 1016',
+                 'K=5 is preffered so that when ws3 does not print a divergence, we are still '
+                 'exhibiting safe behaviour'),
+    'W_CONJ_ROLES': ('g15Mage:latch,g30Mage:latch,ws1Mage:member+gate,ws2Mage:patch,'
+                     'ws3Mage:patch+anchor', 'Joe 1015/1016',
+                     "you should see the reversal happen in a cascade from g15Mage to ws2-3Mage "
+                     "as they each cross from oob to ib / include ws2Mage. the logic: if ws3 is "
+                     "printing a divergence, ws2 is naturally going to follow it / let's make the "
+                     "flip from `missing` to `in` a one-way trip for g15. add also g30 to the "
+                     "same regime / the turn signal can only fire if ws1Mage is same-side oob"),
+    'W_CONJ_PATCH': ('1', 'Joe 1016',
+                     'create a mech that needs 1) and 2) to qualify, then patches conjuncture so '
+                     "that ws3Mage's input is made true"),
+    'W_CONJ_TRAJ_LB': ('18', 'Joe 1016',
+                       'the strengh has increased from 11135 to 18387 in 1.5 minutes'),
+    'W_CONJ_TRAJ_MIN': ('25.0', 'Joe 1016',
+                        "you'll need a minimum angle, which I won't be able to supply. use the "
+                        'value that created the mech, + slack, we can tweak it later'),
+    'CONJ_XCRS_LB': ('36', 'Joe 1016',
+                     'lookback from conjunction firing. from your numbers, I think 3 is better '
+                     'than 2. xwob needs to be confirmed'),
+    'W_CONJ_XCRS_XWOB': ('8', 'Joe 1015', 'using an xwob8'),
+    'W_CONJ_STANDDOWN': ('48', 'Joe 1016',
+                         'require a 4 minute standdown after a trade is printed'),
+    'W_CONJ_CAP': ('2', 'Joe 1015', 'max 2 same-target trades at any given time'),
+    'W_LINEAGE_ROLE': ('confluence', 'Joe 1015', 'lineage is confluence only'),
     'W_ARM': ('cp', 'Joe 1011',
               'replace the current ws2Mage lineage walk qualifier with ws1-cp'),
     'W_ARM_TF': ('1', 'Joe 1009',

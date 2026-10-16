@@ -114,6 +114,65 @@ def px_smooth(ts, px, evt=None, length=2, frac=12):
     return out[np.searchsorted(bid[last], bid)]               # back onto the full 5s grid
 
 
+def mage_ladder_diff(mg, j, off_a, off_b, tfs):
+    """[PRODUCER - Joe 1016] THE SECOND DIFFERENCE ACROSS A MAGE LADDER, in points.
+
+    JOE'S OBSERVATION, 1016, which is the whole mechanic: *"can you see that T23's 10 diff is
+    noticably higher the its 7.5 diff, while the T50's 10 diff is near or slightly lower than its
+    7.5 diff?"* - measured on 2026-07-22, T23 = 00:23 and T50 = 01:08, across ws30 down to ws1 at
+    step 1 (*"all TFs, thanks. step=1"*). The two populations were DISJOINT on all 30 lines: T23
+    +2.95 to +9.11, T50 -1.78 to +2.30.
+
+    A RATIO OF THE TWO DIFFS IS REJECTED. It divides by the earlier diff, so a near-zero
+    denominator blows it up - at the ws5Mage reversals it spanned -6.12 to +10.37 and separated
+    nothing. Joe 1016: *"could ratio be the wrong way to measure this?"* It is. The second
+    difference in POINTS is the measure.
+
+    THE OFFSETS ARE THE CALLER'S, and Joe 1016 ruled they should land on a 5-minute seam: *"landing
+    on the 5TF seam gives us the most accurate picture of the lines, and keeps us clear of the
+    'emerging bar jump at TF seam' issue"*. His own +7.5 min is not a 5-minute multiple; the
+    seam-aligned +5/+10 pair separates T23 from T50 completely where +7.5/+10 does not.
+
+      mg       {tf: the Mage line}, on the 5 s grid
+      j        the bar the reading is ABOUT
+      off_a    the earlier offset, in bars
+      off_b    the later offset, in bars
+      tfs      the ladder, in the order the caller wants reported
+
+    -> (the median second difference, the count of lines positive, the per-line array)
+    CAUSAL WITH A STATED DELAY: this reads j + off_b, so the reading is knowable at j + off_b and
+    never earlier. The caller owns that delay.
+    """
+    d = np.array([mg[t][int(j) + int(off_b)] - mg[t][int(j) + int(off_a)] for t in tfs], float)
+    return float(np.median(d)), int((d > 0).sum()), d
+
+
+def mage_band_split(mg, j, lower_tfs, upper_tfs):
+    """[PRODUCER - Joe 1015, DISABLED AS AN AUTHORITY] the non-oob band read.
+
+    JOE 1015: *"don't use oob. if the TF lines less than ws5Mage (g5 to ws4) print mostly higher
+    values, and the TF lines greater than ws5Mage (ws6 to ws60) print mostly lower values, then the
+    next move is downward. -the inverse is true ... I _think_ this method only works when ws5Mage
+    is infence"*. HIS MODE ON MY MEASUREMENT - he 1016: *"no - it's ours. you brought it to the
+    table, and I offered mode for it"*.
+
+    DISABLED AS A TRADE AUTHORITY, Joe 1016: *"disable it"*. Measured in-use across the six banked
+    2026-07-22 legs: as an ENTRY GATE it blocks two of them including the day's best and costs
+    -2.6831%; as an EXIT at the majority threshold it costs -4.8229%; at the band's extreme it
+    costs -1.5245% and is not implementable because the extreme is only knowable afterwards. Its
+    strongest DISAGREEMENT of the day, 23 of 84 against the 14:14:55 SHORT, was on the day's best
+    leg. IT REMAINS A GOOD READ AT A BAR. It is not an authority over a trade.
+
+    -> (the lower group's median, the upper group's median, pairs with the lower line above,
+        the total pairs)
+    CAUSAL - one bar.
+    """
+    lo = [float(mg[t][int(j)]) for t in lower_tfs]
+    up = [float(mg[t][int(j)]) for t in upper_tfs]
+    pw = sum(1 for a in lo for b in up if a > b)
+    return float(np.median(lo)), float(np.median(up)), pw, len(lo) * len(up)
+
+
 def oob_ib_cross(line, hi, lo, xwob):
     """[PRODUCER · Joe 0806] OOB -> IB crossings of one line on whatever grid it is handed.
 
