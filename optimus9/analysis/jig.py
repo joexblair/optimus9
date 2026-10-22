@@ -2644,6 +2644,108 @@ def wsf_facing_dr(mages, hi, lo):
     return np.where(up, 1, np.where(dn, -1, 0)).astype(np.int8)
 
 
+# ── lift-off (JOE'S WORD, 1022: *"you're right - I do want the lift off bar"*) ─────────────────
+# WHAT IT IS. Two parts, and they are separate on purpose:
+#   at_extreme   a STATE, per bar: is the line still within `tol` of its window extreme on `side`
+#   lift_off     the EVENT: the bar that state stops holding - the line has left its extreme
+#
+# WHY IT IS NOT flat-run, and not a mode of it. Joe 1022 asked whether to build this on flat-run's
+# core. The only part they share is the LATTICE - `pts` samples `gap` bars apart ending at the bar
+# tested - and that lattice is already shared with stall_mask. The TESTS have nothing in common:
+#   flat-run     max - min <= tol. SIDE-FREE, so it answers neither side's question
+#   at_extreme   one-sided, measured from the window extreme the side cares about
+# Measured, 2026-09-01 19:54:00 on ws5r: every sample in the 225 s window sat at or ABOVE the floor
+# 39.81, not one dug below it, and the line was motionless at 39.81 on that bar and the one before.
+# flat-run's span test FAILED it anyway, on a 42.00 that aged into the window from 19:50:15 - a
+# HIGH-side value vetoing a LOW-side read. Joe: *"this is the verdict for high-side reversal. I need
+# low-side data"*. That is the whole reason this producer exists.
+#
+# THE STATE IS TRUE FOR A FALLING LINE, AND THAT IS CORRECT HERE. On the low side the newest sample
+# moves down with the floor, so `newest - min` stays near 0 the whole way down: ws5r held the state
+# for 199 bars = 995 s from 19:44:50 while it fell 42 -> 14. The state carries no claim that the
+# line has stopped. Only its END does, and the END is what Joe asked for. A consumer wanting "has
+# stopped falling" needs a second condition and must say so.
+#
+# THE LIFT-OFF BAR IS THE FIRST BAR THE STATE FAILS, not the last bar it held. That bar is where the
+# information exists: the line has now moved more than tol off its window extreme. CAUSAL, asserted.
+#
+# NOTHING IS DEFAULTED. `pts`, `gap` and `tol` are the caller's. Joe 1022: *"the sample gaps should
+# be TF adjusted"*, and no gap is banked - on ws5r, gaps 5 to 11 bars all land his four targets.
+def at_extreme(r, k, side, pts, gap, tol):
+    """[PRODUCER - Joe 1022] Is the line within `tol` of its window extreme at bar k. -> dist, None.
+
+        r     the line on the 5 s grid
+        k     the bar being tested; the newest sample sits on it
+        side  +1 reads the window HIGH, -1 reads the window LOW
+        pts   samples in the window
+        gap   bars between samples
+        tol   how far off the extreme the line may be, in r-points
+
+    -> the distance from the extreme in r-points when the state HOLDS, else None. 0.0 means the
+    newest sample IS the window extreme, so `None` and `0.0` are different answers - test `is None`.
+    """
+    k, pts, gap = int(k), int(pts), int(gap)
+    lo = k - (pts - 1) * gap
+    if lo < 0:
+        return None
+    w = np.asarray(r[lo:k + 1:gap], float)
+    if len(w) < pts or not np.isfinite(w).all():
+        return None
+    now = float(w[-1])
+    dist = (float(w.max()) - now) if int(side) > 0 else (now - float(w.min()))
+    return dist if dist <= float(tol) else None
+
+
+def at_extreme_mask(r, side, pts, gap, tol):
+    """[PRODUCER - Joe 1022] at_extreme asked at EVERY bar, in one pass. -> bool array.
+
+    Mirrors stall_mask's contract: one value per grid bar, False where the lattice does not fit.
+    """
+    r = np.asarray(r, float)
+    pts, gap = max(2, int(pts)), max(1, int(gap))
+    span = (pts - 1) * gap
+    out = np.zeros(len(r), bool)
+    if len(r) <= span:
+        return out
+    idx = np.arange(span, len(r))[:, None] - (np.arange(pts - 1, -1, -1) * gap)[None, :]
+    w = r[idx]
+    ok = np.isfinite(w).all(axis=1)
+    now = w[:, -1]
+    dist = (np.nanmax(w, axis=1) - now) if int(side) > 0 else (now - np.nanmin(w, axis=1))
+    out[span:] = ok & (dist <= float(tol))
+    return out
+
+
+def lift_off(r, side, pts, gap, tol, wob):
+    """[PRODUCER - Joe 1022] THE LIFT-OFF BARS: where at_extreme stops holding. -> int array.
+
+        wob   bars the state must STAY failed, counting the lift-off bar itself. Joe 1022 set 8
+              = 40 s: *"add a wob 8 to reduce the early reversals"*. A lift-off whose state
+              re-pins inside the hold is not returned.
+
+    Each returned bar is the FIRST bar the state fails after a run of bars where it held. The line
+    has moved more than `tol` off its window extreme by then, and every sample that proves it sits
+    at or before that bar.
+
+    THE BAR IS NOT THE STAMP. A wob of n means the event is not KNOWABLE until bar + n - 1, which
+    is the last bar of the hold and the bar a consumer may act on. This returns the lift-off bar,
+    because that is when the line left its extreme; the consumer adds the wob. Joe's standing rule,
+    and the two differ by 35 s at wob 8.
+
+    NOTHING IS DEFAULTED, here or in at_extreme. pts, gap, tol and wob are all the caller's.
+    """
+    m = at_extreme_mask(r, side, pts, gap, tol)
+    wob = max(1, int(wob))
+    if not m.any():
+        return np.zeros(0, int)
+    off = np.flatnonzero(np.diff(m.astype(np.int8)) == -1) + 1
+    assert off.size == 0 or (int(off.max()) < len(r) and not m[off].any()), \
+        'a lift-off bar is one where the state still holds'
+    keep = [int(b) for b in off if b + wob <= len(m) and not m[b:b + wob].any()]
+    assert all(b + wob - 1 < len(m) for b in keep), 'a lift-off hold ran past the tape'
+    return np.asarray(keep, int)
+
+
 def stoch_out_extreme(stoch_out):
     """[PRODUCER · 0824] Is the reading LEAVING the seven-bar window at an extreme?
 
