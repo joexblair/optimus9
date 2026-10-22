@@ -89,6 +89,8 @@ import numpy as np
 
 import _conj as CJ
 import _bouncepred as BP
+import _ibmech as IBM
+from optimus9.analysis.jig import next_oob_divergence
 
 STANDDOWN = int(os.environ.get('W_CONJ_STANDDOWN', 48))   # 4 min, Joe 1016
 CAP = int(os.environ.get('W_CONJ_CAP', 2))                # Joe 1015
@@ -109,6 +111,53 @@ BP_PRIORITY = os.environ.get('W_OCTO2_BP_PRIORITY', '1') == '1'
 # the +7.5/+9.5 pair I proposed on 94-day fidelity is MOOT and that decision is closed. The offsets
 # stay ruled in `_ruled.py` because the 'fixed' A/B path still reads them.
 GRID = os.environ.get('W_OCTO2_GRID', 'g15ib')
+# ── THE ENTRY TIMING. BANKED 1017 as Joe's "A". ───────────────────────────────────────────────
+# WHAT IT REPLACES: until 1017 a verdict opened AT its own bar. That cost real net once an MAE cap
+# was applied - his own words: *"now is a good time to fix the net value - without an MAE cap, the
+# numbers don't mean a lot when we start gating"*. At his 1.60 cap, firing at the verdict bar earns
+# +1.4405% over the 40 trades of 2026-08-22 to 2026-08-24 against this mech's +14.5689% over 34.
+#
+# HIS SPEC, 1017 verbatim: *"wait for the next high-side g30Mage oob, and use that bar as the
+# anchor for a divergence test / --if the divergence test is bearish, then open the SHORT"*.
+# And the shape, ruled after I put the two causal readings to him: *"bank A"*, A being *"wait for
+# option 2, no fallback"*. He confirmed the fallback is NOT causal - picking which signals to not
+# wait for needs the exit bar, which is in the future at the verdict.
+#   SO A VERDICT THAT NEVER FIRES PRODUCES NO TRADE. 6 of the 40 fire at or after their own exit
+#   and are simply given up, worth +8.2009% at the cap. That is the cost of the bank and it is his.
+#
+# THE SIDE IS THE TRADE'S, from his own words *"because this a SHORT ... the next high-side"*. The
+# EVENT-side variant measured +12.2153% over 30 trades and is NOT banked; W_OCTO2_FIRE_SIDE='event'
+# runs it for an A/B.
+FIRE = os.environ.get('W_OCTO2_FIRE', 'oobdiv')   # 'oobdiv' = Joe's A. 'verdict' = the old bar.
+FIRE_TF = int(os.environ.get('W_OCTO2_FIRE_TF', 30))      # SECONDS. g30Mage, his own line
+# THE EVENT-SIDE A/B IS NOT OFFERED HERE. It measured +12.2153% over 30 trades against the trade
+# side's +14.5689% over 34, but it keys off the ws1cp's oob side and octo2 does not track that -
+# the diagnostic read it from `_ibmech.cps`. Offering a knob that reads the VERDICT's side instead
+# would be a different mech wearing the measured arm's name, so there is no knob.
+# ── THE MAE CAP. Joe 1017: *"apply a 1.6 MAE cap. if the cap is hit, the MFE for that row is set
+# to zero"*, and asked whether that means the row realises the cap loss: *"-yes"*. So a stopped row
+# realises -MAE_CAP, and drag is added on top of it by the report, never in here.
+#   WHY 1.60 AND NOT LOWER, his reason, not a fit: *"MAE is intentionally higher (1.6) because our
+#   window is a high MFE zzone"*. Measured beside it: 0.70 is `trade_config`'s own `mae_cap` and
+#   1.10 is lineage's `stop`; both earn LESS on this window because more trades are stopped before
+#   they resolve. 1.60 is also the peak of the swept range for every arm, on 40 trades.
+#   IT STOPS 17 of the 40 at the old entry timing and 13 of the 34 at this one.
+MAE_CAP = float(os.environ.get('W_OCTO2_MAE_CAP', 1.60))
+# STOP WINS A TIE. INHERITED, not mine: `trade_config`'s `stop_same_bar_priority` is 'stop',
+# Joe 0929 *"use stop"*.
+MAE_CAP_ON = os.environ.get('W_OCTO2_MAE_CAP_ON', '1') == '1'
+# ── THE TRADE FLIP. Joe 1018: *"ok, wire it in and resweep"*, the mech being the one he named the
+# *"trade flip mech"* / *"the printed SHORT is more likely to flip to a LONG"*.
+#   WHAT IT DOES: at a verdict that would open, the 4-voters-against suite is asked whether the
+#   OPPOSITE side is validated. If the suite ALLOWS it - fewer than W_VOTE_MIN objections - the
+#   open FLIPS to that side. If the suite kills it, the printed side stands untouched.
+#   SO IT IS A FLIP, NOT A BLOCK. MINE BY HIS NAMING, STATED: he has called it the flip mech twice
+#   and never asked for a block. A block variant would be a different knob.
+#   NO SECOND VOTE ON THE FLIPPED SIDE. The against-vote has already tested that exact side and
+#   allowed it; asking again is the same call. STRUCTURAL AND STATED.
+#   THE CAP IS CHECKED ON THE FINAL SIDE, after any flip, so a flip cannot break the pyramid rule.
+#   THE VETO'S no-open PATH IS UNTOUCHED - the flip test only runs where something would open.
+FLIP = os.environ.get('W_OCTO2_FLIP', '0') == '1'    # DEFAULT OFF until the sweep rules it
 
 
 class Octo2:
@@ -129,7 +178,17 @@ class Octo2:
         self.sc = sc
         self.hi, self.lo = float(sc.HI), float(sc.LO)
         self.px = np.asarray(sc.PX, float)[:n]
+        # the entry-timing mech's own lines. CLOSE is RAW - `jig.divergence` requires it.
+        self.fire_line = np.asarray(sc.LD(FIRE_TF, 'Mage'), float)[:n]
+        self.fire_r = np.asarray(sc.LD(60, 'r'), float)[:n]
+        self.fire_px = (np.asarray(sc.CLOSE, float)[:n] if sc.CLOSE is not None else self.px)
         self.conj = CJ.Conj(sc)
+        # THE ws1cp SIDE. The flip test's vote needs the EVENT's oob side - Joe 1017: *"extrema
+        # must be same-side as the event's side (not the events' SHORT or LONG verdict)"* - and
+        # octo2 did not track it. Built here from `_ibmech`, the ws1cp mech, which is the same
+        # producer the diagnostics read it from. Lazy: only built when the flip is on.
+        self._cps = None
+        self.vote = None
         self.bp = BP.BouncePred(sc)
         # THE HOLD'S GRID. Both objects expose the same walk(frm, side, until) contract and both
         # stop on the first REVERSE, so the paths below do not branch on the grid.
@@ -270,6 +329,88 @@ class Octo2:
             out.append((bar, side, src, note))
         return out
 
+    # ---- the flip
+    def cp_side(self, bar):
+        """The oob side of the most recent ws1cp at or before `bar`. -> +1 high / -1 low / None."""
+        if self._cps is None:
+            self._cps = IBM.IBMech(self.sc).cps(0, self.n - 1)
+        pr = [d for j, d in self._cps if j <= int(bar)]
+        return int(pr[-1]) if pr else None
+
+    def flip_dr(self, bar, open_dr):
+        """Does the 4-voters-against suite validate the OPPOSITE side at `bar`. -> (dr, why).
+
+        Returns the side to open and the trace. The returned dr is the FLIPPED one when the suite
+        allows it, else `open_dr` unchanged.
+        """
+        if not FLIP:
+            return int(open_dr), ''
+        if self.vote is None:
+            import _openvote as OVM
+            self.vote = OVM.OpenVote(self.sc)
+        es = self.cp_side(bar)
+        if es is None:
+            return int(open_dr), 'no ws1cp before this bar, so no flip test'
+        ag = -int(open_dr)
+        kills, n, vrows, _vb, _vw = self.vote.vote(int(bar), ag, es)
+        if kills:
+            return int(open_dr), ('the flip to %s was KILLED %d of 4'
+                                  % ('SHORT' if ag > 0 else 'LONG', n))
+        return ag, ('FLIPPED to %s, the against-vote ALLOWED it %d of 4'
+                    % ('SHORT' if ag > 0 else 'LONG', n))
+
+    # ---- the entry timing and the stop
+    def fire_bar(self, bar, dr, until):
+        """The bar a verdict at `bar` physically enters on. -> (bar, why) or None.
+
+        Joe 1017's A: the next g30Mage oob on the TRADE's side that anchors a divergence firing the
+        trade's direction. No fallback - None means no trade. The producer is the jig's.
+        """
+        if FIRE == 'verdict':
+            return int(bar), 'the verdict bar'
+        return next_oob_divergence(self.fire_line, self.fire_r, self.fire_px,
+                                   int(bar), int(dr), int(dr), self.hi, self.lo, until=int(until))
+
+    def stop_bar(self, t, upto):
+        """The first bar `t`'s adverse excursion reaches MAE_CAP, at or before `upto`. -> bar/None.
+
+        Joe 1017: *"apply a 1.6 MAE cap. if the cap is hit, the MFE for that row is set to zero"*
+        and, asked whether the row then realises the cap loss, *"-yes"*. The LOSS is the report's
+        to compute - this method only says where the trade ends. NO PnL IN HERE.
+        """
+        if not MAE_CAP_ON:
+            return None
+        e, dr = int(t['entry']), int(t['dr'])
+        upto = int(upto)
+        if e > upto:
+            return None
+        seg = self.px[e:upto + 1]
+        adv = (seg - self.px[e]) / self.px[e] * 100.0 * (1 if dr > 0 else -1)
+        w = np.flatnonzero(adv >= MAE_CAP)
+        return (e + int(w[0])) if len(w) else None
+
+    def _settle(self, upto, live, pending):
+        """Promote pending trades whose entry has arrived, then stop anything that has hit the cap.
+
+        -> the trades closed by the stop, in exit order.
+        ORDER IS DELIBERATE: a trade promoted at `upto` is stop-checked in the same call, because
+        its own entry bar can already be the bar the cap is reached on.
+        """
+        for t in list(pending):
+            if int(t['entry']) <= int(upto):
+                pending.remove(t)
+                live.append(t)
+        out = []
+        for t in list(live):
+            sb = self.stop_bar(t, upto)
+            if sb is not None:
+                t['exit'] = sb
+                t['exit_reason'] = 'the %.2f MAE cap' % MAE_CAP
+                live.remove(t)
+                out.append(t)
+        out.sort(key=lambda z: z['exit'])
+        return out
+
     # ---- the walk
     def walk(self, frm, until):
         """-> (the rows, the still-open trades).
@@ -281,35 +422,36 @@ class Octo2:
         intuitive when you place it next to the exit. instead of `the source` coumn, create a
         `exit reason` column"*. A report prints `exit reason` beside the exit, never `source`.
         """
-        rows, live, last_print = [], [], None
-        riding = []                       # trades whose close was vetoed; each carries ride_exit
+        rows, live, pending, last_print = [], [], [], None
+        self.stop_rows = []
+        # THE MECH OWNS NO EXIT. Joe 1017: *"I think it's better that the spec's edge is contained
+        # to the actual activities of the mech, and let the machine handle everything that is not
+        # involved in creating the veto, redirecting, pyramid flow, etc at the time of the verdict's
+        # bar(s)"*. So `veto-on-momentum` acts only AT the verdict bar and the protected trade is
+        # closed by whatever the machine's next closing event is, like every other trade. The ride
+        # to ws5Mage's target-side oob, the handover to bounce-pred and the
+        # `veto-on-momentum ride` exit reason are all gone with it.
         for bar, side, src, note in self.events(frm, until):
-            # A RIDE EXITS ON ITS OWN BAR, before this event is applied. Its exit bar was fixed
-            # when the ride began and is knowable at itself.
-            for t in list(riding):
-                if t['ride_exit'] is not None and t['ride_exit'] <= bar:
-                    t['exit'] = t['ride_exit']
-                    t['exit_reason'] = 'veto-on-momentum ride, ' + t['ride_why']
-                    riding.remove(t)
-                    if t in live:
-                        live.remove(t)
-                    rows.append((t['exit'], -t['dr'], 'veto-on-momentum ride exit',
-                                 t['ride_why'], [t], None, len(live)))
+            # PENDING -> LIVE, AND THE STOP, up to and including this bar. A stop is not an event,
+            # so a trade it closes is recorded on THIS row's `closed` list with its own true exit
+            # bar, and in `self.stop_rows` at that bar so the stop is traceable where it happened.
+            stopped = self._settle(bar, live, pending)
+            for t in stopped:
+                self.stop_rows.append((int(t['exit']), int(t['dr']), t['exit_reason'],
+                                       'armed %s, entered %s'
+                                       % (self.sc.U(t['armed']), self.sc.U(t['entry']))))
             if last_print is not None and bar - last_print < STANDDOWN:
+                if stopped:
+                    rows.append((bar, side, 'the MAE cap closed a trade', '', stopped, None,
+                                 len(live) + len(pending)))
                 continue
             closing = +1 if side < 0 else -1
             opening = -1 if side < 0 else +1
             # THE VETO, Joe 1016. When the r lines are travelling against this verdict, the
-            # verdict's power to close the opposite side is suspended and that trade rides.
+            # verdict's power to close the opposite side is suspended and that trade stays open.
             veto = None if self.vom is None else self.vom.holds(int(bar), int(side))
             closed = []
             if veto is not None:
-                for t in list(live):
-                    if t['dr'] == closing and t not in riding:
-                        h, xb, why = self.vom.ride_exit(int(bar), t['dr'], until=until)
-                        t['ride_exit'], t['ride_why'] = xb, why
-                        t['riding_from'] = int(bar)
-                        riding.append(t)
                 self.vom_rows.append((int(bar), int(side), 'veto: the close is suspended',
                                      'the departures were %s'
                                      % ', '.join(self.sc.U(z) for z in veto)))
@@ -320,35 +462,93 @@ class Octo2:
                         t['exit_reason'] = src
                         closed.append(t)
                         live.remove(t)
+                        # A NORMAL EVENT MAY CLOSE A VETO-PROTECTED TRADE, Joe 1017: *"a normal
+                        # event may close a trade that is riding"*. With the mech owning no exit
+                        # there is nothing further to cancel here - this IS the close.
+                        #   THE FAULT THIS REPLACES, kept because it cost real net: while the mech
+                        #   owned an exit, a trade closed here was dropped from `live` but LEFT IN
+                        #   `riding`, so the ride-exit block closed it a SECOND time at its own bar
+                        #   and overwrote `exit` with the later, better bar. 6 trades over the 94
+                        #   days, 5 days, worth +11.3375 pp of net the machine had not earned.
             # THE OPEN. Normally the verdict's own side. Under the veto with NOTHING open, Joe
             # 1016: *"the OPEN would be at 02:07, towards the direction that the r lines are
             # facing"* - which is the side the verdict would have CLOSED.
+            #   AND UNDER THE VETO WITH SOMETHING OPEN THE VERDICT OPENS NOTHING, Joe 1017 on
+            #   the 2026-08-22 02:15:00 event: *"creating a short is against the premise of the
+            #   mech, and 3 LONG trades would break the pyramid rule"*. So the event closes
+            #   nothing and opens nothing; the trade already open simply stays open. Until 1017
+            #   this fell through to the verdict's own side and opened AGAINST the r lines the
+            #   veto had just found travelling the other way.
+            #   HE CALLED IT `END` AND THEN WITHDREW THE WORD, 1017: *""END" is confusing me.
+            #   it's the opposite of "keeps riding""*. So the behaviour is named by what it does -
+            #   no open - and no label is coined for it.
+            #   LITERAL ON HIS WORDS: his 1a is conditioned on *"no incoming trade (chain gap)"*,
+            #   so ANY live trade makes the verdict open nothing, not only one on the side
+            #   being closed.
             open_dr = opening
-            if veto is not None and not live:
-                open_dr = closing
+            no_open = False
+            if veto is not None:
+                if live:
+                    no_open = True
+                else:
+                    open_dr = closing
             opened = None
-            if sum(1 for t in live if t['dr'] == open_dr) < CAP:
-                opened = {'dr': open_dr, 'entry': bar, 'exit': None, 'source': src,
-                          'exit_reason': None, 'ride_exit': None, 'ride_why': None}
-                if veto is not None and open_dr == closing:
-                    h, xb, why = self.vom.ride_exit(int(bar), open_dr, until=until)
-                    opened['ride_exit'], opened['ride_why'] = xb, why
-                    opened['riding_from'] = int(bar)
-                    opened['source'] = 'veto-on-momentum open, ' + src
-                    riding.append(opened)
-                live.append(opened)
-                last_print = bar
-            rows.append((bar, side, src, note, closed, opened, len(live)))
-        # ANY RIDE STILL OPEN AT THE END exits on its own bar if that bar has arrived.
-        for t in list(riding):
-            if t['ride_exit'] is not None and t['ride_exit'] <= until:
-                t['exit'] = t['ride_exit']
-                t['exit_reason'] = 'veto-on-momentum ride, ' + t['ride_why']
-                if t in live:
-                    live.remove(t)
-                rows.append((t['exit'], -t['dr'], 'veto-on-momentum ride exit', t['ride_why'],
-                             [t], None, len(live)))
+            # NO OPEN MEANS NO STAND-DOWN STAMP. `last_print` is set inside the open branch only,
+            # which a no-open verdict inherits; MINE AND STATED, Joe has set no rule for it.
+            # THE PYRAMID COUNTS LIVE TRADES ONLY. A pending trade - armed at a verdict and
+            # still waiting for its fire bar - does NOT occupy a CAP slot, because the existing
+            # test has always counted `live` and a pending trade is not live.
+            #   MINE AND STATED, AND IT IS THE ONE RULE OF THIS BANK JOE HAS NOT SET. He has ruled
+            #   on the pyramid before - 1017: *"3 LONG trades would break the pyramid rule"* - so
+            #   if a pending trade should hold a slot, this is the line to change and the run to
+            #   repeat. Flagged to him at the bank.
+            # THE FLIP TEST runs BEFORE the pyramid check, so the cap is tested on the side that
+            # will actually open.
+            flip_why = ''
+            if not no_open:
+                open_dr, flip_why = self.flip_dr(bar, open_dr)
+            if not no_open and sum(1 for t in live if t['dr'] == open_dr) < CAP:
+                got = self.fire_bar(bar, open_dr, until)
+                if got is not None:
+                    fb, fwhy = got
+                    # `armed` is the VERDICT bar - Joe's OPEN, and the trade's identity.
+                    # `entry` is the PHYSICAL fill bar - his `trade-fires` column. `gross` prices
+                    # off `entry`, which is why the fill bar keeps that name.
+                    opened = {'dr': open_dr, 'armed': bar, 'entry': fb, 'exit': None,
+                              'source': src, 'exit_reason': None, 'fire_why': fwhy,
+                              'flip_why': flip_why,
+                              'flipped': bool(flip_why.startswith('FLIPPED'))}
+                    if veto is not None and open_dr == closing:
+                        opened['source'] = 'veto-on-momentum open, ' + src
+                    (live if fb <= bar else pending).append(opened)
+                    # THE STAND-DOWN IS STAMPED AT THE VERDICT, not at the fill. MINE AND STATED:
+                    # `last_print` has always been stamped where the decision was taken, and the
+                    # stand-down exists to space DECISIONS, not fills.
+                    last_print = bar
+            # THE STOP'S CLOSES RIDE THIS ROW'S `closed` LIST. THE FAULT THIS REPLACES, kept
+            # because it inverted a whole run: `stopped` was recorded only in `self.stop_rows` and
+            # in the stand-down branch, so a scorer collecting rows' `closed` lists never saw a
+            # stop-closed trade - it DELETED the row instead of charging it. Turning the cap ON
+            # then RAISED 94-day gross from +251.0116% to +985.2081% across 119 vanished trades,
+            # which a stop can never do. Caught by the control arm, not by reading the code.
+            rows.append((bar, side, src, note, stopped + closed, opened,
+                         len(live) + len(pending)))
+        # THE TAIL. Anything still pending or live at `until` is settled there, so a trade that
+        # was armed inside the window but never fired is dropped rather than counted.
+        tail = self._settle(until, live, pending)
+        for t in tail:
+            self.stop_rows.append((int(t['exit']), int(t['dr']), t['exit_reason'],
+                                   'armed %s, entered %s'
+                                   % (self.sc.U(t['armed']), self.sc.U(t['entry']))))
+        if tail:
+            rows.append((int(until), 0, 'the MAE cap closed a trade', '', tail, None, len(live)))
+        self.never_fired = list(pending)
         rows.sort(key=lambda z: z[0])
+        # A TRADE IS CLOSED EXACTLY ONCE. The 1017 fault was exactly this invariant breaking, so it
+        # is an assert and not a comment: `riding` outliving a normal close let the ride-exit block
+        # append the same trade a second time and overwrite its exit bar.
+        _cl = [id(t) for _b, _s, _sr, _nt, _c, _o, _n in rows for t in _c]
+        assert len(_cl) == len(set(_cl)), 'a trade appears in two `closed` lists'
         return rows, live
 
     def gross(self, t):

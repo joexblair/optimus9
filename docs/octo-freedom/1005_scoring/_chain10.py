@@ -1106,6 +1106,73 @@ def cp2(j, d):
         return None
     return res
 
+# ── the r ib-return, the bar lin-exh is tested at. JOE 1017 ──────────────────────────────────────
+# HIS SPEC, verbatim, on the 2026-08-22 02:07 LONG:
+#   *"first step, so that we're in a the correct state, walk forward to ws1r crossing from low side
+#    ex-fence to low side in-fence / --this is lineage's behaviour - it initiates the baton-pass
+#    test on returning to ib / --this moves 02:07 to ~02:10:30 / --at that bar, there is no lin-hop
+#    TF available to take the baton. / --this is the lin-exh event"*
+# and on the hold, after I showed him the crossing flickering five times in 90 s:
+#   *"this xwob belongs to lineage / --knob:5"*
+#
+# WHY IT IS A FORWARD WALK AND WHY THAT IS NOT LOOKAHEAD. Joe 1017: *"I see it as necessary
+# housekeeping that must follow the time-based confirmation gap. the gap organiclly moves the OPEN
+# further away ws1cp, but a gap that is fixed in time and reliant on a un-groomed g15Mage without
+# higher TF support is unlikely to land in the best bar for success. this is why we let lineage
+# handle it - the mech is solid and designed to handle the last-mile"* / *"the read bar is still
+# 02:07 - that's where the decision was made, bt there's no need for a retest of the event"*.
+#   So the EVENT keeps its own bar and the decision DEFERS to the stamp this returns. Every bar
+#   read here is at or before the stamp, so the verdict is knowable AT the stamp and never earlier.
+#   A caller that acts at the event bar instead would be reading the future.
+#   MEASURED COST, reported to him: on the 02:07 LONG the stamp lands at 02:11:20, 245 s after the
+#   event, and price moves +0.3238% across that gap. Without the hold it was 02:10:00 and +0.4780%.
+#
+# THE SIDE IS THE EVENT'S, NOT THE TRADE'S, Joe 1017: *"extrema must be same-side as the event's
+# side (not the events' SHORT or LONG verdict)"*. At 2026-08-22 02:15 he chose the low side because
+# ws1r was *"travelling away from it's low oob extrema"* - measured at 20.38, just off a 5.45 low -
+# and the trade there was a SHORT while 02:07 on the same side was a LONG.
+#
+# W_LIN_IB_XWOB - THE NAME IS MINE, the value is his. It follows `W_CP_XWOB`'s shape, which is the
+# file's own convention for a cross hold. The stamp is the LAST bar of the hold, which is also
+# `CP_XWOB`'s rule - *"the cross sits at j - CP_XWOB + 1, the hold runs forward to j"*.
+IB_XWOB = int(os.environ.get('W_LIN_IB_XWOB', 5))
+assert IB_XWOB >= 1, 'W_LIN_IB_XWOB is the ib-return hold in bars and must be at least 1'
+
+
+def ib_return(j, side, tf=1, xwob=None):
+    """The bar ws{tf}r's ex-fence -> in-fence return is CONFIRMED, at or after `j`. -> bar or None.
+
+      j      the event bar the walk starts from
+      side   the EVENT'S side: -1 the line returns UP out of the low ex-fence, +1 it returns DOWN
+             out of the high ex-fence
+      tf     which r line. 1 = ws1r, Joe's own line for this
+      xwob   bars the line must HOLD in-fence; defaults to W_LIN_IB_XWOB = 5
+
+    The walk is UNBOUNDED forward and returns None if the tape ends first. No cap - Joe has set
+    none and I will not invent one.
+    KNOWLEDGE DELAY, NOT LOOKAHEAD: the returned stamp is the first bar the hold is complete, so
+    everything it rests on is in its own past. Asserted.
+    """
+    j = int(j)
+    side = int(side)
+    assert side in (+1, -1), "side is the EVENT's side: +1 high, -1 low"
+    w = int(IB_XWOB if xwob is None else xwob)
+    r = R[tf]
+    n = len(r)
+    ib = (lambda v: v < EXF_HI) if side > 0 else (lambda v: v > EXF_LO)
+    xf = (lambda v: v >= EXF_HI) if side > 0 else (lambda v: v <= EXF_LO)
+    for k in range(max(1, j), n):
+        if not (xf(float(r[k - 1])) and ib(float(r[k]))):
+            continue
+        if k + w - 1 >= n:
+            return None
+        if all(ib(float(r[k + q])) for q in range(w)):
+            stamp = k + w - 1
+            assert stamp >= j and stamp < n, 'the ib-return stamp ran off the tape'
+            return stamp
+    return None
+
+
 def bnd(t, k, d):
     v = float(R[t][k])
     if d > 0: return 'O' if v >= SC.HI else ('x' if v >= EXF_HI else '.')

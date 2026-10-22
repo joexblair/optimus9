@@ -19,13 +19,15 @@ matryoshka pattern"*, then refined across the same session:
     *"lineage will hand over to the bounce-pred mech when ws5Mage crosses to target-side oob"*
 
 SO IT IS AN EXIT-SIDE MECH, NOT AN ENTRY GATE:
-    1   the verdict's power to CLOSE the opposite side is suspended - the open trade rides
+    1   the verdict's power to CLOSE the opposite side is suspended - the open trade stays open
     1a  with nothing open, the OPEN fires at the verdict bar on the side the r lines FACE, which is
         the opposite of what the verdict would normally open
-    2   the trade rides ws5r
-    3   handover when ws5Mage reaches the riding trade's TARGET-SIDE OOB
-    4   bounce-pred walks from the handover
-    5   its REVERSE is the exit, at the verdict's knowable bar
+    2   WITHDRAWN 1017 - the trade rides ws5r
+    3   WITHDRAWN 1017 - handover when ws5Mage reaches the riding trade's TARGET-SIDE OOB
+    4   WITHDRAWN 1017 - bounce-pred walks from the handover
+    5   WITHDRAWN 1017 - its REVERSE is the exit, at the verdict's knowable bar
+    items 2 to 5 are his first shape for the mech and are kept as the record. He withdrew the reach
+    himself, see the SRP note below; the machine's own events close the protected trade now.
 
 LINEAGE DECIDES NOTHING HERE. Joe 1016: *"that was banning lineage as a decision route"*. It names
 the state the trade is in while riding. `_lineage_conf.py` is untouched and still returns no bar.
@@ -49,8 +51,17 @@ TWO VALUES ARE MINE AND ARE STATED. Joe named the filters, not the numbers.
     W_VOM_LOOKBACK   240 bars = 20 min. At 5 min only 1 event of 2799 matched and at 60 min the
                     pattern fires on 9.50% of events; 20 min gives 36 = 1.29%. TWEAKABLE.
 
-SRP: this file answers two questions - does the pattern hold at a bar, and where does a ride exit.
-It holds no trade state and moves no trade.
+SRP: this file answers ONE question - does the pattern hold at a bar. It holds no trade state,
+moves no trade and owns no exit.
+  THE RIDE WAS REMOVED 1017. Joe: *"I think it's better that the spec's edge is contained to the
+  actual activities of the mech, and let the machine handle everything that is not involved in
+  creating the veto, redirecting, pyramid flow, etc at the time of the verdict's bar(s)"*. So
+  `ride_exit`, the ws5Mage handover and the bounce-pred walk it launched are gone. His earlier
+  lines *"ride ws5r until lineage takes over"* and *"lineage will hand over to the bounce-pred mech
+  when ws5Mage crosses to target-side oob"* are kept above as the record of the mech's first shape,
+  NOT as live behaviour - he withdrew that reach himself: *"row 3 wouldn't be needed in the spec if
+  we hadn't written 'ride ws5 to oob' in the spec"*.
+  WHAT CLOSES A PROTECTED TRADE NOW: the machine's next closing event, like every other trade.
 """
 import os
 
@@ -66,9 +77,11 @@ XWOB = int(os.environ.get('W_VOM_XWOB', 4))              # the cross hold, Joe 0
 
 
 class VetoOnMomentum:
-    """The pattern and the ride, over one tape. Build once."""
+    """The pattern, over one tape. Build once."""
 
     def __init__(self, sc, hold, m5):
+        """`hold` is unused since 1017 and kept only so the caller's signature is unchanged;
+        the mech no longer walks bounce-pred itself."""
         self.sc = sc
         self.hold = hold                 # the bounce-pred object that takes over at the handover
         self.m5 = np.asarray(m5, float)
@@ -103,28 +116,3 @@ class VetoOnMomentum:
                 return None
             got.append(max(c))
         return got if all(got[i] <= got[i + 1] for i in range(len(got) - 1)) else None
-
-    def ride_exit(self, bar, dr, until=None):
-        """Where a riding trade of side `dr` exits. -> (the handover bar, the exit bar, why).
-
-        The handover waits for ws5Mage to reach the riding trade's TARGET-SIDE OOB - low for a
-        SHORT (dr +1), high for a LONG. Then bounce-pred walks and its REVERSE is the exit, at the
-        verdict's knowable bar. NO CAP on either leg; Joe has set none.
-        """
-        import _bouncepred as BP
-        end = (self.n - 1) if until is None else int(until)
-        tside = -1 if int(dr) > 0 else +1           # a SHORT hunts the low oob
-        seg = self.m5[int(bar):end + 1]
-        want = (seg <= self.lo) if tside < 0 else (seg >= self.hi)
-        hit = np.flatnonzero(want)
-        if hit.size == 0:
-            return None, None, 'no handover - ws5Mage never reached the target-side oob'
-        h = int(bar) + int(hit[0])
-        w = self.hold.walk(h, tside, until=end)
-        if not w:
-            return h, None, 'handed over at %s, bounce-pred produced no verdict' % self.sc.U(h)
-        rb, v, ka, med, pos, why = w[-1]
-        if v != BP.REVERSE:
-            return h, None, 'handed over at %s, still continuance' % self.sc.U(h)
-        return h, int(ka), ('handed over at %s, bounce-pred reverse at %s, %d of 30 positive, '
-                            'median %+.2f' % (self.sc.U(h), self.sc.U(rb), pos, med))

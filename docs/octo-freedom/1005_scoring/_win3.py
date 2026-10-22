@@ -95,6 +95,12 @@ import os
 import numpy as np
 
 CACHE = os.environ.get('W_WIN3_CACHE', '/home/joe/.claude/jobs/6eb9931e/tmp/win3')
+# read from octo2 so the cache's `realised` can never disagree with the machine's own cap.
+try:
+    import octo2 as _O2
+    _MAE_CAP = float(_O2.MAE_CAP)
+except Exception:
+    _MAE_CAP = 1.60
 
 
 def key(a, b, knobs):
@@ -346,14 +352,32 @@ def build(sc, o, a, b, kl_hi=None, kl_lo=None, log=print, run_leg=None,
             ep = float(PX[e])
             adv = (seg - ep) / ep * 100.0 if dr > 0 else (ep - seg) / ep * 100.0
             fav = -adv
-            tr.append({'entry': e - a, 'exit': x - a, 'dr': dr,
+            # `armed` IS NEW, 1017. The verdict bar and the fill bar are now different bars -
+            # Joe's OPEN and his `trade-fires` - so a cache that stored only `entry` could no
+            # longer say when the decision was taken. `.get` so a cache built from the pre-1017
+            # machine still loads: there, armed IS entry.
+            arm = int(t.get('armed', e))
+            capped = str(t['exit_reason']).endswith('MAE cap')
+            tr.append({'entry': e - a, 'exit': x - a, 'armed': arm - a, 'dr': dr,
                        'source': str(t['source']), 'exit_reason': str(t['exit_reason']),
+                       'fire_why': str(t.get('fire_why', 'the verdict bar')),
                        'gross': float(o.gross(t)),
+                       # `realised` CARRIES THE BANKED NET RULE so no report has to re-derive it.
+                       # Joe 1017: *"if the cap is hit, the MFE for that row is set to zero"* and,
+                       # asked whether the row realises the cap loss, *"-yes"*. Drag is NOT in here.
+                       'capped': bool(capped),
+                       'realised': float(-_MAE_CAP if capped else o.gross(t)),
                        'mae': float(max(0.0, np.nanmax(adv))),
-                       'mfe': float(max(0.0, np.nanmax(fav)))})
+                       'mfe': float(0.0 if capped else max(0.0, np.nanmax(fav)))})
     d['trades'] = tr
     d['open_at_end'] = [{'entry': int(t['entry']) - a, 'dr': int(t['dr']),
+                         'armed': int(t.get('armed', t['entry'])) - a,
                          'source': str(t['source'])} for t in live]
+    # ARMED BUT NEVER FILLED. 1017: a verdict whose fire bar never arrives produces NO trade, so
+    # these are not in `trades` and not in `open_at_end`. Banked because "no trade here" is a
+    # result, not an absence - Joe gave up 6 of 40 signals this way when he banked A.
+    d['never_fired'] = [{'armed': int(t['armed']) - a, 'dr': int(t['dr']),
+                         'source': str(t['source'])} for t in getattr(o, 'never_fired', [])]
     # THE WALK ROWS, banked because they are THE CHAIN and they are not reconstructible from
     # events + trades alone: an event that took no row because of the standdown and one whose open
     # the cap blocked look identical once the row is gone.

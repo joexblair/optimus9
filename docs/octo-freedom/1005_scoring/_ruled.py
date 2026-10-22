@@ -39,6 +39,75 @@ RULED = {
                             'bounce-pred has prioirty over turn-predictor'),
     # ---- THE 1016 BANK. Joe: *"g15 ws5/fwd/ex/xwob1/step1 +173.9969%. bank this as our state and make the machine live. no mom-xfer"*
     'W_OCTO2_GRID': ('g15ib', 'Joe 1016', 'g15 ws5/fwd/ex/xwob1/step1 +173.9969%. bank this as our state and make the machine live. no mom-xfer'),
+    # ---- THE 1017 BANK. Joe: *"bank A. update spec, store knobs, commit and push all files, make
+    # the machine live"*, A being *"wait for option 2, no fallback"*.
+    'W_OCTO2_FIRE': ('oobdiv', 'Joe 1017',
+                     'wait for the next high-side g30Mage oob, and use that bar as the anchor for '
+                     'a divergence test / --if the divergence test is bearish, then open the SHORT'),
+    'W_OCTO2_FIRE_TF': ('30', 'Joe 1017',
+                        'wait for the next high-side g30Mage oob'),
+    'W_OCTO2_MAE_CAP': ('1.60', 'Joe 1017',
+                        'apply a 1.6 MAE cap. if the cap is hit, the MFE for that row is set to '
+                        'zero / MAE is intentionally higher (1.6) because our window is a high '
+                        'MFE zzone'),
+    'W_OCTO2_MAE_CAP_ON': ('1', 'Joe 1017',
+                           'now is a good time to fix the net value - without an MAE cap, the '
+                           'numbers don\'t mean a lot when we start gating'),
+    'W_LIN_IB_XWOB': ('5', 'Joe 1017', 'this xwob belongs to lineage / --knob:5'),
+    'W_VOTE_MIN': ('2', 'Joe 1017', '1) 2 of 3 {knob}'),
+    'W_VOTE_V1_MIN': ('2', 'Joe 1017',
+                      'for a short, 2 of the 3 `r`\'s need to be high side of 50 and showing '
+                      'downward trajectory'),
+    'W_VOTE_V1_MID': ('50', 'Joe 1017', '2 of the 3 `r`\'s need to be high side of 50'),
+    'W_VOTE_TRAJ_MULT': ('2', 'Joe 1017',
+                         'the sampling gap for our new lower-TF based mech should remain as '
+                         '2 * TF width'),
+    'W_VOTE_CASC_LO': ('1', 'Joe 1017', 'wsf is ws1 to ws12'),
+    'W_VOTE_CASC_HI': ('12', 'Joe 1017', 'wsf is ws1 to ws12'),
+    'W_VOTE_CASC_ZOOM': ('2', 'Joe 1017',
+                         'this doesn\'t seem to allow for the bumps. a wider zoom is needed / '
+                         'I don\'t know the width yet - we\'ll adjust when I\'m tuning. keep it '
+                         'tight for now'),
+    'W_VOTE_CASC_MIN': ('4', 'Joe 1017',
+                        'so long as there are 4 or more consecutive TFs printing a rising or '
+                        'falling pattern, at the lower end or higher end of wsf range / 4 lines'),
+    'W_VOTE_BAR': ('event', 'Joe 1017, SUPERSEDING his own extrema preference',
+                   'all tests fires at the event: 04:00'),
+    # his earlier 1017 words, kept because the extrema walk is still built and selectable:
+    #   "I'd prefer the cascade to test from a single timestamp taken at the most recent mage
+    #    extrema" / "we sample on a single bar, not many bars"
+    # WHAT MOVED: on the 2026-08-26 04:00:35 event the extrema bar is 03:53:40, 415 s earlier,
+    # where ws1r reads 13.58 against 69.49 at the event.
+    'W_VOTE_BAR_GAP': ('48', 'Joe 1017',
+                       'to find the extrema, look back from the event bar in 4 minute gaps until '
+                       'you see an extrema, then step back another 4 minutes to validate'),
+    'W_VOTE_BAR_TF': ('1', 'Joe 1017',
+                      'in our current state, the most recent mage extrema is captured from ws1Mage'),
+    'W_VOTE_MAT': ('1', 'Joe 1017',
+                   'if ws2r has proven that it will follow ws1r, by following ws1r\'s walk, the '
+                   'trajectory is confluenced'),
+    'W_VOTE_MAT_LO': ('1', 'Joe 1017', 'ws3r will bend and follow ws2r\'s trajectory'),
+    'W_VOTE_MAT_HI': ('2', 'Joe 1017',
+                      'if ws2r has proven that it will follow ws1r, by following ws1r\'s walk'),
+    # ---- THE 1018 BANK. the divergence voter, and the divergence machine's own three knobs.
+    'W_VOTE_DIV': ('1', 'Joe 1018',
+                   'add divergence as the 4th voter for `4-voters-against`. minimum 2 of 4'),
+    'W_VOTE_DIV_TFS': ('1,2,3', 'Joe 1018',
+                       'I think the Mages are too fickle for divergence - we\'ll drop them and '
+                       'use the 3 aaaarrr`s'),
+    'W_VOTE_DIV_MIN': ('1', 'Joe 1017',
+                       'divergence qualifies on >=1 line showing div'),
+    'W_AF_ANCHOR_MID': ('0', 'Joe 1017',
+                      'the "side of 50" has accidently bled into the current state where the '
+                      'genuine bullish divergence is unable to fire / the past 50 mech can\'t '
+                      'block an anchor if it\'s already past 50'),
+    'W_AF_PIVOT_WIDTH': ('12', 'Joe 1017 delegated the value',
+                       'your call on the value - whatever allows ws3r to genuinely cross past 50 '
+                       'before finding the 03:29 low extrema / I think seperate knobs are good'),
+    'W_AF_PIVOT_DEPTH': ('2.0', 'Joe 1017 delegated the value',
+                       'was there a pinhole through 50 that I don\'t see? / your call on the value'),
+    'W_AF_STOP_N': ('2', 'Joe 1017 delegated the value',
+                  'B - no lookback cap / N=your value that finds the correct ws3r floater'),
     'W_G15_SIDE': ('ws5', 'Joe 1016',
                    'instead of a fixed width, collect samples on each g15Mage crossing back to '
                    'ib (on the target side)'),

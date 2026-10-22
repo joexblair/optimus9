@@ -18,6 +18,7 @@ DIFFERENT line: TV-verified MAE 0.03 right, 9.33 transposed). optimus9.compute.l
 that knows the layout. If you are typing ('k', ...) you are doing it wrong.
 """
 import copy
+import os
 import numpy as np
 import bias_machine as bm
 from optimus9.config import get_db_config
@@ -145,6 +146,369 @@ def mage_ladder_diff(mg, j, off_a, off_b, tfs):
     """
     d = np.array([mg[t][int(j) + int(off_b)] - mg[t][int(j) + int(off_a)] for t in tfs], float)
     return float(np.median(d)), int((d > 0).sum()), d
+
+
+# ── mage-cascade (JOE'S NAME, JOE'S MECH) ──────────────────────────────────────────────────────
+# Joe 1017 ruled every part of this. His words are here verbatim; read them before changing a line.
+#
+# THE BAR. *"I'd prefer the cascade to test from a single timestamp taken at the most recent mage
+# extrema"* / *"we sample on a single bar, not many bars"*. EVERY line is read at ONE bar.
+#   WHAT THIS REPLACES, kept because it was mine and unruled: `_openvote._bucket_close` read each
+#   of the 13 lines at its own timeframe's close, so one verdict spanned up to 9 minutes of tape
+#   and the lag was not even monotone in TF - at 2026-08-23 18:55:15 ws5Mage was 20 s old while
+#   ws4Mage below it was 200 s old. Joe asked *"is this in the mech's spec?"* It was not. The spec
+#   (`docs/mage_cascade_findings.md`, `ride_to_max.cascade`) always read ONE bar.
+#
+# FINDING THE BAR, Joe 1017: *"to find the extrema, look back from the event bar in 4 minute gaps
+# until you see an extrema, then step back another 4 minutes to validate the extrema / extrema must
+# be same-side as the event's side (not the events' SHORT or LONG verdict)"*, then *"the true max.
+# the sample bar has no relevence to mage-cascade - it is point in time to find an extrema in front
+# of it"*.
+#   so TWO stages: the coarse walk back finds a SAMPLE bar, and the extrema is the line's true
+#   extreme FORWARD of it. The 4-minute gap is what kills the noise - a bare slope flip at
+#   `WS1MR_REV_WOB` 2 fires on 21.9% of all 1,632,960 tape bars, one every 22.9 s.
+#   THE FORWARD SEARCH ENDS AT THE EVENT BAR. STRUCTURAL AND STATED: it is the only bound that
+#   invents no window and keeps every read at or before the event bar.
+#   ONE EXTREMA, NOT MANY. Joe: *"the whole point of walking back to look forward for the extrema
+#   is to confirm the only extrema it can see"*. Checked: from event bars 2026-08-23 19:02:05 and
+#   19:05:35 the sample bars differ (18:58:05 and 18:57:35, since the grid is anchored on the event
+#   bar) and the extrema is the SAME bar both times - 2026-08-23 18:58:35, ws1Mage 119.14.
+#
+# THE CLUSTER, Joe 1017: *"mage cascade allows for a subset to print a run at the lower or higher
+# end of the wsf TFs. so long as there are 4 or more consecutive TFs printing a rising or falling
+# pattern, at the lower end or higher end of wsf range (eg ws1 to ws4), then the cascade's verdict
+# is true"* / *"it would start at 1 for a low cluster, or end at TF 12 for a high cluster. clusters
+# in the middle (eg from 3 to 7) are discarded"* / *"lower TF runs always outrank the higher TFs in
+# the mage cascade"*.
+#
+# THE BUMPS, Joe 1017: *"this doesn't seem to allow for the bumps. a wider zoom is needed / example
+# ws1,ws2,ws3,ws4, ws5 / samples 100, 88, 90, 81, 70 / my read of the current flow would disqualify
+# the lower TF verdict, whereas I would mark it is SHORT"*.
+#   FOUR candidate mechanics were measured against his example and against four real bars. His
+#   example passed ALL FOUR, so it did not discriminate. The real bars split them: a 1-counter-step
+#   budget INVERTED the verdict to `up` at 2026-08-23 19:05:35 (the +0.61 bump at ws3->ws4 spends
+#   the budget already used on ws1->ws2); a 3-point tolerance and a signed-cumulative test both
+#   failed at 19:02:05 and 19:05:35; a 10-point tolerance swallowed all 12 lines on every bar. The
+#   wider zoom was the only one stable across all four. Joe then set the width: *"I don't know the
+#   width yet - we'll adjust when I'm tuning. keep it tight for now - let it show itself as a
+#   misdiagnosis of another trade, then we can adjust the width"*.
+#
+# NO dr, Joe 1017: *"dr isn't involved. we're taking a snapshot on one bar, making a direction
+# verdict (up, down, neither), and providing the verdict for consumption"*. This producer never
+# sees a trade side. A consumer maps the direction onto its own side.
+#
+# THE RANGE, Joe 1017: *"wsf is ws1 to ws12 / sub-wsf is g5 to g30 / dtf is >12"*, and on g30:
+# *"g30: printed in the table, not a rung in the cluster walk -confirmed"*. His earlier 1017
+# *"add g30 to it as the default mode"* is superseded for the WALK and kept for the PRINT.
+MC_GAP   = 48   # bars between coarse samples = 4 min at the 5 s grid. JOE'S OWN NUMBER, 1017.
+MC_ZOOM  = 2    # rungs each cluster step compares across. Joe 1017: *"keep it tight for now"* - 2
+#                 is the tightest width that admits a bump at all; 1 is the no-bump walk.
+MC_MIN   = 4    # lines a cluster must cover. *"4 or more consecutive TFs"*, then *"4 lines"*.
+MC_TF_LO = 1    # wsf's floor. A low cluster must START here.
+MC_TF_HI = 12   # wsf's ceiling. A high cluster must END here.
+
+
+def mage_cascade_bar(line, bar, side, mode='extrema', gap=MC_GAP, grid=None):
+    """[PRODUCER - Joe 1017] THE ONE BAR the mage cascade reads. -> (bar, why) or None.
+
+      line   the extrema source on the 5 s grid. ws1Mage today - Joe 1017: *"in our current state,
+             the most recent mage extrema is captured from ws1Mage"*. The TF is the CALLER'S, so
+             his *"future where the TF will need to be dynamic"* needs no change in here.
+      bar    the event bar.
+      side   the EVENT'S side, +1 high / -1 low. Joe 1017: *"extrema must be same-side as the
+             event's side (not the events' SHORT or LONG verdict)"*.
+      mode   'extrema'  his walk, then the true extreme forward of the sample bar.
+             'grid'     `bar` snapped DOWN to a `grid`-bar lattice. MINE, and Joe 1017 kept it:
+                        *"I don't want to discount your grid-width build - it needs further
+                        testing, which I'll do when I'm working on the trade list"*. `grid`
+                        defaults to `gap`, so the mode carries no number of its own.
+             'event'    `bar` itself, the control.
+
+    The walk is UNBOUNDED - it runs back to the start of the tape if it must. No cap, Joe's
+    standing rule. Returns None when no same-side turn exists before the tape starts.
+    CAUSAL: asserted, not commented - a returned bar may never exceed `bar`.
+    """
+    line = np.asarray(line, float)
+    bar = int(bar)
+    side = int(side)
+    assert side in (+1, -1), 'side is the EVENT side: +1 high, -1 low'
+    gap = int(gap)
+    assert gap >= 1, 'the coarse gap is in bars'
+    if mode == 'event':
+        k, why = bar, 'the event bar itself'
+    elif mode == 'grid':
+        g = int(gap if grid is None else grid)
+        k = (bar // g) * g
+        why = 'snapped down to the %d-bar lattice, %d bars back' % (g, bar - k)
+    elif mode == 'extrema':
+        prev = float(line[bar])
+        cand, i = None, 1
+        while bar - i * gap >= 0:
+            j = bar - i * gap
+            v = float(line[j])
+            d = (v - prev) * side
+            if d > 0.0:
+                cand = j
+            elif cand is not None:
+                break
+            prev = v
+            i += 1
+        if cand is None:
+            return None
+        seg = line[cand:bar + 1]
+        if not np.isfinite(seg).any():
+            return None
+        o = int(np.nanargmax(seg) if side > 0 else np.nanargmin(seg))
+        k = cand + o
+        why = ('the %s-side extrema %.2f, %d bars back | the coarse sample bar was %d bars back, '
+               '%d x %d-bar steps' % ('high' if side > 0 else 'low', float(line[k]), bar - k,
+                                      bar - cand, (bar - cand) // gap, gap))
+    else:
+        raise ValueError('mode is extrema, grid or event')
+    assert 0 <= k <= bar, 'the mage-cascade bar ran past the event bar'
+    return int(k), why
+
+
+def _mc_run(v, zoom, from_low):
+    """The longest same-direction run ANCHORED at one end of `v`. -> (lines, dir, frm, to).
+
+    `from_low` True anchors at index 0 and walks up; False anchors at the last index and walks
+    down. Each step compares a line with the line `zoom` rungs along, which is Joe's wider zoom.
+    A step of exactly 0.0 does NOT break a run - `ride_to_max.cascade`'s own test is `steps < 0`,
+    so a flat step was already not counted against.
+    """
+    n = len(v)
+    best = (1, 0, 0, 0)
+    for sgn in (+1, -1):
+        m = 0
+        if from_low:
+            i = 0
+            while i + zoom < n and sgn * (v[i + zoom] - v[i]) >= 0.0:
+                m += 1
+                i += 1
+            lines = m + zoom if m else 1
+            frm, to = 0, lines - 1
+        else:
+            i = n - 1 - zoom
+            while i >= 0 and sgn * (v[i + zoom] - v[i]) >= 0.0:
+                m += 1
+                i -= 1
+            lines = m + zoom if m else 1
+            frm, to = n - lines, n - 1
+        if lines > best[0]:
+            best = (lines, sgn if m else 0, frm, to)
+    return best
+
+
+def mage_cascade(mg, bar, tf_lo=MC_TF_LO, tf_hi=MC_TF_HI, zoom=MC_ZOOM, min_lines=MC_MIN,
+                 extra=None):
+    """[PRODUCER - Joe 1017] THE MAGE CASCADE at ONE bar. -> dict, or None if a line is not finite.
+
+      mg         {tf: the Mage line} on the 5 s grid, covering tf_lo..tf_hi
+      bar        the ONE bar every line is read at - `mage_cascade_bar` picks it
+      tf_lo/hi   wsf, ws1 to ws12. A low cluster STARTS at tf_lo, a high cluster ENDS at tf_hi, and
+                 a cluster touching neither end is discarded.
+      zoom       rungs each cluster step compares across
+      min_lines  lines a cluster must cover to count
+      extra      {name: line} printed beside the ladder and NEVER walked - g30Mage's place
+
+    -> v          the ladder, tf_lo..tf_hi, read at `bar`
+       steps      the adjacent per-rung moves, for the printed table
+       low, high  {'lines','dir','frm','to','counts'}. `dir` +1 rising with TF, -1 falling, 0 flat.
+                  `frm`/`to` are TIMEFRAMES, not indices.
+       verdict    'up', 'down' or 'neither'. The LOW cluster wins when both count.
+       drop       the end-to-end diff, mg[tf_lo] - mg[tf_hi]. Joe 1017, asked whether the run
+                  replaces it: *"no, it sits beside"*. It gates nothing in here.
+       extra      {name: value at `bar`}
+       why        the trace
+    NO dr IN OR OUT. A consumer maps `verdict` onto its own trade side.
+    """
+    bar = int(bar)
+    tfs = list(range(int(tf_lo), int(tf_hi) + 1))
+    v = np.array([mg[t][bar] for t in tfs], float)
+    if not np.isfinite(v).all():
+        return None
+    zoom = int(zoom)
+    assert 1 <= zoom < len(v), 'the zoom width must fit inside the ladder'
+    lo_n, lo_d, lo_a, lo_b = _mc_run(v, zoom, True)
+    hi_n, hi_d, hi_a, hi_b = _mc_run(v, zoom, False)
+    low = {'lines': lo_n, 'dir': lo_d, 'frm': tfs[lo_a], 'to': tfs[lo_b],
+           'counts': bool(lo_n >= min_lines and lo_d != 0)}
+    high = {'lines': hi_n, 'dir': hi_d, 'frm': tfs[hi_a], 'to': tfs[hi_b],
+            'counts': bool(hi_n >= min_lines and hi_d != 0)}
+    win = low if low['counts'] else (high if high['counts'] else None)
+    verdict = 'neither' if win is None else ('up' if win['dir'] > 0 else 'down')
+    nm = lambda t: 'ws%d' % t
+    why = ('%s | the low cluster %s to %s, %d lines, %s%s | the high cluster %s to %s, %d lines, '
+           '%s%s | the end-to-end diff %+.2f | zoom %d rungs, min %d lines'
+           % (verdict,
+              nm(low['frm']), nm(low['to']), low['lines'],
+              'rising' if low['dir'] > 0 else ('falling' if low['dir'] < 0 else 'flat'),
+              ' COUNTS' if low['counts'] else '',
+              nm(high['frm']), nm(high['to']), high['lines'],
+              'rising' if high['dir'] > 0 else ('falling' if high['dir'] < 0 else 'flat'),
+              ' COUNTS' if high['counts'] else '',
+              float(v[0] - v[-1]), zoom, int(min_lines)))
+    return {'v': v, 'tfs': tfs, 'steps': np.diff(v), 'low': low, 'high': high,
+            'verdict': verdict, 'drop': float(v[0] - v[-1]),
+            'extra': {} if not extra else {k: float(a[bar]) for k, a in extra.items()},
+            'why': why}
+
+
+
+# ── the matryoshka test (JOE'S WORD, 1017: *"the matryoshka effect"*) ──────────────────────────
+# JOE'S PREMISE, 1017 verbatim, which is the whole reason this producer exists:
+#   *"the 'entire r line' means that r is one single line spread across many TFs. the entire r line
+#    is coarse at the higher TF levels, and microscopic at the lower TF levels. this is why the
+#    higher TF r follows the lower TF r"*
+# So this is NOT three independent lines voting. It is one line read at three resolutions, and the
+# coarse read lags the fine read. Joe 1017 on what that fixes: *"ws1r is penalised in the first 'r
+# test', but in the new second test ws1r has served to prove the entire r line is reversing"*.
+#
+# HIS TEST 2, 1017 verbatim:
+#   *"if ws2r has proven that it will follow ws1r, by following ws1r's walk, the trajectory is
+#    confluenced"*
+#   *"if ws2r reverses against ws1r's trajectory (example 08-24 00:16), no action can be taken.
+#    this needs to be a stub - I want to know if this fires"*  <- WITHDRAWN 1017, his words kept
+#    beside the withdrawal and never rewritten. He built it as a stub, I measured it on the 41
+#    trade signals of 2026-08-22 to 2026-08-24, and he dropped it: *"drop ... it doesn't work well
+#    when the market is voliatile (23:37 and 08:22)"*. The evidence: of the 4 signals it fired on,
+#    2026-08-22 03:01:35 had a 0 s lag and 2026-08-24 08:22:25 a 5 s lag - the two lines bending
+#    opposite ways on the same bar, which is volatility, not ws2r leaving an established walk.
+#    THE CODE IS GONE, not disabled. There is no `against` state and no knob that restores one.
+#    CONSEQUENCE, STRUCTURAL AND STATED: with the opposite bend no longer a verdict, it can no
+#    longer veto a later agreeing bend either. So the walk looks for ws2r's first bend that MATCHES
+#    the fine line's direction, and an opposite bend in between is simply passed over.
+#
+# NO LEVEL, NO FENCE ON THE HIGHER LINE, Joe 1017: *"for a ws1cp event, there will always be ws1r
+# oob to 'start the trajectory walk'. any TF higher than ws1 will turn to follow ws1, but that
+# higher TF does not need to be ex-fence. be sure this is baked in to avoid future issues"*.
+# Measured on 2026-08-23: ws1r bends at r 76.33, ws2r at 74.42, ws3r at 63.93, ws4r at 50.14 - not
+# one of them at a fence, and ws3r never went above the ex-fence 83 at all that episode.
+#
+# CAUSAL, Joe 1017: *"your view of the arrival is non-causal. we can only work with the data at the
+# edge of the walk"*. Every read here is at or before `bar`, asserted.
+#
+# THIS PRODUCER DOES NOT COMPUTE A TRAJECTORY. It takes the two direction series the caller already
+# has. SRP, and it keeps `optimus9` free of an import from the `docs/` tree where `traj` lives.
+
+
+# ── away / toward, the Mage-perspective reading (Joe 1019 named the rule) ──────────────────────
+AT_MID = 50.0     # the level that splits the perspective. Joe 1019: *"if the TF's mage is above 50
+#                   then the perspective is HIGH"*. Not a fence - the mid.
+
+
+def away_toward(mage_dir, persp_mage, prev=None, mid=AT_MID):
+    """[PRODUCER - Joe 1019] The away/toward tag for ONE timeframe at ONE bar. -> 'away'|'toward'.
+
+      mage_dir     the TF's OWN Mage trajectory direction at the bar, +1 / -1 / 0
+      persp_mage   the value that sets the PERSPECTIVE - ws{min_tf}Mage at that bar, ONE value for
+                   the whole ladder
+      prev         the tag at the previous bar, used when mage_dir is 0
+      mid          the perspective split, 50
+
+    THE PERSPECTIVE IS ws1Mage's, NOT THE TF'S OWN. Joe 1019, correcting himself: *"I've made a
+    mistake in setting toward and away. it should be wholly reliant on ws1Mages side - this is
+    different from the per TF side I provided"*. His first wording read each TF's own Mage against
+    50; the ruling is that ws{min_tf}Mage sets one perspective and every TF is read against it.
+
+    THE RULE, from his 1019 wording with the perspective corrected:
+
+        persp_mage >  50  ->  climbing = toward, falling = away
+        persp_mage <= 50  ->  climbing = away,   falling = toward
+
+    THE DIRECTION IS STILL PER TF, and it comes from that TF's MAGE, not its r. Joe 1019: *"Mage is
+    the best source of direction - there's no lag"*.
+
+    A FLAT MAGE HOLDS THE PREVIOUS TAG. Joe 1019: *"35 - hold the previous tag"*.
+
+    WHAT THIS REPLACED, recorded twice over: first a rule of mine that took the side whose `held`
+    counter was smaller, which read ws5r backwards because `held` is staleness and not direction;
+    then the per-TF perspective above, which Joe withdrew.
+    """
+    d = int(mage_dir)
+    if d == 0:
+        return prev
+    high = float(persp_mage) > float(mid)
+    if high:
+        return 'toward' if d > 0 else 'away'
+    return 'away' if d > 0 else 'toward'
+
+
+def away_toward_series(persp_mage, dirs, mid=AT_MID):
+    """`away_toward` over a whole line. -> a list of 'away'|'toward'|None, one per bar.
+
+    `persp_mage` is ws{min_tf}Mage's series - the perspective - and `dirs` is the TF's own Mage
+    direction series. None appears only before the first non-flat bar.
+    """
+    persp_mage = np.asarray(persp_mage, float)
+    dirs = np.asarray(dirs, np.int8)
+    assert len(persp_mage) == len(dirs), 'the perspective and the direction series must share the grid'
+    out = [None] * len(dirs)
+    prev = None
+    for j in range(len(dirs)):
+        prev = away_toward(int(dirs[j]), float(persp_mage[j]), prev, mid)
+        out[j] = prev
+    return out
+
+
+def r_matryoshka(d_lo, d_hi, bar):
+    """[PRODUCER - Joe 1017] Is the coarse r line following the fine one's walk? -> dict.
+
+      d_lo   the FINE line's trajectory direction per bar, +1 / -1 / 0. ws1r today.
+      d_hi   the COARSE line's, same length. ws2r today.
+      bar    the bar the question is about.
+
+    -> state   'follows'   the coarse line has bent the SAME way, at or after the fine line's bend
+               'not yet'   it has not yet bent that way
+               'no walk'   the fine line has no bend at or before `bar`
+       walk_bar / walk_dir  the fine line's most recent bend and its direction - the walk's start
+       hi_bar               the coarse line's first MATCHING bend at or after it, or None
+       lag                  bars from the fine bend to that matching bend, or None
+       why                  the trace
+
+    A BEND is a change of direction in the series, flats transparent - the same reading `traj`
+    itself uses for a reversal. The walk is the fine line's MOST RECENT bend, so the test always
+    asks about the walk in progress and never an older one.
+    """
+    d_lo = np.asarray(d_lo, np.int8)
+    d_hi = np.asarray(d_hi, np.int8)
+    bar = int(bar)
+    assert len(d_lo) == len(d_hi), 'the two direction series must share the grid'
+
+    def bends(d, upto):
+        """(bar, from, to) per direction change at or before `upto`. Flats are transparent."""
+        out, prev = [], 0
+        for i in range(0, upto + 1):
+            v = int(d[i])
+            if v == 0:
+                continue
+            if prev != 0 and v != prev:
+                out.append((i, prev, v))
+            prev = v
+        return out
+
+    bl = bends(d_lo, bar)
+    if not bl:
+        return {'state': 'no walk', 'walk_bar': None, 'walk_dir': 0, 'hi_bar': None,
+                'lag': None, 'why': 'the fine line has not bent at or before the bar'}
+    wb, _wf, wd = bl[-1]
+    # the coarse line's first bend MATCHING the walk, at or after it. An opposite bend in between
+    # is passed over - see the WITHDRAWN note above.
+    bh = [z[0] for z in bends(d_hi, bar) if z[0] >= wb and z[2] == wd]
+    if not bh:
+        hb, lag, state = None, None, 'not yet'
+        why = ('the fine line bent %+d at bar %d; the coarse line has not bent %+d since'
+               % (wd, wb, wd))
+    else:
+        hb = bh[0]
+        lag = hb - wb
+        state = 'follows'
+        why = ('the fine line bent %+d at bar %d; the coarse line bent %+d at bar %d, %d bars '
+               'later - FOLLOWS' % (wd, wb, wd, hb, lag))
+    assert wb <= bar and (hb is None or hb <= bar), 'a matryoshka read ran past the bar'
+    return {'state': state, 'walk_bar': wb, 'walk_dir': int(wd), 'hi_bar': hb,
+            'lag': lag, 'why': why}
 
 
 def mage_band_split(mg, j, lower_tfs, upper_tfs):
@@ -366,12 +730,63 @@ def divergence(osc, px, hi, lo, i0=0, i1=None):
 
 
 # ── the anchor/floater divergence front end (Joe 0912) ─────────────────────────────────────────
-AF_BLOCK = 60    # KNOB. bars in ONE step-3 lookback block = 300 s = 5 minutes at the 5 s grid.
+AF_BLOCK = int(os.environ.get('W_AF_BLOCK', 60))
+#                  KNOB. bars in ONE step-3 lookback block = 300 s = 5 minutes at the 5 s grid.
 #                  Joe 0912: "step 3 then looks back to 17:27, 17:22, etc (in one code loop)".
+# AF_ANCHOR_MID - does step 1 REJECT an anchor on the pivot's side of 50. BANKED False, Joe 1017.
+#   HIS DIAGNOSIS, verbatim: *"the 'side of 50' has accidently bled into the current state where
+#   the genuine bullish divergence is unable to fire / the point of 'must pass 50' was to prevent
+#   an early return to same-side (divergence test side), like the example you can see at 08-25
+#   20:37. the past 50 mech can't block an anchor if it's already past 50"*.
+#   He is right, and 2026-08-25 20:37 is exactly what the rule was built for: ws1r crosses UP
+#   through 50 at 20:37:15 (45.68 -> 53.50) and back DOWN at 20:37:50 (52.19 -> 48.11) - a 35 s,
+#   7-bar poke - then stays below 50 for the next 12 minutes. That is a step-2 problem, a pivot run
+#   with no substance, and it never had anything to do with where the ANCHOR sits.
+#   WHAT IT COST: at 2026-08-26 04:00:45 ws1r is 68.83, so a bullish read at dr -1 returned None
+#   on the first line of the body, before price or the floater were looked at at all.
+#   HE RULED SHAPE A: with the gate off, step 2's 50 rule already does the right thing by itself -
+#   it walks back from k-1, so the anchor's OWN run above 50 becomes the pivot, and the floater
+#   walk then has to find a genuinely separate sub-50 excursion. That is the protection the rule
+#   was for, kept, with no further surgery.
+#   True RESTORES the old rejection, so the non-fires recorded in `wsf_dtf_v3_spec.md`,
+#   `1015_ongoing_momentum.md` and `1015_mechs_ledger.md` stay reproducible.
+AF_ANCHOR_MID = os.environ.get('W_AF_ANCHOR_MID', '0') == '1'
+# ── THE PIVOT MUST BE A PASSAGE, NOT A POKE. Joe 1017, after reading the 2026-08-26 04:00:45 ws3r
+# walk: *"what this uncovers is that the 43.82 was captured before the 'past 50' fired, which
+# breaks the rule. was there a pinhole through 50 that I don't see?"* - there was. Measured: five
+# 50-crossings in ten minutes, and the pivot the walk took was 2026-08-26 03:58:40..03:58:55 -
+# FOUR BARS, 20 s, 0.52 points above 50. The same shape as the 2026-08-25 20:37 example he named
+# earlier: ws1r up through 50 at 20:37:15 and back down at 20:37:50, a 35 s poke, then 12 minutes
+# below.
+#   HE DELEGATED THE VALUES: *"your call on the value - whatever allows ws3r to genuinely cross
+#   past 50 before finding the 03:29 low extrema"* / *"I think seperate knobs are good"*.
+# AF_PIVOT_WIDTH - bars the pivot run must HOLD past `mid`. 12 bars = 60 s = one full ws1 bar of
+#   persistence, which is why it is 12 and not a round number. Rejects the 4-bar pinhole above and
+#   the 6-bar / 30 s run at 2026-08-26 03:43:30.
+# AF_PIVOT_DEPTH - r POINTS past `mid` the run must reach. 2.0 is this file's own `SR_TOL`, from
+#   Joe 0912's *"tolerance ~2%"* read as r points. Rejects a 0.52-point graze.
+# AF_STOP_N - CONSECUTIVE non-improving blocks before the step-3 walk stops. Joe 1017 chose this
+#   shape over requiring the floater to be a turn: *"B - no lookback cap"*. 2 is the minimum that
+#   reaches his named 03:29 low of 16.52 with the pivot above; at 1 the walk stops on a 43.82
+#   knife-edge mid-descent. An EMPTY block still does not count - Joe 0921, *"skipped, not a
+#   stop"*.
+#   NO DISTANCE CAP. His words. The walk runs to bar 0 if the series keeps making new extremes.
+# 1 / 0.0 / 1 restores the pre-1017 behaviour, so the non-fires recorded in `wsf_dtf_v3_spec.md`,
+# `1015_ongoing_momentum.md` and `1015_mechs_ledger.md` stay reproducible.
+AF_PIVOT_WIDTH = int(os.environ.get('W_AF_PIVOT_WIDTH', 12))
+AF_PIVOT_DEPTH = float(os.environ.get('W_AF_PIVOT_DEPTH', 2.0))
+AF_STOP_N = int(os.environ.get('W_AF_STOP_N', 2))
+# AF_SLOPE_FLOOR - the NOISE BAND, in r points, on |d_osc - d_px_scaled|. 0.0 = no band, which is
+#   the no-op default and the only value that invents nothing. NOT RULED: `pk_state`'s caller has
+#   always supplied a floor and Joe has not given one for this producer. At 0.0 `state` is never 0
+#   unless d_osc or d_px is exactly 0.
+AF_SLOPE_FLOOR = float(os.environ.get('W_AF_SLOPE_FLOOR', 0.0))
 
 
 def anchor_floater(r, px, dr, k, block=AF_BLOCK, mid=50.0,
-                   xn=None, dwell_bars=None, oob=None):
+                   xn=None, dwell_bars=None, oob=None, anchor_mid=AF_ANCHOR_MID,
+                   pivot_width=AF_PIVOT_WIDTH, pivot_depth=AF_PIVOT_DEPTH,
+                   stop_n=AF_STOP_N, slope_floor=AF_SLOPE_FLOOR):
     """[PRODUCER · Joe 0912] THE FOUR STEPS that choose what goes into the divergence machine.
 
     JOE'S VERBATIM SPEC, 0912:
@@ -401,9 +816,12 @@ def anchor_floater(r, px, dr, k, block=AF_BLOCK, mid=50.0,
 
     CAUSAL. Every bar read is <= `k`. No fence: the 85/15 in `divergence` plays no part here.
 
-      step 1  the anchor is bar `k`: r[k], px[k], and `dr`. Returns None when r[k] sits on the
-              WRONG side of 50 for the dr, because step 2 is then self-contradictory (it asks for
-              an opposing-dr extreme on the side the anchor is already on).
+      step 1  the anchor is bar `k`: r[k], px[k], and `dr`. NO SIDE TEST - Joe 1017 ruled the 50
+              gate off here, see `AF_ANCHOR_MID`. It used to return None when r[k] sat on the
+              pivot's side of 50, on the reasoning that step 2 was then self-contradictory. It is
+              not: step 2 walks back from k-1, so the anchor's own run becomes the pivot and the
+              floater walk still has to clear 50 to find its extreme. `anchor_mid=True` restores
+              the rejection.
       step 2  the pivot. TWO RULES LIVE HERE - see REPLACED 0921 below.
 
               THE DWELL RULE, Joe 0921, used when `xn` is given: "instead of relying on r passing
@@ -436,6 +854,28 @@ def anchor_floater(r, px, dr, k, block=AF_BLOCK, mid=50.0,
          pivot   (bar, r, px)        blocks  [(from, to, best, best_bar, new_best)] in walk order
          d_osc   r anchor minus r floater      d_px  px anchor minus px floater
          fired   +1 bearish / -1 bullish / 0 none
+         state   THE ONE RESULT, Joe 1018: *"it should be a mech inside of anchor_floater - single
+                 point of consumption, one result"*. THE SIGN NAMES THE TRADE SIDE THE READING
+                 SUPPORTS; THE MAGNITUDE SAYS WHETHER IT IS A DIVERGENCE OR A PRICE MATCH:
+                   +1  a DIVERGENCE whose direction supports a SHORT
+                   -1  a DIVERGENCE whose direction supports a LONG
+                   +2  PM - price and osc AGREE, the trend continuing in the direction that
+                       supports a SHORT
+                   -2  PM - the trend continuing in the direction that supports a LONG
+                    0  inside the noise band, AF_SLOPE_FLOOR
+                 So `state`'s sign compares directly against a BANKED trade side, +1 SHORT / -1
+                 LONG, and `abs(state)` says which kind of reading it is.
+                 *** THIS IS THE OPPOSITE SIGN CONVENTION TO `pk_state`. *** There, +1 is "bull,
+                 line rising", which supports a LONG. `pk5s_gate_computer`, `pk_vote_machine` and
+                 `bias_machine.verdict_pk` all use that one. ANYTHING CARRYING A VALUE BETWEEN THE
+                 TWO MUST FLIP IT. Joe 1018 on why this is spelled out: *"we have to be careful and
+                 precise with our durable data"*.
+         pm      True when abs(state) == 2. PM IS NOT AN ABSENCE OF EVIDENCE - the PK spec's own
+                 rule is that *"PM (price-matched) votes suppress the opposing bucket"*, 40% in
+                 `pk_vote_machine.aggregate`. It used to collapse into `fired` 0 alongside the
+                 noise band, which threw the distinction away: at 2026-08-26 10:35:05 all three r
+                 lines read PM - d_osc +18.93/+47.59/+45.24 against d_px +0.00379/+0.00320/+0.00288,
+                 every pair agreeing - and a consumer reading `fired` saw three zeros.
 
     REPLACED 0921. `xn`, `dwell_bars` and `oob` switch step 2 to the dwell rule. They default to
     None so sideways_reversal, jig.causal.anchor_floater and stopsweep.py - none of which holds an
@@ -446,7 +886,7 @@ def anchor_floater(r, px, dr, k, block=AF_BLOCK, mid=50.0,
     k = int(k); dr = int(dr); block = max(1, int(block))
     if k < 1 or not np.isfinite(r[k]):
         return None
-    if (r[k] <= mid) if dr > 0 else (r[k] >= mid):
+    if anchor_mid and ((r[k] <= mid) if dr > 0 else (r[k] >= mid)):
         return None
     if xn is not None:                                  # THE DWELL RULE, Joe 0921
         x = np.asarray(xn, float)
@@ -472,22 +912,31 @@ def anchor_floater(r, px, dr, k, block=AF_BLOCK, mid=50.0,
         if p is None:
             return None
     else:                                               # THE 50 RULE, the original
+        # THE RUN MUST BE A PASSAGE. It used to take the FIRST contiguous run found walking back,
+        # however thin - see AF_PIVOT_WIDTH / AF_PIVOT_DEPTH. Now a run that fails either test is
+        # stepped over and the walk continues to the next one.
         other = (r < mid) if dr > 0 else (r > mid)
-        j = k - 1
-        while j >= 0 and not other[j]:
-            j -= 1
-        if j < 0:
+        j, p = k - 1, None
+        while j >= 0:
+            if not other[j]:
+                j -= 1
+                continue
+            e = j
+            while e >= 0 and other[e]:
+                e -= 1
+            e += 1
+            seg = r[e:j + 1]
+            if not np.all(np.isnan(seg)):
+                dep = ((mid - float(np.nanmin(seg))) if dr > 0
+                       else (float(np.nanmax(seg)) - mid))
+                if (j - e + 1) >= int(pivot_width) and dep >= float(pivot_depth):
+                    p = e + int(np.nanargmin(seg) if dr > 0 else np.nanargmax(seg))
+                    break
+            j = e - 1
+        if p is None:
             return None
-        e = j
-        while e >= 0 and other[e]:
-            e -= 1
-        e += 1
-        seg = r[e:j + 1]
-        if np.all(np.isnan(seg)):
-            return None
-        p = e + int(np.nanargmin(seg) if dr > 0 else np.nanargmax(seg))
     same = (r > mid) if dr > 0 else (r < mid)
-    best = np.nan; bi = None; blocks = []; n = 0
+    best = np.nan; bi = None; blocks = []; n = 0; bad = 0
     while True:
         n += 1
         b_hi = p - (n - 1) * block
@@ -501,10 +950,15 @@ def anchor_floater(r, px, dr, k, block=AF_BLOCK, mid=50.0,
         m = b_lo + int(np.nanargmax(cand) if dr > 0 else np.nanargmin(cand))
         new = (bi is None) or ((r[m] > best) if dr > 0 else (r[m] < best))
         if new:
-            best = float(r[m]); bi = m
+            best = float(r[m]); bi = m; bad = 0
         blocks.append((b_lo, b_hi, float(r[m]), int(m), int(new)))
         if not new:
-            break
+            # AF_STOP_N CONSECUTIVE non-improving blocks, not one. A single block that fails to
+            # improve used to end the walk, which stopped it on a non-extreme 4.75 min from the
+            # pivot while the real low sat 5.9 blocks further back.
+            bad += 1
+            if bad >= int(stop_n):
+                break
     if bi is None:
         return None
     d_osc = float(r[k]) - float(r[bi])
@@ -513,10 +967,22 @@ def anchor_floater(r, px, dr, k, block=AF_BLOCK, mid=50.0,
         fired = 1 if (d_px > 0 and d_osc < 0) else 0
     else:
         fired = -1 if (d_px < 0 and d_osc > 0) else 0
+    # ---- THE ONE RESULT. `fired` is kept unchanged for every existing caller; `state` is the
+    # field a new consumer reads. See the `state` entry in the docstring for the sign convention
+    # and for why it is the OPPOSITE of `pk_state`'s.
+    if d_osc == 0.0 or d_px == 0.0 or abs(d_osc) <= float(slope_floor):
+        state = 0
+    elif fired != 0:
+        state = int(fired)                              # the signs DISAGREE -> a divergence, +-1
+    else:
+        # the signs AGREE -> PM. Its side is the one the CONTINUING trend supports: price rising
+        # supports a LONG, price falling supports a SHORT.
+        state = -2 if d_px > 0 else 2
     return {'anchor': (k, float(r[k]), float(px[k])),
             'pivot': (int(p), float(r[p]), float(px[p])),
             'floater': (int(bi), float(r[bi]), float(px[bi])),
-            'blocks': blocks, 'd_osc': d_osc, 'd_px': d_px, 'fired': int(fired)}
+            'blocks': blocks, 'd_osc': d_osc, 'd_px': d_px, 'fired': int(fired),
+            'state': int(state), 'pm': bool(abs(state) == 2)}
 
 
 # ── sideways / reversal from a flat sample run + divergence (Joe 0912 hypothesis) ───────────────
@@ -531,6 +997,73 @@ SR_FENCE   = (40.0, 60.0)   # THE MID-ZONE FENCE. Joe 0912: "let's modify the dr
 #                     must sit ABOVE 60; dr -1 reads the LOW side, so the run must sit BELOW 40.
 #                     STRICTLY outside the edge - the same strictness the 50 test used.
 
+
+# ── the oob-anchored divergence fire bar. JOE 1017, his "option 2" ────────────────────────────
+# HIS SPEC, verbatim, offered as one of three replacements for a 4,065 s ib-return wait on the
+# 2026-08-23 19:05 SHORT:
+#   *"2) wait for the next high-side g30Mage oob, and use that bar as the anchor for a divergence
+#    test / --if the divergence test is bearish, then open the SHORT at 19:26"*
+# and the ruling after it was measured over all 40 trades of 2026-08-22 to 2026-08-24:
+#   *"bank A"* - A being *"wait for option 2, no fallback"*, which he confirmed is the only causal
+#   reading: *"is this causal? ... no"* to a fallback that needs the exit bar to choose.
+#
+# THE SIDE IS THE TRADE'S, from his own words *"because this a SHORT ... wait for the next
+# high-side g30Mage oob"*. The EVENT-side variant was measured beside it and is NOT the default:
+# trade side took 34 of 40 trades for +14.5689% net at his 1.60 cap, event side took 30 for
+# +12.2153%.
+#
+# MEASURED AGAINST THE OTHER TWO OPTIONS, all 40 trades, 1.60 MAE cap, cap-loss reading:
+#   option 1, fire at the decision event when the matryoshka test says follows  -3.1004%, 15 trades
+#   option 2, THIS, trade side                                                 +14.5689%, 34 trades
+#   option 3, ws1r reverse + ws1x crossing [boundary, r, Mage] xwob 5           -6.9125%, 40 trades
+#   octo2 as it stood, firing at the decision event every time                  +1.4405%, 40 trades
+# Option 1 was exactly a no-op on the trades it kept - +0.0000 pp against octo2 - because it fires
+# where octo2 already fires. Option 3 lost at every cap value swept.
+#
+# WHAT IT COSTS, reported to him and not hidden: the wait reaches 4,390 s on 2026-08-22 05:15:00,
+# which is LONGER than the ib-return delay he rejected. Median 972 s, 8 of 34 over 2,500 s. And 6
+# of 40 signals never fire before their exit, worth +8.2009% that this mech gives up.
+#
+# CAUSAL: the returned bar is the FIRST bar at or after `frm` that satisfies both conditions, and
+# every read is at or before it. A caller enters AT that bar and never earlier. Asserted.
+# THE NAME IS MINE, the mech is unnamed - Joe has called it only "option 2".
+
+
+def next_oob_divergence(line, r, px, frm, side, dr, hi, lo, until=None):
+    """[PRODUCER - Joe 1017] The first oob-anchored bearish/bullish divergence at or after `frm`.
+
+      line   the line whose oob crossing anchors the test. g30Mage today; the TF is the caller's.
+      r      the r line `anchor_floater` picks its anchor and floater from. ws1r today.
+      px     RAW close for the divergence - `divergence`'s own docstring requires it, not px_smooth
+      frm    the decision event bar. The scan starts strictly AFTER it.
+      side   which oob boundary `line` must cross INTO: +1 the high, -1 the low
+      dr     the direction the divergence must fire, in the BANKED frame: +1 SHORT, -1 LONG
+      hi/lo  the oob fence. REQUIRED, never defaulted - it decides whether an episode exists.
+      until  the last bar the scan may reach. None runs to the end of the line. NO CAP OF MY OWN.
+
+    -> (the bar, the trace) or None.
+    """
+    line = np.asarray(line, float)
+    n = len(line)
+    end = (n - 1) if until is None else min(int(until), n - 1)
+    frm = int(frm)
+    side = int(side)
+    dr = int(dr)
+    assert side in (+1, -1), 'side is the oob boundary to cross into: +1 high, -1 low'
+    assert dr in (+1, -1), 'dr is the BANKED frame: +1 SHORT, -1 LONG'
+    thr = float(hi) if side > 0 else float(lo)
+    for k in range(frm + 1, end + 1):
+        v, p = float(line[k]), float(line[k - 1])
+        crossed = (v >= thr and p < thr) if side > 0 else (v <= thr and p > thr)
+        if not crossed:
+            continue
+        af = anchor_floater(r, px, dr, k)
+        if af is None or int(af.get('fired', 0)) != dr:
+            continue
+        assert k > frm and k <= end, 'the divergence fire bar ran outside the scan'
+        return int(k), ('the %s-side oob at %.2f anchors a divergence firing %+d'
+                        % ('high' if side > 0 else 'low', v, dr))
+    return None
 
 def sideways_reversal(r, px, dr, i0=0, i1=None, samples=SR_SAMPLES, tol=SR_TOL,
                       test=SR_TEST, block=AF_BLOCK, mid=50.0, fence=SR_FENCE, first=False):
