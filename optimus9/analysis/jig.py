@@ -2710,8 +2710,13 @@ def at_extreme_mask(r, side, pts, gap, tol):
     idx = np.arange(span, len(r))[:, None] - (np.arange(pts - 1, -1, -1) * gap)[None, :]
     w = r[idx]
     ok = np.isfinite(w).all(axis=1)
-    now = w[:, -1]
-    dist = (np.nanmax(w, axis=1) - now) if int(side) > 0 else (now - np.nanmin(w, axis=1))
+    # the extremes are taken ONLY on usable rows. An all-NaN row warns under nanmax/nanmin, and a
+    # warning out of a producer is noise a later reader has to re-diagnose.
+    dist = np.full(len(w), np.inf)
+    if ok.any():
+        ww = w[ok]
+        now = ww[:, -1]
+        dist[ok] = (ww.max(axis=1) - now) if int(side) > 0 else (now - ww.min(axis=1))
     out[span:] = ok & (dist <= float(tol))
     return out
 

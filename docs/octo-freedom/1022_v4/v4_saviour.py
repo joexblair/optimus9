@@ -76,8 +76,7 @@ def past_mid_toward(mage, bar, target_side):
     """Is `mage` past 50 TOWARDS the target-side at `bar`. Joe 1022, the clause he had omitted:
     *"ws1Mage is not printing past 50 towards the target-side (ie LONG trade, >50. SHORT trade,
     <50)"*. LONG is target-side high, so "towards" is above 50; SHORT is below."""
-    v = float(mage[int(bar)])
-    return (v > K.MID) if int(target_side) > 0 else (v < K.MID)
+    return K.past_mid(mage[int(bar)], target_side)
 
 
 def _runs(a, side):

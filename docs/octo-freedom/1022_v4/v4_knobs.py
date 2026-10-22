@@ -32,15 +32,33 @@ def _knob(name, default, cast=float):
 #   Joe 1022: *"ensure all potential knobs are captured, including any that I haven't called out"*.
 #   These are standing rulings he has never varied, but they move every verdict in v4, so they sit
 #   in the bank with the rest and an off-ruled run refuses.
-OOB_HI = _knob('OOB_HI', 85.0)  # oob is ALWAYS 15/85. Joe, standing
-OOB_LO = _knob('OOB_LO', 15.0)
-MID = _knob('MID', 50.0)        # low side < MID, high side > MID. Joe 1022: *"low side = <50.  high side = >50"*
+#   ONE KNOB PER FENCE, NOT TWO. Joe 1022: *"oob_hi and oob_lo are expressed as one knob, to avoid
+#   imbalnace.  the formula is (100 -{knob:15}) - you'll see this in the codebase"*, and *"change
+#   `mid` to a fence, same logic as above. 100-{knob:50}"*. The knob is the LOW end and the high end
+#   is 100 - knob, which is jig.wsf_facing_dr's own form (*"the fence, 80 / 20 at knob 20"*) and
+#   test_points' (*"momo_fence_r 17 -> (17.0, 83.0)"*). Two separate knobs could drift apart; one
+#   cannot.
+OOB_FNC = _knob('OOB_FNC', 15.0)    # oob is ALWAYS 15/85 -> the pair is (15.0, 85.0)
+MID_FNC = _knob('MID_FNC', 50.0)    # the middle fence. At 50 the pair is (50.0, 50.0) - no band.
+#   Joe 1022: *"low side = <50.  high side = >50"*. Moving it to 45 opens a 45-55 band, and what a
+#   value INSIDE that band counts as is NOT RULED - it cannot arise at 50, so nothing decides it.
+OOB_LO, OOB_HI = OOB_FNC, 100.0 - OOB_FNC
+MID_LO, MID_HI = MID_FNC, 100.0 - MID_FNC
+MID = MID_FNC                       # kept so a reader of the old name lands on the low end
 
 # ── v4-lineage ────────────────────────────────────────────────────────────────────────────────
 RMOM_FNC = _knob('RMOM_FNC', 80.0)        # the r fence, mirrored. 80 -> (20, 80)
 LIN_HOP = _knob('LIN_HOP', 2, int)        # TFs the lin-hop VIEW reads ahead; the baton moves one
 REV_WOB = _knob('REV_WOB', 3, int)        # bars a v4-lineage reversal must hold
-IB_WOB = _knob('IB_WOB', 3, int)          # bars the ws5r ib cross must hold
+IB_WOB = _knob('IB_WOB', 3, int)          # bars the ws5r ib cross must hold. SUPERSEDED for the
+#   lineage ib cross by LIN_IB_DWELL below, and kept because it is his #10 ruling and the record of
+#   what the static form was.
+LIN_IB_DWELL = _knob('LIN_IB_DWELL', 2.5)  # bars per TF the lineage ib cross must hold, DYNAMIC.
+#   Joe 1022: *"ok, we need a wob for lineage.  it needs to be dynamic: let's start with
+#   int(TF * {knob:2.5, 'V4_LIN_IB_DWELL`})"*. WHY IT MOVED: on 2026-08-31 19:30:40 ws5r crossed to
+#   ib at 16.25, reached 16.36 - 1.36 points past the fence - held THREE bars and fell straight back
+#   to low oob and on down to 11.32. At the static IB_WOB 3 that flicker passed the hold on its last
+#   bar and counted as ws5r walking to ib. int(5 * 2.5) = 12 bars rejects it.
 TF_CEILING = _knob('TF_CEILING', 10, int)  # riderTF max. PROVISIONAL - his word is "unsure"
 
 # ── v4saviour ─────────────────────────────────────────────────────────────────────────────────
@@ -70,6 +88,12 @@ SAV_CASCADE_ZOOM = _knob('SAV_CASCADE_ZOOM', 2, int)     # rungs each cluster st
 SAV_CASCADE_MIN = _knob('SAV_CASCADE_MIN', 4, int)       # lines a cluster must cover
 SAV_CASCADE_MODE = os.environ.get('W_V4_SAV_CASCADE_MODE', 'extrema')   # the bar picker's mode
 
+# ── v4-ws5rbackstop ───────────────────────────────────────────────────────────────────────────
+BSTOP_SYNC_MIN = _knob('BSTOP_SYNC_MIN', 8.8)        # minutes either side of the ws5r reversal that
+#   the ws1r / ws2r / ws3r same-side oob may land in. Joe 1022: *"the ws1r,ws2r,ws3r oob condition
+#   has a +/-8.8 minute window to sync with ws5r reversing.  this needs to be causal"*.
+BSTOP_POOL_HI = _knob('BSTOP_POOL_HI', 3, int)       # the oob pool is ws1r..ws{BSTOP_POOL_HI}r
+
 # ── lift-off ──────────────────────────────────────────────────────────────────────────────────
 LIFT_PTS = _knob('LIFT_PTS', 6, int)        # samples in the window
 LIFT_TOL = _knob('LIFT_TOL', 2.0)           # r-points off the window extreme
@@ -84,7 +108,9 @@ RULED = {
                                 ' enough to oob to be predicted"'),
     'LIN_HOP':          (2,     '"1, 2"'),
     'REV_WOB':          (3,     '"2, 3"'),
-    'IB_WOB':           (3,     '"10, 3"'),
+    'IB_WOB':           (3,     '"10, 3"' + ' - SUPERSEDED by LIN_IB_DWELL'),
+    'LIN_IB_DWELL':     (2.5,   '"it needs to be dynamic: let\'s start with'
+                                ' int(TF * {knob:2.5, `V4_LIN_IB_DWELL`})"'),
     'TF_CEILING':       (10,    '"18, unsure.  use 10" - PROVISIONAL'),
     'SAV_WS2_OOB_TEST': (16.0,  '"increase CAP to {knob:16} minutes, and start the timer'
                                 ' when the trade opens"'),
@@ -99,9 +125,14 @@ RULED = {
     'SAV_CASCADE_MODE': ('extrema', '"25, not extrema - measure where the r reversals print" for the'
                                 ' r-driven reads; the ROUTED read is anchored on the ws1Mage'
                                 ' extrema, so this mode is \'extrema\''),
-    'OOB_HI':           (85.0,  'standing - oob is ALWAYS 15/85'),
-    'OOB_LO':           (15.0,  'standing - oob is ALWAYS 15/85'),
-    'MID':              (50.0,  '"low side = <50.  high side = >50"'),
+    'BSTOP_SYNC_MIN':   (8.8,   '"the ws1r,ws2r,ws3r oob condition has a +/-8.8 minute window to'
+                                ' sync with ws5r reversing.  this needs to be causal"'),
+    'BSTOP_POOL_HI':    (3,     '"(ws1r or ws2r or ws3r are same side oob)"'),
+    'OOB_FNC':          (15.0,  'standing - oob is ALWAYS 15/85. ONE knob: *"oob_hi and oob_lo are'
+                                ' expressed as one knob, to avoid imbalnace.  the formula is'
+                                ' (100 -{knob:15})"*'),
+    'MID_FNC':          (50.0,  '"change `mid` to a fence, same logic as above.'
+                                ' 100-{knob:50}"'),
     'LIFT_PTS':         (6,     '"34, 6 knob"'),
     'LIFT_TOL':         (2.0,   '"35, 2.0 knob"'),
     'LIFT_WOB':         (8,     '"37, 8 knob" and "add a wob 8 to reduce the early reversals"'),
@@ -133,11 +164,22 @@ def ex_fence(v, side):
     return (float(v) >= hi) if side > 0 else (float(v) <= lo)
 
 
+def mid_fence():
+    """MID_FNC as (lo, hi). 50 -> (50.0, 50.0); 45 would be (45.0, 55.0)."""
+    return (MID_LO, MID_HI)
+
+
 def side_of(v):
     """+1 high side, -1 low side. Joe 1022: low side is < 50, high side > 50. 50 itself is LOW,
     because his rule is "< 50" and "> 50" and one of them must own the boundary - STRUCTURAL,
-    and stated rather than decided quietly."""
-    return 1 if float(v) > MID else -1
+    and stated rather than decided quietly. At MID_FNC below 50 a value inside the band reads LOW
+    for the same reason, and that case is UNRULED - see the MID_FNC comment."""
+    return 1 if float(v) > MID_HI else -1
+
+
+def past_mid(v, side):
+    """Is v past the middle fence on `side`. high: v > MID_HI. low: v < MID_LO."""
+    return (float(v) > MID_HI) if int(side) > 0 else (float(v) < MID_LO)
 
 
 def gap_for(tf):
@@ -146,6 +188,16 @@ def gap_for(tf):
     Joe 1022 ruled the rounding: *"38, yes"* to round(). ws3 8.4 -> 8, ws7 19.6 -> 20.
     """
     return max(1, int(round(int(tf) * GAP_PER_TF)))
+
+
+def lin_ib_dwell(tf):
+    """The lineage ib dwell for a timeframe, in bars. int(TF * LIN_IB_DWELL), Joe's own formula."""
+    return max(1, int(int(tf) * LIN_IB_DWELL))
+
+
+def bstop_sync_bars():
+    """BSTOP_SYNC_MIN in bars. 8.8 min = 106 bars at the 5 s grid."""
+    return int(round(BSTOP_SYNC_MIN * BARS_PER_MIN))
 
 
 def sav_cap_bars():
@@ -185,12 +237,14 @@ def table():
     here = globals()
     rows = [('| the knob | value | units | ruled | Joe\'s words |'), ('|---|---|---|---|---|')]
     units = {'RMOM_FNC': 'r-points', 'LIN_HOP': 'TFs', 'REV_WOB': 'bars', 'IB_WOB': 'bars',
-             'TF_CEILING': 'TF', 'SAV_WS2_OOB_TEST': 'minutes', 'SAV_IB_XWOB': 'bars',
+             'TF_CEILING': 'TF', 'LIN_IB_DWELL': 'bars per TF', 'SAV_WS2_OOB_TEST': 'minutes', 'SAV_IB_XWOB': 'bars',
              'SAV_MAGE_GATE_WOB': 'bars', 'SAV_CASCADE_GAP': 'bars',
              'LIFT_PTS': 'samples', 'LIFT_TOL': 'r-points', 'LIFT_WOB': 'bars',
+             'OOB_HI': 'r-points',
              'GAP_PER_TF': 'bars per TF-minute', 'SAV_CASCADE_ZOOM': 'rungs',
              'SAV_CASCADE_MIN': 'lines', 'SAV_CASCADE_MODE': 'mode', 'OOB_HI': 'r-points',
-             'OOB_LO': 'r-points', 'MID': 'r-points'}
+             'OOB_FNC': 'r-points', 'MID_FNC': 'r-points',
+             'BSTOP_SYNC_MIN': 'minutes', 'BSTOP_POOL_HI': 'TF'}
     for k, (v, why) in RULED.items():
         rows.append('| `%s` | %s | %s | %s | %s |'
                     % (k, here[k], units[k], 'YES' if here[k] == v else 'NO - off the bank', why))

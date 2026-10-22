@@ -162,12 +162,116 @@ cannot fail, because after the last bar at the extreme the line never returns to
 
 ---
 
-## 4. BUILD-GATE - still open
+## 4. The baton-pass hatch - CONFIRMED 1022
+
+Joe 1022, verbatim, after two earlier attempts at the same hole were measured and set aside:
+
+```
+-IF current-rider found a reversal in its lookback <- current code, triggered by ws6r
+--walk current-rider until cross to ib <- this applies only to a current rider that carried a reversal in lookback
+--pass the baton to tf+1 or exhaust
+--if the baton passes to tf+1 (second-new-rider) and second-new rider finds a reversal in lookback 
+---declare exhaust
+```
+
+Joe, same message: *"the logic: the 2nd "walk to ib" gives enough time for a reversal to print
+without contention"*. And confirming it: *"cool beans.  find the knobs etc, and bank this mech as
+the confirmed build"*.
+
+### What hole it closes
+
+A rider can arrive already spent: the baton reaches it AFTER its own reversal has printed, so
+*"baton-passing on riderTF reversal"* has nothing left to pass on. Measured 2026-08-31: ws6 takes
+the baton at 19:45:40 with its reversal 105 s behind it, at 19:43:55.
+
+### Why it beats the three floors that were measured first
+
+His first wording was a FLOOR - *"new-rider has a previous same-side reversal which printed >=
+old-rider's reversal timestamp"*. Three candidate floors were measured over 08-30..09-06 on
+ws5..ws10, both sides:
+
+| the floor | what it reads | can it invert | measured |
+|---|---|---|---|
+| the old rider's reversal, his first wording | ANOTHER line's timing | YES | **129 of 447 clustered hand-offs invert, 29%**. ws9 -> ws10 inverts 50% of the time |
+| the new rider's own oob run | only the new rider | no | admits a reversal a median 510 s stale, max 3,540 s |
+| the leg's start | the open mech | no | UNMEASURABLE - #17 is unbuilt |
+
+THE SECOND WALK NEEDS NO FLOOR AT ALL. It never compares two lines' reversal timestamps, so the
+29% inversion rate cannot touch it. That is the whole reason it is the build.
+
+### It has no stuck state
+
+| at the receiver gate | the outcome |
+|---|---|
+| receiver not ex-fence | EXHAUST |
+| receiver ex-fence, no reversal in lookback | the baton passes, the normal path |
+| receiver ex-fence, reversal in lookback | the SECOND walk to ib |
+| after the second walk, second-new-rider has a reversal in lookback | EXHAUST |
+| after the second walk, second-new-rider does not | the baton passes, the normal path |
+
+And it recurses without a special case: a line that later receives the baton already spent becomes
+the current rider with a reversal in its lookback, and the same second walk applies.
+
+### The knobs - NO NEW ONES
+
+Everything it reads is already banked. `v4_knobs.py` is the in-force copy.
+
+| what it reads | the knob | value |
+|---|---|---|
+| the ib dwell, both walks | `LIN_IB_DWELL` | 2.5 bars per TF, int(TF x 2.5) |
+| the oob fence | `OOB_FNC` | 15 -> (15, 85) |
+| the receiver's ex-fence | `RMOM_FNC` | 80 -> (20, 80) |
+| the reversal detector | `LIFT_PTS` / `LIFT_TOL` / `LIFT_WOB` / `GAP_PER_TF` | 6 / 2.0 / 8 / 2.8 |
+| the chain's top | `TF_CEILING` | 10, PROVISIONAL |
+
+ONE THING IS A CHOICE, NOT A KNOB, and it is stated rather than defaulted quietly: the LOOKBACK is
+bounded by the line's own same-side oob RUN, not by a bar count. A reversal outside that run belongs
+to a different move and is not read. No `lookback` window knob is invented; if a bar count is wanted
+there instead, that is Joe's to set.
+
+### The 2026-08-31 trace, reproducible
+
+`v4_lineage_trace.py '2026-08-31 19:00:00' '2026-08-31 21:30:00' 5 low` prints this:
+
+| the step | the bar | the reading |
+|---|---|---|
+| ws5 is the rider and reverses | 2026-08-31 19:23:20 | ws5r 4.92 |
+| ws5 walks to ib, dwell 12 bars | 2026-08-31 19:45:40 | held 352 bars = 1760 s |
+| ws5 -> ws6, the receiver gate | 2026-08-31 19:45:40 | ws6r 5.76, ex-fence YES |
+| ws6 takes the baton | 2026-08-31 19:45:40 | its reversal 2026-08-31 19:43:55, FOUND in its lookback |
+| the SECOND walk to ib on ws6 | 2026-08-31 19:48:55 | dwell 15 bars, held 16 bars = 80 s |
+| ws6 -> ws7, the receiver gate | 2026-08-31 19:48:55 | ws7r 11.22, ex-fence YES |
+| ws7 is the second-new-rider | 2026-08-31 19:48:55 | its reversal 2026-08-31 19:45:50, FOUND in its lookback |
+| **EXHAUST** | **2026-08-31 19:48:55** | the second-new-rider carried a reversal too |
+
+The second walk buys 195 s. In that window ws7's reversal moves from 5 s in the future and contended
+to 185 s in the past and settled. The ws6 ib run holds 16 bars against a 15-bar requirement - ONE
+BAR of margin, which is thin and is recorded as such.
+
+### It is NOT the v4-lineage walker
+
+`v4_lineage_trace.py` traces the baton chain and nothing else. There is no v4-lineage walker, no
+rider selection from the ws1r-ws5r trajectory pool, and no rev-trade - #17 the open mech is held
+back by Joe on purpose: *"I'm holding it back so that your SRP is on point"*.
+
+## 5. Dropped
+
+| the mech | Joe's word | the date |
+|---|---|---|
+| the ws5x escape hatch for a stale baton-pass | *"I think the idea is flawed - I'd rather forego a bit of profit than pay for stops"* | 1022 |
+
+Dropped, and it gets no code, no knobs and no further explanation. `LIN_X_TRAVEL` and
+`XCROS_MIN_SPEED` were banked and have been removed from `v4_knobs.py`.
+
+The hole it was aimed at is closed by SS4, the second walk to ib, which needs no x line.
+
+## 6. BUILD-GATE - still open
 
 | # | the gap | status |
 |---|---|---|
 | 17 | what OPENS the first trade | deferred by Joe: *"different mech.  you'll have the answer after we lock `v4-lineage`"* and *"not for v4-saviour.  I'm holding it back so that your SRP is on point"* |
 | 39 | the ws2x-cross | Joe 1022: *"in-design presently. not for v4-saviour"* |
+| 43 | a baton-pass whose new rider has already reversed | CLOSED 1022 by SS4, the second walk to ib |
 | - | NOTHING IS CODED for v4-lineage. The producers exist; no walker wires them | OPEN |
 
 `TF_CEILING` 10 and `GAP_PER_TF` 2.8 are PROVISIONAL by his own words; they live in `v4_bank.md`.
