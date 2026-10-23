@@ -15,6 +15,10 @@ their spec/memory rather than restate it (SRP). Newest first.
 | 2026-07-08 | **filler_invisible** default ON | CONFIRMED (already on since 0705) | Re-validated: quality-neutral vs OFF; TV-parity; the 24% live-churn was a warmup-edge artifact | [[project_filler_invisible]] |
 | 2026-07-08 | Seam grace **301→2000ms** | INTERIM | Late ticks mutate the std-sensitive BB → live↔backtest desync; 2000ms cuts it to ~6%. Proper fix = finalized-bar read | [[project_o9live_desync_fix]] |
 | 2026-07-08 | **arm_delay** producer | **VOIDED** | Confirmed look-ahead (forward scan can't be clamped causal); the look-ahead-era PnL is void | [[project_tide_exit]] |
+| 2026-10-23 | **walked slippage on the trade history** | LANDED | `OrderBookWalker` already computed it and `FxStore` already stored it; nothing printed it. Three columns: `Slip in`, `Slip out`, `Slip $`. Measured 4.72 bps round-trip mean against the 8.75 assumed | `o9live_spec.md` |
+| 2026-10-23 | `ui_server._db` reads **`PK_DB_NAME`** | LANDED | It was a hard-coded `name="o9_live"` default while the rest of the stack read the env — a second instance's UI would have served the first's trades | `o9live_spec.md` |
+| 2026-10-23 | **two instances, one shared infra** | DECIDED | Joe: per-instance trading db, shared klines/config. `fx_*` cannot be shared — `open_leg` returns any open row, so instance B would pyramid onto A | `o9live_spec.md` |
+| 2026-10-23 | `/v5/execution/list` left alone | DECIDED-AGAINST | Real Bybit returns no slippage field; adding one drifts the contract `BybitClient` is a drop-in for. The UI reads `fx_fill` directly | `o9live_spec.md` |
 
 ## How to use
 Add a row when a tweak lands in o9-live or is decided-against. Keep the `reason` to the one-line "why"; link the spec for
