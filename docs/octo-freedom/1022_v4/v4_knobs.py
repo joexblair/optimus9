@@ -141,10 +141,22 @@ GAP_PER_TF = _knob('GAP_PER_TF', 2.8)       # bars per TF-minute. PROVISIONAL un
 #   hold-out half (+211.71% against the previous bank's +86.49%), on full-tape net USDT
 #   (+21,331.23 against +10,261.38) and on how much of its sweep rate survived the split
 #   (0.92 against 0.69). The ordering was committed to before the hold-out was read.
-R_K = _knob('R_K', 6, int)                  # the StochRSI k length
-R_RSI = _knob('R_RSI', 8, int)              # the RSI length
-R_STC = _knob('R_STC', 6, int)              # the STC length. The only one of the three that moves
-#   the trade count much: stc 6 carries roughly 2.4x the trades of stc 8.
+# THE NAMES ARE WHAT THE SLOTS ACTUALLY HOLD, renamed 1023. Joe: *"I don't recollect on the
+#   transposed knobs, I'll defer to you for the labelling"*. They were R_K / R_RSI / R_STC, which
+#   read as k | rsi | stc - and the legacy tuple is ('k', rsi, stc, k_len, src), so the three
+#   values were really rsi, stc and k_len. line_config.py's own opening paragraph names this bug:
+#   *"Joe writes a k-line as k_len | rsi_len | stc_len | src. The legacy tuple was ('k', rsi_len,
+#   stc_len, k_len, src) - Joe's FIRST number is the tuple's LAST."* It crept back because
+#   v4_rcfg_sweep hand-wrote the positional tuple instead of using the named KLine.
+#   THE ARRAYS DO NOT MOVE. KLine(k_len=6, rsi=6, stc=8).as_tuple() is ('k', 6, 8, 6, 'close'),
+#   byte-identical to what was built, so every cached array stays addressed.
+#   IN JOE'S NOTATION THE BANK IS 6|6|8, and the previous bank was 7|5|8 - which is the DB's
+#   mech_lines('wsf') row exactly, so the old bank was always the ruled line.
+R_RSI = _knob('R_RSI', 6, int)              # the RSI length
+R_STC = _knob('R_STC', 8, int)              # the STC length
+R_KLEN = _knob('R_KLEN', 6, int)            # the StochRSI k length. The only one of the three that
+#   moves the trade count much: k_len 6 carries roughly 2.4x the trades of k_len 8. The finding was
+#   reported on 1023 as "stc is the only parameter that matters"; that was the transposed reading.
 MAX_PYRAMID = _knob('MAX_PYRAMID', 2, int)  # concurrent open positions the account will carry.
 #   JOE'S WORD AND JOE'S NUMBER. 1023: *"it will need a safe max_pyramid setting that only the
 #   account (leverage) can provide"*, then *"including 2 max_pyramid"*. It is the LEVERAGE knob:
@@ -152,6 +164,19 @@ MAX_PYRAMID = _knob('MAX_PYRAMID', 2, int)  # concurrent open positions the acco
 #   100 / (N x 1.100). At 2 that is 45.5x; at the previous unlimited (7 concurrent) it was 13.0x.
 #   Measured on the banked config: 543 trades at 2 against 598 unlimited, +19,485.67 USDT against
 #   +21,331.23, and peak leverage 14.7x either way.
+
+V4CORE_MAGE_FNC = _knob('V4CORE_MAGE_FNC', 5.0)   # the fence v4core's Mage test uses, mirrored.
+#   Joe 1023 spec: *"(ws1Mage or ws2Mage are same-side past 5/95)"* / *"same-side past 5/95 means
+#   <5 if target-side is low, >95 if target-side high"*, then *"fence knob: yes"*.
+#   ONE KNOB, 100 - knob, the same form as OOB_FNC 15 and MID_FNC 50 - two separate knobs could
+#   drift apart and one cannot. 5 -> (5.0, 95.0).
+#   THE NAME IS MINE AND IT IS DELIBERATELY NOT "oob". oob is ALWAYS 15/85; this is a tighter
+#   fence on the Mage lines for one mech, so it is named for the mech and the line it gates rather
+#   than for a region. Joe has not named it.
+#   HELD AT 5 UNTIL THE FULL WALK. Joe 1023: *"5/95 was my eyeballing. I wouldn't change it before
+#   walking the full 6 day window, but it's an option"*. So it is a sweep candidate, not a ruling
+#   he has defended - and the 10:26 arm he flagged reads ws1Mage 92.21 closed, which FAILS >95.
+V4CORE_MAGE_LO, V4CORE_MAGE_HI = V4CORE_MAGE_FNC, 100.0 - V4CORE_MAGE_FNC
 
 # THE CONTROL ROW'S TWO KNOWN-GOOD VALUES. 2026-09-03 00:35:00 on ws5r.
 #   The control used to print ONE number against "ruled 12.48", which is the DB's
@@ -174,9 +199,9 @@ RULED = {
     'LIN_IB_DWELL':     (2.5,   '"it needs to be dynamic: let\'s start with'
                                 ' int(TF * {knob:2.5, `V4_LIN_IB_DWELL`})"'),
     'TF_CEILING':       (10,    '"18, unsure.  use 10" - PROVISIONAL'),
-    'R_K':              (6,     '"bank k6 rsi8 stc6" - 1023'),
-    'R_RSI':            (8,     '"bank k6 rsi8 stc6" - 1023'),
-    'R_STC':            (6,     '"bank k6 rsi8 stc6" - 1023'),
+    'R_RSI':            (6,     '"bank k6 rsi8 stc6" - 1023, which is 6|6|8 in his notation'),
+    'R_STC':            (8,     '"bank k6 rsi8 stc6" - 1023, which is 6|6|8 in his notation'),
+    'R_KLEN':           (6,     '"bank k6 rsi8 stc6" - 1023, which is 6|6|8 in his notation'),
     'MAX_PYRAMID':      (2,     '"including 2 max_pyramid" - 1023'),
     'BSTOP_OOB_WHEN':   ('window', '"I think the answer is \'just recent\'" - 1022,'
                                    ' defaulted 1023'),
@@ -250,6 +275,15 @@ def side_of(v):
     and stated rather than decided quietly. At MID_FNC below 50 a value inside the band reads LOW
     for the same reason, and that case is UNRULED - see the MID_FNC comment."""
     return 1 if float(v) > MID_HI else -1
+
+
+def past_v4core_mage(v, side):
+    """Is v past v4core's Mage fence on `side`. high: v > 95. low: v < 5.
+
+    Joe 1023: *"same-side past 5/95 means <5 if target-side is low, >95 if target-side high"*.
+    STRICTLY past, which is his wording, so exactly 5.0 or 95.0 does not pass.
+    """
+    return (float(v) > V4CORE_MAGE_HI) if int(side) > 0 else (float(v) < V4CORE_MAGE_LO)
 
 
 def past_mid(v, side):
@@ -333,7 +367,7 @@ def table():
     here = globals()
     rows = [('| the knob | value | units | ruled | Joe\'s words |'), ('|---|---|---|---|---|')]
     units = {'RMOM_FNC': 'r-points', 'LIN_HOP': 'TFs', 'IB_WOB': 'bars',
-             'R_K': 'bars', 'R_RSI': 'bars', 'R_STC': 'bars', 'MAX_PYRAMID': 'positions',
+             'R_RSI': 'bars', 'R_STC': 'bars', 'R_KLEN': 'bars', 'MAX_PYRAMID': 'positions',
              'BSTOP_OOB_WHEN': 'mode', 'BSTOP_CASCADE_AT': 'mode',
              'TF_CEILING': 'TF', 'LIN_IB_DWELL': 'bars per TF', 'TRAJ_WIDTH': 'bars per TF-minute',
              'TRAJ_MIN_FRAC': 'fraction of the block', 'TRAJ_MIN_TRAVEL': 'r-points', 'SAV_WS2_OOB_TEST': 'minutes', 'SAV_IB_XWOB': 'bars',

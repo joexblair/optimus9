@@ -34,8 +34,18 @@ def _feed():
     OrderBookFeed(SYMBOL, lambda s, b: UI_BOOK.__setitem__(s, b)).start()
 
 
-def _db(name="o9_live"):
-    cfg = get_db_config(); cfg["database"] = name
+TRADING_DB = os.environ.get("PK_DB_NAME", "o9_live")   # THIS instance's trading database
+#   Joe 1023: *"each instance should have its own \"trading\" db - fakeAPI will handle the infra
+#   (klines, account transactions, etc)"* and *"each instance's rows land in its own trading
+#   database"*. The name was a hard-coded default argument while every other part of the stack
+#   read PK_DB_NAME, so a SECOND instance's UI would have served the FIRST instance's trades -
+#   both pages alive and plausible, which is the worst way for this to fail.
+#   The shared infra handle stays explicit: _db("pk_optimizer") for the klines and the tape.
+
+
+def _db(name=None):
+    """A connection. `name` None = THIS instance's trading database; pass a name for shared infra."""
+    cfg = get_db_config(); cfg["database"] = name or TRADING_DB
     d = DatabaseManager(**cfg); d.connect()
     return d
 

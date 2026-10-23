@@ -39,14 +39,14 @@ import v4_deferred_trades as DT
 import v4_swing_score as SS
 from v4_backstop_trades import prices
 _e = sys.stderr; sys.stderr = io.StringIO()
-from optimus9.compute.line_config import override
+from optimus9.compute.line_config import override, KLine
 from optimus9.orchestration.build_ws_lines import HOURS, WARMUP
 from optimus9.orchestration.rpl_cache import cache_jig_perline, LINE_DIR, _line_key
 sys.stderr = _e
 
 EM = int(dt.datetime.strptime('2026-10-05', '%Y-%m-%d')
          .replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
-K0, R0, S0 = K.R_K, K.R_RSI, K.R_STC       # the banked (k, rsi, stc) - BANKED IN v4_knobs 1023
+K0, R0, S0 = K.R_RSI, K.R_STC, K.R_KLEN    # the trip slots: (rsi, stc, k_len) - BANKED 1023
 #   Joe 1023: *"bank k6 rsi8 stc6"*. It lives in the knob bank so an off-ruled config REFUSES
 #   like every other knob. `cfgs()` is centred on it, so the grid moved with the bank: k 5/6/7 and
 #   stc 5/6/7 now, where it was k 4/5/6 and stc 6/7/8. The k7 and stc5 arrays are NOT built - the
@@ -60,8 +60,15 @@ def cfgs():
 
 
 def spec(tf, trip):
-    k, r, s = trip
-    return override(tf * 60, ('k', k, r, s, 'close'), 'emerging')
+    """One line override for a trip. `trip` is (rsi, stc, k_len) - the LEGACY TUPLE'S OWN ORDER.
+
+    BUILT THROUGH THE NAMED FORM so it cannot transpose again. The hand-written positional tuple
+    here is what reintroduced the exact bug line_config.py was written to kill, and the 1023 audit
+    found every sweep column labelled with the wrong parameter for a day. KLine names what it
+    means; the tuple it emits is byte-identical to what was built, so no cached array moves.
+    """
+    rsi, stc, k_len = trip
+    return override(tf * 60, KLine(k_len=k_len, rsi=rsi, stc=stc, src='close'), 'emerging')
 
 
 def build(trips, log):
