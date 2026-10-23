@@ -291,6 +291,34 @@ def side_of(v):
     return 1 if float(v) > MID_HI else -1
 
 
+def walkable_run(R, k, side, hold_tf=5, max_tf=None):
+    """The CONTIGUOUS same-side oob run holding `hold_tf` at bar k. -> (lo, hi) or None.
+
+    Joe 1023: *"at v4-ws5rbackstop's signal, find the highest same-side oob ws{1-maxTF}r and pass
+    it to lineage"*, then, shown a set of ws4, ws5, ws7: *"why is ws7 there? the v4lineage spec
+    only allows jumps of +1"*. So the set must be CONSECUTIVE - an oob rung lineage cannot reach
+    by +1 steps is a separate island and is not part of the run. At that fire the walkable run is
+    ws4-ws5 and ws7 is excluded.
+
+    THEN: *"swap `highest` with `lowest`"*. The caller takes `lo`.
+
+    `hold_tf` is ws5 because the backstop is a ws5r mech - the run must contain the line the fire
+    came from. 175 of 1086 fires have no such run, because ws5r had already left oob by the time
+    the oob partner set the fire bar. Those return None and are the caller's to rule.
+
+    CAUSAL: every line is read at bar k, which is the fire bar.
+    """
+    mx = TF_CEILING if max_tf is None else int(max_tf)
+    if not oob(R[hold_tf][k], side):
+        return None
+    lo = hi = int(hold_tf)
+    while lo - 1 >= 1 and oob(R[lo - 1][k], side):
+        lo -= 1
+    while hi + 1 <= mx and oob(R[hi + 1][k], side):
+        hi += 1
+    return lo, hi
+
+
 def step0_r_ok(r2, r3, side):
     """STEP0's ws2r/ws3r test on `side`, joined by V4CORE_STEP0_JOIN. -> bool
 

@@ -275,3 +275,81 @@ The hole it was aimed at is closed by SS4, the second walk to ib, which needs no
 | - | NOTHING IS CODED for v4-lineage. The producers exist; no walker wires them | OPEN |
 
 `TF_CEILING` 10 and `GAP_PER_TF` 2.8 are PROVISIONAL by his own words; they live in `v4_bank.md`.
+
+## 7. The start TF, BANKED 1023 — and the walk that confirmed it
+
+Until 1023 the backstop always handed lineage **ws5**, because the backstop is a ws5r mech. Joe
+1023 replaced that:
+
+> at v4-ws5rbackstop's signal, find the highest same-side oob ws{1-maxTF}r and pass it to lineage
+
+> swap `highest` with `lowest` and retest
+
+and, shown a set of ws4, ws5, ws7:
+
+> why is ws7 there?  the v4lineage spec only allows jumps of +1
+
+So the set must be CONSECUTIVE. An oob rung the baton cannot reach by +1 steps is a separate
+island and is not part of the run. `K.walkable_run(R, fire_bar, side)` returns the contiguous
+same-side oob run holding ws5; the start TF is its BOTTOM rung.
+
+| the fire | all same-side oob | walkable runs | the run holding ws5 | start TF |
+|---|---|---|---|---|
+| 2026-09-01 19:15:35 | ws4, ws5, ws7 | ws4-ws5 **+** ws7 | ws4-ws5 | **ws4** |
+| 2026-09-01 19:32:45 | ws3..ws10 | ws3-ws10 | ws3-ws10 | **ws3** |
+
+### The walk Joe signed off
+
+`19:15:35` fire, start ws4, side HIGH, anchored on the ws5r reversal at 19:15:00. Joe 1023, on
+seeing the ws6 row: *"outstanding! I couldn't see the ws6r reversal on TV so I wasn't 100% sure of
+the mech - now you've shown me that our work is paying off: 19:39 is a good result"*.
+
+| the step | the bar | the reading |
+|---|---|---|
+| ws4 is the rider and reverses | 2026-09-01 19:24:00 | ws4r 93.03, knowable 2026-09-01 19:24:35 |
+| ws4 walks to ib, dwell 10 bars | 2026-09-01 19:39:00 | crossed 2026-09-01 19:38:15, dwell proven 10 bars = 50 s |
+| ws4 -> ws5, the receiver gate | 2026-09-01 19:39:00 | ws5r 82.29, ex-fence YES |
+| ws5 takes the baton | 2026-09-01 19:39:00 | its reversal 2026-09-01 19:15:00 knowable 19:15:35, FOUND in its lookback |
+| the SECOND walk to ib on ws5 | 2026-09-01 19:39:55 | dwell 12 bars, held 12 bars = 60 s |
+| ws5 -> ws6, the receiver gate | 2026-09-01 19:39:55 | ws6r 86.47, ex-fence YES |
+| ws6 is the second-new-rider | 2026-09-01 19:39:55 | its reversal 2026-09-01 19:24:25 knowable 19:25:00, FOUND in its lookback |
+| **EXHAUST** | **2026-09-01 19:39:55** | the second-new-rider carried a reversal too |
+
+The rev-trade opens 2026-09-01 19:40:00. Joe's own read of that leg was 19:31.
+
+THE 14-MINUTE DELAY IS ONE STEP: ws4 reverses at 19:24:00 and does not cross to ib until 19:38:15.
+Everything after that happens inside 55 seconds.
+
+### A side effect of starting below ws5, stated not hidden
+
+Lineage is anchored on the ws5r reversal, so when the baton reaches ws5 that reversal is ALWAYS
+already in its lookback. Starting below ws5 therefore opens the baton-pass hatch on the first
+hand-off every time, by construction - the hatch was written for a rider that happens to arrive
+spent, not one that arrives spent by design. Joe was shown this and banked the mech anyway.
+
+## 8. rev-trade's trigger, PART-RULED 1023
+
+Joe 1023: *"rev-trade (the action of closing an incoming trade and opening a trade in the opposite
+direction) fires on a signal from the mechs. for lineage, its `EXHAUST`. for the others, I don't
+know yet."*
+
+| the path | what fires the rev-trade |
+|---|---|
+| v4-ws5rbackstop, which defers to lineage | **EXHAUST** |
+| v4core STEP4, which walks lineage | **EXHAUST** |
+| v4saviour, which returns REV-TRADE directly | **NOT RULED** |
+| the "immediate rev" legs in his walkthrough | **NOT RULED** |
+
+### The open bar carries a guard
+
+`max(EXHAUST, the fire) + 1`. Measured 1023 on the full tape: 4 of 911 walks exhaust BEFORE their
+own fire bar, by up to 5.9 minutes, because the walk anchors on the raw ws5r reversal while the
+fire waits up to `BSTOP_SYNC_MIN` 8.8 min for its oob partner. Without the guard those four would
+open before their own signal existed. It lives in `v4_deferred_trades` so no caller can forget it.
+
+### 175 fires have no walkable run
+
+ws5r is not same-side oob at the fire bar on 175 of 1086 fires - it had already left oob while the
+oob partner was setting the fire bar. Those fires can produce no start TF. `defer(..., fallback=)`
+takes what to do, and NOTHING IS DEFAULTED: `None` drops the fire, a TF number uses that instead.
+Joe has not ruled it.

@@ -8,6 +8,17 @@ fired it, and the trade opens on the bar AFTER lineage prints EXHAUST.
 MY CHOICES, all stated rather than defaulted:
   the anchor     the ws5r reversal the backstop fired on, NOT the fire bar. The fire can be later
                  than the reversal when the pool oob lands after it, and lineage walks the reversal.
+  the start TF   BANKED 1023. The LOWEST rung of the contiguous same-side oob run holding ws5, read
+                 at the FIRE bar. Joe: *"at v4-ws5rbackstop's signal, find the highest same-side
+                 oob ws{1-maxTF}r and pass it to lineage"*, then *"swap `highest` with `lowest`"*,
+                 and on a set of ws4/ws5/ws7: *"why is ws7 there?  the v4lineage spec only allows
+                 jumps of +1"* - so the run must be CONSECUTIVE. It was always ws5 before.
+                 CONFIRMED on the 2026-09-01 19:15:35 fire: run ws4-ws5, start ws4, EXHAUST
+                 19:39:55, and Joe: *"19:39 is a good result"*.
+  the open bar   max(EXHAUST, the fire) + 1. Measured 1023: 4 of 911 walks exhaust BEFORE their own
+                 fire bar, by up to 5.9 min, because the walk anchors on the raw reversal while the
+                 fire waits up to BSTOP_SYNC_MIN for its oob partner. The guard lives here so no
+                 caller can forget it.
   the side       the backstop's, which is ws5r's own oob side. The walk follows it up the ladder.
   the bound      the forward search ends at the SCAN WINDOW's end. That is the data's edge, not a
                  cap on the mech - a walk that reaches it is reported UNRESOLVED, never guessed.
@@ -34,16 +45,32 @@ import v4_lineage_trace as LT
 from v4_backstop_trades import prices
 
 
-def defer(fires, R, B):
+def start_tf(R, d, fallback=None):
+    """The start TF for one fire: the BOTTOM of the walkable run holding ws5. -> tf or None.
+
+    `fallback` is what to use when ws5r is not same-side oob at the fire bar, so no run exists.
+    None means the fire produces no walk at all. NOT RULED by Joe - the caller passes it.
+    """
+    r = K.walkable_run(R, d['fire'], d['side'])
+    return r[0] if r else fallback
+
+
+def defer(fires, R, B, fallback=None):
     """Each fire -> its lineage verdict. -> rows, chronological by the fire."""
     out = []
     for d in fires:
-        v, bar, rows = LT.walk(R, 5, d['side'], d['rev'], B, log=lambda *a: None)
+        stf = start_tf(R, d, fallback)
+        if stf is None:
+            out.append({'fire': d['fire'], 'rev': d['rev'], 'stamp': d['stamp'],
+                        'side': d['side'], 'dir': d['dir'], 'verdict': 'NO WALKABLE RUN',
+                        'exh': None, 'steps': 0, 'start_tf': None})
+            continue
+        v, bar, rows = LT.walk(R, stf, d['side'], d['rev'], B, log=lambda *a: None)
         unresolved = (v == 'EXHAUST' and bar is not None and bar >= B - 1)
         out.append({'fire': d['fire'], 'rev': d['rev'], 'stamp': d['stamp'],
                     'side': d['side'], 'dir': d['dir'],
                     'verdict': 'UNRESOLVED' if unresolved else v, 'exh': None if unresolved else bar,
-                    'steps': len(rows)})
+                    'steps': len(rows), 'start_tf': stf})
     return out
 
 
