@@ -147,10 +147,22 @@ def walk(R, start_tf, side, A, B):
     for t in range(start_tf, K.TF_CEILING + 3):
         if t in R:
             _, _, ST[t] = first_rev_at_or_after(R[t], t, side, A, B)
+
+    def hand_over(tf):
+        """The bar the baton leaves `tf` on. -> bar or None.
+
+        K.LIN_PASS 'reversal' is Joe's 1022 spec - the pass IS the rider's reversal stamp, and the
+        ib walk belongs only to the hatch. 'ib' is what the code has always done.
+        """
+        if K.LIN_PASS == 'reversal':
+            return ST[tf]
+        return ib_cross(R[tf], tf, ST[tf], B)[1]
+
+    assert K.LIN_PASS in ('ib', 'reversal'), 'LIN_PASS %r is not a mode' % (K.LIN_PASS,)
     rid = start_tf
     if ST.get(rid) is None:
         return 'NO REVERSAL', None
-    _, pas, _ = ib_cross(R[rid], rid, ST[rid], B)
+    pas = hand_over(rid)
     if pas is None:
         return 'NO IB CROSS', None
     while True:
@@ -163,7 +175,7 @@ def walk(R, start_tf, side, A, B):
             return 'NO REVERSAL', None
         if ST[nxt] > pas:                          # not reversed yet at pas - the normal path
             rid = nxt
-            _, pas, _ = ib_cross(R[rid], rid, ST[rid], B)
+            pas = hand_over(rid)
             if pas is None:
                 return 'NO IB CROSS', None
             continue
@@ -181,7 +193,7 @@ def walk(R, start_tf, side, A, B):
         if ST[n2] <= p2:
             return 'EXHAUST', p2
         rid = n2
-        _, pas, _ = ib_cross(R[rid], rid, ST[rid], B)
+        pas = hand_over(rid)
         if pas is None:
             return 'NO IB CROSS', None
 

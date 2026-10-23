@@ -101,19 +101,32 @@ def walk(R, start_tf, side, A, B, log=print):
         rows.append((step, bar, read))
         log('| %s | %s | %s |' % (step, bar, read))
 
+    assert K.LIN_PASS in ('ib', 'reversal'), 'LIN_PASS %r is not a mode' % (K.LIN_PASS,)
+
+    def hand_over(tf):
+        """The bar the baton leaves `tf` on, and the row that explains it. -> bar or None."""
+        if K.LIN_PASS == 'reversal':
+            say('the baton passes ON ws%d reversing' % tf, ln.U(ST[tf]),
+                'his 1022 rule - no ib walk on the normal path')
+            return ST[tf]
+        cross, pas, held = ib_cross(R, tf, ST[tf], B)
+        if pas is None:
+            say('ws%d never crosses to ib' % tf, '-', 'the chain cannot advance')
+            return None
+        assert pas >= ST[tf], 'the ib confirm precedes the reversal stamp'
+        say('ws%d walks to ib, dwell %d bars' % (tf, K.lin_ib_dwell(tf)), ln.U(pas),
+            'crossed %s, dwell proven %d bars = %d s' % (ln.U(cross), held, held * 5))
+        return pas
+
     rid = start_tf
     if ST.get(rid) is None:
         say('ws%d has no oob-anchored reversal' % rid, '-', '-')
         return 'NO REVERSAL', None, rows
     say('ws%d is the rider and reverses' % rid, ln.U(REV[rid]),
         'ws%dr %.2f, knowable %s' % (rid, float(R[rid][REV[rid]]), ln.U(ST[rid])))
-    cross, pas, held = ib_cross(R, rid, ST[rid], B)
+    pas = hand_over(rid)
     if pas is None:
-        say('ws%d never crosses to ib' % rid, '-', 'the chain cannot advance')
         return 'NO IB CROSS', None, rows
-    assert pas >= ST[rid], 'the ib confirm precedes the reversal stamp'
-    say('ws%d walks to ib, dwell %d bars' % (rid, K.lin_ib_dwell(rid)), ln.U(pas),
-        'crossed %s, dwell proven %d bars = %d s' % (ln.U(cross), held, held * 5))
 
     while True:
         nxt = rid + 1
@@ -139,13 +152,9 @@ def walk(R, start_tf, side, A, B, log=print):
             say('the normal path', ln.U(pas), 'ws%d waits for its own reversal' % rid)
             say('ws%d reverses' % rid, ln.U(REV[rid]),
                 'ws%dr %.2f, knowable %s' % (rid, float(R[rid][REV[rid]]), ln.U(ST[rid])))
-            cross, pas, held = ib_cross(R, rid, ST[rid], B)
+            pas = hand_over(rid)
             if pas is None:
-                say('ws%d never crosses to ib' % rid, '-', 'the chain cannot advance')
                 return 'NO IB CROSS', None, rows
-            assert pas >= ST[rid], 'the ib confirm precedes the reversal stamp'
-            say('ws%d walks to ib, dwell %d bars' % (rid, K.lin_ib_dwell(rid)), ln.U(pas),
-                'crossed %s, dwell proven %d bars = %d s' % (ln.U(cross), held, held * 5))
             continue
         # HIS RULE: the second walk to ib
         c2, p2, h2 = ib_cross(R, nxt, pas, B)
@@ -179,13 +188,9 @@ def walk(R, start_tf, side, A, B, log=print):
             'its reversal %s knowable %s, not yet in its lookback'
             % (ln.U(REV[n2]), ln.U(ST[n2])))
         rid = n2
-        cross, pas, held = ib_cross(R, rid, ST[rid], B)
+        pas = hand_over(rid)
         if pas is None:
-            say('ws%d never crosses to ib' % rid, '-', 'the chain cannot advance')
             return 'NO IB CROSS', None, rows
-        assert pas >= ST[rid], 'the ib confirm precedes the reversal stamp'
-        say('ws%d walks to ib, dwell %d bars' % (rid, K.lin_ib_dwell(rid)), ln.U(pas),
-            'crossed %s, dwell proven %d bars = %d s' % (ln.U(cross), held, held * 5))
 
 
 if __name__ == '__main__':

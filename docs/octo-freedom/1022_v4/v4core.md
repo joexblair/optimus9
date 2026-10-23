@@ -151,7 +151,52 @@ on `ws1Mage`. That is the whole reason the `c` lines exist.
 
 Nothing else is open. The side question is settled - see below.
 
-## 6a. The side at STEP0, SETTLED 1023
+## 6a. STEP0 IS NOT A SEPARATE MECH — SETTLED 1023
+
+It is STEP1 and STEP2 run against an **invisible LONG or SHORT**. Joe 1023, verbatim:
+
+> as the first trade, the arm comes from a non-existent/invisible LONG trade, so the arm happens at
+> 17:20 when cws1b prints 101.9
+
+> the invisible walk continues to the v4core event. both cws2r and cws3r are oob, so lineage is
+> passed TF3
+
+> lineage has no baton receiver, so exhaust is printed immediately
+
+and, on writing it down:
+
+> be sure to swap "LONG" with "LONG or SHORT" when you write it to the spec
+
+So BOTH invisible trades run, one per side, which is the same thing as his earlier *"scan both
+sides as you walk"*. There is no separate STEP0 code path:
+
+| the invisible trade | its target-side | STEP1 waits for | the real trade it rev-trades into |
+|---|---|---|---|
+| an invisible LONG | high | cws1b high oob | a SHORT |
+| an invisible SHORT | low | cws1b low oob | a LONG |
+
+Whichever side's setup completes first sets the real trade, and the real trade is that invisible
+one's rev-trade - which is exactly `low oob -> LONG, high oob -> SHORT`.
+
+### Measured on his own leg, 2026-09-01
+
+| his statement | measured | match |
+|---|---|---|
+| the arm at 17:20, cws1b prints 101.9 | 2026-09-01 17:20:00, cws1b 101.95 | YES |
+| the invisible walk reaches the v4core event | 2026-09-01 17:30:00 | YES |
+| both cws2r and cws3r are oob | cws2r 96.23, cws3r 86.18 | YES |
+| so lineage is passed TF3 | both oob -> his tie-break to cws3r -> ws3 | YES |
+| lineage has no baton receiver, exhaust immediately | NO - ws4 and ws5 both receive. 7 or 8 steps | **no** |
+
+cws1b is high oob for exactly TWO bars there: 69.68 at 17:19:55, 101.95 at 17:20:00, 81.34 by
+17:21:00. One closed-bar print.
+
+THE WALK, AND HIS RULING ON IT. Under the banked `LIN_PASS` 'ib' the exhaust is 17:40:25 and the
+SHORT opens 17:40:30; under his 1022 reversal-pass rule the exhaust is 17:40:55 and it opens
+17:41:00. Shown both, Joe 1023: *"1741 is fine"*. So his walkthrough's 17:33 for this leg is
+superseded by his own reading of the walk.
+
+## 6b. The side at STEP0, SETTLED 1023
 
 With no open trade there is no trade to take `target-side` from. Joe 1023, verbatim:
 

@@ -61,6 +61,21 @@ LIN_IB_DWELL = _knob('LIN_IB_DWELL', 2.5)  # bars per TF the lineage ib cross mu
 #   ib at 16.25, reached 16.36 - 1.36 points past the fence - held THREE bars and fell straight back
 #   to low oob and on down to 11.32. At the static IB_WOB 3 that flicker passed the hold on its last
 #   bar and counted as ws5r walking to ib. int(5 * 2.5) = 12 bars rejects it.
+LIN_PASS = os.environ.get('W_V4_LIN_PASS', 'ib')   # 'ib' | 'reversal'
+#   HOW THE BATON PASSES. 'ib' is what the code has always done - walk the rider to ib, then pass.
+#   'reversal' is what Joe's 1022 verbatim actually says, and he caught it on 1023: *"I thought
+#   v4lineage uses reverse to pass the baton. the only exception belongs to ws5 and ws6, under
+#   specific conditions"*.
+#   HIS 1022 WORDS, three times over: *"baton-pass on riderTF reversing while riderTF+1 is oob"* /
+#   *"baton-passing on riderTF reversal"* / *"for riderTF+1 to accept a baton-pass, riderTF+1 must
+#   be exfence at the time of riderTF reversing"*.
+#   THE IB WALK IS THE EXCEPTION, and it belongs to two places only: ws5r's own step (*"walk ws5r
+#   to ib and test if ws{TF+lin-hop}r's are oob"*) and the hatch (*"walk current-rider until cross
+#   to ib <- this applies only to a current rider that carried a reversal in lookback"*, which he
+#   noted was *"current code, triggered by ws6r"*).
+#   THE DEFAULT IS STILL 'ib' BECAUSE THAT IS WHAT EVERY BANKED NUMBER WAS MEASURED ON - the 1022
+#   nine test legs, the mech sweep, the 27-config sweep, the hold-out and the 19:39:55 walk. Moving
+#   the default invalidates all of them at once, so it waits for Joe's ruling.
 TF_CEILING = _knob('TF_CEILING', 10, int)  # riderTF max. PROVISIONAL - his word is "unsure"
 
 # ── v4saviour ─────────────────────────────────────────────────────────────────────────────────
@@ -210,6 +225,7 @@ RULED = {
     'LIN_IB_DWELL':     (2.5,   '"it needs to be dynamic: let\'s start with'
                                 ' int(TF * {knob:2.5, `V4_LIN_IB_DWELL`})"'),
     'TF_CEILING':       (10,    '"18, unsure.  use 10" - PROVISIONAL'),
+    'LIN_PASS':         ('ib',  'the code\'s original. His 1022 spec says "reversal" - 1023'),
     'R_RSI':            (6,     '"bank k6 rsi8 stc6" - 1023, which is 6|6|8 in his notation'),
     'R_STC':            (8,     '"bank k6 rsi8 stc6" - 1023, which is 6|6|8 in his notation'),
     'R_KLEN':           (6,     '"bank k6 rsi8 stc6" - 1023, which is 6|6|8 in his notation'),
@@ -428,7 +444,7 @@ def table():
     rows = [('| the knob | value | units | ruled | Joe\'s words |'), ('|---|---|---|---|---|')]
     units = {'RMOM_FNC': 'r-points', 'LIN_HOP': 'TFs', 'IB_WOB': 'bars',
              'R_RSI': 'bars', 'R_STC': 'bars', 'R_KLEN': 'bars', 'MAX_PYRAMID': 'positions',
-             'BSTOP_OOB_WHEN': 'mode', 'BSTOP_CASCADE_AT': 'mode',
+             'BSTOP_OOB_WHEN': 'mode', 'BSTOP_CASCADE_AT': 'mode', 'LIN_PASS': 'mode',
              'V4CORE_MAGE_FNC': 'r-points', 'V4CORE_STEP0_JOIN': 'mode',
              'TF_CEILING': 'TF', 'LIN_IB_DWELL': 'bars per TF', 'TRAJ_WIDTH': 'bars per TF-minute',
              'TRAJ_MIN_FRAC': 'fraction of the block', 'TRAJ_MIN_TRAVEL': 'r-points', 'SAV_WS2_OOB_TEST': 'minutes', 'SAV_IB_XWOB': 'bars',
