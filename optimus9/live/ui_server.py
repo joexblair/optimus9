@@ -41,8 +41,30 @@ def _db(name="o9_live"):
 
 
 def _closed(o9):
-    return o9.execute("SELECT led_id, side, entry_px, exit_px, gross, net, opened_ms, closed_ms FROM o9_ledger "
-                      "WHERE status='closed' ORDER BY closed_ms", fetch=True)
+    """Closed trades, with the ENTRY slippage the exchange actually walked. Joe 1023.
+
+    THE SLIPPAGE IS ALREADY DYNAMIC AND ALREADY STORED - it was never printed. fakeAPI's
+    OrderBookWalker walks the LIVE book for the order's own size and returns the adverse fill
+    against the book mid in bps; FxStore writes it to fx_fill.slippage_bps per fill. The only
+    thing missing was surfacing it, so nothing here models or assumes a cost.
+
+    THE JOIN IS EXACT, NOT A TIME WINDOW. o9_ledger.entry_order_id is the order id fakeAPI
+    returned at the open, and fx_fill.order_id is the same string, so the open leg's fill is
+    addressed directly. That matters with pyramiding: a nearest-timestamp join would mix two
+    concurrent legs' fills, and at max_pyramid 2 there are two.
+
+    AT POSITION OPEN, which is Joe's wording: only the opening fill is read. An opening fill
+    carries closed_size = 0; the exit's own slippage sits on exit_order_id and is not read here.
+
+    LEFT JOIN on purpose. A trade opened before this column existed, or against the real Bybit
+    (which returns no slippage), has no fx_fill row and reads NULL rather than 0 - a missing
+    measurement is not a zero cost.
+    """
+    return o9.execute(
+        "SELECT l.led_id, l.side, l.entry_px, l.exit_px, l.gross, l.net, l.opened_ms, l.closed_ms, "
+        "       f.slippage_bps, f.mid_price, f.exec_qty "
+        "FROM o9_ledger l LEFT JOIN fx_fill f ON f.order_id = l.entry_order_id "
+        "WHERE l.status='closed' ORDER BY l.closed_ms", fetch=True)
 
 
 def _price(dev):
@@ -78,9 +100,17 @@ def history(limit: int = 100):
     bal, out = START_EQUITY, []
     for r in rows:
         net = float(r["net"]); bal += net
+        # the dollar cost of the bps, on the notional that actually filled. Its own column, never
+        # folded into net - net already carries the fee, and this is the OTHER half of the drag.
+        sb = r.get("slippage_bps")
+        sb = None if sb is None else float(sb)
+        usd = (None if sb is None or r.get("mid_price") is None or r.get("exec_qty") is None
+               else sb / 10000.0 * float(r["mid_price"]) * float(r["exec_qty"]))
         out.append({"led": int(r["led_id"]), "oms": int(r["opened_ms"]), "ms": int(r["closed_ms"]), "dir": r["side"],
                     "gross": round(float(r["gross"] or net), 2), "net": round(net, 2), "entry": float(r["entry_px"]),
-                    "exit": float(r["exit_px"] or 0), "bal": round(bal, 2)})
+                    "exit": float(r["exit_px"] or 0), "bal": round(bal, 2),
+                    "slip_bps": None if sb is None else round(sb, 2),
+                    "slip_usd": None if usd is None else round(usd, 4)})
     return {"trades": out[-limit:][::-1]}
 
 
@@ -275,6 +305,7 @@ _PAGE = r"""<!doctype html><html><head><meta charset=utf-8><meta name=viewport c
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:13px system-ui,-apple-system,'Segoe UI',sans-serif;
 background-image:radial-gradient(1100px 520px at 82% -10%,rgba(47,214,190,.07),transparent 60%)}
 .num{font-family:var(--mono);font-variant-numeric:tabular-nums}.pos{color:var(--long)}.neg{color:var(--short)}
+.dimn{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--faint)}
 .lbl{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim)}
 .wrap{height:100vh;max-width:1260px;margin:0 auto;padding:8px;display:flex;flex-direction:column;gap:8px}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px}
@@ -359,7 +390,7 @@ td{padding:8px 14px;text-align:right;border-bottom:1px solid rgba(42,51,70,.5);w
    <div class=scroll><table><thead><tr><th class=l>Side</th><th>Size</th><th>Entry</th><th>Mark</th><th>Unreal $</th><th>Unreal %</th><th>Start</th><th></th></tr></thead><tbody id=pb></tbody></table>
    <div class=empty id=pe>flat &mdash; no open positions</div></div></div>
   <div class="hist panel"><div class=ph><h2>Trade history</h2><span class=c id=hc>&mdash;</span></div>
-   <div class=scroll><table><thead><tr><th class=l>Opened</th><th class=l>Closed</th><th>Dir</th><th>Gross</th><th>Net</th><th>Entry</th><th>Exit</th><th>Balance</th></tr></thead><tbody id=tb></tbody></table>
+   <div class=scroll><table><thead><tr><th class=l>Opened</th><th class=l>Closed</th><th>Dir</th><th>Gross</th><th>Net</th><th title="adverse fill vs the book mid at open, walked for this order's own size">Slip bps</th><th title="what that slippage cost on the filled notional">Slip $</th><th>Entry</th><th>Exit</th><th>Balance</th></tr></thead><tbody id=tb></tbody></table>
    <div class=empty id=he>waiting for the first realtime signal&hellip;</div></div></div>
  </div>
  <div class="book panel" id=book><h3><span>Order book</span><span id=spr>&mdash;</span></h3><div class=ladder id=asks></div>
@@ -452,7 +483,7 @@ function tick(){
   document.getElementById('hc').textContent=s.trades+' closed · '+s.win+'% win · start $'+s.start;
   document.getElementById('he').style.display=h.length?'none':'block';
   document.getElementById('tb').innerHTML=h.map(function(t){var cl=t.net>=0?'pos':'neg',sd=t.dir=='Sell'?'s':'b',nm=t.dir=='Sell'?'SHORT':'LONG';
-   return '<tr class=trow onclick="openTradeModal('+t.led+')"><td class=l>'+hhmm(t.oms)+'</td><td class=l>'+hhmm(t.ms)+'</td><td class=l><span class="side '+sd+'">'+nm+'</span></td><td class="'+(t.gross>=0?'pos':'neg')+'">'+money(t.gross)+'</td><td class="'+cl+'">'+money(t.net)+'</td><td>'+t.entry.toFixed(5)+'</td><td>'+t.exit.toFixed(5)+'</td><td>$'+commas(t.bal)+'</td></tr>'}).join('');
+   return '<tr class=trow onclick="openTradeModal('+t.led+')"><td class=l>'+hhmm(t.oms)+'</td><td class=l>'+hhmm(t.ms)+'</td><td class=l><span class="side '+sd+'">'+nm+'</span></td><td class="'+(t.gross>=0?'pos':'neg')+'">'+money(t.gross)+'</td><td class="'+cl+'">'+money(t.net)+'</td><td class=dimn>'+(t.slip_bps==null?'&mdash;':t.slip_bps.toFixed(2))+'</td><td class=dimn>'+(t.slip_usd==null?'&mdash;':money(-Math.abs(t.slip_usd)))+'</td><td>'+t.entry.toFixed(5)+'</td><td>'+t.exit.toFixed(5)+'</td><td>$'+commas(t.bal)+'</td></tr>'}).join('');
  })}
 window.doExit=function(){if(confirm('Close the open position?'))post('/api/exit').then(tick)};
 document.getElementById('kill').onclick=function(){if(this.classList.contains('resume')){post('/api/resume').then(tick)}else if(confirm('FLATTEN & HALT — close everything and stop trading?')){post('/api/flatten').then(tick)}};
