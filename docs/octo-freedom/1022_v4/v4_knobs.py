@@ -178,6 +178,17 @@ V4CORE_MAGE_FNC = _knob('V4CORE_MAGE_FNC', 5.0)   # the fence v4core's Mage test
 #   he has defended - and the 10:26 arm he flagged reads ws1Mage 92.21 closed, which FAILS >95.
 V4CORE_MAGE_LO, V4CORE_MAGE_HI = V4CORE_MAGE_FNC, 100.0 - V4CORE_MAGE_FNC
 
+V4CORE_STEP0_JOIN = os.environ.get('W_V4_V4CORE_STEP0_JOIN', 'and')   # 'and' | 'or'
+#   HOW STEP0 JOINS ws2r AND ws3r. Joe 1023: *"AND vs OR for step 0 needs to be a knob"*.
+#   THE DEFAULT IS HIS AND HE GAVE THE MECHANISM, not a preference: *"STEP0 is specifically `AND`
+#   to avoid re-entering mid cycle and creating a second stop"* / *"ws3r and ws2r represent the
+#   humans' momentum cycles - when they are oob, a cycle is cycling. if one of these moments
+#   creates a stop, I suspect an unstable market. waiting for (ws2r AND ws3r) feels like the safest
+#   option we have for a profitable reentry."*
+#   STEP0 ONLY. STEP2's join is `or` in his spec and is NOT knobbed - he asked for step 0.
+#   THE NAME IS MINE, shaped like BSTOP_OOB_WHEN: a mode string with an assert rather than a
+#   boolean, so a sweep row reads 'and' / 'or' instead of 1 / 0. Joe has not named it.
+
 # THE CONTROL ROW'S TWO KNOWN-GOOD VALUES. 2026-09-03 00:35:00 on ws5r.
 #   The control used to print ONE number against "ruled 12.48", which is the DB's
 #   mech_lines('wsf') spec (k 5, rsi 8, stc 7). The moment the bank moved to k6 rsi8 stc6 that
@@ -207,6 +218,9 @@ RULED = {
                                    ' defaulted 1023'),
     'BSTOP_CASCADE_AT': ('lift', '"not extrema - measure where the r reversals print" - #25,'
                                  ' defaulted 1023'),
+    'V4CORE_MAGE_FNC':  (5.0,   '"same-side past 5/95" - 1023, his eyeballing, held'),
+    'V4CORE_STEP0_JOIN': ('and', '"STEP0 is specifically AND to avoid re-entering mid cycle and'
+                                 ' creating a second stop" - 1023'),
     'SAV_WS2_OOB_TEST': (16.0,  '"increase CAP to {knob:16} minutes, and start the timer'
                                 ' when the trade opens"'),
     'SAV_IB_XWOB':      (2,     '"23, 2"'),
@@ -275,6 +289,24 @@ def side_of(v):
     and stated rather than decided quietly. At MID_FNC below 50 a value inside the band reads LOW
     for the same reason, and that case is UNRULED - see the MID_FNC comment."""
     return 1 if float(v) > MID_HI else -1
+
+
+def step0_r_ok(r2, r3, side):
+    """STEP0's ws2r/ws3r test on `side`, joined by V4CORE_STEP0_JOIN. -> bool
+
+    Joe 1023 ruled the default 'and' WITH its reason: the two lines are the momentum cycles, and
+    waiting for both out of bounds avoids re-entering mid cycle and taking a second stop. STEP2's
+    join stays `or` and is not this knob's business.
+    """
+    assert V4CORE_STEP0_JOIN in ('and', 'or'), \
+        'V4CORE_STEP0_JOIN %r is not a mode' % (V4CORE_STEP0_JOIN,)
+    a, b = oob(r2, side), oob(r3, side)
+    return (a and b) if V4CORE_STEP0_JOIN == 'and' else (a or b)
+
+
+def step2_r_ok(r2, r3, side):
+    """STEP2's ws2r/ws3r test on `side`. Joe's spec says `or` and it is not knobbed."""
+    return oob(r2, side) or oob(r3, side)
 
 
 def past_v4core_mage(v, side):
@@ -369,6 +401,7 @@ def table():
     units = {'RMOM_FNC': 'r-points', 'LIN_HOP': 'TFs', 'IB_WOB': 'bars',
              'R_RSI': 'bars', 'R_STC': 'bars', 'R_KLEN': 'bars', 'MAX_PYRAMID': 'positions',
              'BSTOP_OOB_WHEN': 'mode', 'BSTOP_CASCADE_AT': 'mode',
+             'V4CORE_MAGE_FNC': 'r-points', 'V4CORE_STEP0_JOIN': 'mode',
              'TF_CEILING': 'TF', 'LIN_IB_DWELL': 'bars per TF', 'TRAJ_WIDTH': 'bars per TF-minute',
              'TRAJ_MIN_FRAC': 'fraction of the block', 'TRAJ_MIN_TRAVEL': 'r-points', 'SAV_WS2_OOB_TEST': 'minutes', 'SAV_IB_XWOB': 'bars',
              'SAV_MAGE_GATE_WOB': 'bars', 'SAV_CASCADE_GAP': 'bars',

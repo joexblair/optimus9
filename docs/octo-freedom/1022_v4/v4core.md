@@ -25,18 +25,54 @@ STEP4 walk `v4-lineage` to exhaustion
 STEP5 rev-trade and disable the arm
 ```
 
-Note the difference between STEP0 and STEP2, which is his and is not a typo: STEP0 requires
-`ws2r oob AND ws3r oob`, STEP2 requires `ws2r or ws3r are oob`.
+## 1a. STEP0's `AND` is deliberate, and he gave the mechanism
+
+The difference between STEP0 and STEP2 is his and is not a typo: STEP0 requires `ws2r oob AND ws3r
+oob`, STEP2 requires `ws2r or ws3r are oob`. Joe 1023, verbatim:
+
+> STEP0 is specifically `AND` to avoid re-entering mid cycle and creating a second stop
+
+> context: ws3r and ws2r represent the humans' momentum cycles - when they are oob, a cycle is
+> cycling. if one of these moments creates a stop, I suspect an unstable market. waiting for
+> (ws2r AND ws3r) feels like the safest option we have for a profitable reentry.
+
+> AND vs OR for step 0 needs to be a knob
+
+`V4CORE_STEP0_JOIN` 'and' is that knob. STEP2's join stays `or` and is NOT knobbed - he asked for
+step 0.
+
+### A measurement I got wrong, and the correction
+
+I tested his twelve walkthrough arms against STEP0's `AND` and reported that only 5 of 12
+reproduced, against 11 of 12 under `OR` - and put that to him as a spec question. That was a
+CATEGORY ERROR. STEP0 fires only when there is no open trade, which in his walkthrough is the
+chain start and nothing else; every later arm is STEP2's rev-trade arm, where `or` is already the
+rule. Read per step, his spec reproduces his whole day:
+
+| the arm | which step | the rule | result |
+|---|---|---|---|
+| 2026-09-01 17:30 | STEP0, the chain start | `AND` | ws2r 96.23 high AND ws3r 86.18 high - passes |
+| the other 11 | STEP2 | `or` | 11 of 11 on the side his direction implies |
+| 2026-09-02 10:26 | STEP2 | `or` | correctly NO arm - both Mages fail `> 95` |
+
+The seven `AND` failures I reported were all the same shape - one of ws2r/ws3r oob, the other in
+bounds - and are exactly the mid-cycle re-entries his reasoning excludes.
 
 ## 2. The lines it reads, SETTLED 1023
 
 | the line | the spec | value mode |
 |---|---|---|
-| `ws1b` | `bb` 49 / 0.95 / close — the Bollinger-position line | emerging, the DB `wsf` row |
+| `cws1b` | `bb` 49 / 0.95 / close — the Bollinger-position line | **closed** |
 | `cws1r`, `cws2r`, `cws3r` | the DB `mech_lines('wsf')` r row, `7\|5\|8` in Joe's notation | **closed** |
 | `cws1Mage`, `cws2Mage` | the DB `mech_lines('wsf')` Mage row, `bb` 38 / 0.93 | **closed** |
 
 - `ws1b` CONFIRMED. Joe 1023: *"yes to ws1b"*. No v4 mech had read the `b` role before.
+- IT IS CLOSED TOO, Joe 1023: *"ws1b should be mode:closed"*. It was banked as emerging on 1023
+  and that was wrong by one turn: at four of the twelve arms in his walkthrough emerging reads
+  `ws1b` IN BOUNDS, and closed puts three of those four on an oob side - 01:29 goes 22.04 ib to
+  5.24 low, 07:13 goes 84.99 ib to 89.44 high, 16:17 goes 64.88 ib to 108.44 high. STEP0's and
+  STEP1's first gate would have failed at those bars. The `c` prefix on the name follows his own
+  naming for the closed set; he named five lines and this is the sixth.
 - THE `c` PREFIX IS HIS: *"we create 5 new lines (cws1-3r and cws1-2Mage) as closed and assign
   them to v4core"*.
 - THE SPEC IS THE DB ROW, NOT THE BANK. Joe 1023, asked which of the two: *"db row"*. The bank is
@@ -110,9 +146,32 @@ on `ws1Mage`. That is the whole reason the `c` lines exist.
 
 | item | what is missing |
 |---|---|
-| `target-side` at STEP0 | with no open trade there is no trade to take the side from. STEP0 walks "until ws1b is oob on target-side" — which side, before a trade exists, is unruled |
 | the `v4core` arm's own measurement | the `v4core`-lines-closed arm has never been measured. Joe 1023: *"noted - that's next"* |
 | the 6-day walk | the fence and the source are both held until it runs |
+
+Nothing else is open. The side question is settled - see below.
+
+## 6a. The side at STEP0, SETTLED 1023
+
+With no open trade there is no trade to take `target-side` from. Joe 1023, verbatim:
+
+> scan both sides as you walk. when the setup prints, the lines will all be on either high oob or
+> low oob. if low oob, open a LONG, if high oob, open a short
+
+So STEP0 runs TWO hypotheses, one per side, and whichever completes first sets the side. `low oob
+-> LONG`, `high oob -> SHORT` - the same polarity `v4-ws5rbackstop` already uses, where a HIGH oob
+reversal spawns a SHORT and a LOW oob reversal spawns a LONG.
+
+MEASURED ON ALL TWELVE ARMS, closed lines: every arm that fires lands on EXACTLY ONE side, that
+side gives the direction he wrote, and zero arms qualify on both sides at once. The rule is not
+contradicted anywhere in his day.
+
+`target-side` therefore means two different things in his spec and both are correct in place:
+- **STEP0** - the side being SCANNED. There is no trade yet, so it is the setup's own oob side.
+- **STEP1 and STEP2** - the OPEN TRADE's target-side, high for a LONG and low for a SHORT.
+
+That makes STEP1/STEP2 the MIRROR of STEP0: the setup shape that opened a LONG off low oob is the
+same shape that, printing later on high oob, arms its reversal. One shape, either side.
 
 ## 7. Related
 
