@@ -53,17 +53,30 @@ def _closed(o9):
     addressed directly. That matters with pyramiding: a nearest-timestamp join would mix two
     concurrent legs' fills, and at max_pyramid 2 there are two.
 
-    AT POSITION OPEN, which is Joe's wording: only the opening fill is read. An opening fill
-    carries closed_size = 0; the exit's own slippage sits on exit_order_id and is not read here.
+    BOTH LEGS, Joe 1023. He asked for the open; asked whether the exit's own slippage was worth
+    having too, he said *"yes - good catch"*. So entry joins entry_order_id and exit joins
+    exit_order_id, and the dollar column is the ROUND TRIP - which is the figure comparable to the
+    0.1975% round-trip drag the sweeps carry.
 
-    LEFT JOIN on purpose. A trade opened before this column existed, or against the real Bybit
-    (which returns no slippage), has no fx_fill row and reads NULL rather than 0 - a missing
-    measurement is not a zero cost.
+    LEFT JOIN on purpose, twice. A trade opened before this column existed, or against the real
+    Bybit (which returns no slippage field), has no fx_fill row and reads NULL rather than 0 - a
+    missing measurement is not a zero cost. The dollar column then sums the legs that DO exist and
+    the em-dash in the bps column says which one is missing.
+
+    ONE KNOWN WAY THIS COULD DOUBLE-COUNT, and it has not happened yet. Ledger._close_rows stamps
+    the SAME exit order id on every row it closes, so one exit order can in principle sit on two
+    ledger rows - each would then read that exit's slippage in full. Measured 1023: all 192 closed
+    trades are 1:1 on both entry_order_id and exit_order_id, and fx_fill holds at most one fill
+    per order id. It is safe per ROW regardless; anyone SUMMING the dollar column across trades
+    needs to check that ratio first.
     """
     return o9.execute(
         "SELECT l.led_id, l.side, l.entry_px, l.exit_px, l.gross, l.net, l.opened_ms, l.closed_ms, "
-        "       f.slippage_bps, f.mid_price, f.exec_qty "
-        "FROM o9_ledger l LEFT JOIN fx_fill f ON f.order_id = l.entry_order_id "
+        "       fi.slippage_bps bps_in,  fi.mid_price mid_in,  fi.exec_qty qty_in, "
+        "       fo.slippage_bps bps_out, fo.mid_price mid_out, fo.exec_qty qty_out "
+        "FROM o9_ledger l "
+        "LEFT JOIN fx_fill fi ON fi.order_id = l.entry_order_id "
+        "LEFT JOIN fx_fill fo ON fo.order_id = l.exit_order_id "
         "WHERE l.status='closed' ORDER BY l.closed_ms", fetch=True)
 
 
@@ -100,17 +113,25 @@ def history(limit: int = 100):
     bal, out = START_EQUITY, []
     for r in rows:
         net = float(r["net"]); bal += net
-        # the dollar cost of the bps, on the notional that actually filled. Its own column, never
-        # folded into net - net already carries the fee, and this is the OTHER half of the drag.
-        sb = r.get("slippage_bps")
-        sb = None if sb is None else float(sb)
-        usd = (None if sb is None or r.get("mid_price") is None or r.get("exec_qty") is None
-               else sb / 10000.0 * float(r["mid_price"]) * float(r["exec_qty"]))
+        # the dollar cost of the bps, on the notional that actually filled, per leg. Its own
+        # column, never folded into net - net already carries the fee, and this is the OTHER half
+        # of the drag. Each leg is priced on ITS OWN mid and qty, because price moved in between.
+        def _leg(bps_k, mid_k, qty_k):
+            b = r.get(bps_k)
+            if b is None or r.get(mid_k) is None or r.get(qty_k) is None:
+                return (None, None)
+            b = float(b)
+            return (b, b / 10000.0 * float(r[mid_k]) * float(r[qty_k]))
+
+        bi, ui = _leg("bps_in", "mid_in", "qty_in")
+        bo, uo = _leg("bps_out", "mid_out", "qty_out")
+        rt = None if (ui is None and uo is None) else (ui or 0.0) + (uo or 0.0)
         out.append({"led": int(r["led_id"]), "oms": int(r["opened_ms"]), "ms": int(r["closed_ms"]), "dir": r["side"],
                     "gross": round(float(r["gross"] or net), 2), "net": round(net, 2), "entry": float(r["entry_px"]),
                     "exit": float(r["exit_px"] or 0), "bal": round(bal, 2),
-                    "slip_bps": None if sb is None else round(sb, 2),
-                    "slip_usd": None if usd is None else round(usd, 4)})
+                    "slip_in": None if bi is None else round(bi, 2),
+                    "slip_out": None if bo is None else round(bo, 2),
+                    "slip_usd": None if rt is None else round(rt, 4)})
     return {"trades": out[-limit:][::-1]}
 
 
@@ -390,7 +411,7 @@ td{padding:8px 14px;text-align:right;border-bottom:1px solid rgba(42,51,70,.5);w
    <div class=scroll><table><thead><tr><th class=l>Side</th><th>Size</th><th>Entry</th><th>Mark</th><th>Unreal $</th><th>Unreal %</th><th>Start</th><th></th></tr></thead><tbody id=pb></tbody></table>
    <div class=empty id=pe>flat &mdash; no open positions</div></div></div>
   <div class="hist panel"><div class=ph><h2>Trade history</h2><span class=c id=hc>&mdash;</span></div>
-   <div class=scroll><table><thead><tr><th class=l>Opened</th><th class=l>Closed</th><th>Dir</th><th>Gross</th><th>Net</th><th title="adverse fill vs the book mid at open, walked for this order's own size">Slip bps</th><th title="what that slippage cost on the filled notional">Slip $</th><th>Entry</th><th>Exit</th><th>Balance</th></tr></thead><tbody id=tb></tbody></table>
+   <div class=scroll><table><thead><tr><th class=l>Opened</th><th class=l>Closed</th><th>Dir</th><th>Gross</th><th>Net</th><th title="adverse fill vs the book mid at OPEN, walked for this order's own size">Slip in</th><th title="adverse fill vs the book mid at the EXIT">Slip out</th><th title="both legs in dollars, on each leg's own filled notional">Slip $</th><th>Entry</th><th>Exit</th><th>Balance</th></tr></thead><tbody id=tb></tbody></table>
    <div class=empty id=he>waiting for the first realtime signal&hellip;</div></div></div>
  </div>
  <div class="book panel" id=book><h3><span>Order book</span><span id=spr>&mdash;</span></h3><div class=ladder id=asks></div>
@@ -483,7 +504,7 @@ function tick(){
   document.getElementById('hc').textContent=s.trades+' closed · '+s.win+'% win · start $'+s.start;
   document.getElementById('he').style.display=h.length?'none':'block';
   document.getElementById('tb').innerHTML=h.map(function(t){var cl=t.net>=0?'pos':'neg',sd=t.dir=='Sell'?'s':'b',nm=t.dir=='Sell'?'SHORT':'LONG';
-   return '<tr class=trow onclick="openTradeModal('+t.led+')"><td class=l>'+hhmm(t.oms)+'</td><td class=l>'+hhmm(t.ms)+'</td><td class=l><span class="side '+sd+'">'+nm+'</span></td><td class="'+(t.gross>=0?'pos':'neg')+'">'+money(t.gross)+'</td><td class="'+cl+'">'+money(t.net)+'</td><td class=dimn>'+(t.slip_bps==null?'&mdash;':t.slip_bps.toFixed(2))+'</td><td class=dimn>'+(t.slip_usd==null?'&mdash;':money(-Math.abs(t.slip_usd)))+'</td><td>'+t.entry.toFixed(5)+'</td><td>'+t.exit.toFixed(5)+'</td><td>$'+commas(t.bal)+'</td></tr>'}).join('');
+   return '<tr class=trow onclick="openTradeModal('+t.led+')"><td class=l>'+hhmm(t.oms)+'</td><td class=l>'+hhmm(t.ms)+'</td><td class=l><span class="side '+sd+'">'+nm+'</span></td><td class="'+(t.gross>=0?'pos':'neg')+'">'+money(t.gross)+'</td><td class="'+cl+'">'+money(t.net)+'</td><td class=dimn>'+(t.slip_in==null?'&mdash;':t.slip_in.toFixed(2))+'</td><td class=dimn>'+(t.slip_out==null?'&mdash;':t.slip_out.toFixed(2))+'</td><td class=dimn>'+(t.slip_usd==null?'&mdash;':money(-Math.abs(t.slip_usd)))+'</td><td>'+t.entry.toFixed(5)+'</td><td>'+t.exit.toFixed(5)+'</td><td>$'+commas(t.bal)+'</td></tr>'}).join('');
  })}
 window.doExit=function(){if(confirm('Close the open position?'))post('/api/exit').then(tick)};
 document.getElementById('kill').onclick=function(){if(this.classList.contains('resume')){post('/api/resume').then(tick)}else if(confirm('FLATTEN & HALT — close everything and stop trading?')){post('/api/flatten').then(tick)}};
