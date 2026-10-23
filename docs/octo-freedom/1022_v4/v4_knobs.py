@@ -73,9 +73,13 @@ LIN_PASS = os.environ.get('W_V4_LIN_PASS', 'ib')   # 'ib' | 'reversal'
 #   to ib and test if ws{TF+lin-hop}r's are oob"*) and the hatch (*"walk current-rider until cross
 #   to ib <- this applies only to a current rider that carried a reversal in lookback"*, which he
 #   noted was *"current code, triggered by ws6r"*).
-#   THE DEFAULT IS STILL 'ib' BECAUSE THAT IS WHAT EVERY BANKED NUMBER WAS MEASURED ON - the 1022
-#   nine test legs, the mech sweep, the 27-config sweep, the hold-out and the 19:39:55 walk. Moving
-#   the default invalidates all of them at once, so it waits for Joe's ruling.
+#   'ib' IS RULED BY MEASUREMENT, 1023, and that makes the code DELIBERATELY DIFFER FROM HIS
+#   WRITTEN HANDOVER. Do not "fix" it back. Joe 1023, shown the 94-day A/B: *"let's align the
+#   machine with ib"*. The two arms, everything else at the bank:
+#       ib        565 trades, 66.9% win, +19,115.41 USDT, DD 344.61, net/DD 55.47, PF 3.61
+#       reversal  594 trades, 66.2% win, +18,886.96 USDT, DD 426.85, net/DD 44.25, PF 3.39
+#   So 'reversal' adds 29 trades and 82.24 USDT of drawdown, loses 20.2% of net-per-drawdown, and
+#   ties on net. 'ib' wins every risk column. The knob stays so the spec reading is re-testable.
 TF_CEILING = _knob('TF_CEILING', 10, int)  # riderTF max. PROVISIONAL - his word is "unsure"
 
 # ── v4saviour ─────────────────────────────────────────────────────────────────────────────────

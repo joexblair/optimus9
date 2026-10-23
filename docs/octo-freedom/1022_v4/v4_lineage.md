@@ -353,3 +353,67 @@ ws5r is not same-side oob at the fire bar on 175 of 1086 fires - it had already 
 oob partner was setting the fire bar. Those fires can produce no start TF. `defer(..., fallback=)`
 takes what to do, and NOTHING IS DEFAULTED: `None` drops the fire, a TF number uses that instead.
 Joe has not ruled it.
+
+## 9. The baton pass: the code differs from the handover ON PURPOSE — RULED 1023
+
+READ THIS BEFORE "FIXING" THE PASS RULE. Joe's 1022 handover says the baton passes on the rider's
+REVERSAL, three times over:
+
+> baton-pass on riderTF reversing while riderTF+1 is oob
+
+> baton-passing on riderTF reversal
+
+> for riderTF+1 to accept a baton-pass, riderTF+1 must be exfence at the time of riderTF reversing
+
+and he caught the code not doing that, 1023: *"I thought v4lineage uses reverse to pass the baton.
+the only exception belongs to ws5 and ws6, under specific conditions"*. He is right about the
+handover. The ib walk belongs to two places only - ws5r's own step, and the hatch, which his own
+spec marks *"this applies only to a current rider that carried a reversal in lookback"*.
+
+THE CODE WALKS EVERY RIDER TO IB ANYWAY, because that measures better. `LIN_PASS` carries both.
+
+### The 94-day A/B, everything else at the bank
+
+| LIN_PASS | trades | win % | net USDT | net % | worst DD | net/DD | PF |
+|---|---|---|---|---|---|---|---|
+| **ib**, the code | **565** | **66.9** | **+19115.41** | +546.35 | **344.61** | **55.47** | **3.61** |
+| reversal, the handover | 594 | 66.2 | +18886.96 | +547.49 | 426.85 | 44.25 | 3.39 |
+
+| the move to `reversal` | value |
+|---|---|
+| trades | +29 |
+| win rate | -0.7 pp |
+| net USDT | -228.45 |
+| worst drawdown | +82.24, 23.9% worse |
+| net / worst DD | -11.22, 20.2% worse |
+| profit factor | -0.22 |
+
+Joe 1023: *"let's align the machine with ib"*.
+
+### It is not a one-cell result
+
+Nine paired knob cells were run under each pass rule. `reversal` carries the bigger drawdown in 7
+of 9, and the two rules want OPPOSITE `RMOM_FNC` values:
+
+| the cell | ib net/DD | reversal net/DD |
+|---|---|---|
+| the bank | 55.47 | 44.25 |
+| LIN_IB_DWELL 1.5 | 41.50 | 36.82 |
+| LIN_IB_DWELL 4.0 | 61.56 | 64.93 |
+| RMOM_FNC 70 | **66.40** | 39.05 |
+| RMOM_FNC 90 | 50.85 | **32.12** |
+| LIFT_WOB 6 | **70.75** | 58.88 |
+| LIFT_WOB 12 | 42.37 | 27.68 |
+| TF_CEILING 8 | 55.12 | 45.22 |
+| TF_CEILING 12 | 55.47 | 45.24 |
+
+### A knob move this sweep found, NOT applied
+
+`RMOM_FNC` 70 under `ib` gives net/DD **66.40** against the bank's 55.47, on 552 trades against
+565, with the drawdown falling 344.61 -> 293.30 and PF rising 3.61 -> 3.88. It is a candidate and
+it is Joe's to rule; the bank stays at 80.
+
+`LIFT_WOB` 6 gives the best net in both sweeps - +20,884.54 under ib - but it lifts fires from
+1086 to 1274, so it is a volume lever rather than a quality one.
+
+`TF_CEILING` still does nothing, at 8, 10 or 12. Same as the 1022 mech sweep found.
