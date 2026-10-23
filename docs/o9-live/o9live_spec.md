@@ -21,11 +21,16 @@ current live config. This is the *steady-state spec*; the running log of individ
 
 ## Two instances, one set of shared infra (Joe 1023)
 
-Joe 1023: *"I think we should run both strategies - the \"all lines on closed bars\" version, and
-the \"v4core lines on closed bars\" version. separate instances, each holding its own trading
-account. one \"safe\", and one \"more net\""*, then *"each instance should have its own \"trading\"
-db - fakeAPI will handle the infra (klines, account transactions, etc)"* and *"each instance's rows
-land in its own trading database"*.
+Joe 1023, verbatim — his own quote marks, so this is a block rather than an italic run:
+
+> I think we should run both strategies - the "all lines on closed bars" version, and the "v4core
+> lines on closed bars" version. separate instances, each holding its own trading account. one
+> "safe", and one "more net"
+
+> each instance should have its own "trading" db - fakeAPI will handle the infra (klines, account
+> transactions, etc)
+
+> each instance's rows land in its own trading database
 
 **The split is the topology above, used twice.** `o9_infra` (SG) / `pk_optimizer` (WSL) is SHARED;
 the trading db is PER-INSTANCE. `o9_live_test` already exists with the same 9 tables, so the
