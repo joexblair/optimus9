@@ -20,7 +20,9 @@ land before OR after the reversal, and the FIRE BAR is the later of the two. So
 Nothing is read past the bar it fires on. His *"rev-trade on the ws5r reversal"* then means the
 reversal is the EVENT; the fill waits for the last condition to land. Asserted, not commented.
 
-TWO THINGS HE HAS NOT RULED, both parameters here and neither defaulted:
+THE TWO FORKS ARE NOW DEFAULTS, Joe 1023: *"make them all default on their current configs"*.
+They live in the knob bank as BSTOP_CASCADE_AT 'lift' and BSTOP_OOB_WHEN 'window' - the values
+every run since 1022 has passed - and an unknown value still refuses rather than falling back:
     cascade_at   the bar the mage cascade is read at. 'lift' takes the ws5r lift-off stamp, which is
                  his #25 r-driven read; 'fire' takes the fire bar itself.
     oob_when     'window' lets the oob land anywhere in the +/-8.8 min; 'at_fire' requires it to
@@ -34,10 +36,12 @@ import v4_knobs as K
 from optimus9.analysis.jig import mage_cascade, lift_off
 
 
-def scan(A, B, R, MG, U, cascade_at, oob_when):
+def scan(A, B, R, MG, U, cascade_at=None, oob_when=None):
     """Every v4-ws5rbackstop fire with its reversal bar inside [A, B]. -> list of dicts."""
-    assert cascade_at in ('lift', 'fire'), 'cascade_at is not ruled; pass it explicitly'
-    assert oob_when in ('window', 'at_fire'), 'oob_when is not ruled; pass it explicitly'
+    cascade_at = K.BSTOP_CASCADE_AT if cascade_at is None else cascade_at
+    oob_when = K.BSTOP_OOB_WHEN if oob_when is None else oob_when
+    assert cascade_at in ('lift', 'fire'), 'cascade_at %r is not a mode' % (cascade_at,)
+    assert oob_when in ('window', 'at_fire'), 'oob_when %r is not a mode' % (oob_when,)
     r5, m5 = R[5], MG[5]
     win = K.bstop_sync_bars()
     pool = list(range(1, K.BSTOP_POOL_HI + 1))
@@ -47,7 +51,7 @@ def scan(A, B, R, MG, U, cascade_at, oob_when):
         oob = {t: ((R[t] >= K.OOB_HI) if side > 0 else (R[t] <= K.OOB_LO)) for t in pool}
         for b in lift_off(r5, side, K.LIFT_PTS, K.gap_for(5), K.LIFT_TOL, K.LIFT_WOB):
             b = int(b)
-            st = b + K.LIFT_WOB - 1                  # the usable event
+            st = K.lift_stamp(b)                     # the usable event
             if st < A or st > B:
                 continue
             if not K.oob(r5[b], side):               # ws5r must be oob AS IT REVERSES

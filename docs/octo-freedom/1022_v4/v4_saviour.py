@@ -8,8 +8,9 @@ EVERY KNOB COMES FROM v4_knobs. Importing that module refuses an off-ruled run.
 
 THE PRINT IS THE USABLE EVENT. Joe 1022: *"when i say "print" about anything, I'll always be
 refering to the usable event"*. So a lift-off is read at its STAMP, bar + LIFT_WOB - 1, never at the
-bar it left its extreme. Every bar this walk acts on is a stamp or a cross, and all of them are at
-or before the bar the verdict lands on. CAUSAL: asserted.
+bar it left its extreme. Every bar this walk acts on is a STAMP or an ib CONFIRM bar - never a
+raw lift-off bar and never a bare cross - and all of them are at or before the bar the verdict
+lands on. The asserts in `_ib_cross` and `_cascade_at` carry that claim, not this paragraph.
 
 THE VERDICTS ARE NOT ARMED, REV-TRADE and STAYS OPEN. Joe 1022 named a fourth, `ENDS`, then
 withdrew it: *"ENDS wasn't the best wording - I prefer your STAYS OPEN"*. There is no fourth.
@@ -87,12 +88,21 @@ def _runs(a, side):
 
 
 def _ib_cross(a, run_end, xwob):
-    """the bar after an oob run, if it holds ib for `xwob` bars. -> bar or None"""
+    """the oob->ib cross after an oob run, CONFIRMED. -> the confirm bar or None
+
+    The cross sits at `run_end + 1`; the hold is `xwob` bars from there, so it is only proven on
+    `run_end + xwob`. THAT is what this returns, and the 1023 audit is why: it used to return the
+    cross bar, putting the fill 1 bar = 5 s at SAV_IB_XWOB 2 ahead of the information.
+    """
     x = int(run_end) + 1
     w = a[x:x + int(xwob)]
     if len(w) < int(xwob) or not np.isfinite(w).all():
         return None
-    return x if bool(((w > K.OOB_LO) & (w < K.OOB_HI)).all()) else None
+    if not bool(((w > K.OOB_LO) & (w < K.OOB_HI)).all()):
+        return None
+    c = x + int(xwob) - 1
+    assert c >= x, 'the ib confirm precedes its own cross'
+    return c
 
 
 def _cascade_at(line, tf, side, at_or_before, MG):
