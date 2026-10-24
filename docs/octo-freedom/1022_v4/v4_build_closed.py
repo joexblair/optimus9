@@ -36,7 +36,11 @@ sys.stderr = _e
 
 #   (the name v4 reads it by, the role in ln.SPEC, the timeframe in SECONDS)
 #   30 s is sub-wsf on Joe's 1017 band names: wsf = ws1-ws12, sub-wsf = g5-g30, dtf = >ws12.
-WANTED = (('gcws30Mage', 'Mage', 30),)
+#   cws1Mage and cws2Mage were already cached - v4core reads them - and are listed so the whole
+#   closed Mage ladder is declared in one place. Joe 1024: *"create cws{TF3-10}Mage lines and set
+#   them all to mode: closed"*.
+WANTED = ((('gcws30Mage', 'Mage', 30),)
+          + tuple(('cws%dMage' % t, 'Mage', t * 60) for t in range(1, 11)))
 MODE = 'closed'
 
 

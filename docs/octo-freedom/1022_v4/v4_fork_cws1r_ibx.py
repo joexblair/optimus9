@@ -50,9 +50,10 @@ THREE READINGS ARE MINE AND STATED, none of them a number I invented:
     Re-deriving per bar is what makes *"testing mage cascade per bar"* mean anything - the anchor
     moves when a new same-side extreme lands.
 
-    THE LADDER IS THE EMERGING ws1Mage..ws12Mage SET, which is what every existing cascade consumer
-    reads. Only the ANCHOR line is closed, because he wrote cws1. If he wants a closed ladder the
-    lines are built and it is one argument.
+    THE LADDER IS THE CLOSED cws1Mage..cws{hi}Mage SET, Joe 1024: *"create cws{TF3-10}Mage lines
+    and set them all to mode: closed. then reprint the table on the cws lines"*. The top rung is a
+    CLI argument because he asked for two ladders - cws1 to cws10, and *"only cws1 to cws5"*. The
+    anchor is cws1Mage, closed, as it already was.
 
 NO END BAR IS CHOSEN HERE. The per-bar test runs to the window end and reports 'no flip' when it
 never happens. A horizon would be a cap he has not specified.
@@ -60,7 +61,7 @@ never happens. A horizon would be a cap he has not specified.
 CAUSAL ON THE CROSS, LOOKAHEAD ON THE WALK. The confirm bar is knowable at itself; the per-bar
 cascade reads each bar at that bar. `mage_cascade_bar` asserts its own bar never exceeds the event.
 
-usage: v4_fork_cws1r_ibx.py <out|-> <end> <'YYYY-MM-DD HH:MM:SS'> [more starts ...]
+usage: v4_fork_cws1r_ibx.py <out|-> <end> <ladder top TF> <'YYYY-MM-DD HH:MM:SS'> [more ...]
 """
 import io
 import os
@@ -105,7 +106,8 @@ def _cascade_at(CM1, MG, bar, side):
         return None, None
     ab = int(got[0])
     assert ab <= int(bar), 'the cascade anchor is past the bar it is read on'
-    c = mage_cascade(MG, ab, zoom=K.SAV_CASCADE_ZOOM, min_lines=K.SAV_CASCADE_MIN)
+    c = mage_cascade(MG, ab, tf_lo=min(MG), tf_hi=max(MG),
+                     zoom=K.SAV_CASCADE_ZOOM, min_lines=K.SAV_CASCADE_MIN)
     return ab, (None if c is None else c['verdict'])
 
 
@@ -155,23 +157,23 @@ def one(CL, EM1, MG, frm, B, log):
     return row
 
 
-def main(dest, B, starts):
+def main(dest, B, hi, starts):
     out = sys.stdout if dest == '-' else open(dest, 'w', buffering=1)
 
     def log(s):
         out.write(s + '\n')
 
     CL = CA.lines()
-    MG = {t: ln.line('ws%dMage' % t) for t in range(1, 13)}
-    EM1 = np.asarray(ln.line('ws1Mage'), float)
+    MG = CA.mage_ladder(hi)                            # the CLOSED cws ladder, 1..hi
+    EM1 = np.asarray(ln.line('ws1Mage'), float)        # the side lookback: he wrote ws1Mage
 
     log('# A FORK OF LINEAGE - cws1r oob x ib, then the cws1Mage-anchored cascade per bar.')
     log('# Joe 1024. the SIDE IS DERIVED: the last ws1Mage oob at or before the start gives the')
     log('#   SOURCE side, and the cws1r cross hunted leaves the OPPOSITE side\'s oob run.')
     log('# the cross dwell is SAV_IB_XWOB %d bars = %d s, acted on at the CONFIRM bar.'
         % (K.SAV_IB_XWOB, K.SAV_IB_XWOB * 5))
-    log('# the cascade: zoom %d rungs, min_lines %d, ladder ws1Mage..ws12Mage EMERGING,'
-        % (K.SAV_CASCADE_ZOOM, K.SAV_CASCADE_MIN))
+    log('# the cascade: zoom %d rungs, min_lines %d, ladder cws1Mage..cws%dMage CLOSED,'
+        % (K.SAV_CASCADE_ZOOM, K.SAV_CASCADE_MIN, hi))
     log('#   anchor cws1Mage CLOSED via mage_cascade_bar mode extrema. window ends %s.' % ln.U(B))
     log('# RULED_OK %s.' % K.RULED_OK)
     log('')
@@ -212,4 +214,4 @@ def main(dest, B, starts):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1], ln.K(sys.argv[2]), sys.argv[3:])
+    main(sys.argv[1], ln.K(sys.argv[2]), int(sys.argv[3]), sys.argv[4:])

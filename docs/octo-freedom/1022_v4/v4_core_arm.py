@@ -53,6 +53,17 @@ def lines():
             'M': {t: _line('Mage', t) for t in (1, 2)}}
 
 
+def mage_ladder(hi):
+    """{tf: the CLOSED cws{tf}Mage array} for tf 1..hi. -> dict.
+
+    Joe 1024: *"create cws{TF3-10}Mage lines and set them all to mode: closed"*. All eleven were
+    already in the cache on their own spec keys; `v4_build_closed.py` declares the set and prints
+    the step rates that prove the mode. The ladder's top rung is the CALLER'S, because he asked for
+    two of them - cws1 to cws10, and cws1 to cws5.
+    """
+    return {t: _line('Mage', t) for t in range(1, int(hi) + 1)}
+
+
 def _mage_ok(CL, k, side):
     return (K.past_v4core_mage(CL['M'][1][k], side)
             or K.past_v4core_mage(CL['M'][2][k], side))
