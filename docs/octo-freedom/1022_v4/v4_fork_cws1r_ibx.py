@@ -15,8 +15,24 @@ HIS TEST, verbatim:
     -record when the verdict flips to flat, and when it flips to {opposite of the first anchor's
      verdict}
 
-A SHORT'S TARGET-SIDE IS LOW, from the banked `v4_signal.target_side`. So the cross hunted is the
-one leaving a LOW oob run.
+THE SIDE IS DERIVED, NOT ASSUMED. Joe 1024, after the 23:18 run picked a cross 78 minutes out:
+
+    I assumed you would have a way to detect the timestamps side - that's on me. the way to find
+    the source side is to lookback (from the timestamp) for the last ws1Mage oob - that will settle
+    the confusion
+
+So the SOURCE side is the side of the most recent ws1Mage oob at or before the start bar, and the
+cws1r cross hunted is the one leaving the OPPOSITE side's oob run. He settled that by pointing at
+the cross he expected: from 2026-08-31 23:18 the lookback finds a LOW ws1Mage oob at 23:15:55, and
+the 23:31:00 cross he named left a HIGH oob run. It also agrees with the banked frame - a low-oob
+source unwinds upward, and the high oob is what that move hunts.
+
+The lookback is UNBOUNDED, back to the tape start if it must. On his five starts it never needed
+more than 2m05s, and three of the five timestamps are themselves a ws1Mage oob bar.
+
+EMERGING OR CLOSED MAKES NO DIFFERENCE ON HIS FIVE. He wrote ws1Mage, so the lookback reads the
+emerging line; the closed cws1Mage gives the same side on all five, with the oob bar differing by
+25 s on one of them.
 
 THREE READINGS ARE MINE AND STATED, none of them a number I invented:
 
@@ -63,6 +79,21 @@ OPP = {'up': 'down', 'down': 'up'}
 FLAT = 'neither'
 
 
+def source_side(line, bar):
+    """The side of the most recent oob at or before `bar`. -> (the bar, the side) or (None, None).
+
+    Joe 1024: *"the way to find the source side is to lookback (from the timestamp) for the last
+    ws1Mage oob"*. oob is 15/85, always. No cap on the walk back - his standing rule.
+    """
+    v = np.asarray(line, float)
+    for j in range(int(bar), -1, -1):
+        if v[j] >= K.OOB_HI:
+            return j, +1
+        if v[j] <= K.OOB_LO:
+            return j, -1
+    return None, None
+
+
 def _cascade_at(CM1, MG, bar, side):
     """The cws1Mage-anchored cascade at `bar`. -> (the anchor bar, the verdict) or (None, None)."""
     got = mage_cascade_bar(CM1, int(bar), int(side), mode='extrema')
@@ -74,19 +105,25 @@ def _cascade_at(CM1, MG, bar, side):
     return ab, (None if c is None else c['verdict'])
 
 
-def one(CL, MG, frm, B, side, log):
-    """One of his start points. -> the row dict."""
+def one(CL, EM1, MG, frm, B, log):
+    """One of his start points. -> the row dict. The side is derived, never passed in."""
     r1 = np.asarray(CL['r'][1], float)
     CM1 = np.asarray(CL['M'][1], float)
+    row = {'frm': int(frm)}
+    sb, src = source_side(EM1, frm)
+    if src is None:
+        row['stage'] = 'no ws1Mage oob at or before the start'
+        return row
+    side = -int(src)                                   # the cross leaves the OPPOSITE oob run
+    row.update({'src_bar': sb, 'src': src, 'side': side})
     xc = [(c, cf) for c, cf, s in oob_ib_cross(r1, K.OOB_HI, K.OOB_LO, K.SAV_IB_XWOB)
           if s == int(side) and cf >= int(frm)]
-    row = {'frm': int(frm)}
     if not xc:
-        row['stage'] = 'no target-side cws1r oob x ib cross in the window'
+        row['stage'] = 'no cws1r oob x ib cross on that side in the window'
         return row
     cross, conf = xc[0]
     row.update({'cross': int(cross), 'conf': int(conf)})
-    ab, v0 = _cascade_at(CM1, MG, conf, side)
+    ab, v0 = _cascade_at(CM1, MG, conf, side)   # the cascade anchor's side is the CROSS's
     row.update({'anchor0': ab, 'v0': v0})
     if v0 is None:
         row['stage'] = 'no cascade verdict at the confirm bar'
@@ -122,10 +159,11 @@ def main(dest, B, starts):
 
     CL = CA.lines()
     MG = {t: ln.line('ws%dMage' % t) for t in range(1, 13)}
-    side = SG.target_side('SHORT')
+    EM1 = np.asarray(ln.line('ws1Mage'), float)
 
     log('# A FORK OF LINEAGE - cws1r oob x ib, then the cws1Mage-anchored cascade per bar.')
-    log('# Joe 1024. a SHORT, so the target-side is %s.' % ('HIGH' if side > 0 else 'LOW'))
+    log('# Joe 1024. the SIDE IS DERIVED: the last ws1Mage oob at or before the start gives the')
+    log('#   SOURCE side, and the cws1r cross hunted leaves the OPPOSITE side\'s oob run.')
     log('# the cross dwell is SAV_IB_XWOB %d bars = %d s, acted on at the CONFIRM bar.'
         % (K.SAV_IB_XWOB, K.SAV_IB_XWOB * 5))
     log('# the cascade: zoom %d rungs, min_lines %d, ladder ws1Mage..ws12Mage EMERGING,'
@@ -133,14 +171,18 @@ def main(dest, B, starts):
     log('#   anchor cws1Mage CLOSED via mage_cascade_bar mode extrema. window ends %s.' % ln.U(B))
     log('# RULED_OK %s.' % K.RULED_OK)
     log('')
-    rows = [one(CL, MG, ln.K(s), B, side, log) for s in starts]
+    rows = [one(CL, EM1, MG, ln.K(s), B, log) for s in starts]
 
-    log('| the start | the cws1r cross | its confirm | the anchor | the first verdict | '
-        'flips to flat | flips to %s | the stage |' % '/'.join(sorted(OPP)))
-    log('|---|---|---|---|---|---|---|---|')
+    log('| the start | the last ws1Mage oob | source side | the cross side | the cws1r cross | '
+        'its confirm | the anchor | the first verdict | flips to flat | flips to %s | the stage |'
+        % '/'.join(sorted(OPP)))
+    log('|---|---|---|---|---|---|---|---|---|---|---|')
     for r in rows:
-        log('| %s | %s | %s | %s | %s | %s | %s | %s |'
+        log('| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |'
             % (ln.U(r['frm']),
+               ln.U(r['src_bar']) if r.get('src_bar') is not None else '-',
+               ('HIGH' if r['src'] > 0 else 'LOW') if r.get('src') else '-',
+               ('HIGH' if r['side'] > 0 else 'LOW') if r.get('side') else '-',
                ln.U(r['cross']) if 'cross' in r else '-',
                ln.U(r['conf']) if 'conf' in r else '-',
                ln.U(r['anchor0']) if r.get('anchor0') is not None else '-',
