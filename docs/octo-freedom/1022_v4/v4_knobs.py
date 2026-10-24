@@ -465,8 +465,11 @@ def walkable_run(R, k, side, hold_tf=5, max_tf=None):
     THEN: *"swap `highest` with `lowest`"*. The caller takes `lo`.
 
     `hold_tf` is ws5 because the backstop is a ws5r mech - the run must contain the line the fire
-    came from. 175 of 1086 fires have no such run, because ws5r had already left oob by the time
-    the oob partner set the fire bar. Those return None and are the caller's to rule.
+    came from. 134 of 602 fires have no such run, because ws5r had already left oob by the time the
+    oob partner set the fire bar. Those return None and are the caller's to rule.
+    THE COUNT MOVED WITH THE DEBANK. 175 of 1086 was measured on the 1023 centroid config
+    (k_len 6, rsi 6, stc 8); on the DB row the r config is R_RSI 5 / R_STC 8 / R_KLEN 7 and the
+    tape carries 602 fires. Re-measured 1024.
 
     CAUSAL: every line is read at bar k, which is the fire bar.
     """

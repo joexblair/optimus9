@@ -337,6 +337,9 @@ oob run, so its own starting rung is spent the moment it hands over.
 printout, so the inventory cannot drift from the walk it describes.
 
 Full tape, 2026-07-02 12:00:00 .. 2026-10-04 23:59:55, 1086 backstop fires, `LIN_PASS` 'ib',
+STALE COUNT - 1086 was measured on the 1023 centroid config (k_len 6, rsi 6, stc 8). On the DB row
+banked 1024 - R_RSI 5 / R_STC 8 / R_KLEN 7 - the same tape carries 602 fires, 468 of them with a
+walkable run. The percentages below were not re-measured and are the 1086 population's.
 lookback floor ON at ws6, `RULED_OK True`:
 
 | the read | value |
