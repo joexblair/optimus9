@@ -80,6 +80,23 @@ LIN_PASS = os.environ.get('W_V4_LIN_PASS', 'ib')   # 'ib' | 'reversal'
 #       reversal  594 trades, 66.2% win, +18,886.96 USDT, DD 426.85, net/DD 44.25, PF 3.39
 #   So 'reversal' adds 29 trades and 82.24 USDT of drawdown, loses 20.2% of net-per-drawdown, and
 #   ties on net. 'ib' wins every risk column. The knob stays so the spec reading is re-testable.
+LIN_LOOKBACK_FLOORED = _knob('LIN_LOOKBACK_FLOORED', 1, int)   # 1 yes, 0 no
+LIN_LOOKBACK_FLOOR_TF = _knob('LIN_LOOKBACK_FLOOR_TF', 6, int)  # the lowest rung that looks back
+#   DOES THE LOOKBACK HAVE A TF FLOOR. Joe 1023, asked whether "starts at ws6r" means rungs below
+#   ws6 never look back: *"yes. this needs to be a yes/no knob, and ws6 needs to be the
+#   complimentary knob"*.
+#   SO A RECEIVER BELOW THE FLOOR NEVER TESTS ITS LOOKBACK - it always takes the normal path, and
+#   the baton-pass hatch cannot fire there.
+#   WHERE IT CAME FROM. His hatch spec annotates the trigger *"<- current code, triggered by
+#   ws6r"*, and the leg is 2026-08-31 19:45:40: ws5 hands to ws6, and ws6's reversal is already
+#   105 s behind the baton at 19:43:55. I banked that annotation as "ws6r is the example" and
+#   generalised the test to every rung - v4_lineage.md:213, *"it recurses without a special
+#   case"*, which is my sentence, not his. He reads the annotation as the FLOOR.
+#   THE CONDITIONS ARE STILL MISSING. He said the floor applies *"under specific conditions"* and
+#   could not recall them; nothing in the repo records them. The floor is unconditional here.
+#   THE NAMES ARE MINE. Joe has named neither knob.
+#   THE DEFAULT IS ON because he ruled "yes". Every banked lineage number predates it, so the A/B
+#   is reported beside it rather than the default being moved quietly.
 TF_CEILING = _knob('TF_CEILING', 10, int)  # riderTF max. PROVISIONAL - his word is "unsure"
 
 # ── v4saviour ─────────────────────────────────────────────────────────────────────────────────
@@ -220,6 +237,20 @@ CONTROL_BANK = 6.77                         # ws5r at R_K/R_RSI/R_STC - recorded
 
 BARS_PER_MIN = 12                           # the 5 s grid
 
+# ── `sweep-pivots`, BANKED 1024. Joe named it; *"let's make it a machine and lock down the spec.
+#    if there's knobs, make sure they're visible"*. The knobs live HERE, in the one home that
+#    refuses an off-ruled run, and v4_sweep_pivots reads them from here.
+SP_PICK = _knob('SP_PICK', 'lowest_pct', str)   # how a pivot is chosen from the index
+SP_BAND = _knob('SP_BAND', 0.0)             # the near-same band, in pct POINTS
+SP_CONTAIN = _knob('SP_CONTAIN', 0, int)    # 1 = the event must fall inside the TF's leg
+SP_XWOB = _knob('SP_XWOB', 18, int)         # bars IB must hold for a Mage oob->ib cross
+SP_ALIGN_S = _knob('SP_ALIGN_S', 300, int)  # the alignment window, seconds. READ ONLY by the
+#                                             'window' PICK arm; 'lowest_pct' never reads it
+SP_TFS = _knob('SP_TFS', 'wide', str)       # 'his' = his six, 'wide' = plus ws1Mage and ws2Mage
+#   ALL SIX GO THROUGH _knob, so all six read the ONE prefix W_V4_SP_* and all six are covered by
+#   check(). SP_PICK and SP_TFS were written reading W_SP_* directly, which put them outside the
+#   refusal: an off-ruled SP_PICK ran as the machine and reported RULED_OK True.
+
 #   name                value              Joe's words, 1022 unless dated
 RULED = {
     'RMOM_FNC':         (80.0,  '"v4_rmom_fnc, default 80 - fence used when testing if a r is close'
@@ -230,6 +261,8 @@ RULED = {
                                 ' int(TF * {knob:2.5, `V4_LIN_IB_DWELL`})"'),
     'TF_CEILING':       (10,    '"18, unsure.  use 10" - PROVISIONAL'),
     'LIN_PASS':         ('ib',  'the code\'s original. His 1022 spec says "reversal" - 1023'),
+    'LIN_LOOKBACK_FLOORED': (1, '"yes" to rungs below ws6 never looking back - 1023'),
+    'LIN_LOOKBACK_FLOOR_TF': (6, '"ws6 needs to be the complimentary knob" - 1023'),
     'R_RSI':            (6,     '"bank k6 rsi8 stc6" - 1023, which is 6|6|8 in his notation'),
     'R_STC':            (8,     '"bank k6 rsi8 stc6" - 1023, which is 6|6|8 in his notation'),
     'R_KLEN':           (6,     '"bank k6 rsi8 stc6" - 1023, which is 6|6|8 in his notation'),
@@ -271,6 +304,29 @@ RULED = {
     'LIFT_TOL':         (2.0,   '"35, 2.0 knob"'),
     'LIFT_WOB':         (8,     '"37, 8 knob" and "add a wob 8 to reduce the early reversals"'),
     'GAP_PER_TF':       (2.8,   '"let\'s choose 2.8 until we get to the sweep" - PROVISIONAL'),
+    # ── sweep-pivots, 1024 ──────────────────────────────────────────────────────────────────────
+    'SP_PICK':      ('lowest_pct', '"start at the lowest TF and scan upwards ... the TF swing/pivot'
+                                   ' to pick should be the highest TF printing the lowest pct'
+                                   ' (between pivot and event)" - 1024'),
+    'SP_BAND':      (0.0,   'his near-same band. MEASURED: 53.6% of the 37,178 consecutive-pct'
+                            ' gaps are EXACTLY 0 - TFs sharing a leg extremum - and p10 to p50 are'
+                            ' all 0.0000 while p75 is 0.3705. So 0.0 already captures the'
+                            ' clustering; widening to 0.5 cost 43.6% -> 28.8% within 0.25% of the'
+                            ' pivot and bought only +1.397% -> +1.802% of leg. No knee - 1024'),
+    'SP_CONTAIN':   (0,     'OFF. Right on the 3 events it was proposed against, wrong on 5,323:'
+                            ' 2,198 events lose EVERY candidate, the median candidate count falls'
+                            ' 8.0 -> 1.0, and the median distance off the pivot goes 0.327% ->'
+                            ' 1.157% with the worst 8.953% -> 26.146% - 1024'),
+    'SP_XWOB':      (18,    '"introduce a wob 18 and retest" - 1024. The only wob he named for'
+                            ' this mech. It lifted the MFE-side rate on every TF'),
+    'SP_ALIGN_S':   (300,   '"agreed on 300s" - 1024. UNREAD by the banked SP_PICK; it gates only'
+                            ' the \'window\' arm, kept as the comparison'),
+    'SP_TFS':       ('wide', 'THE ONE ITEM AWAITING HIS WORD. His 1024 list was SIX - ws3Mage,'
+                             ' ws5Mage, ws10Mage, ws15Mage, ws20Mage, ws30Mage. ws1Mage and'
+                             ' ws2Mage are MINE, and every measurement that justified banking used'
+                             ' all eight, so the banked value is the one that was RUN. On his six'
+                             ' alone the 18-row check scores 8 of 18 against 17 of 18. At'
+                             ' ALIGN_S 300 ws1Mage and ws2Mage are the scale TF on 41.0% of events'),
 }
 
 #   the Jig's own, Joe 1017. Asserted, never re-declared.
@@ -309,6 +365,18 @@ def side_of(v):
     and stated rather than decided quietly. At MID_FNC below 50 a value inside the band reads LOW
     for the same reason, and that case is UNRULED - see the MID_FNC comment."""
     return 1 if float(v) > MID_HI else -1
+
+
+def looks_back(tf):
+    """May this rung test its lookback. -> bool
+
+    Joe 1023: *"yes"* to rungs below ws6 never looking back, *"this needs to be a yes/no knob, and
+    ws6 needs to be the complimentary knob"*. With the floor OFF every rung looks back, which is
+    what the code did from 1022 until now.
+    """
+    if not LIN_LOOKBACK_FLOORED:
+        return True
+    return int(tf) >= LIN_LOOKBACK_FLOOR_TF
 
 
 def walkable_run(R, k, side, hold_tf=5, max_tf=None):
@@ -449,6 +517,7 @@ def table():
     units = {'RMOM_FNC': 'r-points', 'LIN_HOP': 'TFs', 'IB_WOB': 'bars',
              'R_RSI': 'bars', 'R_STC': 'bars', 'R_KLEN': 'bars', 'MAX_PYRAMID': 'positions',
              'BSTOP_OOB_WHEN': 'mode', 'BSTOP_CASCADE_AT': 'mode', 'LIN_PASS': 'mode',
+             'LIN_LOOKBACK_FLOORED': 'yes/no', 'LIN_LOOKBACK_FLOOR_TF': 'TF',
              'V4CORE_MAGE_FNC': 'r-points', 'V4CORE_STEP0_JOIN': 'mode',
              'TF_CEILING': 'TF', 'LIN_IB_DWELL': 'bars per TF', 'TRAJ_WIDTH': 'bars per TF-minute',
              'TRAJ_MIN_FRAC': 'fraction of the block', 'TRAJ_MIN_TRAVEL': 'r-points', 'SAV_WS2_OOB_TEST': 'minutes', 'SAV_IB_XWOB': 'bars',

@@ -54,8 +54,14 @@ COINS = 22000.0                  # Joe 1023: *"I'm assuming no leverage and 22K 
 START = 500.0                    # Joe 1022: USDT 500
 
 
-def ledger(acc, close, piv):
+def ledger(acc, close, piv, bound=None):
     """-> one row per trade, with BOTH exit readings. Chronological by entry.
+
+    `bound` is an OPTIONAL boundary source for the MFE window, added 1024 so `sweep-pivots` can be
+    A/B'd against the banked rule without a second copy of the exit. It is called as
+    `bound(en, d) -> the last bar of the window, or None`, and None falls back to the banked path -
+    *"the MFE measured to the next favourable 2% pivot"*. Default None, so every existing caller
+    gets the banked rule unchanged and nothing that was ruled moves.
 
     THREE BARS PER ROW, 1023. Every row carries
         info   the bar the trade is KNOWABLE on: max(the backstop fire, the lineage confirm bar)
@@ -77,11 +83,18 @@ def ledger(acc, close, piv):
             continue
         d = 1 if r['dir'] == 'LONG' else -1
         fav = 'H' if d > 0 else 'L'
-        nxt = next((pi for pi, pk in piv if pi > en and pk == fav), None)
         p0 = float(close[en])
         if p0 <= 0:
             continue
-        hiB = (nxt + 1) if nxt is not None else len(close)
+        hiB = None
+        if bound is not None:
+            z = bound(en, d)
+            hiB = None if z is None else min(int(z) + 1, len(close))
+        if hiB is None:
+            nxt = next((pi for pi, pk in piv if pi > en and pk == fav), None)
+            hiB = (nxt + 1) if nxt is not None else len(close)
+        if hiB <= en + 1:
+            continue
         dd = (np.asarray(close[en:hiB], float) - p0) / p0 * 100.0 * d
         mfe = float(dd.max())
         level = CAPTURE * mfe
