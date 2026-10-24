@@ -91,20 +91,28 @@ def main(dest, A, B, mx):
                ln.U(ex) if 'close' in t else 'still open',
                mae, mfe, t['sig']['why']))
     log('')
-    log('# THE ROUTER\'S OWN DECISIONS, one row per signal it acted on, in the order it acted.')
-    log('#   `open before` is the set the router read at that bar - each entry is a trade\'s OPEN')
-    log('#   BAR and direction. `shuts` is the direction the signal closes, `closed` the trades it')
-    log('#   removed. `count / cap` is the same-direction count AFTER the close against')
-    log('#   max_pyramid. count >= cap is the whole reason a signal is HELD.')
+    log('# THE ROUTER\'S OWN DECISIONS. Joe 1024 set the columns: the timestamp, the data passed')
+    log('#   in, what the router did with it, and why it did that.')
+    log('#   PASSED IN is the signal as the mech handed it over - its bar, its side, its mech.')
+    log('#   WHY is the same-direction count AFTER the close against max_pyramid. That one')
+    log('#   comparison is the only thing that decides OPEN or HOLD; nothing else refuses.')
     log('')
-    log('| the bar | the signal | by | wants | open before | shuts | closed | count / cap | verdict |')
-    log('|---|---|---|---|---|---|---|---|---|')
+    log('| the bar | passed in | what the router did | why |')
+    log('|---|---|---|---|')
     for r in jn:
-        log('| %s | %s | %s | %s | %s | %s | %s | %d / %d | %s |'
-            % (ln.U(r['bar']), ln.U(r['sig']), r['mech'], r['wants'],
-               ', '.join('%s %s' % (ln.U(b), d) for b, d in r['open_before']) or 'nothing open',
-               r['shuts'], ', '.join(ln.U(b) for b in r['closed']) or 'none',
-               r['count'], r['cap'], r['verdict']))
+        act = []
+        if r['closed']:
+            act.append('closed the %s opened %s'
+                       % (r['shuts'], ', '.join(ln.U(b) for b in r['closed'])))
+        act.append('opened a %s' % r['wants'] if r['verdict'] == 'OPENED'
+                   else 'HELD the %s' % r['wants'])
+        why = '%d %s open of max %d' % (r['count'], r['wants'], r['cap'])
+        if r['blocked_by']:
+            why += ' - the %s opened %s fills it' % (r['wants'],
+                                                     ', '.join(ln.U(b) for b in r['blocked_by']))
+        log('| %s | %s %s %s | %s | %s |'
+            % (ln.U(r['bar']), ln.U(r['sig']), 'HIGH' if r['side'] > 0 else 'LOW', r['mech'],
+               ', then '.join(act), why))
 
     wait = [t for t in trades if int(t['open']) - int(t['sig']['bar']) > 1]
     if wait:

@@ -77,9 +77,8 @@ def route(sigs, A, B, saviour=None, max_pyramid=None, journal=None):
         saviour      an optional callable (block_open_bar, block_dir) -> a signal or None, called
                      ONCE per block, when the block opens. His one-saviour ruling
         max_pyramid  the cap on same-direction opens. Defaults to K.MAX_PYRAMID
-        journal      an optional list. EVERY decision this router makes appends one row, with the
-                     open set it read, what it closed, the count it compared to the cap, and the
-                     verdict. It changes no behaviour. Without it a hold's reason has to be
+        journal      an optional list. EVERY decision this router makes appends one row: what it
+                     was handed, what it did, and the count it compared to the cap. It changes no behaviour. Without it a hold's reason has to be
                      reconstructed from the trade list, which does not carry the open set
 
     A trade row carries `open`, `dir`, `sig`, and once closed `close` and `close_why`. A held
@@ -124,13 +123,11 @@ def route(sigs, A, B, saviour=None, max_pyramid=None, journal=None):
         nonlocal opens
         dirn = SG.direction(s['side'])
         row = {'bar': int(bar), 'sig': int(s['bar']), 'mech': s['mech'], 'side': int(s['side']),
-               'wants': dirn, 'shuts': SG.closes(s['side']),
-               'open_before': tuple((int(x['open']), x['dir']) for x in opens)}
+               'wants': dirn, 'shuts': SG.closes(s['side'])}
         opens, shut = _close_all(opens, SG.closes(s['side']), bar,
                                  '%s %s' % (s['mech'], SG.direction(s['side'])))
         done.extend(shut)
         row['closed'] = tuple(int(x['open']) for x in shut)
-        row['open_after_close'] = tuple((int(x['open']), x['dir']) for x in opens)
         row['count'] = _open_count(opens, dirn)
         row['cap'] = mx
         if row['count'] >= mx:
