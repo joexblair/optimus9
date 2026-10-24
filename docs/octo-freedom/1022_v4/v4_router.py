@@ -111,13 +111,20 @@ def route(sigs, A, B, saviour=None, max_pyramid=None):
             pend.sort(key=lambda z: (z['bar'], z['mech']))
 
     def _act(s, bar):
-        """The close, then the open - his order. -> the trade, or None when the open is HELD."""
+        """The close, then the open - his order. -> the trade, or None when the open is HELD.
+
+        A REFUSAL IS RECORDED, not inferred. `s['refused']` gains one row per bar this signal was
+        turned away: the bar, the direction it wanted, and the OPEN BARS of the trades that filled
+        the cap. Without it the hold's cause has to be reasoned about from the trade list.
+        """
         nonlocal opens
         opens, shut = _close_all(opens, SG.closes(s['side']), bar,
                                  '%s %s' % (s['mech'], SG.direction(s['side'])))
         done.extend(shut)
         dirn = SG.direction(s['side'])
         if _open_count(opens, dirn) >= mx:
+            s.setdefault('refused', []).append(
+                (int(bar), dirn, tuple(int(x['open']) for x in opens if x['dir'] == dirn)))
             return None
         t = {'open': int(bar), 'dir': dirn, 'sig': s}
         opens.append(t)
@@ -141,5 +148,6 @@ def route(sigs, A, B, saviour=None, max_pyramid=None):
                 continue
             t = _act(s, fire)
             if t is None:
-                held.append(dict(s, held_at=fire))
+                s['held_at'] = fire
+                held.append(s)                         # the SAME dict, so `refused` accumulates
     return done + opens, held

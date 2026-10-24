@@ -89,6 +89,36 @@ def main(dest, A, B, mx):
                t['dir'], t['sig']['mech'],
                ln.U(ex) if 'close' in t else 'still open',
                mae, mfe, t['sig']['why']))
+    wait = [t for t in trades if int(t['open']) - int(t['sig']['bar']) > 1]
+    if wait:
+        log('')
+        log('# WHY EACH HELD SIGNAL WAITED. One row per refusal, recorded by the router at the bar')
+        log('#   it refused. `blocked by` is the OPEN BAR of each trade that filled max_pyramid.')
+        log('')
+        log('| # | the signal | refused at | wanted | blocked by | blocker | opened |')
+        log('|---|---|---|---|---|---|---|')
+        #   `blocker` = SIBLING when every blocking trade opened AT OR AFTER this signal's own bar,
+        #   so the slot was taken by a signal that arrived at the same moment; EARLIER LEG when a
+        #   blocking trade was already open before this signal landed. The two are different
+        #   problems: a sibling block is a convergence of signals, an earlier-leg block is the
+        #   pyramid cap doing what it is for.
+        #   NOT an exact bar match: a blocking trade opens at ITS signal bar + 1, so a sibling's
+        #   open is one bar AFTER the bar this signal shares with it.
+        for t in trades:
+            if int(t['open']) - int(t['sig']['bar']) <= 1:
+                continue
+            n = trades.index(t) + 1
+            rf = t['sig'].get('refused', [])
+            if not rf:
+                log('| %d | %s | (none recorded) | | | | %s |'
+                    % (n, ln.U(int(t['sig']['bar'])), ln.U(int(t['open']))))
+            for i, (bar, dirn, blk) in enumerate(rf):
+                sb = int(t['sig']['bar'])
+                own = 'SIBLING' if blk and all(b >= sb for b in blk) else 'EARLIER LEG'
+                log('| %s | %s | %s | %s | %s | %s | %s |'
+                    % (n if i == 0 else '', ln.U(int(t['sig']['bar'])) if i == 0 else '',
+                       ln.U(bar), dirn, ', '.join(ln.U(b) for b in blk), own,
+                       ln.U(int(t['open'])) if i == len(rf) - 1 else ''))
     if held:
         log('')
         log('| the held signal | side | by | the bar it was refused | detail |')
