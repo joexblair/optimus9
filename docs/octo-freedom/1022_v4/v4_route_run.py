@@ -48,11 +48,13 @@ def main(dest, A, B, mx):
     close, hi, lo = prices()
     F.reset()
 
-    sigs = SC.produce(CL, R, A, B) + SB.produce(R, MG, A, B)
+    #   THE SAVIOUR ARMS ON THE OTHER TWO PRODUCERS' SIGNALS, one hunt per signal, and its own
+    #   output joins theirs. Joe 1024: *"router doesn't feedback"* - the router is handed one flat
+    #   list and never calls a mech.
+    base = SC.produce(CL, R, A, B) + SB.produce(R, MG, A, B)
+    sigs = base + SS.produce(base, R, MG)
     jn = []
-    trades, dropped = RT.route(sigs, A, B,
-                            saviour=lambda b, d: SS.produce(b, d, R, MG),
-                            max_pyramid=mx, journal=jn)
+    trades, dropped = RT.route(sigs, A, B, max_pyramid=mx, journal=jn)
     trades.sort(key=lambda t: (t['open'], t['dir']))
 
     log('# THE ROUTER. Joe 1024. %s .. %s. max_pyramid %d.' % (ln.U(A), ln.U(B), mx))

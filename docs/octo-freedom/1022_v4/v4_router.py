@@ -25,8 +25,8 @@ HIS RULINGS, 1024, each one a line of this file:
     [which open position does a signal close, when two or more are open on that side]
     -close all of them together
 
-    [does each open position get its own saviour] -no.  a single saviour will open on qualification
-    and defer to the router if `saviour-rev` prints.  the router will close them all together
+    the 0429 signal doesn't know it's gated, that's routers decision.  router doesn't feedback,
+    therefore ZERO action is needed to allow the 0459 saviour qualification to fire
 
     rev-trade is 2 opposing mechanisms: CLOSE the trade, then OPEN a **NEW** trade in the opposite
     direction
@@ -49,8 +49,11 @@ into 76 refusals, and a signal whose lineage exhausted at 11:52:45 opened a trad
 340m45s later, as the entry for a leg it had not detected. The queue is gone, so a signal is acted
 on once, at its own fire bar, or not at all.
 
-ONE SAVIOUR. The caller supplies it through `saviour`, called once per block when the block opens,
-and its signal is routed like any other.
+THE ROUTER DOES NOT FEED BACK. Joe 1024: *"router doesn't feedback"*. It used to call v4saviour
+itself, once per block at the block's open, through a `saviour=` callback - which made the saviour
+the one mech whose existence depended on what the router had opened, and gave a DROPPED signal no
+saviour at all. v4saviour is now a producer like the other two: it arms on a signal, the caller
+hands its output in with the rest, and this file has no idea which mech produced what.
 
 CAUSAL. Every fire is `signal bar + 1`, and the asserts carry that rather than comments. With the
 queue gone there is no second fire bar to reason about: a signal acts on the bar after it landed.
@@ -60,12 +63,10 @@ import v4_pyramid as PY
 import v4_signal as SG
 
 
-def route(sigs, A, B, saviour=None, max_pyramid=None, journal=None):
+def route(sigs, A, B, max_pyramid=None, journal=None):
     """Signals in, trades out. -> (the trades, the signals dropped).
 
         sigs         every signal from every producer, in any order
-        saviour      an optional callable (block_open_bar, block_dir) -> a signal or None, called
-                     ONCE per block, when the block opens. His one-saviour ruling
         max_pyramid  the cap on same-direction opens. Defaults to K.MAX_PYRAMID
         journal      an optional list. EVERY decision this router makes appends one row: what it
                      was handed, what it did, and the count it compared to the cap. It changes no
@@ -87,20 +88,7 @@ def route(sigs, A, B, saviour=None, max_pyramid=None, journal=None):
     pyr = PY.Pyramid(K.MAX_PYRAMID if max_pyramid is None else max_pyramid)
     pend = sorted([dict(s) for s in sigs if A <= s['bar'] <= B],
                   key=lambda s: (s['bar'], s['mech']))
-    dropped, sav_seen = [], set()
-
-    def _offer_to_saviour(dirn):
-        """A block has just opened. Offer it to the single saviour, once."""
-        if saviour is None:
-            return
-        first = pyr.earliest_open(dirn)
-        if first is None or first in sav_seen:
-            return
-        sav_seen.add(first)
-        sv = saviour(first, dirn)
-        if sv is not None and A <= sv['bar'] <= B:
-            pend.append(sv)
-            pend.sort(key=lambda z: (z['bar'], z['mech']))
+    dropped = []
 
     def _act(s, bar):
         """The close, then the open - his order. -> the trade, or None when the open is DROPPED.
@@ -126,13 +114,9 @@ def route(sigs, A, B, saviour=None, max_pyramid=None, journal=None):
         row['blocked_by'] = ()
         if journal is not None:
             journal.append(row)
-        t = pyr.open(bar, dirn, s)
-        _offer_to_saviour(dirn)
-        return t
+        return pyr.open(bar, dirn, s)
 
-    seen = 0
-    while seen < len(pend):
-        s = pend[seen]; seen += 1
+    for s in pend:
         fire = SG.fire_bar(s)
         assert fire > int(s['bar']), 'a fire cannot land on or before its own signal'
         if fire > B:

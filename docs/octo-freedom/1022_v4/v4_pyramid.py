@@ -56,14 +56,6 @@ class Pyramid:
         """The OPEN BARS of the trades that fill the cap in `dirn`. -> tuple. For the report."""
         return tuple(int(t['open']) for t in self._open if t['dir'] == dirn)
 
-    def earliest_open(self, dirn):
-        """The first open bar of the block in `dirn`. -> bar or None.
-
-        The block's own start, which is what a per-block mech is armed on.
-        """
-        b = [int(t['open']) for t in self._open if t['dir'] == dirn]
-        return min(b) if b else None
-
     def close_all(self, dirn, bar, why):
         """Close EVERY open trade in `dirn`. -> the rows closed.
 

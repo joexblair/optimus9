@@ -1,23 +1,30 @@
 """v4saviour's SIGNAL PRODUCER, and nothing else. Joe 1024.
 
-ONE RESPONSIBILITY: given an open position block, state whether v4saviour prints a signal for it.
+ONE RESPONSIBILITY: state every v4saviour signal on the tape. It reads no open position, and it is
+not called by the router.
 
-IT IS THE ONE PRODUCER THAT IS POSITION-BOUND, and that is by construction rather than by choice:
-v4saviour's arm reads a 30-minute walkback from the trade open, and its whole mech runs under one
-cap timer from that open. There is no open bar to read without a position.
+IT IS ARMED ON A SIGNAL, NOT ON A POSITION. Joe 1024 ruled it after I had built it the other way:
 
-ONE SAVIOUR, NOT ONE PER POSITION. Joe 1024, asked whether each open position gets its own:
+    the saviour's hunt starts at the gated signal's bar
+    -yes, exactly the same behaviour as a non-gated signal
 
-    no.  a single saviour will open on qualification and defer to the router if `saviour-rev`
-    prints.  the router will close them all together
+    here's what makes this simple and easy - the 0429 signal doesn't know it's gated, that's
+    routers decision.  router doesn't feedback, therefore ZERO action is needed to allow the 0459
+    saviour qualification to fire
 
-So this file is called with the BLOCK - every position open on one side - and it reads the block's
-EARLIEST open bar. That is my structural read and it is stated rather than defaulted: both the arm
-walkback and the cap measure from when the position was established, and the earliest open is when
-that happened.
+WHAT IT REPLACED. `route` used to call this file once per BLOCK, at the block's earliest open bar,
+through a `saviour=` callback. That made the saviour the one producer whose existence depended on
+what the router had opened - and a signal the router DROPPED armed nothing at all. On 2026-09-01
+the 04:28:55 HIGH core signal was dropped against the 03:34:30 SHORT, and under the callback the
+only hunt on that block ran from 03:34:30, where the arm walkback read ws5r 90.66 HIGH oob and
+returned NOT ARMED. Run from the signal's own bar the same mech reads ws5r 41.91, arms, and fires
+SAVIOUR REV at 04:41:45.
 
-A SAVIOUR SIGNAL CARRIES THE BLOCK'S TARGET-SIDE, so it closes the block and opens the opposite -
-which is what `SAVIOUR REV` has always meant. `STAYS OPEN` and `NOT ARMED` produce no signal.
+THE HUNT'S TARGET-SIDE IS THE COUNTER OF THE SIGNAL'S SIDE, because the saviour hunts the trade
+that signal would OPEN: a HIGH signal opens a SHORT, and a SHORT's target-side is LOW. The signal
+it emits carries that same side, so it closes the SHORT and opens a LONG - which is what
+`SAVIOUR REV` has always meant, and what Joe asked for: *"saviour should pass timestamp/LOW/saviour
+to router"*. `STAYS OPEN` and `NOT ARMED` produce no signal.
 
 THE WALK IS NOT REIMPLEMENTED. `v4_saviour.walk` owns branch A, branch B, his route clause and the
 verdicts.
@@ -34,16 +41,25 @@ import ln
 sys.stderr = _e
 
 
-def produce(block_open, block_dir, R, MG):
-    """v4saviour on one open block. -> a signal, or None.
+def produce(sigs, R, MG):
+    """Every v4saviour signal armed on `sigs`. -> list of signals, bar-ordered.
 
-        block_open  the EARLIEST open bar of the block - see the module docstring
-        block_dir   'LONG' or 'SHORT'. The block is one direction by definition
+        sigs  the signals from the other producers. One hunt per signal, from ITS bar
+
+    IT DOES NOT ARM ON ANOTHER SAVIOUR SIGNAL, so the caller passes the other producers' output and
+    this makes one pass. A saviour arming on a saviour would chain without end, and whether it
+    should is UNRULED - Joe has not been asked.
     """
-    s = SG.target_side(block_dir)
-    res = SV.walk(int(block_open), s, R, MG, ln.U)
-    if res['verdict'] != 'SAVIOUR REV':
-        return None
-    return SG.signal(int(res['fill']), s, 'saviour', int(block_open),
-                     'fill %s, armed on the %s block opened %s'
-                     % (ln.U(res['fill']), block_dir, ln.U(block_open)))
+    out = []
+    for g in sigs:
+        assert g['mech'] != 'saviour', 'a saviour may not arm on another saviour signal'
+        s = -int(g['side'])
+        res = SV.walk(int(g['bar']), s, R, MG, ln.U)
+        if res['verdict'] != 'SAVIOUR REV':
+            continue
+        out.append(SG.signal(int(res['fill']), s, 'saviour', int(g['bar']),
+                             'fill %s, armed on the %s %s signal %s'
+                             % (ln.U(res['fill']), 'HIGH' if g['side'] > 0 else 'LOW',
+                                g['mech'], ln.U(g['bar']))))
+    out.sort(key=lambda z: (z['bar'], z['side']))
+    return out
