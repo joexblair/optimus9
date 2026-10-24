@@ -1,9 +1,8 @@
 """Build the CLOSED-mode line arrays v4 reads, into the rpl line cache. Joe 1024.
 
-WHY IT EXISTS. `gcws30Mage` is registered in indicator_configs at 30 s with value_mode
-**emerging**, and Joe needs it closed: *"g30Mage is shorthand for gcws30Mage. it will need to be
-mode:closed"*. No build script covered the closed variants - v4core's cws set already reads closed
-arrays by spec, and both `v4_core_arm._line` and `v4_mode_ab` only RAISE when one is absent.
+WHY IT EXISTS. No build script covered the closed variants. v4core's cws set already reads closed
+arrays by spec, and both `v4_core_arm._line` and `v4_mode_ab` only RAISE when one is absent, so a
+missing closed line had no way to be made. This file is the maker.
 
 THE DB ROW IS NOT TOUCHED, which is the structural choice and the precedent is v4core's own: a
 closed line is an OVERRIDE of the same DB spec, not a different row. `_line_key` is built from
@@ -36,8 +35,7 @@ from optimus9.config import get_db_config
 sys.stderr = _e
 
 #   (the name v4 reads it by, the role in ln.SPEC, the timeframe in SECONDS)
-#   gcws30Mage is Joe's g30Mage - the walk terminator of v4nuggies. 30 s is sub-wsf on his 1017
-#   band names: wsf = ws1-ws12, sub-wsf = g5-g30, dtf = >ws12.
+#   30 s is sub-wsf on Joe's 1017 band names: wsf = ws1-ws12, sub-wsf = g5-g30, dtf = >ws12.
 WANTED = (('gcws30Mage', 'Mage', 30),)
 MODE = 'closed'
 
