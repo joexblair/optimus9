@@ -1,11 +1,16 @@
-"""WHY ONE BAR CARRIED SEVERAL SIGNALS. Joe 1024: *"pick the first 'blocked by sibling' and show me
-the 5sec timestamped rows that produced the block"*.
+"""THE WALK BETWEEN TWO REV-TRADES. Joe 1024: *"let's see the walk FROM 00:33 to the next
+rev-trade"*.
 
-NO MECH HERE. It calls the same producers the router is fed by and re-runs each signal's lineage
-walk with `v4_fast.walk`'s own `events` hook, which exists so a caller can ask what the walk did
-without re-implementing it. Every number printed comes from the module that owns it.
+NO MECH HERE. It runs the same pipeline `v4_route_run` runs - the two request producers, the walk
+holder, the saviour, the router - and then prints what the WALK did inside one rev-trade interval.
+The baton steps come from `v4_fast.walk`'s own `events` hook, which exists so a caller can ask what
+the walk did without re-implementing it.
 
-usage: v4_route_trace.py <out|-> <start> <end> <the signal bar>
+THE INTERVAL IS NOT CHOSEN HERE. `frm` names a bar; the first rev-trade at or after it opens the
+interval and the NEXT rev-trade closes it. A rev-trade is a trade OPEN in the router's output -
+Joe's *"CLOSE the trade, then OPEN a NEW trade in the opposite direction"*.
+
+usage: v4_route_trace.py <out|-> <start> <end> <walk scope: global|side> <from>
 """
 import io
 import os
@@ -22,21 +27,18 @@ import v4_core_arm as CA
 import v4_sig_core as SC
 import v4_sig_bstop as SB
 import v4_sig_saviour as SS
+import v4_walk_hold as WH
+import v4_router as RT
 
 
 def _tag(v, side):
     """How a bar's r value reads against the fences it is tested at. -> a short string."""
-    t = []
     if K.oob(v, side):
-        t.append('oob')
-    elif K.ex_fence(v, side):
-        t.append('ex-fence')
-    else:
-        t.append('in-fence')
-    return ' '.join(t)
+        return 'oob'
+    return 'ex-fence' if K.ex_fence(v, side) else 'in-fence'
 
 
-def main(dest, A, B, T):
+def main(dest, A, B, scope, frm):
     out = sys.stdout if dest == '-' else open(dest, 'w', buffering=1)
 
     def log(s):
@@ -47,86 +49,82 @@ def main(dest, A, B, T):
     CL = CA.lines()
     F.reset()
 
-    base = SC.produce(CL, R, A, B) + SB.produce(R, MG, A, B)
-    allsigs = base + SS.produce(base, R, MG)
-    sigs = [s for s in allsigs if s['bar'] == T]
-    sigs.sort(key=lambda s: (s['side'], s['src']))
+    reqs = SC.requests(CL, R, A, B) + SB.requests(R, MG, A, B)
+    wj = []
+    base = WH.run(reqs, R, A, B, scope, journal=wj)
+    sigs = base + SS.produce(base, R, MG)
+    trades, _ = RT.route(sigs, A, B)
 
-    #   THE START TF COMES FROM THE OWNING MODULE, not from parsing the printed `why`. The first
-    #   version read it out of the string with `why.split('fire ')[1][:19]`, which broke the moment
-    #   Joe shortened the detail column to bare HH:MM:SS - a report format change silently feeding
-    #   a trace's arithmetic.
-    bfire = {}
-    for d in F.scan(A, B, R, MG):
-        r = K.walkable_run(R, d['fire'], d['side'])
-        if not r:
-            continue
-        v, exh = F.walk(R, r[0], d['side'], d['rev'], B)
-        if v == 'EXHAUST' and exh is not None:
-            bfire[(max(int(exh), int(d['fire'])), int(d['side']), int(d['rev']))] = (r[0], d['fire'])
+    rev = sorted(int(t['open']) for t in trades)
+    at = [r for r in rev if r >= int(frm)]
+    if not at:
+        log('# no rev-trade at or after %s' % ln.U(frm))
+        return
+    R0 = at[0]
+    nxt = [r for r in rev if r > R0]
+    R1 = nxt[0] if nxt else int(B)
 
-    log('# THE SIGNALS THAT LANDED ON %s. Joe 1024.' % ln.U(T))
-    log('# the producers are the router\'s own; each walk is re-run through v4_fast.walk\'s events')
-    log('#   hook. RULED_OK %s. the control: ws5r %s = %.2f, expected %.2f'
+    log('# THE WALK BETWEEN TWO REV-TRADES. Joe 1024. walk scope %s, max_pyramid %d.'
+        % (scope, K.MAX_PYRAMID))
+    log('# RULED_OK %s. the control: ws5r %s = %.2f, expected %.2f'
         % (K.RULED_OK, K.CONTROL_TS, R[5][ln.K(K.CONTROL_TS)], K.CONTROL_DB))
     log('')
-    log('| the signal | side | by | its walk started | detail |')
-    log('|---|---|---|---|---|')
-    for s in sigs:
-        log('| %s | %s | %s | %s | %s |'
-            % (ln.U(s['bar']), 'HIGH' if s['side'] > 0 else 'LOW', s['mech'],
-               ln.U(s['src']), s['why']))
+    log('| the interval | bar |')
+    log('|---|---|')
+    log('| it opens on the rev-trade at | %s |' % ln.U(R0))
+    log('| it closes on the next rev-trade at | %s |' % (ln.U(R1) if nxt else 'the window end'))
+    log('| bars | %d = %d s |' % (R1 - R0, (R1 - R0) * 5))
 
-    for s in sigs:
-        ev = []
-        stf = None
-        fire = None
-        if s['mech'] == 'core':
-            w = CA.armed_at(CL, s['src'], s['side'])
-            stf = K.CORE_LIN_ENTRY_TF if w == 'arm2' else CA.start_tf(CL, s['src'], s['side'])
-        elif s['mech'] == 'backstop':
-            got = bfire.get((int(s['bar']), int(s['side']), int(s['src'])))
-            stf, fire = got if got else (None, None)
-        else:
-            stf = None                                 # v4saviour runs no lineage walk
-        if stf is None:
+    inside = [r for r in wj if R0 <= r['bar'] <= R1]
+    log('')
+    log('# EVERY WALK REQUEST INSIDE THE INTERVAL, in the order the walk served them.')
+    log('')
+    log('| the request | side | the mech | start TF | the walk | verdict | held to | the signal |')
+    log('|---|---|---|---|---|---|---|---|')
+    for r in inside:
+        log('| %s | %s | %s | ws%d | %s | %s | %s | %s |'
+            % (ln.U(r['bar']), 'HIGH' if r['side'] > 0 else 'LOW', r['mech'], r['start_tf'],
+               r.get('walk', '-'), r['verdict'],
+               ln.U(r['held_by']) if 'held_by' in r else '-',
+               ln.U(r['signal']) if 'signal' in r else '-'))
+
+    for r in inside:
+        if r['verdict'] != 'CLAIMED':
             continue
-        v, exh = F.walk(R, stf, s['side'], s['src'], B, events=ev)
+        ev = []
+        v, exh = F.walk(R, r['start_tf'], r['side'], r['anchor'], B, events=ev)
         log('')
-        log('## %s %s, walk from ws%d starting %s%s -> %s %s'
-            % (s['mech'], 'HIGH' if s['side'] > 0 else 'LOW', stf, ln.U(s['src']),
-               '' if fire is None else ', fire %s' % ln.U(int(fire)), v,
-               ln.U(exh) if exh is not None else '-'))
+        log('## the CLAIMED walk: %s %s from ws%d, anchor %s -> %s %s'
+            % (r['mech'], 'HIGH' if r['side'] > 0 else 'LOW', r['start_tf'], ln.U(r['anchor']),
+               v, ln.U(exh) if exh is not None else '-'))
         log('')
-        log('| the baton bar | from | to | the receiver r value | its reversal stamp | second walk |')
+        if not ev:
+            log('no baton hand-off: the walk resolved on its start rung.')
+            continue
+        log('| the baton bar | from | to | the receiver r | its reversal stamp | second walk |')
         log('|---|---|---|---|---|---|')
         for e in ev:
             log('| %s | ws%d | ws%d | %.2f %s | %s | %s |'
-                % (ln.U(e['pas']), e['frm'], e['to'], e['r_to'],
-                   _tag(e['r_to'], s['side']),
+                % (ln.U(e['pas']), e['frm'], e['to'], e['r_to'], _tag(e['r_to'], r['side']),
                    ln.U(e['rev_to']) if e['rev_to'] is not None else 'none',
                    ln.U(e['p2']) if e['p2'] is not None else '-'))
 
-    #   THE 5-SECOND ROWS. Every bar from the earliest walk start to the signal bar, so the
-    #   convergence is read off the lines rather than inferred from the three verdicts.
-    frm = min(int(s['src']) for s in sigs)
-    tfs = sorted(set([1, 2, 3, 4, 5, 6] ) & set(R))
+    tfs = [t for t in (1, 2, 3, 4, 5, 6) if t in R]
+    sd = inside[0]['side'] if inside else -1
     log('')
-    log('# THE 5-SECOND ROWS, %s .. %s. r values on the SWEEP config (rsi %d, stc %d, k_len %d).'
-        % (ln.U(frm), ln.U(T), RS.K0, RS.R0, RS.S0))
-    #   THE TUPLE ORDER IS LEGACY AND MISLABELLED ELSEWHERE. RS.(K0, R0, S0) is (R_RSI, R_STC,
-    #   R_KLEN) = (5, 8, 7), so K0 is the RSI and S0 is the k_len. out/net.md's columns say
-    #   `k | rsi | stc` and hold (rsi, stc, k_len); that mislabel is live and is not fixed here.
-    log('# a value is tagged against the LOW side, which is the side all these signals carry.')
+    log('# THE 5-SECOND ROWS, %s .. %s. r values on the DB-row config (rsi %d, stc %d, k_len %d),'
+        % (ln.U(R0), ln.U(R1), RS.K0, RS.R0, RS.S0))
+    log('#   tagged against the %s side, which the claimed walk carries.'
+        % ('HIGH' if sd > 0 else 'LOW'))
     log('')
     log('| the bar | ' + ' | '.join('ws%dr' % t for t in tfs) + ' |')
     log('|---|' + '---|' * len(tfs))
-    for k in range(frm, int(T) + 1):
+    for k in range(R0, R1 + 1):
         log('| %s | ' % ln.U(k)
-            + ' | '.join('%.2f %s' % (R[t][k], _tag(R[t][k], sigs[0]['side'])) for t in tfs) + ' |')
+            + ' | '.join('%.2f %s' % (R[t][k], _tag(R[t][k], sd)) for t in tfs) + ' |')
     if dest != '-':
         out.close()
 
 
 if __name__ == '__main__':
-    main(sys.argv[1], ln.K(sys.argv[2]), ln.K(sys.argv[3]), ln.K(sys.argv[4]))
+    main(sys.argv[1], ln.K(sys.argv[2]), ln.K(sys.argv[3]), sys.argv[4], ln.K(sys.argv[5]))
