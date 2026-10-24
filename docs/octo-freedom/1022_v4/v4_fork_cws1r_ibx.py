@@ -7,9 +7,11 @@ not for a coined mechanic. It imports nothing from `v4_fast` and changes nothing
 HIS TARGET. Joe 1024: *"we're going to improve the 0137 timestamp. my target is the low side ws1r
 reversal at 0129"*. On 2026-09-01 lineage's exhaust is 01:37:10; his target is 01:29.
 
-HIS TEST, verbatim:
+HIS TEST, verbatim. Its opening clause was withdrawn by him on 1024 - *"it's best to delete that
+statement so that it doesn't cause confusion"* - and is gone from this file rather than carried with
+an annotation, which is what he asked for. The side rule below replaces it.
 
-    from 08-31 2135, open a SHORT and walk to target-side first cws1r oob x ib.
+    from 08-31 2135, walk to the first cws1r oob x ib.
     -at that bar:  capture a cws1 anchored mage-cascade verdict
     -keep walking and testing mage cascade per bar
     -record when the verdict flips to flat, and when it flips to {opposite of the first anchor's
@@ -26,6 +28,8 @@ cws1r cross hunted is the one leaving the OPPOSITE side's oob run. He settled th
 the cross he expected: from 2026-08-31 23:18 the lookback finds a LOW ws1Mage oob at 23:15:55, and
 the 23:31:00 cross he named left a HIGH oob run. It also agrees with the banked frame - a low-oob
 source unwinds upward, and the high oob is what that move hunts.
+
+THIS IS THE ONLY SIDE RULE IN THIS FORK. There is no second one to reconcile it against.
 
 The lookback is UNBOUNDED, back to the tape start if it must. On his five starts it never needed
 more than 2m05s, and three of the five timestamps are themselves a ws1Mage oob bar.
