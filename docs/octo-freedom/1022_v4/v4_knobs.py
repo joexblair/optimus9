@@ -212,13 +212,13 @@ R_KLEN = _knob('R_KLEN', 7, int)            # the StochRSI k length. DB mlc_k_le
 #   the three that moves the trade count much: k_len 6 carries roughly 2.4x the trades of k_len 7.
 #   The finding was reported on 1023 as "stc is the only parameter that matters"; that was the
 #   transposed reading.
-MAX_PYRAMID = _knob('MAX_PYRAMID', 2, int)  # concurrent open positions the account will carry.
-#   JOE'S WORD AND JOE'S NUMBER. 1023: *"it will need a safe max_pyramid setting that only the
-#   account (leverage) can provide"*, then *"including 2 max_pyramid"*. It is the LEVERAGE knob:
-#   N positions open together means N stops can fire together, so the account-wipe leverage is
-#   100 / (N x 1.100). At 2 that is 45.5x; at the previous unlimited (7 concurrent) it was 13.0x.
-#   Measured on the banked config: 543 trades at 2 against 598 unlimited, +19,485.67 USDT against
-#   +21,331.23, and peak leverage 14.7x either way.
+MAX_PYRAMID = _knob('MAX_PYRAMID', 1, int)  # concurrent open positions the account will carry.
+#   JOE'S WORD AND JOE'S NUMBER. 1024: *"set pyramid to 1"*. It is the LEVERAGE knob: N positions
+#   open together means N stops can fire together, so the account-wipe leverage is
+#   100 / (N x 1.100). At 1 that is 90.9x.
+#   THE BOUNDARY IS `count < cap`, Joe 1024: *"count < cap is right"*. So 1 means at most one
+#   position open in a direction, and a second signal on that side is DROPPED, not queued.
+#   On 2026-09-01 the day is 19 trades at 1 against 27 at 2.
 
 V4CORE_MAGE_FNC = _knob('V4CORE_MAGE_FNC', 5.0)   # the fence v4core's Mage test uses, mirrored.
 #   Joe 1023 spec: *"(ws1Mage or ws2Mage are same-side past 5/95)"* / *"same-side past 5/95 means
@@ -326,7 +326,7 @@ RULED = {
     'R_STC':            (8,     'DEBANKED to the DB row 1024 - unchanged, the DB and the sweep'
                                 ' centroid agree on stc'),
     'R_KLEN':           (7,     'DEBANKED to the DB row 1024 - see the R_* block above'),
-    'MAX_PYRAMID':      (2,     '"including 2 max_pyramid" - 1023'),
+    'MAX_PYRAMID':      (1,     '"set pyramid to 1" - 1024'),
     'BSTOP_OOB_WHEN':   ('window', '"I think the answer is \'just recent\'" - 1022,'
                                    ' defaulted 1023'),
     'BSTOP_CASCADE_AT': ('lift', '"not extrema - measure where the r reversals print" - #25,'
