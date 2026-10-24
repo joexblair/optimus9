@@ -28,7 +28,7 @@ Standing rulings, not v4's to change.
 
 BANKED 1022, after I derived it instead of reading it. Joe asked for *"a trade opens on the low side
 ws5r reversal near 09-06 2220"*; I ran "low-side reversal" through `rev-trade`'s polarity to LONG /
-target-side HIGH and v4saviour returned REV-TRADE off the wrong side. On his stated LOW side it
+target-side HIGH and v4saviour returned SAVIOUR REV off the wrong side. On his stated LOW side it
 returns NOT ARMED. Joe: *"this is the proper way to view it - the v4saviour class will consume this
 data from an external source"*.
 
@@ -93,19 +93,72 @@ and *"16, the reversal bar"* for the fill bar. The UNRULED note above is superse
 `v4_knobs.py` is the in-force copy. Importing it REFUSES an off-ruled run unless
 `W_V4_EXPERIMENT=1`, and an experiment run prints every delta first. A spec doc is not in-use.
 
-| the knob | value | units | Joe's words |
+ALL 48 RULED KNOBS, GENERATED FROM `v4_knobs.RULED` so this table cannot drift from
+the code. An off-ruled run refuses unless `W_V4_EXPERIMENT=1`.
+
+| the knob | value | units | Joe's words, or the measurement that set it |
 |---|---|---|---|
-| `RMOM_FNC` | 80.0 | r-points | *"v4_rmom_fnc, default 80 - fence used when testing if a r is close enough to oob to be predicted"* |
-| `LIN_HOP` | 2 | TFs | *"1, 2"* |
-| `REV_WOB` | 3 | bars | *"2, 3"* |
-| `IB_WOB` | 3 | bars | *"10, 3"* |
-| `TF_CEILING` | 10 | TF | *"18, unsure.  use 10"* - PROVISIONAL |
-| `SAV_WS2_OOB_TEST` | 10.0 | minutes | *"CAP: {knob:10, `V4_SAV_WS2_OOB_TEST`} minutes"* |
-| `SAV_IB_XWOB` | 2 | bars | *"23, 2"* |
-| `LIFT_PTS` | 6 | samples | *"34, 6 knob"* |
-| `LIFT_TOL` | 2.0 | r-points | *"35, 2.0 knob"* |
-| `LIFT_WOB` | 8 | bars | *"37, 8 knob"* |
-| `GAP_PER_TF` | 2.8 | bars per TF-minute | *"let\'s choose 2.8 until we get to the sweep"* - PROVISIONAL |
+| `ARM2` | 1 | yes/no | v4core's second arm, live. "add a second v4core arm" - 1024 |
+| `ARM2_DWELL` | 18 | bars | "min dwell 18 bars" - 1024. The ws1r oob run's own length, so the earliest arm is bar 18 of the run |
+| `ARM2_POOL_MIN` | 2 | lines | "any TWO of ws4-8r are same-side oob" - 1024 |
+| `BSTOP_CASCADE_AT` | 'lift' | mode | "not extrema - measure where the r reversals print" - #25, defaulted 1023 |
+| `BSTOP_OOB_WHEN` | 'window' | mode | "I think the answer is 'just recent'" - 1022, defaulted 1023 |
+| `BSTOP_POOL_HI` | 3 | TF | "(ws1r or ws2r or ws3r are same side oob)" |
+| `BSTOP_SYNC_MIN` | 8.8 | minutes | "the ws1r,ws2r,ws3r oob condition has a +/-8.8 minute window to sync with ws5r reversing. this needs to be causal" |
+| `CORE_LIN_ENTRY_TF` | 4 | TF | "maybe setting the entry TF to {knob:4,'V4_CORE_LIN_ENTRY_TF'} will settle it" - 1024, replacing his earlier "start from ws1" |
+| `GAP_PER_TF` | 2.8 | bars per TF-minute | "let's choose 2.8 until we get to the sweep" - PROVISIONAL |
+| `IB_WOB` | 3 | bars | "10, 3" - SUPERSEDED by LIN_IB_DWELL |
+| `LIFT_PTS` | 6 | samples | "34, 6 knob" |
+| `LIFT_TOL` | 2.0 | r-points | "35, 2.0 knob" |
+| `LIFT_WOB` | 8 | bars | "37, 8 knob" and "add a wob 8 to reduce the early reversals" |
+| `LIN_HOP` | 2 | TFs | "1, 2" |
+| `LIN_IB_DWELL` | 2.5 | bars per TF | "it needs to be dynamic: let's start with int(TF * {knob:2.5, `V4_LIN_IB_DWELL`})" |
+| `LIN_LOOKBACK_FLOORED` | 1 | yes/no | "yes" to rungs below ws6 never looking back - 1023 |
+| `LIN_LOOKBACK_FLOOR_TF` | 6 | TF | "ws6 needs to be the complimentary knob" - 1023 |
+| `LIN_PASS` | 'ib' | mode | the code's original. His 1022 spec says "reversal" - 1023 |
+| `LIN_W4` | 0 | yes/no | arm A is the bank. The handover is arm B of the 1024 A/B and is NOT the machine until he rules it |
+| `LIN_W4_G1_XWOB` | 4 | bars | Joe 0911 "reversal:2, boundary:4. both are knobs" - the boundary one |
+| `LIN_W4_GRACE_S` | 180 | seconds | "I propose we give 3 minutes grace to overcome the scenario" - 1024. UNANCHORED: the jump-back distribution has no knee, p75 is 0.3705 |
+| `MAX_PYRAMID` | 2 | positions | "including 2 max_pyramid" - 1023 |
+| `MID_FNC` | 50.0 | r-points | "change `mid` to a fence, same logic as above. 100-{knob:50}" |
+| `OOB_FNC` | 15.0 | r-points | standing - oob is ALWAYS 15/85. ONE knob: *"oob_hi and oob_lo are expressed as one knob, to avoid imbalnace. the formula is (100 -{knob:15})"* |
+| `RMOM_FNC` | 80.0 | r-points | "v4_rmom_fnc, default 80 - fence used when testing if a r is close enough to oob to be predicted" |
+| `R_KLEN` | 7 | length | DEBANKED to the DB row 1024 - see the R_* block above |
+| `R_RSI` | 5 | length | DEBANKED to the DB row 1024 - see the R_* block above |
+| `R_STC` | 8 | length | DEBANKED to the DB row 1024 - unchanged, the DB and the sweep centroid agree on stc |
+| `SAV_ARM_WALKBACK` | 30 | minutes | "at trade open, walkback in 5 minute jumps (cap: 30 minutes) to find the ws5r extrema. if the extrema is oob, the gate is closed and saviour may not fire" - 1024, with "full range" on the sampling |
+| `SAV_CASCADE_GAP` | 12 | bars | "create a v4-saviour specific knob that looks back in 1 minute jumps" |
+| `SAV_CASCADE_MIN` | 4 | lines | his 1017 "4 or more consecutive TFs" - the Jig's MC_MIN, captured at v4 level |
+| `SAV_CASCADE_MODE` | 'extrema' | mode | "25, not extrema - measure where the r reversals print" for the r-driven reads; the ROUTED read is anchored on the ws1Mage extrema, so this mode is 'extrema' |
+| `SAV_CASCADE_ZOOM` | 2 | rungs | "26, 2 knob" - the Jig's MC_ZOOM, captured at v4 level |
+| `SAV_IB_XWOB` | 2 | bars | "23, 2" |
+| `SAV_MAGE_GATE_WOB` | 8 | bars | "IF any ws1Mage bar lands outside of the past-50-gate (wob 8), route to the ws1r mage-cascade test" |
+| `SAV_WS2_OOB_TEST` | 16.0 | minutes | "increase CAP to {knob:16} minutes, and start the timer when the trade opens" |
+| `SP_ALIGN_S` | 300 | seconds | "agreed on 300s" - 1024. UNREAD by the banked SP_PICK; it gates only the 'window' arm, kept as the comparison |
+| `SP_BAND` | 0.0 | pct points | his near-same band. MEASURED: 53.6% of the 37,178 consecutive-pct gaps are EXACTLY 0 - TFs sharing a leg extremum - and p10 to p50 are all 0.0000 while p75 is 0.3705. So 0.0 already captures the clustering; widening to 0.5 cost 43.6% -> 28.8% within 0.25% of the pivot and bought only +1.397% -> +1.802% of leg. No knee - 1024 |
+| `SP_CONTAIN` | 0 | yes/no | OFF. Right on the 3 events it was proposed against, wrong on 5,323: 2,198 events lose EVERY candidate, the median candidate count falls 8.0 -> 1.0, and the median distance off the pivot goes 0.327% -> 1.157% with the worst 8.953% -> 26.146% - 1024 |
+| `SP_PICK` | 'lowest_pct' | mode | "start at the lowest TF and scan upwards ... the TF swing/pivot to pick should be the highest TF printing the lowest pct (between pivot and event)" - 1024 |
+| `SP_TFS` | 'wide' | set | THE ONE ITEM AWAITING HIS WORD. His 1024 list was SIX - ws3Mage, ws5Mage, ws10Mage, ws15Mage, ws20Mage, ws30Mage. ws1Mage and ws2Mage are MINE, and every measurement that justified banking used all eight, so the banked value is the one that was RUN. On his six alone the 18-row check scores 8 of 18 against 17 of 18. At ALIGN_S 300 ws1Mage and ws2Mage are the scale TF on 41.0% of events |
+| `SP_XWOB` | 18 | bars | "introduce a wob 18 and retest" - 1024. The only wob he named for this mech. It lifted the MFE-side rate on every TF |
+| `TF_CEILING` | 10 | TF | "18, unsure. use 10" - PROVISIONAL |
+| `TRAJ_MIN_FRAC` | 0.5 | fraction | HELD at 0.5 through the width sweep, NOT swept itself |
+| `TRAJ_MIN_TRAVEL` | 0.0 | r-points | Joe 0924: *"I would say the true threshold is in the OOS data"* - UNSET, and it passes dust |
+| `TRAJ_WIDTH` | 21.0 | bars | "lock it in" - 1.75 of the line's own bar, the measured peak on BOTH ws21r and ws13r |
+| `V4CORE_MAGE_FNC` | 5.0 | r-points | "same-side past 5/95" - 1023, his eyeballing, held |
+| `V4CORE_STEP0_JOIN` | 'and' | mode | "STEP0 is specifically AND to avoid re-entering mid cycle and creating a second stop" - 1023 |
+
+THREE CONSTANTS IN `v4_knobs` ARE NOT KNOBS and are deliberately outside `RULED` - they are the
+control row's expected values, the drift check Joe 1023 ruled after a stale label read as cache
+drift:
+
+| the constant | value | what it is |
+|---|---|---|
+| `CONTROL_TS` | '2026-09-03 00:35:00' | the bar every run's control row reads |
+| `CONTROL_DB` | 12.48 | ws5r there on the DB row - THE BANK as of 1024. Every run must read this |
+| `CONTROL_BANK` | 6.77 | ws5r there on the 1023 sweep centroid k_len 6 / rsi 6 / stc 8 |
+
+`REV_WOB` was here at 3 bars until 1023, when Joe said *"delete REV_WOB"*. It is deleted, not
+superseded, and the row is removed rather than annotated.
 
 The cascade's knobs are NOT re-declared. `MC_GAP` 48, `MC_ZOOM` 2, `MC_MIN` 4, `MC_TF_LO` 1 and
 `MC_TF_HI` 12 are Joe\'s 1017 rulings and the Jig is their one home; `v4_knobs` asserts them, so a

@@ -258,6 +258,24 @@ CONTROL_BANK = 6.77                         # ws5r at the same bar on the 1023 s
 
 BARS_PER_MIN = 12                           # the 5 s grid
 
+# ── v4core's SECOND ARM, Joe 1024. His words: *"add a second v4core arm: if ws1r is oob on target
+#    side, min dwell 18 bars, and ws1Mage is same-side oob, and any TWO of ws4-8r are same-side
+#    oob, arm."* STEP2's sibling - *"is it STEP2's sibling - yes"* - so either may fire.
+ARM2 = _knob('ARM2', 1, int)                # 1 = the second arm is live
+ARM2_DWELL = _knob('ARM2_DWELL', 18, int)   # bars the ws1r oob run must REACH. His number
+ARM2_POOL_MIN = _knob('ARM2_POOL_MIN', 2, int)   # *"any TWO of ws4-8r"* - his number
+CORE_LIN_ENTRY_TF = _knob('CORE_LIN_ENTRY_TF', 4, int)   # the rung v4core's SECOND ARM hands
+#   lineage. HIS KNOB AND HIS NAME, 1024: *"maybe setting the entry TF to
+#   {knob:4,'V4_CORE_LIN_ENTRY_TF'} will settle it"*. Read as W_V4_CORE_LIN_ENTRY_TF.
+#   IT REPLACED ws1, which he first ruled - *"start from ws1. most of them are on the pivot, so
+#   near-instant exhaust is typical behaviour"* - and then caught: *"there's a miswiring somewhere.
+#   the A trade mech picked 0116 as the arm and walked it to 0137. this B trade has exhausted
+#   immediate"*. Starting at ws1 makes the baton climb through ws2, and on the 2026-09-01 01:14:25
+#   arm the emerging ws2r is 21.11 against the 20 fence, so the walk died at its first hand-off
+#   with EXHAUST at 01:16:20. The oob at that bar sits at ws1r 10.14, then a HOLE at ws2r 21.11 and
+#   ws3r 15.74, then ws4r 7.94 and ws5r 9.02 - so ws4 is where the walkable oob actually is, and it
+#   is what the A-path backstop used to reach 01:37:10.
+
 SAV_ARM_WALKBACK = _knob('SAV_ARM_WALKBACK', 30, int)   # minutes v4saviour's arm looks BACK from
 #   the trade open for a counter-target-side ws5r extremum. Joe 1024: *"at trade open, walkback in
 #   5 minute jumps (cap: 30 minutes) to find the ws5r extrema. if the extrema is oob, the gate is
@@ -363,6 +381,12 @@ RULED = {
                             ' this mech. It lifted the MFE-side rate on every TF'),
     'SP_ALIGN_S':   (300,   '"agreed on 300s" - 1024. UNREAD by the banked SP_PICK; it gates only'
                             ' the \'window\' arm, kept as the comparison'),
+    'ARM2':         (1,     'v4core\'s second arm, live. "add a second v4core arm" - 1024'),
+    'ARM2_DWELL':   (18,    '"min dwell 18 bars" - 1024. The ws1r oob run\'s own length, so the'
+                            ' earliest arm is bar 18 of the run'),
+    'ARM2_POOL_MIN': (2,    '"any TWO of ws4-8r are same-side oob" - 1024'),
+    'CORE_LIN_ENTRY_TF': (4, '"maybe setting the entry TF to {knob:4,\'V4_CORE_LIN_ENTRY_TF\'}'
+                             ' will settle it" - 1024, replacing his earlier "start from ws1"'),
     'SAV_ARM_WALKBACK': (30, '"at trade open, walkback in 5 minute jumps (cap: 30 minutes) to find'
                              ' the ws5r extrema. if the extrema is oob, the gate is closed and'
                              ' saviour may not fire" - 1024, with "full range" on the sampling'),

@@ -124,7 +124,7 @@ forced out so far, so the external source has a target to meet.
 
 THE SIDE IS AN INPUT, NEVER A DERIVATION. Banked 1022 after I derived it instead of reading it:
 Joe asked for *"a trade opens on the low side ws5r reversal near 09-06 2220"*, I ran "low-side
-reversal" through rev-trade's polarity to LONG / target-side HIGH, and v4saviour returned REV-TRADE
+reversal" through rev-trade's polarity to LONG / target-side HIGH, and v4saviour returned SAVIOUR REV
 off the wrong side. On his stated LOW side it returns NOT ARMED. `walk` does not compute the side
 and must never be given a computed one.
 
@@ -133,7 +133,7 @@ and must never be given a computed one.
 | the verdict | when |
 |---|---|
 | `NOT ARMED` | ws5r was target-side oob at the open, so the arm cannot fire |
-| `REV-TRADE` | a counter cascade at the ws1r ib cross (branch A) or the ws2r ib cross (branch B) |
+| `SAVIOUR REV` | a counter cascade at the ws1r ib cross (branch A) or the ws2r ib cross (branch B) |
 | `STAYS OPEN` | no counter cascade, or the cap expired, or no ws1r oob run followed the open |
 
 ### Three things the testing cannot reach, and they are gaps

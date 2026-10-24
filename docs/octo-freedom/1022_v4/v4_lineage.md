@@ -154,11 +154,11 @@ backwards. With `LIN_HOP` 2 and riderTF ws6 the range is ws7..ws8; measured at t
 2026-09-02 01:54:05, ws7r 33.74 and ws8r 36.83, neither oob, so EXHAUST fires under "any". The only
 state in which it does NOT fire is both oob.
 
-### Why `REV_WOB` 3 is a formality under #20
+### `REV_WOB` is DELETED - Joe 1023
 
-On the full tape, ws1r to ws10r, 9,349 of 136,989 excursions fail the 3-bar hold and all 9,349 fail
-the same way: the hold window runs past the excursion's own end. Inside its own excursion the hold
-cannot fail, because after the last bar at the extreme the line never returns to it.
+Joe 1023: *"delete REV_WOB"*. It is gone from `v4_knobs.py`; the lineage reversal hold is `LIFT_WOB`
+inside `lift_off`, and nothing ever read `REV_WOB`. This section used to argue it was *"a formality
+under #20"*, which kept a deleted knob alive in the spec at a value it no longer has.
 
 ---
 
@@ -194,7 +194,7 @@ ws5..ws10, both sides:
 |---|---|---|---|
 | the old rider's reversal, his first wording | ANOTHER line's timing | YES | **129 of 447 clustered hand-offs invert, 29%**. ws9 -> ws10 inverts 50% of the time |
 | the new rider's own oob run | only the new rider | no | admits a reversal a median 510 s stale, max 3,540 s |
-| the leg's start | the open mech | no | UNMEASURABLE - #17 is unbuilt |
+| the leg's start | the open mech | no | **IT IS THE BOUND IN FORCE** - see "What bounds the lookback" below. Recorded as unmeasurable while #17 was unbuilt; the code had it all along |
 
 THE SECOND WALK NEEDS NO FLOOR AT ALL. It never compares two lines' reversal timestamps, so the
 29% inversion rate cannot touch it. That is the whole reason it is the build.
@@ -209,8 +209,23 @@ THE SECOND WALK NEEDS NO FLOOR AT ALL. It never compares two lines' reversal tim
 | after the second walk, second-new-rider has a reversal in lookback | EXHAUST |
 | after the second walk, second-new-rider does not | the baton passes, the normal path |
 
-And it recurses without a special case: a line that later receives the baton already spent becomes
-the current rider with a reversal in its lookback, and the same second walk applies.
+IT IS ONE LEVEL PER HAND-OFF, AND THAT IS HIS SPEC, NOT A LIMITATION. The two spent receivers are
+NOT treated alike:
+
+| who arrives spent | what happens | where it is written |
+|---|---|---|
+| the receiver at a normal hand-off | the SECOND walk to ib | his `--walk current-rider until cross to ib` |
+| the second-new-rider, after that walk | EXHAUST, no third walk | his `---declare exhaust` |
+
+The hatch can still fire again LATER in the same walk - if the second-new-rider is clean the baton
+passes to it, and the next hand-off tests its own receiver from scratch. What cannot happen is a
+second walk stacked on a second walk.
+
+*Corrected 1023.* This section previously read *"it recurses without a special case: a line that
+later receives the baton already spent becomes the current rider with a reversal in its lookback,
+and the same second walk applies"*. That sentence was not from Joe and not from the code - it was a
+generalisation of the mech written into the spec as if it were the mech. His own spec line
+`---declare exhaust` is the terminal case, and the code does exactly that.
 
 ### The knobs - NO NEW ONES
 
@@ -224,29 +239,145 @@ Everything it reads is already banked. `v4_knobs.py` is the in-force copy.
 | the reversal detector | `LIFT_PTS` / `LIFT_TOL` / `LIFT_WOB` / `GAP_PER_TF` | 6 / 2.0 / 8 / 2.8 |
 | the chain's top | `TF_CEILING` | 10, PROVISIONAL |
 
-ONE THING IS A CHOICE, NOT A KNOB, and it is stated rather than defaulted quietly: the LOOKBACK is
-bounded by the line's own same-side oob RUN, not by a bar count. A reversal outside that run belongs
-to a different move and is not read. No `lookback` window knob is invented; if a bar count is wanted
-there instead, that is Joe's to set.
+### What bounds the lookback - CORRECTED 1023, and it is not what this section used to say
 
-### The 2026-08-31 trace, reproducible
+This section used to state: *"the LOOKBACK is bounded by the line's own same-side oob RUN, not by a
+bar count"*. **That was never implemented.** `v4_fast.walk` seeds every rung's reversal with
+`first_rev_at_or_after(R[t], t, side, A, B)`, and `A` is the walk's anchor, so:
 
-`v4_lineage_trace.py '2026-08-31 19:00:00' '2026-08-31 21:30:00' 5 low` prints this:
+| the bound the code actually applies | the consequence |
+|---|---|
+| **the leg's own start** - no reversal before the anchor is visible to any rung | the oob-run bound is absent; nothing reads a line's own run |
+| the stamp is `bar + LIFT_WOB - 1`, always after the raw bar | a receiver's reversal is ALWAYS at or after the anchor, never before it |
+
+So *"a rider arrives already spent"* can only ever mean **spent relative to the baton-pass bar,
+having reversed during the walk** - never spent before the walk began. The latter is unreachable by
+construction, not rare.
+
+THIS MOVES A ROW IN THE FLOOR TABLE ABOVE. *"the leg's start"* was recorded as UNMEASURABLE because
+#17 was unbuilt; it is in fact the bound in force, and since 1023 the machine produces the anchor
+itself (`v4_machine._lineage` asserts the anchor is machine state, never a window edge), so it is
+now measurable.
+
+**UNRULED, and Joe's to settle:** whether the oob-run bound this section claimed should be built. It
+would SHRINK the lookback - a reversal inside the leg but outside the receiver's own oob run would
+stop counting - so it is a mech change, not a correction. No `lookback` bar-count knob is invented
+either way.
+
+### The leg - REPLACED 1023, because the first one was never legitimate
+
+**WHAT WAS WRONG WITH THE OLD EVIDENCE.** This section used to carry a 2026-08-31 trace produced by
+`v4_lineage_trace.py '2026-08-31 19:00:00' '2026-08-31 21:30:00' 5 low` - a hand-made call that
+starts the walk at the window's own left edge. Joe 1023 caught it: *"it can't: ws1b doesn't reach
+low oob until 19:17"*. cws1b first reads low oob at 19:17:00 (13.41); at 19:02:55 ws1b was 69.98.
+**No trade existed at 19:00:00, so there was nothing for lineage to walk.** The hatch's only
+measured evidence came from an anchor the machine would never have produced, and the mech was
+banked on it.
+
+`v4_machine._lineage` now asserts the anchor is machine state, so that call is no longer reachable:
+the driver's `trace` mode refuses the old bar outright - *"no leg contains 2026-08-31 19:45:40 | the
+chain has not opened by then"*.
+
+**THE REPLACEMENT, on Joe's own key setup.** Joe 1023: *"find the hatch a legitimate leg. the key
+setup (that you probably already know) is ws5r oob plus ws6r oob"*. Reproduce it with:
+
+`v4_machine.py trace - '2026-09-01 00:00:00' '2026-09-03 23:59:55' saviour,core,backstop drop '2026-09-01 01:35:30'`
+
+| where the anchor came from | the reading |
+|---|---|
+| the mech | v4-ws5rbackstop, fire 2026-09-01 01:16:55 |
+| the anchor lineage walks from | 2026-09-01 01:16:20, the fire's own ws5r reversal - machine state, not a window edge |
+| ws5r at the anchor | 3.47, LOW oob |
+| ws6r at the anchor | 6.93, LOW oob - **his key setup, both oob** |
+| the same-side oob run holding ws5 | ws4-ws6, so the walk starts at ws4 |
 
 | the step | the bar | the reading |
 |---|---|---|
-| ws5 is the rider and reverses | 2026-08-31 19:23:20 | ws5r 4.92 |
-| ws5 walks to ib, dwell 12 bars | 2026-08-31 19:45:40 | held 352 bars = 1760 s |
-| ws5 -> ws6, the receiver gate | 2026-08-31 19:45:40 | ws6r 5.76, ex-fence YES |
-| ws6 takes the baton | 2026-08-31 19:45:40 | its reversal 2026-08-31 19:43:55, FOUND in its lookback |
-| the SECOND walk to ib on ws6 | 2026-08-31 19:48:55 | dwell 15 bars, held 16 bars = 80 s |
-| ws6 -> ws7, the receiver gate | 2026-08-31 19:48:55 | ws7r 11.22, ex-fence YES |
-| ws7 is the second-new-rider | 2026-08-31 19:48:55 | its reversal 2026-08-31 19:45:50, FOUND in its lookback |
-| **EXHAUST** | **2026-08-31 19:48:55** | the second-new-rider carried a reversal too |
+| ws4 is the rider and reverses | 2026-09-01 01:16:20 | ws4r 6.91, knowable 2026-09-01 01:16:55 |
+| ws4 walks to ib, dwell 10 bars | 2026-09-01 01:20:45 | crossed 2026-09-01 01:20:00, dwell proven 10 bars = 50 s |
+| ws4 -> ws5, the receiver gate | 2026-09-01 01:20:45 | ws5r 11.13, ex-fence YES |
+| ws5 takes the baton | 2026-09-01 01:20:45 | its reversal 2026-09-01 01:16:20 knowable 2026-09-01 01:16:55, below the ws6 lookback floor - no lookback test |
+| the normal path | 2026-09-01 01:20:45 | ws5 waits for its own reversal |
+| ws5 reverses | 2026-09-01 01:16:20 | ws5r 3.47, knowable 2026-09-01 01:16:55 |
+| ws5 walks to ib, dwell 12 bars | 2026-09-01 01:35:30 | crossed 2026-09-01 01:34:35, dwell proven 12 bars = 60 s |
+| ws5 -> ws6, the receiver gate | 2026-09-01 01:35:30 | ws6r 11.64, ex-fence YES |
+| **ws6 takes the baton** | **2026-09-01 01:35:30** | **its reversal 2026-09-01 01:34:00 knowable 2026-09-01 01:34:35, FOUND in its lookback - THE HATCH** |
+| the SECOND walk to ib on ws6 | 2026-09-01 01:37:10 | dwell 15 bars, held 15 bars = 75 s |
+| ws6 -> ws7, the receiver gate | 2026-09-01 01:37:10 | ws7r 10.20, ex-fence YES |
+| ws7 is the second-new-rider | 2026-09-01 01:37:10 | its reversal 2026-09-01 01:18:40 knowable 2026-09-01 01:19:15, FOUND in its lookback |
+| **EXHAUST** | **2026-09-01 01:37:10** | the second-new-rider carried a reversal too |
 
-The second walk buys 195 s. In that window ws7's reversal moves from 5 s in the future and contended
-to 185 s in the past and settled. The ws6 ib run holds 16 bars against a 15-bar requirement - ONE
-BAR of margin, which is thin and is recorded as such.
+| what the leg produced | value |
+|---|---|
+| the verdict | EXHAUST 2026-09-01 01:37:10 |
+| the trade it opens | 2026-09-01 01:37:15, LONG |
+| what the second walk bought | 100 s, 01:35:30 to 01:37:10 |
+| the ws6 ib run | 15 bars against a 15-bar requirement - ZERO bars of margin, thinner than the old leg's one bar, and recorded as such |
+
+### The same leg is also the floor knob's A/B
+
+Note the ws5 hand-off at 01:20:45: ws5 arrives with its reversal already behind the baton too, and
+is passed WITHOUT a lookback test because the ws6 floor excludes it. Running the SAME leg with the
+floor off - `W_V4_EXPERIMENT=1 W_V4_LIN_LOOKBACK_FLOORED=0`, one variable changed - moves the hatch
+down a rung:
+
+| `LIN_LOOKBACK_FLOORED` | where the hatch fires | the second walk runs on | EXHAUST |
+|---|---|---|---|
+| 1, banked - the floor is ON at ws6 | ws6 takes the baton 01:35:30 | ws6, dwell 15 bars, held 15 | 2026-09-01 01:37:10 |
+| 0 - every rung looks back, which is what the code did 1022 to 1023 | ws5 takes the baton 01:20:45 | ws5, dwell 12 bars, held 12 | 2026-09-01 01:35:30 |
+
+100 s apart on this leg. With the floor off the hatch fires on the FIRST hand-off, which is the
+by-construction case already recorded in §7 (The start TF): the walk starts at the bottom of the
+oob run, so its own starting rung is spent the moment it hands over.
+
+### The hand-off inventory, and what it is built from
+
+`v4_machine.py hatch` walks the chain once and records EVERY baton hand-off the walks made, from the
+`events` hook inside `v4_fast.walk`. Nothing is re-implemented and nothing is parsed from a
+printout, so the inventory cannot drift from the walk it describes.
+
+Full tape, 2026-07-02 12:00:00 .. 2026-10-04 23:59:55, 1086 backstop fires, `LIN_PASS` 'ib',
+lookback floor ON at ws6, `RULED_OK True`:
+
+| the read | value |
+|---|---|
+| baton hand-offs the chain made | 2881 |
+| of those, the receiver arrived SPENT - the hatch fires | 617 |
+| of those, ws5r AND ws6r both oob AT THE ANCHOR - his key setup | 223 |
+| the lookback cannot reach behind the anchor | `first_rev_at_or_after(.., A, ..)` seeds every ST from A, so "already spent" ALWAYS means reversed DURING the walk |
+| hand-offs blocked by the ws6 lookback floor | 2151 |
+| the pass bar can never show ws5r oob | LIN_PASS is 'ib': the sender is IN bounds there |
+| how stale the receiver was at the pass, median | 280 s |
+| how stale the receiver was at the pass, max | 3845 s |
+
+| what the hatch branch ITSELF did | hatch fires | of those on his setup |
+|---|---|---|
+| EXHAUST, second-new-rider not ex-fence | 192 | 62 |
+| EXHAUST, second-new-rider spent too | 415 | 159 |
+| PASSES ON to ws7 | 9 | 2 |
+| PASSES ON to ws8 | 1 | 0 |
+
+| the hand-off rung | hatch fires | of those on his setup |
+|---|---|---|
+| ws5 -> ws6 | 547 | 205 |
+| ws6 -> ws7 | 64 | 18 |
+| ws7 -> ws8 | 6 | 0 |
+
+**THE HATCH IS NOT A DEAD END, AND IT NEARLY IS.** 10 of 617 fires pass the baton on - 9 to ws7, 1
+to ws8. The other 607 declare EXHAUST at the second-new-rider. On his ws5r+ws6r setup it is 2 of
+223. A 3-day sample showed 0 of 22 passing on, which is why the count is taken on the full tape.
+
+What his spec asks of the second walk it delivers: *"the 2nd 'walk to ib' gives enough time for a
+reversal to print without contention"*, and the reversal does print. On this evidence it is the
+second-new-rider's OWN reversal 415 times, which then declares exhaust - so the second walk moves
+WHEN exhaust fires far more often than whether it fires.
+
+The `events` hook is behaviour-neutral and that is measured, not asserted:
+
+| the parity run | result |
+|---|---|
+| 2026-08-27 12:00:00 .. 2026-09-04 11:59:55, 77 fires, 77 walks, 5835 ib_cross probes | 0 disagreements |
+| the 3-day hatch counts, before and after the hook | 104 / 22 / 8 both times |
 
 ### It is NOT the v4-lineage walker
 
@@ -272,7 +403,40 @@ The hole it was aimed at is closed by SS4, the second walk to ib, which needs no
 | 17 | what OPENS the first trade | deferred by Joe: *"different mech.  you'll have the answer after we lock `v4-lineage`"* and *"not for v4-saviour.  I'm holding it back so that your SRP is on point"* |
 | 39 | the ws2x-cross | Joe 1022: *"in-design presently. not for v4-saviour"* |
 | 43 | a baton-pass whose new rider has already reversed | CLOSED 1022 by SS4, the second walk to ib |
-| - | NOTHING IS CODED for v4-lineage. The producers exist; no walker wires them | OPEN |
+| - | NOTHING IS CODED for v4-lineage. The producers exist; no walker wires them | CLOSED - v4_fast.walk and v4_lineage_trace.walk, in parity |
+| - | **a rev-trade that aligns with an ws{TF>3}r crossing to same-side oob** | **PARKED BY JOE 1024, HIS TO RESUME** - see below |
+
+### The rev-trade that should have deferred to lineage — PARKED 1024
+
+Joe 1024, raising it twice:
+
+> if a rev-trade signal aligns with an ws{TF>3}r crossing to same-side oob, defer to lineage
+> eg 0816 rev-trade would be squashed by ws5r crossing to low oob
+> --this likely infers a deeper issue in the baton passing process
+
+Then, on seeing the sweep-pivots score of the 09-01 machine chain: *"hold on to
+'2026-09-01 10:07:35 SHORT, backstop' for me - I'll come back to it. I think it's the same issue I
+brought to you for 0816"*.
+
+THE NUMBERS ON HIS 10:07:35 EXAMPLE, so it is recoverable without re-deriving it. Scored by
+`sweep-pivots` on the machine's own ARM2-on chain for 2026-09-01, the trade's OPEN bar:
+
+| the read | value |
+|---|---|
+| the trade | 2026-09-01 10:07:35 SHORT, v4-ws5rbackstop |
+| its fire | 2026-09-01 09:49:35, start TF ws5, EXHAUST 2026-09-01 10:07:30 |
+| the scale TF sweep-pivots picked | ws1Mage, 1 TF agreeing |
+| the pivot | 2026-09-01 10:40:05 |
+| **the open is off the pivot by** | **-2.040%** - the worst of the 14 trades by a factor of 1.4 |
+| **the share of the leg already behind** | **1.081** |
+| the leg MFE | +1.888% |
+
+A share ABOVE 1 is the tell and it is why he linked the two: the swing the open was scored against
+had already FINISHED before the trade opened. The other 13 trades that day run 0.007 to 0.726.
+
+NOT BUILT, NOT DIAGNOSED, AND NOT TO BE PICKED UP WITHOUT HIM. Two concretions were already put to
+him on the 0816 version and neither is answered: what *"aligns with"* means - the same bar or a
+window - and whether *"defer to lineage"* drops the rev-trade or postpones it.
 
 `TF_CEILING` 10 and `GAP_PER_TF` 2.8 are PROVISIONAL by his own words; they live in `v4_bank.md`.
 
@@ -337,7 +501,7 @@ know yet."*
 |---|---|
 | v4-ws5rbackstop, which defers to lineage | **EXHAUST** |
 | v4core STEP4, which walks lineage | **EXHAUST** |
-| v4saviour, which returns REV-TRADE directly | **NOT RULED** |
+| v4saviour, which returns SAVIOUR REV directly | **NOT RULED** |
 | the "immediate rev" legs in his walkthrough | **NOT RULED** |
 
 ### The open bar carries a guard

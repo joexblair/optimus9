@@ -132,14 +132,23 @@ class Machine:
 
     # ── the three candidates ───────────────────────────────────────────────────────────────────
     def core(self, open_bar, tsd, trace=False, events=None):
-        a, gate = CA.arm(self.CL, open_bar, tsd, self.B)
+        a, gate, which = CA.arm(self.CL, open_bar, tsd, self.B)
         if a is None:
-            return None, 'no STEP2 arm', []
-        stf = CA.start_tf(self.CL, a, tsd)
+            return None, 'no v4core arm', []
+        #   THE START TF DEPENDS ON WHICH SIBLING ARMED. The second arm hands lineage
+        #   K.CORE_LIN_ENTRY_TF - his knob, his name, 1024 - because starting at ws1 made the baton
+        #   climb through a ws2/ws3 oob hole and die at the first hand-off.
+        stf = K.CORE_LIN_ENTRY_TF if which == 'arm2' else CA.start_tf(self.CL, a, tsd)
+        if which == 'arm2' and not K.oob(self.R[stf][a], tsd):
+            #   HIS NEW CASE, 1024: *"if ws{V4_CORE_LIN_ENTRY_TF}r is not oob, then it is an
+            #   immediate exhaust"*. Read at the ARM BAR, which is the bar the hand-off happens on.
+            return a + 1, ('cws1b %s, %s arm %s, ws%d NOT oob - immediate exhaust'
+                           % (ln.U(gate), which, ln.U(a), stf)), []
         v, exh, rows = self._lineage(stf, tsd, a, trace, events, 'core')
         if v != 'EXHAUST' or exh is None:
-            return None, '%s from ws%d, arm %s' % (v, stf, ln.U(a)), rows
-        return exh + 1, 'cws1b %s, arm %s, ws%d, exh %s' % (ln.U(gate), ln.U(a), stf, ln.U(exh)), rows
+            return None, '%s from ws%d, %s arm %s' % (v, stf, which, ln.U(a)), rows
+        return exh + 1, 'cws1b %s, %s arm %s, ws%d, exh %s' % (ln.U(gate), which, ln.U(a), stf,
+                                                                ln.U(exh)), rows
 
     def backstop(self, open_bar, tsd, trace=False, events=None):
         """The earliest backstop fire ON THE WALK'S SIDE that resolves. -> (open bar, why, rows).

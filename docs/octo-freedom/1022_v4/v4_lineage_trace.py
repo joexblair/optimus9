@@ -19,15 +19,17 @@ from optimus9.analysis.jig import lift_off
 
 
 def first_rev_at_or_after(R, t, side, frm, B):
-    """the line's FIRST oob-anchored reversal at or after `frm`. -> (run, raw bar, stamp)
+    """the line's FIRST reversal at or after `frm`. -> (run, raw bar, stamp)
 
     THE STAMP IS THE BAR IT MAY BE ACTED ON, the raw bar is the anchor. jig.lift_off returns the
     bar the line left its extreme and its contract says the event is not knowable until
     `bar + wob - 1`; K.lift_stamp owns that arithmetic. The 1023 audit found this walk acting on
     the raw bar, 7 bars = 35 s before it existed, at LIFT_WOB 8.
 
-    THE REVERSAL IS OOB-ANCHORED: a lift_off bar where the line IS oob, the same test the backstop
-    applies. A lift-off outside an oob run is a different move.
+    NO OOB FILTER, Joe 1023: *"the oob filter can't be applied to a reversal test"*. This had read
+    "THE REVERSAL IS OOB-ANCHORED: a lift_off bar where the line IS oob" - which re-broke his 1022
+    ruling *"I need to be able to test a reversal anywhere on the board"*. The oob condition lives
+    on v4-ws5rbackstop's SIGNAL, where his spec puts it, not on the reversal detector.
 
     ANCHORED FORWARD FROM A BAR, NOT PICKED FROM A WINDOW. The first version of this took the
     LONGEST same-side oob run inside [A, B] and the window therefore chose the anchor: on
@@ -41,7 +43,7 @@ def first_rev_at_or_after(R, t, side, frm, B):
     d = np.diff(np.r_[False, m, False].astype(np.int8))
     runs = [(int(s), int(e)) for s, e in zip(np.flatnonzero(d == 1), np.flatnonzero(d == -1) - 1)]
     L = [int(b) for b in lift_off(a, side, K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL, K.LIFT_WOB)
-         if int(frm) <= b <= B and K.oob(a[b], side)]
+         if int(frm) <= b <= B]
     if not L:
         return None, None, None
     b = L[0]
@@ -143,10 +145,13 @@ def walk(R, start_tf, side, A, B, log=print):
             say('ws%d has no oob-anchored reversal in the data' % nxt, ln.U(pas),
                 'not knowable at this bar - NO REVERSAL, no trade')
             return 'NO REVERSAL', None, rows
-        stale = ST[nxt] <= pas
+        stale = K.looks_back(nxt) and ST[nxt] <= pas
         say('ws%d takes the baton' % nxt, ln.U(pas),
-            'its reversal %s knowable %s, %s in its lookback'
-            % (ln.U(REV[nxt]), ln.U(ST[nxt]), 'FOUND' if stale else 'not yet'))
+            'its reversal %s knowable %s, %s'
+            % (ln.U(REV[nxt]), ln.U(ST[nxt]),
+               'FOUND in its lookback' if stale else
+               ('below the ws%d lookback floor - no lookback test' % K.LIN_LOOKBACK_FLOOR_TF
+                if not K.looks_back(nxt) else 'not yet in its lookback')))
         if not stale:
             rid = nxt
             say('the normal path', ln.U(pas), 'ws%d waits for its own reversal' % rid)
@@ -178,7 +183,7 @@ def walk(R, start_tf, side, A, B, log=print):
             say('ws%d has no oob-anchored reversal in the data' % n2, ln.U(p2),
                 'not knowable at this bar - NO REVERSAL, no trade')
             return 'NO REVERSAL', None, rows
-        if ST[n2] <= p2:
+        if K.looks_back(n2) and ST[n2] <= p2:
             say('ws%d is the second-new-rider' % n2, ln.U(p2),
                 'its reversal %s knowable %s, FOUND in its lookback'
                 % (ln.U(REV[n2]), ln.U(ST[n2])))

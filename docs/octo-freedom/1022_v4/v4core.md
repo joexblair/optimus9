@@ -3,8 +3,8 @@
 Joe 1023 handed this over as one message after the 1023 causality repair. His spec is reproduced
 VERBATIM below and is never retyped in my own words; the rulings and the open items sit under it.
 
-NOT BUILT YET. This doc records the spec and the decisions so the build can start from a settled
-brief. The walkthrough he supplied is one day of estimated times — his words: *"all numbers
+BUILT AND BANKED. `v4_core_arm.py` holds the arm, `v4_machine.py` the chain. The walkthrough he
+supplied is one day of estimated times — his words: *"all numbers
 estimated. time estimates are +/-5 minutes"* and *"my times are always estaimate"* — so the
 MECHANIC comes from his words and no knob is ever fitted to a timestamp he quoted.
 
@@ -141,6 +141,97 @@ on `ws1Mage`. That is the whole reason the `c` lines exist.
 - **10:26** — he flagged it himself as *"contentious - ws1Mage is 93 on TV"*. Closed reads 92.21,
   which fails `> 95`, and `ws2Mage` closed is 73.76, which also fails. Joe 1023: *"if a sweep
   can't improve it then it's stopped"*. So no arm there, and no fence change to make one.
+
+## 5a. THE SECOND ARM — BANKED 1024
+
+Joe 1024, verbatim:
+
+```
+add a second v4core arm: if ws1r is oob on target side, min dwell 18 bars, and ws1Mage is same-side
+oob, and any TWO of ws4-8r are same-side oob, arm.
+```
+
+His example fires, from his own charts: *"0334, lineage carries to 0337 exhaust / 0624, lineage
+exhaust at the same bar / 1349, lineage exhaust at the same bar / 1549, lineage exhaust at the same
+bar"*, with *"I've excluded the ws2r or ws3r armings that fire on the same (ws1 + 2more) bars"*.
+He then dropped two of them: *"drop '06:24 and 15:49'"*.
+
+### The same mech as built
+
+```
+STEP1's cws1b oob gate must be AT OR BEFORE the arm bar
+-"yes. apply this to the existing mech as well"                                  [MOD 1024]
+--it used to `continue` past the gate bar without testing an arm there, so the gate
+  bar could never also be the arm bar and EVERY arm was at least one bar late
+--on 09-01 all five second-arm candidates have cws1b oob ON their arm bar
+--it also moved three STEP2 arms earlier: 07:23:00, 17:59:00, 19:57:00
+the SECOND ARM, STEP2's sibling - "is it STEP2's sibling - yes"
+-cws1r oob on the target side
+--the oob run must REACH ARM2_DWELL 18 bars, so the earliest arm is bar 18 of the run
+---his 03:34:25 and 13:50:25 both land on bar 18 of their run
+-AND cws1Mage same-side oob
+-AND at least ARM2_POOL_MIN 2 of cws4r..cws8r same-side oob
+-EVERY LINE IS A CLOSED c-LINE - "everything is measured on closed bars"
+--cws1Mage is the clause that moves: at 06:24 it reads -5.60 and LOW oob while the
+  EMERGING ws1Mage reads 23.33 and is not
+-either sibling may fire; `arm` takes whichever lands first, and reports `which`
+lineage is entered at CORE_LIN_ENTRY_TF 4 - HIS KNOB AND HIS NAME
+-"maybe setting the entry TF to {knob:4,'V4_CORE_LIN_ENTRY_TF'} will settle it"    [MOD 1024]
+--it REPLACED his own earlier "start from ws1. most of them are on the pivot, so
+  near-instant exhaust is typical behaviour", which he then caught: "there's a
+  miswiring somewhere. the A trade mech picked 0116 as the arm and walked it to 0137.
+  this B trade has exhausted immediate"
+--at the 01:14:25 arm the emerging ws2r is 21.11 against the 20 fence, so a ws1 start
+  died at its first hand-off with EXHAUST at 01:16:20. The oob at that bar is ws1r
+  10.14, a HOLE at ws2r 21.11 and ws3r 15.74, then ws4r 7.94 and ws5r 9.02
+--with the entry at ws4 that arm walks to 01:37:10, which matches the A-path backstop
+  trade EXACTLY
+-IF cws{CORE_LIN_ENTRY_TF}r is NOT oob at the arm bar, it is an immediate exhaust    [MOD 1024]
+--"if ws{V4_CORE_LIN_ENTRY_TF}r is not oob, then it is an immediate exhaust"
+--read at the ARM BAR, which is the bar the hand-off happens on
+--WHY ws4 AND NOT THE LOWEST OOB RUNG, his reason: "I've chosen ws4 specifically to
+  align with the new 'ws4r to ws1Mage ib mech', which we'll insert immediately before
+  exhaust (not yet, but soon). what you're seeing in ws5 and ws6 are the unwinding of
+  the higher TFs momentum, and I've got a plan brewing to teach the new mech how do
+  ride it without the signal delays we typically inherit by passing the baton higher"
+```
+
+### What it did to 2026-09-01
+
+| the read | ARM2 off | ARM2 on |
+|---|---|---|
+| trades | 16 | 14 |
+| by core | 9 | 11 |
+| by backstop | 4 | 2 |
+| by saviour | 2 | 0 |
+| shared with the other arm | - | 11 |
+| trades the second arm dropped | - | 5 |
+| trades only the second arm has | - | 3 |
+
+| the arm | the entry TF read | the outcome |
+|---|---|---|
+| 2026-09-01 01:14:25 | ws4r oob | walks to EXHAUST 01:37:10 - matches the A-path trade |
+| 2026-09-01 03:34:25 | ws4r 76.13, NOT oob | immediate exhaust, opens 03:34:30 |
+| 2026-09-01 06:57:25 | ws4r 28.58, NOT oob | immediate exhaust, opens 06:57:30 |
+| 2026-09-01 13:50:25 | ws4r 78.50, NOT oob, but ws5r 91.71 IS | immediate exhaust, opens 13:50:30 |
+
+ws4r never reaches oob within 5 minutes of any of the three immediate cases, so the exhaust is the
+honest read rather than a near-miss. At 13:50:25 the oob sits one rung up at ws5r 91.71 and the
+entry at 4 declares exhaust anyway - which is his deliberate choice, quoted above.
+
+### Scored by `sweep-pivots`, the machine's own trades
+
+The three immediate-exhaust opens, scored against their own swing - the first time `sweep-pivots`
+has been run on machine events rather than on the in-test chain's:
+
+| the open | % off the pivot | the share of the leg behind |
+|---|---|---|
+| 2026-09-01 03:34:30 | -0.006% | 0.007 |
+| 2026-09-01 06:57:30 | +0.359% | 0.205 |
+| 2026-09-01 13:50:30 | -0.185% | 0.065 |
+
+Two of the three sit inside 0.2% of their pivot with almost nothing of the swing given away, which
+is what he predicted when he ruled the near-instant exhaust acceptable.
 
 ## 6. Open, and NOT decided by me
 
