@@ -90,6 +90,33 @@ def arm2_ok(CL, k, side):
     return sum(1 for t in ARM2_TFS if K.oob(CL['r'][t][k], side)) >= K.ARM2_POOL_MIN
 
 
+def armed_at(CL, k, side):
+    """WHICH arm fires at bar k, ignoring the gate. -> 'step2', 'arm2' or None.
+
+    SPLIT OUT 1024 so the CONDITION and the SEARCH are separate things. `arm` is a forward search
+    and a signal producer needs the predicate: without it, collapsing a run of qualifying bars into
+    one arm means guessing a bar gap, and the closed c-lines step every ~10 bars so an
+    adjacent-bar test silently reports one arm as dozens.
+    """
+    if K.step2_r_ok(CL['r'][2][k], CL['r'][3][k], side) and _mage_ok(CL, k, side):
+        return 'step2'
+    if K.ARM2 and arm2_ok(CL, k, side):
+        return 'arm2'
+    return None
+
+
+def gate_at(CL, k, side, frm=0):
+    """The most recent cws1b oob bar at or before k, on `side`. -> bar or None.
+
+    STEP1's gate, read backwards. Joe 1024: *"the gate must be at or before the arm bar - yes"*.
+    A forward search finds the gate then the arm; a tape scan has the arm and needs its gate.
+    """
+    for j in range(int(k), int(frm) - 1, -1):
+        if K.oob(CL['b'][j], side):
+            return j
+    return None
+
+
 def arm(CL, open_bar, side, B):
     """STEP1's gate, then EITHER arm on `side`. -> (the arm bar, the gate bar, which) or (None, gate, None).
 
@@ -108,10 +135,9 @@ def arm(CL, open_bar, side, B):
             gate = k                                   # the SAME bar may arm - 1024
         if gate is None:
             continue
-        if K.step2_r_ok(CL['r'][2][k], CL['r'][3][k], side) and _mage_ok(CL, k, side):
-            return k, gate, 'step2'
-        if K.ARM2 and arm2_ok(CL, k, side):
-            return k, gate, 'arm2'
+        w = armed_at(CL, k, side)
+        if w is not None:
+            return k, gate, w
     return None, gate, None
 
 
