@@ -70,13 +70,17 @@ def _close_all(opens, dirn, bar, why):
     return stay, shut
 
 
-def route(sigs, A, B, saviour=None, max_pyramid=None):
+def route(sigs, A, B, saviour=None, max_pyramid=None, journal=None):
     """Signals in, trades out. -> (the trades, the signals still held).
 
         sigs         every signal from every producer, in any order
         saviour      an optional callable (block_open_bar, block_dir) -> a signal or None, called
                      ONCE per block, when the block opens. His one-saviour ruling
         max_pyramid  the cap on same-direction opens. Defaults to K.MAX_PYRAMID
+        journal      an optional list. EVERY decision this router makes appends one row, with the
+                     open set it read, what it closed, the count it compared to the cap, and the
+                     verdict. It changes no behaviour. Without it a hold's reason has to be
+                     reconstructed from the trade list, which does not carry the open set
 
     A trade row carries `open`, `dir`, `sig`, and once closed `close` and `close_why`. A held
     signal carries `held_at`, the bar its open was first refused.
@@ -113,19 +117,33 @@ def route(sigs, A, B, saviour=None, max_pyramid=None):
     def _act(s, bar):
         """The close, then the open - his order. -> the trade, or None when the open is HELD.
 
-        A REFUSAL IS RECORDED, not inferred. `s['refused']` gains one row per bar this signal was
-        turned away: the bar, the direction it wanted, and the OPEN BARS of the trades that filled
-        the cap. Without it the hold's cause has to be reasoned about from the trade list.
+        EVERY DECISION IS RECORDED, not inferred. One `journal` row per signal acted on, carrying
+        the open set BEFORE, what the close removed, the same-direction count compared against the
+        cap, and the verdict. `s['refused']` keeps the per-signal list of refusal bars.
         """
         nonlocal opens
+        dirn = SG.direction(s['side'])
+        row = {'bar': int(bar), 'sig': int(s['bar']), 'mech': s['mech'], 'side': int(s['side']),
+               'wants': dirn, 'shuts': SG.closes(s['side']),
+               'open_before': tuple((int(x['open']), x['dir']) for x in opens)}
         opens, shut = _close_all(opens, SG.closes(s['side']), bar,
                                  '%s %s' % (s['mech'], SG.direction(s['side'])))
         done.extend(shut)
-        dirn = SG.direction(s['side'])
-        if _open_count(opens, dirn) >= mx:
-            s.setdefault('refused', []).append(
-                (int(bar), dirn, tuple(int(x['open']) for x in opens if x['dir'] == dirn)))
+        row['closed'] = tuple(int(x['open']) for x in shut)
+        row['open_after_close'] = tuple((int(x['open']), x['dir']) for x in opens)
+        row['count'] = _open_count(opens, dirn)
+        row['cap'] = mx
+        if row['count'] >= mx:
+            row['verdict'] = 'HELD'
+            row['blocked_by'] = tuple(int(x['open']) for x in opens if x['dir'] == dirn)
+            if journal is not None:
+                journal.append(row)
+            s.setdefault('refused', []).append((int(bar), dirn, row['blocked_by']))
             return None
+        row['verdict'] = 'OPENED'
+        row['blocked_by'] = ()
+        if journal is not None:
+            journal.append(row)
         t = {'open': int(bar), 'dir': dirn, 'sig': s}
         opens.append(t)
         _offer_to_saviour(dirn)

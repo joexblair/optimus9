@@ -49,9 +49,10 @@ def main(dest, A, B, mx):
     F.reset()
 
     sigs = SC.produce(CL, R, A, B) + SB.produce(R, MG, A, B)
+    jn = []
     trades, held = RT.route(sigs, A, B,
                             saviour=lambda b, d: SS.produce(b, d, R, MG),
-                            max_pyramid=mx)
+                            max_pyramid=mx, journal=jn)
     trades.sort(key=lambda t: (t['open'], t['dir']))
 
     log('# THE ROUTER. Joe 1024. %s .. %s. max_pyramid %d.' % (ln.U(A), ln.U(B), mx))
@@ -89,6 +90,22 @@ def main(dest, A, B, mx):
                t['dir'], t['sig']['mech'],
                ln.U(ex) if 'close' in t else 'still open',
                mae, mfe, t['sig']['why']))
+    log('')
+    log('# THE ROUTER\'S OWN DECISIONS, one row per signal it acted on, in the order it acted.')
+    log('#   `open before` is the set the router read at that bar - each entry is a trade\'s OPEN')
+    log('#   BAR and direction. `shuts` is the direction the signal closes, `closed` the trades it')
+    log('#   removed. `count / cap` is the same-direction count AFTER the close against')
+    log('#   max_pyramid. count >= cap is the whole reason a signal is HELD.')
+    log('')
+    log('| the bar | the signal | by | wants | open before | shuts | closed | count / cap | verdict |')
+    log('|---|---|---|---|---|---|---|---|---|')
+    for r in jn:
+        log('| %s | %s | %s | %s | %s | %s | %s | %d / %d | %s |'
+            % (ln.U(r['bar']), ln.U(r['sig']), r['mech'], r['wants'],
+               ', '.join('%s %s' % (ln.U(b), d) for b, d in r['open_before']) or 'nothing open',
+               r['shuts'], ', '.join(ln.U(b) for b in r['closed']) or 'none',
+               r['count'], r['cap'], r['verdict']))
+
     wait = [t for t in trades if int(t['open']) - int(t['sig']['bar']) > 1]
     if wait:
         log('')
