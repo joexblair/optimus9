@@ -1,7 +1,11 @@
 """v4-ws5rbackstop's SIGNAL PRODUCER, and nothing else. Joe 1024.
 
-ONE RESPONSIBILITY: state every backstop fire whose lineage resolves, as a signal. No trade-open
-bar, no direction, no reading of what is open.
+ONE RESPONSIBILITY: state every backstop fire as a request to the walk. It runs no walk, and there
+is no trade-open bar, no direction and no reading of what is open.
+
+IT NO LONGER WALKS. Joe 1024 moved the walk's exclusivity into `v4_walk_hold`, so this file ends at
+the fire. Its own spec is the qualifier set: *"IF ws5r is oob and reversing AND (ws1r or ws2r or
+ws3r are same side oob) AND ws5Mage is past 50"*.
 
 THE RENAME MATTERS. `v4_fast.scan` calls its output `fires` and `v4_backstop` says *"reports every
 fire"*, but what they produce is a SIGNAL by Joe's 1024 definition - `max(the ws5r reversal stamp,
@@ -27,21 +31,23 @@ sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1022_v4')
 import v4_knobs as K
 import v4_fast as F
 import v4_signal as SG
+import v4_walk_req as WR
 _e = sys.stderr; sys.stderr = io.StringIO()
 import ln
 sys.stderr = _e
 
 
-def produce(R, MG, A, B, fallback=None):
-    """Every v4-ws5rbackstop signal in [A, B], both sides. -> list of signals, bar-ordered.
+def requests(R, MG, A, B, fallback=None):
+    """Every v4-ws5rbackstop walk request in [A, B], both sides. -> list, bar-ordered.
 
-    The signal bar is the LATER of the lineage exhaust and the fire itself. Joe 1023 ruled the
-    max(): the fire waits for the oob pool, so it can land after the reversal the walk started
-    from, and a signal may not predate the condition that produced it.
+    THE REQUEST BAR IS THE FIRE and the walk's ANCHOR is the ws5r reversal, which is earlier. The
+    fire waits on the oob partner, so the qualifiers complete after the reversal the walk must scan
+    from - and Joe 1023's `max()` then keeps the emitted signal from predating the fire. The holder
+    applies that max, once, for all three mechs.
 
-    `fallback` is the start TF for a fire with no walkable same-side oob run holding ws5 - 175 of
-    1086 on the 1023 measurement. UNRULED by Joe, so None means the signal is not produced rather
-    than a rung being chosen here.
+    `fallback` is the start TF for a fire with no walkable same-side oob run holding ws5 - 134 of
+    602 on the current bank. UNRULED by Joe, so None means no request rather than a rung chosen
+    here.
     """
     out = []
     for d in F.scan(A, B, R, MG):
@@ -49,11 +55,7 @@ def produce(R, MG, A, B, fallback=None):
         stf = r[0] if r else fallback
         if stf is None:
             continue
-        v, exh = F.walk(R, stf, d['side'], d['rev'], B)
-        if v != 'EXHAUST' or exh is None:
-            continue
-        bar = max(int(exh), int(d['fire']))
-        out.append(SG.signal(bar, d['side'], 'backstop', int(d['rev']),
-                             'fire %s, ws%d' % (SG.why_time(d['fire']), stf)))
-    out.sort(key=lambda s: (s['bar'], s['side']))
+        out.append(WR.request(int(d['fire']), d['side'], 'ws5rbackstop', int(stf), int(d['rev']),
+                              why='fire %s, ws%d' % (SG.why_time(d['fire']), stf)))
+    out.sort(key=lambda q: (q['bar'], q['side']))
     return out

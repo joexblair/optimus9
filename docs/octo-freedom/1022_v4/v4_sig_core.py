@@ -1,7 +1,13 @@
-"""v4core's SIGNAL PRODUCER, and nothing else. Joe 1024.
+"""v4core's WALK REQUESTS, and nothing else. Joe 1024.
 
-ONE RESPONSIBILITY: find every bar where v4core's conditions are met and lineage resolves, and
-state it as a signal. It opens no trade, picks no direction and reads no open position.
+ONE RESPONSIBILITY: find every bar where v4core's own qualifiers complete, and state it as a
+request to the walk. It runs no walk, opens no trade, picks no direction and reads no open
+position.
+
+IT NO LONGER WALKS. Joe 1024: *"let's send a signal out from each mech to the walk, and those
+signals will be born of the qualifiers... that allows the walk to discard any mech signal except
+the one its holding, until rev-trade"*. `v4_walk_hold` owns the walk and its exclusivity; this file
+owns the two arms. Before that each mech walked for itself, so three walks ran over the same bars.
 
 WHY IT IS A TAPE SCAN AND NOT A FORWARD SEARCH, which is the change Joe ruled:
 
@@ -18,8 +24,9 @@ AN ARM EPISODE, NOT AN ARM BAR. The conditions hold across a run of bars, so the
 FIRST bar of each contiguous qualifying run per side. Without that collapse 09-01 produced 95 arm
 bars for 5 real arms.
 
-THE ARM ITSELF IS NOT REIMPLEMENTED HERE. `v4_core_arm.arm` owns STEP1's gate and both arms -
-STEP2 and his 1024 second arm - and this file calls it. The lineage walk is `v4_fast.walk`.
+THE ARM ITSELF IS NOT REIMPLEMENTED HERE. `v4_core_arm` owns STEP1's gate and both arms, and this
+file calls it. Joe 1024 named them: **arm1** is the original cws2r/cws3r arm, **arm2** is his
+cws1r-plus-two-of-cws4r-to-cws8r arm.
 """
 import io
 import sys
@@ -28,8 +35,8 @@ sys.path.insert(0, '/home/joe/thecodes')
 sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1022_v4')
 import v4_knobs as K
 import v4_core_arm as CA
-import v4_fast as F
 import v4_signal as SG
+import v4_walk_req as WR
 _e = sys.stderr; sys.stderr = io.StringIO()
 import ln
 sys.stderr = _e
@@ -62,27 +69,28 @@ def _arm_episodes(CL, side, A, B):
     return out
 
 
-def produce(CL, R, A, B):
-    """Every v4core signal in [A, B], both sides. -> list of signals, bar-ordered.
+def requests(CL, R, A, B):
+    """Every v4core walk request in [A, B], both sides. -> list, bar-ordered.
 
-    The signal bar is the LINEAGE EXHAUST, which is what v4core's STEP4/STEP5 resolve to. Joe's
-    1024 immediate case - *"if ws{V4_CORE_LIN_ENTRY_TF}r is not oob, then it is an immediate
-    exhaust"* - makes the arm bar itself the exhaust, and that is read here rather than inside the
-    walk because it is v4core's rule and not lineage's.
+    THE START TF IS THE MECH'S OWN CHOICE and differs between the arms: arm1 hands the walk
+    whichever of cws2r/cws3r triggered (ws3 on a tie, Joe 1023), arm2 hands it
+    `CORE_LIN_ENTRY_TF` 4 - *"I've chosen ws4 specifically to align with the new 'ws4r to ws1Mage
+    ib mech'"*.
+
+    ARM2 CARRIES THE IMMEDIATE FLAG, his 1024 rule: *"if ws{V4_CORE_LIN_ENTRY_TF}r is not oob,
+    then it is an immediate exhaust"*. It travels on the request so the rule stays v4core's while
+    the holder executes it.
     """
     out = []
     for side in (-1, +1):
         for a, gate, which in _arm_episodes(CL, side, A, B):
-            stf = K.CORE_LIN_ENTRY_TF if which == 'arm2' else CA.start_tf(CL, a, side)
-            if which == 'arm2' and not K.oob(R[stf][a], side):
-                out.append(SG.signal(a, side, 'core', a,
-                                     '%s arm %s, ws%d NOT oob - immediate exhaust'
-                                     % (which, SG.why_time(a), stf)))
-                continue
-            v, exh = F.walk(R, stf, side, a, B)
-            if v != 'EXHAUST' or exh is None:
-                continue
-            out.append(SG.signal(exh, side, 'core', a,
-                                 '%s arm %s, ws%d' % (which, SG.why_time(a), stf)))
-    out.sort(key=lambda s: (s['bar'], s['side']))
+            if which == 'arm2':
+                stf = int(K.CORE_LIN_ENTRY_TF)
+                out.append(WR.request(a, side, 'core arm2', stf, a, immediate=True,
+                                      why='arm2 %s, ws%d' % (SG.why_time(a), stf)))
+            else:
+                stf = CA.start_tf(CL, a, side)
+                out.append(WR.request(a, side, 'core arm1', stf, a,
+                                      why='arm1 %s, ws%d' % (SG.why_time(a), stf)))
+    out.sort(key=lambda q: (q['bar'], q['side']))
     return out
