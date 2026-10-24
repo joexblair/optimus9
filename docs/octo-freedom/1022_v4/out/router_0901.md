@@ -8,6 +8,7 @@
 | signals from core | 30 |
 | signals from backstop | 5 |
 | signals from saviour | 4 |
+|   of those, saviour generation 1 | 4 |
 | signals routed | 39 |
 | trades opened | 19 |
 | signals DROPPED by the pyramid test | 20 |

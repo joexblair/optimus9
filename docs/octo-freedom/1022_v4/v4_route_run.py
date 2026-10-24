@@ -52,7 +52,8 @@ def main(dest, A, B, mx):
     #   output joins theirs. Joe 1024: *"router doesn't feedback"* - the router is handed one flat
     #   list and never calls a mech.
     base = SC.produce(CL, R, A, B) + SB.produce(R, MG, A, B)
-    sigs = base + SS.produce(base, R, MG)
+    gens = []
+    sigs = base + SS.produce(base, R, MG, gens=gens)
     jn = []
     trades, dropped = RT.route(sigs, A, B, max_pyramid=mx, journal=jn)
     trades.sort(key=lambda t: (t['open'], t['dir']))
@@ -67,6 +68,8 @@ def main(dest, A, B, mx):
     log('|---|---|')
     for m in SG.MECHS:
         log('| signals from %s | %d |' % (m, sum(1 for s in sigs if s['mech'] == m)))
+    for i, g in enumerate(gens, 1):
+        log('|   of those, saviour generation %d | %d |' % (i, len(g)))
     log('| signals routed | %d |' % len(sigs))
     log('| trades opened | %d |' % len(trades))
     log('| signals DROPPED by the pyramid test | %d |' % len(dropped))

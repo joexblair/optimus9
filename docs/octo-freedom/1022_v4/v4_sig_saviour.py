@@ -41,25 +41,55 @@ import ln
 sys.stderr = _e
 
 
-def produce(sigs, R, MG):
-    """Every v4saviour signal armed on `sigs`. -> list of signals, bar-ordered.
+def _hunt(g, R, MG):
+    """One hunt, armed on signal `g`. -> a signal, or None.
+
+    THE FILL IS STRICTLY AFTER THE ARMING BAR, and the assert carries it rather than a comment.
+    That is what makes a saviour chain terminate: every generation lands later than the one that
+    armed it, so the chain walks forward and the tape ends it. I claimed it would *"chain without
+    end"* and that was wrong - Joe: *"why do you think it would chain without end?"*
+    """
+    s = -int(g['side'])
+    res = SV.walk(int(g['bar']), s, R, MG, ln.U)
+    if res['verdict'] != 'SAVIOUR REV':
+        return None
+    assert int(res['fill']) > int(g['bar']), 'a saviour fill landed on or before the bar that armed it'
+    return SG.signal(int(res['fill']), s, 'saviour', int(g['bar']),
+                     'fill %s, armed on the %s %s signal %s'
+                     % (ln.U(res['fill']), 'HIGH' if g['side'] > 0 else 'LOW',
+                        g['mech'], ln.U(g['bar'])))
+
+
+def produce(sigs, R, MG, gens=None):
+    """Every v4saviour signal armed on `sigs`, and on its own output. -> signals, bar-ordered.
 
         sigs  the signals from the other producers. One hunt per signal, from ITS bar
+        gens  an optional list; each generation's signals append as one entry, for the report
 
-    IT DOES NOT ARM ON ANOTHER SAVIOUR SIGNAL, so the caller passes the other producers' output and
-    this makes one pass. A saviour arming on a saviour would chain without end, and whether it
-    should is UNRULED - Joe has not been asked.
+    A SAVIOUR ARMS ON A SAVIOUR. Joe 1024: *"I know of at least one scenario where saviour
+    signalled `saviour-rev`, then the next trade followed the same `saviour-rev` path... we do need
+    to allow for it"*. So this runs to a fixed point: each generation arms the next, and it stops
+    when a generation produces nothing new.
+
+    IT TERMINATES BY THE ASSERT IN `_hunt`, not by a count. Every fill is strictly after the bar
+    that armed it, so a chain's bars strictly increase and the window bounds it. There is no
+    generation cap - that would be a cap Joe has not specified.
     """
-    out = []
-    for g in sigs:
-        assert g['mech'] != 'saviour', 'a saviour may not arm on another saviour signal'
-        s = -int(g['side'])
-        res = SV.walk(int(g['bar']), s, R, MG, ln.U)
-        if res['verdict'] != 'SAVIOUR REV':
-            continue
-        out.append(SG.signal(int(res['fill']), s, 'saviour', int(g['bar']),
-                             'fill %s, armed on the %s %s signal %s'
-                             % (ln.U(res['fill']), 'HIGH' if g['side'] > 0 else 'LOW',
-                                g['mech'], ln.U(g['bar']))))
+    out, seen, cur = [], set(), list(sigs)
+    while cur:
+        nxt = []
+        for g in cur:
+            z = _hunt(g, R, MG)
+            if z is None:
+                continue
+            key = (z['bar'], z['side'], z['src'])
+            if key in seen:
+                continue                               # the same hunt, already banked
+            seen.add(key)
+            nxt.append(z)
+        if gens is not None and nxt:
+            gens.append(list(nxt))
+        out.extend(nxt)
+        cur = nxt
     out.sort(key=lambda z: (z['bar'], z['side']))
     return out
