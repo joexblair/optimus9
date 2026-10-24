@@ -12,7 +12,9 @@ bar it left its extreme. Every bar this walk acts on is a STAMP or an ib CONFIRM
 raw lift-off bar and never a bare cross - and all of them are at or before the bar the verdict
 lands on. The asserts in `_ib_cross` and `_cascade_at` carry that claim, not this paragraph.
 
-THE VERDICTS ARE NOT ARMED, REV-TRADE and STAYS OPEN. Joe 1022 named a fourth, `ENDS`, then
+THE VERDICTS ARE NOT ARMED, SAVIOUR REV and STAYS OPEN. The middle one was `REV-TRADE` until
+Joe 1023: *"swap v4saviours `REV TRADE` label with `SAVIOUR REV`"*. It is the mech's own rev-trade
+and the new label says whose it is. Joe 1022 named a fourth, `ENDS`, then
 withdrew it: *"ENDS wasn't the best wording - I prefer your STAYS OPEN"*. There is no fourth.
 
 EACH BRANCH NEEDS BOTH TESTS: a counter cascade AND its own Mage not past 50 towards the
@@ -20,8 +22,8 @@ target-side. Joe 1022 added the clause after omitting it - *"ws1Mage is not prin
 towards the target-side (ie LONG trade, >50. SHORT trade, <50)"* - then ruled the fall-through,
 *"it should go on to ws2r"*, then extended it to the second branch: *"ws2Mage also has the past 50
 gate - ws2r should produce a STAYS OPEN"*. So:
-    branch A  ws1r ib cross + counter cascade + ws1Mage not past 50  -> REV-TRADE, else branch B
-    branch B  ws2r ib cross + counter cascade + ws2Mage not past 50  -> REV-TRADE, else STAYS OPEN
+    branch A  ws1r ib cross + counter cascade + ws1Mage not past 50  -> SAVIOUR REV, else branch B
+    branch B  ws2r ib cross + counter cascade + ws2Mage not past 50  -> SAVIOUR REV, else STAYS OPEN
 THE ws1Mage ROUTE BACK, Joe 1022, nested under his branch-B walk line: *"IF any ws1Mage bar lands
 outside of the past-50-gate (wob 8), route to the ws1r mage-cascade test.  mage-cascade test is
 anchored on the most recent target-side extrema"*. So branch B is not a one-way door - while it
@@ -62,7 +64,7 @@ is heading to. RULED, Joe 1022, after two passes at it:
 His spec line says only *"a trade opened while ws5r was NOT oob"* and the side was the one thing
 that moved the verdict. On the 2026-09-06 22:21:50 LONG, ws5r is 12.11: oob on the counter-target
 LOW side, so NOT ARMED - which is the verdict he confirmed. Read on the TARGET side instead it is
-not oob, arms, and returns REV-TRADE off the 22:28:45 ws1r cross. All seven test legs reconcile
+not oob, arms, and returns SAVIOUR REV off the 22:28:45 ws1r cross. All seven test legs reconcile
 under the counter-target read and only 2220 moves, which is why it is this one and not the other.
 """
 import sys
@@ -137,12 +139,32 @@ def walk(open_bar, target_side, R, MG, U):
     why = []
     r1, r2, r5 = R[1], R[2], R[5]
 
-    # ---- the arm: ws5r NOT oob when the trade opened
-    armed = not K.oob(r5[o], -s)       # the COUNTER-TARGET side, the side the trade was born from
+    # ---- the arm: no counter-target-side ws5r oob in the WALKBACK from the open
+    #
+    # Joe 1024: *"at trade open, walkback in 5 minute jumps (cap: 30 minutes) to find the ws5r
+    # extrema. if the extrema is oob, the gate is closed and saviour may not fire"*, and *"full
+    # range"* - so the extremum is read over EVERY bar in the span, not at 7 sampled points.
+    #
+    # WHAT IT REPLACED, and why the at-the-open test was not enough. His diagnosis: *"the LONG
+    # trades opening time was delayed by ~ws9 extending the open bar to a point where ws5r had
+    # already left oob"*. The old arm read ws5r at the open bar ALONE, so a trade whose open was
+    # pushed out by a slow rung saw a ws5r that had climbed back in bounds and armed anyway. On the
+    # 2026-09-01 18:55:15 LONG it read 47.99 and armed; the walkback finds 0.98 at 18:35:15.
+    #
+    # CAUSAL. The span is [open - SAV_ARM_WALKBACK, open] - entirely at or before the open bar.
+    wb = max(0, o - K.SAV_ARM_WALKBACK * K.BARS_PER_MIN)
+    seg = np.asarray(r5[wb:o + 1], float)
+    ex = float(np.nanmin(seg)) if -s < 0 else float(np.nanmax(seg))
+    exb = wb + int(np.nanargmin(seg) if -s < 0 else np.nanargmax(seg))
+    assert exb <= o, 'the arm walkback read a bar after the open'
+    armed = not K.oob(ex, -s)
     why.append(('the open', U(o), 'ws5r %.2f, target-side %s' % (float(r5[o]), 'high' if s > 0 else 'low')))
-    why.append(('the arm, ws5r oob on the COUNTER-TARGET side (%s)'
-                % ('low' if s > 0 else 'high'), U(o),
-                'ws5r oob %s -> %s' % ('YES' if not armed else 'no', 'NOT ARMED' if not armed else 'armed')))
+    why.append(('the arm walkback, %d min, the COUNTER-TARGET side (%s) extremum'
+                % (K.SAV_ARM_WALKBACK, 'low' if s > 0 else 'high'),
+                '%s to %s' % (U(wb), U(o)),
+                'ws5r %.2f at %s, oob %s -> %s'
+                % (ex, U(exb), 'YES' if not armed else 'no',
+                   'NOT ARMED' if not armed else 'armed')))
     if not armed:
         return {'verdict': 'NOT ARMED', 'why': why, 'open': o}
 
@@ -200,7 +222,7 @@ def walk(open_bar, target_side, R, MG, U):
     if vd == want and not pm:
         why.append(('branch A fires', U(x1), 'counter cascade and ws1Mage not past 50'
                                              ' - end the trade, rev-trade on the next bar'))
-        return {'verdict': 'REV-TRADE', 'why': why, 'open': o, 'fill': x1, 'reopen': x1 + 1,
+        return {'verdict': 'SAVIOUR REV', 'why': why, 'open': o, 'fill': x1, 'reopen': x1 + 1,
                 'from_line': 'ws1r'}
     miss = 'the cascade is not counter' if vd != want else 'ws1Mage is past 50 towards the target-side'
 
@@ -246,7 +268,7 @@ def walk(open_bar, target_side, R, MG, U):
         if vd2 == want and not pm2:
             why.append(('branch B fires', U(x2), 'counter cascade and ws2Mage not past 50'
                                                  ' - end the trade, rev-trade on the next bar'))
-            return {'verdict': 'REV-TRADE', 'why': why, 'open': o, 'fill': x2, 'reopen': x2 + 1,
+            return {'verdict': 'SAVIOUR REV', 'why': why, 'open': o, 'fill': x2, 'reopen': x2 + 1,
                     'from_line': 'ws2r'}
         miss2 = ('the cascade is not counter' if vd2 != want
                  else 'ws2Mage is past 50 towards the target-side')
@@ -275,7 +297,7 @@ def _route(route, x1, lim, s, want, MG, why, o, U):
     if vd == want:
         why.append(('the route fires', U(route), 'counter cascade and ws1Mage outside the gate'
                                                  ' - end the trade, rev-trade on the next bar'))
-        return {'verdict': 'REV-TRADE', 'why': why, 'open': o, 'fill': route, 'reopen': route + 1,
+        return {'verdict': 'SAVIOUR REV', 'why': why, 'open': o, 'fill': route, 'reopen': route + 1,
                 'from_line': 'ws1r via the ws1Mage route'}
     why.append(('the route does not fire', U(route),
                 'the cascade is not counter - the trade stays open, v4saviour is complete'))

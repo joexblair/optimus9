@@ -77,7 +77,14 @@ def runs(line, tf, side):
 
 
 def revs(line, tf, side):
-    """every oob-anchored reversal of a line, cached. -> a sorted int array of RAW lift-off bars.
+    """every reversal of a line, cached. -> a sorted int array of RAW lift-off bars.
+
+    NO OOB FILTER. Joe 1023: *"the oob filter can't be applied to a reversal test"*, which repeats
+    his 1022 ruling: *"did you gate the actual reversal times because they were both infence? if
+    so, that's not what I want - I need to be able to test a reversal anywhere on the board"*. I
+    built the filter in anyway and called the result "oob-anchored"; it is removed.
+    WHERE OOB STILL BELONGS: on the SIGNAL, not the detector. v4-ws5rbackstop's own spec is *"IF
+    ws5r is oob and reversing"* - two conditions, and `scan` tests the oob one itself.
 
     RAW, on purpose: the raw bar is the anchor and the identity of the reversal. Every caller that
     ACTS on one passes it through K.lift_stamp first.
@@ -85,7 +92,7 @@ def revs(line, tf, side):
     key = (_dig(line), tf, side, K.LIFT_PTS, K.gap_for(tf), K.LIFT_TOL, K.LIFT_WOB, K.OOB_FNC)
     if key not in _REV:
         L = lift_off(line, side, K.LIFT_PTS, K.gap_for(tf), K.LIFT_TOL, K.LIFT_WOB)
-        _REV[key] = np.asarray([int(b) for b in L if K.oob(line[int(b)], side)], int)
+        _REV[key] = np.asarray([int(b) for b in L], int)
     return _REV[key]
 
 
@@ -99,7 +106,7 @@ def run_holding(line, tf, side, bar):
 
 
 def first_rev_at_or_after(line, tf, side, frm, B):
-    """the first oob-anchored reversal at or after `frm`. -> (run, raw bar, stamp)
+    """the first reversal at or after `frm`. -> (run, raw bar, stamp). NO oob filter - Joe 1023.
 
     `frm` and `B` bound the RAW bar, which is the anchor. The stamp is the bar the walk may act on.
     """
@@ -137,8 +144,12 @@ def ib_cross(line, tf, frm, B):
     return None, None, 0
 
 
-def walk(R, start_tf, side, A, B):
+def walk(R, start_tf, side, A, B, events=None):
     """the baton chain, cached. -> (verdict, bar). Mirrors v4_lineage_trace.walk exactly.
+
+    `events` is an optional list. Each BATON HAND-OFF appends one dict, so a caller can ask what
+    the walk did without parsing a printout or re-implementing the walk. It changes no behaviour
+    and parity does not read it.
 
     EVERY BAR ACTED ON IS A STAMP OR A CONFIRM BAR. `ST[t]` is the reversal's stamp and `pas` is an
     ib CONFIRM bar; the ex-fence gate reads R[nxt] at `pas`, which is Joe 1023 option A.
@@ -173,7 +184,23 @@ def walk(R, start_tf, side, A, B):
             return 'EXHAUST', pas
         if ST.get(nxt) is None:                    # Joe 1023 B: not knowable at pas, so no verdict
             return 'NO REVERSAL', None
-        if ST[nxt] > pas:                          # not reversed yet at pas - the normal path
+        if K.LIN_W4 and nxt == 4 and K.oob(R[4][pas], side):
+            import v4_w4_handover as W4            # ARM B, Joe 1024: *"if ws3r is able to pass the
+            return W4.exhaust(R, side, ST[4], B)   #   baton to ws4r, then 'w4r to ws1Mage ib'
+            #   takes over the walk and continues to exhaust"*. ws4r oob is read at `pas`, the bar
+            #   that passed the baton from ws3 - his *"which ever option passes the baton from
+            #   ws3r"*, which under the banked LIN_PASS 'ib' is the ib cross's confirm bar.
+            #   K.LIN_W4 is 0 at the bank, so arm A is untouched and an arm-B run refuses.
+        ev = None
+        if events is not None:
+            ev = {'frm': rid, 'to': nxt, 'pas': pas, 'r_to': float(R[nxt][pas]),
+                  'rev_to': ST.get(nxt),
+                  'floored': not K.looks_back(nxt),
+                  'stale': bool(K.looks_back(nxt) and ST.get(nxt) is not None
+                                and ST[nxt] <= pas),
+                  'p2': None, 'hatch_out': None}
+            events.append(ev)
+        if not K.looks_back(nxt) or ST[nxt] > pas:  # below the floor, or not reversed yet at pas
             rid = nxt
             pas = hand_over(rid)
             if pas is None:
@@ -181,17 +208,31 @@ def walk(R, start_tf, side, A, B):
             continue
         _, p2, _ = ib_cross(R[nxt], nxt, pas, B)   # HIS RULE: the second walk to ib
         if p2 is None:
+            if ev is not None:
+                ev['hatch_out'] = 'NO IB CROSS on the second walk'
             return 'NO IB CROSS', None
         assert p2 >= pas, 'the second walk resolved before the baton-pass bar'
+        if ev is not None:
+            ev['p2'] = p2                      # what the SECOND walk itself resolved to
         n2 = nxt + 1
         if n2 > K.TF_CEILING:
+            if ev is not None:
+                ev['hatch_out'] = 'EXHAUST, the ceiling'
             return 'EXHAUST', p2
         if not K.ex_fence(R[n2][p2], side):
+            if ev is not None:
+                ev['hatch_out'] = 'EXHAUST, second-new-rider not ex-fence'
             return 'EXHAUST', p2
         if ST.get(n2) is None:
+            if ev is not None:
+                ev['hatch_out'] = 'NO REVERSAL on the second-new-rider'
             return 'NO REVERSAL', None
-        if ST[n2] <= p2:
+        if K.looks_back(n2) and ST[n2] <= p2:
+            if ev is not None:
+                ev['hatch_out'] = 'EXHAUST, second-new-rider spent too'
             return 'EXHAUST', p2
+        if ev is not None:
+            ev['hatch_out'] = 'PASSES ON to ws%d' % n2
         rid = n2
         pas = hand_over(rid)
         if pas is None:
@@ -221,6 +262,8 @@ def scan(A, B, R, MG, oob_when=None):
             st = K.lift_stamp(b)             # one copy of the arithmetic
             if st < A or st > B:
                 continue
+            if not K.oob(r5[b], side):       # HIS SPEC: *"IF ws5r is oob and reversing"*. The oob
+                continue                     # test is the SIGNAL's, not the detector's - 1023
             if not K.past_mid(m5[b], -side):
                 continue
             lo, hi = max(0, b - win), min(len(r5) - 1, b + win)

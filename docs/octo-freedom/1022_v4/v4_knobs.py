@@ -186,13 +186,32 @@ GAP_PER_TF = _knob('GAP_PER_TF', 2.8)       # bars per TF-minute. PROVISIONAL un
 #   v4_rcfg_sweep hand-wrote the positional tuple instead of using the named KLine.
 #   THE ARRAYS DO NOT MOVE. KLine(k_len=6, rsi=6, stc=8).as_tuple() is ('k', 6, 8, 6, 'close'),
 #   byte-identical to what was built, so every cached array stays addressed.
-#   IN JOE'S NOTATION THE BANK IS 6|6|8, and the previous bank was 7|5|8 - which is the DB's
-#   mech_lines('wsf') row exactly, so the old bank was always the ruled line.
-R_RSI = _knob('R_RSI', 6, int)              # the RSI length
-R_STC = _knob('R_STC', 8, int)              # the STC length
-R_KLEN = _knob('R_KLEN', 6, int)            # the StochRSI k length. The only one of the three that
-#   moves the trade count much: k_len 6 carries roughly 2.4x the trades of k_len 8. The finding was
-#   reported on 1023 as "stc is the only parameter that matters"; that was the transposed reading.
+#
+#   DEBANKED TO THE DB ROW, Joe 1024: *"the first thing we need to do is debank the r configs, so
+#   that I can trust the charts that I built the spec on"*, then *"confirmed"* on R_KLEN 6 -> 7 and
+#   R_RSI 6 -> 5.
+#
+#   WHY, and it is the root of a day of bad readings. There were TWO different configs in play:
+#       the DB row       k_len 7, rsi 5, stc 8. mech_line_config mlc_pk 1, role 'r', mech 'wsf',
+#                        live since 2026-01-01. THIS IS WHAT HIS CHARTS DRAW, and therefore what
+#                        every spec he has written was read off.
+#       the 1023 bank    k_len 6, rsi 6, stc 8. His own instruction - *"bank k6 rsi8 stc6, make the
+#                        current config (including 2 max_pyramid) the default mech"* - chosen as
+#                        centroid 2 of the 27-config sweep on the SWEEP half, then confirmed on the
+#                        hold-out (+211.71% against +86.49%).
+#   The sweep picked the best NET. The spec describes the CHARTS. For 1023 and most of 1024 the
+#   code measured a config he has never looked at, and the mech readings were checked against it.
+#   The sweep result is not discarded - it becomes a question for after the mechs match the spec:
+#   does the net advantage survive once the build is faithful?
+#
+#   IN JOE'S NOTATION THE BANK IS NOW 7|5|8 - the DB row. 6|6|8 was the 1023 sweep centroid.
+R_RSI = _knob('R_RSI', 5, int)              # the RSI length. DB mlc_rsi_len
+R_STC = _knob('R_STC', 8, int)              # the STC length. DB mlc_stc_len - the DB and the 1023
+#   sweep centroid agree on this one, so it is the only one that did not move.
+R_KLEN = _knob('R_KLEN', 7, int)            # the StochRSI k length. DB mlc_k_len. The only one of
+#   the three that moves the trade count much: k_len 6 carries roughly 2.4x the trades of k_len 7.
+#   The finding was reported on 1023 as "stc is the only parameter that matters"; that was the
+#   transposed reading.
 MAX_PYRAMID = _knob('MAX_PYRAMID', 2, int)  # concurrent open positions the account will carry.
 #   JOE'S WORD AND JOE'S NUMBER. 1023: *"it will need a safe max_pyramid setting that only the
 #   account (leverage) can provide"*, then *"including 2 max_pyramid"*. It is the LEVERAGE knob:
@@ -232,10 +251,32 @@ V4CORE_STEP0_JOIN = os.environ.get('W_V4_V4CORE_STEP0_JOIN', 'and')   # 'and' | 
 #   12.48)" as though the cache had drifted. Both numbers are now named, and a run prints the one
 #   that belongs to the line it is reading.
 CONTROL_TS = '2026-09-03 00:35:00'
-CONTROL_DB = 12.48                          # the DB-ruled ws5r - the line machinery check
-CONTROL_BANK = 6.77                         # ws5r at R_K/R_RSI/R_STC - recorded 1023
+CONTROL_DB = 12.48                          # ws5r at 2026-09-03 00:35:00 on the DB row, which is
+#   the BANK as of 1024. Every run's control row must read this.
+CONTROL_BANK = 6.77                         # ws5r at the same bar on the 1023 sweep centroid
+#   k_len 6 / rsi 6 / stc 8. Kept as the drift check against the config that was banked 1023-1024.
 
 BARS_PER_MIN = 12                           # the 5 s grid
+
+SAV_ARM_WALKBACK = _knob('SAV_ARM_WALKBACK', 30, int)   # minutes v4saviour's arm looks BACK from
+#   the trade open for a counter-target-side ws5r extremum. Joe 1024: *"at trade open, walkback in
+#   5 minute jumps (cap: 30 minutes) to find the ws5r extrema. if the extrema is oob, the gate is
+#   closed and saviour may not fire"*, then *"full range"* on whether it samples the jumps or reads
+#   every bar - so the extremum is over the WHOLE span, not 7 sampled points.
+#   WHY HE ADDED IT, his own diagnosis: *"the LONG trades opening time was delayed by ~ws9
+#   extending the open bar to a point where ws5r had already left oob"*. On the 2026-09-01 18:55:15
+#   LONG the at-the-open arm read ws5r 47.99 and armed; the walkback finds 0.98 at 18:35:15, deep
+#   LOW oob, so the gate closes and the 18:55 LONG runs on to the backstop's 19:43:15 SHORT.
+
+# ── the ws4r handover inside the lineage walk. Joe 1024, NOT YET NAMED by him - he calls it
+#    *"w4r to ws1Mage ib"*, so the prefix is descriptive of the lines and not a coined shorthand.
+#    His 1024 framing: *"use the existing lineage code UNTIL ws4r is seen to be oob. when ws4r is
+#    oob, the new mech finsihes the lineage flow"*, and *"if ws3r is able to pass the baton to
+#    ws4r, then 'w4r to ws1Mage ib' takes over the walk and continues to exhaust"*.
+LIN_W4 = _knob('LIN_W4', 0, int)            # 0 = arm A, the banked walk. 1 = arm B, the handover
+LIN_W4_GRACE_S = _knob('LIN_W4_GRACE_S', 180, int)   # *"I propose we give 3 minutes grace"* - 1024
+LIN_W4_G1_XWOB = _knob('LIN_W4_G1_XWOB', 4, int)     # bars IB must hold for the ws1Mage cross.
+#                                             Joe 0911: *"reversal:2, boundary:4. both are knobs"*
 
 # ── `sweep-pivots`, BANKED 1024. Joe named it; *"let's make it a machine and lock down the spec.
 #    if there's knobs, make sure they're visible"*. The knobs live HERE, in the one home that
@@ -263,9 +304,10 @@ RULED = {
     'LIN_PASS':         ('ib',  'the code\'s original. His 1022 spec says "reversal" - 1023'),
     'LIN_LOOKBACK_FLOORED': (1, '"yes" to rungs below ws6 never looking back - 1023'),
     'LIN_LOOKBACK_FLOOR_TF': (6, '"ws6 needs to be the complimentary knob" - 1023'),
-    'R_RSI':            (6,     '"bank k6 rsi8 stc6" - 1023, which is 6|6|8 in his notation'),
-    'R_STC':            (8,     '"bank k6 rsi8 stc6" - 1023, which is 6|6|8 in his notation'),
-    'R_KLEN':           (6,     '"bank k6 rsi8 stc6" - 1023, which is 6|6|8 in his notation'),
+    'R_RSI':            (5,     'DEBANKED to the DB row 1024 - see the R_* block above'),
+    'R_STC':            (8,     'DEBANKED to the DB row 1024 - unchanged, the DB and the sweep'
+                                ' centroid agree on stc'),
+    'R_KLEN':           (7,     'DEBANKED to the DB row 1024 - see the R_* block above'),
     'MAX_PYRAMID':      (2,     '"including 2 max_pyramid" - 1023'),
     'BSTOP_OOB_WHEN':   ('window', '"I think the answer is \'just recent\'" - 1022,'
                                    ' defaulted 1023'),
@@ -321,6 +363,14 @@ RULED = {
                             ' this mech. It lifted the MFE-side rate on every TF'),
     'SP_ALIGN_S':   (300,   '"agreed on 300s" - 1024. UNREAD by the banked SP_PICK; it gates only'
                             ' the \'window\' arm, kept as the comparison'),
+    'SAV_ARM_WALKBACK': (30, '"at trade open, walkback in 5 minute jumps (cap: 30 minutes) to find'
+                             ' the ws5r extrema. if the extrema is oob, the gate is closed and'
+                             ' saviour may not fire" - 1024, with "full range" on the sampling'),
+    'LIN_W4':       (0,     'arm A is the bank. The handover is arm B of the 1024 A/B and is NOT'
+                            ' the machine until he rules it'),
+    'LIN_W4_GRACE_S': (180, '"I propose we give 3 minutes grace to overcome the scenario" - 1024.'
+                            ' UNANCHORED: the jump-back distribution has no knee, p75 is 0.3705'),
+    'LIN_W4_G1_XWOB': (4,   'Joe 0911 "reversal:2, boundary:4. both are knobs" - the boundary one'),
     'SP_TFS':       ('wide', 'THE ONE ITEM AWAITING HIS WORD. His 1024 list was SIX - ws3Mage,'
                              ' ws5Mage, ws10Mage, ws15Mage, ws20Mage, ws30Mage. ws1Mage and'
                              ' ws2Mage are MINE, and every measurement that justified banking used'
