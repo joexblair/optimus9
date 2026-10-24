@@ -21,6 +21,7 @@ import v4_rcfg_sweep as RS
 import v4_core_arm as CA
 import v4_sig_core as SC
 import v4_sig_bstop as SB
+import v4_sig_saviour as SS
 
 
 def _tag(v, side):
@@ -46,8 +47,23 @@ def main(dest, A, B, T):
     CL = CA.lines()
     F.reset()
 
-    sigs = [s for s in SC.produce(CL, R, A, B) + SB.produce(R, MG, A, B) if s['bar'] == T]
+    base = SC.produce(CL, R, A, B) + SB.produce(R, MG, A, B)
+    allsigs = base + SS.produce(base, R, MG)
+    sigs = [s for s in allsigs if s['bar'] == T]
     sigs.sort(key=lambda s: (s['side'], s['src']))
+
+    #   THE START TF COMES FROM THE OWNING MODULE, not from parsing the printed `why`. The first
+    #   version read it out of the string with `why.split('fire ')[1][:19]`, which broke the moment
+    #   Joe shortened the detail column to bare HH:MM:SS - a report format change silently feeding
+    #   a trace's arithmetic.
+    bfire = {}
+    for d in F.scan(A, B, R, MG):
+        r = K.walkable_run(R, d['fire'], d['side'])
+        if not r:
+            continue
+        v, exh = F.walk(R, r[0], d['side'], d['rev'], B)
+        if v == 'EXHAUST' and exh is not None:
+            bfire[(max(int(exh), int(d['fire'])), int(d['side']), int(d['rev']))] = (r[0], d['fire'])
 
     log('# THE SIGNALS THAT LANDED ON %s. Joe 1024.' % ln.U(T))
     log('# the producers are the router\'s own; each walk is re-run through v4_fast.walk\'s events')
@@ -64,19 +80,22 @@ def main(dest, A, B, T):
     for s in sigs:
         ev = []
         stf = None
+        fire = None
         if s['mech'] == 'core':
             w = CA.armed_at(CL, s['src'], s['side'])
             stf = K.CORE_LIN_ENTRY_TF if w == 'arm2' else CA.start_tf(CL, s['src'], s['side'])
+        elif s['mech'] == 'backstop':
+            got = bfire.get((int(s['bar']), int(s['side']), int(s['src'])))
+            stf, fire = got if got else (None, None)
         else:
-            r = K.walkable_run(R, int(s['why'].split('fire ')[1][:19] and ln.K(
-                s['why'].split('fire ')[1][:19])), s['side'])
-            stf = r[0] if r else None
+            stf = None                                 # v4saviour runs no lineage walk
         if stf is None:
             continue
         v, exh = F.walk(R, stf, s['side'], s['src'], B, events=ev)
         log('')
-        log('## %s %s, walk from ws%d starting %s -> %s %s'
-            % (s['mech'], 'HIGH' if s['side'] > 0 else 'LOW', stf, ln.U(s['src']), v,
+        log('## %s %s, walk from ws%d starting %s%s -> %s %s'
+            % (s['mech'], 'HIGH' if s['side'] > 0 else 'LOW', stf, ln.U(s['src']),
+               '' if fire is None else ', fire %s' % ln.U(int(fire)), v,
                ln.U(exh) if exh is not None else '-'))
         log('')
         log('| the baton bar | from | to | the receiver r value | its reversal stamp | second walk |')
