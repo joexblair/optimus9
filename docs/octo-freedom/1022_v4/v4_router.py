@@ -19,7 +19,8 @@ HIS RULINGS, 1024, each one a line of this file:
     a mech's condition being met creates a candidate regardless of what is open
     -yes.  then the pyramid checks are downstream of that
 
-    [does a held signal expire] -no.  the mechs that carry a held signal will always print a verdict
+    router only holds the LONG signal for milliseconds: it's job is to accept the signal, check
+    count(exisitng open same-side trade) <= max_pyramid, and drop the signal if false
 
     [which open position does a signal close, when two or more are open on that side]
     -close all of them together
@@ -34,78 +35,66 @@ THE ORDER IS HIS AND IT MATTERS. The close runs first, then the open is tested a
 closing a block never frees the slot the open is tested against - a HIGH signal closes LONGs and
 then counts SHORTS, and the LONGs it just closed were never in that count.
 
-THE PYRAMID TEST IS HIS, restated after I had made it a side-search question: *"it is simply: I'm
-about to open a SHORT (or a long), is there a SHORT (or long) already open"*.
+THE PYRAMID TEST IS NOT IN THIS FILE. Joe 1024: *"SRP the max_pyramid routing. my gut says it
+should be a class"*. `v4_pyramid.Pyramid` owns the open trades, the count, the cap boundary and the
+close-all. This file owns the signal loop and nothing about positions - it asks `admits` and it
+does not know what the answer was counted from.
 
-A HELD SIGNAL NEVER EXPIRES. It sits in the queue and is retried at every later signal bar, because
-his answer was *"no"* and his reason was that the mech will always print a verdict. There is NO
-horizon on the hold - adding one would be a cap he has not specified.
+A REFUSED SIGNAL IS DROPPED. There is no queue and no retry. Joe 1024 ruled it after reading the
+decision journal: *"router only holds the LONG signal for milliseconds"*.
+
+WHAT THE QUEUE DID, which is why he removed it. His earlier *"[does a held signal expire] -no"* was
+built here as a queue retried at every later signal bar. On 2026-09-01 that turned 108 decisions
+into 76 refusals, and a signal whose lineage exhausted at 11:52:45 opened a trade at 17:33:30 -
+340m45s later, as the entry for a leg it had not detected. The queue is gone, so a signal is acted
+on once, at its own fire bar, or not at all.
 
 ONE SAVIOUR. The caller supplies it through `saviour`, called once per block when the block opens,
 and its signal is routed like any other.
 
-CAUSAL. Every fire is `signal bar + 1`, and the asserts carry that rather than comments. The router
-walks signal bars forward and never reads one that has not landed.
+CAUSAL. Every fire is `signal bar + 1`, and the asserts carry that rather than comments. With the
+queue gone there is no second fire bar to reason about: a signal acts on the bar after it landed.
 """
 import v4_knobs as K
+import v4_pyramid as PY
 import v4_signal as SG
 
 
-def _open_count(opens, dirn):
-    """How many trades in `dirn` are open. -> int. The pyramid test's whole input."""
-    return sum(1 for t in opens if t['dir'] == dirn)
-
-
-def _close_all(opens, dirn, bar, why):
-    """Close EVERY open trade in `dirn`. -> (the trades that stay open, the closed rows).
-
-    Joe 1024: *"close all of them together"*, corrected from my "two" to *"two **or more**"*.
-    """
-    stay, shut = [], []
-    for t in opens:
-        if t['dir'] == dirn:
-            shut.append(dict(t, close=int(bar), close_why=why))
-        else:
-            stay.append(t)
-    return stay, shut
-
-
 def route(sigs, A, B, saviour=None, max_pyramid=None, journal=None):
-    """Signals in, trades out. -> (the trades, the signals still held).
+    """Signals in, trades out. -> (the trades, the signals dropped).
 
         sigs         every signal from every producer, in any order
         saviour      an optional callable (block_open_bar, block_dir) -> a signal or None, called
                      ONCE per block, when the block opens. His one-saviour ruling
         max_pyramid  the cap on same-direction opens. Defaults to K.MAX_PYRAMID
         journal      an optional list. EVERY decision this router makes appends one row: what it
-                     was handed, what it did, and the count it compared to the cap. It changes no behaviour. Without it a hold's reason has to be
-                     reconstructed from the trade list, which does not carry the open set
+                     was handed, what it did, and the count it compared to the cap. It changes no
+                     behaviour. Joe 1024 set its shape: *"besides the timestamp 1) the data that
+                     was passed into router and 2) what the router did with it and 3) why it did
+                     what it did"*.
+                     IT DOES NOT RECORD THE OPEN SET. Joe 1024: *"why is `open before` important?
+                     the router doesn't need that data"*. The decision reads ONE number - the
+                     same-direction count after the close - so the journal carries that number and
+                     not the state it was counted from
 
-    A trade row carries `open`, `dir`, `sig`, and once closed `close` and `close_why`. A held
-    signal carries `held_at`, the bar its open was first refused.
+    A trade row carries `open`, `dir`, `sig`, and once closed `close` and `close_why`. A dropped
+    signal carries `dropped_at`, the bar its open was refused.
 
-    A HELD SIGNAL'S FIRE BAR IS NOT ITS OWN. MY STRUCTURAL READ, STATED. A signal that lands at
-    04:29 and is refused cannot later fire at 04:30 - that bar has passed, and acting on it would
-    be a trade opened in the past. So a held signal fires at the bar its hold CLEARS:
-        fire = max(the signal bar + 1, the bar the block freed)
-    Joe ruled that a held signal never expires and that its mech will always print a verdict; he
-    did not say which bar it fires on, and nothing else in his rulings forces one.
+    SIGNALS ARE ACTED ON IN FIRE ORDER, which is signal-bar order since every fire is its own bar
+    plus one. Within a bar the order is the mech's NAME, which is alphabetical and therefore
+    arbitrary - UNRULED, and it decides which of several signals sharing a bar becomes the trade.
     """
-    mx = K.MAX_PYRAMID if max_pyramid is None else max_pyramid
-    assert mx >= 1, 'max_pyramid below 1 can never open a trade'
+    pyr = PY.Pyramid(K.MAX_PYRAMID if max_pyramid is None else max_pyramid)
     pend = sorted([dict(s) for s in sigs if A <= s['bar'] <= B],
                   key=lambda s: (s['bar'], s['mech']))
-    opens, done, held, sav_seen = [], [], [], set()
+    dropped, sav_seen = [], set()
 
     def _offer_to_saviour(dirn):
         """A block has just opened. Offer it to the single saviour, once."""
         if saviour is None:
             return
-        blk = [x for x in opens if x['dir'] == dirn]
-        if not blk:
-            return
-        first = min(int(x['open']) for x in blk)
-        if first in sav_seen:
+        first = pyr.earliest_open(dirn)
+        if first is None or first in sav_seen:
             return
         sav_seen.add(first)
         sv = saviour(first, dirn)
@@ -114,55 +103,41 @@ def route(sigs, A, B, saviour=None, max_pyramid=None, journal=None):
             pend.sort(key=lambda z: (z['bar'], z['mech']))
 
     def _act(s, bar):
-        """The close, then the open - his order. -> the trade, or None when the open is HELD.
+        """The close, then the open - his order. -> the trade, or None when the open is DROPPED.
 
         EVERY DECISION IS RECORDED, not inferred. One `journal` row per signal acted on, carrying
-        the open set BEFORE, what the close removed, the same-direction count compared against the
-        cap, and the verdict. `s['refused']` keeps the per-signal list of refusal bars.
+        what it was handed, what it did, and the count it compared against the cap.
         """
-        nonlocal opens
         dirn = SG.direction(s['side'])
+        shuts = SG.closes(s['side'])
         row = {'bar': int(bar), 'sig': int(s['bar']), 'mech': s['mech'], 'side': int(s['side']),
-               'wants': dirn, 'shuts': SG.closes(s['side'])}
-        opens, shut = _close_all(opens, SG.closes(s['side']), bar,
-                                 '%s %s' % (s['mech'], SG.direction(s['side'])))
-        done.extend(shut)
+               'wants': dirn, 'shuts': shuts}
+        shut = pyr.close_all(shuts, bar, '%s %s' % (s['mech'], dirn))
         row['closed'] = tuple(int(x['open']) for x in shut)
-        row['count'] = _open_count(opens, dirn)
-        row['cap'] = mx
-        if row['count'] >= mx:
-            row['verdict'] = 'HELD'
-            row['blocked_by'] = tuple(int(x['open']) for x in opens if x['dir'] == dirn)
+        row['count'] = pyr.count(dirn)
+        row['cap'] = pyr.cap
+        if not pyr.admits(dirn):
+            row['verdict'] = 'DROPPED'
+            row['blocked_by'] = pyr.blocking(dirn)
             if journal is not None:
                 journal.append(row)
-            s.setdefault('refused', []).append((int(bar), dirn, row['blocked_by']))
             return None
         row['verdict'] = 'OPENED'
         row['blocked_by'] = ()
         if journal is not None:
             journal.append(row)
-        t = {'open': int(bar), 'dir': dirn, 'sig': s}
-        opens.append(t)
+        t = pyr.open(bar, dirn, s)
         _offer_to_saviour(dirn)
         return t
 
     seen = 0
     while seen < len(pend):
-        bar = pend[seen]['bar']
-        batch = []
-        while seen < len(pend) and pend[seen]['bar'] == bar:
-            batch.append(pend[seen]); seen += 1
-        #   HELD FIRST. They landed earlier, so they are older, and nothing in his rulings lets a
-        #   newer signal overtake one that is waiting.
-        queue, held = sorted(held, key=lambda z: z['bar']) + batch, []
-        for s in queue:
-            fire = max(SG.fire_bar(s), int(bar))
-            assert fire > int(s['bar']), 'a fire cannot land on or before its own signal'
-            if fire > B:
-                held.append(s)
-                continue
-            t = _act(s, fire)
-            if t is None:
-                s['held_at'] = fire
-                held.append(s)                         # the SAME dict, so `refused` accumulates
-    return done + opens, held
+        s = pend[seen]; seen += 1
+        fire = SG.fire_bar(s)
+        assert fire > int(s['bar']), 'a fire cannot land on or before its own signal'
+        if fire > B:
+            dropped.append(dict(s, dropped_at=None))
+            continue
+        if _act(s, fire) is None:
+            dropped.append(dict(s, dropped_at=fire))
+    return pyr.trades(), dropped
