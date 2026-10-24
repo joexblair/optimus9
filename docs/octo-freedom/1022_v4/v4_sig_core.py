@@ -76,14 +76,13 @@ def produce(CL, R, A, B):
             stf = K.CORE_LIN_ENTRY_TF if which == 'arm2' else CA.start_tf(CL, a, side)
             if which == 'arm2' and not K.oob(R[stf][a], side):
                 out.append(SG.signal(a, side, 'core', a,
-                                     'cws1b %s, %s arm %s, ws%d NOT oob - immediate exhaust'
-                                     % (ln.U(gate), which, ln.U(a), stf)))
+                                     '%s arm %s, ws%d NOT oob - immediate exhaust'
+                                     % (which, SG.why_time(a), stf)))
                 continue
             v, exh = F.walk(R, stf, side, a, B)
             if v != 'EXHAUST' or exh is None:
                 continue
             out.append(SG.signal(exh, side, 'core', a,
-                                 'cws1b %s, %s arm %s, ws%d, exh %s'
-                                 % (ln.U(gate), which, ln.U(a), stf, ln.U(exh))))
+                                 '%s arm %s, ws%d' % (which, SG.why_time(a), stf)))
     out.sort(key=lambda s: (s['bar'], s['side']))
     return out

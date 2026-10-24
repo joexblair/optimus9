@@ -88,6 +88,21 @@ and *"16, the reversal bar"* for the fill bar. The UNRULED note above is superse
 
 ---
 
+**ONE POINT PRODUCES IT, 1024. See `v4_router.md`.** Joe: *"the code should be asking 'where is my
+rev-trade event?', but we haven't (SRP) built a routing mech. without a single point producing
+rev-trade, mechs conflate internally"*. The close bar, the open bar and the direction are no longer
+computed inside a mech:
+
+| the thing | where it lives now |
+|---|---|
+| what a signal IS | `v4_signal` |
+| the fire bar, `the signal bar + 1` | `v4_signal.fire_bar`, replacing five computations by four rules |
+| the direction | `v4_signal.direction`, from the signal's own side, replacing `flip(the previous trade)` |
+| the open trades, the count, the cap, the close-all | `v4_pyramid.Pyramid` |
+| the signal loop and the journal | `v4_router.route` |
+
+---
+
 ## 8. The knobs, BANKED
 
 `v4_knobs.py` is the in-force copy. Importing it REFUSES an off-ruled run unless

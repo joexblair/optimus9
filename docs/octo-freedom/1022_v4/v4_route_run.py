@@ -11,6 +11,11 @@ their signals to the router, and prints. Every decision lives in the module that
     the pyramid test, the hold
 
 usage: v4_route_run.py <out|-> <start> <end> [max_pyramid]
+
+max_pyramid MAY NOT SILENTLY DIFFER FROM THE BANK. K.MAX_PYRAMID is 2 and it is RULED, but this
+file took the cap as a plain argument, so every run at 1 printed `RULED_OK True` beside a machine
+that was not the bank. An off-ruled cap now refuses unless W_V4_EXPERIMENT=1, which is the same
+rule v4_knobs applies to every other knob.
 """
 import io
 import os
@@ -134,5 +139,8 @@ def main(dest, A, B, mx):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1], ln.K(sys.argv[2]), ln.K(sys.argv[3]),
-         int(sys.argv[4]) if len(sys.argv) > 4 else K.MAX_PYRAMID)
+    _mx = int(sys.argv[4]) if len(sys.argv) > 4 else K.MAX_PYRAMID
+    if _mx != K.MAX_PYRAMID and not os.environ.get('W_V4_EXPERIMENT'):
+        raise SystemExit('REFUSED: max_pyramid %d is not the bank (%d). Set W_V4_EXPERIMENT=1 for '
+                         'an off-ruled run.' % (_mx, K.MAX_PYRAMID))
+    main(sys.argv[1], ln.K(sys.argv[2]), ln.K(sys.argv[3]), _mx)

@@ -55,9 +55,9 @@ def _hunt(g, R, MG):
         return None
     assert int(res['fill']) > int(g['bar']), 'a saviour fill landed on or before the bar that armed it'
     return SG.signal(int(res['fill']), s, 'saviour', int(g['bar']),
-                     'fill %s, armed on the %s %s signal %s'
-                     % (ln.U(res['fill']), 'HIGH' if g['side'] > 0 else 'LOW',
-                        g['mech'], ln.U(g['bar'])))
+                     'armed on the %s %s signal %s'
+                     % ('HIGH' if g['side'] > 0 else 'LOW', g['mech'],
+                        SG.why_time(g['bar'])))
 
 
 def produce(sigs, R, MG, gens=None):

@@ -47,6 +47,21 @@ def signal(bar, side, mech, src, why=''):
     return {'bar': int(bar), 'side': int(side), 'mech': mech, 'src': int(src), 'why': why}
 
 
+def why_time(bar):
+    """The time format used INSIDE a signal's `why`. -> 'HH:MM:SS'.
+
+    Joe 1024: *"the detail column can be reduced to ` step2 arm 00:26:00, ws2`"*. The date is
+    dropped because the `why` sits beside the signal's own full `YYYY-MM-DD HH:MM:SS` timestamp in
+    every report that prints it, so the day is already on the row.
+
+    IT IS BARE HH:MM:SS, which breaks his own *"every printed timestamp is YYYY-MM-DD HH:MM:SS"*
+    rule for a window that spans days: an arm on the previous day reads as if it were today's.
+    This is the format he asked for and the limitation is stated rather than worked around.
+    """
+    import ln
+    return ln.U(int(bar))[11:]
+
+
 def direction(side):
     """The trade a signal on `side` would OPEN. -> 'LONG' or 'SHORT'.
 

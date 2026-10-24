@@ -54,6 +54,6 @@ def produce(R, MG, A, B, fallback=None):
             continue
         bar = max(int(exh), int(d['fire']))
         out.append(SG.signal(bar, d['side'], 'backstop', int(d['rev']),
-                             'fire %s, ws%d, exh %s' % (ln.U(d['fire']), stf, ln.U(exh))))
+                             'fire %s, ws%d' % (SG.why_time(d['fire']), stf)))
     out.sort(key=lambda s: (s['bar'], s['side']))
     return out
