@@ -18,10 +18,22 @@ NO DWELL ON ANY ib CROSS HERE, his ruling: *"no dwell. the way I see it: because
 bars, we have an automatic wob. it also means I have TV values that are precisely aligned with what
 the code sees"*. So every `oob_ib_cross` call takes xwob 1 and the cross bar IS the actionable bar.
 
-t1 AND t2 READ CLOSED LINES, t3 READS EMERGING. That is his 1025 split: the cws lines *"were
-introduced for accuracy and specificity in the lower TFs"*, and *"I don't want slower TF's running
-on closed bars because it spoils the line reversal times"*. Both t1cadence qualifiers are cws1r -
-he corrected his own handover: *"this is my wrong: both should be cws1r"*.
+STATE ON CLOSED, REVERSAL TIMING ON EMERGING - Joe's 1026 ruling, his words:
+
+    add all lines to csw1-12. these closed lines will give us more accurate fence/exfence baton
+    decisions
+    with ws1-12, emerg: time the reversals
+    best of both worlds
+
+So t3's *"have been oob"* reads the CLOSED r ladder and its *"printing a reversal"* reads the
+EMERGING one. t1 and t2 are closed throughout, and both t1 qualifiers are cws1r - he corrected his
+own handover: *"this is my wrong: both should be cws1r"*.
+
+cws1r's REVERSAL CARRIES ITS OWN WOB, `L2_CWS1R_WOB` 1. Joe 1026: *"a lineage2-only wob 1 for
+cws1r"* / *"cws1 is closed bar, so the wob is built-in"*. LIFT_WOB 8 filters 69.4% on the emerging
+ws1r and 3.0% on cws1r, and on 99.2% of cws1r lift-offs the value does not move across the hold -
+the wob is shorter than one cws1r bar. At wob 1 the stamp IS the raw bar, which is what cost his
+2026-08-29 07:23 walk its cadence under wob 8.
 
 t4 IS NOT DETECTED HERE. It is a consequence of the walk's own rider state - a non-oob rider that
 reverses with no in-lin-hop candidate - so `v4_lineage2` raises it where the rider is known.
@@ -43,6 +55,30 @@ from optimus9.analysis.jig import oob_ib_cross
 sys.stderr = _e
 
 HTF_LO = 7                                     # *"any of ws7r to ws12r (HTF lines)"* - Joe 1025
+_LO = {}
+
+
+def cws1r_revs(line, side):
+    """cws1r's lift-off RAW bars at lineage2's own wob. -> a sorted int array, cached.
+
+    `v4_fast.revs` keys its cache on K.LIFT_WOB 8, so it cannot serve `L2_CWS1R_WOB` 1 - this is a
+    separate cache on the same producer, not a second detector.
+    """
+    key = (id(line), int(side), int(K.L2_CWS1R_WOB))
+    if key not in _LO:
+        from optimus9.analysis.jig import lift_off
+        _LO[key] = np.array(sorted(int(x) for x in lift_off(
+            line, side, K.LIFT_PTS, K.gap_for(1), K.LIFT_TOL, K.L2_CWS1R_WOB)), dtype=int)
+    return _LO[key]
+
+
+def _stamp(b):
+    """The bar a cws1r lift-off becomes actionable on, at lineage2's wob. -> bar.
+
+    `K.lift_stamp` adds LIFT_WOB - 1; lineage2's cws1r wob is its own, so the arithmetic is here
+    and there is one copy of it.
+    """
+    return int(b) + max(0, int(K.L2_CWS1R_WOB) - 1)
 
 
 def _runs(a):
@@ -83,7 +119,7 @@ def t1(CL, side, A, B):
     b1 = np.asarray(CL['b'], float)
     r1 = np.asarray(CL['r'][1], float)
     oob = _oob(b1, side)
-    raws = np.array(sorted(int(x) for x in F.revs(r1, 1, side)), dtype=int)
+    raws = cws1r_revs(r1, side)
     grace = max(0, int(K.L2_T1_GRACE_S) // 5)
     out = []
     for c, _cf, s in oob_ib_cross(b1, K.OOB_HI, K.OOB_LO, 1):
@@ -95,23 +131,23 @@ def t1(CL, side, A, B):
         s0, s1 = run
         #   the DURING branch: the RAW reversal inside the oob run, cws1r on the target side of 50
         during = [int(x) for x in raws
-                  if s0 <= x <= s1 and K.side_of(r1[K.lift_stamp(int(x))]) == int(side)]
+                  if s0 <= x <= s1 and K.side_of(r1[_stamp(x)]) == int(side)]
         if during:
-            bar = max(int(c), K.lift_stamp(during[-1]))      # *"whichever is last"*
+            bar = max(int(c), _stamp(during[-1]))            # *"whichever is last"*
             assert bar >= int(c), 'the t1 cadence precedes its own cws1b ib cross'
             out.append((bar, 't1 cws1b oob %s..%s, cws1r reversed %s during, stamp %s'
                         % (ln.U(s0)[11:], ln.U(s1)[11:], ln.U(during[-1])[11:],
-                           ln.U(K.lift_stamp(during[-1]))[11:])))
+                           ln.U(_stamp(during[-1]))[11:])))
             continue
         #   the GRACE branch: the RAW reversal forward of the cross, inside L2_T1_GRACE_S
         late = [int(x) for x in raws
-                if c < x <= c + grace and K.side_of(r1[K.lift_stamp(int(x))]) == int(side)]
+                if c < x <= c + grace and K.side_of(r1[_stamp(x)]) == int(side)]
         if late:
-            bar = max(int(c), K.lift_stamp(late[0]))         # *"whichever is last"*
+            bar = max(int(c), _stamp(late[0]))               # *"whichever is last"*
             assert bar >= int(c), 'the t1 cadence precedes its own cws1b ib cross'
             out.append((bar, 't1 cws1b ib %s, cws1r reversed %s inside the %ds grace, stamp %s'
                         % (ln.U(c)[11:], ln.U(late[0])[11:], K.L2_T1_GRACE_S,
-                           ln.U(K.lift_stamp(late[0]))[11:])))
+                           ln.U(_stamp(late[0]))[11:])))
     return out
 
 
@@ -135,7 +171,7 @@ def t2(CL, side, A, B):
     return out
 
 
-def t3(R, side, arm, B):
+def t3(C, E, side, arm, B):
     """TYPE 3 - the HTF reversal. -> [(the cadence bar, why)].
 
         TYPE 3 v4cadence (the HTF reversal - when any of ws7r to ws12r (HTF lines) have been oob
@@ -152,12 +188,16 @@ def t3(R, side, arm, B):
 
     THE EXTRA GATE IS HIS: *"the 75% qualification can only fire if there are no higher TFs
     exfence, ie there are no baton-pass candidates"*. That is tested at the candidate bar.
+
+    TWO LADDERS, his 1026 ruling. `C` is the CLOSED r set and carries every STATE read - the
+    *"have been oob"* population and the ex-fence gate. `E` is the EMERGING set and carries the
+    reversal TIMING, at the banked LIFT_WOB.
     """
     hi = int(K.L2_MOM_MAXTF)
-    tfs = [t for t in range(HTF_LO, hi + 1) if t in R]
-    oobm = {t: _oob(R[t], side) for t in tfs}
-    stamp = {t: sorted(K.lift_stamp(int(x)) for x in F.revs(np.asarray(R[t], float), t, side))
-             for t in tfs}
+    tfs = [t for t in range(HTF_LO, hi + 1) if t in C and t in E]
+    oobm = {t: _oob(C[t], side) for t in tfs}                # STATE: closed
+    stamp = {t: sorted(K.lift_stamp(int(x)) for x in F.revs(np.asarray(E[t], float), t, side))
+             for t in tfs}                                   # TIMING: emerging
     out = []
     for k in range(int(arm), int(B) + 1):
         been = [t for t in tfs if oobm[t][int(arm):k + 1].any()]
@@ -171,7 +211,7 @@ def t3(R, side, arm, B):
             continue
         #   his gate: no higher TF ex-fence, so no baton candidate exists above the top reverser
         top = max(rev)
-        above = [t for t in range(top + 1, hi + 1) if t in R and K.ex_fence(R[t][k], side)]
+        above = [t for t in range(top + 1, hi + 1) if t in C and K.ex_fence(C[t][k], side)]
         if above:
             continue
         out.append((int(k), 't3 %d of %d oob HTF lines reversed (ws%s), none above ws%d ex-fence'

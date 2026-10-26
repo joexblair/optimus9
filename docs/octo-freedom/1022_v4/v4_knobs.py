@@ -320,6 +320,14 @@ L2_LIN_HOP = _knob('L2_LIN_HOP', 2, int)        # *"lin_hop = 2"*. Max hops ride
 #   markers, linhop applies. at a cadence event, linhop doesn't apply"*.
 L2_T1_GRACE_S = _knob('L2_T1_GRACE_S', 120, int)  # *"the 2 minutes (CAUSALLY) following"*, and he
 #   confirmed it is a knob. Seconds, forward of the cws1b oob->ib cross.
+L2_CWS1R_WOB = _knob('L2_CWS1R_WOB', 1, int)    # lineage2 ONLY: the lift-off wob on cws1r, for
+#   t1cadence's reversal. Joe 1026: *"a lineage2-only wob 1 for cws1r"*, after the measurement he
+#   asked for. LIFT_WOB 8 does 69.4% of its filtering on the EMERGING ws1r and 3.0% on the closed
+#   cws1r, and on 99.2% of cws1r lift-offs the VALUE does not move across the whole 8-bar hold -
+#   the wob is shorter than one cws1r bar, so it holds a state the line cannot change. His words:
+#   *"cws1 is closed bar, so the wob is built-in"*.
+#   IT IS SEPARATE FROM LIFT_WOB ON PURPOSE. LIFT_WOB 8 is read by v4lineage, v4core, the backstop
+#   and v4saviour; moving it would add 55,533 LOW lift-offs on the emerging ws1r alone.
 L2_RE_IB_MIN = _knob('L2_RE_IB_MIN', 2, int)    # v4_reentry: how many Mage rungs above ws5 must
 #   stay IB for the WHOLE ws5Mage oob run. Joe 1026 corrected his own wording: *"my 'any TF >5'
 #   meant 'if any of the TFs higher than TF5' - I was looking for just one TF above 5 to be ib
@@ -431,6 +439,9 @@ RULED = {
     'L2_T1_GRACE_S': (120,  '"the 2 minutes (CAUSALLY) following" - 1025, confirmed a knob'),
     'L2_T3_FRAC':   (0.75,  '"int(round(75%))" - 1025, of the HTF lines that have been oob since'
                             ' the arm bar'),
+    'L2_CWS1R_WOB': (1,     '"a lineage2-only wob 1 for cws1r" - 1026. On the closed line the wob'
+                            ' suppresses 3.0% against the emerging line\'s 69.4%, and the value is'
+                            ' unchanged across the whole hold on 99.2% of lift-offs'),
     'L2_RE_IB_MIN': (2,     '"it should be 2 or more TFs that were ib while ws5Mage was oob" -'
                             ' 1026. He asks whether 2 is too loose; the sweep-pivot scoring of the'
                             ' signals it produces is the measurement he called for'),
@@ -632,7 +643,7 @@ def table():
              'TF_CEILING': 'TF', 'LIN_IB_DWELL': 'bars per TF', 'TRAJ_WIDTH': 'bars per TF-minute',
              'L2_MOM_MAXTF': 'timeframe', 'L2_LIN_HOP': 'timeframe hops',
              'L2_T1_GRACE_S': 'seconds', 'L2_T3_FRAC': 'fraction of the oob HTF lines',
-             'L2_RE_IB_MIN': 'Mage rungs that stayed IB',
+             'L2_RE_IB_MIN': 'Mage rungs that stayed IB', 'L2_CWS1R_WOB': 'bars',
              'TRAJ_MIN_FRAC': 'fraction of the block', 'TRAJ_MIN_TRAVEL': 'r-points', 'SAV_WS2_OOB_TEST': 'minutes', 'SAV_IB_XWOB': 'bars',
              'SAV_MAGE_GATE_WOB': 'bars', 'SAV_CASCADE_GAP': 'bars',
              'LIFT_PTS': 'samples', 'LIFT_TOL': 'r-points', 'LIFT_WOB': 'bars',

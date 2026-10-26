@@ -15,6 +15,30 @@ exactly what `v4_confluence.raw_traj`/`has` already do, and `TRAJ_WIDTH` 21.0 wa
 lines. So `jig.away_toward` is NOT used - its perspective is ws1Mage's by his own 1019 ruling for a
 different mech, and only dead v3 consumes it.
 
+TWO LADDERS - STATE ON CLOSED, REVERSAL TIMING ON EMERGING. Joe 1026, his words:
+
+    add all lines to csw1-12. these closed lines will give us more accurate fence/exfence baton
+    decisions
+    with ws1-12, emerg: time the reversals
+    best of both worlds
+
+    `C`  the CLOSED cws1r..cws12r set. Every STATE read: oob, ex-fence, the rider scan, the baton
+         candidates, the baton-pass crosses, and the trajectory.
+    `E`  the EMERGING ws1r..ws12r set. The reversal TIMING only - the rider's *"has reversed"*.
+
+WHY IT MATTERS, measured on his own 2026-08-29 07:23 walk: emerging ws7r slips 80.11 -> 78.57
+across 35 s and crosses below the 80 fence, which exhausted the walk 11 minutes early. Closed
+cws7r reads 80.86 at both bars and does not move, because a 7-minute closed line steps only on its
+own seam.
+
+THE TRAJECTORY IS ON THE CLOSED LADDER, and that is MY reading, stated. He grouped the closed set
+with *"fence/exfence baton decisions"*, and the trajectory is an input to the same decision as the
+fence test - reading the fence on one ladder and the trajectory on the other for one decision would
+split a single judgement across two line sets.
+
+THE ARM RACE KEEPS HIS 1025 LINES - ws4r EMERGING, the cws lines CLOSED. His 1026 ruling named
+baton decisions; the arm race is not one, so it is left as he specified it.
+
 lin_hop APPLIES BETWEEN CADENCES, NOT AT ONE. Joe 1025, resolving the ws8->ws11 pass in his own
 08-30 example: *"when baton is being passed between cadence markers, linhop applies. at a cadence
 event, linhop doesn't apply"*, and the same for *"review the board from ws{riderTF} to
@@ -43,7 +67,7 @@ from optimus9.compute.rule2_trajectory import opposed_extrema
 sys.stderr = _e
 
 
-def towards(R, tf, bar, side):
+def towards(C, tf, bar, side):
     """Is ws{tf}r travelling TOWARD the target side at `bar`. -> bool.
 
     The banked v4 trajectory read, perspective = the target side. `travel` is the move from the
@@ -51,10 +75,10 @@ def towards(R, tf, bar, side):
     travel < 0 - which is `v4_confluence.raw_traj`'s own `(travel > 0) if dr > 0 else (travel < 0)`
     with the trade direction replaced by the target side, his 1025 ruling.
     """
-    bi, best, _ = opposed_extrema(R[tf], int(side), int(bar), K.traj_block(tf))
+    bi, best, _ = opposed_extrema(C[tf], int(side), int(bar), K.traj_block(tf))
     if bi is None:
         return False
-    travel = float(R[tf][int(bar)]) - best
+    travel = float(C[tf][int(bar)]) - best
     if not np.isfinite(travel):
         return False
     ok = (travel > 0) if int(side) > 0 else (travel < 0)
@@ -102,17 +126,17 @@ def div_verdict(CL, close, side, bar):
     return v
 
 
-def rider_at(R, side, bar, lo=1, hi=None):
+def rider_at(C, side, bar, lo=1, hi=None):
     """The highest ws{TF}r that is ex-fence at `bar`. -> tf or None.
 
         --scan ws{1 to v4_mom_maxTF} for the highest ws{TF}r ex-fence, and make that TF the rider
     """
     hi = int(K.L2_MOM_MAXTF) if hi is None else int(hi)
-    got = [t for t in range(int(lo), hi + 1) if t in R and K.ex_fence(R[t][int(bar)], side)]
+    got = [t for t in range(int(lo), hi + 1) if t in C and K.ex_fence(C[t][int(bar)], side)]
     return max(got) if got else None
 
 
-def candidates(R, side, bar, rider, cap=None):
+def candidates(C, side, bar, rider, cap=None):
     """Baton-pass candidates above `rider` at `bar`. -> [tf], lowest first.
 
         -baton can only be received by an r line that is 1) ex v4mom-fnc and 2) tagged as `towards`
@@ -121,16 +145,16 @@ def candidates(R, side, bar, rider, cap=None):
     """
     top = int(K.L2_MOM_MAXTF) if cap is None else min(int(cap), int(K.L2_MOM_MAXTF))
     return [t for t in range(int(rider) + 1, top + 1)
-            if t in R and K.ex_fence(R[t][int(bar)], side) and towards(R, t, bar, side)]
+            if t in C and K.ex_fence(C[t][int(bar)], side) and towards(C, t, bar, side)]
 
 
-def _pass_bars(R, tf, side, frm, B):
+def _pass_bars(C, tf, side, frm, B):
     """The bars ws{tf}r hands the baton on, between cadences. -> a sorted list.
 
         --1) rider was oob and has crossed to ib
         --2) rider was between ex-v4mom-fnc and oob, and crossed to in-v4mom-fnc
     """
-    v = np.asarray(R[tf], float)
+    v = np.asarray(C[tf], float)
     out = [int(c) for c, _cf, s in oob_ib_cross(v, K.OOB_HI, K.OOB_LO, 1)
            if s == int(side) and int(frm) <= c <= int(B)]
     #   (2) the ex-fence -> in-fence cross, on the target side
@@ -141,8 +165,12 @@ def _pass_bars(R, tf, side, frm, B):
     return sorted(set(out))
 
 
-def walk(CL, R, close, side, frm, B, trace=None):
+def walk(CL, C, E, close, side, frm, B, trace=None):
     """One lineage2 walk. -> (the verdict, the bar, the rows).
+
+        CL  the closed c-set from v4_core_arm.lines() plus 'M' - cws1b, cws1r, cws2r, cws2Mage
+        C   the CLOSED cws1r..cws12r ladder. Every state read
+        E   the EMERGING ws1r..ws12r ladder. The reversal timing only
 
     The arm race, then the rider, then one decision per cadence bar until a verdict.
     """
@@ -153,7 +181,7 @@ def walk(CL, R, close, side, frm, B, trace=None):
         if trace is not None:
             trace.append(kw)
 
-    arm, which, why = arm_race(CL, R, side, frm, B)
+    arm, which, why = arm_race(CL, E, side, frm, B)    # his 1025 lines: ws4r EMERGING
     if arm is None:
         row(bar=None, stage='NO ARM', why=why)
         return 'NO ARM', None, rows
@@ -169,38 +197,38 @@ def walk(CL, R, close, side, frm, B, trace=None):
         if v is not None and ((v > 0 and int(side) > 0) or (v < 0 and int(side) < 0)):
             return 'DIV REV-TRADE', int(arm), rows
 
-    rider = rider_at(R, side, arm)
+    rider = rider_at(C, side, arm)
     if rider is None:
         #   *"IF no rider is assigned at the armed bar +5s --- the walk ends"*
         row(bar=arm + 1, stage='NO RIDER', why='no ws1..ws%d r is ex-fence at the arm bar + 5s'
                                                % K.L2_MOM_MAXTF)
         return 'NO RIDER REV-TRADE', int(arm) + 1, rows
-    row(bar=arm, stage='RIDER', why='ws%d r %.2f, the highest ex-fence' % (rider, R[rider][arm]))
+    row(bar=arm, stage='RIDER', why='cws%d r %.2f, the highest ex-fence' % (rider, C[rider][arm]))
 
     cads = sorted(CAD.t1(CL, side, arm, B) + CAD.t2(CL, side, arm, B)
-                  + CAD.t3(R, side, arm, B), key=lambda z: z[0])
+                  + CAD.t3(C, E, side, arm, B), key=lambda z: z[0])
     cads = [(b, w) for b, w in cads if b >= arm]
     last = int(arm)
     for bar, cwhy in cads:
         #   BETWEEN the cadences the baton moves invisibly, under lin_hop
         while True:
-            pb = [b for b in _pass_bars(R, rider, side, last + 1, bar)]
+            pb = [b for b in _pass_bars(C, rider, side, last + 1, bar)]
             if not pb:
                 break
-            got = candidates(R, side, pb[0], rider, cap=rider + int(K.L2_LIN_HOP))
+            got = candidates(C, side, pb[0], rider, cap=rider + int(K.L2_LIN_HOP))
             if not got:
                 break
             row(bar=pb[0], stage='BATON', why='ws%d -> ws%d, between cadences, lin_hop %d'
                                               % (rider, max(got), K.L2_LIN_HOP))
             rider = max(got)
             last = pb[0]
-        rv = R[rider][bar]
+        rv = C[rider][bar]                             # STATE: the closed ladder
         no_ex = not K.ex_fence(rv, side)
-        revd = any(last <= K.lift_stamp(int(x)) <= bar
-                   for x in F.revs(np.asarray(R[rider], float), rider, side))
+        revd = any(last <= K.lift_stamp(int(x)) <= bar  # TIMING: the emerging ladder
+                   for x in F.revs(np.asarray(E[rider], float), rider, side))
         #   AT a cadence, lin_hop does not apply - the whole board above the rider is in range
-        got = candidates(R, side, bar, rider)
-        row(bar=bar, stage='CADENCE', why='%s | rider ws%d %.2f, no-longer-exfence %s, reversed %s'
+        got = candidates(C, side, bar, rider)
+        row(bar=bar, stage='CADENCE', why='%s | rider cws%d %.2f, no-longer-exfence %s, reversed %s'
                                           % (cwhy, rider, rv, 'yes' if no_ex else 'no',
                                              'yes' if revd else 'no'),
             cands=tuple(got))
@@ -211,14 +239,14 @@ def walk(CL, R, close, side, frm, B, trace=None):
             last = int(bar)
             continue
         if K.oob(rv, side) or (K.ex_fence(rv, side) and not revd):
-            row(bar=bar, stage='HOLD', why='rider ws%d %.2f %s - no action' % (
+            row(bar=bar, stage='HOLD', why='rider cws%d %.2f %s - no action' % (
                 rider, rv, 'oob' if K.oob(rv, side) else 'ex-fence and not reversed'))
             last = int(bar)
             continue
         if no_ex or revd:
             #   t4cadence: a non-oob rider that reversed with nowhere to pass
             tag = 't4' if (revd and not K.oob(rv, side)) else 'exhaust'
-            row(bar=bar, stage='EXHAUST', why='%s - rider ws%d %.2f, no candidate on the whole board'
+            row(bar=bar, stage='EXHAUST', why='%s - rider cws%d %.2f, no candidate on the whole board'
                                               % (tag, rider, rv))
             return 'EXHAUST', int(bar), rows
     row(bar=None, stage='NO VERDICT', why='%d cadence(s) and no exhaust to the window end'

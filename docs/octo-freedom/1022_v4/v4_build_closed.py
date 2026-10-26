@@ -36,14 +36,14 @@ sys.stderr = _e
 
 #   (the name v4 reads it by, the role in ln.SPEC, the timeframe in SECONDS)
 #   30 s is sub-wsf on Joe's 1017 band names: wsf = ws1-ws12, sub-wsf = g5-g30, dtf = >ws12.
-#   cws1Mage and cws2Mage were already cached - v4core reads them - and are listed so the whole
-#   closed Mage ladder is declared in one place. Joe 1024: *"create cws{TF3-10}Mage lines and set
-#   them all to mode: closed"*.
-#   cws11Mage and cws12Mage added 1026 - Joe: *"create a cache for cws{1-12}Mage (mode:closed) and
-#   test them in the reentry mech"*. 12 is L2_MOM_MAXTF, so the closed ladder now reaches the top
-#   rung lineage2 declares.
+#   THE WHOLE cws1..cws12 SET, EVERY ROLE, 1026. Joe: *"add all lines to csw1-12. these closed
+#   lines will give us more accurate fence/exfence baton decisions"*. 12 is L2_MOM_MAXTF, so the
+#   closed set now reaches the top rung lineage2 declares, on all five roles ln.SPEC carries -
+#   Mage, b, m, r and x. 30 of the 60 were already cached; the build adds the rest.
+ROLES = ('Mage', 'b', 'm', 'r', 'x')
 WANTED = ((('gcws30Mage', 'Mage', 30),)
-          + tuple(('cws%dMage' % t, 'Mage', t * 60) for t in range(1, 13)))
+          + tuple(('cws%d%s' % (t, role), role, t * 60)
+                  for role in ROLES for t in range(1, 13)))
 MODE = 'closed'
 
 

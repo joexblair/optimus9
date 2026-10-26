@@ -7,7 +7,8 @@ import ln, v4_knobs as K, v4_rcfg_sweep as RS, v4_core_arm as CA
 import v4_l2_cadence as CAD, v4_lineage2 as L2
 from v4_backstop_trades import prices
 
-R = RS.load((RS.K0, RS.R0, RS.S0))
+E = RS.load((RS.K0, RS.R0, RS.S0))                # EMERGING ws1r..ws12r - reversal TIMING
+C = {t: CA._line('r', t) for t in range(1, 13)}   # CLOSED cws1r..cws12r - every STATE read
 CL = CA.lines(); CL['M'] = CA.mage_ladder(2)      # cws1Mage, cws2Mage CLOSED
 close, _hi, _lo = prices()
 U = lambda k: ln.U(int(k))
@@ -15,6 +16,8 @@ U = lambda k: ln.U(int(k))
 print('# lineage2 VALIDATION against his 1025 examples. RULED_OK %s' % K.RULED_OK)
 print('# L2_MOM_MAXTF %d | L2_LIN_HOP %d | L2_T1_GRACE_S %d | L2_T3_FRAC %s | RMOM_FNC %s'
       % (K.L2_MOM_MAXTF, K.L2_LIN_HOP, K.L2_T1_GRACE_S, K.L2_T3_FRAC, K.RMOM_FNC))
+print('# L2_CWS1R_WOB %d | STATE on the CLOSED cws ladder, reversal TIMING on the EMERGING one'
+      % K.L2_CWS1R_WOB)
 print('')
 
 # ---- t1cadence: his four examples
@@ -55,7 +58,7 @@ for ex, sd in (('2026-08-28 14:58:00', +1), ('2026-08-28 17:48:00', +1),
 print('')
 print('## his 2026-08-29 07:04 HIGH walk - every row')
 print('')
-v, bar, rows = L2.walk(CL, R, close, +1, ln.K('2026-08-29 07:00:00'), ln.K('2026-08-29 09:00:00'))
+v, bar, rows = L2.walk(CL, C, E, close, +1, ln.K('2026-08-29 07:00:00'), ln.K('2026-08-29 09:00:00'))
 print('| the bar | stage | why |'); print('|---|---|---|')
 for r in rows:
     print('| %s | %s | %s |' % (U(r['bar']) if r['bar'] is not None else '-', r['stage'], r['why']))
@@ -68,7 +71,7 @@ print('')
 print('## his 2026-08-30 18:37 walk - every row')
 print('')
 for sd in (-1, +1):
-    v, bar, rows = L2.walk(CL, R, close, sd, ln.K('2026-08-30 18:35:00'), ln.K('2026-08-30 20:00:00'))
+    v, bar, rows = L2.walk(CL, C, E, close, sd, ln.K('2026-08-30 18:35:00'), ln.K('2026-08-30 20:00:00'))
     print('### target-side %s' % ('HIGH' if sd>0 else 'LOW'))
     print('')
     print('| the bar | stage | why |'); print('|---|---|---|')
@@ -84,7 +87,7 @@ print('     1915 ws11 oob->ib, t3 end-of-walk')
 print('')
 print('## his 2026-08-29 02:35 basic walk - LONG, target-side HIGH')
 print('')
-v, bar, rows = L2.walk(CL, R, close, +1, ln.K('2026-08-29 02:35:05'), ln.K('2026-08-29 06:00:00'))
+v, bar, rows = L2.walk(CL, C, E, close, +1, ln.K('2026-08-29 02:35:05'), ln.K('2026-08-29 06:00:00'))
 print('| the bar | stage | why |'); print('|---|---|---|')
 for r in rows:
     print('| %s | %s | %s |' % (U(r['bar']) if r['bar'] is not None else '-', r['stage'], r['why']))
