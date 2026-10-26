@@ -6,6 +6,17 @@
 
     build it now. the described reentry will be the only reentry mech in lineage2
 
+HIS WORDING, CORRECTED BY HIM 1026 after the first build blocked 3 of his 4 examples:
+
+    the problem is in my wording: "ws5Mage oob to IB AND ws{any TF >5}Mage failed to reach oob"
+    -my "any TF >5" meant "if any of the TFs higher than TF5"
+    -I was looking for just one TF above 5 to be ib while ws5Mage was oob
+    on hindsight, it should be 2 or more TFs that were ib while ws5Mage was oob
+
+So the test is a COUNT of rungs that stayed IB for the WHOLE run, against `L2_RE_IB_MIN` 2 - not
+"no rung reached oob", which is how the first build read it. Five of the seven rungs above ws5 may
+reach oob and the signal still fires.
+
 ONE RESPONSIBILITY: state every v4_reentry signal on the tape. It runs no walk and reads no open
 position - the router opens the trade, and lineage2's walk then runs on from there.
 
@@ -87,17 +98,21 @@ def produce(MG, A, B, trace=None):
             reached = [t for t in above
                        if (np.nanmin(MG[t][s0:c]) <= K.OOB_LO if side < 0
                            else np.nanmax(MG[t][s0:c]) >= K.OOB_HI)]
+            stayed = [t for t in above if t not in reached]
             row['reached'] = tuple(reached)
-            if reached:
-                row['stage'] = 'ws%s reached oob during the run' % ','.join(str(t) for t in reached)
+            row['stayed'] = tuple(stayed)
+            if len(stayed) < int(K.L2_RE_IB_MIN):
+                row['stage'] = ('only %d rung(s) stayed IB, needs %d'
+                                % (len(stayed), int(K.L2_RE_IB_MIN)))
                 _keep(trace, row)
                 continue
             row['stage'] = 'reentry'
             _keep(trace, row)
             out.append(SG.signal(int(c), side, 'reentry', int(s0),
-                                 'ws%dMage %s oob %s..%s, no higher Mage reached oob'
+                                 'Mage%d %s oob %s..%s, %d rung(s) stayed IB: ws%s'
                                  % (BASE_TF, 'LOW' if side < 0 else 'HIGH',
-                                    SG.why_time(s0), SG.why_time(int(c) - 1))))
+                                    SG.why_time(s0), SG.why_time(int(c) - 1), len(stayed),
+                                    ','.join(str(t) for t in stayed))))
     out.sort(key=lambda z: (z['bar'], z['side']))
     return out
 

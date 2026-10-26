@@ -320,6 +320,12 @@ L2_LIN_HOP = _knob('L2_LIN_HOP', 2, int)        # *"lin_hop = 2"*. Max hops ride
 #   markers, linhop applies. at a cadence event, linhop doesn't apply"*.
 L2_T1_GRACE_S = _knob('L2_T1_GRACE_S', 120, int)  # *"the 2 minutes (CAUSALLY) following"*, and he
 #   confirmed it is a knob. Seconds, forward of the cws1b oob->ib cross.
+L2_RE_IB_MIN = _knob('L2_RE_IB_MIN', 2, int)    # v4_reentry: how many Mage rungs above ws5 must
+#   stay IB for the WHOLE ws5Mage oob run. Joe 1026 corrected his own wording: *"my 'any TF >5'
+#   meant 'if any of the TFs higher than TF5' - I was looking for just one TF above 5 to be ib
+#   while ws5Mage was oob"*, then *"on hindsight, it should be 2 or more TFs that were ib while
+#   ws5Mage was oob"*. It is a COUNT of rungs that stayed in, not an all-of test - the first build
+#   read his words as "no rung reached oob" and blocked 3 of his 4 examples.
 L2_T3_FRAC = _knob('L2_T3_FRAC', 0.75)          # *"int(round(75%))"* of the HTF lines that HAVE
 #   BEEN oob since the arm bar - his population, confirmed 1025, not all of ws7..ws12.
 #   v4mom_fnc IS RMOM_FNC. Joe 1025, asked whether they are the same knob: *"yes"*. So there is no
@@ -425,6 +431,9 @@ RULED = {
     'L2_T1_GRACE_S': (120,  '"the 2 minutes (CAUSALLY) following" - 1025, confirmed a knob'),
     'L2_T3_FRAC':   (0.75,  '"int(round(75%))" - 1025, of the HTF lines that have been oob since'
                             ' the arm bar'),
+    'L2_RE_IB_MIN': (2,     '"it should be 2 or more TFs that were ib while ws5Mage was oob" -'
+                            ' 1026. He asks whether 2 is too loose; the sweep-pivot scoring of the'
+                            ' signals it produces is the measurement he called for'),
 }
 
 #   the Jig's own, Joe 1017. Asserted, never re-declared.
@@ -623,6 +632,7 @@ def table():
              'TF_CEILING': 'TF', 'LIN_IB_DWELL': 'bars per TF', 'TRAJ_WIDTH': 'bars per TF-minute',
              'L2_MOM_MAXTF': 'timeframe', 'L2_LIN_HOP': 'timeframe hops',
              'L2_T1_GRACE_S': 'seconds', 'L2_T3_FRAC': 'fraction of the oob HTF lines',
+             'L2_RE_IB_MIN': 'Mage rungs that stayed IB',
              'TRAJ_MIN_FRAC': 'fraction of the block', 'TRAJ_MIN_TRAVEL': 'r-points', 'SAV_WS2_OOB_TEST': 'minutes', 'SAV_IB_XWOB': 'bars',
              'SAV_MAGE_GATE_WOB': 'bars', 'SAV_CASCADE_GAP': 'bars',
              'LIFT_PTS': 'samples', 'LIFT_TOL': 'r-points', 'LIFT_WOB': 'bars',
