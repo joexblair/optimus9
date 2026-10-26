@@ -472,6 +472,20 @@ def oob(v, side):
     return (float(v) >= OOB_HI) if side > 0 else (float(v) <= OOB_LO)
 
 
+def oob_mask(a, side):
+    """`oob` asked at EVERY bar of an array, in one pass. -> bool array.
+
+    THE SAME RULE AS `oob`, ONE HOME. Joe 1026: *"whichever mech is deciding `oob` needs to receive
+    the emerging values"* - which is a question about who hands it the number, and it exposed four
+    places that had restated the comparison inline to vectorise it. A restated rule drifts the
+    moment OOB_FNC or the boundary changes, so the vector form lives here beside the scalar one and
+    the two cannot disagree.
+    """
+    import numpy as _np
+    v = _np.asarray(a, float)
+    return (v >= OOB_HI) if int(side) > 0 else (v <= OOB_LO)
+
+
 def ib(v):
     """Is v in bounds."""
     return OOB_LO < float(v) < OOB_HI

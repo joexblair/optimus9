@@ -90,8 +90,8 @@ def _runs(a):
 
 
 def _oob(line, side):
-    v = np.asarray(line, float)
-    return (v <= K.OOB_LO) if int(side) < 0 else (v >= K.OOB_HI)
+    """The oob mask, through `K.oob_mask` so the rule has one home - his 1026 point."""
+    return K.oob_mask(line, side)
 
 
 def t1(CL, side, A, B):

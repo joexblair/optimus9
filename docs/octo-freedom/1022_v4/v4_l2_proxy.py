@@ -106,9 +106,23 @@ class Board:
 
         *"when any of ws7r to ws12r (HTF lines) have been oob already in this trade"*, and
         *"already in this trade"* is measured from the arm bar - his 1025 ruling.
+
+        THE oob DECISION IS `K.oob`, ONE COPY. Joe 1026: *"find out how 't3's two gates' know if a
+        line is oob. whichever mech is deciding `oob` needs to receive the emerging values"*. The
+        first build inlined `seg <= K.OOB_LO` to vectorise over the span, which put a SECOND copy
+        of the oob rule in this file. It agreed with `K.oob` - the measured bar does not move - but
+        a duplicate rule drifts the moment OOB_FNC or the boundary changes. The span is reduced to
+        a single extreme first, so `K.oob` is still asked once per call rather than per bar.
         """
         seg = self._g(tf)[int(a):int(b) + 1]
-        return bool((seg <= K.OOB_LO).any() if int(side) < 0 else (seg >= K.OOB_HI).any())
+        if not seg.size or not np.isfinite(seg).any():
+            return False
+        ex = float(np.nanmin(seg)) if int(side) < 0 else float(np.nanmax(seg))
+        return bool(K.oob(ex, side))
+
+    def gate_oob(self, tf, bar, side):
+        """Is ws{tf}r oob on `side` at one bar, on the GATE ladder. -> bool."""
+        return bool(K.oob(self._g(tf)[int(bar)], side))
 
     def gate_ex_fence(self, tf, bar, side):
         """Is ws{tf}r ex-fence on `side` at `bar`. t3's *"no higher TFs exfence"* gate."""

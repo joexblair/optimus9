@@ -85,7 +85,7 @@ def produce(MG, A, B, trace=None):
     out = []
     #   the ib crosses give the run's END and its side; the run's START comes from the oob mask.
     for side in (-1, +1):
-        oob = (m5 <= K.OOB_LO) if side < 0 else (m5 >= K.OOB_HI)
+        oob = K.oob_mask(m5, side)                 # the rule lives in v4_knobs, not here
         starts = {e: s for s, e in _runs(oob)}
         for c, cf, s in oob_ib_cross(m5, K.OOB_HI, K.OOB_LO, 1):
             if s != side or not (int(A) <= c <= int(B)):
@@ -95,9 +95,11 @@ def produce(MG, A, B, trace=None):
                 continue
             row = {'bar': int(c), 'side': side, 'run_from': int(s0), 'run_to': int(c) - 1}
             assert row['run_to'] < row['bar'], 'the oob run does not end before its ib cross'
+            #   the span reduces to its extreme first, then `K.oob` decides - one copy of the
+            #   rule, asked once per rung rather than per bar. His 1026 point.
             reached = [t for t in above
-                       if (np.nanmin(MG[t][s0:c]) <= K.OOB_LO if side < 0
-                           else np.nanmax(MG[t][s0:c]) >= K.OOB_HI)]
+                       if K.oob(np.nanmin(MG[t][s0:c]) if side < 0
+                                else np.nanmax(MG[t][s0:c]), side)]
             stayed = [t for t in above if t not in reached]
             row['reached'] = tuple(reached)
             row['stayed'] = tuple(stayed)
