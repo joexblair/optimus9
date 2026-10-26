@@ -208,7 +208,18 @@ def t3(BD, side, arm, B):
         rev = [t for t in been if any(int(arm) <= x <= k for x in stamp[t])]
         if len(rev) < need:
             continue
-        #   his gate: no higher TF ex-fence, so no baton candidate exists above the top reverser
+        #   CAUSAL, ASSERTED NOT CLAIMED. Joe 1026 on the reference rung: *"calling it 'the top
+        #   reverser' makes me uneasy - that feels like lookahead"*. Every reversal counted at this
+        #   bar has its stamp at or before it; the span reads are [arm, k] and the fence reads are
+        #   at k. Nothing forward of k is touched.
+        assert all(min(x for x in stamp[t] if x >= int(arm)) <= k for t in rev), \
+            't3 counted a reversal whose stamp has not landed yet'
+        #   `top` IS MINE, NOT HIS. His gate is *"no higher TFs exfence, ie there are no
+        #   baton-pass candidates"*, and baton candidates are measured from the RIDER - which this
+        #   module does not know. max(rev) stands in for it, and the two differ whenever the rider
+        #   is below the highest reverser: at 2026-08-30 18:56:10 the reversers are ws7, ws8, ws11
+        #   and the rider is ws8, so this gate looks above ws11 and misses ws11 itself being a
+        #   candidate for ws8. UNRULED - he has been asked which rung the gate references.
         top = max(rev)
         above = [t for t in range(top + 1, hi + 1)
                  if t in BD.tfs and BD.gate_ex_fence(t, k, side)]           # GATE
