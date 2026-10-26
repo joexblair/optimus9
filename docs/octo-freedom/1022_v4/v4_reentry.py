@@ -14,13 +14,22 @@ the direction that side implies. His 08-29 02:35 example is *"a LONG open at 023
 signal"* with *"target-side is high for the LONG"*, which is `v4_signal.direction(-1) == 'LONG'` -
 a LOW-oob ws5Mage run. So the signal side is the side of the run ws5Mage just left.
 
-THE LADDER ABOVE ws5 IS EMERGING, his 1025 ruling for the whole rider band: *"I don't want slower
-TF's running on closed bars because it spoils the line reversal times"*. Its top rung is
-`L2_MOM_MAXTF` 12 - *"ws{any TF >5}Mage"* needs a top and 12 is the one he set for this fork.
+THE LADDER'S MODE IS THE CALLER'S. The SPEC says emerging, his 1025 ruling for the whole rider
+band: *"I don't want slower TF's running on closed bars because it spoils the line reversal
+times"*. Its top rung is `L2_MOM_MAXTF` 12 - *"ws{any TF >5}Mage"* needs a top and 12 is the one he
+set for this fork.
 
-NO DWELL ON THE ib CROSS. Joe 1025: *"no dwell... because we're on closed bars, we have an
-automatic wob"*. ws5Mage is EMERGING here, so that reasoning is his for the cws lines rather than
-this one - stated, and the cross is taken at `xwob` 1, its own bar.
+THE CLOSED LADDER IS AN EXPERIMENT HE CALLED FOR, 1026: *"let's experiment: create a cache for
+cws{1-12}Mage (mode:closed) and test them in the reentry mech"*. It is the caller's `MG` dict, so
+this file holds no mode of its own and neither run is privileged in the code.
+
+WHY IT MATTERS, measured on the emerging run over 2026-08-28 and 08-29: ws5Mage emerging produces
+206 oob runs in two days, median 30 s, 41 of them a single bar. 44 of the 53 signals come from runs
+under a minute, where *"no higher Mage reached oob"* is satisfied because there was no time for one
+to. His no-dwell ruling was reasoned on CLOSED bars - *"because we're on closed bars, we have an
+automatic wob"* - and the emerging line has no such wob.
+
+NO DWELL ON THE ib CROSS, his ruling, so the cross is taken at `xwob` 1 - its own bar.
 
 CAUSAL. The oob run and the partner test both read bars at or before the cross, and the assert
 carries it.

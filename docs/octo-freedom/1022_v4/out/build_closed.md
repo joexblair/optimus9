@@ -14,6 +14,8 @@
 | cws8Mage | 480s | ('bb', 38, 0.93, 'close') | aa32430e2c30d637c3b2 | CACHED |
 | cws9Mage | 540s | ('bb', 38, 0.93, 'close') | 229f466895dedf6d77c6 | CACHED |
 | cws10Mage | 600s | ('bb', 38, 0.93, 'close') | 55126b9f88bfa4159958 | CACHED |
+| cws11Mage | 660s | ('bb', 38, 0.93, 'close') | 93e8f4c9ffa3a6ee90bd | CACHED |
+| cws12Mage | 720s | ('bb', 38, 0.93, 'close') | 4b0fa105a8d65190b8aa | CACHED |
 
 # ts 2026-07-02 12:00:00 -> 2026-10-04 23:59:55, 1632960 bars
 
@@ -30,6 +32,8 @@
 | cws8Mage | 1629408 | -55.38 | 49.18 | 162.88 | 2026-07-02 16:56:00 |
 | cws9Mage | 1628964 | -50.69 | 49.13 | 160.89 | 2026-07-02 17:33:00 |
 | cws10Mage | 1628520 | -53.21 | 48.72 | 161.42 | 2026-07-02 18:10:00 |
+| cws11Mage | 1628136 | -49.07 | 48.62 | 156.13 | 2026-07-02 18:42:00 |
+| cws12Mage | 1627632 | -46.52 | 48.46 | 155.99 | 2026-07-02 19:24:00 |
 
 | the line | mode | bars that changed | % of bars |
 |---|---|---|---|
@@ -55,3 +59,7 @@
 | cws9Mage | emerging | 1114689 | 68.3% |
 | cws10Mage | closed | 18009 | 1.1% |
 | cws10Mage | emerging | 1114557 | 68.3% |
+| cws11Mage | closed | 17165 | 1.1% |
+| cws11Mage | emerging | 1114676 | 68.3% |
+| cws12Mage | closed | 16629 | 1.0% |
+| cws12Mage | emerging | 1114631 | 68.3% |

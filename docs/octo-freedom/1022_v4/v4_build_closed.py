@@ -39,8 +39,11 @@ sys.stderr = _e
 #   cws1Mage and cws2Mage were already cached - v4core reads them - and are listed so the whole
 #   closed Mage ladder is declared in one place. Joe 1024: *"create cws{TF3-10}Mage lines and set
 #   them all to mode: closed"*.
+#   cws11Mage and cws12Mage added 1026 - Joe: *"create a cache for cws{1-12}Mage (mode:closed) and
+#   test them in the reentry mech"*. 12 is L2_MOM_MAXTF, so the closed ladder now reaches the top
+#   rung lineage2 declares.
 WANTED = ((('gcws30Mage', 'Mage', 30),)
-          + tuple(('cws%dMage' % t, 'Mage', t * 60) for t in range(1, 11)))
+          + tuple(('cws%dMage' % t, 'Mage', t * 60) for t in range(1, 13)))
 MODE = 'closed'
 
 
