@@ -310,6 +310,25 @@ SP_TFS = _knob('SP_TFS', 'wide', str)       # 'his' = his six, 'wide' = plus ws1
 #   check(). SP_PICK and SP_TFS were written reading W_SP_* directly, which put them outside the
 #   refusal: an off-ruled SP_PICK ran as the machine and reported RULED_OK True.
 
+# -- lineage2, the 1025 FORK ------------------------------------------------------------------
+#   A FORK, not an arm of v4lineage. Joe 1025: *"I need a lineage2 fork of lineage - we're going to
+#   play with a new idea"*. Nothing in the machine calls it; the knobs live here because v4_knobs is
+#   the one knob home and a knob outside it cannot be checked.
+L2_MOM_MAXTF = _knob('L2_MOM_MAXTF', 12, int)   # *"v4mom_maxTF = 12"*. The ladder's top rung.
+L2_LIN_HOP = _knob('L2_LIN_HOP', 2, int)        # *"lin_hop = 2"*. Max hops rider -> candidate, and
+#   it applies ONLY between cadence events. Joe 1025: *"when baton is being passed between cadence
+#   markers, linhop applies. at a cadence event, linhop doesn't apply"*.
+L2_T1_GRACE_S = _knob('L2_T1_GRACE_S', 120, int)  # *"the 2 minutes (CAUSALLY) following"*, and he
+#   confirmed it is a knob. Seconds, forward of the cws1b oob->ib cross.
+L2_T3_FRAC = _knob('L2_T3_FRAC', 0.75)          # *"int(round(75%))"* of the HTF lines that HAVE
+#   BEEN oob since the arm bar - his population, confirmed 1025, not all of ws7..ws12.
+#   v4mom_fnc IS RMOM_FNC. Joe 1025, asked whether they are the same knob: *"yes"*. So there is no
+#   L2 fence knob - moving RMOM_FNC moves lineage2 too, on purpose.
+#   v4cadence_fnc is DROPPED. Joe 1025 asked *"#JOE, is this needed?"* and then: *"drop"*.
+#   NO ib-CROSS DWELL KNOB EXISTS HERE. Joe 1025: *"no dwell. the way I see it: because we're on
+#   closed bars, we have an automatic wob. it also means I have TV values that are precisely
+#   aligned with what the code sees"*.
+
 #   name                value              Joe's words, 1022 unless dated
 RULED = {
     'RMOM_FNC':         (80.0,  '"v4_rmom_fnc, default 80 - fence used when testing if a r is close'
@@ -401,6 +420,11 @@ RULED = {
                              ' all eight, so the banked value is the one that was RUN. On his six'
                              ' alone the 18-row check scores 8 of 18 against 17 of 18. At'
                              ' ALIGN_S 300 ws1Mage and ws2Mage are the scale TF on 41.0% of events'),
+    'L2_MOM_MAXTF': (12,    '"v4mom_maxTF = 12" - 1025, the lineage2 fork'),
+    'L2_LIN_HOP':   (2,     '"lin_hop = 2" - 1025. Applies BETWEEN cadences only, his ruling'),
+    'L2_T1_GRACE_S': (120,  '"the 2 minutes (CAUSALLY) following" - 1025, confirmed a knob'),
+    'L2_T3_FRAC':   (0.75,  '"int(round(75%))" - 1025, of the HTF lines that have been oob since'
+                            ' the arm bar'),
 }
 
 #   the Jig's own, Joe 1017. Asserted, never re-declared.
@@ -597,6 +621,8 @@ def table():
              'LIN_LOOKBACK_FLOORED': 'yes/no', 'LIN_LOOKBACK_FLOOR_TF': 'TF',
              'V4CORE_MAGE_FNC': 'r-points', 'V4CORE_STEP0_JOIN': 'mode',
              'TF_CEILING': 'TF', 'LIN_IB_DWELL': 'bars per TF', 'TRAJ_WIDTH': 'bars per TF-minute',
+             'L2_MOM_MAXTF': 'timeframe', 'L2_LIN_HOP': 'timeframe hops',
+             'L2_T1_GRACE_S': 'seconds', 'L2_T3_FRAC': 'fraction of the oob HTF lines',
              'TRAJ_MIN_FRAC': 'fraction of the block', 'TRAJ_MIN_TRAVEL': 'r-points', 'SAV_WS2_OOB_TEST': 'minutes', 'SAV_IB_XWOB': 'bars',
              'SAV_MAGE_GATE_WOB': 'bars', 'SAV_CASCADE_GAP': 'bars',
              'LIFT_PTS': 'samples', 'LIFT_TOL': 'r-points', 'LIFT_WOB': 'bars',

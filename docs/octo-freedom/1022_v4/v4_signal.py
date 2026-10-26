@@ -24,7 +24,7 @@ mechs conflate internally"*. A signal states a BAR and a SIDE; the router derive
 import v4_knobs as K
 
 #   the mechs that may produce a signal. A new producer adds its name here and nowhere else.
-MECHS = ('core', 'backstop', 'saviour')
+MECHS = ('core', 'backstop', 'saviour', 'reentry')
 
 
 def signal(bar, side, mech, src, why=''):
