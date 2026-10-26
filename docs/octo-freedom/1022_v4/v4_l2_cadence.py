@@ -67,15 +67,23 @@ def t1(CL, side, A, B):
          reversing" bar, whichever is last
 
     THE REVERSAL IS lift_off ON cws1r, with the value's side of 50 tested at the stamp - the exact
-    construct `v4_w4_handover._next_ws1r_rev` uses for his *"same-side of 50"* wording. The stamp,
-    not the raw bar, is what a consumer may act on.
+    construct `v4_w4_handover._next_ws1r_rev` uses for his *"same-side of 50"* wording.
+
+    THE RAW BAR IS WHAT THE WINDOWS BOUND, and the STAMP is only the fire bar. That is his standing
+    rule, carried in `v4_fast.revs`: *"RAW, on purpose: the raw bar is the anchor and the identity
+    of the reversal. Every caller that ACTS on one passes it through K.lift_stamp first"*.
+
+    THE FIRST BUILD BOUNDED BOTH WINDOWS BY THE STAMP and so missed his 2026-08-29 07:48 example.
+    His cws1b oob run is 07:46:00..07:46:55, its ib cross 07:47:00, and the 120 s grace reaches
+    07:49:00. The cws1r reversal's raw bar is 07:49:00 - exactly on the edge, inside - and its
+    stamp is 07:49:35, 35 s past. Bounding by the stamp threw the event away.
 
     *"WHICHEVER IS LAST"* is his standing race shape - `max(the ib cross bar, the reversal stamp)`.
     """
     b1 = np.asarray(CL['b'], float)
     r1 = np.asarray(CL['r'][1], float)
     oob = _oob(b1, side)
-    stamps = np.array(sorted(K.lift_stamp(int(x)) for x in F.revs(r1, 1, side)), dtype=int)
+    raws = np.array(sorted(int(x) for x in F.revs(r1, 1, side)), dtype=int)
     grace = max(0, int(K.L2_T1_GRACE_S) // 5)
     out = []
     for c, _cf, s in oob_ib_cross(b1, K.OOB_HI, K.OOB_LO, 1):
@@ -85,20 +93,25 @@ def t1(CL, side, A, B):
         if run is None:
             continue
         s0, s1 = run
-        #   the DURING branch: a stamp inside the oob run, with cws1r on the target side of 50
-        during = [int(x) for x in stamps if s0 <= x <= s1 and K.side_of(r1[int(x)]) == int(side)]
+        #   the DURING branch: the RAW reversal inside the oob run, cws1r on the target side of 50
+        during = [int(x) for x in raws
+                  if s0 <= x <= s1 and K.side_of(r1[K.lift_stamp(int(x))]) == int(side)]
         if during:
-            out.append((int(c), 't1 cws1b oob %s..%s, cws1r reversed %s during'
-                        % (ln.U(s0)[11:], ln.U(s1)[11:], ln.U(during[-1])[11:])))
-            continue
-        #   the GRACE branch: a stamp forward of the cross, inside L2_T1_GRACE_S
-        late = [int(x) for x in stamps
-                if c < x <= c + grace and K.side_of(r1[int(x)]) == int(side)]
-        if late:
-            bar = max(int(c), late[0])             # *"whichever is last"*
+            bar = max(int(c), K.lift_stamp(during[-1]))      # *"whichever is last"*
             assert bar >= int(c), 'the t1 cadence precedes its own cws1b ib cross'
-            out.append((bar, 't1 cws1b ib %s, cws1r reversed %s inside the %ds grace'
-                        % (ln.U(c)[11:], ln.U(late[0])[11:], K.L2_T1_GRACE_S)))
+            out.append((bar, 't1 cws1b oob %s..%s, cws1r reversed %s during, stamp %s'
+                        % (ln.U(s0)[11:], ln.U(s1)[11:], ln.U(during[-1])[11:],
+                           ln.U(K.lift_stamp(during[-1]))[11:])))
+            continue
+        #   the GRACE branch: the RAW reversal forward of the cross, inside L2_T1_GRACE_S
+        late = [int(x) for x in raws
+                if c < x <= c + grace and K.side_of(r1[K.lift_stamp(int(x))]) == int(side)]
+        if late:
+            bar = max(int(c), K.lift_stamp(late[0]))         # *"whichever is last"*
+            assert bar >= int(c), 'the t1 cadence precedes its own cws1b ib cross'
+            out.append((bar, 't1 cws1b ib %s, cws1r reversed %s inside the %ds grace, stamp %s'
+                        % (ln.U(c)[11:], ln.U(late[0])[11:], K.L2_T1_GRACE_S,
+                           ln.U(K.lift_stamp(late[0]))[11:])))
     return out
 
 
