@@ -25,8 +25,10 @@ STATE ON CLOSED, REVERSAL TIMING ON EMERGING - Joe's 1026 ruling, his words:
     with ws1-12, emerg: time the reversals
     best of both worlds
 
-So t3's *"have been oob"* reads the CLOSED r ladder and its *"printing a reversal"* reads the
-EMERGING one. t1 and t2 are closed throughout, and both t1 qualifiers are cws1r - he corrected his
+t3 READS THE BOARD PROXY, not two dicts. Joe 1026: *"build a proxy that sends the emerging values
+to the gate decision"*. `v4_l2_proxy.Board` holds both ladders and routes each read - STATE to
+closed, reversal TIMING to emerging, and t3's two GATES to whichever `L2_GATE_MODE` names, which is
+'emerging' on his instruction. The routing table is in that one file. t1 and t2 are closed throughout, and both t1 qualifiers are cws1r - he corrected his
 own handover: *"this is my wrong: both should be cws1r"*.
 
 cws1r's REVERSAL CARRIES ITS OWN WOB, `L2_CWS1R_WOB` 1. Joe 1026: *"a lineage2-only wob 1 for
@@ -171,7 +173,7 @@ def t2(CL, side, A, B):
     return out
 
 
-def t3(C, E, side, arm, B):
+def t3(BD, side, arm, B):
     """TYPE 3 - the HTF reversal. -> [(the cadence bar, why)].
 
         TYPE 3 v4cadence (the HTF reversal - when any of ws7r to ws12r (HTF lines) have been oob
@@ -189,18 +191,15 @@ def t3(C, E, side, arm, B):
     THE EXTRA GATE IS HIS: *"the 75% qualification can only fire if there are no higher TFs
     exfence, ie there are no baton-pass candidates"*. That is tested at the candidate bar.
 
-    TWO LADDERS, his 1026 ruling. `C` is the CLOSED r set and carries every STATE read - the
-    *"have been oob"* population and the ex-fence gate. `E` is the EMERGING set and carries the
-    reversal TIMING, at the banked LIFT_WOB.
+    `BD` IS THE BOARD PROXY and it owns the closed/emerging routing. Both of t3's gates go through
+    its `gate_*` methods, so his 1026 instruction is honoured in one place rather than here.
     """
     hi = int(K.L2_MOM_MAXTF)
-    tfs = [t for t in range(HTF_LO, hi + 1) if t in C and t in E]
-    oobm = {t: _oob(C[t], side) for t in tfs}                # STATE: closed
-    stamp = {t: sorted(K.lift_stamp(int(x)) for x in F.revs(np.asarray(E[t], float), t, side))
-             for t in tfs}                                   # TIMING: emerging
+    tfs = [t for t in range(HTF_LO, hi + 1) if t in BD.tfs]
+    stamp = {t: BD.rev_stamps(t, side) for t in tfs}          # TIMING: emerging, always
     out = []
     for k in range(int(arm), int(B) + 1):
-        been = [t for t in tfs if oobm[t][int(arm):k + 1].any()]
+        been = [t for t in tfs if BD.gate_been_oob(t, arm, k, side)]      # GATE
         if not been:
             continue
         need = int(round(float(K.L2_T3_FRAC) * len(been)))
@@ -211,10 +210,12 @@ def t3(C, E, side, arm, B):
             continue
         #   his gate: no higher TF ex-fence, so no baton candidate exists above the top reverser
         top = max(rev)
-        above = [t for t in range(top + 1, hi + 1) if t in C and K.ex_fence(C[t][k], side)]
+        above = [t for t in range(top + 1, hi + 1)
+                 if t in BD.tfs and BD.gate_ex_fence(t, k, side)]           # GATE
         if above:
             continue
         out.append((int(k), 't3 %d of %d oob HTF lines reversed (ws%s), none above ws%d ex-fence'
-                    % (len(rev), len(been), ','.join(str(t) for t in rev), top)))
+                             ' [gate on %s]'
+                    % (len(rev), len(been), ','.join(str(t) for t in rev), top, BD.gate_mode())))
         break                                      # the walk ends here; one t3 per walk
     return out

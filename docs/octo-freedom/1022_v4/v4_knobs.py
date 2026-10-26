@@ -320,6 +320,15 @@ L2_LIN_HOP = _knob('L2_LIN_HOP', 2, int)        # *"lin_hop = 2"*. Max hops ride
 #   markers, linhop applies. at a cadence event, linhop doesn't apply"*.
 L2_T1_GRACE_S = _knob('L2_T1_GRACE_S', 120, int)  # *"the 2 minutes (CAUSALLY) following"*, and he
 #   confirmed it is a knob. Seconds, forward of the cws1b oob->ib cross.
+L2_GATE_MODE = _knob('L2_GATE_MODE', 'emerging', str)   # which ladder t3cadence's GATES read.
+#   Joe 1026: *"build a proxy that sends the emerging values to the gate decision"*. The two gates
+#   are t3's *"have been oob already in this trade"* population and its *"no higher TFs exfence"*
+#   test; every other fence read stays CLOSED on his *"more accurate fence/exfence baton
+#   decisions"*. 'closed' is the other arm of the A/B and `v4_l2_proxy.Board` is the one place the
+#   routing lives.
+#   WHAT IT MOVES, on his 2026-08-30 18:37 LOW walk: ws7r reaches LOW oob at 19:57:00 closed and
+#   19:50:00 emerging, so t3 moves 7 minutes earlier. It does NOT reach the 19:20 he eyeballed -
+#   ws7r's reversal stamp is 19:20:10 on both ladders, 30 minutes BEFORE either oob.
 L2_CWS1R_WOB = _knob('L2_CWS1R_WOB', 1, int)    # lineage2 ONLY: the lift-off wob on cws1r, for
 #   t1cadence's reversal. Joe 1026: *"a lineage2-only wob 1 for cws1r"*, after the measurement he
 #   asked for. LIFT_WOB 8 does 69.4% of its filtering on the EMERGING ws1r and 3.0% on the closed
@@ -439,6 +448,8 @@ RULED = {
     'L2_T1_GRACE_S': (120,  '"the 2 minutes (CAUSALLY) following" - 1025, confirmed a knob'),
     'L2_T3_FRAC':   (0.75,  '"int(round(75%))" - 1025, of the HTF lines that have been oob since'
                             ' the arm bar'),
+    'L2_GATE_MODE': ('emerging', '"build a proxy that sends the emerging values to the gate'
+                                 ' decision" - 1026. t3cadence\'s two gates only'),
     'L2_CWS1R_WOB': (1,     '"a lineage2-only wob 1 for cws1r" - 1026. On the closed line the wob'
                             ' suppresses 3.0% against the emerging line\'s 69.4%, and the value is'
                             ' unchanged across the whole hold on 99.2% of lift-offs'),
