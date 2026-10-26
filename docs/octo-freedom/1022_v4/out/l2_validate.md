@@ -46,9 +46,15 @@ verdict EXHAUST at 2026-08-29 07:49:00. his: t1 0704, t2 0723, t1 0734, t1 0747,
 | the bar | stage | why |
 |---|---|---|
 | 2026-08-30 19:16:00 | ARM | ws4r: ws4r 14.46 oob |
-| 2026-08-30 19:16:05 | NO RIDER | no ws1..ws12 r is ex-fence at the arm bar + 5s |
+| 2026-08-30 19:16:05 | NO RIDER | no cws1..cws12 r is ex-fence at the arm bar + 5s - the walk continues, t3 and t4 stay reachable |
+| 2026-08-30 19:51:00 | RIDER | t1 cws1b oob 19:21:00..19:50:55, cws1r reversed 19:45:00 during, stamp 19:45:00 | cws7 r 15.15 picked up at a cadence, no prior rider |
+| 2026-08-30 19:57:00 | CADENCE | t3 1 of 1 oob HTF lines reversed (ws7), none above ws7 ex-fence | rider cws7 4.65, no-longer-exfence no, reversed no |
+| 2026-08-30 19:57:00 | HOLD | rider cws7 4.65 oob - no action |
+| 2026-08-30 20:11:00 | BATON | ws7 -> ws9, between cadences, lin_hop 2 |
+| 2026-08-30 20:35:00 | CADENCE | t2 cws1r ib 20:35:00, cws1b 35.26 not oob | rider cws9 44.88, no-longer-exfence yes, reversed yes |
+| 2026-08-30 20:35:00 | EXHAUST | t4 - rider cws9 44.88, no candidate on the whole board |
 
-verdict NO RIDER REV-TRADE at 2026-08-30 19:16:05
+verdict EXHAUST at 2026-08-30 20:35:00
 
 ### target-side HIGH
 

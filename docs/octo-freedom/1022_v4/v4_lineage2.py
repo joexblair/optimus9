@@ -36,6 +36,21 @@ with *"fence/exfence baton decisions"*, and the trajectory is an input to the sa
 fence test - reading the fence on one ladder and the trajectory on the other for one decision would
 split a single judgement across two line sets.
 
+THE RIDER GATE DOES NOT END THE WALK. Joe 1026: *"drop the rider gate for t3 and t4"*, asked
+whether t3 and t4 would fire after 2026-08-30 19:00 on a walk his 1025 spec had already killed:
+
+    --IF no rider is assigned at the armed bar +5s
+    ---the walk ends. pass to router for a rev-trade
+
+That end is removed. With no rider the walk carries on to its cadences, and a rider is picked up at
+the first cadence where the board offers one. t3 needs no rider at all - it is a board-level read -
+and t4 becomes reachable once a rider exists.
+
+WITH NO RIDER THE WHOLE BOARD IS THE CANDIDATE RANGE, ws1 to `L2_MOM_MAXTF`, and `lin_hop` does not
+apply between cadences because there is no rung to hop FROM. That is the only reading available:
+his hop rule is *"the max hops between a rider and a candidate baton receiver"*, and without a
+rider there is no distance to measure. Stated, not defaulted.
+
 THE ARM RACE KEEPS HIS 1025 LINES - ws4r EMERGING, the cws lines CLOSED. His 1026 ruling named
 baton decisions; the arm race is not one, so it is left as he specified it.
 
@@ -199,17 +214,36 @@ def walk(CL, C, E, close, side, frm, B, trace=None):
 
     rider = rider_at(C, side, arm)
     if rider is None:
-        #   *"IF no rider is assigned at the armed bar +5s --- the walk ends"*
-        row(bar=arm + 1, stage='NO RIDER', why='no ws1..ws%d r is ex-fence at the arm bar + 5s'
+        #   HIS 1026 RULING: this no longer ends the walk - *"drop the rider gate for t3 and t4"*
+        row(bar=arm + 1, stage='NO RIDER', why='no cws1..cws%d r is ex-fence at the arm bar + 5s -'
+                                               ' the walk continues, t3 and t4 stay reachable'
                                                % K.L2_MOM_MAXTF)
-        return 'NO RIDER REV-TRADE', int(arm) + 1, rows
-    row(bar=arm, stage='RIDER', why='cws%d r %.2f, the highest ex-fence' % (rider, C[rider][arm]))
+    else:
+        row(bar=arm, stage='RIDER', why='cws%d r %.2f, the highest ex-fence'
+                                        % (rider, C[rider][arm]))
 
     cads = sorted(CAD.t1(CL, side, arm, B) + CAD.t2(CL, side, arm, B)
                   + CAD.t3(C, E, side, arm, B), key=lambda z: z[0])
     cads = [(b, w) for b, w in cads if b >= arm]
     last = int(arm)
     for bar, cwhy in cads:
+        if rider is None:
+            #   NO RIDER YET. The whole board is in range and lin_hop does not apply - there is no
+            #   rung to hop FROM. A t3 at this bar still ends the walk below.
+            got = candidates(C, side, bar, 0)
+            if got:
+                rider = max(got)
+                last = int(bar)
+                row(bar=bar, stage='RIDER', why='%s | cws%d r %.2f picked up at a cadence, no'
+                                                ' prior rider' % (cwhy, rider, C[rider][bar]))
+                continue
+            if cwhy.startswith('t3'):
+                row(bar=bar, stage='EXHAUST', why='t3 with no rider - %s' % cwhy)
+                return 'EXHAUST', int(bar), rows
+            row(bar=bar, stage='NO RIDER', why='%s | still no ex-fence line on the whole board'
+                                               % cwhy)
+            last = int(bar)
+            continue
         #   BETWEEN the cadences the baton moves invisibly, under lin_hop
         while True:
             pb = [b for b in _pass_bars(C, rider, side, last + 1, bar)]

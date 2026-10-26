@@ -71,7 +71,7 @@ print('')
 print('## his 2026-08-30 18:37 walk - every row')
 print('')
 for sd in (-1, +1):
-    v, bar, rows = L2.walk(CL, C, E, close, sd, ln.K('2026-08-30 18:35:00'), ln.K('2026-08-30 20:00:00'))
+    v, bar, rows = L2.walk(CL, C, E, close, sd, ln.K('2026-08-30 18:35:00'), ln.K('2026-08-30 23:59:55'))
     print('### target-side %s' % ('HIGH' if sd>0 else 'LOW'))
     print('')
     print('| the bar | stage | why |'); print('|---|---|---|')
