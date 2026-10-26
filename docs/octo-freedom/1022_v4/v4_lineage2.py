@@ -57,8 +57,10 @@ apply between cadences because there is no rung to hop FROM. That is the only re
 his hop rule is *"the max hops between a rider and a candidate baton receiver"*, and without a
 rider there is no distance to measure. Stated, not defaulted.
 
-THE ARM RACE KEEPS HIS 1025 LINES - ws4r EMERGING, the cws lines CLOSED. His 1026 ruling named
-baton decisions; the arm race is not one, so it is left as he specified it.
+THE ARM RACE READS CLOSED THROUGHOUT, 1026. I had left ws4r emerging on his 1025 spec and argued
+that his *"more accurate fence/exfence baton decisions"* named baton decisions only. He corrected
+it: *"1804 is printing the emerging value for ws4r. I thought we changed that"*. The arm's ws4r oob
+test IS a fence read, so cws4r carries it and the whole race is on the closed set.
 
 lin_hop APPLIES BETWEEN CADENCES, NOT AT ONE. Joe 1025, resolving the ws8->ws11 pass in his own
 08-30 example: *"when baton is being passed between cadence markers, linhop applies. at a cadence
@@ -107,20 +109,22 @@ def towards(BD, tf, bar, side):
     return bool(ok and bars > K.traj_min_bars(tf) and abs(travel) >= float(K.TRAJ_MIN_TRAVEL))
 
 
-def arm_race(CL, R, side, frm, B):
+def arm_race(CL, BD, side, frm, B):
     """*"race the arm"*. -> (the arm bar, which, why) or (None, None, why).
 
         --ws4r oob, or (cws1b + cws1r oob), or (cws2Mage + cws2r oob)
 
-    The first bar at or after `frm` where any of the three qualifies. ws4r is EMERGING, the cws
-    lines are CLOSED - his 1025 split.
+    The first bar at or after `frm` where any of the three qualifies. ALL THREE READ CLOSED LINES -
+    his 1026 correction: *"1804 is printing the emerging value for ws4r. I thought we changed
+    that"*. The arm's oob test is a fence read, so it belongs on the closed set with every other
+    fence read in this fork.
     """
-    r4 = np.asarray(R[4], float)
+    r4 = BD.line(4)                                    # cws4r, CLOSED
     b1, c1r = np.asarray(CL['b'], float), np.asarray(CL['r'][1], float)
     c2m, c2r = np.asarray(CL['M'][2], float), np.asarray(CL['r'][2], float)
     for k in range(int(frm), int(B) + 1):
         if K.oob(r4[k], side):
-            return k, 'ws4r', 'ws4r %.2f oob' % r4[k]
+            return k, 'cws4r', 'cws4r %.2f oob' % r4[k]
         if K.oob(b1[k], side) and K.oob(c1r[k], side):
             return k, 'cws1b+cws1r', 'cws1b %.2f + cws1r %.2f oob' % (b1[k], c1r[k])
         if K.oob(c2m[k], side) and K.oob(c2r[k], side):
@@ -201,7 +205,7 @@ def walk(CL, BD, close, side, frm, B, trace=None):
         if trace is not None:
             trace.append(kw)
 
-    arm, which, why = arm_race(CL, BD.E, side, frm, B)   # his 1025 lines: ws4r EMERGING
+    arm, which, why = arm_race(CL, BD, side, frm, B)   # all three on the CLOSED set, 1026
     if arm is None:
         row(bar=None, stage='NO ARM', why=why)
         return 'NO ARM', None, rows
