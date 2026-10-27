@@ -393,38 +393,40 @@ def mage_cascade(mg, bar, tf_lo=MC_TF_LO, tf_hi=MC_TF_HI, zoom=MC_ZOOM, min_line
 # has. SRP, and it keeps `optimus9` free of an import from the `docs/` tree where `traj` lives.
 
 
-# ── away / toward, the Mage-perspective reading (Joe 1019 named the rule) ──────────────────────
-AT_MID = 50.0     # the level that splits the perspective. Joe 1019: *"if the TF's mage is above 50
-#                   then the perspective is HIGH"*. Not a fence - the mid.
+# ── away / toward, read from the TRADE's target side (Joe 1027 settled the perspective) ────────
+AT_MID = 50.0     # kept for the callers that still pass a perspective value. NOT the perspective.
 
 
 def away_toward(mage_dir, persp_mage, prev=None, mid=AT_MID):
-    """[PRODUCER - Joe 1019] The away/toward tag for ONE timeframe at ONE bar. -> 'away'|'toward'.
+    """[PRODUCER - Joe 1019, perspective settled 1027] The away/toward tag for ONE timeframe at ONE
+    bar. -> 'away'|'toward'.
 
       mage_dir     the TF's OWN Mage trajectory direction at the bar, +1 / -1 / 0
-      persp_mage   the value that sets the PERSPECTIVE - ws{min_tf}Mage at that bar, ONE value for
-                   the whole ladder
+      persp_mage   THE TARGET SIDE, +1 HIGH / -1 LOW. A value > `mid` is read as HIGH for the
+                   callers that still pass a level; a bare +1 / -1 works too.
       prev         the tag at the previous bar, used when mage_dir is 0
-      mid          the perspective split, 50
+      mid          the split used only when `persp_mage` is passed as a level
 
-    THE PERSPECTIVE IS ws1Mage's, NOT THE TF'S OWN. Joe 1019, correcting himself: *"I've made a
-    mistake in setting toward and away. it should be wholly reliant on ws1Mages side - this is
-    different from the per TF side I provided"*. His first wording read each TF's own Mage against
-    50; the ruling is that ws{min_tf}Mage sets one perspective and every TF is read against it.
+    THE PERSPECTIVE IS THE TRADE'S TARGET SIDE. Joe 1027, correcting this for the third time:
+    *"I've already corrected this twice, please delete the ws1Mage note. the actual toward/away
+    perspective comes from the open (or invisible-incoming, if no trade is open) trade: use the
+    target-side"*. So there is no ws1Mage read here and no per-TF read either - ONE side, taken
+    from the open trade, or from the incoming one when none is open.
 
-    THE RULE, from his 1019 wording with the perspective corrected:
+    THE RULE:
 
-        persp_mage >  50  ->  climbing = toward, falling = away
-        persp_mage <= 50  ->  climbing = away,   falling = toward
+        target side HIGH  ->  climbing = toward, falling = away
+        target side LOW   ->  climbing = away,   falling = toward
 
     THE DIRECTION IS STILL PER TF, and it comes from that TF's MAGE, not its r. Joe 1019: *"Mage is
     the best source of direction - there's no lag"*.
 
     A FLAT MAGE HOLDS THE PREVIOUS TAG. Joe 1019: *"35 - hold the previous tag"*.
 
-    WHAT THIS REPLACED, recorded twice over: first a rule of mine that took the side whose `held`
+    WHAT THIS REPLACED, recorded in order: first a rule of mine that took the side whose `held`
     counter was smaller, which read ws5r backwards because `held` is staleness and not direction;
-    then the per-TF perspective above, which Joe withdrew.
+    then a per-TF perspective, which he withdrew; then ws1Mage's side, which he withdrew on 1027
+    and asked to be DELETED rather than annotated. The target side is the perspective.
     """
     d = int(mage_dir)
     if d == 0:
@@ -673,7 +675,28 @@ def mage_rev_walk(legs, dr, frm, sig_lookback=0):
 
 # ── divergence (Joe 0912) ──────────────────────────────────────────────────────────────────────
 def divergence(osc, px, hi, lo, i0=0, i1=None):
-    """[PRODUCER · lifted from divergence_exit.div_sig 0706, split onto the jig 0912 on Joe's word]
+    """*** PSEUDO-DISABLED, Joe 1026. DO NOT CALL THIS. USE `anchor_floater`. ***
+
+    Joe 1026: *"I instructed to not use jig.divergence. pseudo-disable jig.divergence: make the
+    return a non-sensical result so that the docstring will be read."* It now returns an all-NaN
+    `sig` and a sentinel `episodes`, so any caller fails instead of quietly getting a number.
+
+    WHY. `divergence` is STEP 4 ONLY - the comparison. It cannot choose what to compare, so called
+    on its own it invents its own episode pair from a fence, which is not the mech. The selection
+    is Joe's four-step 0912 spec and it lives in `anchor_floater`: the anchor at bar k, the pivot,
+    then the floater. THE DIVERGENCE READ IS `anchor_floater`, and its `state` is the one result:
+    +1 a divergence supporting a SHORT, -1 supporting a LONG, +/-2 PM, 0 inside the noise band.
+
+    WHAT THIS COST, measured 1026 on the live-seam run: asked for the bearish divergence at the
+    2026-10-26 21:51 cadence, this function returned NOTHING across eight argument variants - two
+    price series x four fence pairs, 292 to 825 episodes each. `anchor_floater(ws1r, close, +1, k)`
+    returned state +1 at all four markers, anchor 51.94 against a floater of 100.00 at 21:38:00,
+    d_osc -48.06 against d_px +0.000230. Eight tables of "none" were measuring the wrong function.
+
+    THE ORIGINAL DOCSTRING FOLLOWS, unchanged, because the mechanic it describes is still the one
+    `anchor_floater` step 4 performs.
+
+    [PRODUCER · lifted from divergence_exit.div_sig 0706, split onto the jig 0912 on Joe's word]
 
     THE EXTREMA DIVERGENCE. Joe 0912: "the jig has an updated version that relies on 2 lookbacks
     based on extremas". The two lookbacks are two CONSECUTIVE SAME-SIDE OOB EPISODES, each
@@ -698,6 +721,12 @@ def divergence(osc, px, hi, lo, i0=0, i1=None):
        sig       float array, +1 / -1 / 0 per bar, nonzero only on a confirming episode-end bar
        episodes  [(side, start, end, extreme_bar, osc_at_extreme, px_at_extreme, fired)] in bar
                  order, so a caller can show BOTH lookbacks behind any signal."""
+    #   THE PSEUDO-DISABLE. Returns before any work, so nothing here can be reached by accident.
+    #   NaN != 0.0 is True, so a caller testing `sig != 0` sees every bar fire and then fails on
+    #   int(nan) - loud, not silent. The episodes sentinel breaks any tuple unpack.
+    return (np.full(len(np.asarray(osc, float)), np.nan),
+            [('PSEUDO-DISABLED 1026 - read this function\'s docstring and use anchor_floater',)])
+
     osc = np.asarray(osc, float); px = np.asarray(px, float)
     n = len(osc); i1 = n - 1 if i1 is None else i1
     sig = np.zeros(n); eps_all = []
@@ -787,7 +816,14 @@ def anchor_floater(r, px, dr, k, block=AF_BLOCK, mid=50.0,
                    xn=None, dwell_bars=None, oob=None, anchor_mid=AF_ANCHOR_MID,
                    pivot_width=AF_PIVOT_WIDTH, pivot_depth=AF_PIVOT_DEPTH,
                    stop_n=AF_STOP_N, slope_floor=AF_SLOPE_FLOOR):
-    """[PRODUCER · Joe 0912] THE FOUR STEPS that choose what goes into the divergence machine.
+    """[PRODUCER · Joe 0912] *** THE DIVERGENCE READ. THIS IS "DIVERGENCE". ***
+
+    Joe 1026: *"make sure that jig.anchor_floater has a 'divergence' tag so that we use the same
+    language"*. When anything in this project says DIVERGENCE, it means THIS function and its
+    `state`. `jig.divergence` is step 4 alone and is pseudo-disabled; it cannot choose what to
+    compare, so it is not the read.
+
+    THE FOUR STEPS that choose what goes into the divergence machine.
 
     JOE'S VERBATIM SPEC, 0912:
       "whenever a divergence test is requested
@@ -1496,14 +1532,18 @@ class _Causal:
         return (cs[i + 1] - cs[np.maximum(0, i - k + 1)]) > 0
 
     def divergence(self, osc, px, hi, lo, i0=0, i1=None):
-        """`divergence` - THE divergence calc, Joe 0912. Delegates to the module producer.
+        """*** PSEUDO-DISABLED, Joe 1026. USE `anchor_floater` - THE DIVERGENCE READ. ***
+        The module producer returns an all-NaN sig and a sentinel episodes list; read its docstring.
+        Delegates to the module producer.
         Two lookbacks based on EXTREMAS: consecutive same-side OOB episodes, each contributing its
         own extreme, confirmed at the episode end. `osc` and `px` are arrays (px = RAW close);
         `hi`/`lo` are the episode fence and are required. -> (sig, episodes). See the producer."""
         return divergence(osc, px, hi, lo, i0=i0, i1=i1)
 
     def anchor_floater(self, r, px, dr, k, **kw):
-        """Joe's four-step anchor/floater selection at bar `k`. Delegates to `anchor_floater`.
+        """THE DIVERGENCE READ - Joe's four-step anchor/floater selection at bar `k`. When this
+        project says DIVERGENCE it means this and its `state`, not the pseudo-disabled
+        `jig.divergence`. Delegates to `anchor_floater`.
         `r` and `px` are arrays on this jig's grid - pass jig.causal.line('ws1r') and RAW close."""
         return anchor_floater(r, px, dr, k, **kw)
 
