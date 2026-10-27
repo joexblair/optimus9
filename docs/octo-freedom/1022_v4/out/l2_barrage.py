@@ -66,6 +66,7 @@ for sd in (-1, +1):
     for bar, _ty, why in CAD.barrage(BD, sd, A, B):
         rows.append((int(bar), int(sd), why))
 rows.sort()                                            # chronological ascending
+RISE, FALL, LEG = [], [], []                           # the maemfe summary's own columns
 
 print('| the cadence bar | the target side | the ws1Mage cross | the ws1r reversal | gap s |'
       ' lines | which | top | rise after % | fall after % | SP TF | the pivot | leg MFE % |')
@@ -84,9 +85,48 @@ for bar, sd, why in rows:
     sw = SP.swing(int(bar), int(sd), close)
     tail = ('| %s | %s | %.3f |' % (sw['tf'], ln.U(int(sw['pivot'])), sw['mfe_pct'])
             if sw and sw.get('close') is not None else '| - | no sweep-pivot scale | - |')
+    rise, fall = (hi - p0) / p0 * 100.0, (lo - p0) / p0 * 100.0
+    RISE.append(rise); FALL.append(fall)
+    if sw and sw.get('close') is not None:
+        LEG.append(float(sw['mfe_pct']))
     print('| %s | %s | %s | %s | %s | %s | %s | %s | %+.3f | %+.3f %s'
           % (ln.U(bar), 'HIGH' if sd > 0 else 'LOW', xr, rv, gp, nl, wh, tp,
-             (hi - p0) / p0 * 100.0, (lo - p0) / p0 * 100.0, tail))
+             rise, fall, tail))
+
+#   THE MAE/MFE SUMMARY, Joe 1027: *"always include an maemfe summary when a detailed report is
+#   created and shows the per-row maemfe"*. Two blocks, because the two columns are not the same
+#   kind of measurement and averaging them together would hide that.
+_med = lambda v: sorted(v)[len(v) // 2] if v else float('nan')
+print('')
+print('| the sweep-pivot leg MFE read | value |')
+print('|---|---|')
+print('| events scaled | %d of %d |' % (len(LEG), len(rows)))
+if LEG:
+    print('| sum leg MFE %% | %+.3f |' % sum(LEG))
+    print('| median leg MFE %% | %.3f |' % _med(LEG))
+    print('| lowest leg MFE %% | %.3f |' % min(LEG))
+    print('| highest leg MFE %% | %.3f |' % max(LEG))
+    print('| at or above 1.0%% | %d of %d |' % (sum(1 for x in LEG if x >= 1.0), len(LEG)))
+    print('| below 0.5%% | %d of %d |' % (sum(1 for x in LEG if x < 0.5), len(LEG)))
+print('| what it measures | the event\'s own swing, scaled by sweep-pivots - the per-event read |')
+print('')
+print('| the rise/fall read | value |')
+print('|---|---|')
+print('| events | %d |' % len(rows))
+if rows:
+    print('| sum rise %% | %+.3f |' % sum(RISE))
+    print('| sum fall %% | %+.3f |' % sum(FALL))
+    print('| median rise %% | %+.3f |' % _med(RISE))
+    print('| median fall %% | %+.3f |' % _med(FALL))
+    print('| best rise %% | %+.3f |' % max(RISE))
+    print('| worst fall %% | %+.3f |' % min(FALL))
+    print('| rise > abs(fall) | %d of %d |'
+          % (sum(1 for r, f in zip(RISE, FALL) if r > abs(f)), len(rows)))
+print('| NO HORIZON | each row runs from its cadence bar to the window end %s, so an early row'
+      ' sees the whole window and a late row sees hours. These are NOT per-event reads and the'
+      ' aggregate above them is an aggregate of that. The horizon is Joe\'s to set |' % ln.U(B))
+print('| NO TRADE SIDE | rise and fall are reported as measured, not mapped onto MAE/MFE - the'
+      ' side is an input |')
 
 print('')
 days = sorted({ln.U(b)[:10] for b, _s, _w in rows})
