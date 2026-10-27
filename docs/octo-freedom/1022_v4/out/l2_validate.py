@@ -4,13 +4,15 @@ import numpy as np
 sys.path.insert(0,'/home/joe/thecodes'); sys.path.insert(0,'/home/joe/thecodes/docs/octo-freedom/1022_v4')
 os.environ.setdefault('LG_TAPE_END','2026-10-05')
 import ln, v4_knobs as K, v4_rcfg_sweep as RS, v4_core_arm as CA
-import v4_l2_cadence as CAD, v4_lineage2 as L2, v4_l2_proxy as PX
+import v4_l2_cadence as CAD, v4_lineage2 as L2, v4_l2_proxy as PX, v4_closed_prev as CP
 from v4_backstop_trades import prices
 
 E = RS.load((RS.K0, RS.R0, RS.S0))                # EMERGING ws1r..ws12r - reversal TIMING
-C = {t: CA._line('r', t) for t in range(1, 13)}   # CLOSED cws1r..cws12r - every STATE read
-CL = CA.lines(); CL['M'] = CA.mage_ladder(2)      # cws1Mage, cws2Mage CLOSED
-BD = PX.Board(C, E)                               # the proxy owns the routing
+C = CP.ladder(E)                                  # the CAUSAL last-closed r ladder
+CL = CP.arm_lines(E)                              # cws1b, cws1r..cws12r, cws1Mage, cws2Mage
+#   THE CAUSAL MAGE LADDER for the cascade, Joe 1027. Same last-closed rule as the r set.
+MGL = {t: CP.line('ws%dMage' % t, t * 60) for t in range(1, 13)}
+BD = PX.Board(C, E, MG=MGL)                               # the proxy owns the routing
 close, _hi, _lo = prices()
 U = lambda k: ln.U(int(k))
 

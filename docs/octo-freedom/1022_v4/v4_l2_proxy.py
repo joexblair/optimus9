@@ -56,9 +56,13 @@ class Board:
         E  the EMERGING ws1r..ws12r set
     """
 
-    def __init__(self, C, E):
+    def __init__(self, C, E, MG=None):
         self.C = {int(t): np.asarray(v, float) for t, v in C.items()}
         self.E = {int(t): np.asarray(v, float) for t, v in E.items()}
+        #   THE MAGE LADDER, added 1027 for *"the mage-cascde verdict at every cadence event"*. It
+        #   is a FOURTH bucket and it is READ-ONLY to the walk: the cascade is recorded on the row,
+        #   never acted on, until he rules what the walk does with the verdict.
+        self.mage = None if MG is None else {int(t): np.asarray(v, float) for t, v in MG.items()}
         self.tfs = sorted(set(self.C) & set(self.E))
         assert self.tfs, 'the two ladders share no timeframe'
         self._gate = str(K.L2_GATE_MODE)

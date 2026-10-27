@@ -320,15 +320,126 @@ L2_LIN_HOP = _knob('L2_LIN_HOP', 2, int)        # *"lin_hop = 2"*. Max hops ride
 #   markers, linhop applies. at a cadence event, linhop doesn't apply"*.
 L2_T1_GRACE_S = _knob('L2_T1_GRACE_S', 120, int)  # *"the 2 minutes (CAUSALLY) following"*, and he
 #   confirmed it is a knob. Seconds, forward of the cws1b oob->ib cross.
-L2_GATE_MODE = _knob('L2_GATE_MODE', 'emerging', str)   # which ladder t3cadence's GATES read.
-#   Joe 1026: *"build a proxy that sends the emerging values to the gate decision"*. The two gates
-#   are t3's *"have been oob already in this trade"* population and its *"no higher TFs exfence"*
-#   test; every other fence read stays CLOSED on his *"more accurate fence/exfence baton
-#   decisions"*. 'closed' is the other arm of the A/B and `v4_l2_proxy.Board` is the one place the
-#   routing lives.
-#   WHAT IT MOVES, on his 2026-08-30 18:37 LOW walk: ws7r reaches LOW oob at 19:57:00 closed and
-#   19:50:00 emerging, so t3 moves 7 minutes earlier. It does NOT reach the 19:20 he eyeballed -
-#   ws7r's reversal stamp is 19:20:10 on both ladders, 30 minutes BEFORE either oob.
+# -- the t3 REPLACEMENT, Joe 1026. A 2-STAGED LATCH ------------------------------------------
+#   HIS SPEC, verbatim: *"I see a potential replacement for t3, and it's 2-staged latch / 1st latch,
+#   the bearish divergence that fires on the 2151 t1 cadence / 2nd latch, ws7r reversing (with
+#   wob12) and no baton candidate options PLUS the supporting ws4,5,6r matryoshka reversals"*.
+#   Then *"the old t3 is defunct"*, so L2_T3_ON's default moves to 0 below.
+LIN2_LATCH_ON = _knob('LIN2_LATCH_ON', 1, int)      # the latch on/off. BANKED ON - it is his mech.
+LIN2_T3_MIN_TF = _knob('LIN2_T3_MIN_TF', 5, int)    # HIS NAME AND HIS VALUE, 1026:
+#   *"the rider between ws{knob:5,'lin2_t3_min_tf'} and ws12"*. The rider range latch 2 accepts.
+LIN2_LATCH_LIFE_S = _knob('LIN2_LATCH_LIFE_S', 600, int)   # *"3, 10 minutes (knob)"* - how long
+#   latch 1 stays latched. Seconds. HE SET THE VALUE; the knob's NAME is mine, not his.
+LIN2_SUPPORT_LINES = _knob('LIN2_SUPPORT_LINES', 3, int)   # *"7, 3 lines below the rider"*. ALL of
+#   them must have reversed - his original reading named ws4, ws5 and ws6 under a ws7 rider.
+LIN2_REV_WOB = _knob('LIN2_REV_WOB', 12, int)       # *"1 static wob12. noted, we'll keep the
+#   static"*. Bars the lift-off state must hold, for THIS mech only - LIFT_WOB 8 is untouched and
+#   every other mech keeps it. Measured 1026: at 12 the ws7r 2026-10-26 22:00:15 reversal drops and
+#   21:53:20 and 22:03:05 survive; across ws5/7/9/12r over 08-30..09-03 a seam-aligned dynamic wob
+#   kept ~25% fewer reversals and was slower on every one, median 75-80 s against the static 55 s.
+
+# -- the BARRAGE mech, Joe 1027. BANKED, and wiring it into the chain is the open task ------------
+#   HIS QUESTION, then his agreement:
+#     *"if there was a tolerance that allowed for low-side ws1r reversing to pseudo fit 'inside the
+#      ws1Mage oob to ib' at 02:29, would it have detected a barrage of low-side reversals and
+#      declared exhaust?"*
+#     *"so the tolerance alone will not select 02:29. It needs a second condition - the barrage
+#      itself is the obvious candidate"* / *"agreed"* / *"bank the barrage results"*
+#   THE THREE CONDITIONS: ws1Mage crosses oob -> ib on a side; ws1r reverses on the SAME side
+#   within LIN2_BARRAGE_TOL_S of that cross; at least LIN2_BARRAGE_LINES r lines reverse on that
+#   side between the cross and the ws1r reversal.
+LIN2_BARRAGE_TOL_S = _knob('LIN2_BARRAGE_TOL_S', 70, int)   # MEASURED off his 02:29 instance - the
+#   gap from the 2026-08-30 02:27:50 ws1Mage cross to the 02:29:00 ws1r reversal. Not a chosen value
+#   and not swept. Of 204 LOW-side ws1Mage ib-crosses on 08-30, 94 have a ws1r reversal inside 120 s
+#   and the median gap is 140 s, so the tolerance ALONE selects nothing - that is why the barrage
+#   condition exists.
+LIN2_BARRAGE_LINES = _knob('LIN2_BARRAGE_LINES', 6, int)    # MEASURED off the same instance - the
+#   6 lines reversing LOW inside those 70 s were ws3, ws4, ws8, ws6, ws7, ws1. Also not swept.
+#   WITH BOTH: 204 LOW-side crosses on 08-30 reduce to 8 instances, in 3 clusters.
+LIN2_BARRAGE_MIN_TF = _knob('LIN2_BARRAGE_MIN_TF', 0, int)  # 0 = OFF. When set, the barrage must
+#   include at least one line at or above this TF. HIS OBSERVATION, 1027: *"0234 is better than 0229,
+#   and 0229 did not have the higher lines"*. 02:29 tops out at ws8 and is the ONLY one of the 8
+#   instances with no ws9..ws12 line; setting this to 9 drops it and leaves 7 - CORRECTED 1027, the
+#   first write of this line said 6 and was not taken from the output file. HE HAS NOT RULED THE
+#   VALUE, so it is off.
+
+LIN2_MISMATCH_ACTION = os.environ.get('W_V4_LIN2_MISMATCH_ACTION', 'rev-trade')   # what a
+#   mage-cascade MISMATCH does. Joe 1027: *"make this a knob: rev-trade, or, close only (so that
+#   reentry creates the next open)"*.
+#     'rev-trade'   the walk ends and the opposite side opens at the exhaust bar + 1. THE BANK.
+#     'close-only'  the walk ends and NO opposite side opens - reentry is left to open the next one
+#   IT GOVERNS THE cws1b COUNTER-OOB CADENCE ONLY, Joe 1027: *"narrow it - applies only to cws1b
+#   counter oob"*. Every other cadence type always rev-trades on a mismatch.
+#   'close-only' CURRENTLY LEAVES A GAP: v4_reentry is not wired into the chain (task 31), so
+#   nothing opens the next trade and the chain stops at that exhaust.
+LIN2_MAE_CAP = _knob('LIN2_MAE_CAP', 1.1)       # Joe 1027: *"if MAE > 1.1, cap mae at 1.1 and print
+#   0 in mfe"*. A STOP-LOSS MODEL in the REPORT only - it changes no decision in the walk. A trade
+#   whose adverse excursion passes the cap is reported at the cap with MFE 0, because it would have
+#   been closed before it reached its favourable excursion. HIS CAP, HIS VALUE - the standing rule
+#   is that no cap exists unless he sets one.
+
+LIN2_CAND_NOT_REVERSED = _knob('LIN2_CAND_NOT_REVERSED', 0, int)   # a THIRD term on the baton
+#   candidate test, Joe 1027: *"that's a good idea. can we test it on the day?"*. The banked rule is
+#   ex-fence AND `towards` and NOTHING ELSE, so a line that has already reversed can still receive
+#   the baton - measured on 2026-08-30 11:33:00, where ws12r took it at 82.87 carrying a reversal
+#   stamped 11:23:40, 9 m 20 s earlier.
+#     0  OFF - the banked rule, unchanged
+#     1  a candidate must have NO reversal stamped since the rider took the baton
+#     2  a candidate must have NO reversal stamped since the walk armed
+#   DEFAULT 0 so the bank does not move on a test. THE REVERSAL WOB USED IS LIN2_REV_WOB 12, which
+#   is MY choice - he named no wob for this term and LIFT_WOB 8 is the other candidate.
+#   A THIRD READING IS NOT BUILT: replacing `towards` with the banked away/toward tag, which he
+#   settled on 1027 as reading from the target side. That is a different mech, not a term.
+LIN2_CASCADE_NO_ACTION = _knob('LIN2_CASCADE_NO_ACTION', 1, int)   # Joe 1027: *"get a mage-verdict,
+#   and if its verdict matches the trade direction then take no action (ie keep walking)"*, and on
+#   the mapping *"1, confirmed"*: `up` matches a LONG (target side HIGH), `down` matches a SHORT
+#   (target side LOW). `neither` -> *"2, let the cadence decide"*, so it is NOT suppressed.
+#   HIS FULL TRUTH TABLE, 1027, after the first build only had the no-action half:
+#       LONG  + up    -> no action        LONG  + down  -> REV-TRADE
+#       SHORT + down  -> no action        SHORT + up    -> REV-TRADE
+#       neither       -> the cadence decides
+#   A MISMATCH IS AN EXIT, not a fall-through to the board review.
+#   THE cws1b COUNTER-OOB CADENCE IS EXEMPT FROM THE NO-ACTION HALF ONLY.
+#   THE MECHANIC HAS NO NAME BUT HIS. I called it "suppression" in a report on 1027; that was
+#   my coinage and it is gone. The cadence TAKES NO ACTION and the walk KEEPS WALKING - his
+#   words. The row stage is 'NO ACTION'.
+#   BANKED ON BY HIM, 1027: *"1, bank it, and make the current machine default"*. 0 is the A/B arm.
+
+LIN2_CROSS_WOB = _knob('LIN2_CROSS_WOB', 12, int)   # Joe 1027: *"add the wob12 to all crosses to
+#   ib and crosses to in-mom-fnc"*. Bars the NEW state must hold; the actionable bar is the LAST
+#   bar of the hold, never the cross bar. It governs FIVE sites, every one of them a cross INTO the
+#   gentler state - t1's cws1b oob->ib, t2's cws1r oob->ib, v4-arm-lineage-retest's cws1r oob->ib,
+#   and both of the walk's pass-bar rules.
+#   IT DOES NOT GOVERN CROSSES THE OTHER WAY. He named crosses to ib and to in-mom-fnc only, so
+#   entering oob or entering ex-fence still carries no dwell - a single bar past the fence still
+#   makes a line ex-fence and a rider candidate.
+#   IT SUPERSEDES TWO EARLIER RULINGS OF HIS, both recorded here rather than quietly dropped:
+#     1026, the retest's gap 5 - *"5, your read"* accepting L2_CWS1R_WOB 1 for ITS oob->ib cross
+#     1026, in v4_l2_cadence's own header - *"every `oob_ib_cross` call takes xwob 1 and the cross
+#       bar IS the actionable bar"*
+#   The knob's NAME is mine, not his.
+LIN2_COUNTER_OOB_ON = _knob('LIN2_COUNTER_OOB_ON', 1, int)   # the cws1b counter-target-side
+#   oob cadence, Joe 1026: *"create a cadence when cws1b crosses to counter target-side oob (eg
+#   08-30 1921)"*, marked IMPORTANT and *"go"* on 1027. BANKED ON. No wob - he named no dwell.
+#   He has not NUMBERED this cadence, so its rows carry the description 'cws1b counter-oob'.
+
+L2_ARM_RETEST = _knob('L2_ARM_RETEST', 1, int)  # v4-arm-lineage-retest on/off. BANKED ON - he
+#   named it and ruled all nine of its gaps on 1026. 0 is the A/B arm.
+L2_T3_ON = _knob('L2_T3_ON', 0, int)            # t3cadence on/off. BANKED **OFF** 1026 - Joe:
+#   *"10, yes - the old t3 is defunct"*. The 2-staged latch above replaces it. 1 is the A/B arm,
+#   kept so the superseded mech can still be measured against the latch.
+#   Joe 1026, after the 24 t3 events scored: *"I see what you see - it doesn't hold up ... disable
+#   t3 and walk forward from the arm"*. Off is an EXPERIMENT, so the run refuses without
+#   W_V4_EXPERIMENT=1 and prints the delta. t1, t2 and t4 are untouched by it.
+L2_GATE_MODE = _knob('L2_GATE_MODE', 'closed', str)   # which ladder t3cadence's oob population
+#   gate reads. Joe 1026 FINAL: *"move everything except reversal detection to closed bars"*.
+#   HE MOVED IT TWICE. First *"build a proxy that sends the emerging values to the gate decision"*,
+#   which set it to 'emerging'; then, shown that t3's population was counting an EMERGING ws7r oob
+#   that the closed cws7r never had, *"move everything except reversal detection to closed bars"*.
+#   So the ONLY emerging read left in lineage2 is the reversal detection - his 1025 reason stands
+#   for that one: *"I don't want slower TF's running on closed bars because it spoils the line
+#   reversal times"*. 'emerging' is kept as the other arm of the A/B.
+#   `v4_l2_proxy.Board` is the one place the routing lives.
 L2_CWS1R_WOB = _knob('L2_CWS1R_WOB', 1, int)    # lineage2 ONLY: the lift-off wob on cws1r, for
 #   t1cadence's reversal. Joe 1026: *"a lineage2-only wob 1 for cws1r"*, after the measurement he
 #   asked for. LIFT_WOB 8 does 69.4% of its filtering on the EMERGING ws1r and 3.0% on the closed
@@ -343,6 +454,15 @@ L2_RE_IB_MIN = _knob('L2_RE_IB_MIN', 2, int)    # v4_reentry: how many Mage rung
 #   while ws5Mage was oob"*, then *"on hindsight, it should be 2 or more TFs that were ib while
 #   ws5Mage was oob"*. It is a COUNT of rungs that stayed in, not an all-of test - the first build
 #   read his words as "no rung reached oob" and blocked 3 of his 4 examples.
+L2_T3_MIN_MATRY = _knob('L2_T3_MIN_MATRY', 2, int)  # the fewest matryoshka lines that must have
+#   REVERSED for t3 to fire. Joe 1026: *"use the >=2 applied to the lines that actually reversed"*.
+#   t3's need is `max(this, round(L2_T3_FRAC x the ex-fence population))`.
+#   IT WAS ON THE RANGE FIRST, from his *"when the rider has fewer than 2 lines in its matryoshka,
+#   t3 simply never fires"*. That let t3 fire on a SINGLE reversal: at 2026-08-30 20:11:00 the
+#   rider was ws9, its matryoshka {ws7, ws8} met the floor, only ws7 had reached ex-fence, and
+#   round(0.75 x 1) = 1. One line satisfied a rule whose point is *"if >1 lines ... have
+#   reversed"*. The range check survives as an early-out only.
+#   The matryoshka of a rider at TF N is ws7..N-1 - *"ws7 is the floor for t3"*.
 L2_T3_FRAC = _knob('L2_T3_FRAC', 0.75)          # *"int(round(75%))"* of the HTF lines that HAVE
 #   BEEN oob since the arm bar - his population, confirmed 1025, not all of ws7..ws12.
 #   v4mom_fnc IS RMOM_FNC. Joe 1025, asked whether they are the same knob: *"yes"*. So there is no
@@ -446,10 +566,60 @@ RULED = {
     'L2_MOM_MAXTF': (12,    '"v4mom_maxTF = 12" - 1025, the lineage2 fork'),
     'L2_LIN_HOP':   (2,     '"lin_hop = 2" - 1025. Applies BETWEEN cadences only, his ruling'),
     'L2_T1_GRACE_S': (120,  '"the 2 minutes (CAUSALLY) following" - 1025, confirmed a knob'),
-    'L2_T3_FRAC':   (0.75,  '"int(round(75%))" - 1025, of the HTF lines that have been oob since'
-                            ' the arm bar'),
-    'L2_GATE_MODE': ('emerging', '"build a proxy that sends the emerging values to the gate'
-                                 ' decision" - 1026. t3cadence\'s two gates only'),
+    'L2_T3_FRAC':   (0.75,  '"L2_T3_FRAC 0.75 survives" - 1026. Of the rider\'s matryoshka lines'
+                            ' that reached EX-FENCE since the arm, not oob: "requiring lines to be'
+                            ' oob excludes the lines that reached only ex-fence before reversing"'),
+    'L2_T3_MIN_MATRY': (2,  '"use the >=2 applied to the lines that actually reversed" - 1026.'
+                            ' t3 needs max(2, round(L2_T3_FRAC x the ex-fence population))'),
+    'L2_ARM_RETEST': (1,    'BANKED ON. v4-arm-lineage-retest, Joe 1026: "let\'s add a'
+                            ' `v4-arm-lineage-retest` mech that will fire at arm". His nine'
+                            ' rulings are in v4_lineage2.md; 0 is the A/B arm'),
+    'LIN2_BARRAGE_TOL_S': (70, 'MEASURED off his 2026-08-30 02:29 instance - the 02:27:50 cross'
+                               ' to the 02:29:00 ws1r reversal. Not chosen, not swept'),
+    'LIN2_BARRAGE_LINES': (6,  'MEASURED off the same instance - ws3,4,8,6,7,1 inside those 70 s.'
+                               ' With the tolerance it cuts 204 LOW crosses to 8 instances'),
+    'LIN2_BARRAGE_MIN_TF': (0, 'OFF. His "0229 did not have the higher lines" - 02:29 tops out at'
+                               ' ws8 and is the only one of the 8 with no ws9..ws12. Setting 9'
+                               ' drops it. HE HAS NOT RULED THE VALUE'),
+    'LIN2_MISMATCH_ACTION': ('rev-trade', '"make this a knob: rev-trade, or, close only (so that'
+                                          ' reentry creates the next open)" - 1027, narrowed the'
+                                          ' same day to the cws1b counter-oob cadence ONLY.'
+                                          ' close-only stops the chain until v4_reentry is wired,'
+                                          ' task 31'),
+    'LIN2_MAE_CAP': (1.1,   '"if MAE > 1.1, cap mae at 1.1 and print 0 in mfe" - 1027. A'
+                            ' stop-loss model in the REPORT only; it moves no decision'),
+    'LIN2_CAND_NOT_REVERSED': (0, 'OFF is the bank. 1 = no reversal since the rider took the'
+                                  ' baton, 2 = none since the arm. His 1027 "can we test it on the'
+                                  ' day?" - the test arms, not a banked change. The wob is'
+                                  ' LIN2_REV_WOB 12, which is MINE'),
+    'LIN2_CASCADE_NO_ACTION': (1, 'BANKED ON, his word 1027 - "bank it, and make the current'
+                                 ' machine default". "if its verdict matches the trade direction then take'
+                                 ' no action (ie keep walking)" - 1027. up = LONG, down = SHORT,'
+                                 ' his "1, confirmed". neither is NOT suppressed - "let the cadence'
+                                 ' decide"'),
+    'LIN2_CROSS_WOB': (12,  '"add the wob12 to all crosses to ib and crosses to in-mom-fnc" -'
+                            ' 1027. Five sites: t1, t2, the retest gate, and both pass-bar rules.'
+                            ' Supersedes L2_CWS1R_WOB 1 on the retest cross and the "xwob 1" header'
+                            ' ruling. Crosses INTO oob or ex-fence still carry no dwell'),
+    'LIN2_COUNTER_OOB_ON': (1, 'BANKED ON. "create a cadence when cws1b crosses to counter'
+                               ' target-side oob (eg 08-30 1921)" - 1026, "go" - 1027. Raw cross'
+                               ' bar, no wob. 69 firings arm..exhaust over 08-30..09-03'),
+    'LIN2_LATCH_ON': (1,    'BANKED ON. the 2-staged latch, Joe 1026: "I see a potential'
+                            ' replacement for t3, and it\'s 2-staged latch"'),
+    'LIN2_T3_MIN_TF': (5,   'HIS NAME, HIS VALUE - "the rider between'
+                            ' ws{knob:5,\'lin2_t3_min_tf\'} and ws12"'),
+    'LIN2_LATCH_LIFE_S': (600, '"10 minutes (knob)" - 1026. How long latch 1 stays latched.'
+                               ' Seconds. The value is his; the knob name is mine'),
+    'LIN2_SUPPORT_LINES': (3, '"3 lines below the rider" - 1026. ALL of them must have reversed;'
+                              ' his own reading named ws4, ws5, ws6 under a ws7 rider'),
+    'LIN2_REV_WOB': (12,    '"static wob12. noted, we\'ll keep the static" - 1026. THIS MECH ONLY;'
+                            ' LIFT_WOB 8 is untouched. A seam-aligned dynamic wob kept ~25% fewer'
+                            ' reversals and was slower on every one, measured 08-30..09-03'),
+    'L2_T3_ON':     (0,     'BANKED OFF 1026 - "the old t3 is defunct". 1 is the A/B arm; 0 is the experiment arm he asked'
+                            ' for on 1026 after its 24 events scored - 11 of the 24 fired with the'
+                            ' rider already at cws12, where no pass is possible'),
+    'L2_GATE_MODE': ('closed', '"move everything except reversal detection to closed bars" -'
+                               ' 1026 FINAL. t3cadence\'s oob population gate'),
     'L2_CWS1R_WOB': (1,     '"a lineage2-only wob 1 for cws1r" - 1026. On the closed line the wob'
                             ' suppresses 3.0% against the emerging line\'s 69.4%, and the value is'
                             ' unchanged across the whole hold on 99.2% of lift-offs'),
@@ -669,6 +839,7 @@ def table():
              'L2_MOM_MAXTF': 'timeframe', 'L2_LIN_HOP': 'timeframe hops',
              'L2_T1_GRACE_S': 'seconds', 'L2_T3_FRAC': 'fraction of the oob HTF lines',
              'L2_RE_IB_MIN': 'Mage rungs that stayed IB', 'L2_CWS1R_WOB': 'bars',
+             'L2_T3_MIN_MATRY': 'matryoshka lines that reversed',
              'TRAJ_MIN_FRAC': 'fraction of the block', 'TRAJ_MIN_TRAVEL': 'r-points', 'SAV_WS2_OOB_TEST': 'minutes', 'SAV_IB_XWOB': 'bars',
              'SAV_MAGE_GATE_WOB': 'bars', 'SAV_CASCADE_GAP': 'bars',
              'LIFT_PTS': 'samples', 'LIFT_TOL': 'r-points', 'LIFT_WOB': 'bars',

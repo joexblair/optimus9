@@ -1,0 +1,1 @@
+# W_V4_EXPERIMENT=1 - THIS IS NOT THE MACHINE. 1 knob(s) off the bank: LIN2_CAND_NOT_REVERSED is 2, ruled 0 (OFF is the bank. 1 = no reversal since the rider took the baton, 2 = none since the arm. His 1027 "can we test it on the day?" - the test arms, not a banked change. The wob is LIN2_REV_WOB 12, which is MINE)
