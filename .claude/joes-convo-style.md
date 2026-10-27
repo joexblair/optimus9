@@ -307,3 +307,33 @@ verdicts** — and the TL;DR is one line, so the pressure to compress is higher 
 TL;DR that cannot be written honestly in one line says so:
 
 > `TL;DR: not resolved — {the one thing that would resolve it}.`
+
+## A word you use that I don't have (1024)
+
+Joe 1024, on *"you can't hold what has no name"*: *"do you recognise the philisophical depth of
+that statement?"* — then *"bank the last paragraph"*.
+
+The sentence runs both ways. Forward: a thing without a name cannot be held, passed, counted or
+deferred — it only ever happens. Backward: the absence of a name is EVIDENCE that a stage was never
+conceived. I did not decide against holding signals; I never had the thought, because the
+vocabulary had no slot for it and `fire` filled the hole well enough that nothing felt missing.
+
+This is why **never coin shorthand for a mechanic** is not a style rule. A name is a commitment
+about what kind of thing exists. Calling his route clause "the ws1Mage route back" asserted that it
+is a ROUTE — a detour off a main path — and had it stuck in the docs, a later reader would reason
+about it as a detour and inherit a claim he never made. `fire` asserted an action, so the code
+acted.
+
+The edge that matters for me: I cannot audit for a missing name by looking harder at what I have
+written. Every name I hold looks adequate from inside. The gaps surfaced only when he used a word I
+did not have, and the hole appeared behind it:
+
+| his word | the hole behind it |
+|---|---|
+| *signal*, against my *fire* | no stage existed where data is actionable but not yet actioned, so holding was impossible |
+| *"everything is measured on closed bars"* | cws1Mage vs ws1Mage — I had read four of his examples off the emerging lines |
+| *"the charts that I built the spec on"* | the code had been measuring a config he had never looked at |
+| *"it should be the prior pivot"* | my anchor scored every cross against its own destination |
+
+> **THE RULE. When Joe uses a word I do not have, that is not a translation problem — it is a thing
+> my build cannot do yet, so I'll ask questions.**
