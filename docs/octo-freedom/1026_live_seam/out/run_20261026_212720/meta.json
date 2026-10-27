@@ -1,0 +1,128 @@
+{
+ "symbol": "FARTCOINUSDT",
+ "tp_pk": 1,
+ "seed_from": "2026-10-22 13:27:25",
+ "seed_to": "2026-10-26 21:27:20",
+ "seed_bars": 74880,
+ "hours": 4.0,
+ "lookback_h": 24,
+ "warmup_h": 80,
+ "delay_ms": 301,
+ "filler_invisible": true,
+ "overrides": {
+  "ws1b": [
+   "60",
+   "('bb', 49, 0.95, 'close')",
+   "emerging"
+  ],
+  "ws1r": [
+   "60",
+   "('k', 5, 8, 7, 'close')",
+   "emerging"
+  ],
+  "ws2r": [
+   "120",
+   "('k', 5, 8, 7, 'close')",
+   "emerging"
+  ],
+  "ws3r": [
+   "180",
+   "('k', 5, 8, 7, 'close')",
+   "emerging"
+  ],
+  "ws4r": [
+   "240",
+   "('k', 5, 8, 7, 'close')",
+   "emerging"
+  ],
+  "ws5r": [
+   "300",
+   "('k', 5, 8, 7, 'close')",
+   "emerging"
+  ],
+  "ws6r": [
+   "360",
+   "('k', 5, 8, 7, 'close')",
+   "emerging"
+  ],
+  "ws7r": [
+   "420",
+   "('k', 5, 8, 7, 'close')",
+   "emerging"
+  ],
+  "ws8r": [
+   "480",
+   "('k', 5, 8, 7, 'close')",
+   "emerging"
+  ],
+  "ws9r": [
+   "540",
+   "('k', 5, 8, 7, 'close')",
+   "emerging"
+  ],
+  "ws10r": [
+   "600",
+   "('k', 5, 8, 7, 'close')",
+   "emerging"
+  ],
+  "ws11r": [
+   "660",
+   "('k', 5, 8, 7, 'close')",
+   "emerging"
+  ],
+  "ws12r": [
+   "720",
+   "('k', 5, 8, 7, 'close')",
+   "emerging"
+  ],
+  "ws5Mage": [
+   "300",
+   "('bb', 38, 0.93, 'close')",
+   "emerging"
+  ],
+  "ws6Mage": [
+   "360",
+   "('bb', 38, 0.93, 'close')",
+   "emerging"
+  ],
+  "ws7Mage": [
+   "420",
+   "('bb', 38, 0.93, 'close')",
+   "emerging"
+  ],
+  "ws8Mage": [
+   "480",
+   "('bb', 38, 0.93, 'close')",
+   "emerging"
+  ],
+  "ws9Mage": [
+   "540",
+   "('bb', 38, 0.93, 'close')",
+   "emerging"
+  ],
+  "ws10Mage": [
+   "600",
+   "('bb', 38, 0.93, 'close')",
+   "emerging"
+  ],
+  "ws11Mage": [
+   "660",
+   "('bb', 38, 0.93, 'close')",
+   "emerging"
+  ],
+  "ws12Mage": [
+   "720",
+   "('bb', 38, 0.93, 'close')",
+   "emerging"
+  ]
+ },
+ "oob": [
+  15.0,
+  85.0
+ ],
+ "fence": [
+  20.0,
+  80.0
+ ],
+ "started_utc": "2026-10-26 21:27:28"
+}
