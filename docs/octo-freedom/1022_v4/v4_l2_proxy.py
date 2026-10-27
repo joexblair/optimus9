@@ -56,13 +56,22 @@ class Board:
         E  the EMERGING ws1r..ws12r set
     """
 
-    def __init__(self, C, E, MG=None):
+    def __init__(self, C, E, MG=None, MGE=None):
         self.C = {int(t): np.asarray(v, float) for t, v in C.items()}
         self.E = {int(t): np.asarray(v, float) for t, v in E.items()}
-        #   THE MAGE LADDER, added 1027 for *"the mage-cascde verdict at every cadence event"*. It
-        #   is a FOURTH bucket and it is READ-ONLY to the walk: the cascade is recorded on the row,
-        #   never acted on, until he rules what the walk does with the verdict.
+        #   THE CLOSED MAGE LADDER, added 1027 for *"the mage-cascde verdict at every cadence
+        #   event"*. A FOURTH bucket. His 1027 truth table is what the walk does with the verdict.
         self.mage = None if MG is None else {int(t): np.asarray(v, float) for t, v in MG.items()}
+        #   THE EMERGING MAGE LADDER, added 1027 for the BARRAGE. A FIFTH bucket, and the only
+        #   caller is the barrage's ws1Mage oob->ib cross.
+        #   WHY IT IS EMERGING, AND THE CHOICE IS MINE: his 1026 rule is *"move everything except
+        #   reversal detection to closed bars"*, which would put this cross on cws1Mage. But
+        #   LIN2_BARRAGE_TOL_S 70 s is MEASURED as the gap from the EMERGING 2026-08-30 02:27:50
+        #   cross to the 02:29:00 ws1r reversal, so moving the read moves the anchor the threshold
+        #   was taken from. The measured read is kept and the alternative is measured beside it, in
+        #   out/l2_barrage_reads.md, rather than decided here.
+        self.mage_em = None if MGE is None else {int(t): np.asarray(v, float)
+                                                 for t, v in MGE.items()}
         self.tfs = sorted(set(self.C) & set(self.E))
         assert self.tfs, 'the two ladders share no timeframe'
         self._gate = str(K.L2_GATE_MODE)
@@ -84,6 +93,16 @@ class Board:
     def line(self, tf):
         """The CLOSED array, for a producer that needs the whole series - crosses, trajectory."""
         return self.C[int(tf)]
+
+    def mage_line(self, tf, mode):
+        """ws{tf}Mage's whole series from the bucket `mode` names. -> the array.
+
+        'closed' is the cascade's ladder, 'emerging' is the barrage's. A caller names the bucket
+        it is entitled to; the routing stays in this file.
+        """
+        d = {'closed': self.mage, 'emerging': self.mage_em}[str(mode)]
+        assert d is not None, 'the %s Mage ladder was not handed to the Board' % mode
+        return d[int(tf)]
 
     #  ── TIMING: the emerging ladder ───────────────────────────────────────────────────────────
     def rev_stamps(self, tf, side):

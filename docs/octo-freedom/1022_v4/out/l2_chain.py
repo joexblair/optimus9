@@ -33,7 +33,10 @@ DEEP = [ln.K(x) for x in os.environ.get('L2_DEEP', '').split(',') if x.strip()]
 E = RS.load((RS.K0, RS.R0, RS.S0)); C = CP.ladder(E)
 #   THE CAUSAL MAGE LADDER for the cascade, Joe 1027. Same last-closed rule as the r set.
 MGL = {t: CP.line('ws%dMage' % t, t * 60) for t in range(1, 13)}
-BD = PX.Board(C, E, MG=MGL); CL = CP.arm_lines(E)
+#   THE EMERGING MAGE LADDER for the barrage's ws1Mage oob->ib cross, 1027. The closed
+#   one stays the cascade's; the proxy owns which read answers which question.
+MGE = {t: ln.line('ws%dMage' % t) for t in range(1, 13)}
+BD = PX.Board(C, E, MG=MGL, MGE=MGE); CL = CP.arm_lines(E)
 close, PHI, PLO = prices()
 
 
@@ -136,13 +139,16 @@ for first in (+1, -1):
     #   the pivot-to-leg-end excursion, and `share` is given / leg.
     #   SP.swing's `side` IS THE OOB SIDE THE LEG LEFT and its favourable direction is -side, so a
     #   LONG (target side HIGH, +1) is passed -1. Same mapping v4_reentry's scoring used.
+    #   MARKDOWN, his 1011 banked format. The box-drawn version he pasted on 1027 was his own
+    #   copy of THIS table - *"that was my copy paste of your dynamic table. no table changes are
+    #   required"* - so nothing about the drawing moves.
     print('| # | the open | dir | the arm | the cadence that ended it |'
           ' the exhaust = the rev-trade bar | the verdict |'
           ' MAE % | MFE % | capped | SP TF | the pivot | leg MFE % | ended by |')
     print('#   THE EXHAUST BAR *IS* THE REV-TRADE BAR. An exhaust is only ever declared at a')
     print('#   cadence event bar, so every bar in that column is a cadence bar. The trade closes')
     print('#   there and the opposite side opens at that bar + 1, which is the NEXT row\'s open.')
-    print('|---|---|---|---|---|---|---|---|---|---|---|---|')
+    print('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
     trades = []
     sprows = []
     prev = int(A)
@@ -154,7 +160,8 @@ for first in (+1, -1):
         ctype = (ex[0].get('ctype') or '-') if ex else '-'
         if ex and ctype == '-':
             w = ex[0]['why']
-            for name in ('t1', 't2', 't3', 't4', 'latch', 'cws1b counter-oob', 'retest'):
+            for name in ('t1', 't2', 't3', 't4', 'latch', 'cws1b counter-oob', 'retest',
+                         'barrage'):
                 if name in w:
                     ctype = name
                     break
@@ -166,10 +173,6 @@ for first in (+1, -1):
         mfe = ((hh - p0) if d > 0 else (p0 - ll)) / p0 * 100.0
         mae = ((ll - p0) if d > 0 else (p0 - hh)) / p0 * 100.0
         sw = SP.swing(int(bar), -int(sd), close)
-        if sw is None or sw.get('close') is None:
-            tail = '| - | no sweep-pivot scale | - |'
-        else:
-            tail = '| %s | %s | %.3f |' % (sw['tf'], ln.U(int(sw['pivot'])), sw['mfe_pct'])
         #   HIS CAP, 1027: *"if MAE > 1.1, cap mae at 1.1 and print 0 in mfe"*. The trade would have
         #   been closed at the cap, so it never reached its favourable excursion. REPORT ONLY.
         cap = float(K.LIN2_MAE_CAP)
@@ -178,12 +181,25 @@ for first in (+1, -1):
             mae, mfe = -cap, 0.0
         #   WHICH BRANCH ENDED IT: a mage-cascade mismatch, or the cadence's own board review.
         mm = [r for r in rows if r['stage'] == 'EXHAUST' and r.get('mismatch')]
-        print('| %d | %s | %s | %s | %s | %s | %s | %+.3f | %+.3f | %s %s %s'
+        #   WHICH MECH ENDED IT. The barrage is its own cadence type and its own exhaust branch,
+        #   so it is named rather than folded into the board review.
+        if ctype == 'barrage':
+            endby = 'the barrage'
+        elif mm:
+            endby = 'the mage-cascade mismatch'
+        else:
+            endby = 'the board review'
+        _no_sp = sw is None or sw.get('close') is None
+        print('| %d | %s | %s | %s | %s | %s | %s | %+.3f | %+.3f | %s | %s | %s | %s | %s |'
               % (n, ln.U(prev + 1), 'LONG' if sd > 0 else 'SHORT',
                  ln.U(arm[0]['bar']) if arm and arm[0]['bar'] is not None else 'no arm',
-                 ctype, ln.U(bar), v, mae, mfe, 'YES' if capped else '-', tail,
-                 ('the mage-cascade mismatch |' if mm else 'the board review |')))
-        sprows.append((mae, mfe, None if sw is None else sw.get('share'), capped, bool(mm)))
+                 ctype, ln.U(bar), v, mae, mfe, 'YES' if capped else '-',
+                 '-' if _no_sp else sw['tf'],
+                 'no sweep-pivot scale' if _no_sp else ln.U(int(sw['pivot'])),
+                 '-' if _no_sp else '%.3f' % sw['mfe_pct'],
+                 endby))
+        sprows.append((mae, mfe, None if sw is None else sw.get('share'), capped, bool(mm),
+                       ctype))
         prev = int(bar)
     if sprows:
         M = [r[0] for r in sprows]; F = [r[1] for r in sprows]
@@ -193,7 +209,9 @@ for first in (+1, -1):
         print('| trades capped at MAE %.2f%% | %d of %d |'
               % (float(K.LIN2_MAE_CAP), sum(1 for r in sprows if r[3]), len(sprows)))
         print('| ended by a mage-cascade mismatch | %d |' % sum(1 for r in sprows if r[4]))
-        print('| ended by the cadence board review | %d |' % sum(1 for r in sprows if not r[4]))
+        print('| ended by the barrage | %d |' % sum(1 for r in sprows if r[5] == 'barrage'))
+        print('| ended by the cadence board review | %d |'
+              % sum(1 for r in sprows if not r[4] and r[5] != 'barrage'))
         print('| the mismatch action | %s |' % K.LIN2_MISMATCH_ACTION)
         print('')
         print('| the read | value |'); print('|---|---|')

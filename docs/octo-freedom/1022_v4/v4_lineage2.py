@@ -436,8 +436,12 @@ def walk(CL, BD, close, side, frm, B, trace=None):
     fixed = {}
     #   t1, t2 and his 1026 cws1b counter-oob cadence all read only cws1b and cws1r, so all three
     #   are precomputed. Only the latch needs the live rider.
+    #   THE BARRAGE joins them, Joe 1027: *"bank the barrage results and wire the mech into the
+    #   chain"*. It reads the emerging ws1Mage and the emerging r ladder off the Board, so it is
+    #   precomputed with the rest - it needs no rider.
     produced = (CAD.t1(CL, side, arm, B) + CAD.t2(CL, side, arm, B)
-                + (CAD.counter_oob(CL, side, arm, B) if int(K.LIN2_COUNTER_OOB_ON) else []))
+                + (CAD.counter_oob(CL, side, arm, B) if int(K.LIN2_COUNTER_OOB_ON) else [])
+                + (CAD.barrage(BD, side, arm, B) if int(K.LIN2_BARRAGE_ON) else []))
     for b, ty, w in produced:
         if b >= start:
             fixed.setdefault(int(b), []).append((ty, w))
@@ -514,16 +518,18 @@ def walk(CL, BD, close, side, frm, B, trace=None):
             continue
 
         for ctype, cwhy in here:
-            #   THE MAGE-CASCADE READ AT THE CADENCE, Joe 1027. His words for what happens:
-            #   *"if its verdict matches the trade direction then take no action (ie keep
-            #   walking)"*. "Suppression" was MY coinage for it in a report and is not used. A verdict that MATCHES the trade direction
-            #   means the trend the walk is riding is still intact, so the cadence takes no
-            #   decision and the walk carries on. `up` matches a LONG, which is target side HIGH;
-            #   `down` matches a SHORT, target side LOW - his *"1, confirmed"*. `neither` is left
-            #   to the cadence, his *"2, let the cadence decide"*.
-            #   ONE READING IS MINE: latch 1 still arms on a suppressed cadence bar. The
-            #   suppression removes the cadence's DECISION, and latch 1 is a recording of the
-            #   divergence state at a cadence bar, not a decision. Flagged to him.
+            #   THE BARRAGE EXHAUSTS, and it is served BEFORE the cascade table. Joe 1027, asked
+            #   whether it declares exhaust or fires as a cadence and lets the board review decide:
+            #   *"both - a cadence keeps the walk's transactions uniform, and exhaust will fire"*.
+            #   So the row is a cadence row AND the walk ends on it.
+            #   WHY IT IS AHEAD OF THE CASCADE, AND THE READING IS MINE: a cascade verdict that
+            #   MATCHES the trade takes no action, which would veto an exhaust he said WILL fire.
+            #   Reading his sentence literally puts the barrage first. The cascade verdict is still
+            #   recorded on the row so the other arm is measurable.
+            if ctype == 'barrage':
+                row(bar=bar, stage='EXHAUST', rider=rider, ctype=ctype,
+                    why='barrage %s | mage-cascade %s | the walk ends' % (cwhy, cascade_at(bar)))
+                return 'EXHAUST', int(bar), rows
             #   THE MAGE-CASCADE AT THE CADENCE. Joe 1027 gave the whole truth table, verbatim:
             #       if the trade is long and the verdict is up, take no action
             #       if the trade is long and the verdict is down, rev-trade

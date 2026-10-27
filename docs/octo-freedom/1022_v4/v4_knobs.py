@@ -356,12 +356,17 @@ LIN2_BARRAGE_TOL_S = _knob('LIN2_BARRAGE_TOL_S', 70, int)   # MEASURED off his 0
 LIN2_BARRAGE_LINES = _knob('LIN2_BARRAGE_LINES', 6, int)    # MEASURED off the same instance - the
 #   6 lines reversing LOW inside those 70 s were ws3, ws4, ws8, ws6, ws7, ws1. Also not swept.
 #   WITH BOTH: 204 LOW-side crosses on 08-30 reduce to 8 instances, in 3 clusters.
-LIN2_BARRAGE_MIN_TF = _knob('LIN2_BARRAGE_MIN_TF', 0, int)  # 0 = OFF. When set, the barrage must
-#   include at least one line at or above this TF. HIS OBSERVATION, 1027: *"0234 is better than 0229,
-#   and 0229 did not have the higher lines"*. 02:29 tops out at ws8 and is the ONLY one of the 8
-#   instances with no ws9..ws12 line; setting this to 9 drops it and leaves 7 - CORRECTED 1027, the
-#   first write of this line said 6 and was not taken from the output file. HE HAS NOT RULED THE
-#   VALUE, so it is off.
+LIN2_BARRAGE_MIN_TF = _knob('LIN2_BARRAGE_MIN_TF', 9, int)  # 0 = OFF. The barrage must include at
+#   least one line at or above this TF. HIS OBSERVATION, 1027: *"0234 is better than 0229, and 0229
+#   did not have the higher lines"*, then his RULING: *"dropping 0229 is ok - 0234 picked it up"*.
+#   02:29 tops out at ws8 and is the ONLY one of the 8 instances with no ws9..ws12 line, so 9 drops
+#   it and leaves 7. The 02:34:20 instance is 25 s later and carries ws11 and ws12, which is the
+#   *"0234 picked it up"*.
+#   NOTE THE CONSEQUENCE HE ACCEPTED: the thresholds above are measured off 02:29, so the mech is
+#   anchored to an instance this knob now excludes. That is his call, and 02:34 reproduces it.
+LIN2_BARRAGE_ON = _knob('LIN2_BARRAGE_ON', 1, int)   # the barrage in the chain, on/off. BANKED ON,
+#   Joe 1027: *"bank the barrage results and wire the mech into the chain"*. The knob's NAME is
+#   mine; 0 is the A/B arm.
 
 LIN2_MISMATCH_ACTION = os.environ.get('W_V4_LIN2_MISMATCH_ACTION', 'rev-trade')   # what a
 #   mage-cascade MISMATCH does. Joe 1027: *"make this a knob: rev-trade, or, close only (so that
@@ -578,9 +583,13 @@ RULED = {
                                ' to the 02:29:00 ws1r reversal. Not chosen, not swept'),
     'LIN2_BARRAGE_LINES': (6,  'MEASURED off the same instance - ws3,4,8,6,7,1 inside those 70 s.'
                                ' With the tolerance it cuts 204 LOW crosses to 8 instances'),
-    'LIN2_BARRAGE_MIN_TF': (0, 'OFF. His "0229 did not have the higher lines" - 02:29 tops out at'
-                               ' ws8 and is the only one of the 8 with no ws9..ws12. Setting 9'
-                               ' drops it. HE HAS NOT RULED THE VALUE'),
+    'LIN2_BARRAGE_MIN_TF': (9, 'HIS RULING 1027: "dropping 0229 is ok - 0234 picked it up". 02:29'
+                               ' tops out at ws8 and is the only one of the 8 with no ws9..ws12,'
+                               ' so 9 drops it and leaves 7. 02:34:20 is 25 s later with ws11+ws12'),
+    'LIN2_BARRAGE_ON': (1,  'BANKED ON, Joe 1027: "bank the barrage results and wire the mech into'
+                            ' the chain". It fires as a CADENCE and that cadence EXHAUSTS - his'
+                            ' "both - a cadence keeps the walk\'s transactions uniform, and'
+                            ' exhaust will fire". 0 is the A/B arm'),
     'LIN2_MISMATCH_ACTION': ('rev-trade', '"make this a knob: rev-trade, or, close only (so that'
                                           ' reentry creates the next open)" - 1027, narrowed the'
                                           ' same day to the cws1b counter-oob cadence ONLY.'

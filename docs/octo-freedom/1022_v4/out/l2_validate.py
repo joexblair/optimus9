@@ -12,7 +12,9 @@ C = CP.ladder(E)                                  # the CAUSAL last-closed r lad
 CL = CP.arm_lines(E)                              # cws1b, cws1r..cws12r, cws1Mage, cws2Mage
 #   THE CAUSAL MAGE LADDER for the cascade, Joe 1027. Same last-closed rule as the r set.
 MGL = {t: CP.line('ws%dMage' % t, t * 60) for t in range(1, 13)}
-BD = PX.Board(C, E, MG=MGL)                               # the proxy owns the routing
+#   THE EMERGING MAGE LADDER for the barrage's ws1Mage oob->ib cross, 1027.
+MGE = {t: ln.line('ws%dMage' % t) for t in range(1, 13)}
+BD = PX.Board(C, E, MG=MGL, MGE=MGE)                      # the proxy owns the routing
 close, _hi, _lo = prices()
 U = lambda k: ln.U(int(k))
 
@@ -98,3 +100,33 @@ for r in rows:
 print('')
 print('verdict %s at %s. his: arm 0300 on ws4r oob, t1 0303, exhaust -> SHORT, then arm 0356 low'
       % (v, U(bar) if bar is not None else '-'))
+
+# ---- the barrage producer against the banked standalone list
+print('')
+print('## the barrage producer, 2026-08-30, against out/l2_barrage.md')
+print('')
+print('# LIN2_BARRAGE_TOL_S %d s | LIN2_BARRAGE_LINES %d | LIN2_BARRAGE_MIN_TF %d | ON %d'
+      % (K.LIN2_BARRAGE_TOL_S, K.LIN2_BARRAGE_LINES, K.LIN2_BARRAGE_MIN_TF, K.LIN2_BARRAGE_ON))
+print('# the cadence bar is the LAST CONTRIBUTING REVERSAL\'S STAMP - the raw ws1r reversal bar is')
+print('#   in the why, so the banked list and this table can be lined up.')
+print('')
+A0, B0 = ln.K('2026-08-30 00:00:00'), ln.K('2026-08-30 23:59:55')
+print('| the target side | the cadence bar | why |')
+print('|---|---|---|')
+_bar_rows = []
+for sd in (-1, +1):
+    for b, ty, w in CAD.barrage(BD, sd, A0, B0):
+        _bar_rows.append((int(b), sd, w))
+for b, sd, w in sorted(_bar_rows):
+    print('| %s | %s | %s |' % ('HIGH' if sd > 0 else 'LOW', U(b), w.replace('|', '\\|')))
+print('')
+print('| the read | value |')
+print('|---|---|')
+print('| cadences produced | %d |' % len(_bar_rows))
+print('| on the LOW target side | %d |' % sum(1 for r in _bar_rows if r[1] < 0))
+print('| on the HIGH target side | %d |' % sum(1 for r in _bar_rows if r[1] > 0))
+print('| his 02:29 instance | %s |'
+      % ('present' if any('02:29:00' in r[2] for r in _bar_rows)
+         else 'DROPPED by LIN2_BARRAGE_MIN_TF %d, his ruling' % K.LIN2_BARRAGE_MIN_TF))
+print('| the 02:34 instance that replaces it | %s |'
+      % ('present' if any('02:34:45' in r[2] for r in _bar_rows) else 'ABSENT'))

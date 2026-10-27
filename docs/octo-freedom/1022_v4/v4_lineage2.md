@@ -506,9 +506,15 @@ HIS QUESTION, 1027, then his ruling:
 **WHY CONDITION 3 EXISTS.** Of 204 LOW-side ws1Mage ib-crosses on 2026-08-30, 94 have a ws1r
 reversal inside 120 s and the median gap is 140 s. The tolerance ALONE selects nothing.
 
+**THE RULE HAS ONE HOME**, `v4_l2_cadence.barrage`, which the chain and the standalone list both
+call. `out/l2_barrage.py` carried its own copy of the three conditions when it was first written;
+that copy counted ws1..ws30 and had no MIN_TF term, so it is gone and the file now only scores.
+
 **THE BANKED LIST**, 2026-08-30, from `out/l2_barrage.md`. 8 instances, all LOW side, in 3 clusters.
-No trade side is derived — the rise and the fall from the signal bar are both reported, and the
-scale is sweep-pivots because this mech has no exit rule of its own:
+That list scored from the RAW ws1r reversal bar; the cadence the chain acts on is 35 s later, so a
+later re-score of the same instances reads 35 s further on. No trade side is derived — the rise and
+the fall are both reported, and the scale is sweep-pivots because this mech has no exit rule of its
+own:
 
 | the ws1Mage cross | the ws1r reversal | gap s | lines | which | rise % | fall % | SP TF | the pivot | leg MFE % |
 |---|---|---|---|---|---|---|---|---|---|
@@ -529,23 +535,79 @@ higher lines"*, and his correction of my reading of it: *"look at it this way: 0
 0229, therefore the incoming SHORT collects more pnl. following that, the climb from 0234 to the
 0244 high-side exhaust is more lucrative than 0229 to 0244"*.
 
+**`LIN2_BARRAGE_MIN_TF` IS 9**, his ruling 1027: *"dropping 0229 is ok - 0234 picked it up"*.
+
 | the read | value |
 |---|---|
 | instances with no ws9..ws12 line | 1 — his 02:29, which tops out at ws8 |
-| instances remaining if `LIN2_BARRAGE_MIN_TF` = 9 | 7 |
+| instances remaining at `LIN2_BARRAGE_MIN_TF` 9 | 7 |
+| the gap from 02:29:00 to the 02:34:45 instance that replaces it | 345 s |
+| ws9..ws12 lines in the 02:34:45 instance | ws11, ws12 |
 
-`LIN2_BARRAGE_MIN_TF` IS 0 = OFF, because he has not ruled the value.
+**THE CONSEQUENCE HE ACCEPTED**, stated and not buried: both thresholds are measured off the 02:29
+instance, so the mech is anchored to an instance this knob now excludes. 02:34:45 reproduces it
+5 m 45 s later and carries the higher lines.
 
 **THE 19:07 PAIR IS THE CASE HE FLAGGED AS UNRESOLVED.** Joe 1027: *"19:07 failing was expected: we
 spent a lot of time trying to fit t3 to it and it's still unresolved"*. The barrage selects it
 without being fitted to it.
 
-**TWO GAPS ARE HIS, AND THE WIRING WAITS ON THEM:**
+### What it does when it fires
 
-| # | the gap |
+Joe 1027, asked whether it declares exhaust or fires as a cadence and lets the board review decide:
+
+> both - a cadence keeps the walk's transactions uniform, and exhaust will fire
+
+So it produces a CADENCE ROW and the walk ENDS on it. `LIN2_BARRAGE_ON` is banked 1.
+
+**THE CADENCE BAR IS THE LAST CONTRIBUTING REVERSAL'S STAMP**, never a raw bar. Every reversal in
+the count has to be confirmed before the count is knowable, so the bar served is
+`max(K.lift_stamp(b))` over the contributing lines. Two asserts carry that claim — the cadence is
+never before its own ws1r reversal, and never before a reversal it counted.
+
+| the read | the ladder | the wob |
+|---|---|---|
+| the ws1Mage oob→ib cross | EMERGING ws1Mage | 1 — `LIN2_CROSS_WOB` is r lines only, his narrowing |
+| the ws1r reversal and the barrage count | EMERGING r | `LIFT_WOB` 8 — the wob the thresholds were measured at |
+
+**THREE READINGS IN IT ARE MINE:**
+
+| my reading | why, and what the alternative is |
 |---|---|
-| 1 | what the barrage DOES when it fires — declare exhaust (his original *"declared exhaust"*), or fire as a cadence and let the board review decide |
-| 2 | `LIN2_BARRAGE_MIN_TF` — 0 as banked, or 9, which drops his own 02:29 instance |
+| the ws1Mage cross reads EMERGING | his 1026 rule is *"move everything except reversal detection to closed bars"*, which says cws1Mage. But `LIN2_BARRAGE_TOL_S` 70 s is the gap from the EMERGING 02:27:50 cross, so moving the read moves the anchor. The closed read is measured beside it, not decided here |
+| the barrage is served BEFORE the mage-cascade table | a cascade verdict that MATCHES the trade takes no action, which would veto an exhaust he said WILL fire. The cascade verdict is still recorded on the row so the deferring arm stays measurable |
+| the barrage side is the walk's TARGET side | his own reading of the pair is the climb that follows: *"the climb from 0234 to the 0244 high-side exhaust is more lucrative than 0229 to 0244"* — a LOW barrage, then a climb to a HIGH exhaust. He wrote *"the incoming SHORT"* in the same sentence, which reads the other way; the climb clause is what is built |
+
+### What it did to 2026-08-30 in the chain
+
+`LIN2_BARRAGE_ON` 1 and `LIN2_BARRAGE_MIN_TF` 9 are the machine. An off-ruled run on either refuses
+without `W_V4_EXPERIMENT=1`.
+
+| the read | HIGH-first | LOW-first |
+|---|---|---|
+| rev-trades | 16 | 15 |
+| barrage cadences produced on the day | 4 | 4 |
+| barrage cadences a walk actually reached | 1 | 1 |
+| the one that fired | 2026-08-30 02:35:20 | 2026-08-30 02:35:20 |
+| the trade it ended | 00:21:00 SHORT | 00:00:05 SHORT |
+| that trade's MAE % | −0.117 | −0.580 |
+| that trade's MFE % | +1.829 | +1.884 |
+| ended by a mage-cascade mismatch | 6 | 6 |
+| ended by the cadence board review | 9 | 8 |
+| capped at MAE 1.10 | 5 of 16 | 5 of 15 |
+| sum MAE % | −8.458 | −8.392 |
+| sum MFE % | +13.418 | +12.893 |
+
+**THE TWO CHAINS CONVERGE ON IT.** From 02:35:25 the HIGH-first and LOW-first chains are
+row-for-row identical, and the barrage cadence is the bar that merged them.
+
+**THREE OF THE FOUR CADENCES ARE NEVER REACHED** on this day — 09:45:20, 10:06:00 and 19:07:55 all
+land inside a trade that had already closed on another mech. 19:07:55 is the unresolved 19:07 case:
+the barrage detects it, the chain does not get there, because the trade before it closed at
+18:38:00 on a cascade mismatch and the next walk armed at 19:26:00.
+
+**THE 5 CAPPED TRADES ARE UNCHANGED BY IT.** All 5 still end on a cascade mismatch, which is what
+task 35 measures.
 
 ## 17. The MAE 1.1 cap — a report-only stop model
 
@@ -571,11 +633,19 @@ is the candidate and is not wired.
 
 | # | what is open | whose |
 |---|---|---|
-| 1 | what the barrage does when it fires | his |
-| 2 | `LIN2_BARRAGE_MIN_TF` — 0 or 9 | his |
-| 3 | the rider's own reversal window in latch 2 | his |
-| 4 | `LIN2_CAND_NOT_REVERSED` — 0, 1 or 2, and which wob the term reads | his |
-| 5 | the ex-fence half of the live-tape validation — reconstruct from bars.jsonl, or capture a second run | his |
-| 6 | whether the MAE cap becomes a real stop, and what reopens | his |
-| 7 | `v4_reentry` wired into the chain, or ruled out | his |
-| 8 | walking the cadence forward when gcws30Mage and gcws15Mage are both counter-oob and reversing | his, and he has named the knob `l2_walk_cadence_fwd` 2 |
+| 1 | the rider's own reversal window in latch 2 | his |
+| 2 | `LIN2_CAND_NOT_REVERSED` — 0, 1 or 2, and which wob the term reads | his |
+| 3 | whether the MAE cap becomes a real stop, and what reopens | his |
+| 4 | `v4_reentry` wired into the chain, or ruled out | his |
+| 5 | walking the cadence forward when gcws30Mage and gcws15Mage are both counter-oob and reversing | his, and he has named the knob `l2_walk_cadence_fwd` 2 |
+| 6 | what *"groom the rev-trade"* means — move its bar, gate whether it opens, or pick its side | his. Named 1027: *"I want to see if we can use the sub-wsf (gcws15/30) lines to groom the rev-trade"* |
+| 7 | whether the barrage's ws1Mage cross should read closed instead of emerging | his, with both measured |
+| 8 | whether the barrage should defer to the mage-cascade table instead of preceding it | his, with both measured |
+
+CLOSED SINCE THE FIRST WRITE OF THIS SECTION, all three on 1027:
+
+| what was open | his ruling |
+|---|---|
+| what the barrage does when it fires | *"both - a cadence keeps the walk's transactions uniform, and exhaust will fire"* |
+| `LIN2_BARRAGE_MIN_TF` | *"dropping 0229 is ok - 0234 picked it up"* → 9 |
+| the ex-fence half of the live-tape validation | *"ex-fence can be reconstructed from bars.jsonl (both reads are in every bar row)"* |

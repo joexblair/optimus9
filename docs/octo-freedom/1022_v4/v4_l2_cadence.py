@@ -225,6 +225,101 @@ def counter_oob(CL, side, A, B):
     return out
 
 
+def barrage(BD, side, A, B):
+    """THE BARRAGE. -> [(the cadence bar, 'barrage', why)].
+
+    HIS QUESTION, 1027, which is where the mech came from:
+
+        if there was a tolerance that allowed for low-side ws1r reversing to pseudo fit "inside the
+        ws1Mage oob to ib" at 02:29, would it have detected a barrage of low-side reversals and
+        declared exhaust?
+
+    then, shown that the tolerance alone selects nothing: *"It needs a second condition - the
+    barrage itself is the obvious candidate, agreed"*, and *"bank the barrage results and wire the
+    mech into the chain"*.
+
+    THE THREE CONDITIONS, his:
+
+        1  ws1Mage crosses from oob to ib on the side
+        2  ws1r reverses on the SAME side within LIN2_BARRAGE_TOL_S of that cross
+        3  at least LIN2_BARRAGE_LINES r lines reverse on that side between the cross and the
+           ws1r reversal
+
+    and a fourth he ruled on 1027 - *"dropping 0229 is ok - 0234 picked it up"* - so the barrage
+    must also reach LIN2_BARRAGE_MIN_TF 9.
+
+    WHAT IT DOES, his words: *"both - a cadence keeps the walk's transactions uniform, and exhaust
+    will fire"*. So this produces a CADENCE, and `v4_lineage2.walk` exhausts on it. The exhaust is
+    NOT routed through the mage-cascade truth table first - his *"exhaust WILL fire"* is read
+    literally, and a cascade that matched the trade would otherwise veto it. That reading is MINE
+    and it is the one open question on this mech; the arm that defers to the cascade is measured
+    beside it rather than argued.
+
+    THE SIDE IS THE WALK'S TARGET SIDE. A barrage on the side the walk is hunting says that side's
+    move is spent. His own reading of the 02:29/02:34 pair is the climb that follows it: *"the
+    climb from 0234 to the 0244 high-side exhaust is more lucrative than 0229 to 0244"* - a LOW
+    barrage, then a climb to a HIGH exhaust. He wrote *"the incoming SHORT"* in the same sentence,
+    which reads the other way; the climb clause is what is built, and the side is his to correct.
+
+    THE CADENCE BAR IS THE LAST CONTRIBUTING REVERSAL'S STAMP, never a raw bar. Every reversal in
+    the count has to be confirmed before the count is knowable, so the bar served is
+    max(K.lift_stamp(b)) over the contributing lines. Two asserts carry that claim.
+
+    THE WOB ON THE ws1Mage CROSS IS 1, not LIN2_CROSS_WOB 12. He narrowed that knob himself:
+    *"I need wob12 only for r lines crossing back to ib, or to in-mom-fnc"*, and ws1Mage is not an
+    r line.
+
+    THE REVERSAL WOB IS LIFT_WOB 8, not LIN2_REV_WOB 12. The thresholds above were measured at
+    LIFT_WOB, and LIN2_REV_WOB is the latch's own wob by his *"THIS MECH ONLY"* ruling.
+
+    THE COUNT IS ws1..L2_MOM_MAXTF, which is 12. The Board carries ws1..ws30, and the first build
+    of this function counted all of them - so the 2026-08-30 02:34 barrage read 8 lines instead of
+    7 (ws14), 09:43 read 11 instead of 8 (ws15, ws18, ws19), and three instances appeared that are
+    not in the banked list at all: 04:51:35 on ws16/ws18/ws24, 16:19:30 on ws13/ws15/ws27 and
+    23:49:30 on ws14. Worse, LIN2_BARRAGE_MIN_TF 9 was being satisfied by a dtf line rather than by
+    ws9..ws12. The thresholds were measured over ws1..ws12, so the count is bounded by his own
+    ladder knob. dtf lines (>ws12, his 1017 band name) are not on the lineage2 board.
+    """
+    M1 = BD.mage_line(1, 'emerging')
+    w = int(K.LIN2_BARRAGE_TOL_S) // 5                 # 70 s = 14 bars on the 5 s grid
+    need = int(K.LIN2_BARRAGE_LINES)
+    min_tf = int(K.LIN2_BARRAGE_MIN_TF)
+    tfs = [int(t) for t in BD.tfs if int(t) <= int(K.L2_MOM_MAXTF)]
+    assert max(tfs) <= int(K.L2_MOM_MAXTF), 'the barrage is counting a line off the lineage2 board'
+    raws = {int(t): [int(b) for b in F.revs(BD.E[int(t)], int(t), int(side))] for t in tfs}
+    out = []
+    for c, _cf, sd in oob_ib_cross(M1, K.OOB_HI, K.OOB_LO, 1):
+        if int(sd) != int(side):
+            continue
+        c = int(c)
+        r1 = [b for b in raws[1] if c <= b <= c + w]
+        if not r1:
+            continue
+        sig = int(r1[0])
+        #   WHICH LINES REVERSED BETWEEN THE CROSS AND THE ws1r REVERSAL, and when each first did
+        first = {t: min(b for b in bs if c <= b <= sig)
+                 for t, bs in raws.items() if any(c <= b <= sig for b in bs)}
+        if len(first) < need:
+            continue
+        if min_tf and max(first) < min_tf:
+            continue
+        k = max(int(K.lift_stamp(b)) for b in first.values())
+        assert k >= sig, 'the barrage cadence is before its own ws1r reversal'
+        assert all(k >= b for b in first.values()), \
+            'the barrage cadence is before a reversal it counted'
+        if not (int(A) <= k <= int(B)):
+            continue
+        if any(r[0] == k for r in out):
+            continue                                   # one cadence per bar; the earlier cross owns it
+        out.append((k, 'barrage',
+                    'ws1Mage %.2f %s oob->ib %s, ws1r reverses %s (%d s), %d lines reverse with it'
+                    ' (%s), top ws%d - confirmed %s'
+                    % (float(M1[c]), 'LOW' if int(side) < 0 else 'HIGH', ln.U(c)[11:], ln.U(sig)[11:],
+                       (sig - c) * 5, len(first),
+                       ','.join('ws%d' % t for t in sorted(first)), max(first), ln.U(k)[11:])))
+    return out
+
+
 def matryoshka(rider):
     """The rider's matryoshka - the lines t3 compares it against. -> a list, lowest first.
 
