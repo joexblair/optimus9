@@ -27,6 +27,21 @@ that the side is an input.
 NO EXIT RULE EXISTS for this mech, so the scale is sweep-pivots, which is what every other event
 list in this fork uses: `SP.swing(bar, side, close)` with `side` the oob side the leg LEFT.
 
+SWEEP-PIVOTS HAS NO MAE, and it structurally cannot have one. `mfe_pct` is measured FROM the pivot,
+and the pivot IS the extreme of the leg (`argmin`/`argmax` over the leg's span), so an adverse
+excursion measured from the pivot is zero by construction. Joe 1027 asked why the aggregate had no
+MAE in it; that is the reason, and it is not a reason to ship an MFE-only report.
+
+SO THE PER-EVENT MAE IS MEASURED FROM THE CADENCE BAR, over the leg's own span - from the cadence
+bar to `sw['close']`, the bar sweep-pivots itself ends the leg on. That is the excursion between
+the bar the chain acts on and the bar the scale closes, favourable direction -side. THE BOUND IS
+SWEEP-PIVOTS' OWN, not a horizon chosen here, which is why this pair can be aggregated and the
+rise/fall pair cannot.
+
+THE CADENCE BAR IS OFTEN NOT INSIDE THE LEG. `lag_s` is negative when the cadence precedes the
+leg's open - at 2026-08-30 02:35:20 it is -185 s, so the span scored runs 185 s before the leg
+starts. That is reported as it is; it is the real distance between the decision and the swing.
+
 NO HORIZON. The rise and the fall run from the cadence bar to the window end he asked for, because
 no cap exists unless he sets one.
 
@@ -67,10 +82,12 @@ for sd in (-1, +1):
         rows.append((int(bar), int(sd), why))
 rows.sort()                                            # chronological ascending
 RISE, FALL, LEG = [], [], []                           # the maemfe summary's own columns
+MAE, MFE = [], []                                      # from the cadence bar to the leg's close
 
 print('| the cadence bar | the target side | the ws1Mage cross | the ws1r reversal | gap s |'
-      ' lines | which | top | rise after % | fall after % | SP TF | the pivot | leg MFE % |')
-print('|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+      ' lines | which | top | MAE % | MFE % | lag s | rise after % | fall after % | SP TF |'
+      ' the pivot | leg MFE % |')
+print('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
 for bar, sd, why in rows:
     #   the producer's `why` carries the mech's own figures; parsed back out so the table has one
     #   column per field rather than one prose cell
@@ -87,16 +104,52 @@ for bar, sd, why in rows:
             if sw and sw.get('close') is not None else '| - | no sweep-pivot scale | - |')
     rise, fall = (hi - p0) / p0 * 100.0, (lo - p0) / p0 * 100.0
     RISE.append(rise); FALL.append(fall)
+    #   THE PER-EVENT MAE/MFE: the cadence bar to the bar sweep-pivots closes the leg on. The
+    #   favourable direction is -side, the same mapping `mfe_pct` uses.
+    mae = mfe = None
     if sw and sw.get('close') is not None:
         LEG.append(float(sw['mfe_pct']))
-    print('| %s | %s | %s | %s | %s | %s | %s | %s | %+.3f | %+.3f %s'
+        z = int(sw['close'])
+        #   THE SPAN IS ORDERED, NOT ASSUMED. `lag_s` can be negative, so the cadence bar can sit
+        #   before the leg's open; the span is then cadence -> leg close either way.
+        a, b2 = min(int(bar), z), max(int(bar), z)
+        seg = np.asarray(close[a:b2 + 1], float)
+        pb, fav = float(close[int(bar)]), -int(sd)
+        if np.isfinite(seg).any():
+            up = (float(np.nanmax(seg)) - pb) / pb * 100.0
+            dn = (float(np.nanmin(seg)) - pb) / pb * 100.0
+            mfe, mae = (up, dn) if fav > 0 else (-dn, -up)
+            MFE.append(mfe); MAE.append(mae)
+    print('| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %+.3f | %+.3f %s'
           % (ln.U(bar), 'HIGH' if sd > 0 else 'LOW', xr, rv, gp, nl, wh, tp,
+             '-' if mae is None else '%+.3f' % mae,
+             '-' if mfe is None else '%+.3f' % mfe,
+             '-' if sw is None or sw.get('lag_s') is None else sw['lag_s'],
              rise, fall, tail))
 
 #   THE MAE/MFE SUMMARY, Joe 1027: *"always include an maemfe summary when a detailed report is
 #   created and shows the per-row maemfe"*. Two blocks, because the two columns are not the same
 #   kind of measurement and averaging them together would hide that.
 _med = lambda v: sorted(v)[len(v) // 2] if v else float('nan')
+print('')
+print('| the MAE/MFE read, the cadence bar to the leg close | value |')
+print('|---|---|')
+print('| events scored | %d of %d |' % (len(MAE), len(rows)))
+if MAE:
+    print('| sum MAE %% | %+.3f |' % sum(MAE))
+    print('| sum MFE %% | %+.3f |' % sum(MFE))
+    print('| median MAE %% | %+.3f |' % _med(MAE))
+    print('| median MFE %% | %+.3f |' % _med(MFE))
+    print('| worst MAE %% | %+.3f |' % min(MAE))
+    print('| best MFE %% | %+.3f |' % max(MFE))
+    print('| MFE > abs(MAE) | %d of %d |'
+          % (sum(1 for m, f in zip(MAE, MFE) if f > abs(m)), len(MAE)))
+    print('| MAE worse than -1.1%% (LIN2_MAE_CAP) | %d of %d |'
+          % (sum(1 for m in MAE if m < -float(K.LIN2_MAE_CAP)), len(MAE)))
+print('| the span | the cadence bar to sw[close], the bar sweep-pivots ends the leg on - NOT a'
+      ' horizon chosen here |')
+print('| why sweep-pivots has no MAE of its own | mfe_pct is measured FROM the pivot, and the'
+      ' pivot IS the leg\'s extreme, so an adverse excursion from it is 0 by construction |')
 print('')
 print('| the sweep-pivot leg MFE read | value |')
 print('|---|---|')

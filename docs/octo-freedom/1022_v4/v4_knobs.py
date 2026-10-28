@@ -356,14 +356,80 @@ LIN2_BARRAGE_TOL_S = _knob('LIN2_BARRAGE_TOL_S', 70, int)   # MEASURED off his 0
 LIN2_BARRAGE_LINES = _knob('LIN2_BARRAGE_LINES', 6, int)    # MEASURED off the same instance - the
 #   6 lines reversing LOW inside those 70 s were ws3, ws4, ws8, ws6, ws7, ws1. Also not swept.
 #   WITH BOTH: 204 LOW-side crosses on 08-30 reduce to 8 instances, in 3 clusters.
-LIN2_BARRAGE_MIN_TF = _knob('LIN2_BARRAGE_MIN_TF', 9, int)  # 0 = OFF. The barrage must include at
-#   least one line at or above this TF. HIS OBSERVATION, 1027: *"0234 is better than 0229, and 0229
-#   did not have the higher lines"*, then his RULING: *"dropping 0229 is ok - 0234 picked it up"*.
-#   02:29 tops out at ws8 and is the ONLY one of the 8 instances with no ws9..ws12 line, so 9 drops
-#   it and leaves 7. The 02:34:20 instance is 25 s later and carries ws11 and ws12, which is the
-#   *"0234 picked it up"*.
-#   NOTE THE CONSEQUENCE HE ACCEPTED: the thresholds above are measured off 02:29, so the mech is
-#   anchored to an instance this knob now excludes. That is his call, and 02:34 reproduces it.
+LIN2_BARRAGE_MIN_TF = _knob('LIN2_BARRAGE_MIN_TF', 9, int)  # 0 = OFF. THE MINIMUM TF ALLOWED TO
+#   CONTRIBUTE to the barrage count - a floor applied BEFORE LIN2_BARRAGE_LINES is tested.
+#   HIS DEFINITION, 1027, correcting mine: *"my minTF isn't your minTF (my error). I meant 'the
+#   minimum TF allowed to contribute'. example: 'ws1,ws2,ws3,ws4,ws5,ws7,ws9,ws12' would be
+#   restricted to 'ws5,ws7,ws9,ws12' if minTF =5"*.
+#   WHAT I BUILT FIRST was a MEMBERSHIP test - at least one line at or above min_tf, with the count
+#   still taken over every TF. He spotted it himself: *"wouldn't minTF 12 break the minimum
+#   required lines? at minTF 12, there is only one line"*. Under his definition it would, and that
+#   is the point of the floor.
+#   *** THE VALUE 9 IS NOW UNRULED, AND AT 9 THIS MECH FIRES NOTHING. *** His 9 was ruled against
+#   the membership reading - a different mechanic - so it is not his ruling on this one. Under the
+#   floor reading the contributing pool at 9 is ws9..ws12, four lines, and LIN2_BARRAGE_LINES 6
+#   cannot be met by four lines: the barrage produces ZERO cadences. The pair (min_tf, lines) has
+#   to be ruled together and neither half is mine. out/l2_barrage_sweep.md is the grid he rules on.
+LIN2_REV_FENCE = _knob('LIN2_REV_FENCE', 40, int)   # THE REVERSAL FENCE. Joe 1028, his own words
+#   and his own value: *"we require our reversals for a SHORT, (low-side target) to reverse below
+#   40. for a LONG, high-side target, the reverse must be above 60 (100 - {knob:40}) fence"*, then
+#   *"this feels like the right direction. lock it in"*.
+#     a LOW-side reversal counts only if the line is BELOW this
+#     a HIGH-side reversal counts only if the line is ABOVE 100 - this
+#   IT IS A THIRD FENCE AND IT HAS NO NAME BUT ITS VALUE. oob is 15/85 (his standing rule) and
+#   ex-fence is RMOM_FNC 80 mirrored to 20/80. 40/60 is neither, so nothing here calls it anything
+#   but the fence at LIN2_REV_FENCE.
+LIN2_REV_FENCE_AT = os.environ.get('W_V4_LIN2_REV_FENCE_AT', 'confirm')   # WHICH value clears the
+#   fence. He did not specify, both were measured, and he ruled: *"at the CONFIRM ... this feels
+#   like the right direction. lock it in"*.
+#     'confirm'  the value at the bar the turn becomes KNOWABLE on. THE BANKED READING, and the
+#                causal one - it tests the bar a decision is actually made at.
+#     'turn'     the value at the sampled extreme itself, which is only known in hindsight.
+#   MEASURED 08-30..09-06 on ws13r, cadence-sampled turns: at 'turn' 78 LOW / 66 HIGH clear the
+#   fence of 133 / 135; at 'confirm' 56 / 57. On his six 2026-08-31 pivot legs the early-reversal
+#   count goes 8 -> 5 at 'turn' and 8 -> 4 at 'confirm', and clean legs 1 of 6 -> 3 of 6.
+#   *** THE SCOPE IS UNRULED. *** He said lock the fence in, not where it applies. It could gate
+#   (a) only test#1's dtf reversal read, (b) every reversal lineage2 consumes - the latch, the
+#   rider's own turn, the barrage count - or (c) only the cadence-sampled view it was measured on.
+#   (b) would move the latch, the barrage and every rider decision, so nothing is wired until he
+#   says which. The knob exists; no consumer reads it yet.
+LIN2_BARRAGE_WIN_S = _knob('LIN2_BARRAGE_WIN_S', 0, int)   # THE COUNTING WINDOW, measured from
+#   the ws1Mage cross bar, in seconds. Joe 1027, option A, after he asked what the tolerance was
+#   actually for: *"so the tolerance is the maximum possible counting window. that's not how I
+#   understood it. I thought tolerance allows for ws1mage and ws1r to sync"* / *"A. let the data
+#   supply the best value for it"*.
+#   WHY IT EXISTS: his own spec line put the count *"between the cross and the ws1r reversal"*, so
+#   LIN2_BARRAGE_TOL_S was capping the counting window as a SIDE EFFECT of gating the ws1r sync.
+#   One knob was doing two jobs and he only ever intended the first.
+#     0   the window IS the ws1r reversal bar - the as-built behaviour, so nothing measured so far
+#         moves. THE DEFAULT, because the value is his and the data has not supplied it yet.
+#     >0  the window is cross + this, independent of when ws1r reverses
+#   THE KNOB'S NAME IS MINE. THE VALUE IS UNRULED - it comes off the sweep he asked for.
+LIN2_BARRAGE_FIT = os.environ.get('W_V4_LIN2_BARRAGE_FIT', 'off')   # what happens when the
+#   min_tf floor leaves fewer lines than LIN2_BARRAGE_LINES requires. Joe 1027, who named both
+#   mechanics and asked for both to be tested: *"there's 2 ways to handle this, and both need to be
+#   tested / 1) dynamiclaly reduce the minimum required lines to fit them all inside the ws12cap /
+#   2) dynamically increase the ws12 cap to include the minimum required lines"*.
+#     'off'    neither. The pool stays ws{min_tf}..ws{L2_MOM_MAXTF} and a short pool fires nothing.
+#              THE BANKED ARM, so no measurement taken so far moves.
+#     'lines'  HIS 1 - the required count drops to the pool's size. At min_tf 9 the pool is
+#              ws9..ws12 and LINES 6 becomes 4.
+#     'cap'    HIS 2 - the ceiling rises to ws{min_tf + LINES - 1}. At min_tf 9 with LINES 6 the
+#              ceiling becomes ws14, so dtf lines (>ws12, his 1017 band name) contribute. That is
+#              the same bound I removed as a DEFECT when it happened by accident; here it is his
+#              mechanic, asked for by name.
+#   THE ARM NAMES ARE MINE. 'off' is the default so the bank does not move on a sweep.
+LIN2_BARRAGE_FENCE = os.environ.get('W_V4_LIN2_BARRAGE_FENCE', 'any')   # which reversals may
+#   contribute, by the line's FENCE STATE at its own reversal bar. Joe 1027: *"sweep reversing
+#   infence vs reversing exfence"*.
+#     'any'  no fence test - the banked behaviour, and what every measurement so far used
+#     'in'   only a line that is INSIDE the r fence on the target side at its reversal bar
+#     'ex'   only a line that is EX-FENCE on the target side at its reversal bar
+#   The fence read is CLOSED, at the RAW reversal bar, per his 1026 *"move everything except
+#   reversal detection to closed bars"*. It stays causal because the barrage acts at the reversal's
+#   STAMP, which is later than the bar the fence is read at.
+#   THE KNOB'S NAME AND ITS THREE ARM NAMES ARE MINE. 'any' is the default so the bank does not
+#   move on a sweep.
 LIN2_BARRAGE_ON = _knob('LIN2_BARRAGE_ON', 1, int)   # the barrage in the chain, on/off. BANKED ON,
 #   Joe 1027: *"bank the barrage results and wire the mech into the chain"*. The knob's NAME is
 #   mine; 0 is the A/B arm.
@@ -583,9 +649,30 @@ RULED = {
                                ' to the 02:29:00 ws1r reversal. Not chosen, not swept'),
     'LIN2_BARRAGE_LINES': (6,  'MEASURED off the same instance - ws3,4,8,6,7,1 inside those 70 s.'
                                ' With the tolerance it cuts 204 LOW crosses to 8 instances'),
-    'LIN2_BARRAGE_MIN_TF': (9, 'HIS RULING 1027: "dropping 0229 is ok - 0234 picked it up". 02:29'
-                               ' tops out at ws8 and is the only one of the 8 with no ws9..ws12,'
-                               ' so 9 drops it and leaves 7. 02:34:20 is 25 s later with ws11+ws12'),
+    'LIN2_BARRAGE_MIN_TF': (9, '*** UNRULED AND EMPTY AT 9. *** His 1027 definition is "the'
+                               ' minimum TF allowed to contribute", a floor applied BEFORE the'
+                               ' line count. At 9 the pool is ws9..ws12 (four lines) and'
+                               ' LIN2_BARRAGE_LINES 6 cannot be met, so the mech fires NOTHING.'
+                               ' His 9 was ruled against a membership reading - a different'
+                               ' mechanic. (min_tf, lines) must be ruled together'),
+    'LIN2_REV_FENCE': (40, 'HIS value and HIS words 1028: a LOW reversal counts only below 40, a'
+                           ' HIGH only above 60. "lock it in". A THIRD fence - not oob (15/85) and'
+                           ' not ex-fence (20/80). THE SCOPE IS UNRULED: no consumer reads it yet'),
+    'LIN2_REV_FENCE_AT': ('confirm', 'the value at the bar the turn becomes KNOWABLE on - the'
+                                     ' causal one. HIS ruling 1028 after both were measured.'
+                                     ' "turn" is the hindsight reading'),
+    'LIN2_BARRAGE_WIN_S': (0, 'the counting window is the ws1r reversal bar - the as-built'
+                              ' behaviour, so nothing measured so far moves. His 1027 option A'
+                              ' split it from the tolerance, which only ever meant to let ws1Mage'
+                              ' and ws1r sync. THE VALUE IS UNRULED and comes off the sweep'),
+    'LIN2_BARRAGE_FIT': ('off', 'neither of his two fits - a short pool fires nothing. THE BANKED'
+                                ' ARM. lines = his "reduce the minimum required lines to fit them'
+                                ' all inside the ws12cap"; cap = his "increase the ws12 cap to'
+                                ' include the minimum required lines". The arm names are MINE'),
+    'LIN2_BARRAGE_FENCE': ('any', 'no fence test on a contributing reversal - the banked behaviour'
+                                  ' and what every measurement so far used. in/ex are the sweep'
+                                  ' arms for his 1027 "sweep reversing infence vs reversing'
+                                  ' exfence". The knob name and the arm names are MINE'),
     'LIN2_BARRAGE_ON': (1,  'BANKED ON, Joe 1027: "bank the barrage results and wire the mech into'
                             ' the chain". It fires as a CADENCE and that cadence EXHAUSTS - his'
                             ' "both - a cadence keeps the walk\'s transactions uniform, and'

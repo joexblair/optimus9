@@ -225,7 +225,8 @@ def counter_oob(CL, side, A, B):
     return out
 
 
-def barrage(BD, side, A, B):
+def barrage(BD, side, A, B, tol_s=None, lines=None, min_tf=None, fence=None,
+            fit=None, win_s=None, cand=None):
     """THE BARRAGE. -> [(the cadence bar, 'barrage', why)].
 
     HIS QUESTION, 1027, which is where the mech came from:
@@ -279,34 +280,70 @@ def barrage(BD, side, A, B):
     23:49:30 on ws14. Worse, LIN2_BARRAGE_MIN_TF 9 was being satisfied by a dtf line rather than by
     ws9..ws12. The thresholds were measured over ws1..ws12, so the count is bounded by his own
     ladder knob. dtf lines (>ws12, his 1017 band name) are not on the lineage2 board.
+
+    THE THRESHOLDS CAN BE OVERRIDDEN BY A CALLER, for a sweep only. `tol_s`, `lines` and `min_tf`
+    default to the banked knobs, which is what the chain gets. A sweep passes explicit values so
+    there is still ONE copy of the rule - the alternative was a second detection loop in the sweep
+    script, and that is exactly the drift that put dtf lines in the first count.
     """
-    M1 = BD.mage_line(1, 'emerging')
-    w = int(K.LIN2_BARRAGE_TOL_S) // 5                 # 70 s = 14 bars on the 5 s grid
-    need = int(K.LIN2_BARRAGE_LINES)
-    min_tf = int(K.LIN2_BARRAGE_MIN_TF)
-    tfs = [int(t) for t in BD.tfs if int(t) <= int(K.L2_MOM_MAXTF)]
-    assert max(tfs) <= int(K.L2_MOM_MAXTF), 'the barrage is counting a line off the lineage2 board'
-    raws = {int(t): [int(b) for b in F.revs(BD.E[int(t)], int(t), int(side))] for t in tfs}
+    tol_s = int(K.LIN2_BARRAGE_TOL_S) if tol_s is None else int(tol_s)
+    need = int(K.LIN2_BARRAGE_LINES) if lines is None else int(lines)
+    min_tf = int(K.LIN2_BARRAGE_MIN_TF) if min_tf is None else int(min_tf)
+    fence = str(K.LIN2_BARRAGE_FENCE) if fence is None else str(fence)
+    assert fence in ('any', 'in', 'ex'), 'LIN2_BARRAGE_FENCE %r is not an arm' % fence
+    fit = str(K.LIN2_BARRAGE_FIT) if fit is None else str(fit)
+    assert fit in ('off', 'lines', 'cap'), 'LIN2_BARRAGE_FIT %r is not an arm' % fit
+    #   THE COUNTING WINDOW IS ITS OWN TERM, Joe 1027 option A. He asked what the tolerance was
+    #   for and then corrected the build: *"I thought tolerance allows for ws1mage and ws1r to
+    #   sync"*. His own spec line put the count *"between the cross and the ws1r reversal"*, which
+    #   made the tolerance cap the counting window as a SIDE EFFECT - one knob doing two jobs.
+    #   Now the tolerance does the sync ONLY and the count has its own window off the cross.
+    #     0   the window is the ws1r reversal bar - THE AS-BUILT BEHAVIOUR, so the bank cannot
+    #         move on this change
+    #     >0  the window is cross + win_s, independent of when ws1r reverses
+    #   *"let the data supply the best value for it"* - out/l2_barrage_sweep.md is the grid.
+    win_s = int(K.LIN2_BARRAGE_WIN_S) if win_s is None else int(win_s)
+    #   WHEN THE FLOOR AND THE LINE COUNT CANNOT BOTH BE MET, Joe 1027 gave two mechanics and
+    #   asked for both: *"1) dynamiclaly reduce the minimum required lines to fit them all inside
+    #   the ws12cap / 2) dynamically increase the ws12 cap to include the minimum required lines"*.
+    #     'off'    neither - the pool stays ws{min_tf}..ws{L2_MOM_MAXTF} and a short pool means the
+    #              mech fires nothing. THE BANKED BEHAVIOUR.
+    #     'lines'  his 1 - the required count drops to the pool's size
+    #     'cap'    his 2 - the ceiling rises to ws{min_tf + lines - 1}, which admits dtf lines
+    #              (>ws12) on purpose. That is the same bound I removed as a defect when it was
+    #              UNINTENDED; here he is asking for it.
+    avail = sorted(int(t) for t in BD.tfs)
+    ceil = int(K.L2_MOM_MAXTF)
+    if fit == 'cap':
+        ceil = max(ceil, int(min_tf) + int(need) - 1)
+        ceil = min(ceil, avail[-1])                    # the ladder cannot be extended past ws%d
+    pool = [t for t in avail if int(min_tf) <= t <= ceil]
+    if fit == 'lines':
+        need = min(int(need), len(pool))
     out = []
-    for c, _cf, sd in oob_ib_cross(M1, K.OOB_HI, K.OOB_LO, 1):
-        if int(sd) != int(side):
+    for c, sig, first, m1v, exf in barrage_candidates(BD, side, cand=cand):
+        if (sig - c) * 5 > tol_s:
             continue
-        c = int(c)
-        r1 = [b for b in raws[1] if c <= b <= c + w]
-        if not r1:
+        #   MIN_TF IS A FLOOR ON WHICH LINES MAY CONTRIBUTE, his correction 1027: *"my minTF isn't
+        #   your minTF (my error). I meant 'the minimum TF allowed to contribute'"*, with his own
+        #   example - ws1,ws2,ws3,ws4,ws5,ws7,ws9,ws12 restricted to ws5,ws7,ws9,ws12 at minTF 5.
+        #   So the floor is applied BEFORE the count, not as a membership test after it.
+        right = int(sig) if win_s <= 0 else int(c) + int(win_s) // 5
+        inside = {t: b for t, b in first.items()
+                  if b <= right and int(min_tf) <= int(t) <= ceil}
+        if fence != 'any':
+            want = (fence == 'ex')
+            inside = {t: b for t, b in inside.items() if bool(exf[t]) is want}
+        if len(inside) < need:
             continue
-        sig = int(r1[0])
-        #   WHICH LINES REVERSED BETWEEN THE CROSS AND THE ws1r REVERSAL, and when each first did
-        first = {t: min(b for b in bs if c <= b <= sig)
-                 for t, bs in raws.items() if any(c <= b <= sig for b in bs)}
-        if len(first) < need:
-            continue
-        if min_tf and max(first) < min_tf:
-            continue
-        k = max(int(K.lift_stamp(b)) for b in first.values())
-        assert k >= sig, 'the barrage cadence is before its own ws1r reversal'
-        assert all(k >= b for b in first.values()), \
-            'the barrage cadence is before a reversal it counted'
+        k = max(int(K.lift_stamp(b)) for b in inside.values())
+        assert all(k >= b for b in inside.values()), \
+            'the barrage cadence is before a reversal it counted, or before a fence read'
+        #   WITH AN INDEPENDENT WINDOW a contributing reversal can land AFTER the ws1r one, so the
+        #   cadence bar can be later than the ws1r stamp. It is still the max stamp of everything
+        #   counted, which is the bar every term is knowable at.
+        assert k >= int(K.lift_stamp(sig)) or win_s > 0, \
+            'the cadence is before the ws1r stamp with the window tied to it'
         if not (int(A) <= k <= int(B)):
             continue
         if any(r[0] == k for r in out):
@@ -314,9 +351,60 @@ def barrage(BD, side, A, B):
         out.append((k, 'barrage',
                     'ws1Mage %.2f %s oob->ib %s, ws1r reverses %s (%d s), %d lines reverse with it'
                     ' (%s), top ws%d - confirmed %s'
-                    % (float(M1[c]), 'LOW' if int(side) < 0 else 'HIGH', ln.U(c)[11:], ln.U(sig)[11:],
-                       (sig - c) * 5, len(first),
-                       ','.join('ws%d' % t for t in sorted(first)), max(first), ln.U(k)[11:])))
+                    % (m1v, 'LOW' if int(side) < 0 else 'HIGH', ln.U(c)[11:], ln.U(sig)[11:],
+                       (sig - c) * 5, len(inside),
+                       ','.join('ws%d' % t for t in sorted(inside)), max(inside), ln.U(k)[11:])))
+    return out
+
+
+def barrage_candidates(BD, side, cand=None):
+    """THE BARRAGE'S RAW CANDIDATES, with NO threshold applied. -> [(cross, sig, first, m1v, exf)].
+
+        cross  a ws1Mage oob->ib cross bar on `side`
+        sig    the FIRST same-side ws1r reversal at or after that cross, at any distance
+        first  {tf: the first same-side reversal of ws{tf}r at or after the cross}, ws1..L2_MOM_MAXTF
+        m1v    ws1Mage's value at the cross bar
+        exf    {tf: was ws{tf}r EX-FENCE on `side` at its own reversal bar}, read CLOSED
+
+    THE FENCE READ IS CLOSED, at the RAW reversal bar. His 1026 rule is *"move everything except
+    reversal detection to closed bars"*, so the reversal TIMING is emerging and the fence STATE at
+    that bar is closed. It stays causal because the barrage acts at the reversal's STAMP, which is
+    later than the bar the fence is read at - asserted in `barrage`.
+
+    NO TOLERANCE AND NO HORIZON HERE. `sig` is found at whatever distance it happens, and `first`
+    holds every line's first reversal after the cross whether or not it lands before `sig`. The
+    three thresholds are applied by `barrage` on top of this, which is what lets a sweep vary them
+    without a second copy of the rule and without recomputing the reversal detection per combo.
+
+    A cross with no later ws1r reversal at all is dropped - there is nothing for a tolerance to
+    admit. `cand` lets a caller pass a list this function already returned, so a sweep computes it
+    once.
+    """
+    if cand is not None:
+        return cand
+    M1 = BD.mage_line(1, 'emerging')
+    #   EVERY TF THE BOARD HAS, and the CEILING IS APPLIED BY `barrage`, not here. It used to be
+    #   applied here at L2_MOM_MAXTF 12, which is correct for every arm but his 'cap' one - that
+    #   arm raises the ceiling past ws12 on purpose, so the candidate set has to be
+    #   ceiling-agnostic. With fit 'off' or 'lines' the ceiling is still 12 and nothing moves.
+    tfs = sorted(int(t) for t in BD.tfs)
+    raws = {int(t): [int(b) for b in F.revs(BD.E[int(t)], int(t), int(side))] for t in tfs}
+    out = []
+    for c, _cf, sd in oob_ib_cross(M1, K.OOB_HI, K.OOB_LO, 1):
+        if int(sd) != int(side):
+            continue
+        c = int(c)
+        later = [b for b in raws[1] if b >= c]
+        if not later:
+            continue
+        sig = int(later[0])
+        first, exf = {}, {}
+        for t, bs in raws.items():
+            nxt = [b for b in bs if b >= c]
+            if nxt:
+                first[t] = int(nxt[0])
+                exf[t] = bool(BD.ex_fence(int(t), int(nxt[0]), int(side)))
+        out.append((c, sig, first, float(M1[c]), exf))
     return out
 
 

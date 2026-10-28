@@ -609,6 +609,55 @@ the barrage detects it, the chain does not get there, because the trade before i
 **THE 5 CAPPED TRADES ARE UNCHANGED BY IT.** All 5 still end on a cascade mismatch, which is what
 task 35 measures.
 
+### test#1 and test#2 gate the barrage, and a failure HOLDS it
+
+Joe 1027/1028, his words:
+
+> test#1 has an r line above {knob:12} recently reversed
+> test#2 is there not a r line above {different knob:12} that is exfence on the opposing side
+> when either test return a disqualified, lineage2 fires. there is no wait for the lineage2 arm -
+> the mech looks for the highest same-side exfence line and rides it, or prints exhaust if there
+> are no same-side ex-fence lines
+> if the exhaust did not print immediately, walk to the following t1/t2 cadence and let lineage2
+> take full control
+
+> every barrage event is held if test#1 or test#2 do not pass. for 1432, test#1 failed. on a test
+> failure, barrage holds it's signal and lineage2 takes the walk forward. ie no trade happens
+> at 1432
+
+**SO A FAILED TEST IS NOT A REJECTION AND NOT A TRADE.** The barrage HOLDS its signal, and the walk
+carries it forward. Whatever trade happens, happens at the walk's own conclusion.
+
+| the gate | the condition that QUALIFIES |
+|---|---|
+| test#1 | an r line above ws12 has recently reversed, same side as the signal |
+| test#2 | there is NO r line above ws12 ex-fence on the opposing side |
+
+| what happens | when |
+|---|---|
+| the barrage cadence EXHAUSTS, as section 16 has it | both tests qualify |
+| the barrage HOLDS and lineage2 walks forward from the fire bar | either test disqualifies |
+
+**THE WALK ON THE HELD ROUTE**, his words again: no arm race - the fire bar IS the arm; ride the
+highest same-side ex-fence wsf line; exhaust immediately if there is none; otherwise nothing is
+decided until the following t1/t2 cadence, and lineage2 then has full control.
+
+**HIS 2026-08-31 14:32:40 CASE.** test#1 fails there - no dtf reversal inside 60 s - so the barrage
+holds. The walk rides cws8 and exhausts at 14:33:00, so the trade opens at 14:33:05 as a rev-trade,
+20 s after the fire bar and NOT at the fire bar.
+
+**TWO THINGS THIS DOES NOT SETTLE, and both are his:**
+
+| # | the gap |
+|---|---|
+| 1 | test#1's lookback window and the TOP of the dtf scan. His five examples pin the window to 1-5 min ONLY if the scan stops near ws14; on the whole band to ws30 the window has to be 12-48 s |
+| 2 | he named ws9 as the line that takes the baton at 14:32:40; `rider_at` picked cws8 off the closed ladder. One of the two reads a different board |
+
+**A CORRECTION TO A MEASUREMENT I REPORTED.** `out/l2_barrage_route.md` opened a trade AT the fire
+bar and scored MAE/MFE from there - sum MAE -23.042, sum MFE +15.072 over 28 walks. Under his
+ruling no trade exists at the fire bar, so those figures measure the HOLD, not a trade. The trade
+starts at the walk's exhaust + 1. The route's exhaust bars stand; its excursion columns do not.
+
 ## 17. The MAE 1.1 cap — a report-only stop model
 
 Joe 1027: *"the truth table: if MAE > 1.1, cap mae at 1.1 and print 0 in mfe"*.

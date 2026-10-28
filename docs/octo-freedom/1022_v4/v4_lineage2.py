@@ -348,13 +348,21 @@ def pass_why(BD, tf, side, bar):
     return ' + '.join(hit) or 'not a pass bar'
 
 
-def walk(CL, BD, close, side, frm, B, trace=None):
+def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
     """One lineage2 walk. -> (the verdict, the bar, the rows).
 
-        CL  the closed c-set from v4_core_arm.lines() plus 'M' - cws1b, cws1r, cws2r, cws2Mage
-        BD  a `v4_l2_proxy.Board`, which owns both r ladders and the routing between them
+        CL      the closed c-set from v4_core_arm.lines() plus 'M' - cws1b, cws1r, cws2r, cws2Mage
+        BD      a `v4_l2_proxy.Board`, which owns both r ladders and the routing between them
+        arm_at  a bar to START AT, skipping the arm race entirely. None runs the race.
 
     The arm race, then the rider, then one decision per cadence bar until a verdict.
+
+    `arm_at` EXISTS FOR HIS test#1 ROUTE, Joe 1027: *"if we trigger the lineage2 walk at
+    barrage-fire (08-31 1432) and scan the wsf range for the highest exfence line, then the high
+    exfence ws9 takes the baton. exhaust fires at 1501. this lineage2 walk is the same as usual:
+    decisions at cadences only"*. The race decides nothing on that route - the barrage bar IS the
+    arm - so the race is skipped and the rider is scanned at that bar. Everything after is
+    unchanged, which is what *"the same as usual"* requires.
     """
     rows = []
 
@@ -363,11 +371,16 @@ def walk(CL, BD, close, side, frm, B, trace=None):
         if trace is not None:
             trace.append(kw)
 
-    arm, which, why = arm_race(CL, BD, side, frm, B)   # all three on the CLOSED set, 1026
-    if arm is None:
-        row(bar=None, stage='NO ARM', why=why)
-        return 'NO ARM', None, rows
-    row(bar=arm, stage='ARM', why='%s: %s' % (which, why))
+    if arm_at is not None:
+        arm, which = int(arm_at), 'arm_at'
+        row(bar=arm, stage='ARM', why='arm_at %s - the arm race is skipped, this bar IS the arm'
+                                      % ln.U(arm))
+    else:
+        arm, which, why = arm_race(CL, BD, side, frm, B)   # all three on the CLOSED set, 1026
+        if arm is None:
+            row(bar=None, stage='NO ARM', why=why)
+            return 'NO ARM', None, rows
+        row(bar=arm, stage='ARM', why='%s: %s' % (which, why))
 
     if which == 'cws2Mage+cws2r':
         v = div_verdict(CL, close, side, arm)
