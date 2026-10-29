@@ -325,10 +325,10 @@ L2_T1_GRACE_S = _knob('L2_T1_GRACE_S', 120, int)  # *"the 2 minutes (CAUSALLY) f
 #   the bearish divergence that fires on the 2151 t1 cadence / 2nd latch, ws7r reversing (with
 #   wob12) and no baton candidate options PLUS the supporting ws4,5,6r matryoshka reversals"*.
 #   Then *"the old t3 is defunct"*, so L2_T3_ON's default moves to 0 below.
-LIN2_LATCH_ON = _knob('LIN2_LATCH_ON', 1, int)      # the latch on/off. BANKED ON - it is his mech.
+LIN2_CAD_LATCH_ON = _knob('LIN2_CAD_LATCH_ON', 1, int)      # the latch on/off. BANKED ON - it is his mech.
 LIN2_T3_MIN_TF = _knob('LIN2_T3_MIN_TF', 5, int)    # HIS NAME AND HIS VALUE, 1026:
 #   *"the rider between ws{knob:5,'lin2_t3_min_tf'} and ws12"*. The rider range latch 2 accepts.
-LIN2_LATCH_LIFE_S = _knob('LIN2_LATCH_LIFE_S', 600, int)   # *"3, 10 minutes (knob)"* - how long
+LIN2_CAD_LATCH_LIFE_S = _knob('LIN2_CAD_LATCH_LIFE_S', 600, int)   # *"3, 10 minutes (knob)"* - how long
 #   latch 1 stays latched. Seconds. HE SET THE VALUE; the knob's NAME is mine, not his.
 LIN2_SUPPORT_LINES = _knob('LIN2_SUPPORT_LINES', 3, int)   # *"7, 3 lines below the rider"*. ALL of
 #   them must have reversed - his original reading named ws4, ws5 and ws6 under a ws7 rider.
@@ -370,6 +370,126 @@ LIN2_BARRAGE_MIN_TF = _knob('LIN2_BARRAGE_MIN_TF', 9, int)  # 0 = OFF. THE MINIM
 #   floor reading the contributing pool at 9 is ws9..ws12, four lines, and LIN2_BARRAGE_LINES 6
 #   cannot be met by four lines: the barrage produces ZERO cadences. The pair (min_tf, lines) has
 #   to be ruled together and neither half is mine. out/l2_barrage_sweep.md is the grid he rules on.
+LIN2_BARRAGE_MAX_TF = _knob('LIN2_BARRAGE_MAX_TF', 15, int)  # THE BARRAGE'S OWN CEILING, in TF.
+#   HIS VALUE AND HIS MECH, 1029: *"barrage maxTF needs to increase, knob:15. with this in place,
+#   the sweep of barrage's minTF (and maxTF, range:[12-22]) will be able to test (compared against
+#   the last sweep)"*.
+#   IT IS BARRAGE-ONLY, AND THAT IS MY CALL, stated: his words were "barrage maxTF", and
+#   L2_MOM_MAXTF 12 is a ceiling in six other places (the rider scan, the baton candidates, the
+#   latch range, t3's HTF set, v4_reentry) plus a FLOOR in test#1/test#2. Moving the shared one
+#   would move all of them, so the barrage gets its own and L2_MOM_MAXTF stays 12.
+#   LINES ws1..ws30 ARE ON DISK for both the emerging and the closed read, so his [12-22] range is
+#   buildable. SIX OF THE ELEVEN VALUES have a short final midnight bucket and so their
+#   pseudo-closed read is NOT bit-exact to the product's closed read at a grid close: ws13 (1440/13
+#   = 110.77), ws14 (102.86), ws17 (84.71), ws19 (75.79), ws21 (68.57), ws22 (65.45). Exact:
+#   ws12, ws15, ws16, ws18, ws20. ws15 and ws16 were measured at max diff 0.000000.
+#   IT INTERACTS WITH LIN2_BARRAGE_FIT 'cap', which raises the ceiling dynamically. This knob is
+#   the BASE ceiling and 'cap' may still raise it; with FIT 'off', banked, nothing raises it.
+LIN2_BARRAGE_MIN_TF_MODE = os.environ.get('W_V4_LIN2_BARRAGE_MIN_TF_MODE', 'membership')
+#   HOW LIN2_BARRAGE_MIN_TF IS APPLIED. Joe 1028 chose this arm - *"B"* - to run the legs on *"the
+#   settings that built the pine-emit"*.
+#     'membership'  at least ONE contributing line is at or above MIN_TF, and the COUNT is taken
+#                   over ws1..L2_MOM_MAXTF. This is what out/l2_barrage.pine and the banked
+#                   out/l2_barrage_0830_0906.md were built on: 24 cadences over 08-30..09-06.
+#     'floor'       only lines at or above MIN_TF may contribute at all - HIS OWN definition,
+#                   1028: *"I meant 'the minimum TF allowed to contribute'"*.
+#   *** THE FLOOR ARM IS EMPTY AT THE CURRENT PAIR. *** MIN_TF 9 leaves ws9..ws12, four lines, and
+#   LIN2_BARRAGE_LINES 6 cannot be met by four, so the mech fires NOTHING. The (MIN_TF, LINES) pair
+#   has to be ruled together for that arm; until then 'membership' is the default so the mech does
+#   not ship empty. THE ARM NAMES ARE MINE; the two readings are both his.
+LIN2_B1_HOLD = _knob('LIN2_B1_HOLD', 0, int)   # bars ws1b's crossing back inside must hold
+#   before the two cadences count it as inside. 0 = the instantaneous read, which is what they do
+#   today.
+#   HIS MECH, 1029: *"could the ws1b test incorporate the wob 12? ie if ws1b to ib has not
+#   qualified its wob 12, then its value is not passed in"*, and the reason: *"what I'm trying to
+#   capture is the ws1b low oob excursion that runs from 0100 to 0121"*.
+#   MEASURED on 2026-08-30, the live read: ws1b's low-side excursion runs 00:59:25 to 01:20:45 and
+#   contains FOUR crossings back inside, of 9, 4, 2 and 9 bars. The instantaneous read breaks the
+#   excursion at the first of them. At 12 bars none of the four qualifies and the real exit at
+#   01:20:50 holds 550 bars, so the excursion reads as one event confirmed 01:21:45 - his 0121.
+#   THE KNOB NAME IS MINE. The value 12 is his, and it is the same count as the crossing hold the
+#   two cadences already apply to ws1r.
+#   DEFAULT 0 so the arm is measured before it is banked.
+LIN2_LATCH_EXFNC_ON = _knob('LIN2_LATCH_EXFNC_ON', 1, int)   # the PER-LINE EX-FENCE LATCH, on/off.
+#   HIS MECH AND HIS KNOB NAME, 1029, verbatim:
+#       I have a third option to add to pseudo-close and 180 wob: use a per-line latch
+#       -the mech would latch on when the r line crosses into exfence, with a small
+#        {knob:4,'LIN2_EXFNC_LATCH_WOB'} WOB
+#       -the latch releases on barrage's signal
+#       -the baton-passing consumers will no longer test a line's value to decide ex-fence (and
+#        oob). they will query the latch state
+#       -any non-baton-passing mechs can still use line values for decisions
+#   and 1029: *"ADD LIN2_LATCH_EXFNC_ON / no need for a latch life on this new mech / the mech I
+#   propose is purely for baton-passing"*.
+#   BANKED ON, 1029: *"bank this as the machine"*, after the three reads were measured on
+#   2026-08-30 with one open at 23:53:55 SHORT. It was proposed as a third option against
+#   pseudo-closed and the live read, and it is the one he banked.
+#   NO LIFE KNOB, on his instruction. The only release is the barrage's signal, so a line that
+#   latches and never meets a barrage stays latched to the window's end. No cap is applied.
+LIN2_EXFNC_LATCH_WOB = _knob('LIN2_EXFNC_LATCH_WOB', 4, int)   # HIS NAME AND HIS VALUE - *"a small
+#   {knob:4,'LIN2_EXFNC_LATCH_WOB'} WOB"*. BARS, at the 5 s grid, so 4 = 20 s. Bars is MY reading
+#   and it follows every other wob in the tree: LIFT_WOB 8, LIN2_REV_WOB 12, LIN2_CROSS_WOB 12.
+#   The latch turns on at the CONFIRM bar, cross + wob - 1, and only if the line held beyond the
+#   fence for every bar of that window - the same shape _pass_bars uses for its off-edge.
+LIN2_CHAIN_OPEN_ON = _knob('LIN2_CHAIN_OPEN_ON', 1, int)   # the chain's FIRST open, on/off.
+#   HIS MECH AND HIS RULING, 1029: *"the chain open should be on the ws5Mage oob with at least one
+#   higher TF Mage printing closer to 50. that moment is 08-29 ~2345, and it's a SHORT"*, then the
+#   logic corrected by him in the same breath: *"'closer to 50' was poor logic - help me simplify
+#   the logic: if ws5Mage is high oob, then at least 2 higher TFs must be printing LOWER values. if
+#   ws5MAge is low oob, then the higher TFs must be printing higher"*.
+#   IT REPLACES A HANDED-IN FIRST SIDE. Before this the chain opened at the window's first bar on a
+#   side passed in as +1 - not a mech, just a boundary and a choice. Now the open is produced.
+#   DEFAULT ON, and that is MY call: *"should be"* is a ruling, so the default moves. The OFF arm
+#   keeps the old handed-in open so the two are comparable in one table.
+#   THE SCAN RUNS BACKWARD from the window's first bar, with NO limit: Joe 1029 *"we're always
+#   going to have an incoming trade to start a window... option B is the answer"*. It is causal -
+#   it finds a PAST event, and the trigger at bar k reads only bar k.
+LIN2_CHAIN_OPEN_TF = _knob('LIN2_CHAIN_OPEN_TF', 5, int)   # the trigger line: ws{TF}Mage. HIS LINE.
+LIN2_CHAIN_OPEN_LOOKBACK_S = _knob('LIN2_CHAIN_OPEN_LOOKBACK_S', 300, int)   # HIS VALUE - the
+#   ws{TF}Mage oob gate passes if it is oob AT the firing bar or was oob inside this trailing span.
+#   *"if ws5Mage is oob or has been oob in the last 5 minutes on the candidate-side"*. Seconds.
+LIN2_CHAIN_OPEN_XWOB = _knob('LIN2_CHAIN_OPEN_XWOB', 1, int)   # bars the ws1b ib state must hold
+#   for the cross to fire. 1 = the RAW cross bar.
+#   MY CALL, AND IT IS CONTESTED BY HIS OWN EARLIER RULING. His 1027 *"add the wob12 to all
+#   crosses"* points at 12; LIN2_CROSS_WOB 12 is that knob. MEASURED on his instance, all four arms
+#   give the SAME anchor, the same 7-of-7 count and the same SHORT - only the open bar moves:
+#     emerging raw      2026-08-29 23:53:50   +0.8 min from his "2353"
+#     emerging wob 12   2026-08-29 23:54:45   +1.8 min
+#     closed_prev raw   2026-08-29 23:54:00   +1.0 min
+#     closed_prev w12   2026-08-29 23:54:55   +1.9 min
+#   1 is banked because it is nearest his call and the ws{TF}Mage gate plus the anchor test already
+#   stand in for a hold. Set W_V4_LIN2_CHAIN_OPEN_XWOB=12 to take the other arm.
+LIN2_CHAIN_OPEN_LINES = _knob('LIN2_CHAIN_OPEN_LINES', 2, int)  # HIS VALUE - *"at least 2 higher
+#   TFs"*. How many of ws{TF+1}..ws{L2_MOM_MAXTF} Mage must print on the far side of the trigger's
+#   own value: LOWER when the trigger is HIGH oob, HIGHER when it is LOW oob.
+#   THE BAND IS ws{TF+1}..ws{L2_MOM_MAXTF}, MY call: L2_MOM_MAXTF 12 is the ladder's top rung
+#   everywhere else and the Mage ladder is built ws1..ws12 in every driver. His instance does not
+#   discriminate - at 2026-08-29 23:50:00 closed, all 7 of ws6..ws12 qualify.
+#   THE SIDE IS THE COUNTER SIDE of the trigger's oob: HIGH oob -> SHORT. His instance is a HIGH
+#   oob at 87.75 which he called a SHORT. NO WOB - he named none.
+LIN2_PSEUDO_MIN_TF = _knob('LIN2_PSEUDO_MIN_TF', 99, int)
+#   99 = OFF, BANKED 1029: *"bank this as the machine"* names the arm with the ex-fence latch ON
+#   and the pseudo-closed line OUT. 4 was his 1028 value for the arm where pseudo answers ws4 and
+#   up; it is kept here as that arm's number, not as the machine's.
+#   THE ORIGINAL 1028 NOTE FOLLOWS, unchanged:   # the LOWEST TF whose EX-FENCE read
+#   comes from the pseudo-closed line. Joe 1028: *"we can't confine it to above ws12. we've already
+#   had cases yesterday when a line that I thought should be ex-fence and the walk saw the emerging
+#   spikes which early-exhausted the walk. let's confine pseudo-closed to >3"*, and on the band
+#   *"I see ws1-3 as fast lines"*. So ws1..ws3 keep their current reads and ws4 upward go pseudo.
+#     HIS VALUE. The knob's name is mine.
+#   WHY THE EX-FENCE READ AND NOT THE REVERSALS: *"1, pseudo for exfence. the candidates for a
+#   reversal mech are lift-off and pseudo - we need to see both reversal times in different columns
+#   when the walk's leg report is printed"*. So the reversal mech is UNDECIDED and the walk keeps
+#   lift-off; both times are reported side by side.
+#   AN EX-FENCE READ NEEDS ONE SAMPLE, so it carries no cadence dependency. The 3-cadence hole in
+#   the cadence-sampled turn rule does not touch it - his own point: *"most of the walk is
+#   invisible until a cadence event"*.
+#   THE VALUE PRINTED BESIDE A PSEUDO EX-FENCE DECISION IS THE PSEUDO VALUE. That is MY call: a row
+#   reading "cws5 r 80.58, the highest ex-fence" with a closed number against a pseudo decision
+#   would misreport which board the walk used.
+#   IT IS NOT CACHEABLE TAPE-WIDE. pseudo-closed holds 121 TF-bar samples per 5 s bar, so a full
+#   1.63M-bar tape is ~1.5 GB per line. It is computed for a run's own window plus 120 x T bars of
+#   history - ~17 MB per line for a one-day chain run.
 LIN2_REV_FENCE = _knob('LIN2_REV_FENCE', 40, int)   # THE REVERSAL FENCE. Joe 1028, his own words
 #   and his own value: *"we require our reversals for a SHORT, (low-side target) to reverse below
 #   40. for a LONG, high-side target, the reverse must be above 60 (100 - {knob:40}) fence"*, then
@@ -655,6 +775,14 @@ RULED = {
                                ' LIN2_BARRAGE_LINES 6 cannot be met, so the mech fires NOTHING.'
                                ' His 9 was ruled against a membership reading - a different'
                                ' mechanic. (min_tf, lines) must be ruled together'),
+    'LIN2_BARRAGE_MIN_TF_MODE': ('membership', 'the arm the pine emit and the banked 24-cadence'
+                                               ' list were built on - one contributing line at or'
+                                               ' above MIN_TF, count over ws1..12. HIS choice 1028'
+                                               ' ("B"). The "floor" arm is HIS definition but is'
+                                               ' EMPTY at MIN_TF 9 / LINES 6, so the pair must be'
+                                               ' ruled before it can be the default'),
+    'LIN2_PSEUDO_MIN_TF': (99, '99 = OFF. "bank this as the machine" - 1029 names the arm with'
+                               ' the ex-fence latch ON and pseudo OUT. 4 is the other arm'),
     'LIN2_REV_FENCE': (40, 'HIS value and HIS words 1028: a LOW reversal counts only below 40, a'
                            ' HIGH only above 60. "lock it in". A THIRD fence - not oob (15/85) and'
                            ' not ex-fence (20/80). THE SCOPE IS UNRULED: no consumer reads it yet'),
@@ -700,11 +828,28 @@ RULED = {
     'LIN2_COUNTER_OOB_ON': (1, 'BANKED ON. "create a cadence when cws1b crosses to counter'
                                ' target-side oob (eg 08-30 1921)" - 1026, "go" - 1027. Raw cross'
                                ' bar, no wob. 69 firings arm..exhaust over 08-30..09-03'),
-    'LIN2_LATCH_ON': (1,    'BANKED ON. the 2-staged latch, Joe 1026: "I see a potential'
+    'LIN2_CAD_LATCH_ON': (1,    'BANKED ON. the 2-staged latch, Joe 1026: "I see a potential'
                             ' replacement for t3, and it\'s 2-staged latch"'),
+    'LIN2_CHAIN_OPEN_ON': (1, 'HIS MECH - "the chain open should be on the ws5Mage oob" - 1029.'
+                              ' ON: "should be" is a ruling. OFF keeps the handed-in first side'),
+    'LIN2_CHAIN_OPEN_TF': (5, 'HIS LINE - ws5Mage - 1029'),
+    'LIN2_CHAIN_OPEN_LOOKBACK_S': (300, 'HIS VALUE - "has been oob in the last 5 minutes" - 1029'),
+    'LIN2_CHAIN_OPEN_XWOB': (1, 'MINE. The RAW ws1b cross. His "wob12 to all crosses" (1027)'
+                                ' points at 12; raw is 0.8 min from his "2353" against 1.8'),
+    'LIN2_CHAIN_OPEN_LINES': (2, 'HIS VALUE - "at least 2 higher TFs must be printing LOWER'
+                                 ' values" - 1029. The band ws6..ws12 is mine'),
+    'LIN2_BARRAGE_MAX_TF': (15, 'HIS VALUE - "barrage maxTF needs to increase, knob:15" - 1029.'
+                                ' Barrage-only; L2_MOM_MAXTF stays 12. Sweep range [12-22] is his'),
+    'LIN2_B1_HOLD': (0, 'HIS MECH - "if ws1b to ib has not qualified its wob 12, then its'
+                        ' value is not passed in" - 1029. OFF until measured. At 12 it holds his'
+                        ' 2026-08-30 00:59:25..01:20:45 low excursion together as one event'),
+    'LIN2_LATCH_EXFNC_ON': (1, 'HIS MECH, HIS KNOB NAME, AND HIS BANK - "ADD'
+                               ' LIN2_LATCH_EXFNC_ON" then "bank this as the machine" - 1029'),
+    'LIN2_EXFNC_LATCH_WOB': (4, 'HIS NAME AND HIS VALUE - "a small'
+                                ' {knob:4,\'LIN2_EXFNC_LATCH_WOB\'} WOB" - 1029. Bars is mine'),
     'LIN2_T3_MIN_TF': (5,   'HIS NAME, HIS VALUE - "the rider between'
                             ' ws{knob:5,\'lin2_t3_min_tf\'} and ws12"'),
-    'LIN2_LATCH_LIFE_S': (600, '"10 minutes (knob)" - 1026. How long latch 1 stays latched.'
+    'LIN2_CAD_LATCH_LIFE_S': (600, '"10 minutes (knob)" - 1026. How long latch 1 stays latched.'
                                ' Seconds. The value is his; the knob name is mine'),
     'LIN2_SUPPORT_LINES': (3, '"3 lines below the rider" - 1026. ALL of them must have reversed;'
                               ' his own reading named ws4, ws5, ws6 under a ws7 rider'),
@@ -761,6 +906,20 @@ def ex_fence(v, side):
     """Is v past the r fence on `side`."""
     lo, hi = fence()
     return (float(v) >= hi) if side > 0 else (float(v) <= lo)
+
+
+def ex_fence_mask(a, side):
+    """`ex_fence` asked at EVERY bar of an array, in one pass. -> bool array.
+
+    THE SAME RULE AS `ex_fence`, ONE HOME - the sibling of `oob_mask` and for the same reason. The
+    per-line ex-fence latch needs the fence state over a whole series to find its cross-in edges,
+    and _pass_bars already had `np.array([K.ex_fence(x, side) for x in v], bool)` inline. A
+    restated comparison drifts the moment RMOM_FNC moves, so the vector form lives here.
+    """
+    import numpy as _np
+    lo, hi = fence()
+    v = _np.asarray(a, float)
+    return (v >= hi) if int(side) > 0 else (v <= lo)
 
 
 def mid_fence():
@@ -938,6 +1097,13 @@ def table():
              'L2_T3_MIN_MATRY': 'matryoshka lines that reversed',
              'TRAJ_MIN_FRAC': 'fraction of the block', 'TRAJ_MIN_TRAVEL': 'r-points', 'SAV_WS2_OOB_TEST': 'minutes', 'SAV_IB_XWOB': 'bars',
              'SAV_MAGE_GATE_WOB': 'bars', 'SAV_CASCADE_GAP': 'bars',
+             'LIN2_B1_HOLD': 'bars',
+             'LIN2_CHAIN_OPEN_ON': 'on/off', 'LIN2_CHAIN_OPEN_TF': 'TF',
+             'LIN2_CHAIN_OPEN_LOOKBACK_S': 'seconds',
+             'LIN2_CHAIN_OPEN_XWOB': 'bars',
+             'LIN2_CHAIN_OPEN_LINES': 'lines',
+             'LIN2_BARRAGE_MAX_TF': 'TF', 'LIN2_EXFNC_LATCH_WOB': 'bars',
+             'LIN2_LATCH_EXFNC_ON': 'on/off',
              'LIFT_PTS': 'samples', 'LIFT_TOL': 'r-points', 'LIFT_WOB': 'bars',
              'OOB_HI': 'r-points',
              'GAP_PER_TF': 'bars per TF-minute', 'SAV_CASCADE_ZOOM': 'rungs',

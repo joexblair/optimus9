@@ -90,6 +90,45 @@ def _runs(a):
     return list(zip(np.flatnonzero(d == 1).astype(int), (np.flatnonzero(d == -1) - 1).astype(int)))
 
 
+def b1_beyond(b1, side, hold=None):
+    """ws1b's beyond-the-line state for the two cadences. -> bool array.
+
+    AT HOLD 0 OR 1 this is the plain state at each bar, which is what both cadences read today.
+
+    AT HOLD H a crossing back inside counts only once it has held H bars. Until then ws1b still
+    reads as beyond the line, so one brief return does not break an excursion in two.
+
+    Joe 1029: *"could the ws1b test incorporate the wob 12? ie if ws1b to ib has not qualified its
+    wob 12, then its value is not passed in"*, and what he is after: *"what I'm trying to capture
+    is the ws1b low oob excursion that runs from 0100 to 0121"*.
+
+    CAUSAL: at any bar this asks whether the last crossing back inside is at least H bars old and
+    stayed inside throughout. Nothing after the bar is read.
+    """
+    m = np.asarray(K.oob_mask(np.asarray(b1, float), int(side)), bool)
+    h = int(K.LIN2_B1_HOLD) if hold is None else int(hold)
+    if h <= 1:
+        return m
+    n = len(m)
+    out = m.copy()
+    i = 1
+    while i < n:
+        if (not m[i]) and m[i - 1]:
+            j = i
+            while j + 1 < n and not m[j + 1]:
+                j += 1
+            run = j - i + 1
+            if run >= h:
+                #   credited from its own confirm bar, i + h - 1. Before that it still reads beyond.
+                out[i:i + h - 1] = True
+            else:
+                out[i:j + 1] = True
+            i = j + 1
+            continue
+        i += 1
+    return out
+
+
 def _oob(line, side):
     """The oob mask, through `K.oob_mask` so the rule has one home - his 1026 point."""
     return K.oob_mask(line, side)
@@ -126,7 +165,8 @@ def t1(CL, side, A, B):
     """
     b1 = np.asarray(CL['b'], float)
     r1 = np.asarray(CL['r'][1], float)
-    oob = _oob(b1, side)
+    #   ws1b's state, held per LIN2_B1_HOLD. At 0 this is the plain read and nothing moves.
+    oob = b1_beyond(b1, side)
     raws = cws1r_revs(r1, side)
     grace = max(0, int(K.L2_T1_GRACE_S) // 5)
     out = []
@@ -172,15 +212,18 @@ def t2(CL, side, A, B):
     """
     b1 = np.asarray(CL['b'], float)
     r1 = np.asarray(CL['r'][1], float)
+    held = b1_beyond(b1, side)      # ws1b's state, held per LIN2_B1_HOLD
     out = []
     #   WOB 12 ON THE CROSS, Joe 1027: the cadence fires on the CONFIRM bar, c + wob - 1.
     for c, cf, s in oob_ib_cross(r1, K.OOB_HI, K.OOB_LO, int(K.LIN2_CROSS_WOB)):
         if s != int(side) or not (int(A) <= cf <= int(B)):
             continue
-        if K.oob(b1[cf], side):
+        if held[cf]:
             continue                               # that is t1's case, not t2's
-        out.append((int(cf), 't2', 'cws1r ib cross %s confirmed %s at wob %d, cws1b %.2f not oob'
-                    % (ln.U(c)[11:], ln.U(cf)[11:], K.LIN2_CROSS_WOB, b1[cf])))
+        out.append((int(cf), 't2', 'cws1r ib cross %s confirmed %s at wob %d, cws1b %.2f not oob,'
+                                   ' ws1b hold %d'
+                    % (ln.U(c)[11:], ln.U(cf)[11:], K.LIN2_CROSS_WOB, b1[cf],
+                       K.LIN2_B1_HOLD)))
     return out
 
 
@@ -226,7 +269,7 @@ def counter_oob(CL, side, A, B):
 
 
 def barrage(BD, side, A, B, tol_s=None, lines=None, min_tf=None, fence=None,
-            fit=None, win_s=None, cand=None):
+            fit=None, win_s=None, mode=None, cand=None, max_tf=None):
     """THE BARRAGE. -> [(the cadence bar, 'barrage', why)].
 
     HIS QUESTION, 1027, which is where the mech came from:
@@ -293,6 +336,13 @@ def barrage(BD, side, A, B, tol_s=None, lines=None, min_tf=None, fence=None,
     assert fence in ('any', 'in', 'ex'), 'LIN2_BARRAGE_FENCE %r is not an arm' % fence
     fit = str(K.LIN2_BARRAGE_FIT) if fit is None else str(fit)
     assert fit in ('off', 'lines', 'cap'), 'LIN2_BARRAGE_FIT %r is not an arm' % fit
+    #   HOW min_tf IS APPLIED. Joe 1028 chose 'membership' - *"B"* - so the legs run on the
+    #   settings the pine emit was built with.
+    #     'floor'       only lines at or above min_tf contribute at all. HIS definition, 1027.
+    #     'membership'  the count is over ws1..ceil and at least ONE line must reach min_tf. What
+    #                   out/l2_barrage.pine and the banked 24-cadence list were built on.
+    mode = str(K.LIN2_BARRAGE_MIN_TF_MODE) if mode is None else str(mode)
+    assert mode in ('membership', 'floor'), 'LIN2_BARRAGE_MIN_TF_MODE %r is not an arm' % mode
     #   THE COUNTING WINDOW IS ITS OWN TERM, Joe 1027 option A. He asked what the tolerance was
     #   for and then corrected the build: *"I thought tolerance allows for ws1mage and ws1r to
     #   sync"*. His own spec line put the count *"between the cross and the ws1r reversal"*, which
@@ -313,11 +363,17 @@ def barrage(BD, side, A, B, tol_s=None, lines=None, min_tf=None, fence=None,
     #              (>ws12) on purpose. That is the same bound I removed as a defect when it was
     #              UNINTENDED; here he is asking for it.
     avail = sorted(int(t) for t in BD.tfs)
-    ceil = int(K.L2_MOM_MAXTF)
+    #   THE BARRAGE'S OWN CEILING, his 1029 knob. It used to be the shared L2_MOM_MAXTF 12, which
+    #   is still the ladder's top rung everywhere else - the rider scan, the baton candidates, the
+    #   cadence latch's range, t3's HTF set and v4_reentry. His words were "barrage maxTF", so the
+    #   barrage gets its own and nothing else moves.
+    ceil = int(K.LIN2_BARRAGE_MAX_TF) if max_tf is None else int(max_tf)
+    assert ceil >= 1, 'LIN2_BARRAGE_MAX_TF %d is not a rung' % ceil
     if fit == 'cap':
-        ceil = max(ceil, int(min_tf) + int(need) - 1)
+        #   the pool the ceiling has to make room for starts at the arm's own floor
+        ceil = max(ceil, (int(min_tf) if mode == 'floor' else 1) + int(need) - 1)
         ceil = min(ceil, avail[-1])                    # the ladder cannot be extended past ws%d
-    pool = [t for t in avail if int(min_tf) <= t <= ceil]
+    pool = [t for t in avail if (int(min_tf) if mode == 'floor' else 1) <= t <= ceil]
     if fit == 'lines':
         need = min(int(need), len(pool))
     out = []
@@ -329,8 +385,12 @@ def barrage(BD, side, A, B, tol_s=None, lines=None, min_tf=None, fence=None,
         #   example - ws1,ws2,ws3,ws4,ws5,ws7,ws9,ws12 restricted to ws5,ws7,ws9,ws12 at minTF 5.
         #   So the floor is applied BEFORE the count, not as a membership test after it.
         right = int(sig) if win_s <= 0 else int(c) + int(win_s) // 5
+        lo = int(min_tf) if mode == 'floor' else 1
         inside = {t: b for t, b in first.items()
-                  if b <= right and int(min_tf) <= int(t) <= ceil}
+                  if b <= right and lo <= int(t) <= ceil}
+        #   THE MEMBERSHIP ARM tests min_tf AFTER the count: at least one line must reach it
+        if mode == 'membership' and min_tf and inside and max(inside) < int(min_tf):
+            continue
         if fence != 'any':
             want = (fence == 'ex')
             inside = {t: b for t, b in inside.items() if bool(exf[t]) is want}
@@ -388,24 +448,115 @@ def barrage_candidates(BD, side, cand=None):
     #   arm raises the ceiling past ws12 on purpose, so the candidate set has to be
     #   ceiling-agnostic. With fit 'off' or 'lines' the ceiling is still 12 and nothing moves.
     tfs = sorted(int(t) for t in BD.tfs)
-    raws = {int(t): [int(b) for b in F.revs(BD.E[int(t)], int(t), int(side))] for t in tfs}
+    #   SORTED ARRAYS AND searchsorted, NOT A LIST SCAN PER CROSS. The list form was
+    #   O(crosses x tfs x reversals) and the ex-fence latch asks for this over the WHOLE tape to
+    #   find its release bars - a window here would be a horizon nobody ruled. `np.searchsorted`
+    #   returns the first index with b >= c, which is exactly what `nxt[0]` was.
+    raws = {int(t): np.array(sorted(int(b) for b in F.revs(BD.E[int(t)], int(t), int(side))),
+                             dtype=int) for t in tfs}
     out = []
     for c, _cf, sd in oob_ib_cross(M1, K.OOB_HI, K.OOB_LO, 1):
         if int(sd) != int(side):
             continue
         c = int(c)
-        later = [b for b in raws[1] if b >= c]
-        if not later:
+        i1 = int(np.searchsorted(raws[1], c, side='left'))
+        if i1 >= len(raws[1]):
             continue
-        sig = int(later[0])
+        sig = int(raws[1][i1])
         first, exf = {}, {}
         for t, bs in raws.items():
-            nxt = [b for b in bs if b >= c]
-            if nxt:
-                first[t] = int(nxt[0])
-                exf[t] = bool(BD.ex_fence(int(t), int(nxt[0]), int(side)))
+            i = int(np.searchsorted(bs, c, side='left'))
+            if i < len(bs):
+                first[t] = int(bs[i])
+                exf[t] = bool(BD.ex_fence(int(t), int(bs[i]), int(side)))
         out.append((c, sig, first, float(M1[c]), exf))
     return out
+
+
+def chain_open(B1, MG, before=None, tf=None, lines=None, hi=None, lookback_s=None, xwob=None):
+    """THE CHAIN'S OPEN - his ws1b firing mech. -> dict or None.
+
+    Joe 1029, the flow verbatim:
+
+        -there is no trade open  (either because of a STOP, or because the machine is cold-starting)
+        -walk
+        -if ws1b crosses from oob to ib (candidate-side)
+        --if ws5Mage is oob or has been oob in the last 5 minutes on the candidate-side
+        ---anchor on the ws5Mage extremum.  the anchor is for the next step to align with
+        ---if at least 2 ws{>5}Mage wsf lines are printing a value that is away from the candidate
+           side, at the anchor bar (ie: high candidate-side and line values are less than ws5Mage,
+           low candidate-side and lines are printing values higher than ws5Mage)
+        ----open the trade, direction: away from candidate-side
+
+    and *"bank this and make it the machine"*.
+
+    EVERY READ IS EMERGING. Joe 1029: *"closed_prev is also not an option. I know I suggested it
+    earlier (for baton passing)"*. `B1` is emerging ws1b and `MG` the emerging Mage ladder; the
+    caller hands them in so this function holds no opinion about where they came from.
+
+    THE ANCHOR IS CAUSAL BY CONSTRUCTION: the extremum is taken over [run start, FIRING BAR]. The
+    oob run may still be open at the fire, so reading past it would be lookahead. Asserted.
+
+    THE SCAN RUNS BACKWARD from `before` with NO limit. Joe 1029: *"we're always going to have an
+    incoming trade to start a window... option B is the answer"*.
+
+    `candidate side` is the side ws1b was oob on before crossing in. The trade side is AWAY from
+    it, which is his own wording and not a read of price.
+    """
+    tf = int(K.LIN2_CHAIN_OPEN_TF) if tf is None else int(tf)
+    need = int(K.LIN2_CHAIN_OPEN_LINES) if lines is None else int(lines)
+    hi = int(K.L2_MOM_MAXTF) if hi is None else int(hi)
+    lb = int(K.LIN2_CHAIN_OPEN_LOOKBACK_S) if lookback_s is None else int(lookback_s)
+    w = max(1, int(K.LIN2_CHAIN_OPEN_XWOB) if xwob is None else int(xwob))
+    band = [t for t in range(tf + 1, hi + 1) if t in MG]
+    assert band, 'no higher TF than ws%d in the Mage ladder - the count can never be met' % tf
+    b1 = np.asarray(B1, float)
+    m5 = np.asarray(MG[tf], float)
+    #   FORWARD, NEVER BACKWARD. This searched backward from `before` and returned the LATEST
+    #   firing ahead of it, which is a bar the chain can never reach: a firing opens the trade and
+    #   no later firing is taken while it is open. On 2026-08-29 it returned 23:56:00 when the
+    #   trade had already opened at 23:53:50. Joe 1029: *"ws1b crossing to ib is the fire bar"*.
+    #   `before` NO LONGER LIMITS THE SEARCH. The chain's open is the EARLIEST firing in the
+    #   series, which is the data's own boundary and not a cut-off chosen by me. It is kept only
+    #   as an assert for a caller that believes the open precedes a bar.
+    hits = []
+    for c, cf, sd in oob_ib_cross(b1, K.OOB_HI, K.OOB_LO, w):
+        f = int(cf) if w > 1 else int(c)
+        hits.append((f, int(c), int(cf), int(sd)))
+    for f, c, cf, sd in sorted(hits):
+        gate = K.oob_mask(m5, sd)
+        if not (bool(gate[f]) or bool(gate[max(0, f - lb // 5):f + 1].any())):
+            continue
+        #   THE ANCHOR: the ws{tf}Mage extremum of the oob run that contains `f`, or of the most
+        #   recent run inside the lookback. Bars after `f` are never read.
+        j = f if gate[f] else None
+        if j is None:
+            for i in range(f, max(0, f - lb // 5) - 1, -1):
+                if gate[i]:
+                    j = i
+                    break
+        if j is None:
+            continue
+        i = j
+        while i > 0 and gate[i - 1]:
+            i -= 1
+        seg = m5[i:j + 1]
+        if not np.isfinite(seg).any():
+            continue
+        k = i + (int(np.nanargmax(seg)) if sd > 0 else int(np.nanargmin(seg)))
+        assert k <= f, 'the anchor is after the firing bar - that read is lookahead'
+        v0 = float(m5[k])
+        got = tuple(t for t in band
+                    if np.isfinite(MG[t][k])
+                    and ((float(MG[t][k]) < v0) if sd > 0 else (float(MG[t][k]) > v0)))
+        if len(got) < need:
+            continue
+        if before is not None:
+            assert f <= int(before), \
+                ('the earliest firing %d is after the bar the caller expected it to precede %d'
+                 % (f, int(before)))
+        return dict(bar=f, raw=c, conf=cf, cand_side=sd, side=-sd, anchor=k, trig=v0, lines=got)
+    return None
 
 
 def matryoshka(rider):
@@ -432,7 +583,7 @@ class Latch:
 
         the divergence read     `anchor_floater`'s `state`, not `jig.divergence`
         latch 1's bar           *"2, at the cadence bar"*
-        latch 1's life          *"3, 10 minutes (knob)"* -> LIN2_LATCH_LIFE_S 600 s
+        latch 1's life          *"3, 10 minutes (knob)"* -> LIN2_CAD_LATCH_LIFE_S 600 s
         the rider range         *"4, the rider between ws{knob:5,'lin2_t3_min_tf'} and ws12"*
         the reversal wob        *"1 static wob12"* -> LIN2_REV_WOB 12, THIS MECH ONLY
         no baton candidate      *"6, inside linhop"*
@@ -517,10 +668,10 @@ class Latch:
         return None
 
     def live(self, k):
-        """Is latch 1 still latched at `k`. -> bool. LIN2_LATCH_LIFE_S seconds from its own bar."""
+        """Is latch 1 still latched at `k`. -> bool. LIN2_CAD_LATCH_LIFE_S seconds from its own bar."""
         if self.l1 is None:
             return False
-        return (int(k) - self.l1) * 5 <= int(K.LIN2_LATCH_LIFE_S)
+        return (int(k) - self.l1) * 5 <= int(K.LIN2_CAD_LATCH_LIFE_S)
 
     def at(self, k, rider, cand_fn):
         """Does latch 2 hold at `k`. -> (bool, why).
@@ -538,7 +689,7 @@ class Latch:
             return False, 'latch 1 has not fired'
         if not self.live(k):
             return False, ('latch 1 at %s expired - %d s of %d'
-                           % (ln.U(self.l1), (int(k) - self.l1) * 5, K.LIN2_LATCH_LIFE_S))
+                           % (ln.U(self.l1), (int(k) - self.l1) * 5, K.LIN2_CAD_LATCH_LIFE_S))
         lo, hi = int(K.LIN2_T3_MIN_TF), int(K.L2_MOM_MAXTF)
         if rider is None or not (lo <= int(rider) <= hi):
             return False, ('rider %s is outside ws%d..ws%d'

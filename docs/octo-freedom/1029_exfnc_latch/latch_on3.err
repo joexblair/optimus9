@@ -1,0 +1,7 @@
+/home/joe/thecodes/docs/octo-freedom/1027_pseudo_closed/pseudo_closed.py:84: RuntimeWarning: Mean of empty slice
+  out[n - 1:] = np.nanmean(w, axis=-1)
+Traceback (most recent call last):
+  File "/home/joe/thecodes/docs/octo-freedom/1029_exfnc_latch/latch_validate.py", line 238, in <module>
+    se = BD._latch(t, sd, 'ex'); so = BD._latch(t, sd, 'oob')
+         ^^^^^^^^^^^^^^^^^^^^^^
+TypeError: Board._latch() takes 3 positional arguments but 4 were given

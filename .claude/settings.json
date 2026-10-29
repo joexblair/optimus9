@@ -25,6 +25,16 @@
             "statusMessage": "autonomous mode"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/joe/thecodes/.claude/hooks/jargon-check.py",
+            "timeout": 15,
+            "statusMessage": "jargon check"
+          }
+        ]
       }
     ]
   }

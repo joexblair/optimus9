@@ -98,7 +98,7 @@ import v4_l2_cadence as CAD
 import v4_signal as SG
 _e = sys.stderr; sys.stderr = io.StringIO()
 import ln
-from optimus9.analysis.jig import anchor_floater, lift_off, mage_cascade, oob_ib_cross
+from optimus9.analysis.jig import anchor_floater, lift_off, mage_cascade, oob_ib_cross, mage_cascade_bar, MC_GAP
 from optimus9.compute.rule2_trajectory import opposed_extrema
 sys.stderr = _e
 
@@ -252,7 +252,9 @@ def rider_at(BD, side, bar, lo=1, hi=None):
         --scan ws{1 to v4_mom_maxTF} for the highest ws{TF}r ex-fence, and make that TF the rider
     """
     hi = int(K.L2_MOM_MAXTF) if hi is None else int(hi)
-    got = [t for t in range(int(lo), hi + 1) if t in BD.tfs and BD.ex_fence(t, bar, side)]
+    #   A BATON-PASSING CONSUMER, so the fence test goes through `baton_ex_fence` - his 1029
+    #   ruling. With LIN2_LATCH_EXFNC_ON 0 that call IS `ex_fence` and this line is unchanged.
+    got = [t for t in range(int(lo), hi + 1) if t in BD.tfs and BD.baton_ex_fence(t, bar, side)]
     return max(got) if got else None
 
 
@@ -277,8 +279,10 @@ def candidates(BD, side, bar, rider, cap=None, not_rev_since=None):
     The wob is LIN2_REV_WOB 12, MY choice - he named none for this term.
     """
     top = int(K.L2_MOM_MAXTF) if cap is None else min(int(cap), int(K.L2_MOM_MAXTF))
+    #   A BATON-PASSING CONSUMER - `baton_ex_fence`, his 1029 ruling. `towards` is a trajectory
+    #   read, not a fence test, so it is untouched.
     out = [t for t in range(int(rider) + 1, top + 1)
-           if t in BD.tfs and BD.ex_fence(t, bar, side) and towards(BD, t, bar, side)]
+           if t in BD.tfs and BD.baton_ex_fence(t, bar, side) and towards(BD, t, bar, side)]
     if not_rev_since is None or not out:
         return out
     keep = []
@@ -302,7 +306,7 @@ def _pass_bars(BD, tf, side, frm, B):
     """
     #   CACHED OVER THE WHOLE TAPE, then sliced. The uncached form rebuilt `oob_ib_cross` over
     #   1.6M bars on every call, and the bar-loop walk calls it once per bar.
-    key = (id(BD), int(tf), int(side))
+    key = (id(BD), int(tf), int(side), BD.baton_src())
     if key not in _PB:
         v = BD.line(tf)
         w = max(1, int(K.LIN2_CROSS_WOB))
@@ -311,15 +315,24 @@ def _pass_bars(BD, tf, side, frm, B):
         a = [int(cf) for _c, cf, s in oob_ib_cross(v, K.OOB_HI, K.OOB_LO, w) if s == int(side)]
         #   RULE 2, ex-fence -> in-mom-fnc, WITH THE SAME WOB. The edge is where ex-fence turns
         #   off; the pass bar is edge + w - 1, and only if in-fence held every bar of that window.
-        ex = np.array([K.ex_fence(x, side) for x in v], bool)
-        edges = (np.flatnonzero(ex[:-1] & ~ex[1:]) + 1).astype(int)
-        b = []
-        for e in edges:
-            e = int(e)
-            if e + w - 1 >= len(ex):
-                continue
-            if not ex[e:e + w].any():              # in-fence for the whole hold
-                b.append(e + w - 1)
+        #   UNDER THE LATCH the ex-fence edge IS the latch's release, his 1029 mech: a line stops
+        #   being ex-fence when the barrage releases it or an opposite-side cross confirms, not
+        #   when its value re-crosses. LIN2_CROSS_WOB 12 is NOT re-applied on top, and that is
+        #   structural - the latch carries LIN2_EXFNC_LATCH_WOB on its on-edge and the barrage
+        #   carries its own confirm on the off-edge, so stacking would count one hold twice.
+        #   RULE 1 ABOVE IS UNTOUCHED: it is an oob read and oob is not latched.
+        if int(K.LIN2_LATCH_EXFNC_ON):
+            b = [int(x) for x in BD.latch_off_bars(tf, side)]
+        else:
+            ex = K.ex_fence_mask(v, side)        # ONE HOME for the fence test
+            edges = (np.flatnonzero(ex[:-1] & ~ex[1:]) + 1).astype(int)
+            b = []
+            for e in edges:
+                e = int(e)
+                if e + w - 1 >= len(ex):
+                    continue
+                if not ex[e:e + w].any():          # in-fence for the whole hold
+                    b.append(e + w - 1)
         _PB[key] = (np.array(sorted(set(a) | set(b)), dtype=int), set(a), set(b))
     arr = _PB[key][0]
     i = int(np.searchsorted(arr, int(frm)))
@@ -436,10 +449,35 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
     #   matches the trade direction then take no action (ie keep walking)"*, which is a SECOND
     #   ruling he has not yet given.
     def cascade_at(k):
+        """The mage-cascade verdict for the cadence at `k`. -> 'up', 'down', 'neither' or a note.
+
+        IT ANCHORS ON A ws1Mage EXTREMUM, not on the cadence bar. Joe 1029: *"were the mage
+        cascades anchored on a ws1Mage's extremum? if not, they should be"* - and they were not.
+        This walk passed the cadence bar straight in while every other consumer of the cascade in
+        the tree picks the extremum bar first, which is his own 1017 design: *"in our current
+        state, the most recent mage extrema is captured from ws1Mage"*.
+
+        THE GAP IS 48 BARS = 4 MIN, his 1029 choice of the cascade's own default and his own 1017
+        number. The saviour has a separate 12-bar value for its own read; this does not share it.
+
+        MEASURED ON THE TWO BARS HE ASKED ABOUT, 2026-08-30: at 04:41:00 the cadence bar gives
+        'down' with ws1Mage at 48.56, and the extremum at 04:40:00 gives 'up' with ws1Mage at
+        -14.39. At 04:48:30 the cadence bar gives 'down' at 18.17, and the extremum at 04:47:20
+        gives 'up' at -19.38. Both flip, because at the cadence bar ws1Mage has already climbed
+        off its low so the first rung reads as falling.
+
+        CAUSAL: the picker asserts its own bar never exceeds the event bar.
+        """
         if BD.mage is None:
             return 'no Mage ladder'
         try:
-            c = mage_cascade(BD.mage, int(k), tf_lo=min(BD.mage), tf_hi=max(BD.mage),
+            got = mage_cascade_bar(BD.mage[min(BD.mage)], int(k), int(side), mode='extrema',
+                                   gap=MC_GAP)
+            if got is None:
+                return 'no same-side ws1Mage extremum before the tape starts'
+            ab = int(got[0])
+            assert ab <= int(k), 'the cascade anchor is after the cadence bar it serves'
+            c = mage_cascade(BD.mage, ab, tf_lo=min(BD.mage), tf_hi=max(BD.mage),
                              zoom=K.SAV_CASCADE_ZOOM, min_lines=K.SAV_CASCADE_MIN)
         except Exception as ex:
             return 'cascade failed %r' % ex
@@ -462,7 +500,7 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
     #   t3's population is measured SINCE THE ARM - his 1026 ruling *"tested since the arm"* - so
     #   the retest moving the walk's start does not move t3's origin.
     t3 = CAD.T3(BD, side, arm)
-    #   THE t3 REPLACEMENT, his 1026 2-staged latch. L2_T3_ON is banked 0 and LIN2_LATCH_ON 1, so
+    #   THE t3 REPLACEMENT, his 1026 2-staged latch. L2_T3_ON is banked 0 and LIN2_CAD_LATCH_ON 1, so
     #   this is the live mech and t3 is the A/B arm.
     lat = CAD.Latch(BD, side, arm)
     #   A PASS BAR THAT FINDS NOTHING leaves `last` where it is, so the loop re-reads the same bar
@@ -509,7 +547,7 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
                 t3_on = ok
         #   LATCH 1 reads at every cadence bar - his *"2, at the cadence bar"*. It is armed
         #   BEFORE the cadence is served, so a latch-2 completion on the same bar can see it.
-        if int(K.LIN2_LATCH_ON) and here:
+        if int(K.LIN2_CAD_LATCH_ON) and here:
             st = div_verdict(CL, close, side, bar)
             ok1, w1 = lat.arm1(bar, st, here[0][0])
             if ok1:
@@ -517,7 +555,7 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
 
         #   LATCH 2 is the cadence t3 used to be: the RISING EDGE of its own condition, tested on
         #   every bar, and completing it exhausts the walk.
-        if int(K.LIN2_LATCH_ON) and rider is not None and lat.live(bar):
+        if int(K.LIN2_CAD_LATCH_ON) and rider is not None and lat.live(bar):
             cap2 = int(rider) + int(K.L2_LIN_HOP)
             ok2, w2 = lat.at(bar, rider,
                              lambda: candidates(BD, side, bar, rider, cap=cap2))
@@ -595,7 +633,10 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
                 continue
 
             rv = BD.value(rider, bar)                      # STATE: closed, via the proxy
-            no_ex = not BD.ex_fence(rider, bar, side)
+            #   THE RIDER'S OWN TEST IS A BATON-PASSING CONSUMER. Joe 1029, on being shown that
+            #   under the latch a once-oob rider can only ever take the HOLD branch until a
+            #   barrage fires: *"the consequences: expected"*.
+            no_ex = not BD.baton_ex_fence(rider, bar, side)
             revd = BD.reversed_in(rider, side, last, bar)  # TIMING: emerging, via the proxy
             #   HIS 1026 RULING: only t1 and t2 lift lin_hop
             cap = None if ctype in ('t1', 't2') else rider + int(K.L2_LIN_HOP)
@@ -617,6 +658,8 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
                 rider_since = int(bar)
                 last = int(bar)
                 continue
+            #   THE oob READ IS THE VALUE, not the latch. Joe 1029: *"what oob latch? that wasn't
+            #   in the spec"*. Only the ex-fence decision above comes from the latch.
             if BD.oob(rider, bar, side) or (not no_ex and not revd):
                 row(bar=bar, stage='HOLD', why='rider cws%d %.2f %s - no action' % (
                     rider, rv, 'oob' if BD.oob(rider, bar, side) else 'ex-fence and not reversed'),

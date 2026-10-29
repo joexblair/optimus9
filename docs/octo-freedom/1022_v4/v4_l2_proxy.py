@@ -56,7 +56,11 @@ class Board:
         E  the EMERGING ws1r..ws12r set
     """
 
-    def __init__(self, C, E, MG=None, MGE=None):
+    def __init__(self, C, E, MG=None, MGE=None, PS=None):
+        #   `C` IS NO LONGER A SECOND SOURCE. Joe 1029 dropped the previous completed bar's close,
+        #   so a caller passes the live ladder here and the two stay identical. The `closed_*`
+        #   accessors are kept for callers that still name them and now answer from the same
+        #   arrays; the assert below refuses a caller that hands in two different ladders.
         self.C = {int(t): np.asarray(v, float) for t, v in C.items()}
         self.E = {int(t): np.asarray(v, float) for t, v in E.items()}
         #   THE CLOSED MAGE LADDER, added 1027 for *"the mage-cascde verdict at every cadence
@@ -72,26 +76,235 @@ class Board:
         #   out/l2_barrage_reads.md, rather than decided here.
         self.mage_em = None if MGE is None else {int(t): np.asarray(v, float)
                                                  for t, v in MGE.items()}
+        #   THE PSEUDO-CLOSED LADDER, a SIXTH bucket, added 1028 on his ruling: *"1, pseudo for
+        #   exfence"* with the band *"confine pseudo-closed to >3"*. Keys are TFs; a TF that is
+        #   absent falls back to the closed read, so a caller that did not build it is unchanged.
+        self.pseudo = None if PS is None else {int(t): np.asarray(v, float) for t, v in PS.items()}
         self.tfs = sorted(set(self.C) & set(self.E))
         assert self.tfs, 'the two ladders share no timeframe'
         self._gate = str(K.L2_GATE_MODE)
         assert self._gate in ('emerging', 'closed'), 'L2_GATE_MODE %r is not a mode' % self._gate
+        #   THE PER-LINE EX-FENCE LATCH's two caches, his 1029 mech. Keyed per (tf, side, fence)
+        #   and per side; both are built over the WHOLE tape so no caller's bar is out of range.
+        self._lat = {}
+        self._rel = {}
 
-    #  ── STATE: the closed ladder ──────────────────────────────────────────────────────────────
+    #  ── STATE: the closed ladder, or the PSEUDO-CLOSED one above his band ─────────────────────
+    def _state(self, tf):
+        """The array a STATE read uses for ws{tf}r. -> pseudo above his band, else closed.
+
+        Joe 1028: *"1, pseudo for exfence"*, and the band *"confine pseudo-closed to >3"* with
+        ws1..ws3 his *"fast lines"*. LIN2_PSEUDO_MIN_TF 4 is the floor.
+
+        A TF the caller did not build a pseudo line for falls back to closed, so nothing that
+        predates this change moves. `state_src` reports which one answered.
+        """
+        t = int(tf)
+        if self.pseudo is not None and t >= int(K.LIN2_PSEUDO_MIN_TF) and t in self.pseudo:
+            return self.pseudo[t]
+        #   THE FALLBACK IS THE LIVE VALUE. Joe 1029: *"completely drop prev-close"*. There is
+        #   no second arm, so there is no knob either.
+        return self.E[t]
+
+    def state_src(self, tf):
+        """Which ladder a STATE read for ws{tf}r came from. -> 'pseudo' or 'closed'. For a report."""
+        t = int(tf)
+        if self.pseudo is not None and t >= int(K.LIN2_PSEUDO_MIN_TF) and t in self.pseudo:
+            return 'pseudo'
+        return 'live'
+
     def value(self, tf, bar):
-        """ws{tf}r at `bar`, CLOSED. The number every fence test reads."""
-        return float(self.C[int(tf)][int(bar)])
+        """ws{tf}r at `bar`, on the STATE ladder. The number every fence test reads.
+
+        IT IS THE SAME ARRAY THE FENCE TEST USES, which is MY call and stated in the knob: a row
+        printing a closed number beside a pseudo ex-fence decision would misreport the board.
+        """
+        return float(self._state(tf)[int(bar)])
 
     def oob(self, tf, bar, side):
-        """Is ws{tf}r oob on `side` at `bar`, CLOSED."""
-        return bool(K.oob(self.C[int(tf)][int(bar)], side))
+        """Is ws{tf}r oob on `side` at `bar`, on the STATE ladder."""
+        return bool(K.oob(self._state(tf)[int(bar)], side))
 
     def ex_fence(self, tf, bar, side):
-        """Is ws{tf}r past the r fence on `side` at `bar`, CLOSED."""
-        return bool(K.ex_fence(self.C[int(tf)][int(bar)], side))
+        """Is ws{tf}r past the r fence on `side` at `bar`, on the STATE ladder."""
+        return bool(K.ex_fence(self._state(tf)[int(bar)], side))
+
+    #  ── THE PER-LINE EX-FENCE LATCH: his 1029 mech, LIN2_LATCH_EXFNC_ON ───────────────────────
+    #
+    #   HIS SPEC, verbatim:
+    #       I have a third option to add to pseudo-close and 180 wob: use a per-line latch
+    #       -the mech would latch on when the r line crosses into exfence, with a small
+    #        {knob:4,'LIN2_EXFNC_LATCH_WOB'} WOB
+    #       -the latch releases on barrage's signal
+    #       -the baton-passing consumers will no longer test a line's value to decide ex-fence
+    #        (and oob). they will query the latch state
+    #       -any non-baton-passing mechs can still use line values for decisions (eg, the test for
+    #        2 consecutive exfence TFs that print exhaust if either failed to reach oob)
+    #   and *"no need for a latch life on this new mech"* / *"the mech I propose is purely for
+    #   baton-passing"*.
+    #
+    #   WHY IT LIVES HERE: this file's one responsibility is to answer "what is ws{tf}r here" and
+    #   to know which read the caller is entitled to. The latch is a third read of the same board,
+    #   so the routing belongs beside `_state`, not in the walk.
+    #
+    #   FIVE CONCRETIONS HIS SPEC DID NOT PIN. Each is MY call, stated, and each is listed with the
+    #   arm I did not take so he can veto one without reading the code:
+    #
+    #     1  oob.  THERE IS NO oob LATCH. Joe 1029: *"what oob latch? that wasn't in the spec"*.
+    #              I built one by reading his *"ex-fence (and oob)"* as "latch both fences", and it
+    #              was wrong twice over - it was not asked for, and two independent latches drifted
+    #              into "oob and not ex-fence", impossible on a value since 15/85 is a subset of
+    #              20/80. Removed. THE LATCH ANSWERS EX-FENCE ONLY; every oob read in the walk
+    #              stays on the line's value, which is his *"any non-baton-passing mechs can still
+    #              use line values"* applied to the one fence he did not name.
+    #     2  side. An opposite-side cross CLEARS a stale latch. Without it a line that latched HIGH
+    #              and then crossed LOW would read ex-fence on BOTH sides at once and the rider
+    #              scan could pick a line travelling the wrong way. NOT TAKEN: both latches held.
+    #     3  the release bar. The barrage's CADENCE bar - the only timestamp the mech emits, and
+    #              the bar the chain already consumes. NOT TAKEN: the ws1Mage oob->ib cross bar,
+    #              and the ws1r reversal stamp.
+    #     4  the release scope. Every line on the SAME side as the latch, released by the barrage
+    #              on that side. His sentence carries no side qualifier, but a baton consumer is
+    #              always called with the walk's side, and the barrage on the other side is an
+    #              event this walk never sees. NOT TAKEN: all lines both sides, and contributors
+    #              only.
+    #     5  the window's first bar. A CROSS is required, so a line already beyond the fence at the
+    #              first finite bar is NOT latched until it leaves and re-enters. NOT TAKEN:
+    #              latching on the first bar it is seen beyond the fence.
+    #
+    #   AND A SIXTH, on the tie: a release and a latch-on at the SAME bar leave the line LATCHED.
+    #   The on-edge describes the state AT that bar; the release clears the history up to it.
+    #
+    #   THE BARRAGE READS VALUES, NEVER THE LATCH. That is structural, not a preference: the latch
+    #   releases on the barrage's signal, so a barrage that read the latch would be circular. Its
+    #   per-line fence read stays on `ex_fence`, asserted below.
+    #
+    #   NO CAP AND NO LIFE. On his instruction there is no life knob. A line that latches and never
+    #   meets a barrage on its side stays latched to the end of the tape.
+
+    def _releases(self, side):
+        """The bars a barrage on `side` releases every latch on `side`. -> sorted int array.
+
+        WHOLE TAPE, not the walk's window: a latch set before the arm can be released by a barrage
+        that fired before the arm, so scoping these to the walk would invent a horizon.
+        """
+        key = int(side)
+        if key not in self._rel:
+            #   LOCAL IMPORT. v4_l2_cadence does not import this file, so there is no cycle; the
+            #   import is local only to keep module load order free of a new edge.
+            import v4_l2_cadence as CAD
+            assert self.mage_em is not None, \
+                'the ex-fence latch needs the EMERGING Mage ladder - the barrage read is its release'
+            n = len(self._state(self.tfs[0]))
+            self._rel[key] = np.array(sorted(int(r[0]) for r in
+                                             CAD.barrage(self, key, 0, n - 1)), dtype=int)
+        return self._rel[key]
+
+    @staticmethod
+    def _confirm(mask, w):
+        """The bars a cross INTO `mask` is confirmed on. -> int array.
+
+        The edge is where the state turns on; the confirm bar is edge + w - 1, and only when the
+        state held every bar of that window. The exact mirror of `_pass_bars`' off-edge shape, so
+        an on-edge and an off-edge are measured the same way.
+        """
+        m = np.asarray(mask, bool)
+        if len(m) < 2:
+            return np.array([], dtype=int)
+        out = []
+        for e in (np.flatnonzero(~m[:-1] & m[1:]) + 1).astype(int):
+            e = int(e)
+            if e + w - 1 >= len(m):
+                continue
+            if m[e:e + w].all():
+                out.append(e + w - 1)
+        return np.array(sorted(set(out)), dtype=int)
+
+    def _latch(self, tf, side):
+        """THE latch for (line, side) at every bar. -> bool array over the tape.
+
+        ON at an ex-fence cross confirmed over LIN2_EXFNC_LATCH_WOB bars. OFF at a barrage release
+        on that side, or at an opposite-side ex-fence cross.
+
+        EX-FENCE ONLY. There is no oob latch - see decision 1 above.
+        """
+        key = (int(tf), int(side))
+        if key in self._lat:
+            return self._lat[key]
+        v = self._state(tf)
+        w = max(1, int(K.LIN2_EXFNC_LATCH_WOB))
+        n = len(v)
+        on = [int(x) for x in self._confirm(K.ex_fence_mask(v, int(side)), w)]
+        off = sorted(set(int(x) for x in self._releases(side))
+                     | set(int(x) for x in self._confirm(K.ex_fence_mask(v, -int(side)), w)))
+        st = np.zeros(n, bool)
+        #   A FORWARD LOOP OVER THE EVENTS, his causal form. sorted() puts (bar, 0) before
+        #   (bar, 1), so at a tie the release is applied first and the latch-on wins - decision 6.
+        cur, prev = False, 0
+        for bb, kind in sorted([(x, 0) for x in off] + [(x, 1) for x in on]):
+            if bb >= n:
+                break
+            st[prev:bb] = cur
+            cur = bool(kind)
+            prev = int(bb)
+        st[prev:] = cur
+        for bb in on:
+            if bb < n:
+                assert st[bb], 'a latch-on bar is not latched: tf %s side %s bar %d' % (
+                    tf, side, bb)
+        self._lat[key] = st
+        return st
+
+    def baton_src(self):
+        """What a baton-passing fence test reads. -> 'latch' or 'value'. For a report's header."""
+        return 'latch' if int(K.LIN2_LATCH_EXFNC_ON) else 'value'
+
+    def baton_ex_fence(self, tf, bar, side):
+        """Is ws{tf}r ex-fence on `side` at `bar`, FOR A BATON-PASSING CONSUMER.
+
+        His 1029 ruling: the baton-passing consumers query the latch state. With
+        LIN2_LATCH_EXFNC_ON 0 this is `ex_fence` and nothing moves.
+
+        THERE IS NO `baton_oob`. Every oob read in the walk stays on the line's value - his 1029
+        correction. A caller that wants oob calls `oob`.
+        """
+        if not int(K.LIN2_LATCH_EXFNC_ON):
+            return self.ex_fence(tf, bar, side)
+        return bool(self._latch(tf, side)[int(bar)])
+
+    def latch_on_bar(self, tf, bar, side):
+        """The bar the latch live at `bar` turned on. -> bar or None. For a leg report's row."""
+        st = self._latch(tf, side)
+        b = int(bar)
+        if not st[b]:
+            return None
+        while b > 0 and st[b - 1]:
+            b -= 1
+        return b
+
+    def latch_off_bars(self, tf, side):
+        """The bars the (line, side) latch turns OFF on. -> sorted list.
+
+        Under his mech a line stops being ex-fence at a release, not at a value crossing, so these
+        are `_pass_bars`' ex-fence edges. Its oob->ib rule is untouched and stays on the value.
+        """
+        st = self._latch(tf, side)
+        return [int(x) + 1 for x in np.flatnonzero(st[:-1] & ~st[1:])]
+
+    def closed_value(self, tf, bar):
+        """ws{tf}r at `bar`, CLOSED, whatever the state ladder is. For a side-by-side report."""
+        return float(self.C[int(tf)][int(bar)])
 
     def line(self, tf):
-        """The CLOSED array, for a producer that needs the whole series - crosses, trajectory."""
+        """The STATE array, for a producer that needs the whole series - crosses, trajectory.
+
+        Routed the same way as `value`, so a cross or a trajectory read sees the board the fence
+        tests see. `closed_line` is the raw closed series for a caller that needs it specifically.
+        """
+        return self._state(tf)
+
+    def closed_line(self, tf):
+        """The CLOSED array, whatever the state ladder is."""
         return self.C[int(tf)]
 
     def mage_line(self, tf, mode):

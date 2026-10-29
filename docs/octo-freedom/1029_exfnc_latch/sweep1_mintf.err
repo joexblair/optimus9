@@ -1,0 +1,14 @@
+/home/joe/thecodes/docs/octo-freedom/1027_pseudo_closed/pseudo_closed.py:84: RuntimeWarning: Mean of empty slice
+  out[n - 1:] = np.nanmean(w, axis=-1)
+Traceback (most recent call last):
+  File "/home/joe/thecodes/docs/octo-freedom/1029_exfnc_latch/sweep1_mintf.py", line 168, in <module>
+  File "/home/joe/thecodes/docs/octo-freedom/1029_exfnc_latch/sweep1_mintf.py", line 92, in run
+    K.LIN2_BARRAGE_MIN_TF_MODE = 'membership'
+                           ^^^^^^^^^^^^^^^^^^^
+  File "/home/joe/thecodes/docs/octo-freedom/1022_v4/v4_lineage2.py", line 470, in walk
+    """
+        
+  File "/home/joe/thecodes/docs/octo-freedom/1022_v4/v4_l2_cadence.py", line 362, in barrage
+    #     'cap'    his 2 - the ceiling rises to ws{min_tf + lines - 1}, which admits dtf lines
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: the cadence is before the ws1r stamp with the window tied to it
