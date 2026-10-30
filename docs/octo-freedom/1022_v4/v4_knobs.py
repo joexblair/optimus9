@@ -426,11 +426,114 @@ LIN2_LATCH_EXFNC_ON = _knob('LIN2_LATCH_EXFNC_ON', 1, int)   # the PER-LINE EX-F
 #   pseudo-closed and the live read, and it is the one he banked.
 #   NO LIFE KNOB, on his instruction. The only release is the barrage's signal, so a line that
 #   latches and never meets a barrage stays latched to the window's end. No cap is applied.
+LIN2_LATCH_OOB_ON = _knob('LIN2_LATCH_OOB_ON', 0, int)   # whether the baton path's oob reads go
+#   through the latch as well as its ex-fence reads. 0 = the line value, which is banked.
+#   Joe 1029: *"earlier in the transcript, you had a specific oob latch that produced higher net on
+#   that day. I dropped it, but now feels like a good time to check it - so that we're sure about
+#   the mech and the code, do a 08-30 chain AB test to validate or drop the oob latch"*.
+#   IT IS ONE LATCH READ AT DEPTH, not a second latch. My first build was two independent latches,
+#   one on the RMOM_FNC pair and one on 15/85, each cleared only by its own fence's opposite-side
+#   crossing - and they drifted into "oob but not ex-fence" for 27,460 bars on 2026-08-30 across
+#   all 24 line-sides. His reading rules that state out: *"I see ex-fence as a literal term:
+#   'external of the fence', ie oob is definitely ex-fence"*, and the code agrees - 0 values across
+#   0.00 to 100.00 are oob without also being ex-fence. So the depth read is a FILTER on the one
+#   latch: latched, AND 15/85 confirmed at or after that latch's own on-bar. It cannot drift.
 LIN2_EXFNC_LATCH_WOB = _knob('LIN2_EXFNC_LATCH_WOB', 4, int)   # HIS NAME AND HIS VALUE - *"a small
 #   {knob:4,'LIN2_EXFNC_LATCH_WOB'} WOB"*. BARS, at the 5 s grid, so 4 = 20 s. Bars is MY reading
 #   and it follows every other wob in the tree: LIFT_WOB 8, LIN2_REV_WOB 12, LIN2_CROSS_WOB 12.
 #   The latch turns on at the CONFIRM bar, cross + wob - 1, and only if the line held beyond the
 #   fence for every bar of that window - the same shape _pass_bars uses for its off-edge.
+LIN2_EXFNC_LATCH_REL = os.environ.get('W_V4_LIN2_EXFNC_LATCH_REL', 'bank')   # WHAT RELEASES
+#   THE PER-LINE EX-FENCE LATCH. THE KNOB'S NAME IS MINE; the mech in the 'lift' arm is his, 1030:
+#   *"why wouldn't we make the ex-fence latch all inclusive? ie line value crosses past 75/25 (or
+#   80/20) and is latched until a lif-off fires, instead of the latch releasing on the cross to
+#   oob (current behaviour)"*.
+#     'bank'  a barrage on that side, OR an opposite-side ex-fence cross confirmed over
+#             LIN2_EXFNC_LATCH_WOB. THE BANKED ARM - his 1029 *"the latch releases on barrage's
+#             signal"* plus the opposite-side clear he ruled in the same message.
+#     'lift'  the latched line's own lift-off, and NOTHING else. The barrage release and the
+#             opposite-side clear are both gone.
+#   HIS PREMISE WAS CORRECTED BEFORE THIS WAS BUILT: the banked arm does not release on a cross to
+#   oob. oob is read THROUGH the latch by the baton path; it never releases it.
+#   THREE THINGS INSIDE 'lift' ARE MINE AND UNRULED - he said "a lift-off" and named no more:
+#     1  it is the LATCHED LINE's own lift-off, not ws1r's
+#     2  it is read on the SAME side as the latch, so a HIGH latch clears when the line leaves its
+#        HIGH extreme
+#     3  the stamp is lift + LIFT_WOB - 1 = lift + 7 bars = 35 s, his standing rule that the
+#        producer returns the raw bar and the consumer adds the wob. LIN2_REV_WOB 12 is the other
+#        candidate and lineage2 already uses it for reversals at v4_lineage2.py:291.
+#   MEASURED BEFORE IT WAS WIRED, in 1030_mom_fence/latch_release_ab.md: over ws1..ws20 at 75/25
+#   'bank' holds 46.55% of all line-side bars and 'lift' holds 13.89%, which is within reach of
+#   the 16.5% the plain line value reads. 'lift' is the RESTRICTIVE arm, not the inclusive one.
+#   THE SAMPLING RESTARTS AT THE LATCH, his 1030 ruling after he was shown lift-off's lattice:
+#   *"lift-off per-line sampling is set to zero (samples collected) when the ex-fence latch is
+#   latched"*. A lift-off only releases an episode once all LIFT_PTS 6 samples sit at or after
+#   that episode's latch-on bar - 5 x gap_for(tf) bars, which is 15 bars = 75 s on ws1r and 280
+#   bars = 1400 s on ws20r. It is built in the 'lift' branch of v4_l2_proxy._latch.
+#   *** THE SCOPE IS UNRULED. *** He said it of the latch's own release. Lift-off is also the
+#   barrage's reversal detector through v4_fast.revs, and v4core, the backstop and v4saviour all
+#   read it. Whether their sampling restarts at the latch too is HIS, and nothing outside the
+#   latch is touched.
+LIN2_B1_OOB_DWELL = _knob('LIN2_B1_OOB_DWELL', 0, int)   # BARS cws1b must hold past the oob
+#   fence before its oob state counts. Joe 1030, after being shown that cws1b entered the LOW oob
+#   four separate times in 85 s on 2026-08-30 22:22 and the counter-oob cadence fired on each:
+#   *"add a minimum oob dwell of 12 bars for cws1b"*. "dwell" is HIS word - LIN_IB_DWELL already
+#   carries it. HIS VALUE IS 12 = 60 s at the 5 s grid.
+#     0 or 1  the plain per-bar read. THE BANK, so nothing measured so far moves.
+#     D       the state turns on at the entry bar + D - 1, and only if cws1b held past the fence
+#             on every bar of that window. A run shorter than D never counts as oob at all.
+#   IT IS THE MIRROR OF LIN2_B1_HOLD, not a replacement: the hold is on the crossing back INSIDE,
+#   this is on the entry. Both live in v4_l2_cadence.b1_beyond, which is cws1b's one oob state.
+#   WHO READS IT, all four through b1_beyond: the t1 cadence, the t2 cadence, the arm's
+#   cws1b+cws1r test, and the cws1b counter-target-side oob cadence.
+#   *** TWO CONSEQUENCES, STATED NOT HIDDEN. ***
+#     1  t2's test is cws1b NOT oob. A dwell makes fewer bars count as oob, so t2 fires MORE often,
+#        not less. That direction is the opposite of the other three and it is HIS to accept.
+#     2  the chain open reads ws1b through jig.oob_ib_cross with its own LIN2_CHAIN_OPEN_XWOB 1,
+#        a Jig producer with its own contract. It is NOT routed through this dwell. HIS to rule.
+# ── LIN2_MATRY_WSF_TAKEOVER - HIS MECH AND HIS NAME, 1030 ────────────────────────────────────
+#   His spec verbatim, and the context he gave with it: *"smaller/faster lines form the lead for
+#   higher/slower lines (matryoshka)"*, after *"do you remember the days when we looped on ws10, so
+#   that we didn't get caught in higher TF (like ws17r) that takes to long to produce an actioable
+#   signal? we're seeing the same thing now, but now we have the benefit of using cadences"*.
+#
+#       --if a rider is >=ws{knob:7, 'LIN2_MATRY_WSF_TAKEOVER_TF'}
+#       ---if a t1 or t2 cadence fires
+#       ----if a scan from ws1 to ws4 finds two consecutive TFs printing infence, or between
+#            exfence and oob
+#       -----print exhaustion and sent rev-trade to the router
+#
+#   WHAT HE SETTLED WHEN I PUT THE GAPS TO HIM, 1030, one line each:
+#     the two states      read on the TARGET side only, so together they are every value UNDER
+#                         the target oob fence - 85.0 at OOB_FNC 15. His correction: *"your logic
+#                         is mixing high side and low side ... your numbers for this are 75 and 85
+#                         (high-side/LONG)"*. There is no unnamed value between them.
+#     "two consecutive"   adjacent TF numbers - *"2 - yes"*
+#     the lines           LIVE, never closed - *"CLOSED LINES ARE NOT WELCOME IN OUR STRATEGY"*
+#     value or latch      the VALUE. A latch is one yes/no and cannot separate "between exfence
+#                         and oob" from "oob". He accepted that read: *"understood"*
+#     the baton           it fires even when baton-pass candidates exist - *"because matryoshka is
+#                         leading"*
+#     the cadences        t1, t2, and the retest gate's own cadence - *"7 - noted"* to adding it
+LIN2_MATRY_WSF_TAKEOVER_ON = _knob('LIN2_MATRY_WSF_TAKEOVER_ON', 0, int)   # on/off. THE NAME'S
+#   _ON SUFFIX IS MINE; he named the mech. 0 is the bank so nothing measured so far moves.
+LIN2_MATRY_WSF_TAKEOVER_TF = _knob('LIN2_MATRY_WSF_TAKEOVER_TF', 7, int)   # HIS KNOB NAME AND HIS
+#   VALUE, written into his spec line as {knob:7}. The rider's TF must be AT OR OVER this for the
+#   mech to look at all.
+LIN2_MATRY_WSF_TAKEOVER_AT = os.environ.get('W_V4_LIN2_MATRY_WSF_TAKEOVER_AT', 'event')  # WHICH
+#   BAR THE ws1..ws4 SCAN READS. THE KNOB NAME IS MINE; the two arms are his, 1030: *"I'm not sure
+#   if this is event anchored or ws1mage extremum anchored. test both"*.
+#     'event'     the cadence bar itself
+#     'extremum'  the ws1Mage extremum at or before the cadence bar, picked by
+#                 jig.mage_cascade_bar(mode='extrema', gap=MC_GAP 48) - the same picker the mage
+#                 cascade uses since his 1029 *"were the mage cascades anchored on a ws1Mage's
+#                 extremum? if not, they should be"*. Not a second copy of that logic.
+#   NEITHER IS RULED. Both are measured and the numbers go to him.
+LIN2_MATRY_WSF_SCAN_HI = _knob('LIN2_MATRY_WSF_SCAN_HI', 4, int)   # the scan's top rung. HIS
+#   VALUE, from *"a scan from ws1 to ws4"*; the knob NAME is mine. The floor is ws1, also his.
+#   *** THE ORDER IS MINE AND UNRULED. *** The mech sits AFTER the mage-cascade no-action test, so
+#   a cadence whose cascade verdict matches the trade direction keeps walking and never reaches it.
+#   He ruled the mech against the BATON, not against the cascade.
 LIN2_CHAIN_OPEN_ON = _knob('LIN2_CHAIN_OPEN_ON', 1, int)   # the chain's FIRST open, on/off.
 #   HIS MECH AND HIS RULING, 1029: *"the chain open should be on the ws5Mage oob with at least one
 #   higher TF Mage printing closer to 50. that moment is 08-29 ~2345, and it's a SHORT"*, then the
@@ -845,6 +948,28 @@ RULED = {
                         ' 2026-08-30 00:59:25..01:20:45 low excursion together as one event'),
     'LIN2_LATCH_EXFNC_ON': (1, 'HIS MECH, HIS KNOB NAME, AND HIS BANK - "ADD'
                                ' LIN2_LATCH_EXFNC_ON" then "bank this as the machine" - 1029'),
+    'LIN2_LATCH_OOB_ON': (0, 'OFF, the banked arm. His 1029 ask to A/B it: "do a 08-30 chain AB'
+                             ' test to validate or drop the oob latch". One latch read at depth,'
+                             ' never a second latch'),
+    'LIN2_MATRY_WSF_TAKEOVER_ON': (0, 'OFF is the bank - his 1030 mech, measured before'
+                                      ' it can be the default. The _ON suffix is mine'),
+    'LIN2_MATRY_WSF_TAKEOVER_TF': (7, 'HIS knob name and HIS value, written into his own'
+                                      ' spec line as {knob:7}'),
+    'LIN2_MATRY_WSF_TAKEOVER_AT': ('event', 'the cadence bar. "extremum" reads the'
+                                            ' ws1Mage extremum instead - his "test both"'
+                                            ' and NEITHER is ruled'),
+    'LIN2_MATRY_WSF_SCAN_HI': (4, 'his "a scan from ws1 to ws4". The knob name is mine'),
+    'LIN2_B1_OOB_DWELL': (0, 'the plain per-bar read - the bank, so nothing measured so'
+                            ' far moves. His 1030 value is 12 bars = 60 s, after the'
+                            ' 2026-08-30 22:22 trace showed cws1b entering the LOW oob'
+                            ' four times in 85 s. Read by t1, t2, the arm and the'
+                            ' counter-oob cadence, all through b1_beyond'),
+    'LIN2_EXFNC_LATCH_REL': ('bank', 'the barrage plus the opposite-side clear - his 1029'
+                             ' mech, and the arm every banked number was measured on.'
+                             ' "lift" is his 1030 all-inclusive proposal: the latched'
+                             ' line\'s own lift-off and nothing else. THE KNOB NAME IS'
+                             ' MINE, the mech is his, and three choices inside it are'
+                             ' mine and unruled - see the declaration'),
     'LIN2_EXFNC_LATCH_WOB': (4, 'HIS NAME AND HIS VALUE - "a small'
                                 ' {knob:4,\'LIN2_EXFNC_LATCH_WOB\'} WOB" - 1029. Bars is mine'),
     'LIN2_T3_MIN_TF': (5,   'HIS NAME, HIS VALUE - "the rider between'
@@ -1098,6 +1223,7 @@ def table():
              'TRAJ_MIN_FRAC': 'fraction of the block', 'TRAJ_MIN_TRAVEL': 'r-points', 'SAV_WS2_OOB_TEST': 'minutes', 'SAV_IB_XWOB': 'bars',
              'SAV_MAGE_GATE_WOB': 'bars', 'SAV_CASCADE_GAP': 'bars',
              'LIN2_B1_HOLD': 'bars',
+             'LIN2_LATCH_OOB_ON': 'on/off',
              'LIN2_CHAIN_OPEN_ON': 'on/off', 'LIN2_CHAIN_OPEN_TF': 'TF',
              'LIN2_CHAIN_OPEN_LOOKBACK_S': 'seconds',
              'LIN2_CHAIN_OPEN_XWOB': 'bars',

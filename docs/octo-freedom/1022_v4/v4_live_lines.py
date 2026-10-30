@@ -20,6 +20,7 @@ import numpy as np
 
 sys.path.insert(0, '/home/joe/thecodes')
 sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1022_v4')
+import v4_knobs as K
 _e = sys.stderr; sys.stderr = io.StringIO()
 import ln
 sys.stderr = _e
@@ -36,6 +37,12 @@ def arm_lines(E):
             'M': {t: np.asarray(ln.line('ws%dMage' % t), float) for t in (1, 2)}}
 
 
-def mage(hi=12):
-    """The Mage ladder ws1..ws{hi}, live. -> {tf: array}."""
-    return {t: np.asarray(ln.line('ws%dMage' % t), float) for t in range(1, int(hi) + 1)}
+def mage(hi=None):
+    """The Mage ladder ws1..ws{hi}, live. -> {tf: array}.
+
+    `hi` DEFAULTS TO THE KNOB, not to a literal 12. L2_MOM_MAXTF is declared as the ladder's top
+    rung, and a caller that restates 12 silently disagrees with it the moment the knob moves -
+    which is exactly what his 1030 *"increase the TF from 12 to 20"* does. One source for one fact.
+    """
+    hi = int(K.L2_MOM_MAXTF) if hi is None else int(hi)
+    return {t: np.asarray(ln.line('ws%dMage' % t), float) for t in range(1, hi + 1)}

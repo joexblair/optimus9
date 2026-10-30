@@ -132,16 +132,24 @@ def arm_race(CL, BD, side, frm, B):
     that"*. The arm's oob test is a fence read, so it belongs on the closed set with every other
     fence read in this fork.
     """
-    r4 = BD.line(4)                                    # cws4r, CLOSED
+    r4 = BD.line(4)                                    # ws4r, the LIVE value via the proxy
     b1, c1r = np.asarray(CL['b'], float), np.asarray(CL['r'][1], float)
     c2m, c2r = np.asarray(CL['M'][2], float), np.asarray(CL['r'][2], float)
+    #   cws1b's oob READ THROUGH ITS ONE STATE, so his 1030 dwell reaches the arm as well as the
+    #   cadences. At LIN2_B1_OOB_DWELL 0 and LIN2_B1_HOLD 0 this is K.oob bar for bar and the arm
+    #   does not move - asserted below on the bar it returns.
+    b1o = np.asarray(CAD.b1_beyond(b1, int(side)), bool)
     for k in range(int(frm), int(B) + 1):
         if K.oob(r4[k], side):
-            return k, 'cws4r', 'cws4r %.2f oob' % r4[k]
-        if K.oob(b1[k], side) and K.oob(c1r[k], side):
-            return k, 'cws1b+cws1r', 'cws1b %.2f + cws1r %.2f oob' % (b1[k], c1r[k])
+            return k, 'ws4r', 'ws4r %.2f oob' % r4[k]
+        if b1o[k] and K.oob(c1r[k], side):
+            assert int(K.LIN2_B1_OOB_DWELL) > 1 or int(K.LIN2_B1_HOLD) > 1 \
+                or K.oob(b1[k], side), \
+                'ws1b arms off its held state with both knobs at the plain read'
+            return k, 'ws1b+ws1r', ('ws1b %.2f + ws1r %.2f oob, ws1b dwell %d'
+                                      % (b1[k], c1r[k], K.LIN2_B1_OOB_DWELL))
         if K.oob(c2m[k], side) and K.oob(c2r[k], side):
-            return k, 'cws2Mage+cws2r', 'cws2Mage %.2f + cws2r %.2f oob' % (c2m[k], c2r[k])
+            return k, 'ws2Mage+ws2r', 'ws2Mage %.2f + ws2r %.2f oob' % (c2m[k], c2r[k])
     return None, None, 'no arm to the window end'
 
 
@@ -226,9 +234,9 @@ def arm_retest(CL, side, arm, B):
     c3r = np.asarray(CL['r'][3], float)
     k = int(arm)
     if not K.oob(c1r[k], side):
-        return None, 'cws1r %.2f is not oob at the arm - the gate stays shut' % c1r[k]
+        return None, 'ws1r %.2f is not oob at the arm - the gate stays shut' % c1r[k]
     if K.ex_fence(c2r[k], side) or K.ex_fence(c3r[k], side):
-        return None, ('cws2r %.2f / cws3r %.2f - not both inside the fence at the arm'
+        return None, ('ws2r %.2f / ws3r %.2f - not both inside the fence at the arm'
                       % (c2r[k], c3r[k]))
     #   RULING 4 and 5: the oob->ib cross only, wob L2_CWS1R_WOB. `oob_ib_cross`'s third field is
     #   the oob side the run LEFT, which for this gate is the target side.
@@ -237,11 +245,11 @@ def arm_retest(CL, side, arm, B):
     xs = [(c, cf) for c, cf, sd in oob_ib_cross(c1r, K.OOB_HI, K.OOB_LO, int(K.LIN2_CROSS_WOB))
           if int(sd) == int(side) and int(cf) >= k]
     if not xs:
-        return None, ('cws1r %.2f oob, cws2r %.2f + cws3r %.2f in - open, but no cws1r oob->ib'
+        return None, ('ws1r %.2f oob, ws2r %.2f + ws3r %.2f in - open, but no ws1r oob->ib'
                       ' cross to the data end' % (c1r[k], c2r[k], c3r[k]))
     cross, conf = int(xs[0][0]), int(xs[0][1])
     assert conf >= k, 'the retest cadence is before the arm that opened the gate'
-    return conf, ('cws1r %.2f oob + cws2r %.2f / cws3r %.2f in - the gate opens; cws1r oob->ib'
+    return conf, ('ws1r %.2f oob + ws2r %.2f / ws3r %.2f in - the gate opens; ws1r oob->ib'
                   ' cross %s, wob %d, cadence at %s'
                   % (c1r[k], c2r[k], c3r[k], ln.U(cross), K.LIN2_CROSS_WOB, ln.U(conf)))
 
@@ -395,14 +403,14 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
             return 'NO ARM', None, rows
         row(bar=arm, stage='ARM', why='%s: %s' % (which, why))
 
-    if which == 'cws2Mage+cws2r':
+    if which == 'ws2Mage+ws2r':
         v = div_verdict(CL, close, side, arm)
         #   *"if the open trade ... is SHORT and the verdict is +1, the verdict is AGAINST the
         #   SHORT and router will create a rev-trade"*. A SHORT is side +1 here, so a +1 verdict
         #   against a +1 side is the rev-trade; aligned means take no action.
         st = div_state(CL, close, side, arm)
         row(bar=arm, stage='DIV', state=st,
-            why='cws1r divergence %s | anchor_floater state %s' % (
+            why='ws1r divergence %s | anchor_floater state %s' % (
                 ('none' if v is None else ('+1 bearish' if v > 0 else '-1 bullish')),
                 'no reading' if st is None else
                 {1: '+1 divergence, SHORT', -1: '-1 divergence, LONG',
@@ -415,17 +423,18 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
     rider_since = int(arm)                             # the bar the CURRENT rider took the baton
     if rider is None:
         #   HIS 1026 RULING: this no longer ends the walk - *"drop the rider gate for t3 and t4"*
-        row(bar=arm + 1, stage='NO RIDER', why='no cws1..cws%d r is ex-fence at the arm bar + 5s -'
+        row(bar=arm + 1, stage='NO RIDER', why='no ws1..ws%d r is ex-fence at the arm bar + 5s -'
                                                ' the walk continues, t3 and t4 stay reachable'
                                                % K.L2_MOM_MAXTF)
     else:
-        row(bar=arm, stage='RIDER', why='cws%d r %.2f, the highest ex-fence'
+        row(bar=arm, stage='RIDER', why='ws%d r %.2f, the highest ex-fence'
                                         % (rider, BD.value(rider, arm)), rider=rider)
 
     #   v4-arm-lineage-retest. While the gate is open nothing else decides, so the walk starts at
     #   the gate's own cadence and the cadences before it are not served. His flow: *"the gate is
     #   open ... nothing is tested again until it moves"*.
     start = int(arm)
+    gate_cad = None                     # the retest gate's own cadence, for the review list below
     if int(K.L2_ARM_RETEST):
         rt, rt_why = arm_retest(CL, side, arm, B)
         row(bar=arm, stage='RETEST', why=rt_why)
@@ -435,13 +444,20 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
                 #   HIS OWN SPEC LINE, reached at the gate's cadence instead of at the arm:
                 #   *"IF no rider is assigned ... the walk ends. pass to router for a rev-trade"*.
                 row(bar=rt, stage='EXHAUST',
-                    why='v4-arm-lineage-retest: no cws1..cws%d r is ex-fence at the gate cadence -'
+                    why='v4-arm-lineage-retest: no ws1..ws%d r is ex-fence at the gate cadence -'
                         ' the walk ends' % K.L2_MOM_MAXTF, rider=rider, ctype='retest')
                 return 'EXHAUST', int(rt), rows
             row(bar=rt, stage='RIDER',
-                why='v4-arm-lineage-retest: the re-scan rides cws%d %.2f, the highest ex-fence'
+                why='v4-arm-lineage-retest: the re-scan rides ws%d %.2f, the highest ex-fence'
                     % (nr, BD.value(nr, rt)), rider=nr, ctype='retest')
             rider, start = int(nr), int(rt)
+            #   THE GATE'S CADENCE JOINS THE REVIEW LIST. Joe 1030, shown that the board review
+            #   never ran at 2026-08-30 22:02:55 and that his own spec line
+            #   *"--walk cws1r to handover (ib) and follow the lineage process"* plus
+            #   *"--if an exhaust is found, route to rev-trade"* both require it: *"7 - add the
+            #   gate's cadence"*. Before this, `produced` carried t1, t2, the counter-oob cadence
+            #   and the barrage only, so the gate's own bar was the one cadence never reviewed.
+            gate_cad = (int(rt), 'retest', rt_why)
 
     #   THE MAGE-CASCADE VERDICT AT EVERY CADENCE, Joe 1027: *"in fact, let's get the mage-cascde
     #   verdict at every cadence event"*. It is RECORDED, not acted on - he has not ruled what the
@@ -492,7 +508,8 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
     #   precomputed with the rest - it needs no rider.
     produced = (CAD.t1(CL, side, arm, B) + CAD.t2(CL, side, arm, B)
                 + (CAD.counter_oob(CL, side, arm, B) if int(K.LIN2_COUNTER_OOB_ON) else [])
-                + (CAD.barrage(BD, side, arm, B) if int(K.LIN2_BARRAGE_ON) else []))
+                + (CAD.barrage(BD, side, arm, B) if int(K.LIN2_BARRAGE_ON) else [])
+                + ([gate_cad] if gate_cad is not None else []))
     for b, ty, w in produced:
         if b >= start:
             fixed.setdefault(int(b), []).append((ty, w))
@@ -521,7 +538,7 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
                     if (int(pb[0]), int(rider)) not in tried:
                         tried.add((int(pb[0]), int(rider)))
                         row(bar=pb[0], stage='NO PASS',
-                            why='cws%d %.2f ATTEMPTS to hand over, between cadences - no'
+                            why='ws%d %.2f ATTEMPTS to hand over, between cadences - no'
                                 ' candidate inside lin_hop %d'
                                 % (rider, BD.value(rider, pb[0]), K.L2_LIN_HOP),
                             rider=rider, cands=(), cap=rider + int(K.L2_LIN_HOP),
@@ -605,14 +622,14 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
                     #   THE KNOB IS NARROWED TO THE cws1b COUNTER-OOB CADENCE, Joe 1027:
                     #   *"narrow it - applies only to cws1b counter oob"*. Every other cadence
                     #   type always rev-trades on a mismatch.
-                    act = (str(K.LIN2_MISMATCH_ACTION) if ctype == 'cws1b counter-oob'
+                    act = (str(K.LIN2_MISMATCH_ACTION) if ctype == 'ws1b counter-oob'
                            else 'rev-trade')
                     row(bar=bar, stage='EXHAUST', rider=rider, ctype=ctype, mismatch=True,
                         why='%s %s | mage-cascade %s OPPOSES the %s - %s'
                             % (ctype, cwhy, mv, 'LONG' if lng else 'SHORT', act))
                     return ('CLOSE ONLY' if act == 'close-only' else 'EXHAUST'), int(bar), rows
                 if ((mv == 'up' and lng) or (mv == 'down' and not lng)) \
-                        and ctype != 'cws1b counter-oob':
+                        and ctype != 'ws1b counter-oob':
                     row(bar=bar, stage='NO ACTION', rider=rider, ctype=ctype,
                         why='%s %s | mage-cascade %s matches the %s - no action, keep walking'
                             % (ctype, cwhy, mv, 'LONG' if lng else 'SHORT'))
@@ -624,7 +641,7 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
                     rider = max(got)
                     last = int(bar)
                     row(bar=bar, stage='RIDER',
-                        why='%s %s | cws%d r %.2f picked up at a cadence, no prior rider'
+                        why='%s %s | ws%d r %.2f picked up at a cadence, no prior rider'
                             % (ctype, cwhy, rider, BD.value(rider, bar)), rider=rider)
                     continue
                 row(bar=bar, stage='NO RIDER',
@@ -632,7 +649,41 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
                 last = int(bar)
                 continue
 
-            rv = BD.value(rider, bar)                      # STATE: closed, via the proxy
+            rv = BD.value(rider, bar)                      # the LIVE value, via the proxy
+            #   LIN2_MATRY_WSF_TAKEOVER - HIS MECH, 1030. A slow rider is overtaken by the fast
+            #   lines it is supposed to be led by. His spec and the six gaps he closed are at the
+            #   knob; the two anchor arms are his *"test both"*.
+            #   IT RUNS BEFORE THE CANDIDATE SCAN, his *"it fires even when candidates exist
+            #   (because matryoshka is leading)"*.
+            if int(K.LIN2_MATRY_WSF_TAKEOVER_ON) \
+                    and int(rider) >= int(K.LIN2_MATRY_WSF_TAKEOVER_TF) \
+                    and ctype in ('t1', 't2', 'retest'):
+                ab = int(bar)
+                at = str(K.LIN2_MATRY_WSF_TAKEOVER_AT)
+                assert at in ('event', 'extremum'), \
+                    'LIN2_MATRY_WSF_TAKEOVER_AT %r is not an arm' % at
+                if at == 'extremum' and BD.mage is not None:
+                    pk = mage_cascade_bar(BD.mage[min(BD.mage)], int(bar), int(side),
+                                          mode='extrema', gap=MC_GAP)
+                    if pk is not None:
+                        ab = int(pk[0])
+                assert ab <= int(bar), 'the scan anchor is after the cadence bar it serves'
+                top = int(K.LIN2_MATRY_WSF_SCAN_HI)
+                #   HIS TWO STATES ARE EVERY VALUE UNDER THE TARGET oob FENCE, so the test is one
+                #   read through BD.oob - the same home every other oob read in the fork uses.
+                ok = [t for t in range(1, top + 1)
+                      if t in BD.tfs and not BD.oob(t, ab, int(side))]
+                pair = next(((t, t + 1) for t in range(1, top)
+                             if t in ok and (t + 1) in ok), None)
+                if pair is not None:
+                    row(bar=bar, stage='EXHAUST', rider=rider, ctype=ctype,
+                        why=('%s %s | LIN2_MATRY_WSF_TAKEOVER: rider ws%d is at or over ws%d and'
+                             ' ws%d %.2f + ws%d %.2f are both under the target oob fence at %s'
+                             ' (%s anchor) - rev-trade'
+                             % (ctype, cwhy, rider, K.LIN2_MATRY_WSF_TAKEOVER_TF,
+                                pair[0], BD.value(pair[0], ab), pair[1], BD.value(pair[1], ab),
+                                ln.U(ab), at)))
+                    return 'EXHAUST', int(bar), rows
             #   THE RIDER'S OWN TEST IS A BATON-PASSING CONSUMER. Joe 1029, on being shown that
             #   under the latch a once-oob rider can only ever take the HOLD branch until a
             #   barrage fires: *"the consequences: expected"*.
@@ -643,7 +694,7 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
             got = candidates(BD, side, bar, rider, cap=cap,
                              not_rev_since=_nrs(rider_since, arm))
             row(bar=bar, stage='CADENCE',
-                why='%s %s | rider cws%d %.2f, no-longer-exfence %s, reversed %s | mage-cascade %s'
+                why='%s %s | rider ws%d %.2f, no-longer-exfence %s, reversed %s | mage-cascade %s'
                     % (ctype, cwhy, rider, rv, 'yes' if no_ex else 'no', 'yes' if revd else 'no',
                        cascade_at(bar)),
                 cands=tuple(got), rider=rider, cap=cap, ctype=ctype)
@@ -658,18 +709,20 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
                 rider_since = int(bar)
                 last = int(bar)
                 continue
-            #   THE oob READ IS THE VALUE, not the latch. Joe 1029: *"what oob latch? that wasn't
-            #   in the spec"*. Only the ex-fence decision above comes from the latch.
-            if BD.oob(rider, bar, side) or (not no_ex and not revd):
-                row(bar=bar, stage='HOLD', why='rider cws%d %.2f %s - no action' % (
-                    rider, rv, 'oob' if BD.oob(rider, bar, side) else 'ex-fence and not reversed'),
+            #   THE oob READ GOES THROUGH `baton_oob`, which at LIN2_LATCH_OOB_ON 0 IS the line
+            #   value - his 1029 correction. At 1 it is the one latch read at depth, the arm he
+            #   asked to A/B.
+            if BD.baton_oob(rider, bar, side) or (not no_ex and not revd):
+                row(bar=bar, stage='HOLD', why='rider ws%d %.2f %s - no action' % (
+                    rider, rv,
+                    'oob' if BD.baton_oob(rider, bar, side) else 'ex-fence and not reversed'),
                     rider=rider)
                 last = int(bar)
                 continue
             #   t4cadence: a non-oob rider that reversed with nowhere to pass
-            tag = 't4' if (revd and not BD.oob(rider, bar, side)) else 'exhaust'
+            tag = 't4' if (revd and not BD.baton_oob(rider, bar, side)) else 'exhaust'
             row(bar=bar, stage='EXHAUST',
-                why='%s at a %s cadence - rider cws%d %.2f, no candidate %s'
+                why='%s at a %s cadence - rider ws%d %.2f, no candidate %s'
                     % (tag, ctype, rider, rv,
                        'on the whole board' if cap is None else 'inside lin_hop %d' % K.L2_LIN_HOP),
                 rider=rider, cap=cap, ctype=ctype)

@@ -33,8 +33,8 @@ GLOSS = re.compile(r'(=|\u2014|\bmeans\b|\bbars?\b|\bseconds?\b|\bminutes?\b|%|\
 
 #   Terms HE has flagged as mine. Nothing is added here by guessing.
 MINE = [
-    'turn bar', 'cadence i', 'confirming bar', 'consumer', 'consumers', 'bucket', 'buckets',
-    'producer', 'producers', 'the band', 'arm on a knob', 'the shape', 'membership arm',
+    'turn bar', 'cadence i', 'confirming bar', 'bucket', 'buckets',
+    'the band', 'arm on a knob', 'the shape', 'membership arm',
     'floor arm', 'zero-length leg', 'state read', 'wob180',
 ]
 
@@ -60,7 +60,8 @@ FORWARD = [
 #   allowlist - it's too restrictive on me"*. This is the short list of terms HE uses, which the
 #   shape checks would otherwise flag because they look like code. It grows only when he tells me
 #   one of his words was flagged.
-HIS = {'lin_hop'}
+HIS = {'lin_hop', 'consumer', 'consumers', 'producer', 'producers', 'oob',
+       'lin2_matry_wsf_takeover', 'matryoshka'}
 
 SHAPES = [
     ('a knob or constant name', re.compile(r'\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+){1,}\b')),

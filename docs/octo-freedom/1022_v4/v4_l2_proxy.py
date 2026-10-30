@@ -188,7 +188,7 @@ class Board:
         WHOLE TAPE, not the walk's window: a latch set before the arm can be released by a barrage
         that fired before the arm, so scoping these to the walk would invent a horizon.
         """
-        key = int(side)
+        key = (int(side), float(K.RMOM_FNC))
         if key not in self._rel:
             #   LOCAL IMPORT. v4_l2_cadence does not import this file, so there is no cycle; the
             #   import is local only to keep module load order free of a new edge.
@@ -223,18 +223,77 @@ class Board:
     def _latch(self, tf, side):
         """THE latch for (line, side) at every bar. -> bool array over the tape.
 
-        ON at an ex-fence cross confirmed over LIN2_EXFNC_LATCH_WOB bars. OFF at a barrage release
-        on that side, or at an opposite-side ex-fence cross.
+        ON at an ex-fence cross confirmed over LIN2_EXFNC_LATCH_WOB bars, both arms.
 
-        EX-FENCE ONLY. There is no oob latch - see decision 1 above.
+        WHAT RELEASES IT IS LIN2_EXFNC_LATCH_REL:
+            'bank'  a barrage on that side, or an opposite-side ex-fence cross confirmed over the
+                    same hold. His 1029 mech and the arm every banked number was measured on.
+            'lift'  the latched line's own lift-off on the SAME side, stamped at
+                    lift + LIFT_WOB - 1, and nothing else. His 1030 proposal; the three choices
+                    inside it are mine and are listed at the knob's declaration.
+                    ITS SAMPLING RESTARTS AT THE LATCH, his 1030 ruling - a lift-off only counts
+                    once the whole LIFT_PTS lattice sits at or after the latch-on bar.
+
+        EX-FENCE ONLY. There is no oob latch - see decision 1 above. Neither arm releases on a
+        cross to oob: oob is read THROUGH this state by the baton path, never against it.
+
+        THE CACHE KEY CARRIES THE RELEASE MODE AND THE FENCE. Both move within one process in a
+        comparison driver, and a key of (tf, side) alone would hand back a latch built under the
+        other arm - real arrays, wrong arm, no error.
         """
-        key = (int(tf), int(side))
+        mode = str(K.LIN2_EXFNC_LATCH_REL)
+        assert mode in ('bank', 'lift'), 'LIN2_EXFNC_LATCH_REL %r is not an arm' % mode
+        key = (int(tf), int(side), mode, float(K.RMOM_FNC))
         if key in self._lat:
             return self._lat[key]
         v = self._state(tf)
         w = max(1, int(K.LIN2_EXFNC_LATCH_WOB))
         n = len(v)
         on = [int(x) for x in self._confirm(K.ex_fence_mask(v, int(side)), w)]
+        if mode == 'lift':
+            #   LOCAL IMPORT, same reason as _releases': no new module-load edge.
+            from optimus9.analysis.jig import lift_off
+            gap = int(K.gap_for(int(tf)))
+            span = (max(2, int(K.LIFT_PTS)) - 1) * max(1, gap)
+            raw = np.asarray(sorted(int(b) for b in lift_off(
+                v, int(side), K.LIFT_PTS, gap, K.LIFT_TOL, K.LIFT_WOB)), int)
+            #   THE SAMPLING RESTARTS AT THE LATCH, Joe 1030: *"lift-off per-line sampling is set
+            #   to zero (samples collected) when the ex-fence latch is latched"*. So a lift-off
+            #   only counts for an episode once the whole lattice sits at or after the latch-on
+            #   bar: LIFT_PTS 6 samples at `gap` bars apart reach back span = 5 * gap bars, and
+            #   the HELD bar of the off-edge is Y - 1, so the first usable off-edge is
+            #   Y >= on + span + 1. Below that the line has not collected its samples yet and
+            #   nothing can print.
+            #   WHY IT IS A FILTER AND NOT A RE-COMPUTE: at_extreme_mask zeroes the first `span`
+            #   bars of whatever array it is handed and is otherwise identical bar for bar, so
+            #   lift_off(v[on:]) and lift_off(v) agree on every bar at or after on + span. One
+            #   whole-tape pass and a searchsorted give the same answer as a pass per episode.
+            st = np.zeros(n, bool)
+            lat_on, idx = None, 0
+            ons = sorted(on)
+            while idx < len(ons):
+                o0 = int(ons[idx])
+                if o0 >= n:
+                    break
+                j = int(np.searchsorted(raw, o0 + span + 1, 'left'))
+                rel = int(K.lift_stamp(int(raw[j]))) if j < len(raw) else None
+                assert rel is None or rel > o0, \
+                    'a lift-off release is at or before the latch-on bar it clears'
+                end = n if rel is None or rel >= n else rel
+                st[o0:end] = True
+                if rel is None:
+                    break
+                #   the next episode starts at the first confirm bar AT OR AFTER the release.
+                nxt = idx + 1
+                while nxt < len(ons) and int(ons[nxt]) < rel:
+                    nxt += 1
+                idx = nxt
+            for bb in on:
+                if bb < n:
+                    assert st[bb], 'a latch-on bar is not latched: tf %s side %s bar %d' % (
+                        tf, side, bb)
+            self._lat[key] = st
+            return st
         off = sorted(set(int(x) for x in self._releases(side))
                      | set(int(x) for x in self._confirm(K.ex_fence_mask(v, -int(side)), w)))
         st = np.zeros(n, bool)
@@ -256,8 +315,59 @@ class Board:
         return st
 
     def baton_src(self):
-        """What a baton-passing fence test reads. -> 'latch' or 'value'. For a report's header."""
-        return 'latch' if int(K.LIN2_LATCH_EXFNC_ON) else 'value'
+        """What a baton-passing fence test reads. -> a label. For a report's header."""
+        if not int(K.LIN2_LATCH_EXFNC_ON):
+            return 'value'
+        return 'latch, released on %s' % str(K.LIN2_EXFNC_LATCH_REL)
+
+    def _deep(self, tf, side):
+        """THE ONE LATCH READ AT DEPTH. -> bool array. Latched AND 15/85 confirmed since its on-bar.
+
+        His 1029 reading is what makes this a filter rather than a second latch: *"I see ex-fence
+        as a literal term: 'external of the fence', ie oob is definitely ex-fence"*. Anything past
+        15/85 is already past the RMOM_FNC pair, so the depth read can only ever be a subset of the
+        latch and the two cannot disagree. Asserted below.
+
+        MY FIRST BUILD WAS TWO INDEPENDENT LATCHES and they drifted into "oob but not ex-fence" for
+        27,460 bars on 2026-08-30 across all 24 line-sides. That state is impossible on a value.
+
+        CAUSAL: the confirm bars are the latch's own, and the running maximum only looks back.
+        """
+        #   THE KEY CARRIES THE RELEASE ARM AND THE FENCE, for the same reason _latch's does.
+        key = (int(tf), int(side), 'deep', str(K.LIN2_EXFNC_LATCH_REL), float(K.RMOM_FNC))
+        if key in self._lat:
+            return self._lat[key]
+        st = self._latch(tf, side)
+        v = self._state(tf)
+        w = max(1, int(K.LIN2_EXFNC_LATCH_WOB))
+        n = len(v)
+        idx = np.arange(n)
+        #   this latch's own on-bar, at every bar: the last on-edge at or before it.
+        edge = np.zeros(n, bool)
+        edge[0] = st[0]
+        edge[1:] = st[1:] & ~st[:-1]
+        begun = np.maximum.accumulate(np.where(edge, idx, -1))
+        #   the last CONFIRMED 15/85 bar at or before it.
+        oc = np.zeros(n, bool)
+        for b in self._confirm(K.oob_mask(v, int(side)), w):
+            if int(b) < n:
+                oc[int(b)] = True
+        deep = np.maximum.accumulate(np.where(oc, idx, -1))
+        out = st & (deep >= begun) & (begun >= 0)
+        assert not np.any(out & ~st), \
+            'the depth read is on where the latch is off - it must be a subset of it'
+        self._lat[key] = out
+        return out
+
+    def baton_oob(self, tf, bar, side):
+        """Is ws{tf}r oob on `side` at `bar`, FOR A BATON-PASSING CONSUMER.
+
+        At LIN2_LATCH_OOB_ON 0, which is banked, this is the line value and nothing moves. At 1 it
+        is the one latch read at depth - see `_deep`.
+        """
+        if not int(K.LIN2_LATCH_OOB_ON):
+            return self.oob(tf, bar, side)
+        return bool(self._deep(tf, side)[int(bar)])
 
     def baton_ex_fence(self, tf, bar, side):
         """Is ws{tf}r ex-fence on `side` at `bar`, FOR A BATON-PASSING CONSUMER.
@@ -265,8 +375,8 @@ class Board:
         His 1029 ruling: the baton-passing consumers query the latch state. With
         LIN2_LATCH_EXFNC_ON 0 this is `ex_fence` and nothing moves.
 
-        THERE IS NO `baton_oob`. Every oob read in the walk stays on the line's value - his 1029
-        correction. A caller that wants oob calls `oob`.
+        `baton_oob` is its oob counterpart, and at LIN2_LATCH_OOB_ON 0 that one is the line
+        value - his 1029 correction that there is no second latch.
         """
         if not int(K.LIN2_LATCH_EXFNC_ON):
             return self.ex_fence(tf, bar, side)

@@ -32,7 +32,7 @@ A, B = ln.K('2026-08-30 00:00:00'), ln.K('2026-08-30 23:59:55')
 close, phi, plo = prices()
 E = RS.load((RS.K0, RS.R0, RS.S0))
 CL = LL.arm_lines(E)
-MG = LL.mage(12)
+MG = LL.mage()      # ws1..ws{L2_MOM_MAXTF} - the knob owns the top rung
 B1 = np.asarray(CL['b'], float)
 BD = PX.Board(E, E, MG=MG, MGE=MG, PS=None)
 

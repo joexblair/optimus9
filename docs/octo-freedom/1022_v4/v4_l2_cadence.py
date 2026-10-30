@@ -62,8 +62,8 @@ HTF_LO = 7                                     # *"any of ws7r to ws12r (HTF lin
 _LO = {}
 
 
-def cws1r_revs(line, side):
-    """cws1r's lift-off RAW bars at lineage2's own wob. -> a sorted int array, cached.
+def ws1r_revs(line, side):
+    """ws1r's lift-off RAW bars at lineage2's own wob. -> a sorted int array, cached.
 
     `v4_fast.revs` keys its cache on K.LIFT_WOB 8, so it cannot serve `L2_CWS1R_WOB` 1 - this is a
     separate cache on the same producer, not a second detector.
@@ -76,9 +76,9 @@ def cws1r_revs(line, side):
 
 
 def _stamp(b):
-    """The bar a cws1r lift-off becomes actionable on, at lineage2's wob. -> bar.
+    """The bar a ws1r lift-off becomes actionable on, at lineage2's wob. -> bar.
 
-    `K.lift_stamp` adds LIFT_WOB - 1; lineage2's cws1r wob is its own, so the arithmetic is here
+    `K.lift_stamp` adds LIFT_WOB - 1; lineage2's ws1r wob is its own, so the arithmetic is here
     and there is one copy of it.
     """
     return int(b) + max(0, int(K.L2_CWS1R_WOB) - 1)
@@ -90,22 +90,41 @@ def _runs(a):
     return list(zip(np.flatnonzero(d == 1).astype(int), (np.flatnonzero(d == -1) - 1).astype(int)))
 
 
-def b1_beyond(b1, side, hold=None):
-    """ws1b's beyond-the-line state for the two cadences. -> bool array.
+def b1_beyond(b1, side, hold=None, dwell=None):
+    """cws1b's ONE oob state. Every consumer in the fork reads it here. -> bool array.
 
-    AT HOLD 0 OR 1 this is the plain state at each bar, which is what both cadences read today.
+    TWO RULES, BOTH HIS, ONE ON EACH EDGE:
 
-    AT HOLD H a crossing back inside counts only once it has held H bars. Until then ws1b still
-    reads as beyond the line, so one brief return does not break an excursion in two.
+    THE DWELL ON THE ENTRY, LIN2_B1_OOB_DWELL, Joe 1030: *"add a minimum oob dwell of 12 bars for
+    cws1b"* and *"the dwell resets on each ws1b blip back to ib"*. The state turns on at the
+    entry bar + D - 1 and only if cws1b was past the fence on EVERY bar of that window. One bar
+    back inside restarts the count from zero, so a run shorter than D never counts as oob at all.
+    It is taken on the RAW fence read, before the hold below, because the hold's whole job is to
+    bridge a brief return and his ruling is that such a return resets the dwell. At D 0 or 1
+    nothing moves.
 
-    Joe 1029: *"could the ws1b test incorporate the wob 12? ie if ws1b to ib has not qualified its
-    wob 12, then its value is not passed in"*, and what he is after: *"what I'm trying to capture
-    is the ws1b low oob excursion that runs from 0100 to 0121"*.
+    THE HOLD ON THE RETURN, LIN2_B1_HOLD, Joe 1029: *"could the ws1b test incorporate the wob 12?
+    ie if ws1b to ib has not qualified its wob 12, then its value is not passed in"*, after
+    *"what I'm trying to capture is the ws1b low oob excursion that runs from 0100 to 0121"*. A
+    crossing back inside counts only once it has held H bars; until then cws1b still reads as
+    beyond the fence. At H 0 or 1 nothing moves.
 
-    CAUSAL: at any bar this asks whether the last crossing back inside is at least H bars old and
-    stayed inside throughout. Nothing after the bar is read.
+    CAUSAL ON BOTH EDGES. The entry asks whether the last D bars including this one were all past
+    the fence. The return asks whether the last crossing inside is at least H bars old and stayed
+    inside throughout. Neither reads a bar after the one it answers for.
     """
-    m = np.asarray(K.oob_mask(np.asarray(b1, float), int(side)), bool)
+    raw = np.asarray(K.oob_mask(np.asarray(b1, float), int(side)), bool)
+    d = int(K.LIN2_B1_OOB_DWELL) if dwell is None else int(dwell)
+    if d > 1:
+        n0 = len(raw)
+        m = np.zeros(n0, bool)
+        for a, b in _runs(raw):
+            a, b = int(a), int(b)
+            if b - a + 1 >= d:
+                assert raw[a:a + d].all(), 'a dwell window has a bar that is not past the fence'
+                m[a + d - 1:b + 1] = True
+    else:
+        m = raw
     h = int(K.LIN2_B1_HOLD) if hold is None else int(hold)
     if h <= 1:
         return m
@@ -167,7 +186,7 @@ def t1(CL, side, A, B):
     r1 = np.asarray(CL['r'][1], float)
     #   ws1b's state, held per LIN2_B1_HOLD. At 0 this is the plain read and nothing moves.
     oob = b1_beyond(b1, side)
-    raws = cws1r_revs(r1, side)
+    raws = ws1r_revs(r1, side)
     grace = max(0, int(K.L2_T1_GRACE_S) // 5)
     out = []
     #   WOB 12 ON THE CROSS, Joe 1027. `c` is still the cross bar - it is what the oob run is
@@ -186,7 +205,7 @@ def t1(CL, side, A, B):
         if during:
             bar = max(int(c), _stamp(during[-1]))            # *"whichever is last"*
             assert bar >= int(c), 'the t1 cadence precedes its own cws1b ib cross'
-            out.append((bar, 't1', 'cws1b oob %s..%s, cws1r reversed %s during, stamp %s'
+            out.append((bar, 't1', 'ws1b oob %s..%s, ws1r reversed %s during, stamp %s'
                         % (ln.U(s0)[11:], ln.U(s1)[11:], ln.U(during[-1])[11:],
                            ln.U(_stamp(during[-1]))[11:])))
             continue
@@ -196,7 +215,7 @@ def t1(CL, side, A, B):
         if late:
             bar = max(int(c), _stamp(late[0]))               # *"whichever is last"*
             assert bar >= int(c), 'the t1 cadence precedes its own cws1b ib cross'
-            out.append((bar, 't1', 'cws1b ib %s, cws1r reversed %s inside the %ds grace, stamp %s'
+            out.append((bar, 't1', 'ws1b ib %s, ws1r reversed %s inside the %ds grace, stamp %s'
                         % (ln.U(c)[11:], ln.U(late[0])[11:], K.L2_T1_GRACE_S,
                            ln.U(_stamp(late[0]))[11:])))
     return out
@@ -220,7 +239,7 @@ def t2(CL, side, A, B):
             continue
         if held[cf]:
             continue                               # that is t1's case, not t2's
-        out.append((int(cf), 't2', 'cws1r ib cross %s confirmed %s at wob %d, cws1b %.2f not oob,'
+        out.append((int(cf), 't2', 'ws1r ib cross %s confirmed %s at wob %d, ws1b %.2f not oob,'
                                    ' ws1b hold %d'
                     % (ln.U(c)[11:], ln.U(cf)[11:], K.LIN2_CROSS_WOB, b1[cf],
                        K.LIN2_B1_HOLD)))
@@ -255,16 +274,19 @@ def counter_oob(CL, side, A, B):
     the exhaust branch, 5 HOLD and 2 pass the baton.
     """
     b1 = np.asarray(CL['b'], float)
-    m = K.oob_mask(b1, -int(side))                     # the COUNTER side's oob, one home
-    cr = np.flatnonzero(m[1:] & ~m[:-1]) + 1           # the rising edge: entering the band
+    #   THE COUNTER SIDE'S oob, read through cws1b's ONE state so his 1030 dwell applies here too.
+    #   At LIN2_B1_OOB_DWELL 0 this is the same mask K.oob_mask returned and nothing moves.
+    m = np.asarray(b1_beyond(b1, -int(side)), bool)
+    cr = np.flatnonzero(m[1:] & ~m[:-1]) + 1           # the rising edge: the first qualifying bar
     out = []
     for c in cr:
         c = int(c)
         if not (int(A) <= c <= int(B)):
             continue
-        out.append((c, 'cws1b counter-oob',
-                    'cws1b %.2f entered the %s oob %s'
-                    % (b1[c], 'LOW' if int(side) > 0 else 'HIGH', ln.U(c)[11:])))
+        out.append((c, 'ws1b counter-oob',
+                    'ws1b %.2f qualified the %s oob %s at dwell %d'
+                    % (b1[c], 'LOW' if int(side) > 0 else 'HIGH', ln.U(c)[11:],
+                       K.LIN2_B1_OOB_DWELL)))
     return out
 
 
@@ -523,8 +545,12 @@ def chain_open(B1, MG, before=None, tf=None, lines=None, hi=None, lookback_s=Non
     for c, cf, sd in oob_ib_cross(b1, K.OOB_HI, K.OOB_LO, w):
         f = int(cf) if w > 1 else int(c)
         hits.append((f, int(c), int(cf), int(sd)))
+    #   THE GATE MASK IS HOISTED. It depends only on `sd`, which takes two values, and it was
+    #   being rebuilt over the whole tape once per crossing - thousands of 1.6M-bar allocations
+    #   for two distinct answers. Same values, same order, same result.
+    GATE = {d: K.oob_mask(m5, d) for d in (-1, +1)}
     for f, c, cf, sd in sorted(hits):
-        gate = K.oob_mask(m5, sd)
+        gate = GATE[int(sd)]
         if not (bool(gate[f]) or bool(gate[max(0, f - lb // 5):f + 1].any())):
             continue
         #   THE ANCHOR: the ws{tf}Mage extremum of the oob run that contains `f`, or of the most
@@ -693,17 +719,17 @@ class Latch:
         lo, hi = int(K.LIN2_T3_MIN_TF), int(K.L2_MOM_MAXTF)
         if rider is None or not (lo <= int(rider) <= hi):
             return False, ('rider %s is outside ws%d..ws%d'
-                           % (('cws%d' % rider) if rider else 'none', lo, hi))
+                           % (('ws%d' % rider) if rider else 'none', lo, hi))
         #   THE REVERSAL TESTS FIRST - they are dict lookups. The candidate scan is last.
         rr = self._rev_in(rider, self.arm - 1, k)
         if rr is None:
-            return False, 'the rider cws%d has no reversal at wob %d yet' % (rider, K.LIN2_REV_WOB)
+            return False, 'the rider ws%d has no reversal at wob %d yet' % (rider, K.LIN2_REV_WOB)
         #   THE SUPPORT: the LIN2_SUPPORT_LINES lines immediately below the rider, every one of
         #   them reversed SINCE THE CADENCE - his *"8, since the cadence"*, which is latch 1's bar.
         sup = [t for t in range(int(rider) - int(K.LIN2_SUPPORT_LINES), int(rider))
                if t >= 1 and t in self.BD.tfs]
         if len(sup) < int(K.LIN2_SUPPORT_LINES):
-            return False, ('only %d support line(s) exist below cws%d, need %d'
+            return False, ('only %d support line(s) exist below ws%d, need %d'
                            % (len(sup), rider, K.LIN2_SUPPORT_LINES))
         got = {t: self._rev_in(t, self.l1, k) for t in sup}
         miss = [t for t in sup if got[t] is None]
@@ -714,7 +740,7 @@ class Latch:
         if cands:
             return False, ('%d baton candidate(s) inside lin_hop: %s'
                            % (len(cands), ', '.join('ws%d' % t for t in cands)))
-        return True, ('latch 2: rider cws%d reversed raw %s stamp %s, no candidate inside lin_hop,'
+        return True, ('latch 2: rider ws%d reversed raw %s stamp %s, no candidate inside lin_hop,'
                       ' support %s | %s'
                       % (rider, ln.U(rr[1]), ln.U(rr[0]),
                          ', '.join('ws%d raw %s stamp %s' % (t, ln.U(got[t][1]), ln.U(got[t][0]))
