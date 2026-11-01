@@ -1,18 +1,34 @@
-"""THE 2-DAY CHAIN ON HIS ARM 4: fence 75/25, ladder ws1..ws20, the latch released on lift-off.
+"""THE CHAIN DRIVER. One file, annotated as it changes - his 1101 rule, not a fork per question.
 
-Joe 1030, picking one arm out of the four: *"do this only / 4 / 75/25 / ws1..ws20 / the line's own
-lift-off / -start on 2026-08-29 23:53:55 SHORT, handed in / -print the chain for 2 days: 08-30 and
-08-31 / -show me these legs as timestamped row tables: 08-30 legs 2,4,6 and 08-31 legs 2,4,6 / no
-stats, just the walks and the chain summary"*.
+HIS 1101 INSTRUCTION, verbatim: *"make sure your running the updated script.  remember that you now
+only use one script and annotate changes, instead of building a new script for every update"*. It
+replaced `days_0903.py` and `chain_0903.py`, which each hardcoded their own open and window and had
+begun to drift. Both were deleted on his word *"4 is delete, so long as we don't lose the 08-14
+1407"* - that walk comes from `baton_l2_0814.py`, which this does not touch.
 
-    W_V4_RMOM_FNC=75 W_V4_L2_MOM_MAXTF=20 W_V4_LIN2_EXFNC_LATCH_REL=lift W_V4_EXPERIMENT=1
+EVERYTHING A QUESTION NEEDS IS AN ARGUMENT OR AN ENV VAR, so a new question needs no new file:
 
-All three are off the bank, so the run is an experiment and v4_knobs prints its own deltas. The
-machine's defaults are untouched.
+    W_WIN_START  the window's first bar          default 2026-08-30 00:00:00
+    W_WIN_END    its last bar                    default 2026-08-31 23:59:55
+    W_OPEN       the handed-in open bar          default '' = take it from the lin2-reentry signal
+    W_SIDE       LONG or SHORT, with W_OPEN      default SHORT
+    W_MAE_CAP    'on' turns the 1.1% stop on     default off
+    W_WALKS      'day:leg,day:leg' or 'none'     default the six legs he first asked for
+    W_RESIG      'on' gives a stop its way back  default off - see below
 
-THE OPEN IS HANDED IN, his instruction. The side is NOT derived from price: it comes through the
-signal layer's own two conversions off the lin2-reentry signal at 2026-08-29 23:53:50, the same
-path legs_live.py and the week A/B use.
+THE KNOBS COME FROM THE BANK. Every value this once passed in by hand - the 75/25 fence, the ws30
+ladder, the lift-off latch release - was banked on 1031, so the run needs no W_V4_* overrides and
+the ruled check passes on its own. An override is now an experiment and v4_knobs says so.
+
+THE OPEN IS HANDED IN WHEN W_OPEN IS SET, his instruction on every walk he has named. Without it
+the open comes off the lin2-reentry signal at 2026-08-29 23:53:50, the path legs_live.py and the
+week A/B use. The side is never derived from price.
+
+W_RESIG AND THE STOP. v4_chain.legs goes FLAT at a stop, so a stop needs a way back in. The only
+one wired is v4_sig_lin2_reentry - the ws5Mage reentry - and his 1101 update opens with *"delete
+the current ws5Mage reentry (from spec and code)"*. So W_RESIG defaults OFF: with the stop on and
+no way back in, the chain reports to its FIRST STOP and ends. That is the machine's true state with
+the old reentry deleted and his new one pending. W_RESIG=on restores the old path for an A/B only.
 
 LEGS ARE NUMBERED PER DAY, by the day each leg's own open falls on - that is how he asked for them.
 """
@@ -40,15 +56,18 @@ from v4_backstop_trades import prices
 sys.stderr = _e
 
 T0 = time.time()
-K.LIN2_PSEUDO_MIN_TF = 99          # pseudo-closed is not in this arm - his 1029 bank
-K.LIN2_LATCH_EXFNC_ON = 1          # the per-line ex-fence latch is ON
-K.LIN2_B1_HOLD = 0                 # *"let's use wob 0 until we sweep"*
+#   NOTHING IS FORCED HERE ANY MORE. These three were set by hand when they were off the bank;
+#   all three are now the banked defaults, so setting them would hide a later bank move from the
+#   ruled check. LIN2_PSEUDO_MIN_TF 99, LIN2_LATCH_EXFNC_ON 1 and LIN2_B1_HOLD 0 all come from
+#   v4_knobs.*
 
 #   THE WINDOW IS SETTABLE so the same driver can settle a knob on a wider window without a
 #   second copy of the loop. His 1030: *"settle (sweep) the floor (the control's net%) on a
 #   wider window"*. The open stays the handed-in 2026-08-29 23:53:55 SHORT either way.
 A = ln.K(os.environ.get('W_WIN_START', '2026-08-30 00:00:00'))
 B = ln.K(os.environ.get('W_WIN_END', '2026-08-31 23:59:55'))
+_OPEN_AT = os.environ.get('W_OPEN', '')
+_OPEN_SIDE = +1 if os.environ.get('W_SIDE', 'SHORT').upper() == 'LONG' else -1
 close, phi, plo = prices()
 E = RS.load((RS.K0, RS.R0, RS.S0))
 CL = LL.arm_lines(E)
@@ -57,12 +76,21 @@ B1 = np.asarray(CL['b'], float)
 BD = PX.Board(E, E, MG=MG, MGE=MG, PS=None)
 assert max(MG) == int(K.L2_MOM_MAXTF), 'the Mage ladder top does not match the knob'
 
-SIG = [g for g in L2R.signals(B1, MG) if g['bar'] == ln.K('2026-08-29 23:53:50')]
-assert len(SIG) == 1, ('the 23:53:50 lin2-reentry signal is not in the list at this ladder -'
-                       ' %d matches' % len(SIG))
-OPEN_DIR = SG.direction(int(SIG[0]['side']))
-OPEN = (SG.fire_bar(SIG[0]), SG.target_side(OPEN_DIR))
-assert ln.U(OPEN[0]) == '2026-08-29 23:53:55', 'the handed-in open moved: %s' % ln.U(OPEN[0])
+#   W_OPEN HANDS THE OPEN IN DIRECTLY - a bar and a side, his own route on every walk he names.
+#   Without it the open comes off the 2026-08-29 23:53:50 lin2-reentry signal, which is the path
+#   the banked 2-day numbers were measured on.
+if _OPEN_AT:
+    OPEN_DIR = 'LONG' if _OPEN_SIDE > 0 else 'SHORT'
+    OPEN = (ln.K(_OPEN_AT), _OPEN_SIDE)
+    SIG = None
+    assert ln.U(OPEN[0]) == _OPEN_AT, 'W_OPEN is not a tape bar: %s' % _OPEN_AT
+else:
+    SIG = [g for g in L2R.signals(B1, MG) if g['bar'] == ln.K('2026-08-29 23:53:50')]
+    assert len(SIG) == 1, ('the 23:53:50 lin2-reentry signal is not in the list at this ladder -'
+                           ' %d matches' % len(SIG))
+    OPEN_DIR = SG.direction(int(SIG[0]['side']))
+    OPEN = (SG.fire_bar(SIG[0]), SG.target_side(OPEN_DIR))
+    assert ln.U(OPEN[0]) == '2026-08-29 23:53:55', 'the handed-in open moved: %s' % ln.U(OPEN[0])
 
 #   THE 1.1% STOP, OFF BY DEFAULT. His 1030: *"are you sweeping using mae1.1? that will impact
 #   the results if your sweep"*. It was off in every arm run before this.
@@ -71,7 +99,11 @@ assert ln.U(OPEN[0]) == '2026-08-29 23:53:55', 'the handed-in open moved: %s' % 
 #   cold-starting)"* - and the way back in is the next lin2-reentry signal. Without that list a
 #   stop ENDS the chain, which would read as a shorter chain rather than as a stop.
 CAP = float(K.LIN2_MAE_CAP) if os.environ.get('W_MAE_CAP') == 'on' else None
-RESIG = L2R.signals(B1, MG) if CAP is not None else None
+#   THE WAY BACK IN IS OFF BY DEFAULT since his 1101 update deleted the ws5Mage reentry. With the
+#   stop on and resig None the chain reports to its first stop and ends - the machine's true state
+#   while his new re-entry is pending. W_RESIG=on restores the old path for an A/B only.
+RESIG = (L2R.signals(B1, MG)
+         if (CAP is not None and os.environ.get('W_RESIG') == 'on') else None)
 lg, zero, op = CH.legs(CL, BD, close, phi, plo, A, B, MG=MG, B1=B1, open_at=OPEN,
                        mae_cap=CAP, resig=RESIG)
 
@@ -137,7 +169,13 @@ for x in lg:
     x['day'] = d
     x['nday'] = seen[d]
 
-print('# THE 2-DAY CHAIN - FENCE 75/25, LADDER ws1..ws20, THE LATCH RELEASED ON LIFT-OFF')
+#   EVERY VALUE IN THIS HEADER COMES FROM THE KNOB, none is typed. The old title read
+#   "LADDER ws1..ws20" from when that was the arm, and on 1101 - with L2_MOM_MAXTF banked at 30 and
+#   printed one line below it - Joe read the stale title and said *"I see that ws20 is the maxTF"*.
+#   A hardcoded number in a header outlives the thing it describes.
+print('# THE CHAIN - FENCE %.0f/%.0f, LADDER ws1..ws%d, THE LATCH RELEASED ON %s'
+      % (K.RMOM_FNC, 100.0 - K.RMOM_FNC, K.L2_MOM_MAXTF,
+         str(K.LIN2_EXFNC_LATCH_REL).upper()))
 print('# WINDOW %s .. %s | TAPE %d bars | RULED_OK %s' % (ln.U(A), ln.U(B), len(close), K.RULED_OK))
 print('# RMOM_FNC %.1f -> (%.1f, %.1f) | L2_MOM_MAXTF %d | LIN2_EXFNC_LATCH_REL %r'
       % (K.RMOM_FNC, 100.0 - K.RMOM_FNC, K.RMOM_FNC, K.L2_MOM_MAXTF, K.LIN2_EXFNC_LATCH_REL))
@@ -153,8 +191,13 @@ print('# LIN2_COUNTER_OOB_ON %d - his 1030 *"drop the opposing oob side forced e
       ' ws1b counter-target-side' % K.LIN2_COUNTER_OOB_ON)
 print('#   oob cadence is not produced at all, so no leg can exit on it. Its replacement is'
       ' UNRULED - his own words.')
-print('# the open is %s %s, handed in - the router\'s fire bar off the lin2-reentry signal %s.'
-      % (ln.U(OPEN[0]), OPEN_DIR, ln.U(SIG[0]['bar'])))
+print('# the open is %s %s, handed in - %s'
+      % (ln.U(OPEN[0]), OPEN_DIR,
+         'W_OPEN, his own bar and side' if SIG is None
+         else "the router's fire bar off the lin2-reentry signal %s" % ln.U(SIG[0]['bar'])))
+print('# the way back in after a stop: %s'
+      % ('the ws5Mage reentry, W_RESIG=on - an A/B of a mech his 1101 update deleted'
+         if RESIG else 'NONE - the chain ends at its first stop'))
 print('# the baton fence test reads: %s. the stop is %s. drag %.4f%% per round trip, its own'
       ' column and its own total.'
       % (BD.baton_src(),
@@ -274,8 +317,9 @@ for day, k in WANT:
 print('')
 print('| the read | value |')
 print('|---|---|')
-print('| legs in the chain over the two days | %d |' % len(lg))
-print('| legs opening on 2026-08-30 | %d |' % seen.get('2026-08-30', 0))
-print('| legs opening on 2026-08-31 | %d |' % seen.get('2026-08-31', 0))
-print('| legs opening on 2026-08-29 | %d |' % seen.get('2026-08-29', 0))
+print('| legs in the chain over the window | %d |' % len(lg))
+#   ONE ROW PER DAY THE WINDOW SPANS, not two typed dates. The old pair read
+#   "legs opening on 2026-08-30" and "...08-31" whatever window was passed in.
+for _d in sorted({ln.U(int(x['opn']))[:10] for x in lg}):
+    print('| legs opening on %s | %d |' % (_d, sum(1 for x in lg if x['day'] == _d)))
 print('| seconds to compute | %.1f |' % (time.time() - T0))
