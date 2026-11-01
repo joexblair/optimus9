@@ -133,21 +133,61 @@ def arm_race(CL, BD, side, frm, B):
     fence read in this fork.
     """
     r4 = BD.line(4)                                    # ws4r, the LIVE value via the proxy
-    b1, c1r = np.asarray(CL['b'], float), np.asarray(CL['r'][1], float)
-    c2m, c2r = np.asarray(CL['M'][2], float), np.asarray(CL['r'][2], float)
-    #   cws1b's oob READ THROUGH ITS ONE STATE, so his 1030 dwell reaches the arm as well as the
-    #   cadences. At LIN2_B1_OOB_DWELL 0 and LIN2_B1_HOLD 0 this is K.oob bar for bar and the arm
-    #   does not move - asserted below on the bar it returns.
-    b1o = np.asarray(CAD.b1_beyond(b1, int(side)), bool)
+    c1r, c2r = np.asarray(CL['r'][1], float), np.asarray(CL['r'][2], float)
+    c3r = np.asarray(CL['r'][3], float)
+    c2m = np.asarray(CL['M'][2], float)
+    #   CONDITION 2's b LINE, his 1031 update: *"gcws30b ex=5/95-fence replaces ws1b oob"*. Both
+    #   lines sit in CL so LIN2_ARM_B_LINE picks one here and LIN2_T1_B_LINE picks for t1
+    #   independently.
+    akey = {'ws1b': 'b', 'gcws30b': 'g30b'}[str(K.LIN2_ARM_B_LINE)]
+    b1 = np.asarray(CL[akey], float)
+    newb = akey != 'b'
+    if newb:
+        #   HIS THREE wob-6 USES MAP ONTO THE TWO EDGES `b1_beyond` ALREADY OWNS: *"gcws30b uses a
+        #   wob 6 for both to-oob and to-ib crosses, and for the dwell in ex-95/5-fence"*. The
+        #   to-oob cross hold and the dwell beyond the fence are the SAME 6 bars - a cross that
+        #   holds 6 bars past the fence IS a 6-bar dwell - so the entry takes 6 and the return
+        #   takes 6. If he means three independent counts, the third needs its own knob.
+        aw = max(1, int(K.LIN2_ARM_B_WOB))
+        alo, ahi = 100.0 - float(K.LIN2_ARM_B_FNC), float(K.LIN2_ARM_B_FNC)
+        b1o = np.asarray(CAD.b1_beyond(b1, int(side), hold=aw, dwell=aw,
+                                       mask=K.beyond_mask(b1, int(side), alo, ahi)), bool)
+    else:
+        #   cws1b's oob READ THROUGH ITS ONE STATE, so his 1030 dwell reaches the arm as well as
+        #   the cadences. At LIN2_B1_OOB_DWELL 0 and LIN2_B1_HOLD 0 this is K.oob bar for bar.
+        alo, ahi, aw = K.OOB_LO, K.OOB_HI, int(K.LIN2_CROSS_WOB)
+        b1o = np.asarray(CAD.b1_beyond(b1, int(side)), bool)
+    w3 = bool(int(K.LIN2_ARM_WS3R_ON))
     for k in range(int(frm), int(B) + 1):
         if K.oob(r4[k], side):
             return k, 'ws4r', 'ws4r %.2f oob' % r4[k]
-        if b1o[k] and K.oob(c1r[k], side):
-            assert int(K.LIN2_B1_OOB_DWELL) > 1 or int(K.LIN2_B1_HOLD) > 1 \
+        #   HIS 1031 ARM: the b line beyond its own fence, AND at least one r line oob. His
+        #   revision, verbatim: *"(ws1r or ws2r) + gcws30b"* - the r lines are an OR, not the
+        #   conjunction his first wording read as. ws3r joins the SAME OR group at
+        #   LIN2_ARM_WS3R_ON, because that is where his "add ws3r to the existing ws1r oob" puts
+        #   it once the group is an OR.
+        #   THE PRE-1031 ws1b ARM IS UNTOUCHED: it is ws1b oob AND ws1r oob, no OR and no ws2r.
+        rgrp = (K.oob(c1r[k], side) or K.oob(c2r[k], side)
+                or (w3 and K.oob(c3r[k], side))) if newb else K.oob(c1r[k], side)
+        if b1o[k] and rgrp:
+            assert newb or int(K.LIN2_B1_OOB_DWELL) > 1 or int(K.LIN2_B1_HOLD) > 1 \
                 or K.oob(b1[k], side), \
                 'ws1b arms off its held state with both knobs at the plain read'
-            return k, 'ws1b+ws1r', ('ws1b %.2f + ws1r %.2f oob, ws1b dwell %d'
-                                      % (b1[k], c1r[k], K.LIN2_B1_OOB_DWELL))
+            assert not newb or (float(b1[k]) >= ahi or float(b1[k]) <= alo) \
+                or aw > 1, 'the arm b line is inside its fence on the bar it armed'
+            nm = ('%s+(ws1r|ws2r%s)' % (K.LIN2_ARM_B_LINE, '|ws3r' if w3 else '')
+                  if newb else 'ws1b+ws1r')
+            if newb:
+                oo = [n for n, v in (('ws1r', c1r[k]), ('ws2r', c2r[k]))
+                      + ((('ws3r', c3r[k]),) if w3 else ()) if K.oob(v, side)]
+                why = ('%s %.2f at or beyond the %.1f/%.1f fence, held %d bars, + %s oob'
+                       ' (ws1r %.2f, ws2r %.2f%s)'
+                       % (K.LIN2_ARM_B_LINE, b1[k], alo, ahi, aw, ' and '.join(oo),
+                          c1r[k], c2r[k], ', ws3r %.2f' % c3r[k] if w3 else ''))
+            else:
+                why = ('ws1b %.2f + ws1r %.2f oob, ws1b dwell %d'
+                       % (b1[k], c1r[k], K.LIN2_B1_OOB_DWELL))
+            return k, nm, why
         if K.oob(c2m[k], side) and K.oob(c2r[k], side):
             return k, 'ws2Mage+ws2r', 'ws2Mage %.2f + ws2r %.2f oob' % (c2m[k], c2r[k])
     return None, None, 'no arm to the window end'
@@ -254,15 +294,24 @@ def arm_retest(CL, side, arm, B):
                   % (c1r[k], c2r[k], c3r[k], ln.U(cross), K.LIN2_CROSS_WOB, ln.U(conf)))
 
 
-def rider_at(BD, side, bar, lo=1, hi=None):
+def rider_at(BD, side, bar, lo=1, hi=None, cur=None, at_cadence=True):
     """The highest ws{TF}r that is ex-fence at `bar`. -> tf or None.
 
         --scan ws{1 to v4_mom_maxTF} for the highest ws{TF}r ex-fence, and make that TF the rider
     """
     hi = int(K.L2_MOM_MAXTF) if hi is None else int(hi)
+    #   HIS 1031 JUMP BOUND. At LIN2_RIDER_JUMP 0 nothing is bounded and this is the pre-1031 scan.
+    #   `cur` is the rider the walk holds now; his *"arm starts with rider=0"* makes the first
+    #   cadence scan ws1..ws{0 + jump}.
+    j = int(K.LIN2_RIDER_JUMP)
+    if j > 0:
+        hi = min(hi, int(0 if cur is None else cur) + j)
     #   A BATON-PASSING CONSUMER, so the fence test goes through `baton_ex_fence` - his 1029
     #   ruling. With LIN2_LATCH_EXFNC_ON 0 that call IS `ex_fence` and this line is unchanged.
-    got = [t for t in range(int(lo), hi + 1) if t in BD.tfs and BD.baton_ex_fence(t, bar, side)]
+    #   `at_cadence` admits his 1031 re-latch; every caller of this reads at a cadence marker or at
+    #   the arm, and the arm is the walk's own origin marker.
+    got = [t for t in range(int(lo), hi + 1)
+           if t in BD.tfs and BD.baton_ex_fence(t, bar, side, at_cadence=at_cadence)]
     return max(got) if got else None
 
 
@@ -272,7 +321,7 @@ def _nrs(rider_since, arm):
     return None if m == 0 else (int(rider_since) if m == 1 else int(arm))
 
 
-def candidates(BD, side, bar, rider, cap=None, not_rev_since=None):
+def candidates(BD, side, bar, rider, cap=None, not_rev_since=None, at_cadence=False):
     """Baton-pass candidates above `rider` at `bar`. -> [tf], lowest first.
 
         -baton can only be received by an r line that is 1) ex v4mom-fnc and 2) tagged as `towards`
@@ -290,17 +339,37 @@ def candidates(BD, side, bar, rider, cap=None, not_rev_since=None):
     #   A BATON-PASSING CONSUMER - `baton_ex_fence`, his 1029 ruling. `towards` is a trajectory
     #   read, not a fence test, so it is untouched.
     out = [t for t in range(int(rider) + 1, top + 1)
-           if t in BD.tfs and BD.baton_ex_fence(t, bar, side) and towards(BD, t, bar, side)]
+           if t in BD.tfs and BD.baton_ex_fence(t, bar, side, at_cadence=at_cadence)
+           and towards(BD, t, bar, side)]
     if not_rev_since is None or not out:
         return out
     keep = []
     for t in out:
-        revs = [int(b) + max(1, int(K.LIN2_REV_WOB)) - 1
-                for b in lift_off(BD.E[int(t)], int(side), K.LIFT_PTS, K.gap_for(int(t)),
-                                  K.LIFT_TOL, int(K.LIN2_REV_WOB))]
+        revs = [st for _raw, st in _rev_pairs(BD, t, side)]
         if not any(int(not_rev_since) < st <= int(bar) for st in revs):
             keep.append(t)
     return keep
+
+
+_RV = {}
+
+
+def _rev_pairs(BD, tf, side):
+    """ws{tf}r's reversals on `side`, EMERGING. -> [(the raw lift-off bar, its stamp)].
+
+    ONE HOME for lineage2's reversal stamp. `candidates` had this inline and `_pass_bars` now needs
+    the same bars for LIN2_PASS, so a second copy would be two answers to one question.
+
+    THE WOB IS LIN2_REV_WOB 12, his 1026 static. The stamp is raw + wob - 1, which is the last bar
+    of the hold and the first bar a consumer may act on; the raw bar is the anchor and the identity.
+    """
+    key = (id(BD), int(tf), int(side), int(K.LIN2_REV_WOB))
+    if key not in _RV:
+        w = max(1, int(K.LIN2_REV_WOB))
+        _RV[key] = [(int(b), int(b) + w - 1)
+                    for b in lift_off(BD.E[int(tf)], int(side), K.LIFT_PTS,
+                                      K.gap_for(int(tf)), K.LIFT_TOL, w)]
+    return _RV[key]
 
 
 _PB = {}
@@ -314,8 +383,33 @@ def _pass_bars(BD, tf, side, frm, B):
     """
     #   CACHED OVER THE WHOLE TAPE, then sliced. The uncached form rebuilt `oob_ib_cross` over
     #   1.6M bars on every call, and the bar-loop walk calls it once per bar.
-    key = (id(BD), int(tf), int(side), BD.baton_src())
+    assert K.LIN2_PASS in ('ib', 'reversal', 'reversal+quarter'), \
+        'LIN2_PASS %r is not a mode' % (K.LIN2_PASS,)
+    key = (id(BD), int(tf), int(side), BD.baton_src(), K.LIN2_PASS)
     if key not in _PB:
+        #   HIS 1031 MODES. 'reversal' and 'reversal+quarter' REPLACE both rules below - he said
+        #   "swaps ib with reversal", so the pass bar becomes the rider's own reversal and neither
+        #   the oob->ib cross nor the latch release produces one. THE LATCH IS STILL LIVE: it gates
+        #   every candidate through `baton_ex_fence`, which is a different read from this one.
+        if K.LIN2_PASS != 'ib':
+            pr = _rev_pairs(BD, tf, side)
+            if K.LIN2_PASS == 'reversal':
+                r = [st for _raw, st in pr]
+            else:
+                #   THE LATER BAR WINS, his banked stamp rule: a new stamp rule is additive and
+                #   takes max(), never swaps. At a low TF the quarter is SHORTER than the wob, so
+                #   without the max the pass would land before the reversal was knowable.
+                q = int(K.lin2_quarter_tf(tf))
+                r = [max(int(st), int(raw) + q) for raw, st in pr]
+            n = len(BD.line(tf))
+            r = sorted(set(x for x in r if 0 <= x < n))
+            assert all(x >= min(st for _w, st in pr) for x in r) if pr else True, \
+                'a pass bar precedes every reversal stamp on this line'
+            _PB[key] = (np.array(r, dtype=int), set(r), set())
+            arr = _PB[key][0]
+            i = int(np.searchsorted(arr, int(frm)))
+            j = int(np.searchsorted(arr, int(B), side='right'))
+            return [int(x) for x in arr[i:j]]
         v = BD.line(tf)
         w = max(1, int(K.LIN2_CROSS_WOB))
         #   RULE 1, oob -> ib, WITH WOB 12 - Joe 1027. The pass bar is the cross's CONFIRM bar,
@@ -357,11 +451,20 @@ def pass_why(BD, tf, side, bar):
     BOTH CARRY LIN2_CROSS_WOB 12 since 1027, so the bar reported is the last bar of the hold, not
     the cross itself. Reads the same cache `_pass_bars` built, so the two can never disagree.
     """
-    key = (id(BD), int(tf), int(side))
+    #   THE KEY MUST MATCH `_pass_bars`' KEY. It was a 3-tuple against that function's 4-tuple,
+    #   so the lookup below raised KeyError on the first call. Nothing called it, so nothing broke.
+    key = (id(BD), int(tf), int(side), BD.baton_src(), K.LIN2_PASS)
     if key not in _PB:
         _pass_bars(BD, tf, side, 0, 0)
     _arr, a, b = _PB[key]
     hit = []
+    if K.LIN2_PASS == 'reversal':
+        return ('ws%d reversed, wob %d bars' % (int(tf), K.LIN2_REV_WOB)
+                if int(bar) in a else 'not a pass bar')
+    if K.LIN2_PASS == 'reversal+quarter':
+        return ('ws%d reversed, then a quarter of its width - %d bars = %d s'
+                % (int(tf), K.lin2_quarter_tf(tf), K.lin2_quarter_tf(tf) * 5)
+                if int(bar) in a else 'not a pass bar')
     if int(bar) in a:
         hit.append('oob -> ib, held %d bars' % K.LIN2_CROSS_WOB)
     if int(bar) in b:
@@ -419,15 +522,23 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
         if v is not None and ((v > 0 and int(side) > 0) or (v < 0 and int(side) < 0)):
             return 'DIV REV-TRADE', int(arm), rows
 
-    rider = rider_at(BD, side, arm)
+    #   HIS 1031 RULE: *"arm starts with rider=0"*. At LIN2_RIDER_JUMP 0 the arm scans as it
+    #   always did; with the bound on, the arm assigns nothing and the first cadence does the work.
+    rider = None if int(K.LIN2_RIDER_JUMP) > 0 else rider_at(BD, side, arm)
     rider_since = int(arm)                             # the bar the CURRENT rider took the baton
     if rider is None:
         #   HIS 1026 RULING: this no longer ends the walk - *"drop the rider gate for t3 and t4"*
-        row(bar=arm + 1, stage='NO RIDER', why='no ws1..ws%d r is ex-fence at the arm bar + 5s -'
-                                               ' the walk continues, t3 and t4 stay reachable'
-                                               % K.L2_MOM_MAXTF)
+        row(bar=arm + 1, stage='NO RIDER',
+            why=('the arm starts with rider 0 - his 1031 rule, jump bound %d TFs'
+                 % int(K.LIN2_RIDER_JUMP)) if int(K.LIN2_RIDER_JUMP) > 0 else
+                ('no ws1..ws%d r is LATCHED at the arm bar + 5s - the walk continues, t3 and t4'
+                 ' stay reachable' % K.L2_MOM_MAXTF))
     else:
-        row(bar=arm, stage='RIDER', why='ws%d r %.2f, the highest ex-fence'
+        #   "LATCHED", NOT "ex-fence". Joe 1031: *"label them as "latched" and print the current
+#   value"*. The scan reads `baton_ex_fence`, which at LIN2_LATCH_EXFNC_ON 1 is the LATCH; a
+#   latched line's value can sit inside the fence, and he caught this row claiming otherwise at
+#   ws30 25.67 against a 25.0 fence.
+        row(bar=arm, stage='RIDER', why='ws%d LATCHED, r %.2f - the highest latched rung'
                                         % (rider, BD.value(rider, arm)), rider=rider)
 
     #   v4-arm-lineage-retest. While the gate is open nothing else decides, so the walk starts at
@@ -439,17 +550,19 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
         rt, rt_why = arm_retest(CL, side, arm, B)
         row(bar=arm, stage='RETEST', why=rt_why)
         if rt is not None:
-            nr = rider_at(BD, side, rt)                # RULING 6: re-scan and ride the highest
+            #   THE BOUND APPLIES HERE TOO - the gate's bar IS a cadence marker. He has not
+            #   ruled it either way; stated, not decided quietly.
+            nr = rider_at(BD, side, rt, cur=rider)     # RULING 6: re-scan and ride the highest
             if nr is None:
                 #   HIS OWN SPEC LINE, reached at the gate's cadence instead of at the arm:
                 #   *"IF no rider is assigned ... the walk ends. pass to router for a rev-trade"*.
                 row(bar=rt, stage='EXHAUST',
-                    why='v4-arm-lineage-retest: no ws1..ws%d r is ex-fence at the gate cadence -'
+                    why='v4-arm-lineage-retest: no ws1..ws%d r is LATCHED at the gate cadence -'
                         ' the walk ends' % K.L2_MOM_MAXTF, rider=rider, ctype='retest')
                 return 'EXHAUST', int(rt), rows
             row(bar=rt, stage='RIDER',
-                why='v4-arm-lineage-retest: the re-scan rides ws%d %.2f, the highest ex-fence'
-                    % (nr, BD.value(nr, rt)), rider=nr, ctype='retest')
+                why='v4-arm-lineage-retest: the re-scan rides ws%d LATCHED, r %.2f - the highest'
+                    ' latched rung' % (nr, BD.value(nr, rt)), rider=nr, ctype='retest')
             rider, start = int(nr), int(rt)
             #   THE GATE'S CADENCE JOINS THE REVIEW LIST. Joe 1030, shown that the board review
             #   never ran at 2026-08-30 22:02:55 and that his own spec line
@@ -510,8 +623,11 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
                 + (CAD.counter_oob(CL, side, arm, B) if int(K.LIN2_COUNTER_OOB_ON) else [])
                 + (CAD.barrage(BD, side, arm, B) if int(K.LIN2_BARRAGE_ON) else [])
                 + ([gate_cad] if gate_cad is not None else []))
+    #   HIS 1031 FILTER. LIN2_CAD_TYPES 'all' is the bank and changes nothing; a type list keeps
+    #   only those cadences in the review list. The mechs still RAN - their own ON knobs own that -
+    #   so a barrage that fired is still a barrage, it just does not get to decide here.
     for b, ty, w in produced:
-        if b >= start:
+        if b >= start and K.cad_allowed(ty):
             fixed.setdefault(int(b), []).append((ty, w))
     t3_on, lat_on, last = False, False, int(start)
     #   t3's population is measured SINCE THE ARM - his 1026 ruling *"tested since the arm"* - so
@@ -559,7 +675,7 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
             t3.advance(bar)
             if rider is not None:
                 ok, t3why = t3.at(bar, rider)
-                if ok and not t3_on:
+                if ok and not t3_on and K.cad_allowed('t3'):
                     here.append(('t3', t3why))
                 t3_on = ok
         #   LATCH 1 reads at every cadence bar - his *"2, at the cadence bar"*. It is armed
@@ -576,7 +692,7 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
             cap2 = int(rider) + int(K.L2_LIN_HOP)
             ok2, w2 = lat.at(bar, rider,
                              lambda: candidates(BD, side, bar, rider, cap=cap2))
-            if ok2 and not lat_on:
+            if ok2 and not lat_on and K.cad_allowed('latch'):
                 here.append(('latch', w2))
             lat_on = ok2
         elif lat_on:
@@ -619,15 +735,35 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
                 mv = cascade_at(bar)
                 lng = int(side) > 0                    # target side HIGH is a LONG
                 if (mv == 'up' and not lng) or (mv == 'down' and lng):
-                    #   THE KNOB IS NARROWED TO THE cws1b COUNTER-OOB CADENCE, Joe 1027:
-                    #   *"narrow it - applies only to cws1b counter oob"*. Every other cadence
-                    #   type always rev-trades on a mismatch.
-                    act = (str(K.LIN2_MISMATCH_ACTION) if ctype == 'ws1b counter-oob'
-                           else 'rev-trade')
-                    row(bar=bar, stage='EXHAUST', rider=rider, ctype=ctype, mismatch=True,
-                        why='%s %s | mage-cascade %s OPPOSES the %s - %s'
-                            % (ctype, cwhy, mv, 'LONG' if lng else 'SHORT', act))
-                    return ('CLOSE ONLY' if act == 'close-only' else 'EXHAUST'), int(bar), rows
+                    #   HIS 1030 GATE, in front of the reversal and nowhere else. A baton-pass
+                    #   candidate anywhere in ws1..ws{LIN2_CASC_REV_GATE_HI} means a fast line is
+                    #   still past the fence AND still `towards`, so the trade has a lead running
+                    #   and the cascade's reversal is NOT honoured - the bar falls through to the
+                    #   board review below.
+                    #   THE RANGE IS NOT THE BATON'S. `candidates` scans UPWARD from the rung it is
+                    #   handed, so rider 0 with the cap at ws4 asks about rungs the baton would
+                    #   never reach. His word on that reading: *"agreed - that's my design"*.
+                    gcd = (candidates(BD, side, bar, 0, cap=int(K.LIN2_CASC_REV_GATE_HI),
+                                      at_cadence=True)
+                           if int(K.LIN2_CASC_REV_GATE_ON) else ())
+                    if gcd:
+                        row(bar=bar, stage='CASCADE GATED', rider=rider, ctype=ctype,
+                            why=('%s %s | mage-cascade %s OPPOSES the %s, but ws1..ws%d still'
+                                 ' offer %s - the reversal is NOT honoured, the board decides'
+                                 % (ctype, cwhy, mv, 'LONG' if lng else 'SHORT',
+                                    K.LIN2_CASC_REV_GATE_HI,
+                                    ', '.join('ws%d %.2f' % (t, BD.value(t, bar)) for t in gcd))))
+                    else:
+                        #   THE KNOB IS NARROWED TO THE ws1b COUNTER-OOB CADENCE, Joe 1027:
+                        #   *"narrow it - applies only to cws1b counter oob"*. Every other cadence
+                        #   type always rev-trades on a mismatch.
+                        act = (str(K.LIN2_MISMATCH_ACTION) if ctype == 'ws1b counter-oob'
+                               else 'rev-trade')
+                        row(bar=bar, stage='EXHAUST', rider=rider, ctype=ctype, mismatch=True,
+                            why='%s %s | mage-cascade %s OPPOSES the %s - %s'
+                                % (ctype, cwhy, mv, 'LONG' if lng else 'SHORT', act))
+                        return ('CLOSE ONLY' if act == 'close-only'
+                                else 'EXHAUST'), int(bar), rows
                 if ((mv == 'up' and lng) or (mv == 'down' and not lng)) \
                         and ctype != 'ws1b counter-oob':
                     row(bar=bar, stage='NO ACTION', rider=rider, ctype=ctype,
@@ -636,7 +772,7 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
                     last = int(bar)
                     continue
             if rider is None:
-                got = candidates(BD, side, bar, 0)
+                got = candidates(BD, side, bar, 0, at_cadence=True)
                 if got:
                     rider = max(got)
                     last = int(bar)
@@ -691,7 +827,22 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
             revd = BD.reversed_in(rider, side, last, bar)  # TIMING: emerging, via the proxy
             #   HIS 1026 RULING: only t1 and t2 lift lin_hop
             cap = None if ctype in ('t1', 't2') else rider + int(K.L2_LIN_HOP)
-            got = candidates(BD, side, bar, rider, cap=cap,
+            #   HIS 1031 JUMP BOUND APPLIES HERE. *"at a cadence marker, the rider TF can only jump
+            #   by {knob:8} TFs"* - and a baton pass at a cadence IS the rider advancing. The first
+            #   build left this cap at None on a t1 and he caught it: *"this broke the max-jump
+            #   rule"* on ws7 -> ws27, a jump of 20.
+            #   IT DOES NOT CANCEL THE 1026 LIFT. lin_hop 2 still does not bind at a t1, because 8
+            #   is wider than 2; the bound replaces the UNBOUNDED ceiling, not the lift.
+            #   BETWEEN CADENCES IT NEVER BINDS: lin_hop 2 is already tighter than 8, and his rule
+            #   names a cadence marker.
+            capsrc = 'the whole board' if cap is None else 'lin_hop %d' % K.L2_LIN_HOP
+            if int(K.LIN2_RIDER_JUMP) > 0:
+                jcap = int(rider) + int(K.LIN2_RIDER_JUMP)
+                if cap is None or jcap <= int(cap):
+                    cap, capsrc = jcap, 'the jump bound %d' % K.LIN2_RIDER_JUMP
+            #   at_cadence TRUE: this IS the cadence's own candidate scan, where his 1031
+            #   re-latch is allowed to speak. The between-cadences scan above is not.
+            got = candidates(BD, side, bar, rider, cap=cap, at_cadence=True,
                              not_rev_since=_nrs(rider_since, arm))
             row(bar=bar, stage='CADENCE',
                 why='%s %s | rider ws%d %.2f, no-longer-exfence %s, reversed %s | mage-cascade %s'
@@ -703,7 +854,10 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
                     why='ws%d -> ws%d, at a %s cadence, %s'
                         % (rider, max(got), ctype,
                            'whole board' if cap is None
-                           else 'capped at ws%d by lin_hop %d' % (cap, K.L2_LIN_HOP)),
+                           else 'capped at ws%d by %s%s'
+                                % (cap, capsrc,
+                                   ' - past the ws%d ladder top, so it does not bind'
+                                   % K.L2_MOM_MAXTF if int(cap) > int(K.L2_MOM_MAXTF) else '')),
                     rider=rider, to=max(got), cands=tuple(got), cap=cap, ctype=ctype)
                 rider = max(got)
                 rider_since = int(bar)
@@ -719,12 +873,40 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
                     rider=rider)
                 last = int(bar)
                 continue
+            #   HIS 1031 TRICK, IN FRONT OF THE EXHAUST: *"when ws30 exhausts, set the rider to
+            #   zero and test for baton pass candidates (same logic, max jump = 8 TFs)"*. The
+            #   trigger is the LADDER TOP - his ws30 IS L2_MOM_MAXTF on that walk and there is
+            #   nowhere above it to pass to; the rung-to-condition step is mine and stated.
+            #   NO LIMIT ON REPEATS: he named none, so a rider that climbs back to the top and
+            #   exhausts again resets again.
+            if int(K.LIN2_TOP_RESET_ON) and int(rider) >= int(K.L2_MOM_MAXTF):
+                rcap = int(K.LIN2_RIDER_JUMP) or None
+                rgot = candidates(BD, side, bar, 0, cap=rcap, at_cadence=True)
+                if rgot:
+                    row(bar=bar, stage='TOP RESET', rider=rider, to=max(rgot),
+                        cands=tuple(rgot), cap=rcap, ctype=ctype,
+                        why='ws%d %.2f is the ladder top and exhausted - the rider resets to 0 and'
+                            ' re-scans%s, taking ws%d'
+                            % (rider, rv,
+                               '' if rcap is None else ' capped at ws%d by the jump bound' % rcap,
+                               max(rgot)))
+                    rider = max(rgot)
+                    rider_since = int(bar)
+                    last = int(bar)
+                    continue
+                row(bar=bar, stage='TOP RESET EMPTY', rider=rider, cands=(), cap=rcap,
+                    ctype=ctype,
+                    why='ws%d %.2f is the ladder top and exhausted - the rider reset to 0 found no'
+                        ' candidate%s' % (rider, rv,
+                                          '' if rcap is None
+                                          else ' at or below ws%d' % rcap))
             #   t4cadence: a non-oob rider that reversed with nowhere to pass
             tag = 't4' if (revd and not BD.baton_oob(rider, bar, side)) else 'exhaust'
             row(bar=bar, stage='EXHAUST',
                 why='%s at a %s cadence - rider ws%d %.2f, no candidate %s'
                     % (tag, ctype, rider, rv,
-                       'on the whole board' if cap is None else 'inside lin_hop %d' % K.L2_LIN_HOP),
+                       'on the whole board' if cap is None
+                       else 'at or below ws%d (%s)' % (cap, capsrc)),
                 rider=rider, cap=cap, ctype=ctype)
             return 'EXHAUST', int(bar), rows
 

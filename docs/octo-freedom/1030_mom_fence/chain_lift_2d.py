@@ -44,7 +44,11 @@ K.LIN2_PSEUDO_MIN_TF = 99          # pseudo-closed is not in this arm - his 1029
 K.LIN2_LATCH_EXFNC_ON = 1          # the per-line ex-fence latch is ON
 K.LIN2_B1_HOLD = 0                 # *"let's use wob 0 until we sweep"*
 
-A, B = ln.K('2026-08-30 00:00:00'), ln.K('2026-08-31 23:59:55')
+#   THE WINDOW IS SETTABLE so the same driver can settle a knob on a wider window without a
+#   second copy of the loop. His 1030: *"settle (sweep) the floor (the control's net%) on a
+#   wider window"*. The open stays the handed-in 2026-08-29 23:53:55 SHORT either way.
+A = ln.K(os.environ.get('W_WIN_START', '2026-08-30 00:00:00'))
+B = ln.K(os.environ.get('W_WIN_END', '2026-08-31 23:59:55'))
 close, phi, plo = prices()
 E = RS.load((RS.K0, RS.R0, RS.S0))
 CL = LL.arm_lines(E)
@@ -60,7 +64,16 @@ OPEN_DIR = SG.direction(int(SIG[0]['side']))
 OPEN = (SG.fire_bar(SIG[0]), SG.target_side(OPEN_DIR))
 assert ln.U(OPEN[0]) == '2026-08-29 23:53:55', 'the handed-in open moved: %s' % ln.U(OPEN[0])
 
-lg, zero, op = CH.legs(CL, BD, close, phi, plo, A, B, MG=MG, B1=B1, open_at=OPEN)
+#   THE 1.1% STOP, OFF BY DEFAULT. His 1030: *"are you sweeping using mae1.1? that will impact
+#   the results if your sweep"*. It was off in every arm run before this.
+#   IT NEEDS THE SIGNAL LIST. v4_chain.legs goes FLAT at a stop - his own first line for
+#   lin2-reentry is *"there is no trade open (either because of a STOP, or because the machine is
+#   cold-starting)"* - and the way back in is the next lin2-reentry signal. Without that list a
+#   stop ENDS the chain, which would read as a shorter chain rather than as a stop.
+CAP = float(K.LIN2_MAE_CAP) if os.environ.get('W_MAE_CAP') == 'on' else None
+RESIG = L2R.signals(B1, MG) if CAP is not None else None
+lg, zero, op = CH.legs(CL, BD, close, phi, plo, A, B, MG=MG, B1=B1, open_at=OPEN,
+                       mae_cap=CAP, resig=RESIG)
 
 #   ── the report's columns, his format ───────────────────────────────────────────────────────
 CADENCE_TYPES = ('t1', 't2', 'barrage', 'ws1b counter-oob', 'retest')
@@ -142,8 +155,12 @@ print('#   oob cadence is not produced at all, so no leg can exit on it. Its rep
       ' UNRULED - his own words.')
 print('# the open is %s %s, handed in - the router\'s fire bar off the lin2-reentry signal %s.'
       % (ln.U(OPEN[0]), OPEN_DIR, ln.U(SIG[0]['bar'])))
-print('# the baton fence test reads: %s. the 1.1%% stop is OFF. drag %.4f%% per round trip,'
-      ' its own column and its own total.' % (BD.baton_src(), CH.DRAG_PCT))
+print('# the baton fence test reads: %s. the stop is %s. drag %.4f%% per round trip, its own'
+      ' column and its own total.'
+      % (BD.baton_src(),
+         'OFF' if CAP is None else ('ON at LIN2_MAE_CAP %.2f%%, with %d lin2-reentry signals as the'
+                                    ' way back in' % (CAP, len(RESIG or ()))),
+         CH.DRAG_PCT))
 print('# ts is the bar. pxs is that bar\'s close unless the row names an extreme. pct is signed to'
       ' THIS leg.')
 print('# baton candidates: every candidate timeframe offered at that bar with its value.'
@@ -193,7 +210,9 @@ if zero:
 #   WHICH WALKS TO PRINT, settable so a question about one leg does not need a code edit.
 #   W_WALKS='2026-08-31:5,2026-08-30:13' prints those two. Unset is the six he first asked for.
 _w = os.environ.get('W_WALKS', '')
-if _w:
+if _w == 'none':
+    WANT = []          # the summary only - a sweep arm has no use for the row traces
+elif _w:
     WANT = [(p.split(':')[0], int(p.split(':')[1])) for p in _w.split(',') if p.strip()]
 else:
     WANT = [('2026-08-30', 2), ('2026-08-30', 4), ('2026-08-30', 6),

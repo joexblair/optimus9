@@ -95,7 +95,7 @@ def walk(R, start_tf, side, A, B, log=print):
     and "reverses later" are the same observation and only the future separates them.
     """
     REV, RUN, ST = {}, {}, {}
-    for t in range(start_tf, K.TF_CEILING + 3):
+    for t in range(start_tf, K.TF_CEILING + 1):
         RUN[t], REV[t], ST[t] = first_rev_at_or_after(R, t, side, A, B)
     rows = []
 
@@ -103,7 +103,8 @@ def walk(R, start_tf, side, A, B, log=print):
         rows.append((step, bar, read))
         log('| %s | %s | %s |' % (step, bar, read))
 
-    assert K.LIN_PASS in ('ib', 'reversal'), 'LIN_PASS %r is not a mode' % (K.LIN_PASS,)
+    assert K.LIN_PASS in ('ib', 'reversal', 'reversal+quarter'), \
+        'LIN_PASS %r is not a mode' % (K.LIN_PASS,)
 
     def hand_over(tf):
         """The bar the baton leaves `tf` on, and the row that explains it. -> bar or None."""
@@ -111,6 +112,18 @@ def walk(R, start_tf, side, A, B, log=print):
             say('the baton passes ON ws%d reversing' % tf, ln.U(ST[tf]),
                 'his 1022 rule - no ib walk on the normal path')
             return ST[tf]
+        if K.LIN_PASS == 'reversal+quarter':
+            d = K.lin_quarter_tf(tf)
+            bar = max(int(ST[tf]), int(REV[tf]) + d)
+            assert bar >= int(ST[tf]), 'the quarter-width pass precedes the reversal stamp'
+            if bar > B:
+                say('ws%d quarter-width pass lands past the tape' % tf, '-',
+                    'raw %s + %d bars - the chain cannot advance' % (ln.U(REV[tf]), d))
+                return None
+            say('the baton passes a quarter of ws%d after it reverses' % tf, ln.U(bar),
+                'raw %s + %d bars = %d s; knowable %s, the later bar wins'
+                % (ln.U(REV[tf]), d, d * 5, ln.U(ST[tf])))
+            return bar
         cross, pas, held = ib_cross(R, tf, ST[tf], B)
         if pas is None:
             say('ws%d never crosses to ib' % tf, '-', 'the chain cannot advance')
@@ -201,13 +214,18 @@ def walk(R, start_tf, side, A, B, log=print):
 if __name__ == '__main__':
     A, B = ln.K(sys.argv[1]), ln.K(sys.argv[2])
     tf, side = int(sys.argv[3]), (1 if sys.argv[4] == 'high' else -1)
-    R = {t: ln.line('ws%dr' % t) for t in range(tf, K.TF_CEILING + 3)}
+    # TF_CEILING + 1, not + 3: every path returns EXHAUST before reading a rung above the
+    # ceiling, and only ws1r..ws30r exist on disk, so + 3 cannot be built at TF_CEILING 30.
+    R = {t: ln.line('ws%dr' % t) for t in range(tf, K.TF_CEILING + 1)}
     print('# control ws5r 2026-09-03 00:35:00 = %.2f (DB-ruled known-good 12.48; the BANKED k6 rsi8 stc6 line reads 6.77 there)'
           % ln.line('ws5r')[ln.K('2026-09-03 00:35:00')])
     print('# RULED_OK %s. ib dwell int(TF x %.1f), oob %.1f/%.1f, ex-fence %s, ceiling ws%d'
           % (K.RULED_OK, K.LIN_IB_DWELL, K.OOB_LO, K.OOB_HI, K.fence(), K.TF_CEILING))
     print('# the reversal stamp adds LIFT_WOB - 1 = %d bars = %d s to every lift-off bar'
           % (K.LIFT_WOB - 1, (K.LIFT_WOB - 1) * 5))
+    print('# the baton passes on %r. quarter width = %.2f x TF x 12 bars: ws22 -> %d bars = %d s'
+          % (K.LIN_PASS, K.LIN_PASS_QUARTER, K.lin_quarter_tf(22), K.lin_quarter_tf(22) * 5))
+    print('# A %s  B %s (the last tape bar, no end bound applied)' % (ln.U(A), ln.U(B)))
     print()
     print('| the step | the bar | the reading |')
     print('|---|---|---|')

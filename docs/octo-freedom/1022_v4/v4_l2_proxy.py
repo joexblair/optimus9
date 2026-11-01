@@ -196,8 +196,13 @@ class Board:
             assert self.mage_em is not None, \
                 'the ex-fence latch needs the EMERGING Mage ladder - the barrage read is its release'
             n = len(self._state(self.tfs[0]))
+            #   `int(side)`, NOT `key`. The cache key carries RMOM_FNC so a fence move cannot
+            #   serve a stale release set, but `barrage` takes the SIDE. Passing the key reached
+            #   `int(side)` inside barrage_candidates as a tuple and raised TypeError, which made
+            #   the BANKED latch-release arm unrunnable; only the 'lift' arm, which never calls
+            #   this, was being exercised.
             self._rel[key] = np.array(sorted(int(r[0]) for r in
-                                             CAD.barrage(self, key, 0, n - 1)), dtype=int)
+                                             CAD.barrage(self, int(side), 0, n - 1)), dtype=int)
         return self._rel[key]
 
     @staticmethod
@@ -226,13 +231,18 @@ class Board:
         ON at an ex-fence cross confirmed over LIN2_EXFNC_LATCH_WOB bars, both arms.
 
         WHAT RELEASES IT IS LIN2_EXFNC_LATCH_REL:
-            'bank'  a barrage on that side, or an opposite-side ex-fence cross confirmed over the
-                    same hold. His 1029 mech and the arm every banked number was measured on.
             'lift'  the latched line's own lift-off on the SAME side, stamped at
-                    lift + LIFT_WOB - 1, and nothing else. His 1030 proposal; the three choices
-                    inside it are mine and are listed at the knob's declaration.
+                    lift + LIFT_WOB - 1, and nothing else. THE SPEC'D ARM AND THE DEFAULT since
+                    his 1031 revision: *"replace "-the latch releases on barrage's signal" with
+                    "-the latch releases on lift-off's signal""*. The three choices inside it are
+                    mine and are listed at the knob's declaration.
                     ITS SAMPLING RESTARTS AT THE LATCH, his 1030 ruling - a lift-off only counts
                     once the whole LIFT_PTS lattice sits at or after the latch-on bar.
+            'barrage'  a barrage on that side, or an opposite-side ex-fence cross confirmed over
+                    the same hold. His 1029 release before he revised it, plus the opposite-side
+                    clear which is MINE and has no verbatim note anywhere in the tree. RENAMED
+                    FROM 'bank' on 1031 - it is not the bank any more. Every latch figure measured
+                    before 1031 was taken on this arm.
 
         EX-FENCE ONLY. There is no oob latch - see decision 1 above. Neither arm releases on a
         cross to oob: oob is read THROUGH this state by the baton path, never against it.
@@ -242,7 +252,7 @@ class Board:
         other arm - real arrays, wrong arm, no error.
         """
         mode = str(K.LIN2_EXFNC_LATCH_REL)
-        assert mode in ('bank', 'lift'), 'LIN2_EXFNC_LATCH_REL %r is not an arm' % mode
+        assert mode in ('lift', 'barrage'), 'LIN2_EXFNC_LATCH_REL %r is not an arm' % mode
         key = (int(tf), int(side), mode, float(K.RMOM_FNC))
         if key in self._lat:
             return self._lat[key]
@@ -369,8 +379,67 @@ class Board:
             return self.oob(tf, bar, side)
         return bool(self._deep(tf, side)[int(bar)])
 
-    def baton_ex_fence(self, tf, bar, side):
+    def relatch_ok(self, tf, bar, side):
+        """Would his 1031 re-latch put ws{tf}r's latch back on at `bar`. -> (bool, why).
+
+        HIS THREE TESTS, every one causal and every one reading at or before `bar`:
+          1  the lift-off release in force at `bar` fired while the line was STILL ex-fence, read
+             at the RAW lift-off bar - his ruling, because the raw bar is where the bump happened
+             and the stamp is LIFT_WOB - 1 = 7 bars = 35 s later, by which point the line has moved
+             further toward in-fence.
+          2  the line has not reached in-fence between that raw bar and `bar`.
+          3  the line's value at `bar` has come back to the value it printed at that raw bar - at
+             or below it on a low side, at or above on a high side.
+
+        THE RELEASE IN FORCE IS THE LAST ONE AT OR BEFORE `bar`, not the first of the episode. That
+        is what makes his ruling 4 free: a new lift-off after a re-latch becomes the release in
+        force and is reviewed afresh at the following cadence, with no state carried between bars.
+
+        NO EXTRA HOLD. LIN2_EXFNC_LATCH_WOB debounces a CROSS; this is not a cross.
+        """
+        from optimus9.analysis.jig import lift_off
+        tf, bar, side = int(tf), int(bar), int(side)
+        v = self._state(tf)
+        w = max(1, int(K.LIN2_EXFNC_LATCH_WOB))
+        ex = K.ex_fence_mask(v, side)
+        ons = [int(x) for x in self._confirm(ex, w)]
+        on0 = max([x for x in ons if x <= bar], default=None)
+        if on0 is None:
+            return False, 'ws%d has no ex-fence latch episode at or before this bar' % tf
+        gap = int(K.gap_for(tf))
+        span = (max(2, int(K.LIFT_PTS)) - 1) * max(1, gap)
+        raw = np.asarray(sorted(int(b) for b in lift_off(
+            v, side, K.LIFT_PTS, gap, K.LIFT_TOL, K.LIFT_WOB)), int)
+        #   every lift-off whose whole lattice sits at or after the latch-on bar, his 1030 sampling
+        #   reset, and whose STAMP has landed by `bar` - a release is not in force before then.
+        ok = [int(b) for b in raw[np.searchsorted(raw, on0 + span + 1, 'left'):]
+              if int(K.lift_stamp(int(b))) <= bar]
+        if not ok:
+            return False, 'ws%d carries no lift-off release in force at this bar' % tf
+        rw = int(ok[-1])
+        assert rw <= bar, 'the release in force is after the bar it is read at'
+        if not bool(ex[rw]):
+            return False, ('ws%d lift-off %s printed %.2f, IN-fence - the line reached in-fence,'
+                           ' so it must cross out again'
+                           % (tf, ln.U(rw), float(v[rw])))
+        if bool((~ex[rw:bar + 1]).any()):
+            return False, ('ws%d reached in-fence between its lift-off %s and this bar'
+                           % (tf, ln.U(rw)))
+        back = (float(v[bar]) <= float(v[rw])) if side < 0 else (float(v[bar]) >= float(v[rw]))
+        if not back:
+            return False, ('ws%d %.2f has not fallen back to its lift-off value %.2f'
+                           % (tf, float(v[bar]), float(v[rw])))
+        return True, ('ws%d RE-LATCHED: its lift-off %s printed %.2f ex-fence, the line stayed'
+                      ' ex-fence, and %.2f is back at or beyond it'
+                      % (tf, ln.U(rw), float(v[rw]), float(v[bar])))
+
+    def baton_ex_fence(self, tf, bar, side, at_cadence=False):
         """Is ws{tf}r ex-fence on `side` at `bar`, FOR A BATON-PASSING CONSUMER.
+
+        `at_cadence` admits his 1031 re-latch, and ONLY at a cadence bar - his ruling *"cadence
+        only.  the point of cadences: at ws1r reversing, that is the moment when matryoshka is
+        leading the higher lines direction"*. The flag is an argument rather than a knob read so
+        the "cadence only" rule lives in the call sites, not in a comment.
 
         His 1029 ruling: the baton-passing consumers query the latch state. With
         LIN2_LATCH_EXFNC_ON 0 this is `ex_fence` and nothing moves.
@@ -380,7 +449,11 @@ class Board:
         """
         if not int(K.LIN2_LATCH_EXFNC_ON):
             return self.ex_fence(tf, bar, side)
-        return bool(self._latch(tf, side)[int(bar)])
+        if bool(self._latch(tf, side)[int(bar)]):
+            return True
+        if at_cadence and int(K.LIN2_RELATCH_ON):
+            return self.relatch_ok(tf, bar, side)[0]
+        return False
 
     def latch_on_bar(self, tf, bar, side):
         """The bar the latch live at `bar` turned on. -> bar or None. For a leg report's row."""

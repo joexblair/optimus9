@@ -1,0 +1,15 @@
+# control ws5r 2026-09-03 00:35:00 = 12.48 (DB-ruled known-good 12.48; the BANKED k6 rsi8 stc6 line reads 6.77 there)
+# RULED_OK False. ib dwell int(TF x 2.5), oob 15.0/85.0, ex-fence (25.0, 75.0), ceiling ws30
+# the reversal stamp adds LIFT_WOB - 1 = 7 bars = 35 s to every lift-off bar
+# the baton passes on 'reversal'. quarter width = 0.25 x TF x 12 bars: ws22 -> 66 bars = 330 s
+# A 2026-08-14 06:59:00  B 2026-10-04 23:59:55 (the last tape bar, no end bound applied)
+
+| the step | the bar | the reading |
+|---|---|---|
+| ws1 is the rider and reverses | 2026-08-14 07:00:55 | ws1r 14.92, knowable 2026-08-14 07:01:30 |
+| the baton passes ON ws1 reversing | 2026-08-14 07:01:30 | his 1022 rule - no ib walk on the normal path |
+| ws1 -> ws2, the receiver gate | 2026-08-14 07:01:30 | ws2r 38.62, not ex-fence - EXHAUST |
+
+| the verdict | the bar |
+|---|---|
+| **EXHAUST** | 2026-08-14 07:01:30 |

@@ -90,8 +90,14 @@ def _runs(a):
     return list(zip(np.flatnonzero(d == 1).astype(int), (np.flatnonzero(d == -1) - 1).astype(int)))
 
 
-def b1_beyond(b1, side, hold=None, dwell=None):
-    """cws1b's ONE oob state. Every consumer in the fork reads it here. -> bool array.
+def b1_beyond(b1, side, hold=None, dwell=None, mask=None):
+    """A b line's ONE beyond-the-fence state. Every consumer in the fork reads it here.
+    -> bool array.
+
+    `mask` OVERRIDES THE RAW FENCE READ, added 1031 so his arm update's gcws30b can be tested
+    against its own (5.0, 95.0) pair instead of oob 15/85. Without it the raw read is `K.oob_mask`
+    and nothing moves. ONE HOME for the two edges below either way - a second copy of this hold and
+    dwell for the new line is how the two would drift apart.
 
     TWO RULES, BOTH HIS, ONE ON EACH EDGE:
 
@@ -113,7 +119,7 @@ def b1_beyond(b1, side, hold=None, dwell=None):
     the fence. The return asks whether the last crossing inside is at least H bars old and stayed
     inside throughout. Neither reads a bar after the one it answers for.
     """
-    raw = np.asarray(K.oob_mask(np.asarray(b1, float), int(side)), bool)
+    raw = np.asarray(K.oob_mask(np.asarray(b1, float), int(side)) if mask is None else mask, bool)
     d = int(K.LIN2_B1_OOB_DWELL) if dwell is None else int(dwell)
     if d > 1:
         n0 = len(raw)
@@ -182,17 +188,37 @@ def t1(CL, side, A, B):
     t2"* - and a walk deciding behaviour by string-matching a report field is the defect that broke
     the trace when he shortened the detail column.
     """
-    b1 = np.asarray(CL['b'], float)
-    r1 = np.asarray(CL['r'][1], float)
-    #   ws1b's state, held per LIN2_B1_HOLD. At 0 this is the plain read and nothing moves.
+    #   HIS 1031 UPDATE: the b line is gcws30b and its cross hold is 6 bars = 30 s, not ws1b at
+    #   LIN2_CROSS_WOB 12. Both lines are in CL, so LIN2_T1_B_LINE picks one and the arm's own
+    #   knob picks independently.
+    key = {'ws1b': 'b', 'gcws30b': 'g30b'}[str(K.LIN2_T1_B_LINE)]
+    b1 = np.asarray(CL[key], float)
+    r1 = np.asarray(CL['r'][1], float)      # ws1r, unchanged - his 1031 ruling
+    w1 = max(1, int(K.LIN2_T1_B_WOB))
+    #   the b line's state, held per LIN2_B1_HOLD. At 0 this is the plain read and nothing moves.
     oob = b1_beyond(b1, side)
     raws = ws1r_revs(r1, side)
     grace = max(0, int(K.L2_T1_GRACE_S) // 5)
+    gat = str(K.LIN2_T1_GRACE_AT)
+    assert gat in ('cross', 'confirm'), 'LIN2_T1_GRACE_AT %r is not an arm' % gat
+    #   HIS 1031 r GATE: the reversal's r value must be past the (100 - LIN2_T1_R_FNC, FNC) fence
+    #   on the target side, replacing the side-of-50 test. His examples: r 50.3 fails, r 59 passes.
+    rlo, rhi = 100.0 - float(K.LIN2_T1_R_FNC), float(K.LIN2_T1_R_FNC)
+
+    def rgate(x):
+        v = float(r1[_stamp(x)])
+        return (v >= rhi) if int(side) > 0 else (v <= rlo)
+
     out = []
     #   WOB 12 ON THE CROSS, Joe 1027. `c` is still the cross bar - it is what the oob run is
     #   matched against - and `cf` = c + LIN2_CROSS_WOB - 1 is the first bar the cross may be ACTED
     #   on. The cadence fires on `cf`, or on the late reversal's stamp, whichever is last.
-    for c, cf, s in oob_ib_cross(b1, K.OOB_HI, K.OOB_LO, int(K.LIN2_CROSS_WOB)):
+    #   *** THE CODE DID NOT DO THIS UNTIL 1031. *** It fired on max(c, stamp), so 16 of the 17 t1
+    #   cadences on the 2026-08-14 0659 walk acted 25 to 55 s before their own hold was complete.
+    #   Found by bounding the walk at its own verdict bar: the cadence vanished, because its `cf`
+    #   no longer fitted the window it was filtered on. Every t1 figure measured before 1031 carries
+    #   that lookahead.
+    for c, cf, s in oob_ib_cross(b1, K.OOB_HI, K.OOB_LO, w1):
         if s != int(side) or not (int(A) <= cf <= int(B)):
             continue
         run = next((r for r in _runs(oob) if r[1] == c - 1), None)
@@ -200,24 +226,38 @@ def t1(CL, side, A, B):
             continue
         s0, s1 = run
         #   the DURING branch: the RAW reversal inside the oob run, cws1r on the target side of 50
-        during = [int(x) for x in raws
-                  if s0 <= x <= s1 and K.side_of(r1[_stamp(x)]) == int(side)]
+        during = [int(x) for x in raws if s0 <= x <= s1 and rgate(x)]
         if during:
-            bar = max(int(c), _stamp(during[-1]))            # *"whichever is last"*
-            assert bar >= int(c), 'the t1 cadence precedes its own cws1b ib cross'
-            out.append((bar, 't1', 'ws1b oob %s..%s, ws1r reversed %s during, stamp %s'
-                        % (ln.U(s0)[11:], ln.U(s1)[11:], ln.U(during[-1])[11:],
-                           ln.U(_stamp(during[-1]))[11:])))
+            #   THE FIRE BAR IS cf, NOT c. Joe 1031, on being shown 16 of 17 t1 cadences firing up
+            #   to 55 s before their own 12-bar hold was complete: *"option 1 - the wob has earnt a
+            #   place in the mech.  its true value will be swept in the future"*. The comment above
+            #   has said `cf` since 1027; the code used `c`, so the cadence acted on a cross whose
+            #   hold was not yet proven. THE WINDOWS STILL BOUND ON c - the oob run match and the
+            #   grace window are both anchored on the cross bar, which is his standing rule.
+            bar = max(int(cf), _stamp(during[-1]))           # *"whichever is last"*
+            assert bar >= int(cf), 'the t1 cadence precedes its own cws1b ib cross confirm'
+            out.append((bar, 't1', '%s oob %s..%s, ws1r reversed %s during, r %.2f past the'
+                                   ' %.1f fence, stamp %s, cross %s hold %d bars'
+                        % (K.LIN2_T1_B_LINE, ln.U(s0)[11:], ln.U(s1)[11:],
+                           ln.U(during[-1])[11:], float(r1[_stamp(during[-1])]),
+                           rhi if int(side) > 0 else rlo,
+                           ln.U(_stamp(during[-1]))[11:], ln.U(c)[11:], w1)))
             continue
         #   the GRACE branch: the RAW reversal forward of the cross, inside L2_T1_GRACE_S
-        late = [int(x) for x in raws
-                if c < x <= c + grace and K.side_of(r1[_stamp(x)]) == int(side)]
+        #   WHERE THE GRACE WINDOW STARTS is LIN2_T1_GRACE_AT - his 1031 *"give it an on off
+        #   knob and show the diff"*. 'cross' is the pre-1031 origin.
+        g0 = int(c) if gat == 'cross' else int(cf)
+        late = [int(x) for x in raws if g0 < x <= g0 + grace and rgate(x)]
         if late:
-            bar = max(int(c), _stamp(late[0]))               # *"whichever is last"*
-            assert bar >= int(c), 'the t1 cadence precedes its own cws1b ib cross'
-            out.append((bar, 't1', 'ws1b ib %s, ws1r reversed %s inside the %ds grace, stamp %s'
-                        % (ln.U(c)[11:], ln.U(late[0])[11:], K.L2_T1_GRACE_S,
-                           ln.U(_stamp(late[0]))[11:])))
+            #   cf, not c - the same 1031 fix as the during branch above.
+            bar = max(int(cf), _stamp(late[0]))              # *"whichever is last"*
+            assert bar >= int(cf), 'the t1 cadence precedes its own cws1b ib cross confirm'
+            out.append((bar, 't1', '%s ib %s, ws1r reversed %s inside the %ds grace from the'
+                                   ' %s bar %s, r %.2f past the %.1f fence, stamp %s, hold %d bars'
+                        % (K.LIN2_T1_B_LINE, ln.U(c)[11:], ln.U(late[0])[11:], K.L2_T1_GRACE_S,
+                           gat, ln.U(g0)[11:], float(r1[_stamp(late[0])]),
+                           rhi if int(side) > 0 else rlo,
+                           ln.U(_stamp(late[0]))[11:], w1)))
     return out
 
 
