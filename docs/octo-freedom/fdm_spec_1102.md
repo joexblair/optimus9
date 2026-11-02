@@ -103,13 +103,13 @@ structural gaps.
 | 0 | SETTLED 1102 - the fdm-cadence level-4 scan's range is **ws2 to ws12**, his words: *"ws2 to ws12.  the scan can only look upwards"*. ws1 is excluded. ONE THING HIS "upwards" DOES NOT FIX: whether it means the range is read from ws2 upward, or that the scan never adds a TF below the ones already in the array |
 | 1 | SETTLED 1102 - the fence is `fdm-20-80-fnc`, his name, value 20, read as (100 - 20) = (20.0, 80.0) |
 | 2 | SETTLED 1102 - his design, not a gap: *"the scan-while-walking adds more TFs to an array, and the reversal gate on the highest TF in the array automatically overrides the notion of a rider"*. The array IS the anchor, and the highest TF in it is what the reversal gate reads. See THE RIDER QUESTION below |
-| 3 | `walk forward until ws1b is ib ELSE walk forward until gcws30b is ib` - what makes the ELSE fire. His note says *"ie we will use the fast gcws30 line in the absence of exfence lines"*, which reads as a condition on the lines, not on ws1b |
-| 4 | "the last two cadence events" - the ws{>25}r ex-fence lookback. Two events of either side, or two same-side |
-| 5 | "the prior same-side cadence window opened" - the blast radius's reversal window. Its opening bar, or its closing bar |
-| 6 | which 5 TFs `fdm-blst-rad-conf-tfs` names - the 5 immediately below the highest ex-20/80 line, or the 5 lowest of the collected set |
+| 3 | SETTLED 1102 - the ELSE fires when the level-5 IF is NOT true: *"the ELSE fires if this is not true: IF there are wsf and dtf lines that are ex-20/80-fence AND have not lift-off-reversed after crossing to ex-20/80-fence"*. *** BUT THE LINE SITS INSIDE THAT IF, SO THE ELSE IS UNREACHABLE AS WRITTEN - see THE 1102 ELSE CONTRADICTION below *** |
+| 4 | SETTLED 1102 - *"same-side"*. The ws{>25}r ex-fence lookback spans the last two SAME-SIDE cadence events |
+| 5 | SETTLED 1102 - *"the window's opening bar"*. The blast radius counts reversals since the prior same-side cadence window OPENED |
+| 6 | SETTLED 1102 - selected dynamically: *"the lines within {knob:5,'fdm-blst-rad-conf-tfs'} TFs of the highest TF ex-20/80-fence"*. So the set is the highest ex-20/80 TF minus 1 down to minus 5, and 4 of those 5 must have reversed |
 | 7 | SETTLED 1102 - the line is now *"walk forward an additional 10 minutes #to capture a late ws30r"* with no "from cadence event", and it moved to level 7. The anchor is the bar the walk is on |
 | 8 | "if a last cadence event fails to print" - what makes a cadence event the last one |
-| 9 | the reversal reads: he names *"emerging lift-off"* for the highest-oob-TF test and *"lift-off-reversed"* for the ex-20/80 lines. Whether the second is emerging too |
+| 9 | SETTLED 1102 - *"lift-off will always be emerging bars"*. BOTH reversal reads in this mech are emerging, and that is a standing rule for the machine rather than one line's setting |
 | 10 | wsf is ws1-ws12 and dtf is >ws12, his 1017 band names. Confirmed by those, not by this spec |
 
 ## THE 1102 INDENT MOVE, AND WHAT IT CHANGES
@@ -198,3 +198,22 @@ it still pending. It is carried here so the greenfield build has it.
 pass to ib, read the exhaust. fdm-cadence has none of those three. Reviving the mech as written
 means either keeping a rider-and-ib walk alive beside the new one, or rewriting those three lines
 against fdm-cadence. That is a design call and it is his.
+
+## THE 1102 ELSE CONTRADICTION - his answer to #3 does not fit where the line sits
+
+His ruling: the ELSE in `walk forward until ws1b is ib ELSE walk forward until gcws30b is ib`
+fires when there are NO wsf or dtf lines that are ex-20/80-fence and un-reversed - his own note,
+*"ie we will use the fast gcws30 line in the absence of exfence lines"*.
+
+The line sits at level 6, INSIDE the level-5 `-----IF there are wsf and dtf lines that are
+ex-20/80-fence AND have not lift-off-reversed...`. Inside that branch those lines exist by
+construction, so the "absence of exfence lines" case cannot arise there and the ELSE half is dead
+code.
+
+| the reading | what it would take |
+|---|---|
+| the line moves OUT one level, to level 5, ahead of the IF | both halves become reachable and the walk-until happens before the branch |
+| the line is DUPLICATED into the `-----ELSE if no higher r lines are ex-80/20-fence` branch | the ws1b half stays where it is and the gcws30b half moves to the other branch |
+
+NEITHER IS HIS YET. The rest of #3 is settled - the condition governing the ELSE is the level-5
+IF's own condition.

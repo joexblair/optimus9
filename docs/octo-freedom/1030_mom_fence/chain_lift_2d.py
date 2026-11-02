@@ -56,6 +56,7 @@ try:
     import v4_chain as CH
     import v4_signal as SG
     import v4_sig_lin2_reentry as L2R
+    import v4_fdm_reentry as RE
     import ln
     from v4_backstop_trades import prices
 finally:
@@ -108,8 +109,17 @@ CAP = float(K.LIN2_MAE_CAP) if os.environ.get('W_MAE_CAP') == 'on' else None
 #   THE WAY BACK IN IS OFF BY DEFAULT since his 1101 update deleted the ws5Mage reentry. With the
 #   stop on and resig None the chain reports to its first stop and ends - the machine's true state
 #   while his new re-entry is pending. W_RESIG=on restores the old path for an A/B only.
-RESIG = (L2R.signals(B1, MG)
-         if (CAP is not None and os.environ.get('W_RESIG') == 'on') else None)
+#   1102: THE WAY BACK IN IS THE fdm RE-ENTRY, ON BY DEFAULT WHEN THE STOP IS ON. His words:
+#   *"when you hit mae1.1, you'll run the reentry mech before reporting the mae1.1 stop.  this will
+#   save us time"*. Before this the chain ENDED at its first stop, because the only wired way back
+#   was the ws5Mage reentry his 1101 update deleted.
+#   W_RESIG=old restores that deleted path for an A/B; anything else uses the fdm mech.
+RESIG = None
+if CAP is not None:
+    if os.environ.get('W_RESIG') == 'old':
+        RESIG = L2R.signals(B1, MG)
+    else:
+        RESIG = RE.signals(LL._g30b(), E)
 lg, zero, op = CH.legs(CL, BD, close, phi, plo, A, B, MG=MG, B1=B1, open_at=OPEN,
                        mae_cap=CAP, resig=RESIG)
 
@@ -202,8 +212,12 @@ print('# the open is %s %s, handed in - %s'
          'W_OPEN, his own bar and side' if SIG is None
          else "the router's fire bar off the lin2-reentry signal %s" % ln.U(SIG[0]['bar'])))
 print('# the way back in after a stop: %s'
-      % ('the ws5Mage reentry, W_RESIG=on - an A/B of a mech his 1101 update deleted'
-         if RESIG else 'NONE - the chain ends at its first stop'))
+      % (('the ws5Mage reentry, W_RESIG=old - an A/B of a mech his 1101 update deleted'
+          if os.environ.get('W_RESIG') == 'old' else
+          'the fdm re-entry - gcws30b ex-%.1f window, closed by its ib cross at xwob %d, gate'
+          ' ws1r AND (ws2r or ws3r) past the %.1f fence SEEN in the window'
+          % (K.FDM_RE_B_FNC, K.FDM_RE_IB_XWOB, K.FDM_RE_GATE_FNC))
+         if RESIG else 'NONE - no stop, so no way back in is needed'))
 print('# the baton fence test reads: %s. the stop is %s. drag %.4f%% per round trip, its own'
       ' column and its own total.'
       % (BD.baton_src(),

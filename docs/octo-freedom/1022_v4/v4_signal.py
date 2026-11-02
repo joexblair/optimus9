@@ -24,9 +24,12 @@ mechs conflate internally"*. A signal states a BAR and a SIDE; the router derive
 import v4_knobs as K
 
 #   the mechs that may produce a signal. A new producer adds its name here and nowhere else.
-MECHS = ('core', 'backstop', 'saviour', 'reentry', 'lin2-reentry')
+MECHS = ('core', 'backstop', 'saviour', 'reentry', 'lin2-reentry', 'fdm-reentry')
 #   'lin2-reentry' is HIS LABEL, 1029: *"label it lin2-reentry"*. Its file is
 #   v4_sig_lin2_reentry. 'reentry' was already taken by a different mech.
+#   'fdm-reentry' IS MINE, 1102. He named the machine - *"final-draft-maybe"* - and called this
+#   *"the reentry machine"*, but both 'reentry' and 'lin2-reentry' were already taken, so the
+#   machine's initials carry it. If he names the mech, this label moves.
 
 
 def signal(bar, side, mech, src, why=''):

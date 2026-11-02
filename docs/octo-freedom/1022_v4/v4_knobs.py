@@ -1068,6 +1068,29 @@ LIN2_CP_MIN_TF = _knob('LIN2_CP_MIN_TF', 1, int)   # the TF floor for the chart-
 #   SCOPE: the t1 r gate's ws1r reversal BARS only. `_rev_pairs`, which finds each RUNG's reversal
 #   for the baton, is a different consumer and is NOT routed by this - he named lift-off in the
 #   context of the t1 marker and the rungs are not measured here.
+#  ── THE fdm RE-ENTRY: his 1102 mech, banked on his *"bank this and make it the reentry machine"* ─
+#
+#   HIS SPEC, built in this order:
+#     the window OPENS   gcws30b at or beyond the (5.0, 95.0) pair on the target side
+#     the window CLOSES  gcws30b's oob->ib cross at the 15/85 pair - `jig.oob_ib_cross`, the banked
+#                        mech. His words: *"I see gcws30b "returning to ib" (the mech) at 0041"*,
+#                        and the cross bar on 2026-08-03 is 00:41:30, which he confirmed:
+#                        *"00:41:30 is my view also"*
+#     the GATE           ws1r AND (ws2r or ws3r), each SEEN past the r fence anywhere inside the
+#                        window. His *"the lines need to be seen in the window, but do not need to
+#                        dwell for the window's full range"*
+#     the FIRE           at the close bar. His *"tested at gcws30b window's close.  if the test is
+#                        true, open a trade"*
+#   THE SIDE IS THE OOB SIDE THE LINES WERE FOUND ON, his 1102 answer. `v4_signal.direction` then
+#   maps it: a HIGH oob side opens a SHORT. That mapping is banked and not mine.
+FDM_RE_B_FNC = _knob('FDM_RE_B_FNC', 95.0)      # the window's opening fence, 95 -> (5.0, 95.0).
+FDM_RE_IB_XWOB = _knob('FDM_RE_IB_XWOB', 1, int)  # the ib cross hold, in bars.
+#   AT 1 THE CLOSE IS THE CROSS BAR ITSELF, which is the 00:41:30 he banked. A larger hold moves
+#   the fire later: 6 gives 00:41:55 and 12 gives 00:42:25 on that window.
+FDM_RE_GATE_FNC = _knob('FDM_RE_GATE_FNC', 75.0)  # the gate's fence on ws1r/ws2r/ws3r.
+#   HIS WORD WAS "ex v4mom fence", which is RMOM_FNC 75. It has its OWN knob here so the re-entry
+#   and the walk can move apart; the value is the same today.
+
 LIN2_CP_LIFT = os.environ.get('W_V4_LIN2_CP_LIFT', 'closed_prev')
 LIN2_CP_WS1R = os.environ.get('W_V4_LIN2_CP_WS1R', 'closed_prev')   # ws1r's VALUE source in
 #   the t1 r gate. BANKED 'closed_prev' on his 1101 *"change ws1r to closed-p"*. THE KNOB NAME IS
@@ -1331,6 +1354,9 @@ RULED = {
                                 ' "closed_prev" is the arm'),
     'LIN2_CP_IB': ('emerging', 'BANKED 1101 on his gut - "my gut says emerging: create a knob that'
                                ' tests both options". "closed_prev" is the arm'),
+    'FDM_RE_B_FNC': (95.0, 'HIS 1102 mech - the fdm re-entry window opens on gcws30b at or beyond (5.0, 95.0)'),
+    'FDM_RE_IB_XWOB': (1, 'HIS 1102 bank - the window closes on the ib cross BAR, which is 2026-08-03 00:41:30: "00:41:30 is my view also". A hold would move the fire later'),
+    'FDM_RE_GATE_FNC': (75.0, 'HIS 1102 "ex v4mom fence" for the ws1r AND (ws2r or ws3r) gate. Same value as RMOM_FNC, its own knob so the two can move apart'),
     'LIN2_CP_LIFT': ('closed_prev', 'BANKED 1101 - "lift-off needs a close-p mode - it only reacts to full 1 minute bars". The t1 ws1r reversal BARS; it REVISES his earlier "keeping the lift-off on emerging" and gives up the 0445 reversals. _rev_pairs is not routed'),
     'LIN2_CP_WS1R': ('closed_prev', 'BANKED 1101 - "change ws1r to closed-p". The t1 r gate\'s VALUE read only; the reversal BARS stay emerging'),
     'LIN2_CP_GCWS30B': ('closed_prev', 'BANKED 1101 on his "yes" to routing gcws30b. It moves the t1 cadence AND the arm race - both read CL[\'g30b\']. "emerging" is the other arm'),
