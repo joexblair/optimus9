@@ -60,11 +60,17 @@ import v4_knobs as K
 import v4_fast as F
 import v4_rcfg_sweep as RS
 from v4_backstop_trades import prices
+#   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever
+#   happens. Without it a refusal from v4_knobs.check() - an off-ruled run with no
+#   W_V4_EXPERIMENT=1 - goes into the StringIO and the process exits 1 with NOTHING on
+#   either stream. That cost a diagnosis on 1101.
 _e = sys.stderr; sys.stderr = io.StringIO()
-from optimus9.analysis.jig import px_smooth, lift_off, oob_ib_cross
-from optimus9.analysis.lr_v2 import _mage_rev
-from optimus9.compute.swing_detect import find_pivots
-sys.stderr = _e
+try:
+    from optimus9.analysis.jig import px_smooth, lift_off, oob_ib_cross
+    from optimus9.analysis.lr_v2 import _mage_rev
+    from optimus9.compute.swing_detect import find_pivots
+finally:
+    sys.stderr = _e
 
 # ── the one knob his spec names, and it is his number ──────────────────────────────────────────
 PIVOT_PCT = float(os.environ.get('W_TS_PIVOT_PCT', 0.50))   # UNRULED, and it is a SCORING knob -

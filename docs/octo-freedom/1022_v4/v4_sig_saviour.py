@@ -36,9 +36,15 @@ sys.path.insert(0, '/home/joe/thecodes')
 sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1022_v4')
 import v4_saviour as SV
 import v4_signal as SG
+#   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever
+#   happens. Without it a refusal from v4_knobs.check() - an off-ruled run with no
+#   W_V4_EXPERIMENT=1 - goes into the StringIO and the process exits 1 with NOTHING on
+#   either stream. That cost a diagnosis on 1101.
 _e = sys.stderr; sys.stderr = io.StringIO()
-import ln
-sys.stderr = _e
+try:
+    import ln
+finally:
+    sys.stderr = _e
 
 
 def _hunt(g, R, MG):

@@ -24,18 +24,24 @@ import numpy as np
 sys.path.insert(0, '/home/joe/thecodes')
 sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1022_v4')
 os.environ.setdefault('LG_TAPE_END', '2026-10-05')
+#   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever
+#   happens. Without it a refusal from v4_knobs.check() - an off-ruled run with no
+#   W_V4_EXPERIMENT=1 - goes into the StringIO and the process exits 1 with NOTHING on
+#   either stream. That cost a diagnosis on 1101.
 _e = sys.stderr; sys.stderr = io.StringIO()
-import v4_knobs as K
-import v4_rcfg_sweep as RS
-import v4_live_lines as LL
-import v4_l2_proxy as PX
-import v4_chain as CH
-import v4_lineage2 as L2
-import v4_signal as SG
-import v4_sig_lin2_reentry as L2R
-import ln
-from v4_backstop_trades import prices
-sys.stderr = _e
+try:
+    import v4_knobs as K
+    import v4_rcfg_sweep as RS
+    import v4_live_lines as LL
+    import v4_l2_proxy as PX
+    import v4_chain as CH
+    import v4_lineage2 as L2
+    import v4_signal as SG
+    import v4_sig_lin2_reentry as L2R
+    import ln
+    from v4_backstop_trades import prices
+finally:
+    sys.stderr = _e
 
 T0 = time.time()
 K.LIN2_PSEUDO_MIN_TF = 99

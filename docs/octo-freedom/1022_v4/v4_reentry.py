@@ -56,10 +56,16 @@ sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1022_v4')
 os.environ.setdefault('LG_TAPE_END', '2026-10-05')
 import v4_knobs as K
 import v4_signal as SG
+#   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever
+#   happens. Without it a refusal from v4_knobs.check() - an off-ruled run with no
+#   W_V4_EXPERIMENT=1 - goes into the StringIO and the process exits 1 with NOTHING on
+#   either stream. That cost a diagnosis on 1101.
 _e = sys.stderr; sys.stderr = io.StringIO()
-import ln
-from optimus9.analysis.jig import oob_ib_cross
-sys.stderr = _e
+try:
+    import ln
+    from optimus9.analysis.jig import oob_ib_cross
+finally:
+    sys.stderr = _e
 
 BASE_TF = 5                                   # *"ws5Mage oob to IB"*
 

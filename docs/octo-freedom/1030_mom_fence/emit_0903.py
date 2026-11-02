@@ -28,9 +28,15 @@ import re
 import sys
 
 sys.path.insert(0, '/home/joe/thecodes')
+#   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever
+#   happens. Without it a refusal from v4_knobs.check() - an off-ruled run with no
+#   W_V4_EXPERIMENT=1 - goes into the StringIO and the process exits 1 with NOTHING on
+#   either stream. That cost a diagnosis on 1101.
 _e = sys.stderr; sys.stderr = io.StringIO()
-from optimus9.analysis.jig import _Score
-sys.stderr = _e
+try:
+    from optimus9.analysis.jig import _Score
+finally:
+    sys.stderr = _e
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 #   THE SOURCE TABLE IS SETTABLE so the stop-on and stop-off walks each get their own overlay.

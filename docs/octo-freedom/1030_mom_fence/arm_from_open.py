@@ -13,15 +13,21 @@ import numpy as np
 sys.path.insert(0, '/home/joe/thecodes')
 sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1022_v4')
 os.environ.setdefault('LG_TAPE_END', '2026-10-05')
+#   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever
+#   happens. Without it a refusal from v4_knobs.check() - an off-ruled run with no
+#   W_V4_EXPERIMENT=1 - goes into the StringIO and the process exits 1 with NOTHING on
+#   either stream. That cost a diagnosis on 1101.
 _e = sys.stderr; sys.stderr = io.StringIO()
-import v4_knobs as K
-import v4_rcfg_sweep as RS
-import v4_live_lines as LL
-import v4_l2_proxy as PX
-import v4_l2_cadence as CAD
-import v4_lineage2 as L2
-import ln
-sys.stderr = _e
+try:
+    import v4_knobs as K
+    import v4_rcfg_sweep as RS
+    import v4_live_lines as LL
+    import v4_l2_proxy as PX
+    import v4_l2_cadence as CAD
+    import v4_lineage2 as L2
+    import ln
+finally:
+    sys.stderr = _e
 E = RS.load((RS.K0, RS.R0, RS.S0))
 CL = LL.arm_lines(E); MG = LL.mage()
 BD = PX.Board(E, E, MG=MG, MGE=MG, PS=None)
@@ -34,7 +40,14 @@ ST = {sd: np.asarray(CAD.b1_beyond(g, sd, hold=aw, dwell=aw,
                                    mask=K.beyond_mask(g, sd, alo, ahi)), bool) for sd in (-1, 1)}
 #   HIS 1031 REVISION: *"(ws1r or ws2r) + gcws30b"* - the r lines are an OR.
 OK = {sd: ST[sd] & (K.oob_mask(r1, sd) | K.oob_mask(r2, sd)) for sd in (-1, 1)}
-ROWS = [('2026-09-03 17:01:00', +1, '2026-09-03 17:16:00'),
+#   1101 ANNOTATION - THE 0437 LEG JOINED THE LIST. His 1101: *"this is the reason for me pushing
+#   to build an arm on a divergence signal - 0437 needs to exhaust"*. The mech he is specifying can
+#   only act where a trade has NO arm, so the question is whether 2026-09-03 04:37:55 sits inside
+#   this leg's open-to-arm gap. The open comes from the chain run chain_0903_armcheck.md - leg 2,
+#   2026-09-03 01:36:05 SHORT, exited 04:56:55 by the 1.1% stop. THE THIRD COLUMN IS NOT AN ARM HE
+#   GAVE: it is the 04:37:55 bar, carried so the gap column measures against it.
+ROWS = [('2026-09-03 01:36:05', -1, '2026-09-03 04:37:55'),
+        ('2026-09-03 17:01:00', +1, '2026-09-03 17:16:00'),
         ('2026-09-03 19:30:00', -1, '2026-09-03 22:01:00'),
         ('2026-09-03 23:24:00', +1, '2026-09-03 23:39:00'),
         ('2026-09-03 23:43:00', -1, '2026-09-04 00:07:00'),

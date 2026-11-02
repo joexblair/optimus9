@@ -34,9 +34,15 @@ import v4_knobs as K
 import v4_l2_cadence as CAD
 import v4_lineage2 as L2
 import v4_signal as SG
+#   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever
+#   happens. Without it a refusal from v4_knobs.check() - an off-ruled run with no
+#   W_V4_EXPERIMENT=1 - goes into the StringIO and the process exits 1 with NOTHING on
+#   either stream. That cost a diagnosis on 1101.
 _e = sys.stderr; sys.stderr = io.StringIO()
-import ln
-sys.stderr = _e
+try:
+    import ln
+finally:
+    sys.stderr = _e
 
 DRAG_PCT = 0.1975      # % round trip, o9-live drag_pct: 11.0 bps fee + 8.75 bps slippage
 

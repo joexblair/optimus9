@@ -14,13 +14,19 @@ usage: ln.py <'YYYY-MM-DD HH:MM:SS'> <'YYYY-MM-DD HH:MM:SS'> ws7r [ws7Mage ...]
 import os, sys, io, datetime as dt
 import numpy as np
 sys.path.insert(0, '/home/joe/thecodes')
+#   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever
+#   happens. Without it a refusal from v4_knobs.check() - an off-ruled run with no
+#   W_V4_EXPERIMENT=1 - goes into the StringIO and the process exits 1 with NOTHING on
+#   either stream. That cost a diagnosis on 1101.
 _e = sys.stderr; sys.stderr = io.StringIO()
-from optimus9.compute.line_config import override, mech_lines
-from optimus9.orchestration.build_ws_lines import HOURS, WARMUP
-from optimus9.orchestration.rpl_cache import LINE_DIR, TAPE_DIR, _line_key, _tape_key
-from optimus9.db.database_manager import DatabaseManager
-from optimus9.config import get_db_config
-sys.stderr = _e
+try:
+    from optimus9.compute.line_config import override, mech_lines
+    from optimus9.orchestration.build_ws_lines import HOURS, WARMUP
+    from optimus9.orchestration.rpl_cache import LINE_DIR, TAPE_DIR, _line_key, _tape_key
+    from optimus9.db.database_manager import DatabaseManager
+    from optimus9.config import get_db_config
+finally:
+    sys.stderr = _e
 
 EM = int(dt.datetime.strptime(os.environ.get('LG_TAPE_END', '2026-10-05'), '%Y-%m-%d')
          .replace(tzinfo=dt.timezone.utc).timestamp() * 1000)

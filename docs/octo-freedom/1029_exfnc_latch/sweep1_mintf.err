@@ -1,10 +1,15 @@
 /home/joe/thecodes/docs/octo-freedom/1027_pseudo_closed/pseudo_closed.py:84: RuntimeWarning: Mean of empty slice
   out[n - 1:] = np.nanmean(w, axis=-1)
 Traceback (most recent call last):
-  File "/home/joe/thecodes/docs/octo-freedom/1029_exfnc_latch/sweep1_mintf.py", line 168, in <module>
-  File "/home/joe/thecodes/docs/octo-freedom/1029_exfnc_latch/sweep1_mintf.py", line 92, in run
-    K.LIN2_BARRAGE_MIN_TF_MODE = 'membership'
-                           ^^^^^^^^^^^^^^^^^^^
+  File "/home/joe/thecodes/docs/octo-freedom/1029_exfnc_latch/sweep1_mintf.py", line 119, in <module>
+    s, z, op = one()
+               ^^^^^
+  File "/home/joe/thecodes/docs/octo-freedom/1029_exfnc_latch/sweep1_mintf.py", line 75, in one
+    lg, zero, op = CH.legs(CL, BD, close, phi, plo, WA, WB, MG=MGL)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/joe/thecodes/docs/octo-freedom/1022_v4/v4_chain.py", line 69, in legs
+    def stop_bar(opn, ex, side, close, phi, plo, cap):
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/home/joe/thecodes/docs/octo-freedom/1022_v4/v4_lineage2.py", line 470, in walk
     """
         

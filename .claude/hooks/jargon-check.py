@@ -60,8 +60,11 @@ FORWARD = [
 #   allowlist - it's too restrictive on me"*. This is the short list of terms HE uses, which the
 #   shape checks would otherwise flag because they look like code. It grows only when he tells me
 #   one of his words was flagged.
+#   1101: *"I'm assuming "every bar" is emerging?  add emerg and emerging to the allowed list"*.
+#   Both forms, because he writes the short one too. I had been writing "every bar" to dodge a flag
+#   that was never going to come - his word is the clearer one and it is his to use.
 HIS = {'lin_hop', 'consumer', 'consumers', 'producer', 'producers', 'oob',
-       'lin2_matry_wsf_takeover', 'matryoshka'}
+       'lin2_matry_wsf_takeover', 'matryoshka', 'emerg', 'emerging'}
 
 SHAPES = [
     ('a knob or constant name', re.compile(r'\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+){1,}\b')),

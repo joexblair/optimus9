@@ -66,10 +66,16 @@ import v4_deferred_trades as DT
 import v4_rcfg_sweep as RS
 from v4_equity import ledger, cap_pyramid, PCT, CAP, COINS, START, DRAG_22K
 from v4_backstop_trades import prices
+#   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever
+#   happens. Without it a refusal from v4_knobs.check() - an off-ruled run with no
+#   W_V4_EXPERIMENT=1 - goes into the StringIO and the process exits 1 with NOTHING on
+#   either stream. That cost a diagnosis on 1101.
 _e = sys.stderr; sys.stderr = io.StringIO()
-from optimus9.compute.rule2_trajectory import opposed_extrema
-from optimus9.compute.swing_detect import find_pivots
-sys.stderr = _e
+try:
+    from optimus9.compute.rule2_trajectory import opposed_extrema
+    from optimus9.compute.swing_detect import find_pivots
+finally:
+    sys.stderr = _e
 
 TF_LO, TF_HI = 13, 30
 SPLIT_TS = '2026-09-01 00:00:00'

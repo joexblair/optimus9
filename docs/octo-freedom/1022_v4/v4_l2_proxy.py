@@ -44,9 +44,15 @@ sys.path.insert(0, '/home/joe/thecodes')
 sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1022_v4')
 import v4_knobs as K
 import v4_fast as F
+#   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever
+#   happens. Without it a refusal from v4_knobs.check() - an off-ruled run with no
+#   W_V4_EXPERIMENT=1 - goes into the StringIO and the process exits 1 with NOTHING on
+#   either stream. That cost a diagnosis on 1101.
 _e = sys.stderr; sys.stderr = io.StringIO()
-import ln
-sys.stderr = _e
+try:
+    import ln
+finally:
+    sys.stderr = _e
 
 
 class Board:
@@ -88,6 +94,10 @@ class Board:
         #   and per side; both are built over the WHOLE tape so no caller's bar is out of range.
         self._lat = {}
         self._rel = {}
+        #   THE CHART-MATCHED LADDER, a SEVENTH bucket, his 1101 reversal of the 1029 "drop
+        #   prev-close". Built LAZILY per timeframe from this Board's own emerging ladder, so no
+        #   caller's constructor signature moves and a run that routes nothing pays nothing.
+        self._cpl = {}
 
     #  ── STATE: the closed ladder, or the PSEUDO-CLOSED one above his band ─────────────────────
     def _state(self, tf):
@@ -113,6 +123,60 @@ class Board:
             return 'pseudo'
         return 'live'
 
+    #  ── THE CHART-MATCHED READ: seam-5s carried forward, per read kind ───────────────────────
+    #
+    #   HIS 1101 ROUTING, verbatim: *"we will use closed_prev only for exiting fences"* / *"keeping
+    #   the lift-off on emerging allows us to capture those much needed 0445 reversal timestamps"*
+    #   / *"I'm not sure about closed_prev for ib.  my gut says emerging: create a knob that tests
+    #   both options"* / *"build for both options"*.
+    #
+    #   REVERSAL DETECTION IS NOT ROUTED HERE AT ALL and that is his ruling, not an omission:
+    #   `rev_stamps`, `reversed_in` and `_rev_pairs` read `line`/`E` and stay emerging.
+
+    def _cp(self, tf):
+        """ws{tf}r's chart-matched series. -> the array.
+
+        The EMERGING value at the last 5 s bar of the most recently COMPLETED ws{tf} bar, carried
+        forward - `v4_closed_prev.series`, which asserts its own causality: the bar it reads is
+        strictly before the bar it serves and inside a bar that has already closed.
+
+        LAZY AND CACHED. 30 series over a 1.6M-bar tape is not built unless a read asks for one.
+        """
+        t = int(tf)
+        if t not in self._cpl:
+            import v4_closed_prev as CP
+            self._cpl[t] = np.asarray(CP.series(self.E[t], t * 60), float)
+        return self._cpl[t]
+
+    def _read(self, tf, kind):
+        """The array a `kind` read uses for ws{tf}r. kind in ('exfnc', 'oob', 'ib'). -> the array.
+
+        ONE HOME for the routing, so a second copy cannot disagree with it. A timeframe under
+        LIN2_CP_MIN_TF is never routed - his rule *"ws1{any} and gcws1{any} stay on emerging"*.
+
+        A NaN, which the chart-matched series carries until its first ws{tf} bar has completed,
+        fails every comparison in `K.oob` and `K.ex_fence`. So an unwarmed bar reads as not-oob and
+        not-ex-fence rather than raising. STATED because it is a direction, not a non-answer.
+        """
+        want = {'exfnc': str(K.LIN2_CP_EXFNC), 'oob': str(K.LIN2_CP_OOB),
+                'ib': str(K.LIN2_CP_IB)}[str(kind)]
+        assert want in ('emerging', 'closed_prev'), \
+            'the %s read source %r is not an arm' % (kind, want)
+        if want == 'closed_prev' and int(tf) >= int(K.LIN2_CP_MIN_TF):
+            return self._cp(tf)
+        return self._state(tf)
+
+    def read_src(self, tf, kind):
+        """Which source a `kind` read for ws{tf}r came from. -> 'emerging' or 'closed_prev'."""
+        want = {'exfnc': str(K.LIN2_CP_EXFNC), 'oob': str(K.LIN2_CP_OOB),
+                'ib': str(K.LIN2_CP_IB)}[str(kind)]
+        return ('closed_prev' if want == 'closed_prev' and int(tf) >= int(K.LIN2_CP_MIN_TF)
+                else 'emerging')
+
+    def ib_line(self, tf):
+        """The whole series an oob->ib CROSS read uses for ws{tf}r. -> the array."""
+        return self._read(tf, 'ib')
+
     def value(self, tf, bar):
         """ws{tf}r at `bar`, on the STATE ladder. The number every fence test reads.
 
@@ -122,12 +186,12 @@ class Board:
         return float(self._state(tf)[int(bar)])
 
     def oob(self, tf, bar, side):
-        """Is ws{tf}r oob on `side` at `bar`, on the STATE ladder."""
-        return bool(K.oob(self._state(tf)[int(bar)], side))
+        """Is ws{tf}r oob on `side` at `bar`. Routed by LIN2_CP_OOB."""
+        return bool(K.oob(self._read(tf, 'oob')[int(bar)], side))
 
     def ex_fence(self, tf, bar, side):
-        """Is ws{tf}r past the r fence on `side` at `bar`, on the STATE ladder."""
-        return bool(K.ex_fence(self._state(tf)[int(bar)], side))
+        """Is ws{tf}r past the r fence on `side` at `bar`. Routed by LIN2_CP_EXFNC."""
+        return bool(K.ex_fence(self._read(tf, 'exfnc')[int(bar)], side))
 
     #  ── THE PER-LINE EX-FENCE LATCH: his 1029 mech, LIN2_LATCH_EXFNC_ON ───────────────────────
     #

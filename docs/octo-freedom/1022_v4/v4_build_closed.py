@@ -26,13 +26,19 @@ sys.path.insert(0, '/home/joe/thecodes')
 sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1022_v4')
 os.environ.setdefault('LG_TAPE_END', '2026-10-05')
 import ln
+#   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever
+#   happens. Without it a refusal from v4_knobs.check() - an off-ruled run with no
+#   W_V4_EXPERIMENT=1 - goes into the StringIO and the process exits 1 with NOTHING on
+#   either stream. That cost a diagnosis on 1101.
 _e = sys.stderr; sys.stderr = io.StringIO()
-from optimus9.compute.line_config import override
-from optimus9.orchestration.build_ws_lines import HOURS, WARMUP
-from optimus9.orchestration.rpl_cache import LINE_DIR, _line_key, cache_jig_perline
-from optimus9.db.database_manager import DatabaseManager
-from optimus9.config import get_db_config
-sys.stderr = _e
+try:
+    from optimus9.compute.line_config import override
+    from optimus9.orchestration.build_ws_lines import HOURS, WARMUP
+    from optimus9.orchestration.rpl_cache import LINE_DIR, _line_key, cache_jig_perline
+    from optimus9.db.database_manager import DatabaseManager
+    from optimus9.config import get_db_config
+finally:
+    sys.stderr = _e
 
 #   (the name v4 reads it by, the role in ln.SPEC, the timeframe in SECONDS)
 #   30 s is sub-wsf on Joe's 1017 band names: wsf = ws1-ws12, sub-wsf = g5-g30, dtf = >ws12.

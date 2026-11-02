@@ -67,9 +67,15 @@ import numpy as np
 import ln
 import v4_knobs as K
 
+#   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever
+#   happens. Without it a refusal from v4_knobs.check() - an off-ruled run with no
+#   W_V4_EXPERIMENT=1 - goes into the StringIO and the process exits 1 with NOTHING on
+#   either stream. That cost a diagnosis on 1101.
 _e = sys.stderr; sys.stderr = io.StringIO()
-from optimus9.analysis.jig import oob_ib_cross
-sys.stderr = _e
+try:
+    from optimus9.analysis.jig import oob_ib_cross
+finally:
+    sys.stderr = _e
 
 _G1 = {}
 _M2 = None

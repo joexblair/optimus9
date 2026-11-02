@@ -53,10 +53,16 @@ sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1022_v4')
 os.environ.setdefault('LG_TAPE_END', '2026-10-05')
 import v4_knobs as K
 import v4_fast as F
+#   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever
+#   happens. Without it a refusal from v4_knobs.check() - an off-ruled run with no
+#   W_V4_EXPERIMENT=1 - goes into the StringIO and the process exits 1 with NOTHING on
+#   either stream. That cost a diagnosis on 1101.
 _e = sys.stderr; sys.stderr = io.StringIO()
-import ln
-from optimus9.analysis.jig import lift_off, oob_ib_cross
-sys.stderr = _e
+try:
+    import ln
+    from optimus9.analysis.jig import lift_off, oob_ib_cross
+finally:
+    sys.stderr = _e
 
 HTF_LO = 7                                     # *"any of ws7r to ws12r (HTF lines)"* - Joe 1025
 _LO = {}
@@ -154,6 +160,22 @@ def b1_beyond(b1, side, hold=None, dwell=None, mask=None):
     return out
 
 
+_CPR = {}
+
+
+def _cp_ws1r(em):
+    """ws1r's chart-matched value series, cached. -> the array.
+
+    The EMERGING value at the last 5 s bar of the most recently completed 60 s bar, carried
+    forward. ONE HOME so the gate and the printed value cannot diverge.
+    """
+    k = id(em)
+    if k not in _CPR:
+        import v4_closed_prev as CP
+        _CPR[k] = np.asarray(CP.series(em, 60), float)
+    return _CPR[k]
+
+
 def _oob(line, side):
     """The oob mask, through `K.oob_mask` so the rule has one home - his 1026 point."""
     return K.oob_mask(line, side)
@@ -193,11 +215,76 @@ def t1(CL, side, A, B):
     #   knob picks independently.
     key = {'ws1b': 'b', 'gcws30b': 'g30b'}[str(K.LIN2_T1_B_LINE)]
     b1 = np.asarray(CL[key], float)
-    r1 = np.asarray(CL['r'][1], float)      # ws1r, unchanged - his 1031 ruling
+    r1 = np.asarray(CL['r'][1], float)      # ws1r EMERGING - the reversal BARS come off this
+    #   HIS 1101: ws1r's VALUE read routes to the chart-matched series - *"change ws1r to
+    #   closed-p"*. Two different questions on one line: WHEN it reversed (r1, emerging, his
+    #   *"keeping the lift-off on emerging"*) and WHAT its value was at that stamp (r1v).
+    _w1r = str(K.LIN2_CP_WS1R)
+    assert _w1r in ('emerging', 'closed_prev'), 'LIN2_CP_WS1R %r is not an arm' % (_w1r,)
+    r1v = r1 if _w1r == 'emerging' else _cp_ws1r(r1)
+    #   HIS 1101: the lift-off DETECTOR reads the chart-matched series too, so a reversal can only
+    #   land on a 60 s bar close - *"lift-off needs a close-p mode - it only reacts to full 1
+    #   minute bars"*. A THIRD read of one line: the bars (this), the gate value (r1v), and the
+    #   every-bar series (r1) that both are derived from.
+    _lft = str(K.LIN2_CP_LIFT)
+    assert _lft in ('emerging', 'closed_prev'), 'LIN2_CP_LIFT %r is not an arm' % (_lft,)
+    r1d = r1 if _lft == 'emerging' else _cp_ws1r(r1)
     w1 = max(1, int(K.LIN2_T1_B_WOB))
-    #   the b line's state, held per LIN2_B1_HOLD. At 0 this is the plain read and nothing moves.
-    oob = b1_beyond(b1, side)
-    raws = ws1r_revs(r1, side)
+    #   HIS 1101 SPEC REVISION: THE b LINE'S FENCE IS LIN2_T1_B_FNC 95 -> (5.0, 95.0), NOT oob
+    #   15/85. *"I've just found it - I omitted the 5/95 requirement for gcws30b"*. Both reads below
+    #   move together - the beyond-state AND the cross back in - because they are two halves of one
+    #   question: when was the line past its fence, and when did it come back inside.
+    blo, bhi = 100.0 - float(K.LIN2_T1_B_FNC), float(K.LIN2_T1_B_FNC)
+    bfnc = bhi if int(side) > 0 else blo        # the edge the row prints, on this side
+    #   HIS 1101 ADDITION: the b line's IB state must have held LIN2_T1_B_IB_DWELL bars, counting
+    #   the cross bar. ADDITIVE to the wob - he said *"add a 1 minute minimum dwell on gcws30b
+    #   ib"* - so the fire bar takes the LATEST of the three requirements. CAUSAL: the dwell
+    #   window is the cross bar and the bars after it, and the cadence fires on its last bar.
+    _ibd = max(1, int(K.LIN2_T1_B_IB_DWELL))
+    #   *** THE DWELL MUST VERIFY THE STATE HELD, NOT JUST COUNT BARS FORWARD. *** The first build
+    #   of this took max(..., c + _ibd - 1) and nothing else, so a cross whose ib state BROKE
+    #   inside the dwell still fired - 2026-09-03 05:24:30 held ib for exactly 6 bars at 15.13 and
+    #   was back at 14.38 by 05:25:00, yet the cadence printed at 05:25:25. A dwell is a HELD
+    #   state, his word, so the window is tested here.
+    _ibm = (b1 > K.OOB_LO) & (b1 < K.OOB_HI)      # ib is STRICTLY inside the oob pair
+    _ibm = np.asarray(_ibm, bool)
+
+    def _dwell_ok(c0):
+        """Did the b line's ib state hold LIN2_T1_B_IB_DWELL bars from the cross bar. -> bool.
+
+        CAUSAL: the window is the cross bar and the _ibd - 1 bars after it, and the cadence it
+        gates cannot fire before that window's last bar.
+        """
+        a, b = int(c0), int(c0) + _ibd
+        return bool(b <= len(_ibm) and _ibm[a:b].all())
+    #   *** HIS 1101 TWO-FENCE JOURNEY. *** Verbatim: *"I want to make gcws30b qualify on
+    #   ex-95/5-fence on the way out, and when gcws30b returns in to in-fence, that infence is
+    #   85/15 (ie exits to an extremum outside of 95/5, and returns past ib to complete it's
+    #   journey)"* / *"xwob for ib cross is 6 bars"*.
+    #
+    #   ONE EXCURSION, TWO FENCES, and the nesting is why this works: beyond 5 on the low side
+    #   implies beyond 15, so the 15/85 run CONTAINS the 5/95 run. The journey is therefore the
+    #   15/85 run, and the 5/95 fence is a qualifier ON it - at least one bar of that run must have
+    #   reached beyond 5/95. The return is the 15/85 ib cross at LIN2_T1_B_WOB 6 bars = 30 s.
+    #
+    #   BEFORE THIS both reads were on 5/95, and the cross back inside 5 ended the event while the
+    #   line was still oob at 15/85 - the 05:19:00 case he questioned.
+    far = np.asarray(K.beyond_mask(b1, side, blo, bhi), bool)   # the way out: beyond (blo, bhi)
+    #   *** HIS 1101 CORRECTION: AN ib BLIP THAT DOES NOT HOLD DOES NOT BREAK THE EXCURSION. ***
+    #   Verbatim: *"this doesn't consider the entire ex-fence excursion - we must need a rule that
+    #   says "gcws1b must print ex 95/5 at least once while gcws1b is oob".  the 0524 blip that
+    #   didn't hold in ib doesn't break the oob excursion"*.
+    #   WHAT WENT WRONG WITHOUT IT: 2026-09-03 05:24:30 closed at 15.13 against the 15.0 fence and
+    #   stayed ib for 6 bars before falling back. That split one excursion into 05:17:30..05:24:25,
+    #   which reached -4.51 and qualified, and 05:25:00..05:28:55, whose lowest is 8.28 and which
+    #   does not - so his real return at 05:29:00 was refused by a 0.13 blip.
+    #   THE BREAK THRESHOLD IS LIN2_T1_B_IB_DWELL, which is a STRUCTURAL call of MINE with HIS
+    #   value: "held in ib" has to mean one thing, and he has already set that standard at 12 bars
+    #   = 60 s for the return. Two knobs for one idea would drift. `b1_beyond`'s own `hold`
+    #   argument is the mech - his 1029 *"if ws1b to ib has not qualified its wob 12, then its
+    #   value is not passed in"* - and t1 now passes it explicitly instead of taking LIN2_B1_HOLD 0.
+    oob = b1_beyond(b1, side, hold=max(1, int(K.LIN2_T1_B_IB_DWELL)))
+    raws = ws1r_revs(r1d, side)
     grace = max(0, int(K.L2_T1_GRACE_S) // 5)
     gat = str(K.LIN2_T1_GRACE_AT)
     assert gat in ('cross', 'confirm'), 'LIN2_T1_GRACE_AT %r is not an arm' % gat
@@ -206,7 +293,7 @@ def t1(CL, side, A, B):
     rlo, rhi = 100.0 - float(K.LIN2_T1_R_FNC), float(K.LIN2_T1_R_FNC)
 
     def rgate(x):
-        v = float(r1[_stamp(x)])
+        v = float(r1v[_stamp(x)])
         return (v >= rhi) if int(side) > 0 else (v <= rlo)
 
     out = []
@@ -218,13 +305,32 @@ def t1(CL, side, A, B):
     #   Found by bounding the walk at its own verdict bar: the cadence vanished, because its `cf`
     #   no longer fitted the window it was filtered on. Every t1 figure measured before 1031 carries
     #   that lookahead.
+    #   THE RETURN IS THE 15/85 ib CROSS, his 1101 *"that infence is 85/15"*, at xwob 6.
     for c, cf, s in oob_ib_cross(b1, K.OOB_HI, K.OOB_LO, w1):
         if s != int(side) or not (int(A) <= cf <= int(B)):
             continue
-        run = next((r for r in _runs(oob) if r[1] == c - 1), None)
+        #   THE MATCH IS CONTAINMENT, NOT AN EXACT END, and the hold is why. `b1_beyond` credits a
+        #   qualified return from its own confirm bar - out[i:i+h-1] stays True - so a held run no
+        #   longer ends at c - 1 for the raw cross bar c. It ends h - 2 bars later. Asking which
+        #   run CONTAINS the bar before the cross is the same question without the arithmetic, and
+        #   it does not care what the hold is set to.
+        #   THE BLIPS INSIDE A RUN ARE FILTERED BY THE DWELL BELOW, not here: several raw crosses
+        #   can sit inside one excursion and only the one whose ib state holds is the return.
+        run = next((r for r in _runs(oob) if int(r[0]) <= int(c) - 1 <= int(r[1])), None)
         if run is None:
             continue
+        #   HIS 1-MINUTE ib DWELL, as a HELD state. A cross that falls back out inside the window
+        #   has not completed its return and produces no cadence.
+        if not _dwell_ok(c):
+            continue
         s0, s1 = run
+        #   THE QUALIFIER: the journey must have reached beyond the (blo, bhi) fence. Without a bar
+        #   out there the excursion never left in-fence by his measure and the cadence is refused.
+        if not far[int(s0):int(s1) + 1].any():
+            continue
+        #   the extremum the journey reached, for the row. MIN on the low side, MAX on the high.
+        _ex = (float(np.nanmax(b1[int(s0):int(s1) + 1])) if int(side) > 0
+               else float(np.nanmin(b1[int(s0):int(s1) + 1])))
         #   the DURING branch: the RAW reversal inside the oob run, cws1r on the target side of 50
         during = [int(x) for x in raws if s0 <= x <= s1 and rgate(x)]
         if during:
@@ -234,14 +340,17 @@ def t1(CL, side, A, B):
             #   has said `cf` since 1027; the code used `c`, so the cadence acted on a cross whose
             #   hold was not yet proven. THE WINDOWS STILL BOUND ON c - the oob run match and the
             #   grace window are both anchored on the cross bar, which is his standing rule.
-            bar = max(int(cf), _stamp(during[-1]))           # *"whichever is last"*
+            bar = max(int(cf), int(c) + _ibd - 1, _stamp(during[-1]))   # *"whichever is last"*
             assert bar >= int(cf), 'the t1 cadence precedes its own cws1b ib cross confirm'
-            out.append((bar, 't1', '%s oob %s..%s, ws1r reversed %s during, r %.2f past the'
-                                   ' %.1f fence, stamp %s, cross %s hold %d bars'
-                        % (K.LIN2_T1_B_LINE, ln.U(s0)[11:], ln.U(s1)[11:],
-                           ln.U(during[-1])[11:], float(r1[_stamp(during[-1])]),
+            assert bar >= int(c) + _ibd - 1, 'the t1 cadence precedes its own ib dwell'
+            out.append((bar, 't1', '%s journey %s..%s reached %.2f past the %.1f fence, ws1r'
+                                   ' reversed %s during, r %.2f past the %.1f fence, stamp %s,'
+                                   ' ib %.1f cross %s hold %d bars, ib dwell %d bars'
+                        % (K.LIN2_T1_B_LINE, ln.U(s0)[11:], ln.U(s1)[11:], _ex, bfnc,
+                           ln.U(during[-1])[11:], float(r1v[_stamp(during[-1])]),
                            rhi if int(side) > 0 else rlo,
-                           ln.U(_stamp(during[-1]))[11:], ln.U(c)[11:], w1)))
+                           ln.U(_stamp(during[-1]))[11:],
+                           K.OOB_HI if int(side) > 0 else K.OOB_LO, ln.U(c)[11:], w1, _ibd)))
             continue
         #   the GRACE branch: the RAW reversal forward of the cross, inside L2_T1_GRACE_S
         #   WHERE THE GRACE WINDOW STARTS is LIN2_T1_GRACE_AT - his 1031 *"give it an on off
@@ -250,14 +359,20 @@ def t1(CL, side, A, B):
         late = [int(x) for x in raws if g0 < x <= g0 + grace and rgate(x)]
         if late:
             #   cf, not c - the same 1031 fix as the during branch above.
-            bar = max(int(cf), _stamp(late[0]))              # *"whichever is last"*
+            bar = max(int(cf), int(c) + _ibd - 1, _stamp(late[0]))      # *"whichever is last"*
             assert bar >= int(cf), 'the t1 cadence precedes its own cws1b ib cross confirm'
-            out.append((bar, 't1', '%s ib %s, ws1r reversed %s inside the %ds grace from the'
-                                   ' %s bar %s, r %.2f past the %.1f fence, stamp %s, hold %d bars'
-                        % (K.LIN2_T1_B_LINE, ln.U(c)[11:], ln.U(late[0])[11:], K.L2_T1_GRACE_S,
-                           gat, ln.U(g0)[11:], float(r1[_stamp(late[0])]),
+            assert bar >= int(c) + _ibd - 1, 'the t1 cadence precedes its own ib dwell'
+            out.append((bar, 't1', '%s journey %s..%s reached %.2f past the %.1f fence, back'
+                                   ' inside the %.1f ib fence %s, ws1r reversed %s inside the %ds'
+                                   ' grace from the %s bar %s, r %.2f past the %.1f fence, stamp'
+                                   ' %s, hold %d bars, ib dwell %d bars'
+                        % (K.LIN2_T1_B_LINE, ln.U(s0)[11:], ln.U(s1)[11:], _ex, bfnc,
+                           K.OOB_HI if int(side) > 0 else K.OOB_LO,
+                           ln.U(c)[11:], ln.U(late[0])[11:],
+                           K.L2_T1_GRACE_S,
+                           gat, ln.U(g0)[11:], float(r1v[_stamp(late[0])]),
                            rhi if int(side) > 0 else rlo,
-                           ln.U(_stamp(late[0]))[11:], w1)))
+                           ln.U(_stamp(late[0]))[11:], w1, _ibd)))
     return out
 
 

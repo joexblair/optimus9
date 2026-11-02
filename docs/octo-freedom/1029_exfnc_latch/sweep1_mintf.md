@@ -8,12 +8,12 @@
 
 | the read | expected | this run | match |
 |---|---|---|---|
-| legs | 6 | 21 | ** NO ** |
-| net % | +2.2658 | -0.7203 | ** NO ** |
-
-** THE CONTROL FAILED. Every row below is suspect. **
+| legs | 20 | 20 | yes |
+| net % | -0.3014 | -0.3014 | yes |
 
 ## the grid, ordered by MIN_TF then mode
 
 | min_tf | mode | legs | barrage exits | MAE %% | MFE %% | realised %% | drag %% | net %% | net %% per leg | legs net-positive |
+|---|---|---|---|---|---|---|---|---|---|---|
+gs net-positive |
 |---|---|---|---|---|---|---|---|---|---|---|

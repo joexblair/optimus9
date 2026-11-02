@@ -21,9 +21,15 @@ import numpy as np
 sys.path.insert(0, '/home/joe/thecodes')
 sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1022_v4')
 import v4_knobs as K
+#   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever
+#   happens. Without it a refusal from v4_knobs.check() - an off-ruled run with no
+#   W_V4_EXPERIMENT=1 - goes into the StringIO and the process exits 1 with NOTHING on
+#   either stream. That cost a diagnosis on 1101.
 _e = sys.stderr; sys.stderr = io.StringIO()
-import ln
-sys.stderr = _e
+try:
+    import ln
+finally:
+    sys.stderr = _e
 
 
 _SUB = {}
@@ -64,6 +70,26 @@ def sub_line(name):
     return a
 
 
+def _g30b():
+    """gcws30b, routed by LIN2_CP_GCWS30B. -> array.
+
+    ONE HOME for the routing, because BOTH consumers read the same dict entry: the t1 cadence's b
+    line and the arm race's own 5/95 test. His 1101 *"yes"* routes the LINE, not one mech's view.
+
+    'closed_prev' is the chart-matched read - gcws30b's value at the last 5 s bar of the most
+    recently completed 30 s bar, carried forward, which is what TradingView shows as that bar's
+    close. 30, not 1800: gcws30 is a THIRTY SECOND line, his sub-wsf naming.
+    """
+    em = sub_line('gcws30b')
+    want = str(K.LIN2_CP_GCWS30B)
+    assert want in ('emerging', 'closed_prev'), \
+        'LIN2_CP_GCWS30B %r is not an arm' % (want,)
+    if want == 'emerging':
+        return em
+    import v4_closed_prev as CP
+    return np.asarray(CP.series(em, 30), float)
+
+
 def arm_lines(E):
     """The four lines the walk reads, every one live. -> {'b', 'r', 'M'}.
 
@@ -74,7 +100,7 @@ def arm_lines(E):
     #   rather than replacing it in this dict, because the two mechs that move to it each carry
     #   their own knob and a run may have one on the new line and one on the old.
     return {'b': np.asarray(ln.line('ws1b'), float),
-            'g30b': sub_line('gcws30b'),
+            'g30b': _g30b(),
             'r': {int(t): np.asarray(v, float) for t, v in E.items()},
             'M': {t: np.asarray(ln.line('ws%dMage' % t), float) for t in (1, 2)}}
 

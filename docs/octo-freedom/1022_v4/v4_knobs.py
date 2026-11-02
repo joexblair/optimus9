@@ -365,11 +365,92 @@ LIN2_RELATCH_ON = _knob('LIN2_RELATCH_ON', 1, int)   # THE EX-FENCE LATCH RE-LAT
 #   "AT OR BEYOND" ON TEST 3: on a low side the value must be at or BELOW the lift-off value, on a
 #   high side at or above. The inclusive form is MINE - he wrote "falls back to the value".
 #   DEFAULT OFF so the arm is measured before it is banked.
+#  -- HIS 1101 DIVERGENCE-AT-A-CADENCE UPDATE -----------------------------------------------------
+#   His words: *"divergence update: -divergence currently fires at the arm / -floater_anchor/
+#   divergence and PM (price matching) also needs to be tested at a cadence even. ordered before
+#   lineage (ie lineage tests after devergence tests) / -examples on 09-03 / --bullish 2324, floater
+#   2312 / --bullish 0437, floater 0418"*.
+#   WHY IT WAS BUILT: no ex-fence latch wob can exhaust the 2026-09-03 04:37:55 cadence. Measured
+#   across 17 values from 1 to 480 bars - at 120 bars = 600 s the candidate set empties and the bar
+#   lands on HOLD, never on EXHAUST, because HOLD fires on `baton_oob(rider)` and ws12r reads 13.56
+#   against the 15.0 oob fence. His condition: *"I want a ex-fence wob that creates an exhaust ar
+#   0437.  if that can't be done, then we have to apply this new update now"*.
+#   *** HIS 1101 RULING: DIVERGENCE IS COMPLETELY DISABLED, AND ws1r IS THE WRONG LINE FOR IT. ***
+#   Verbatim: *"divergence can be completely disabled.  in the notes, make it clear that ws1r is not
+#   the best divergence test: ws1 works in small cycles that are not profitable.  ws3r seems to have
+#   more divergence potential (eyeballed)"*.
+#   HIS EYEBALL READ IS A RESULT, not an absence of one: ws3r has the divergence potential, ws1r's
+#   cycles are too small to be worth trading. No ws3r divergence has been measured here - the line
+#   the producer reads is ws1r (CL['r'][1]) at every call site - so ws3r is a BUILD he has not asked
+#   for yet, and this note is the record of why it would be the one to build.
+LIN2_DIV_ON = _knob('LIN2_DIV_ON', 0, int)   # HIS KNOB NAME. The divergence test AT EVERY CADENCE,
+#   on/off. At 0 the divergence runs only at the arm, which is the pre-1101 behaviour.
+#   THE ORDER IS HIS, confirmed 1101: it runs BEFORE the lineage tests - before the rider pickup,
+#   before the candidate scan and before HOLD. That ordering is the whole mech: at 04:37:55 HOLD
+#   takes the bar today, so a test placed after it could never fire.
+#   HIS TRUTH TABLE, 1101 verbatim: *"if divergence's verdict is bullish and the target-side is low,
+#   router receives a rev-trade signal.  if divergence is bearish and target-side is high, router
+#   receives a rev-trade signal. if neither match, the outcome is none"*.
+#   THAT IS `verdict == target side`. anchor_floater's state is +1 for a divergence supporting a
+#   SHORT - bearish - and -1 for one supporting a LONG - bullish; the target side is +1 high and -1
+#   low. bullish + low is -1 == -1; bearish + high is +1 == +1. It is the SAME condition the arm
+#   has always used, so no sign is re-derived and no second truth table exists.
+#   *** THE ARM'S OWN COMMENT CONTRADICTS ITS OWN CODE. *** It reads "A SHORT is side +1 here",
+#   which is wrong - a SHORT's target side is the LOW one, -1. The CONDITION beside it is right and
+#   matches his 1101 table. The comment is corrected, the condition is untouched.
+#   DEFAULT OFF so the arm is measured before it is banked.
+LIN2_DIV_AT = os.environ.get('W_V4_LIN2_DIV_AT', 'cadence')   # WHICH BAR the divergence is
+#   anchored on at a cadence: 'cadence' = the cadence bar itself, 'extremum' = the target-side
+#   ws1Mage extremum at or before it.
+#   HIS 1101 PROPOSAL, verbatim: *"2324 is when the cadence fires.  maybe divergence will work
+#   better if it's anchored on the ws1Mage extremum - walk back to look forward and find the
+#   target-side ws1Mage extremum, anchor on it and test for divergence"*.
+#   IT IS THE SAME PICKER THE MAGE CASCADE USES - jig.mage_cascade_bar in 'extrema' mode, his 1029
+#   ruling *"were the mage cascades anchored on a ws1Mage's extremum? if not, they should be"*. So
+#   no new producer: the walk back is unbounded, the gap is MC_GAP 48 bars = 4 min - his own 1017
+#   number - and the returned bar may never exceed the cadence bar, which that producer asserts.
+#   WHY HE PROPOSED IT. At the 2026-09-03 23:24:00 cadence, anchored on the cadence bar, pxs rises
+#   +0.000100 from the floater while ws1r rises +38.02, so both signs are positive and the read is
+#   price-matched - refused. He does not read 2324 as price-matched. A +0.000100 move is 0.060% of
+#   price, and the anchor is the lever he reached for rather than the PM floor.
+#   NEITHER ARM IS RULED. 'cadence' is the default and the pre-1101 behaviour; the two are reported
+#   side by side against his own examples, not chosen.
+#   THE KNOB NAME AND BOTH ARM NAMES ARE MINE.
+LIN2_DIV_PM_FLOOR = _knob('LIN2_DIV_PM_FLOOR', 0.0)   # HIS KNOB NAME. The floor PM - price
+#   matching - needs before it may act. 0.0 = PM DISABLED, his 1101: *"PM matching.  it needs a
+#   floor that I don't have yet - disable PM matching for lineage2"*.
+#   PM IS ALREADY REFUSED by `div_verdict`, which returns None for abs(state) == 2 alongside state
+#   0. So at 0.0 nothing changes and this knob is the declared home for the floor when he sets it.
+#   NOTHING READS IT YET. It is declared, ruled at 0.0, and wired to no test - stated, so a later
+#   reader does not assume a mech behind it.
+
 #  -- HIS 1031 t1 CADENCE UPDATE -----------------------------------------------------------------
 #   His words: *"t1 cadence update: -ws1b is replaced by gcws30b, wob 6 / -the "r reversing
 #   target-side past 50" gate is replaced with "r reversing on target-side ex-{100-{knob:56}
 #   fence}" / --example 09-03 1152 does not qualify because r is 50.3. 1233 does qualify because r
 #   is 59"*.
+#   *** HIS 1101 SPEC REVISION: t1's b LINE MUST BE EX-5/95, NOT oob 15/85. *** His words:
+#   *"I can't see the gcws30b ex 5/95"* / *"I might have overlooked 5/95 fence for gcws30b in the
+#   spec"* / *"I've just found it - I omitted the 5/95 requirement for gcws30b"*.
+#   BEFORE THIS the t1 b read was oob 15/85 on whatever line LIN2_T1_B_LINE named - K.OOB_HI/LO
+#   both in the beyond-state and in the oob->ib cross. The 5/95 pair replaces that pair for the
+#   line t1 reads; on the high side beyond 95 already implies beyond 85, so this is a narrowing,
+#   and the CROSS back to in-bounds is now a cross back inside 95.
+#   THE KNOB IS ONE HOME FOR THE FENCE and it applies to whichever line t1 reads - a structural
+#   call of MINE, stated: a fence keyed to a line name would need a second copy of the mapping the
+#   b-line knob already owns. AT THE ws1b ARM of LIN2_T1_B_LINE this wants 85.0, not 95.0.
+#   HIS 1101 ADDITION: a 1 MINUTE MINIMUM DWELL ON gcws30b's IB STATE. His words: *"add a 1 minute
+#   minimum dwell on gcws30b ib"*. The cadence may not fire until the b line's in-bounds state has
+#   held this many bars, counting the cross bar itself. It is ADDITIVE to LIN2_T1_B_WOB 6 - he said
+#   "add" - so the fire bar is max(the cross's confirm bar, the cross + dwell - 1, the reversal
+#   stamp), and at 12 the dwell is what binds.
+#   *** THE SIDE OF THE FENCE IS HIS WORD "ib" READ LITERALLY, AND THERE IS A SECOND READING. ***
+#   The 05:19:25 cadence he questioned fired off a BEYOND-the-fence run of exactly 6 bars = 30 s
+#   (gcws30b at 2.66, 05:18:30..05:18:55). A 1-minute minimum on the BEYOND side would delete that
+#   cadence; this ib dwell only moves it 30 s later, to 05:19:55. Both are measured for him rather
+#   than chosen here - LIN2_B1_OOB_DWELL is where the beyond-side version would go.
+LIN2_T1_B_IB_DWELL = _knob('LIN2_T1_B_IB_DWELL', 12, int)   # bars = 60 s at 12.
+LIN2_T1_B_FNC = _knob('LIN2_T1_B_FNC', 95.0)   # the t1 b line's fence, 95 -> (5.0, 95.0).
 LIN2_T1_B_LINE = os.environ.get('W_V4_LIN2_T1_B_LINE', 'gcws30b')   # the b line t1 reads. 'ws1b'
 #   is the pre-1031 arm. THE KNOB NAME IS MINE; the line is his. Both are kept so one run can hold
 #   t1 on the new line and the arm on the old.
@@ -417,6 +498,29 @@ LIN2_ARM_WS3R_ON = _knob('LIN2_ARM_WS3R_ON', 0, int)   # whether ws3r oob joins 
 #   fired on 40 bars of 2026-09-03 on the low side and 49 on the high side. The OR replaces it,
 #   and ws3r joins the same group rather than being a fourth conjunct.
 
+#   *** HIS 1101 BLANKET RULE: NO EXHAUST WHILE ANY RUNG ON THE BOARD IS oob. *** His words:
+#   *"0554 can't exhaust - ws3r is oob so it must walk to the next cadence"*, then, asked whether
+#   it was the rider or the band: *"the oob rule doesn't apply to a rider - it's a blanket rule
+#   across the board"*.
+#   THE BOARD IS THE FULL RANGE, ws1..L2_MOM_MAXTF, his standing meaning of the word - not the
+#   candidate band and not the rungs above the rider. ws3 at the 2026-09-03 05:54:25 exhaust sits
+#   BELOW the rider ws5 and could never be a candidate, and his rule still covers it.
+#   THE READ IS `Board.oob`, routed by LIN2_CP_OOB, so it is the same oob the rest of the walk uses.
+#   THE KNOB NAME IS MINE; the rule and its scope are his.
+#   *** HIS 1101 THIRD ARM: THE LIN-HOP REACH TEST. *** *"let's try this: if a line that is inside
+#   of lin-hop's reach is ex-fence, then walk to the next cadence"*. The reach is the rider's own
+#   hop band, rider + 1 .. rider + L2_LIN_HOP, which is 2 - so two rungs above the rider.
+#
+#   ALL FOUR ARMS LIVE IN ONE KNOB so they can be A/B'd without stacking:
+#     'off'                 no board test - the pre-1101 walk
+#     'board_oob'           any ws1..L2_MOM_MAXTF oob blocks. His first wording
+#     'board_oob_rev'       oob AND not reversed since the previous cadence. His correction
+#     'linhop_exfnc'        any rung in rider + 1 .. rider + L2_LIN_HOP ex-fence blocks. This one
+#   THE ARM NAMES ARE MINE. The four rules are his, each in his own words above.
+LIN2_BOARD_HOLD = os.environ.get('W_V4_LIN2_BOARD_HOLD', 'linhop_exfnc')
+#   BANKED at his new arm on *"let's try this"*. The other three are one env var away.
+LIN2_BOARD_OOB_HOLD = _knob('LIN2_BOARD_OOB_HOLD', 1, int)   # SUPERSEDED by LIN2_BOARD_HOLD above.
+#   Kept at 1 so an old caller reading it is unchanged; the walk reads LIN2_BOARD_HOLD now.
 LIN2_TOP_RESET_ON = _knob('LIN2_TOP_RESET_ON', 1, int)   # THE LADDER-TOP RIDER RESET, on/off.
 #   HIS MECH, 1031, verbatim: *"I have an new trick that I haven't shared yet: when ws30 exhausts,
 #   set the rider to zero and test for baton pass candidates (same logic, max jump = 8 TFs)"*.
@@ -554,7 +658,10 @@ LIN2_B1_HOLD = _knob('LIN2_B1_HOLD', 0, int)   # bars ws1b's crossing back insid
 #   THE KNOB NAME IS MINE. The value 12 is his, and it is the same count as the crossing hold the
 #   two cadences already apply to ws1r.
 #   DEFAULT 0 so the arm is measured before it is banked.
-LIN2_LATCH_EXFNC_ON = _knob('LIN2_LATCH_EXFNC_ON', 1, int)   # the PER-LINE EX-FENCE LATCH, on/off.
+#   *** BANKED OFF 1101. *** His words: *"disable the latch.  I introduced it get around
+#   emerging"*. The chart-matched ex-fence read above is what it was standing in for, so the
+#   latch comes out rather than running beside it. 1 is the pre-1101 arm.
+LIN2_LATCH_EXFNC_ON = _knob('LIN2_LATCH_EXFNC_ON', 0, int)   # the PER-LINE EX-FENCE LATCH, on/off.
 #   HIS MECH AND HIS KNOB NAME, 1029, verbatim:
 #       I have a third option to add to pseudo-close and 180 wob: use a per-line latch
 #       -the mech would latch on when the r line crosses into exfence, with a small
@@ -906,6 +1013,78 @@ LIN2_COUNTER_OOB_ON = _knob('LIN2_COUNTER_OOB_ON', 0, int)   # the cws1b counter
 #   08-30 1921)"*, marked IMPORTANT and *"go"* on 1027. BANKED ON. No wob - he named no dwell.
 #   He has not NUMBERED this cadence, so its rows carry the description 'cws1b counter-oob'.
 
+#  ── THE CHART-MATCHED READ: his 1101 reversal of the 1029 "drop prev-close" ──────────────────
+#
+#   HIS 1101 WORDS, verbatim: *"I didn't realise the closed_prev was exactly the same as "seam -5,
+#   carried forward" - I was wrong to disable that"* / *"it makes sense to me that we will use
+#   closed_prev only for exiting fences.  keeping the lift-off on emerging allows us to capture
+#   those much needed 0445 reversal timestamps"* / *"I'm not sure about closed_prev for ib.  my gut
+#   says emerging: create a knob that tests both options"* / *"1) build for both options, then we
+#   can test both with ease a reduced downtime"*.
+#
+#   WHAT THE READ IS. `v4_closed_prev.series` - the line's EMERGING value at the last 5 s bar of
+#   the most recently COMPLETED coarse bar, carried forward. That is the value TradingView shows as
+#   that bar's close (docs/emerging_bar_open.md line 93), read causally. NaN until the first coarse
+#   bar has completed, and a NaN fails every fence test, which is the quiet direction.
+#
+#   WHY IT MATTERS, measured on 2026-09-03 03:59:55..04:47:55, ws4r: 23 of 578 5 s bars are past
+#   the 25.0 fence and NONE of the 13 chart points is. His words: *"if I take seam, then 0436
+#   prints an ex-fence latch value that I can't see on the charts"*.
+#
+#   THE THREE KNOB NAMES ARE MINE. He named the reads - "exiting fences", "ib" - not the labels.
+LIN2_CP_EXFNC = os.environ.get('W_V4_LIN2_CP_EXFNC', 'closed_prev')   # the ex-fence read's source.
+#   BANKED 'closed_prev' on his 1101 ruling *"closed_prev only for exiting fences"*. 'emerging' is
+#   the other arm and is the pre-1101 behaviour.
+LIN2_CP_OOB = os.environ.get('W_V4_LIN2_CP_OOB', 'emerging')          # the oob 15/85 read's source.
+#   BANKED 'emerging'. He did not put oob in either of his two categories; asked which, he said
+#   *"build for both options, then we can test both with ease a reduced downtime"*. The bank is
+#   therefore today's read and 'closed_prev' is the arm, so banking it moves no verdict by itself.
+LIN2_CP_IB = os.environ.get('W_V4_LIN2_CP_IB', 'emerging')            # the oob->ib cross's source.
+#   BANKED 'emerging' - *"my gut says emerging: create a knob that tests both options"*. His gut IS
+#   the bank until the arms are measured.
+#   *** 1101, LATER: HE MOVED ws1r ONTO THE CHART-MATCHED READ. *** *"change ws1r to closed-p"*.
+#   That reverses the ws1 half of his earlier rule *"ws1{any} and gcws1{any} stay on emerging"*,
+#   whose reason was the 09-03 0326 arm - so the arm race's own ws1r oob read moves with it and
+#   the arm list is re-measured beside his five validated timestamps, not assumed.
+#   REVERSAL DETECTION IS STILL EMERGING and that is unchanged: `ws1r_revs` feeds on the emerging
+#   array, his *"keeping the lift-off on emerging"*. Only ws1r's VALUE reads move.
+LIN2_CP_MIN_TF = _knob('LIN2_CP_MIN_TF', 1, int)   # the TF floor for the chart-matched read.
+#   HIS 1101 RULE: *"ws1{any} and gcws1{any} stay on emerging (otherwise we lose the 09-03 0326
+#   arm). all else is closed-prev"*. At 2 every ws1 line is exempt.
+#   *** MY gcws READING WAS WRONG AND HIS LITERAL WORDS WERE RIGHT. *** I read "gcws1{any}" as
+#   "every line at or below ws1's 60 s", which exempted gcws30b at 30 s. Asked directly whether
+#   "make this the machine" routes gcws30b, he said *"yes"*. So the exemption is gcws1-anything,
+#   which is a line that does not exist, and gcws30b routes like everything else. This floor
+#   governs the r ladder only; gcws30b has its own knob below because it is not in that ladder.
+#   *** HIS 1101 REVISION: THE LIFT-OFF DETECTOR NEEDS A CHART-MATCHED MODE. *** *"lift-off needs
+#   a close-p mode - it only reacts to full 1 minute bars"*.
+#   WHY HE ASKED. On 2026-09-03 the t1 r gate took a reversal at 06:24:35 where ws1r on the
+#   every-bar read fell 69.18 -> 62.38, a turn AWAY from the high target side, because `lift_off`
+#   fired on an intra-bar move. On the chart-matched series the line steps once per 60 s bar, so a
+#   lift-off can only land on a bar close.
+#   THIS REVISES HIS EARLIER RULING, and that is on the record: *"keeping the lift-off on emerging
+#   allows us to capture those much needed 0445 reversal timestamps"*. Those 0445 reversals were
+#   his reason for the every-bar read, and this arm gives them up. 'emerging' is the other arm.
+#   SCOPE: the t1 r gate's ws1r reversal BARS only. `_rev_pairs`, which finds each RUNG's reversal
+#   for the baton, is a different consumer and is NOT routed by this - he named lift-off in the
+#   context of the t1 marker and the rungs are not measured here.
+LIN2_CP_LIFT = os.environ.get('W_V4_LIN2_CP_LIFT', 'closed_prev')
+LIN2_CP_WS1R = os.environ.get('W_V4_LIN2_CP_WS1R', 'closed_prev')   # ws1r's VALUE source in
+#   the t1 r gate. BANKED 'closed_prev' on his 1101 *"change ws1r to closed-p"*. THE KNOB NAME IS
+#   MINE. It routes the GATE's value read only - `ws1r_revs`, which finds the reversal bars, keeps
+#   the emerging array because he ruled lift-off stays emerging. The two are different questions:
+#   WHEN did ws1r reverse (emerging) and WHAT was its value at that stamp (this knob).
+LIN2_CP_GCWS30B = os.environ.get('W_V4_LIN2_CP_GCWS30B', 'closed_prev')   # gcws30b's source.
+#   BANKED 'closed_prev' on his 1101 *"yes"*. THE KNOB NAME IS MINE; the line and the ruling are
+#   his. It routes gcws30b for EVERY consumer - the t1 cadence and the arm race both read
+#   CL['g30b'] - because he routed the LINE, not one mech's view of it.
+#   WHAT IT MOVES, measured before it was banked: the high-side t1 count over 2026-09-03
+#   01:30..03:30 goes 3 -> 4, his 02:35 reversal appears as the 02:36:25 cadence, and the 02:15
+#   cadence he could not see on his chart is gone on both sources once the 5/95 fence is in.
+#   IT ALSO MOVES THE ARM, which is not measured yet: his validated arm list - 17:16, 22:01, 23:39,
+#   00:07, 00:36 - was matched on the EMERGING gcws30b to within 1.4 min, and the arm race reads
+#   this same array. 'emerging' is the other arm of the knob.
+
 L2_ARM_RETEST = _knob('L2_ARM_RETEST', 1, int)  # v4-arm-lineage-retest on/off. BANKED ON - he
 #   named it and ruled all nine of its gaps on 1026. 0 is the A/B arm.
 L2_T3_ON = _knob('L2_T3_ON', 0, int)            # t3cadence on/off. BANKED **OFF** 1026 - Joe:
@@ -1141,8 +1320,24 @@ RULED = {
     'LIN2_B1_HOLD': (0, 'HIS MECH - "if ws1b to ib has not qualified its wob 12, then its'
                         ' value is not passed in" - 1029. OFF until measured. At 12 it holds his'
                         ' 2026-08-30 00:59:25..01:20:45 low excursion together as one event'),
-    'LIN2_LATCH_EXFNC_ON': (1, 'HIS MECH, HIS KNOB NAME, AND HIS BANK - "ADD'
-                               ' LIN2_LATCH_EXFNC_ON" then "bank this as the machine" - 1029'),
+    'LIN2_LATCH_EXFNC_ON': (0, 'BANKED OFF 1101: "disable the latch.  I introduced it get'
+                               ' around emerging". The chart-matched ex-fence read replaces it.'
+                               ' WAS (1, HIS MECH, HIS KNOB NAME AND HIS BANK - "ADD'
+                               ' LIN2_LATCH_EXFNC_ON" then "bank this as the machine", 1029)'),
+    'LIN2_CP_EXFNC': ('closed_prev', 'BANKED 1101: "we will use closed_prev only for exiting'
+                                     ' fences". "emerging" is the pre-1101 arm'),
+    'LIN2_CP_OOB': ('emerging', 'BANKED at today\'s read 1101. He put oob in neither category and'
+                                ' said "build for both options", so the bank moves no verdict and'
+                                ' "closed_prev" is the arm'),
+    'LIN2_CP_IB': ('emerging', 'BANKED 1101 on his gut - "my gut says emerging: create a knob that'
+                               ' tests both options". "closed_prev" is the arm'),
+    'LIN2_CP_LIFT': ('closed_prev', 'BANKED 1101 - "lift-off needs a close-p mode - it only reacts to full 1 minute bars". The t1 ws1r reversal BARS; it REVISES his earlier "keeping the lift-off on emerging" and gives up the 0445 reversals. _rev_pairs is not routed'),
+    'LIN2_CP_WS1R': ('closed_prev', 'BANKED 1101 - "change ws1r to closed-p". The t1 r gate\'s VALUE read only; the reversal BARS stay emerging'),
+    'LIN2_CP_GCWS30B': ('closed_prev', 'BANKED 1101 on his "yes" to routing gcws30b. It moves the t1 cadence AND the arm race - both read CL[\'g30b\']. "emerging" is the other arm'),
+    'LIN2_CP_MIN_TF': (1, 'HIS RULE 1101, AS HE LEFT IT: "change ws1r to closed-p" moved the floor from 2 to 1, reversing the ws1 half of "ws1{any} and gcws1{any} stay on emerging". WAS (2, HIS RULE 1101: "ws1{any} and gcws1{any} stay on emerging (otherwise we'
+                          ' lose the 09-03 0326 arm). all else is closed-prev". At 2 every ws1'
+                          ' line is exempt. THE gcws HALF IS A READING OF MINE - no gcws1 line'
+                          ' exists, so no sub-wsf line is routed at all'),
     'LIN2_LATCH_OOB_ON': (0, 'OFF, the banked arm. His 1029 ask to A/B it: "do a 08-30 chain AB'
                              ' test to validate or drop the oob latch". One latch read at depth,'
                              ' never a second latch'),
@@ -1177,6 +1372,15 @@ RULED = {
                                ' Seconds. The value is his; the knob name is mine'),
     'LIN2_SUPPORT_LINES': (3, '"3 lines below the rider" - 1026. ALL of them must have reversed;'
                               ' his own reading named ws4, ws5, ws6 under a ws7 rider'),
+    'LIN2_DIV_ON': (0, 'OFF, AND HIS 1101 WORD IS "divergence can be completely disabled". ws1r is the wrong line for the test - "ws1 works in small cycles that are not profitable" - and "ws3r seems to have more divergence potential (eyeballed)". ws3r is unbuilt. HIS knob'
+                       ' name. At 0 the divergence runs only at the arm'),
+    'LIN2_DIV_AT': ('cadence', 'the cadence bar itself, the pre-1101 behaviour. "extremum"'
+                               ' anchors on the target-side ws1Mage extremum - his 1101'
+                               ' proposal. NEITHER arm is ruled; the knob name is mine'),
+    'LIN2_DIV_PM_FLOOR': (0.0, 'PM DISABLED - "it needs a floor that I don\'t have yet". HIS'
+                               ' knob name. Declared and read by nothing, on purpose'),
+    'LIN2_T1_B_IB_DWELL': (12, 'HIS 1101 ADDITION - "add a 1 minute minimum dwell on gcws30b ib" = 12 bars = 60 s. ADDITIVE to the wob 6. THE SIDE IS HIS WORD "ib" READ LITERALLY; a beyond-side minimum would be LIN2_B1_OOB_DWELL and would delete the 05:19:25 cadence rather than move it'),
+    'LIN2_T1_B_FNC': (95.0, 'HIS 1101 SPEC REVISION - "I omitted the 5/95 requirement for gcws30b". t1\'s b read was oob 15/85 before this. At the ws1b arm it wants 85.0'),
     'LIN2_T1_B_LINE': ('gcws30b', 'HIS line, 1031 - ws1b is replaced by gcws30b. "ws1b" is the'
                                   ' pre-1031 arm. The knob name is mine'),
     'LIN2_T1_B_WOB': (6, 'HIS value - wob 6. Replaces LIN2_CROSS_WOB 12 for t1\'s b-line cross'
@@ -1193,6 +1397,8 @@ RULED = {
                           ' the 5/95 fence'),
     'LIN2_ARM_WS3R_ON': (0, 'OFF - he bracketed ws3r in question marks, then said he is not'
                             ' convinced. ws2r is IN unconditionally'),
+    'LIN2_BOARD_HOLD': ('linhop_exfnc', 'BANKED at his 1101 third arm - "if a line that is inside of lin-hop\'s reach is ex-fence, then walk to the next cadence". The arms are off, board_oob, board_oob_rev and linhop_exfnc; the names are mine, the four rules are his'),
+    'LIN2_BOARD_OOB_HOLD': (1, 'HIS RULE 1101 - "the oob rule doesn\'t apply to a rider - it\'s a blanket rule across the board". No exhaust while any ws1..L2_MOM_MAXTF r is oob on the target side; the walk holds to the next cadence'),
     'LIN2_TOP_RESET_ON': (1, 'BANKED ON 1031 after the truncation test passed on the 08-14 0659'
                              ' walk. His "new trick"; the knob name is mine and the mech is'
                              ' unnamed. No limit on repeats, his own "yes"'),

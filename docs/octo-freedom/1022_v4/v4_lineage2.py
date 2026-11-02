@@ -96,11 +96,17 @@ import v4_knobs as K
 import v4_fast as F
 import v4_l2_cadence as CAD
 import v4_signal as SG
+#   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever
+#   happens. Without it a refusal from v4_knobs.check() - an off-ruled run with no
+#   W_V4_EXPERIMENT=1 - goes into the StringIO and the process exits 1 with NOTHING on
+#   either stream. That cost a diagnosis on 1101.
 _e = sys.stderr; sys.stderr = io.StringIO()
-import ln
-from optimus9.analysis.jig import anchor_floater, lift_off, mage_cascade, oob_ib_cross, mage_cascade_bar, MC_GAP
-from optimus9.compute.rule2_trajectory import opposed_extrema
-sys.stderr = _e
+try:
+    import ln
+    from optimus9.analysis.jig import anchor_floater, lift_off, mage_cascade, oob_ib_cross, mage_cascade_bar, MC_GAP
+    from optimus9.compute.rule2_trajectory import opposed_extrema
+finally:
+    sys.stderr = _e
 
 
 def towards(BD, tf, bar, side):
@@ -195,6 +201,12 @@ def arm_race(CL, BD, side, frm, B):
 
 def div_verdict(CL, close, side, bar):
     """The cws1r divergence verdict AT `bar`. -> +1 bearish, -1 bullish, or None.
+
+    *** HIS 1101 RULING: COMPLETELY DISABLED, AND ws1r IS THE WRONG LINE. *** *"divergence can be
+    completely disabled"* / *"ws1r is not the best divergence test: ws1 works in small cycles that
+    are not profitable.  ws3r seems to have more divergence potential (eyeballed)"*. His eyeball
+    read IS the result on ws3r; nothing here measures it, because the line handed to the producer
+    is ws1r at every call site. A ws3r arm would be a build he has not asked for.
 
     Joe 1025: *"if cws2Mage + cws2r wins the race, check for a cws1r div and follow its verdict"*.
 
@@ -385,7 +397,10 @@ def _pass_bars(BD, tf, side, frm, B):
     #   1.6M bars on every call, and the bar-loop walk calls it once per bar.
     assert K.LIN2_PASS in ('ib', 'reversal', 'reversal+quarter'), \
         'LIN2_PASS %r is not a mode' % (K.LIN2_PASS,)
-    key = (id(BD), int(tf), int(side), BD.baton_src(), K.LIN2_PASS)
+    #   THE ROUTING IS IN THE KEY. Without it an arm switch returns the first arm's
+    #   cached bars - a hash-keyed cache failing silently with real-but-wrong arrays.
+    key = (id(BD), int(tf), int(side), BD.baton_src(), K.LIN2_PASS,
+           BD.read_src(tf, 'ib'), BD.read_src(tf, 'exfnc'), BD.read_src(tf, 'oob'))
     if key not in _PB:
         #   HIS 1031 MODES. 'reversal' and 'reversal+quarter' REPLACE both rules below - he said
         #   "swaps ib with reversal", so the pass bar becomes the rider's own reversal and neither
@@ -410,7 +425,11 @@ def _pass_bars(BD, tf, side, frm, B):
             i = int(np.searchsorted(arr, int(frm)))
             j = int(np.searchsorted(arr, int(B), side='right'))
             return [int(x) for x in arr[i:j]]
-        v = BD.line(tf)
+        #   HIS 1101 KNOB: the oob->ib CROSS reads `ib_line`, routed by LIN2_CP_IB. Banked
+        #   'emerging', which is this line unchanged; 'closed_prev' is the other arm he asked to be
+        #   buildable - *"I'm not sure about closed_prev for ib.  my gut says emerging: create a
+        #   knob that tests both options"*.
+        v = BD.ib_line(tf)
         w = max(1, int(K.LIN2_CROSS_WOB))
         #   RULE 1, oob -> ib, WITH WOB 12 - Joe 1027. The pass bar is the cross's CONFIRM bar,
         #   c + w - 1, which is the first bar the ib state has held for w bars.
@@ -453,7 +472,10 @@ def pass_why(BD, tf, side, bar):
     """
     #   THE KEY MUST MATCH `_pass_bars`' KEY. It was a 3-tuple against that function's 4-tuple,
     #   so the lookup below raised KeyError on the first call. Nothing called it, so nothing broke.
-    key = (id(BD), int(tf), int(side), BD.baton_src(), K.LIN2_PASS)
+    #   THE ROUTING IS IN THE KEY. Without it an arm switch returns the first arm's
+    #   cached bars - a hash-keyed cache failing silently with real-but-wrong arrays.
+    key = (id(BD), int(tf), int(side), BD.baton_src(), K.LIN2_PASS,
+           BD.read_src(tf, 'ib'), BD.read_src(tf, 'exfnc'), BD.read_src(tf, 'oob'))
     if key not in _PB:
         _pass_bars(BD, tf, side, 0, 0)
     _arr, a, b = _PB[key]
@@ -509,8 +531,12 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
     if which == 'ws2Mage+ws2r':
         v = div_verdict(CL, close, side, arm)
         #   *"if the open trade ... is SHORT and the verdict is +1, the verdict is AGAINST the
-        #   SHORT and router will create a rev-trade"*. A SHORT is side +1 here, so a +1 verdict
-        #   against a +1 side is the rev-trade; aligned means take no action.
+        #   SHORT and router will create a rev-trade"*.
+        #   *** THIS USED TO READ "A SHORT is side +1 here". THAT WAS WRONG. *** A SHORT's target
+        #   side is the LOW one, -1. The condition below is `verdict == side` and it is RIGHT:
+        #   anchor_floater's +1 supports a SHORT, so +1 against a LOW target side (-1) does NOT
+        #   match and takes no action, while -1 bullish against a LOW target side DOES match and
+        #   rev-trades - his 1101 table verbatim. The code was never changed, only this comment.
         st = div_state(CL, close, side, arm)
         row(bar=arm, stage='DIV', state=st,
             why='ws1r divergence %s | anchor_floater state %s' % (
@@ -702,6 +728,76 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
             continue
 
         for ctype, cwhy in here:
+            #   *** HIS 1101 ORDER: THIS IS THE FIRST TASK AT A CADENCE. *** *"the test for
+            #   "linhop reaching an ex-fence line" is the (almost) first task, and definitely
+            #   before any lineage tasks fire.  that means the rider stays at ws1"* / *"I say
+            #   "almost" because I'm not sure of the cadence's task order"*.
+            #   IT NOW PRECEDES, in this order: the divergence test, the barrage exhaust, the
+            #   mage-cascade verdict, the rider pickup, the matryoshka takeover, the candidate
+            #   scan, HOLD, the ladder-top reset and the exhaust. His "almost" is unresolved, so
+            #   that list is what he moves it against.
+            #
+            #   A RIDER OF 0 STILL HAS A REACH, and this is MY reading of his sentence, stated:
+            #   the band is rider + 1 .. rider + L2_LIN_HOP by his own hop rule, so at the arm's
+            #   rider 0 it is ws1..ws2. Skipping the test with no rider - which is what I built
+            #   first - makes his own 0554 example impossible, because the rider only reached ws5
+            #   through a pickup this test is meant to come before.
+            _bh = str(K.LIN2_BOARD_HOLD)
+            assert _bh in ('off', 'board_oob', 'board_oob_rev', 'linhop_exfnc'), \
+                'LIN2_BOARD_HOLD %r is not an arm' % (_bh,)
+            if _bh == 'linhop_exfnc':
+                _r0 = int(rider or 0)
+                _lo = _r0 + 1
+                _hi = min(_r0 + int(K.L2_LIN_HOP), int(K.L2_MOM_MAXTF))
+                _xf = [t for t in range(_lo, _hi + 1)
+                       if BD.baton_ex_fence(t, bar, side, at_cadence=True)
+                       and towards(BD, t, bar, side)]
+                if _xf:
+                    row(bar=bar, stage='HOLD', rider=rider, ctype=ctype,
+                        why='ws%d..ws%d is lin_hop %d reach from rider ws%d and %d of it is'
+                            ' ex-fence and printing towards at a %s cadence - %s - the tests are'
+                            ' concluded and the walk goes to the next cadence'
+                            % (_lo, _hi, K.L2_LIN_HOP, _r0, len(_xf), ctype,
+                               ', '.join('ws%d %.2f' % (t, BD.value(t, bar)) for t in _xf)))
+                    last = int(bar)
+                    continue
+            #   HIS 1101 DIVERGENCE TEST, AT EVERY CADENCE AND BEFORE THE LINEAGE TESTS. His
+            #   *"ordered before lineage (ie lineage tests after devergence tests)"*, confirmed when
+            #   asked. It sits ahead of the rider pickup, the candidate scan and HOLD, because at
+            #   2026-09-03 04:37:55 HOLD takes the bar - a test placed after it could never fire.
+            #   HIS TRUTH TABLE, 1101: bullish verdict with a LOW target side rev-trades; bearish
+            #   with a HIGH target side rev-trades; neither match is no outcome. That is
+            #   `verdict == side`, the SAME condition the arm uses, so no sign is re-derived.
+            #   PM IS REFUSED BY `div_verdict` ITSELF - it returns None for abs(state) == 2 - which
+            #   is his *"disable PM matching for lineage2"*. LIN2_DIV_PM_FLOOR is declared for the
+            #   floor he has not set and is read by nothing.
+            if int(K.LIN2_DIV_ON):
+                #   WHICH BAR IT IS ANCHORED ON, his 1101 proposal. 'extremum' walks back for the
+                #   target-side ws1Mage extremum with the SAME picker the cascade uses, so the walk
+                #   is unbounded and the returned bar may never exceed this one - asserted there
+                #   and again here.
+                dat = str(K.LIN2_DIV_AT)
+                assert dat in ('cadence', 'extremum'), 'LIN2_DIV_AT %r is not an arm' % dat
+                db = int(bar)
+                if dat == 'extremum' and BD.mage is not None:
+                    _pk = mage_cascade_bar(BD.mage[min(BD.mage)], int(bar), int(side),
+                                           mode='extrema', gap=MC_GAP)
+                    if _pk is not None:
+                        db = int(_pk[0])
+                assert db <= int(bar), 'the divergence anchor is after the cadence bar it serves'
+                dv = div_verdict(CL, close, side, db)
+                ds = div_state(CL, close, side, db)
+                dn = ('none' if dv is None else ('+1 bearish' if dv > 0 else '-1 bullish'))
+                sn = 'high' if int(side) > 0 else 'low'
+                if dv is not None and int(dv) == int(side):
+                    row(bar=bar, stage='EXHAUST', rider=rider, ctype=ctype, state=ds,
+                        why='%s %s | divergence %s with a %s target side, anchored on the %s bar'
+                            ' %s - rev-trade (raw state %s)'
+                            % (ctype, cwhy, dn, sn, dat, ln.U(db), ds))
+                    return 'DIV REV-TRADE', int(bar), rows
+                row(bar=bar, stage='DIV', rider=rider, ctype=ctype, state=ds,
+                    why='%s | divergence %s with a %s target side, anchored on the %s bar %s -'
+                        ' no outcome (raw state %s)' % (ctype, dn, sn, dat, ln.U(db), ds))
             #   THE BARRAGE EXHAUSTS, and it is served BEFORE the cascade table. Joe 1027, asked
             #   whether it declares exhaust or fires as a cadence and lets the board review decide:
             #   *"both - a cadence keeps the walk's transactions uniform, and exhaust will fire"*.
@@ -900,6 +996,40 @@ def walk(CL, BD, close, side, frm, B, trace=None, arm_at=None):
                         ' candidate%s' % (rider, rv,
                                           '' if rcap is None
                                           else ' at or below ws%d' % rcap))
+            #   *** HIS 1101 BLANKET RULE, IN FRONT OF THE EXHAUST. *** *"0554 can't exhaust -
+            #   ws3r is oob so it must walk to the next cadence"* / *"the oob rule doesn't apply to
+            #   a rider - it's a blanket rule across the board"*. The FULL range ws1..L2_MOM_MAXTF,
+            #   his standing meaning of "board", so a rung BELOW the rider counts too.
+            #   WHERE IT SITS IS MINE AND STATED: after the ladder-top reset, immediately before
+            #   the exhaust. The reset is not a verdict - it is the alternative to exhausting - so
+            #   gating it would remove a mech he banked. This gates only the exhaust itself.
+            #   *** HIS FOUR BOARD ARMS, ONE KNOB. *** LIN2_BOARD_HOLD picks which rule gates
+            #   the exhaust. 'linhop_exfnc' is his 1101 third arm, banked: *"if a line that is
+            #   inside of lin-hop's reach is ex-fence, then walk to the next cadence"*. The reach
+            #   is the rider's own hop band, rider + 1 .. rider + L2_LIN_HOP 2.
+            #   WITH NO RIDER THERE IS NO REACH, so the arm tests nothing and does not gate - the
+            #   hop rule's own shape, his *"the max hops between a rider and a candidate"*.
+            if _bh in ('board_oob', 'board_oob_rev'):
+                #   *** HIS 1101 CORRECTION: oob AND NOT REVERSED. *** *"I must have made a
+                #   mistake.  maybe the rule is oob and has not reversed"*. An oob rung that has
+                #   turned no longer blocks; only one still running does.
+                #   THE REVERSAL WINDOW IS THE ESTABLISHED ONE, and that is MY call, stated: it is
+                #   `reversed_in(tf, side, last, bar)`, exactly the read the rider's own `revd`
+                #   uses above, over the same window - since the previous cadence. The other
+                #   reading is "since this rung became oob", which needs the oob run's start bar
+                #   and is a different mech; it is not built.
+                _ob = [t for t in range(1, int(K.L2_MOM_MAXTF) + 1)
+                       if BD.oob(t, bar, side)
+                       and (_bh == 'board_oob'
+                            or not BD.reversed_in(t, side, last, bar))]
+                if _ob:
+                    row(bar=bar, stage='HOLD', rider=rider, ctype=ctype,
+                        why='%d of ws1..ws%d are oob and not reversed since %s at a %s cadence -'
+                            ' %s - the board holds and the walk goes to the next cadence'
+                            % (len(_ob), K.L2_MOM_MAXTF, ln.U(int(last)), ctype,
+                               ', '.join('ws%d %.2f' % (t, BD.value(t, bar)) for t in _ob)))
+                    last = int(bar)
+                    continue
             #   t4cadence: a non-oob rider that reversed with nowhere to pass
             tag = 't4' if (revd and not BD.baton_oob(rider, bar, side)) else 'exhaust'
             row(bar=bar, stage='EXHAUST',

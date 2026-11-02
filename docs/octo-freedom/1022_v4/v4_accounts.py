@@ -50,9 +50,15 @@ import v4_rcfg_sweep as RS
 from v4_equity import (ledger, concurrency, peak_notional, cap_pyramid,
                         CAPTURE, PCT, CAP, COINS, START)
 from v4_backstop_trades import prices
+#   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever
+#   happens. Without it a refusal from v4_knobs.check() - an off-ruled run with no
+#   W_V4_EXPERIMENT=1 - goes into the StringIO and the process exits 1 with NOTHING on
+#   either stream. That cost a diagnosis on 1101.
 _e = sys.stderr; sys.stderr = io.StringIO()
-from optimus9.compute.swing_detect import find_pivots
-sys.stderr = _e
+try:
+    from optimus9.compute.swing_detect import find_pivots
+finally:
+    sys.stderr = _e
 
 DRAGS = (('0.1100', 0.1100), ('0.1770', 0.1770), ('0.1975', 0.1975))
 RANK_DRAG = 0.1975               # the figure measured AT 22,000 coins

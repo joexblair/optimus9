@@ -32,9 +32,15 @@ import v4_knobs as K
 import v4_fast as F
 import v4_signal as SG
 import v4_walk_req as WR
+#   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever
+#   happens. Without it a refusal from v4_knobs.check() - an off-ruled run with no
+#   W_V4_EXPERIMENT=1 - goes into the StringIO and the process exits 1 with NOTHING on
+#   either stream. That cost a diagnosis on 1101.
 _e = sys.stderr; sys.stderr = io.StringIO()
-import ln
-sys.stderr = _e
+try:
+    import ln
+finally:
+    sys.stderr = _e
 
 
 def requests(R, MG, A, B, fallback=None):
