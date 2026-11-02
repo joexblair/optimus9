@@ -125,12 +125,10 @@ same level as "walk forward an additional 10 minutes""*.
 | ELSE, with his narration | level 6 | **level 7** |
 | this cadence window is closed, walk to the next window | level 7 | level 8 |
 
-*** THE CONSEQUENCE, BY HIS OWN INDENT RULE, AND IT NEEDS HIS EYE. *** At level 6 the 10-minute
-walk was a SIBLING of `------if any ws{>25}r has printed ex-fence inside the last two cadence
-events`. At level 7 it nests INSIDE that test, beside `-------collect...` and `-------IF 4 of the
-5...`. So the late-ws30r capture now runs ONLY when a ws{>25}r printed ex-fence inside the last two
-cadence events. If the capture is meant to run whatever that test says, the 10-minute block stays
-at level 6 and only the lines beneath it move.
+SETTLED 1102: *"the 10min capture is correctly placed"*. So the late-ws30r capture nests INSIDE
+`------if any ws{>25}r has printed ex-fence inside the last two cadence events` and runs only when
+that test holds. It is a sibling of the collect and the 4-of-5 blast-radius test, not of the
+ws{>25}r test itself.
 
 ## THE RIDER QUESTION - his design, and I am not pushing back
 
@@ -173,12 +171,13 @@ it still pending. It is carried here so the greenfield build has it.
 
 ### WHAT IT WAS GATED ON, 1101 - still open
 
-| # | the question |
-|---|---|
-| 1 | does the `gcws30b is ex-95/5-fnc` read carry the wob 6 that the arm's own 5/95 test uses |
-| 2 | does OPTION 1 stay unbuilt - he marked it *"possibly defunct"* himself |
-| 3 | which timeframes the *"any 2 TFs"* scan covers |
-| 4 | the signal's direction rule - the router gets a signal, and nothing says which side it opens |
+| # | the question | his 1102 answer |
+|---|---|---|
+| 1 | does the `gcws30b is ex-95/5-fnc` read carry the wob 6 | the LINE is the chart-matched read, banked - `LIN2_CP_GCWS30B` 'closed_prev'. *** THE WOB 6 IS A NO-OP ON IT: *** gcws30b steps once per 30 s = 6 bars, so a 6-bar hold spans exactly one coarse bar and can never ask for a second. Same shape as the t1 xwob he agreed was confirming nothing |
+| 2 | does OPTION 1 stay unbuilt | *"option1 stays unbuilt"* |
+| 3 | which timeframes the *"any 2 TFs"* scan covers | STILL OPEN - *"I'll need to see my spec notes"* |
+| 4 | the signal's direction rule | *"the oob side where the lines were found"* |
+| 5 | whether a rider-and-ib walk stays alive beside fdm-cadence | *"that's fine - it only fires for re-entry"* |
 
 ### WHAT CHANGED UNDER IT SINCE HE WROTE IT
 
