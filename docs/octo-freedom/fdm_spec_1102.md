@@ -151,7 +151,12 @@ ONE THING THAT FOLLOWS, and it is a real question rather than a pushback: with n
 needs a range. Three readings exist and none is his yet - within `L2_LIN_HOP` of the array's
 highest TF, of its lowest, or the whole board. The lineage2 value was 2.
 
-## THE RE-ENTRY MECH, REVIVED 1102
+## THE RE-ENTRY MECH, REVIVED 1102 - RETEST DUE WHEN THE CHAIN BUILD STARTS
+
+His 1102 word on the ws5 cap: *"we'll get to retest the mech when the chain build starts"*. That is
+a scheduled retest, not a settled value - the cap is provisional and he said so.
+
+
 
 His word: *"revive the latest re-entry mech from the last machine"*. This is his 1101 update
 verbatim, which was never built - it was gated on four of his answers and lineage2 was sealed with
@@ -176,7 +181,7 @@ it still pending. It is carried here so the greenfield build has it.
 |---|---|---|
 | 1 | does the `gcws30b is ex-95/5-fnc` read carry the wob 6 | the LINE is the chart-matched read, banked - `LIN2_CP_GCWS30B` 'closed_prev'. *** THE WOB 6 IS A NO-OP ON IT: *** gcws30b steps once per 30 s = 6 bars, so a 6-bar hold spans exactly one coarse bar and can never ask for a second. Same shape as the t1 xwob he agreed was confirming nothing |
 | 2 | does OPTION 1 stay unbuilt | *"option1 stays unbuilt"* |
-| 3 | which timeframes the *"any 2 TFs"* scan covers | STILL OPEN - *"I'll need to see my spec notes"* |
+| 3 | which timeframes the *"any 2 TFs"* scan covers | CAPPED AT ws5 1102, and he said it is provisional: *"I'm not sure so let's cap it at ws5.  we'll get to retest the mech when the chain build starts"*. His own example is ws3 and ws4 at 08-14 0529, which sits inside it. THE LOWER BOUND IS NOT HIS - a cap names the top only; the build needs the bottom before it scans |
 | 4 | the signal's direction rule | *"the oob side where the lines were found"* |
 | 5 | whether a rider-and-ib walk stays alive beside fdm-cadence | *"that's fine - it only fires for re-entry"* |
 
