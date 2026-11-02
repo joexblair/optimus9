@@ -100,6 +100,7 @@ structural gaps.
 
 | # | the concretion |
 |---|---|
+| 0 | SETTLED 1102 - the fdm-cadence level-4 scan's range is **ws2 to ws12**, his words: *"ws2 to ws12.  the scan can only look upwards"*. ws1 is excluded. ONE THING HIS "upwards" DOES NOT FIX: whether it means the range is read from ws2 upward, or that the scan never adds a TF below the ones already in the array |
 | 1 | SETTLED 1102 - the fence is `fdm-20-80-fnc`, his name, value 20, read as (100 - 20) = (20.0, 80.0) |
 | 2 | SETTLED 1102 - his design, not a gap: *"the scan-while-walking adds more TFs to an array, and the reversal gate on the highest TF in the array automatically overrides the notion of a rider"*. The array IS the anchor, and the highest TF in it is what the reversal gate reads. See THE RIDER QUESTION below |
 | 3 | `walk forward until ws1b is ib ELSE walk forward until gcws30b is ib` - what makes the ELSE fire. His note says *"ie we will use the fast gcws30 line in the absence of exfence lines"*, which reads as a condition on the lines, not on ws1b |
