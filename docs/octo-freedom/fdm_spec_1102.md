@@ -27,13 +27,13 @@ HIS SPEC, with the six things he settled on 1102 folded in. Nothing here is mine
            window opened
     -------IF 4 of the 5 fdm-blst-rad-conf-tfs r lines have reversed
     --------EXHAUST and send rev-trade to router #stub
-    ------walk forward an additional 10 minutes from cadence event
-    ------IF ws30r reverses inside the 10 minute range
-    -------truncate the 10 minute walk forward, and print exhaust, and send rev-trade to router
-    ------ELSE #if ws30r has not reversed inside the 10min window, then our only option is walk to
-          the next cadence, or a ws10x fallback (the backstop)
-    -------this cadence window is closed - cadence event is printed here. walk to the next cadence
-           window open
+    -------walk forward an additional 10 minutes #to capture a late ws30r
+    -------IF ws30r reverses inside the 10 minute range
+    --------truncate the 10 minute walk forward, and print exhaust, and send rev-trade to router
+    -------ELSE #if ws30r has not reversed inside the 10min window, then our only option is walk to
+           the next cadence, or a ws10x fallback (the backstop)
+    --------this cadence window is closed - cadence event is printed here. walk to the next cadence
+            window open
     -----ELSE if no higher r lines are ex-80/20-fence
     ------loop until all of the "wsf r`s" lines have been processed
     ------if the loop ends on a bar that detects "wsf and dtf lines that are ex-20/80-fence AND
@@ -100,13 +100,96 @@ structural gaps.
 
 | # | the concretion |
 |---|---|
-| 1 | the 20/80 fence is a THIRD fence beside oob 15/85 and the r fence 25/75. It needs a knob and a name |
-| 2 | "lines inside of lin-hops reach" - the reach is measured FROM a rider, and he wrote *"there is no rider in this mech"*. What anchors the reach |
+| 1 | SETTLED 1102 - the fence is `fdm-20-80-fnc`, his name, value 20, read as (100 - 20) = (20.0, 80.0) |
+| 2 | SETTLED 1102 - his design, not a gap: *"the scan-while-walking adds more TFs to an array, and the reversal gate on the highest TF in the array automatically overrides the notion of a rider"*. The array IS the anchor, and the highest TF in it is what the reversal gate reads. See THE RIDER QUESTION below |
 | 3 | `walk forward until ws1b is ib ELSE walk forward until gcws30b is ib` - what makes the ELSE fire. His note says *"ie we will use the fast gcws30 line in the absence of exfence lines"*, which reads as a condition on the lines, not on ws1b |
 | 4 | "the last two cadence events" - the ws{>25}r ex-fence lookback. Two events of either side, or two same-side |
 | 5 | "the prior same-side cadence window opened" - the blast radius's reversal window. Its opening bar, or its closing bar |
 | 6 | which 5 TFs `fdm-blst-rad-conf-tfs` names - the 5 immediately below the highest ex-20/80 line, or the 5 lowest of the collected set |
-| 7 | "an additional 10 minutes from cadence event" - which bar is the cadence event at that point, given the event is printed when the window CLOSES |
+| 7 | SETTLED 1102 - the line is now *"walk forward an additional 10 minutes #to capture a late ws30r"* with no "from cadence event", and it moved to level 7. The anchor is the bar the walk is on |
 | 8 | "if a last cadence event fails to print" - what makes a cadence event the last one |
 | 9 | the reversal reads: he names *"emerging lift-off"* for the highest-oob-TF test and *"lift-off-reversed"* for the ex-20/80 lines. Whether the second is emerging too |
 | 10 | wsf is ws1-ws12 and dtf is >ws12, his 1017 band names. Confirmed by those, not by this spec |
+
+## THE 1102 INDENT MOVE, AND WHAT IT CHANGES
+
+He ruled: *"that should be in lvl7, not lvl6"* / *"every line under "walk forward an additional 10
+minutes" needs one additional indent, so that "IF ws30r reverses inside the 10 minute range" is the
+same level as "walk forward an additional 10 minutes""*.
+
+| the line | was | now |
+|---|---|---|
+| walk forward an additional 10 minutes | level 6 | **level 7** |
+| IF ws30r reverses inside the 10 minute range | level 6 | **level 7** |
+| truncate, print exhaust, send rev-trade | level 7 | level 8 |
+| ELSE, with his narration | level 6 | **level 7** |
+| this cadence window is closed, walk to the next window | level 7 | level 8 |
+
+*** THE CONSEQUENCE, BY HIS OWN INDENT RULE, AND IT NEEDS HIS EYE. *** At level 6 the 10-minute
+walk was a SIBLING of `------if any ws{>25}r has printed ex-fence inside the last two cadence
+events`. At level 7 it nests INSIDE that test, beside `-------collect...` and `-------IF 4 of the
+5...`. So the late-ws30r capture now runs ONLY when a ws{>25}r printed ex-fence inside the last two
+cadence events. If the capture is meant to run whatever that test says, the 10-minute block stays
+at level 6 and only the lines beneath it move.
+
+## THE RIDER QUESTION - his design, and I am not pushing back
+
+He invited it: *"pushback if you need to"*. I do not.
+
+| what he said | what the code says |
+|---|---|
+| *"the scan-while-walking adds more TFs to an array"* | the level-4 loop line: *"while the walk is walking, scan for new {lines inside of lin-hops reach} crossing to oob. add any new oob lines to the current list of "wsf r`s" lines"* |
+| *"the reversal gate on the highest TF in the array automatically overrides the notion of a rider"* | the level-4 test: *"IF ws{highest TF that is oob}r has reversed on emerging lift-off"* |
+
+In lineage2 the rider was two things at once: the rung whose reversal decides, and the anchor the
+candidate band is measured from. This mech splits them. The array holds every oob line the walk has
+found, the decision reads its highest TF, and the array grows by its own scan - so there is no rung
+to measure a band from because nothing is being handed anything. His *"I'm swapping `ib` with
+`reverse`. there is no rider in this mech"* is the same statement from the other side.
+
+ONE THING THAT FOLLOWS, and it is a real question rather than a pushback: with no rider, the phrase
+*"lines inside of lin-hops reach"* in the scan has nothing to measure a reach from either. The scan
+needs a range. Three readings exist and none is his yet - within `L2_LIN_HOP` of the array's
+highest TF, of its lowest, or the whole board. The lineage2 value was 2.
+
+## THE RE-ENTRY MECH, REVIVED 1102
+
+His word: *"revive the latest re-entry mech from the last machine"*. This is his 1101 update
+verbatim, which was never built - it was gated on four of his answers and lineage2 was sealed with
+it still pending. It is carried here so the greenfield build has it.
+
+    re-entry
+    delete the current ws5Mage reentry (from spec and code)
+    -IF there is no trade open (because of a STOP, or because of the machine starting)
+    --IF gcws30b is ex-95/5-fnc
+    ---OPTION 1 (possibly defunct): walk the bars until ws1r, gcws30b, and ws{>1}r are all
+       same-side oob (example: high side 09-04 1128)
+    ---OPTION 2: IF any 2 TFs are same-side of gcws30b and ex-v4mom-fence (example 08-14 0529,
+       ws3 and ws4)
+    ----the highest TF is tagged as the rider. arm is not required
+    ----follow the lineage walk (baton pass on rider to ib)
+    ----IF lineage prints exhaustion (example: 09-04 1221 on ws11, 08-14 0600 on ws7)
+    -----send a trade signal to the router (ie the router will handle the OPEN)
+
+### WHAT IT WAS GATED ON, 1101 - still open
+
+| # | the question |
+|---|---|
+| 1 | does the `gcws30b is ex-95/5-fnc` read carry the wob 6 that the arm's own 5/95 test uses |
+| 2 | does OPTION 1 stay unbuilt - he marked it *"possibly defunct"* himself |
+| 3 | which timeframes the *"any 2 TFs"* scan covers |
+| 4 | the signal's direction rule - the router gets a signal, and nothing says which side it opens |
+
+### WHAT CHANGED UNDER IT SINCE HE WROTE IT
+
+| the piece | then | now |
+|---|---|---|
+| `follow the lineage walk (baton pass on rider to ib)` | lineage2's walk, with a rider | fdm-cadence has no rider and swaps `ib` for `reverse`. The sentence points at a mech that no longer exists in that form |
+| `the highest TF is tagged as the rider` | the rider was the band's anchor and the deciding rung | in fdm-cadence the array's highest TF is the deciding rung and nothing is an anchor |
+| `gcws30b` | emerging | he banked it on the chart-matched read on 1101 |
+| `ex-v4mom-fence` | the r fence, 25/75 at RMOM_FNC 75 | unchanged, and it is NOT the new `fdm-20-80-fnc` |
+
+*** THE ONE THAT MATTERS: *** the re-entry's body is three lines of lineage2 - tag a rider, baton
+pass to ib, read the exhaust. fdm-cadence has none of those three. Reviving the mech as written
+means either keeping a rider-and-ib walk alive beside the new one, or rewriting those three lines
+against fdm-cadence. That is a design call and it is his.
