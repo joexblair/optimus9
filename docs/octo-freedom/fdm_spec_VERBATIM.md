@@ -79,6 +79,7 @@ delete the current ws5Mage reentry (from spec and code)
 | the knob or term | value |
 |---|---|
 | fdm-20-80-fnc | 20, read as (100 - 20) = (20.0, 80.0) |
+| what "ex" means on ANY fence he names | "external of", and it INCLUDES oob - *"note my preference: ex-any-fence includes oob - this is my literal use of "ex" meaning "external of""*. So ex-20/80 low means r <= 20, which contains the oob lines at r <= 15 and everything below. Never read a fence as a band |
 | fdm-blst-rad-conf-tfs | 5 TFs, selected dynamically as the lines within 5 TFs of the highest ex-20/80-fence TF. 4 of those 5 must have reversed |
 | the level-4 scan's range | ws2 to ws12, upwards only |
 | the blast radius's reversal origin | the prior same-side cadence window's OPENING bar |
