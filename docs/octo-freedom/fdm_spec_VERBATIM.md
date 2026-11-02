@@ -84,6 +84,7 @@ delete the current ws5Mage reentry (from spec and code)
 | the blast radius's reversal origin | the prior same-side cadence window's OPENING bar |
 | the ws{>25}r ex-fence lookback | the last two SAME-SIDE cadence events. If two do not exist in this trade, the trade's open bar |
 | every lift-off in this machine | emerging bars, always |
+| EVERY OTHER LINE READ in this machine | the chart-matched read - *"we're using emerging in lift-off only.  all other line activities are closed-prev"*. A value, a fence test, oob, ex-fence, a cross, an excursion's start: all chart-matched |
 | wsf | ws1-ws12 |
 | sub-wsf | g5-g30 |
 | dtf | above ws12 |
