@@ -103,6 +103,49 @@ if the ws10x-cadence fires first
 | 2 | the mae1.1 stop's default | *"yes, move it to defualt"*. `FDM_MAE_CAP` 1.1, always applied. No `W_MAE_CAP=on` gate, unlike lineage2's `LIN2_MAE_CAP` |
 | 3 | does the population grow during the grace walk | *"no"*. Frozen at the ws10x-cadence over [the trade's open, the ws10x-cadence]. Both his verified cases carry a constant denominator, 21 at 1012 and 22 at 1841 |
 
+## THE CADENCE PREAMBLE, AS IT NOW STANDS
+
+HIS 1103 CORRECTION: *"ws1r, ws2r, ws3r are all qualifying lines"*, with the fdm line he handed
+over beside it - `fdm_spec_VERBATIM.md:8-9`:
+
+    cadence windows open when ws1r or ws2r or ws3r oob AND are nestled inside of ws1Mage or
+    ws2Mage at any time during ws1Mage/ws2Mage's oob excursion
+    -#nestled: ws1Mage or ws2Mage is deeper oob when ws1-3r is less deeper oob
+
+| the test | whose words | state |
+|---|---|---|
+| the **nestle** - a ws1,2Mage deeper oob than an oob ws1,2,3r, any pair, no TF match, latching for the window | his, and `nestle` is HIS NAME | built |
+| ws3Mage ex-25/75 while ws1b is oob | his 1103 preamble. HE HAS NOT NAMED IT | built, at `FDM_M3_FNC` 25.0 |
+| "ws1Mage, ws1b, ws1r are all oob at some time during ws1b's oob excursion" | his 1103 preamble | **DROPPED AS IMPLIED.** Read with his correction the nestle proves every clause of it: an oob r among ws1,2,3r, a ws1,2Mage deeper than it (so itself oob), inside a ws1b oob run |
+| `t1` / `t2` / `t3` | MINE, and they collided with lineage2's cadence TYPES | dropped on his *"what is t1 and t2?  if they are the cadences from the earlier specs, then drop them"* |
+
+WHAT THE DROPPED LINE COST. As written it required ws1r specifically, and it rejected
+2026-08-03 16:45:00 - ws1r's deepest reading in that 2m55s excursion was 20.24 against the 15.0
+oob fence, while ws2r reached 7.14 and carries the nestle on its own.
+
+| the 1644 LOW reading | before his correction | after |
+|---|---|---|
+| cadence events in 16:44:00 .. 18:41:00 | 0 | 1, at 2026-08-03 16:45:00 |
+| the verdict | NO CADENCE EVENT | rev-trade 2026-08-03 16:47:40, ws10r, 9 of 10 = 90.0% |
+| step 1 at the cadence event | - | 7 of 27 |
+
+It is the only one of the seven decision paths that moved. It also closes gap C from his own
+answers - 1644 LOW had 1.95 h with no decision point, and the fallback is ruled out of use.
+
+## OPEN - THE EXCURSION ANCHOR
+
+| the anchor | the source | what it spans at 16:45:00 |
+|---|---|---|
+| ws1b's oob excursion | his 1103 revised preamble. WHAT THE CODE READS | 16:42:00 .. 16:44:55, 2m55s |
+| ws1Mage / ws2Mage's oob excursion | `fdm_spec_VERBATIM.md:8`, the line he handed over at 1103 | not measured - a different span |
+
+Two further lines hang off it:
+
+| # | the question |
+|---|---|
+| 7 | `fdm_spec_VERBATIM.md:10` says *"cadence events fire when the cadence window closes"*; the 1103 preamble says the event is ws1b to ib. If the Mage excursion ending is the close, the event bar moves off ws1b entirely |
+| 8 | the spec body carries ws3Mage at **20/80** in a different role (`fdm_spec_VERBATIM.md:13`) while the preamble carries it at 25/75. Two fences for one line are both in play |
+
 ## OPEN - WHAT THE BUILD SURFACED
 
 | # | the line | why it matters |

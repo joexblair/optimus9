@@ -150,19 +150,44 @@ def towards(r, tf, bar, side):
 def cadence_events(LN, side, A, B, trace=False):
     """His cadence events on `side` in [A, B]. -> [(the event bar, the excursion start, why)].
 
+    HIS 1103 REVISED PREAMBLE, and his names for its parts. The labels t1/t2/t3 were MINE and they
+    collided with lineage2's cadence TYPES - his *"what is t1 and t2?  if they are the cadences
+    from the earlier specs, then drop them"*. They are not: they were my labels for his own three
+    lines, and they are gone.
+
         a cadence event prints on ws1b to ib, IF ws1,2Mage was more deeply oob (further away from
         50) than ws1,2,3r during ws1b's oob excursion
         -ws1Mage, ws1b, ws1r are all oob at some time during ws1b's oob excursion
         -ws3Mage must be ex 25/75 fence while ws1b is oob
         --this cadence event can only be tested on target-side
 
-    The event is ws1b's oob->ib cross. All three tests are evaluated over the excursion that ENDS
-    at that cross, so every read is at or before the event bar - the assert carries that.
+    TWO TESTS REMAIN, both his:
+
+      the NESTLE        HIS WORD, from the fdm line he handed over at 1103: *"ws1r or ws2r or ws3r
+                        oob AND are nestled inside of ws1Mage or ws2Mage"* / *"#nestled: ws1Mage or
+                        ws2Mage is deeper oob when ws1-3r is less deeper oob"*. One pair suffices
+                        and it needs no TF match - his *"it can be any mage deeper than any r"*.
+                        It LATCHES: his *"once it qualifies it stays qualified until the cadence
+                        window ends"*, which is why the scan takes the first qualifying bar.
+      ws3Mage ex-fence  his *"ws3Mage must be ex 25/75 fence while ws1b is oob"*, at FDM_M3_FNC
+                        25.0. HE HAS NOT NAMED THIS ONE.
+
+    THE "all oob" LINE IS GONE, not overruled - it is IMPLIED. His 1103 correction *"ws1r, ws2r,
+    ws3r are all qualifying lines"* makes its r clause any of the three and its Mage clause either
+    of the two; the nestle already needs an oob r among ws1,2,3r with a ws1,2Mage deeper than it -
+    a Mage deeper than an oob r is itself oob - and s0..s1 IS a ws1b oob run. As written it
+    rejected 2026-08-03 16:45:00 on ws1r alone, whose deepest reading in that 2m55s excursion was
+    20.24 against the 15.0 oob fence while ws2r reached 7.14.
+
+    THE EXCURSION ANCHOR IS ws1b's, his 1103 revision - NOT ws1Mage/ws2Mage's, which is what
+    fdm_spec_VERBATIM.md line 8 anchors the window on. The two are different spans and he has not
+    ruled between them.
+
+    The event is ws1b's oob->ib cross. Both tests are evaluated over the excursion that ENDS at
+    that cross, so every read is at or before the event bar - the assert carries that.
 
     `trace=True` returns EVERY cross on `side` with its per-test verdict instead of only the
-    passes, so a rejection can be read off the data rather than guessed at. The pass path is
-    unchanged either way - one function owns the preamble and the trace is a view of it, not a
-    second copy. His 1103 *"why was 1644 tagged as NO CADENCE EVENT?"* is what it is for.
+    passes, so a rejection can be read off the data rather than guessed at.
     """
     out, tr = [], []
     B1, CPR, CPM = LN['B1'], LN['CPR'], LN['CPM']
@@ -177,17 +202,14 @@ def cadence_events(LN, side, A, B, trace=False):
         j = int(c) - 1
         if j < 0 or not oob[j]:
             if trace:
-                tr.append(dict(cross=int(c), inwin=inwin, s0=None, s1=None, t1=None, t2=None,
-                               t3=None, why='the bar before the cross is not oob - no excursion'))
+                tr.append(dict(cross=int(c), inwin=inwin, s0=None, s1=None, nestle=None,
+                               m3=None, why='the bar before the cross is not oob - no excursion'))
             continue
         while j > 0 and oob[j - 1]:
             j -= 1
         s0, s1 = j, int(c) - 1
         assert s1 < int(c), 'an excursion ends at or after its own ib cross'
-        #   test 1: ONE PAIR SUFFICES - his *"it can be any mage deeper than any r, as long as the
-        #   ws1,2,3 candidates are oob.  example, (ws2r is infence and printing a ws2Mage oob that
-        #   is deeper than ws1r oob) = qualify"*.
-        t1 = None
+        nestle = None
         for b in range(s0, s1 + 1):
             for rt in (1, 2, 3):
                 rv = float(CPR[rt][b])
@@ -196,27 +218,21 @@ def cadence_events(LN, side, A, B, trace=False):
                 for mt in (1, 2):
                     mv = float(CPM[mt][b])
                     if deeper(mv, rv, side):
-                        t1 = (b, mt, mv, rt, rv)
+                        nestle = (b, mt, mv, rt, rv)
                         break
-                if t1:
+                if nestle:
                     break
-            if t1:
+            if nestle:
                 break
-
-        def anyoob(a):
-            seg = a[s0:s1 + 1]
-            return bool(((seg >= K.OOB_HI) if side > 0 else (seg <= K.OOB_LO)).any())
-
-        #   test 2: each of the three at its OWN bar somewhere in the excursion, not all together
-        t2 = dict(ws1Mage=anyoob(CPM[1]), ws1b=anyoob(B1), ws1r=anyoob(CPR[1]))
-        #   test 3: ws3Mage ex-FDM_M3_FNC 25/75 while ws1b is oob
-        m3 = CPM[3][s0:s1 + 1]
-        t3 = bool(((m3 >= 100.0 - f3) if side > 0 else (m3 <= f3)).any())
-        why = ('ws1b excursion %s..%s, ws%dMage %.2f deeper than ws%dr %.2f at %s'
-               % (ln.U(s0), ln.U(s1), t1[1], t1[2], t1[3], t1[4], ln.U(t1[0]))) if t1 else ''
+        m3seg = CPM[3][s0:s1 + 1]
+        m3 = bool(((m3seg >= 100.0 - f3) if side > 0 else (m3seg <= f3)).any())
+        why = ('ws1b excursion %s..%s, the nestle is ws%dMage %.2f deeper than ws%dr %.2f at %s'
+               % (ln.U(s0), ln.U(s1), nestle[1], nestle[2], nestle[3], nestle[4],
+                  ln.U(nestle[0]))) if nestle else ''
         if trace:
-            tr.append(dict(cross=int(c), inwin=inwin, s0=s0, s1=s1, t1=t1, t2=t2, t3=t3, why=why))
-        if t1 is None or not all(t2.values()) or not t3 or not inwin:
+            tr.append(dict(cross=int(c), inwin=inwin, s0=s0, s1=s1, nestle=nestle, m3=m3,
+                           why=why))
+        if nestle is None or not m3 or not inwin:
             continue
         out.append((int(c), int(s0), why))
     return tr if trace else out

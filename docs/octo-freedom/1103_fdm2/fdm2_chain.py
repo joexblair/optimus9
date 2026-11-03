@@ -154,7 +154,7 @@ if os.environ.get('W_FDM2_VERIFY') == 'on':
           ' each walk STOPS at its first rev-trade, as the mech does'
           % (int(K.FDM_X10_WOB), int(K.FDM_X10_WOB) * 5))
     print()
-    print('| the trade | target side | the bar | the stage | step 1 | the ws10x-cadence | which |'
+    print('| the trade | target side | the bar | the stage | step 1 nestled+towards | the ws10x-cadence | which |'
           ' reversed, STAMP | pct, STAMP | reversed, RAW lift bar | pct, RAW |')
     print('|---|---|---|---|---|---|---|---|---|---|---|')
     for nm, t0, t1, psd in HIS:
@@ -199,37 +199,34 @@ if _W:
     print('## every ws1b %s oob->ib cross | the cross in %s .. %s | the cadence preamble, test by'
           ' test' % ('HIGH' if _sd > 0 else 'LOW', ln.U(_a), ln.U(_b)))
     print()
-    print('| the ws1b cross | the cross is in the window | the ws1b excursion | t1 Mage deeper'
-          ' than an oob r | t2 ws1Mage oob | t2 ws1b oob | t2 ws1r oob | ws1r deepest in the'
-          ' excursion | the oob fence it needed | t3 ws3Mage ex-%g/%g | the verdict |'
+    print('| the ws1b cross | the cross is in the window | the ws1b excursion | the nestle |'
+          ' ws1r deepest in the excursion | the oob fence | ws3Mage ex-%g/%g | the verdict |'
           % (float(K.FDM_M3_FNC), 100.0 - float(K.FDM_M3_FNC)))
-    print('|---|---|---|---|---|---|---|---|---|---|---|')
+    print('|---|---|---|---|---|---|---|---|')
     for t in F2.cadence_events(LN, _sd, _a, _b, trace=True):
         if not (_a <= int(t['cross']) <= _b):
             if t['s0'] is None or int(t['s0']) > _b or int(t['s1']) < _a:
                 continue
-        t2 = t['t2'] or {}
-        ok = (t['t1'] is not None and t2 and all(t2.values()) and t['t3'] and t['inwin'])
+        ok = (t['nestle'] is not None and t['m3'] and t['inwin'])
         fail = ('-' if ok else
                 'the cross is outside the window' if not t['inwin'] else
                 'no excursion' if t['s0'] is None else
-                't1 - no ws1,2Mage deeper than an oob ws1,2,3r' if t['t1'] is None else
-                't2 - %s never oob' % ', '.join(k for k, v in t2.items() if not v)
-                if not all(t2.values()) else 't3 - ws3Mage never ex-fence')
-        #   ws1r's DEEPEST READING IN THE EXCURSION, so a t2 failure carries its own number
+                'the nestle - no ws1,2Mage deeper than an oob ws1,2,3r' if t['nestle'] is None
+                else 'ws3Mage never ex-fence')
+        #   ws1r's DEEPEST READING IN THE EXCURSION. It is kept because it is the number that
+        #   rejected 16:45:00 under the "all oob" line his 1103 correction removed.
         if t['s0'] is None:
             d1 = float('nan')
         else:
             _g = LN['CPR'][1][int(t['s0']):int(t['s1']) + 1]
             d1 = float(np.nanmax(_g)) if _sd > 0 else float(np.nanmin(_g))
-        print('| %s | %s | %s | %s | %s | %s | %s | %.2f | %s %.1f | %s | %s |'
+        print('| %s | %s | %s | %s | %.2f | %s %.1f | %s | %s |'
               % (ln.U(int(t['cross'])), 'yes' if t['inwin'] else 'NO',
                  '-' if t['s0'] is None else '%s .. %s' % (ln.U(int(t['s0'])),
                                                            ln.U(int(t['s1']))),
-                 '-' if t['t1'] is None else 'ws%dMage %.2f vs ws%dr %.2f at %s'
-                 % (t['t1'][1], t['t1'][2], t['t1'][3], t['t1'][4], ln.U(int(t['t1'][0]))),
-                 'yes' if t2.get('ws1Mage') else 'NO', 'yes' if t2.get('ws1b') else 'NO',
-                 'yes' if t2.get('ws1r') else 'NO', d1,
-                 'at or above' if _sd > 0 else 'at or below',
+                 '-' if t['nestle'] is None else 'ws%dMage %.2f vs ws%dr %.2f at %s'
+                 % (t['nestle'][1], t['nestle'][2], t['nestle'][3], t['nestle'][4],
+                    ln.U(int(t['nestle'][0]))),
+                 d1, 'at or above' if _sd > 0 else 'at or below',
                  float(K.OOB_HI) if _sd > 0 else float(K.OOB_LO),
-                 'yes' if t['t3'] else 'NO', 'CADENCE EVENT' if ok else fail))
+                 'yes' if t['m3'] else 'NO', 'CADENCE EVENT' if ok else fail))

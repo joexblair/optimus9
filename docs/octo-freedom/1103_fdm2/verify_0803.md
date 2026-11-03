@@ -54,7 +54,7 @@
 
 ## his 08-03 trades through v4_fdm2 | ws10x hold FDM_X10_WOB 24 bars = 120 s | each walk STOPS at its first rev-trade, as the mech does
 
-| the trade | target side | the bar | the stage | step 1 | the ws10x-cadence | which | reversed, STAMP | pct, STAMP | reversed, RAW lift bar | pct, RAW |
+| the trade | target side | the bar | the stage | step 1 nestled+towards | the ws10x-cadence | which | reversed, STAMP | pct, STAMP | reversed, RAW lift bar | pct, RAW |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 0702 | LOW | 2026-08-03 07:03:00 | WALK | 2 of 27 | - | - | - | - | - | - |
 | 0702 | LOW | 2026-08-03 07:12:20 | REV-TRADE | 2 of 27 | 2026-08-03 07:12:20 | ib | 3 of 3 | 100.0% | 3 of 3 | 100.0% |
@@ -70,7 +70,9 @@
 | 1406 | HIGH | 2026-08-03 14:07:00 | WALK | 5 of 27 | - | - | - | - | - | - |
 | 1406 | HIGH | 2026-08-03 14:15:45 | REV-TRADE | 5 of 27 | 2026-08-03 14:15:45 | ib | 8 of 8 | 100.0% | 7 of 8 | 87.5% |
 | 1406 | HIGH | 2026-08-03 14:15:50 | TRADE CLOSES | - | - | - | - | - | - | - |
-| 1644 | LOW | - | NO CADENCE EVENT | - | - | - | - | - | - | - |
+| 1644 | LOW | 2026-08-03 16:45:00 | WALK | 7 of 27 | - | - | - | - | - | - |
+| 1644 | LOW | 2026-08-03 16:47:40 | REV-TRADE | 7 of 27 | 2026-08-03 16:47:40 | ws10r | 9 of 10 | 90.0% | 9 of 10 | 90.0% |
+| 1644 | LOW | 2026-08-03 16:47:45 | TRADE CLOSES | - | - | - | - | - | - | - |
 | 1841 | HIGH | 2026-08-03 18:42:00 | WALK | 10 of 27 | - | - | - | - | - | - |
 | 1841 | HIGH | 2026-08-03 18:51:55 | REV-TRADE | 10 of 27 | 2026-08-03 18:51:55 | ws10r | 9 of 12 | 75.0% | 10 of 12 | 83.3% |
 | 1841 | HIGH | 2026-08-03 18:52:00 | TRADE CLOSES | - | - | - | - | - | - | - |
