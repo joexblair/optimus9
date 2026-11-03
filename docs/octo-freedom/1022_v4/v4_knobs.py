@@ -1097,8 +1097,25 @@ LIN2_CP_MIN_TF = _knob('LIN2_CP_MIN_TF', 1, int)   # the TF floor for the chart-
 #                        true, open a trade"*
 #   THE SIDE IS THE OOB SIDE THE LINES WERE FOUND ON, his 1102 answer. `v4_signal.direction` then
 #   maps it: a HIGH oob side opens a SHORT. That mapping is banked and not mine.
-FDM_RE_IB_XWOB = _knob('FDM_RE_IB_XWOB', 1, int)  # the ws1b ib cross hold, in bars.
-#   1 MEANS THE CROSS BAR ITSELF, the same hold the cadence event uses on the same line.
+FDM_RE_IB_XWOB = _knob('FDM_RE_IB_XWOB', 1, int)  # the window's ib cross hold, in bars.
+#   1 MEANS THE CROSS BAR ITSELF, the same hold the cadence event uses on ws1b.
+FDM_RE_B_FNC = _knob('FDM_RE_B_FNC', 95.0)      # gcws30b's own fence, 95 -> (5.0, 95.0).
+#   READ ONLY BY THE ARMS THAT NAME gcws30b. The banked window is ws1b at both ends.
+FDM_RE_WIN_OPEN = os.environ.get('W_V4_FDM_RE_WIN_OPEN', 'both')
+FDM_RE_WIN_CLOSE = os.environ.get('W_V4_FDM_RE_WIN_CLOSE', 'ws1b')
+#   WHAT OPENS AND WHAT CLOSES THE RE-ENTRY WINDOW. His 1103: *"other than this binary option, do
+#   you see any other permuatations of ws1b and gcws30b?  if so, test the net outputs"* / *"run EFG
+#   as well"*.
+#     open 'ws1b'      ws1b crosses to oob on the side. THE BANK, his *"replace gcws30b crossing
+#                      to ex-5/95 with ws1b crossing to oob"*
+#     open 'gcws30b'   gcws30b crosses beyond FDM_RE_B_FNC on the side
+#     open 'both'      ws1b oob on the side AND gcws30b beyond its fence on EITHER side
+#     open 'first'     whichever of those two conditions holds first
+#     open 'sameside'  both on the SAME side
+#     close 'ws1b'     ws1b's oob->ib cross on the side. THE BANK
+#     close 'gcws30b'  gcws30b's oob->ib cross on the side, read at the oob pair
+#   'both', 'first' and 'sameside' ARE MINE - he asked whether other permutations exist and told me
+#   to run them. They are not permutations of the two slots; they are new opening tests.
 FDM_RE_GATE_FNC = _knob('FDM_RE_GATE_FNC', 75.0)  # the gate's fence on ws1r/ws2r/ws3r.
 #   HIS WORD WAS "ex v4mom fence", which is RMOM_FNC 75. It has its OWN knob here so the re-entry
 #   and the walk can move apart; the value is the same today.
@@ -1111,6 +1128,19 @@ FDM_RE_GATE_FNC = _knob('FDM_RE_GATE_FNC', 75.0)  # the gate's fence on ws1r/ws2
 FDM_FNC_2080 = _knob('FDM_FNC_2080', 20.0)      # HIS NAME 'fdm-20-80-fnc'. 20 -> (20.0, 80.0).
 #   "ex" INCLUDES oob, his standing rule, so the test is r <= 20 low / r >= 80 high.
 FDM_M3_FNC = _knob('FDM_M3_FNC', 25.0)          # ws3Mage's own fence in the preamble, 25 -> 25/75.
+FDM_M3_RESCUE_ON = _knob('FDM_M3_RESCUE_ON', 1, int)   # 1 runs his 1103 ws3Mage gate update.
+FDM_M3_RESCUE_FNC = _knob('FDM_M3_RESCUE_FNC', 40.0)   # the rescue's ws3Mage fence, 40 -> 40/60.
+#   HIS 1103 MECH UPDATE, verbatim:
+#     -IF a cadence is gated at the windows close (ws1b to ib) because ws3Mage stayed infence
+#     --IF ws3r was oob during the window (from gcws30b ex-5/95, to ws1b crossing to ib)
+#     ---IF ws3Mage was ex-40/60-fence during the window
+#     ----print a cadence event
+#   THE RESCUE'S WINDOW IS HIS, AND IT IS NOT THE CADENCE EXCURSION. He names it: from gcws30b's
+#   cross beyond FDM_RE_B_FNC to the ws1b ib cross. gcws30b's ex-fence bar can sit well before
+#   ws1b goes oob - 2026-09-15 14:00:00 against 14:33:00 - so this span usually CONTAINS the
+#   cadence excursion rather than matching it.
+#   40/60 IS WIDER THAN THE 25/75 IT RESCUES, so ws3Mage has less distance to cover; the price is
+#   the new ws3r oob requirement, which 25/75 never asked for.
 FDM_POP_LO = _knob('FDM_POP_LO', 3, int)        # the reversal population's floor TF. ws3..ws30.
 #   HIS 1103: *"ws3 to ws30 for both the cadence and the ws10x-cadence"*. The top is L2_MOM_MAXTF
 #   30, so the population is 28 lines before the ex-fence filter.
@@ -1430,10 +1460,15 @@ RULED = {
                                 ' "closed_prev" is the arm'),
     'LIN2_CP_IB': ('emerging', 'BANKED 1101 on his gut - "my gut says emerging: create a knob that'
                                ' tests both options". "closed_prev" is the arm'),
-    'FDM_RE_IB_XWOB': (1, 'the ws1b ib cross hold that closes the re-entry window. 1 is the cross bar itself, the same hold the cadence event uses on the same line'),
+    'FDM_RE_IB_XWOB': (1, 'the ib cross hold that closes the re-entry window. 1 is the cross bar itself, the same hold the cadence event uses on ws1b'),
+    'FDM_RE_B_FNC': (95.0, 'gcws30b\'s own fence, read only by the arms that name gcws30b. The banked window is ws1b at both ends'),
+    'FDM_RE_WIN_OPEN': ('both', 'BANKED 1103 - his "let\'s bank E, and make it the machine". Arm E opens the window where ws1b is oob AND gcws30b is ex-5/95. The 28-run sweep: E is the ONLY arm positive on 08-03 at +0.152% and ties the best on 09-15 at +14.325%. The arms are ws1b, gcws30b, first and sameside'),
+    'FDM_RE_WIN_CLOSE': ('ws1b', 'HIS 1103 "close the window on ws1b to ib". "gcws30b" is the arm it replaced'),
     'FDM_RE_GATE_FNC': (75.0, 'HIS 1102 "ex v4mom fence" for the ws1r AND (ws2r or ws3r) gate. Same value as RMOM_FNC, its own knob so the two can move apart'),
     'FDM_FNC_2080': (20.0, 'HIS OWN KNOB NAME, "fdm-20-80-fnc", at his own value. Both the step-1 test and the reversal population read it; "ex" includes oob'),
     'FDM_M3_FNC': (25.0, 'HIS 1103 "ws3Mage is settled on 25/75". The knob name is mine; the value is his'),
+    'FDM_M3_RESCUE_ON': (1, 'HIS 1103 MECH UPDATE - a cadence gated on ws3Mage staying infence is rescued when ws3r went oob and ws3Mage reached ex-40/60 in the gcws30b-to-ws1b window'),
+    'FDM_M3_RESCUE_FNC': (40.0, 'HIS 1103 "IF ws3Mage was ex-40/60-fence during the window". Wider than the 25/75 it rescues'),
     'FDM_POP_LO': (3, 'HIS 1103 "ws3 to ws30 for both the cadence and the ws10x-cadence". The top comes from L2_MOM_MAXTF 30, not from a second knob'),
     'FDM_STEP1_ABOVE_TF': (3, 'HIS 1103 "above in timeframe" - step 1 scans ws4..ws30. STRICTLY above, so this knob is the excluded rung, not the floor'),
     'FDM_X10_WOB': (24, 'HIS 1103 RULING "now that we have the grade period, we can leverage a smaller wob: use 24". 36 is the other arm, from his own 1841 example'),

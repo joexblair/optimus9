@@ -70,34 +70,76 @@ finally:
 MECH = 'fdm-reentry'
 
 
-def windows(B1, side):
-    """ws1b's oob excursions on `side`. -> [(the open bar, the close bar)].
+def _beyond(a, side, fnc):
+    """Is `a` at or beyond the mirrored `fnc` pair on `side`. -> bool array."""
+    x = np.asarray(a, float)
+    hi = float(fnc)
+    return (x >= hi) if int(side) > 0 else (x <= 100.0 - hi)
 
-    The open is the first bar ws1b is oob after a bar it was not. The close is the CONFIRM bar of
-    that excursion's oob->ib cross at FDM_RE_IB_XWOB - the banked mech, not a value test.
 
-    An excursion with no ib cross after it is NOT returned: it has not closed, so it cannot fire.
-    His 1103 says that case is impossible, so it is the unreachable path rather than a branch.
+def _opens(B1, G, side):
+    """The window's open bars on `side`, by FDM_RE_WIN_OPEN. -> int array.
+
+    An open is the first bar the opening test holds after a bar it did not.
+
+      'ws1b'      ws1b oob on `side`. THE BANK
+      'gcws30b'   gcws30b beyond FDM_RE_B_FNC on `side`
+      'both'      ws1b oob on `side` AND gcws30b beyond its fence on EITHER side
+      'first'     whichever of those two holds
+      'sameside'  both on `side`
+
+    The last three are MINE - he asked whether other permutations exist and said to run them.
     """
-    b = np.asarray(B1, float)
-    oob = (b >= K.OOB_HI) if int(side) > 0 else (b <= K.OOB_LO)
+    w1 = _beyond(B1, side, float(K.OOB_HI)) if int(side) > 0 else \
+        (np.asarray(B1, float) <= float(K.OOB_LO))
+    m = str(K.FDM_RE_WIN_OPEN)
+    if m == 'ws1b':
+        hold = w1
+    else:
+        assert G is not None, 'this window arm reads gcws30b and none was handed in'
+        gs = _beyond(G, side, float(K.FDM_RE_B_FNC))
+        ge = gs | _beyond(G, -int(side), float(K.FDM_RE_B_FNC))
+        hold = {'gcws30b': gs, 'both': w1 & ge, 'first': w1 | ge,
+                'sameside': w1 & gs}[m]
+    return np.flatnonzero(hold[1:] & ~hold[:-1]) + 1
+
+
+def windows(B1, side, G=None):
+    """The re-entry windows on `side`. -> [(the open bar, the close bar)].
+
+    The close is the CONFIRM bar of the closing line's oob->ib cross whose own cross bar is after
+    the open - the banked mech, not a value test. FDM_RE_WIN_CLOSE picks the line, and gcws30b's
+    cross is read at the oob pair, as it always was.
+
+    A window with no closing cross after it is NOT returned: it has not closed, so it cannot fire.
+    One window per close, so overlapping opens collapse onto the same close rather than firing
+    twice - the walk resumes after each close.
+    """
     w = max(1, int(K.FDM_RE_IB_XWOB))
-    out = []
-    for c, cf, s1 in oob_ib_cross(b, K.OOB_HI, K.OOB_LO, w):
-        if int(s1) != int(side):
+    cl = str(K.FDM_RE_WIN_CLOSE)
+    if cl == 'ws1b':
+        L = np.asarray(B1, float)
+    else:
+        assert G is not None, 'this window arm closes on gcws30b and none was handed in'
+        L = np.asarray(G, float)
+    crosses = [(int(c), int(cf)) for c, cf, s1 in oob_ib_cross(L, K.OOB_HI, K.OOB_LO, w)
+               if int(s1) == int(side)]
+    out, used = [], -1
+    for o in _opens(B1, G, side):
+        if int(o) <= used:
             continue
-        j = int(c) - 1
-        if j < 0 or not oob[j]:
-            continue
-        while j > 0 and oob[j - 1]:
-            j -= 1
-        assert j < int(c), 'a window closes at or before it opens'
+        nxt = next(((c, cf) for c, cf in crosses if c > int(o)), None)
+        if nxt is None:
+            break
+        c, cf = nxt
         assert cf >= c, 'an ib cross confirm bar precedes its own cross bar'
-        out.append((j, int(cf)))
+        assert c > int(o), 'a window closes at or before it opens'
+        out.append((int(o), int(cf)))
+        used = int(cf)
     return out
 
 
-def signals(B1, R, side=None):
+def signals(B1, R, side=None, G=None):
     """Every fdm re-entry signal on the tape, bar-ordered. -> list of signals.
 
     `B1` is ws1b - the line whose oob excursion IS the window - and `R` the r ladder keyed by
@@ -109,7 +151,7 @@ def signals(B1, R, side=None):
     out = []
     for sd in sides:
         edge = fnc if sd > 0 else (100.0 - fnc)
-        for o, c in windows(B1, sd):
+        for o, c in windows(B1, sd, G):
             seen = {}
             for tf in (1, 2, 3):
                 a = np.asarray(R[tf], float)
@@ -122,9 +164,11 @@ def signals(B1, R, side=None):
                 continue
             got = [t for t in (1, 2, 3) if seen[t] is not None]
             out.append(SG.signal(c, sd, MECH, o,
-                                 'ws1b %s oob window %s..%s, %.1f min, ws1r AND (ws2r or ws3r)'
-                                 ' seen past the %.1f fence - %s - gate TRUE at the ws1b ib cross'
+                                 '%s window %s..%s, %.1f min, opened on %s and closed on %s,'
+                                 ' ws1r AND (ws2r or ws3r) seen past the %.1f fence - %s - gate'
+                                 ' TRUE at the close'
                                  % ('HIGH' if sd > 0 else 'LOW', SG.why_time(o), SG.why_time(c),
-                                    (c - o) * 5 / 60.0, edge,
+                                    (c - o) * 5 / 60.0, K.FDM_RE_WIN_OPEN,
+                                    K.FDM_RE_WIN_CLOSE, edge,
                                     ', '.join('ws%d %s' % (t, SG.why_time(seen[t])) for t in got))))
     return sorted(out, key=lambda x: x['bar'])

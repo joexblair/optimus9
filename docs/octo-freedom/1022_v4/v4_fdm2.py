@@ -236,12 +236,42 @@ def cadence_events(LN, side, A, B, trace=False):
                 break
         m3seg = CPM[3][s0:s1 + 1]
         m3 = bool(((m3seg >= 100.0 - f3) if side > 0 else (m3seg <= f3)).any())
-        why = ('ws1b excursion %s..%s, the nestle is ws%dMage %.2f deeper than ws%dr %.2f at %s'
+        #   HIS 1103 WS3MAGE GATE UPDATE. A cross gated because ws3Mage stayed infence is rescued
+        #   when, inside the gcws30b-ex-fence-to-ws1b-ib window, ws3r went oob AND ws3Mage reached
+        #   ex-FDM_M3_RESCUE_FNC 40/60. HIS WINDOW, NOT THE EXCURSION: it starts at gcws30b's cross
+        #   beyond FDM_RE_B_FNC, which can sit well before ws1b goes oob.
+        rsc = None
+        if not m3 and int(K.FDM_M3_RESCUE_ON):
+            #   THE RESCUE WINDOW'S OPENER IS THE ARM'S OWN, his 1103 *"follow whichever opener the
+            #   arm uses"*. His spec wrote it as gcws30b ex-5/95 because that was the opener at the
+            #   time; with FDM_RE_WIN_OPEN now a knob, the rescue reads the same opener the
+            #   re-entry window does. v4_fdm_reentry._opens is that ONE home - duplicating the
+            #   five arms here is where the two would drift apart.
+            import v4_fdm_reentry as _RE
+            gx = _RE._opens(LN['B1'], LN['G30B'], side)
+            gx = gx[gx <= int(c)]
+            if gx.size:
+                w0 = int(gx[-1])
+                r3 = CPR[3][w0:int(c) + 1]
+                m3b = CPM[3][w0:int(c) + 1]
+                fr = float(K.FDM_M3_RESCUE_FNC)
+                r3ok = bool(((r3 >= K.OOB_HI) if side > 0 else (r3 <= K.OOB_LO)).any())
+                m3ok = bool(((m3b >= 100.0 - fr) if side > 0 else (m3b <= fr)).any())
+                assert w0 <= int(c), 'the rescue window opens after the cross it serves'
+                if r3ok and m3ok:
+                    rsc = (w0, float(np.nanmax(r3) if side > 0 else np.nanmin(r3)),
+                           float(np.nanmax(m3b) if side > 0 else np.nanmin(m3b)))
+                    m3 = True
+        why = ('ws1b excursion %s..%s, the nestle is ws%dMage %.2f deeper than ws%dr %.2f at %s%s'
                % (ln.U(s0), ln.U(s1), nestle[1], nestle[2], nestle[3], nestle[4],
-                  ln.U(nestle[0]))) if nestle else ''
+                  ln.U(nestle[0]),
+                  '' if rsc is None else
+                  ', ws3Mage RESCUED - the %s window opened %s, ws3r reached %.2f and'
+                  ' ws3Mage reached %.2f'
+                  % (K.FDM_RE_WIN_OPEN, ln.U(rsc[0]), rsc[1], rsc[2]))) if nestle else ''
         if trace:
             tr.append(dict(cross=int(c), inwin=inwin, s0=s0, s1=s1, nestle=nestle, m3=m3,
-                           why=why))
+                           rsc=rsc, why=why))
         if nestle is None or not m3 or not inwin:
             continue
         out.append((int(c), int(s0), why))
@@ -415,7 +445,8 @@ def walk(LN, side, opn, B):
         nxt = int(evs[i + 1][0]) if i + 1 < len(evs) else None
         k, n = step1(LN, side, ev)
         if k == 0:
-            rows.append(dict(bar=ev, stage='REV-TRADE', ev=ev, k=0, n=n, why='cadence event, 0 of %d lines ws%d..'
+            rows.append(dict(bar=ev, stage='REV-TRADE', ev=ev, k=0, n=n, cwhy=why,
+                             why='cadence event, 0 of %d lines ws%d..'
                              'ws%d printing ex-%g/%g AND towards - his "if the answer is no, then '
                              'rev-trade"' % (n, int(K.FDM_STEP1_ABOVE_TF) + 1, LN['HI'],
                                              K.FDM_FNC_2080, 100.0 - float(K.FDM_FNC_2080))))
@@ -424,7 +455,8 @@ def walk(LN, side, opn, B):
         xb = x10[0] if x10 is not None else None
         win = ('the next cadence event' if nxt is not None and (xb is None or nxt <= xb)
                else ('the ws10x-cadence' if xb is not None else 'nothing - the tape ends'))
-        rows.append(dict(bar=ev, stage='WALK', ev=ev, k=k, n=n, why='cadence event, %d of %d lines printing ex-%g/%g'
+        rows.append(dict(bar=ev, stage='WALK', ev=ev, k=k, n=n, cwhy=why,
+                         why='cadence event, %d of %d lines printing ex-%g/%g'
                          ' AND towards -> walk. %s is first%s'
                          % (k, n, K.FDM_FNC_2080, 100.0 - float(K.FDM_FNC_2080), win,
                             '' if xb is None else ' (ws10x crosses to %s %s, the ws10x-cadence'

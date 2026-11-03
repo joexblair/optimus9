@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "/home/joe/thecodes/docs/octo-freedom/1103_fdm2/fdm2_chain.py", line 91, in <module>
+    LG = F2.legs(LN, (OPN, TS, 'fdm re-entry %s' % ln.U(int(g['bar']))), B, resig=SIGS)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/joe/thecodes/docs/octo-freedom/1022_v4/v4_fdm2.py", line 615, in legs
+    sig, rows = walk(LN, side, opn, bound)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/joe/thecodes/docs/octo-freedom/1022_v4/v4_fdm2.py", line 437, in walk
+    evs = cadence_events(LN, side, int(opn) + 1, int(B))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/joe/thecodes/docs/octo-freedom/1022_v4/v4_fdm2.py", line 244, in cadence_events
+    if not m3 and int(K.FDM_M3_RESCUE_ON):
+                      ^^^^^^^^^^^^^^^^^^
+AttributeError: module 'v4_knobs' has no attribute 'FDM_M3_RESCUE_ON'

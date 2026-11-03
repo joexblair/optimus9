@@ -64,7 +64,7 @@ for nm, what in (('FDM_FNC_2080', 'his "fdm-20-80-fnc" - step 1 AND the populati
 print()
 
 #   ── the open: his banked re-entry ─────────────────────────────────────────────────────────────
-SIGS = RE.signals(LN['B1'], LN['EMR'])
+SIGS = RE.signals(LN['B1'], LN['EMR'], G=LN['G30B'])
 if DAY:
     HIT = [x for x in SIGS if A <= int(x['bar']) <= B]
     assert HIT, 'no fdm re-entry signal inside %s .. %s' % (ln.U(A), ln.U(B))
@@ -101,7 +101,9 @@ for i, L in enumerate(LG):
     print('| the bar | the stage | why |')
     print('|---|---|---|')
     for r in L['rows']:
-        print('| %s | %s | %s |' % (ln.U(int(r['bar'])), r['stage'], r['why']))
+        print('| %s | %s | %s%s |'
+              % (ln.U(int(r['bar'])), r['stage'], r['why'],
+                 '' if not r.get('cwhy') else ' || ' + str(r['cwhy'])))
     if not L['rows']:
         print('| %s | NO CADENCE EVENT | no cadence event on the %s side from the open to %s |'
               % (ln.U(L['opn']), 'HIGH' if L['side'] > 0 else 'LOW', ln.U(B)))
@@ -306,7 +308,9 @@ if _W:
                  % (t['nestle'][1], t['nestle'][2], t['nestle'][3], t['nestle'][4],
                     ln.U(int(t['nestle'][0]))),
                  _x3r, _x3m,
-                 'yes' if t['m3'] else 'NO', 'CADENCE EVENT' if ok else fail))
+                 ('yes' if t.get('rsc') is None else 'RESCUED at %g/%g'
+                  % (float(K.FDM_M3_RESCUE_FNC), 100.0 - float(K.FDM_M3_RESCUE_FNC)))
+                 if t['m3'] else 'NO', 'CADENCE EVENT' if ok else fail))
 
 
 #   ── W_FDM2_SAV='<the open bar>': v4saviour on one fdm2 leg ────────────────────────────────────
