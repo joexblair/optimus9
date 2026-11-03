@@ -130,6 +130,20 @@ SAV_MAGE_GATE_WOB = _knob('SAV_MAGE_GATE_WOB', 8, int)   # bars ws1Mage must sta
 SAV_CASCADE_ZOOM = _knob('SAV_CASCADE_ZOOM', 2, int)     # rungs each cluster step compares across
 SAV_CASCADE_MIN = _knob('SAV_CASCADE_MIN', 4, int)       # lines a cluster must cover
 SAV_CASCADE_MODE = os.environ.get('W_V4_SAV_CASCADE_MODE', 'extrema')   # the bar picker's mode
+SAV_CASCADE_TF_HI = _knob('SAV_CASCADE_TF_HI', 12, int)  # the cascade ladder's top rung.
+#   12 IS THE BANKED VALUE and it is what v4_machine.py gets. HIS 1103 ASK for fdm2's own use of
+#   v4saviour is 6 - *"reduce the mage cascade to ws1-ws6"* - and fdm2's driver passes that
+#   explicitly rather than moving this default, because moving it changes the live machine.
+#   AT 6 THE LADDER IS 6 LINES, so SAV_CASCADE_MIN 4 is still reachable: a cluster can cover 4, 5
+#   or 6 of them. At 3 it could not, and the verdict would be 'neither' on every bar.
+SAV_CASCADE_ANCHOR = os.environ.get('W_V4_SAV_CASCADE_ANCHOR', 'liftoff')   # 'liftoff'|'ws1mage'
+#   WHICH BAR THE CASCADE IS READ AT.
+#     'liftoff'   the r line's most recent lift-off STAMP at or before the ib cross. His #25,
+#                 *"not extrema - measure where the r reversals print"*, and the banked value
+#     'ws1mage'   ws1Mage's most recent target-side extremum, via mage_cascade_bar - the same
+#                 anchor his ws1Mage route already uses. HIS 1103 *"test at the ws1Mage extremum"*
+#   AT 'ws1mage' THE r LINE IS NOT READ FOR THE ANCHOR AT ALL, so the lift-off's emerging read
+#   drops out and every cascade input is the chart-matched one.
 
 # ── the trajectory read, for the dtf confluence ───────────────────────────────────────────────
 TRAJ_WIDTH = _knob('TRAJ_WIDTH', 21.0)       # bars per TF-minute for rule2_trajectory's block.
@@ -1230,6 +1244,8 @@ RULED = {
     'SAV_CASCADE_ZOOM': (2,     '"26, 2 knob" - the Jig\'s MC_ZOOM, captured at v4 level'),
     'SAV_CASCADE_MIN':  (4,     'his 1017 "4 or more consecutive TFs" - the Jig\'s MC_MIN,'
                                 ' captured at v4 level'),
+    'SAV_CASCADE_TF_HI': (12, 'THE BANKED LADDER TOP, what v4_machine gets. HIS 1103 "reduce the mage cascade to ws1-ws6" is fdm2\'s own value, passed by its driver so the live machine is untouched'),
+    'SAV_CASCADE_ANCHOR': ('liftoff', 'HIS #25 "not extrema - measure where the r reversals print" is the bank. "ws1mage" is his 1103 "test at the ws1Mage extremum", passed by fdm2\'s driver'),
     'SAV_CASCADE_MODE': ('extrema', '"25, not extrema - measure where the r reversals print" for the'
                                 ' r-driven reads; the ROUTED read is anchored on the ws1Mage'
                                 ' extrema, so this mode is \'extrema\''),

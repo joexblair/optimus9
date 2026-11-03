@@ -323,7 +323,8 @@ if _S:
     R = {t: LN['CPR'][t] for t in (1, 2)}
     RE = {t: LN['EMR'][t] for t in (1, 2)}
     MG = {t: LN['CPM'][t] for t in range(1, 13)}
-    v = SAV.walk(int(L['opn']), int(L['side']), R, MG, ln.U, RE=RE, arm=False)
+    v = SAV.walk(int(L['opn']), int(L['side']), R, MG, ln.U, RE=RE, arm=False,
+                 tf_hi=6, anchor='ws1mage')
     print()
     print('## v4saviour on the %s %s | target side %s | chart-matched, lift-off emerging, no arm'
           % (ln.U(L['opn']), 'LONG' if L['side'] > 0 else 'SHORT',
@@ -333,6 +334,28 @@ if _S:
     print('|---|---|---|')
     for a, b, c in v['why']:
         print('| %s | %s | %s |' % (a, b, str(c).replace('|', '\\|')))
+    print()
+    #   THE LADDER, LINE BY LINE. The why-string gives each cluster's span and length but not the
+    #   values, so a 3/3 split reads as a fact with no cause on the page. `step to the next rung`
+    #   is the adjacent diff; `step across the zoom` is the one _mc_run actually tests, comparing a
+    #   line with the line SAV_CASCADE_ZOOM rungs along.
+    _AB = [b2 for a2, b2, c2 in v['why'] if a2 in ('the cascade anchor',
+                                                   'the ws1Mage target-side extrema anchor')]
+    _z = int(K.SAV_CASCADE_ZOOM)
+    for _i, _bar in enumerate(_AB):
+        _k = ln.K(_bar)
+        print()
+        print('### the ws1..ws6 Mage ladder at %s | zoom %d rungs, a cluster needs %d lines'
+              % (_bar, _z, int(K.SAV_CASCADE_MIN)))
+        print()
+        print('| the line | its value | step to the next rung | step across the zoom to ws%d+ |'
+              % _z)
+        print('|---|---|---|---|')
+        _v = [float(LN['CPM'][t][_k]) for t in range(1, 7)]
+        for _t in range(1, 7):
+            _n = ('%+.4f' % (_v[_t] - _v[_t - 1])) if _t < 6 else '-'
+            _zz = ('%+.4f' % (_v[_t - 1 + _z] - _v[_t - 1])) if _t - 1 + _z < 6 else '-'
+            print('| ws%dMage | %.4f | %s | %s |' % (_t, _v[_t - 1], _n, _zz))
     print()
     print('| the verdict | value |')
     print('|---|---|')
