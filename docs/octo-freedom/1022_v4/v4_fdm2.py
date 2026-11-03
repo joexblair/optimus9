@@ -331,11 +331,30 @@ def population(LN, side, opn, bar):
     return out
 
 
+def rev_from(ev, s0):
+    """The bar the reversal count starts from, by FDM_REV_FROM. -> bar.
+
+    HIS 1103 2-POLE ASK: *"add a 2-pole knob: 'from the cadence event bar' and 'from the cadence
+    event bar's window open'"*.
+
+      'event'    `ev`, the cadence event bar - ws1b's oob->ib cross
+      'window'   `s0`, the FIRST bar of that cadence event's ws1b oob excursion
+
+    Both are at or before the cadence event, so neither reads a later bar. 'window' always starts
+    earlier, so it can only count the same reversals or more.
+    """
+    b = int(s0) if str(K.FDM_REV_FROM) == 'window' else int(ev)
+    assert b <= int(ev), 'the reversal count starts after the cadence event it belongs to'
+    return b
+
+
 def reversed_since(LN, side, pop, a, b):
     """How many of `pop` have a lift-off STAMP in (a, b]. -> int.
 
     A reversal is a lift-off off the extreme on the TARGET side: the lines were running to that
     extreme and one left it. The stamp, not the lift bar - a lift at b-2 is not knowable at b.
+
+    `a` comes from rev_from, which is the cadence event bar or its window's open.
     """
     assert int(b) >= int(a), 'a reversal window ends before it starts'
     n = 0
@@ -383,19 +402,20 @@ def walk(LN, side, opn, B):
         if win != 'the ws10x-cadence':
             continue
         pop = population(LN, side, opn, xb)
-        rv = reversed_since(LN, side, pop, ev, xb)
+        rf = rev_from(ev, s0)
+        rv = reversed_since(LN, side, pop, rf, xb)
         pct = (rv / len(pop) * 100.0) if pop else 0.0
         if pct >= t_pct:
             rows.append(dict(bar=xb, stage='REV-TRADE', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
                              pct=pct, which=x10[1], why='ws10x-cadence to %s, %d of %d reversed '
-                             'since %s = %.1f%% >= %g%% at the cadence itself'
-                             % (x10[1], rv, len(pop), ln.U(ev), pct, t_pct)))
+                             'since %s (%s) = %.1f%% >= %g%% at the cadence itself'
+                             % (x10[1], rv, len(pop), ln.U(rf), K.FDM_REV_FROM, pct, t_pct)))
             return xb, rows
         if pct < g_pct:
             rows.append(dict(bar=xb, stage='NO ACTION', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
                              pct=pct, which=x10[1], why='ws10x-cadence to %s, %d of %d reversed '
-                             'since %s = %.1f%% < %g%% - no branch, wait for the next cadence'
-                             % (x10[1], rv, len(pop), ln.U(ev), pct, g_pct)))
+                             'since %s (%s) = %.1f%% < %g%% - no branch, wait for the next cadence'
+                             % (x10[1], rv, len(pop), ln.U(rf), K.FDM_REV_FROM, pct, g_pct)))
             continue
         #   THE GRACE WALK. The clock starts at the ws10x-cadence, the COUNT carries on from its
         #   value there - his *"why would it reset?  the grace fires on a low pct, and the low pct
@@ -406,14 +426,14 @@ def walk(LN, side, opn, B):
             end = min(end, int(nxt) - 1)
         rows.append(dict(bar=xb, stage='GRACE', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
                          pct=pct, which=x10[1], why='ws10x-cadence to %s, %d of %d reversed since %s '
-                         '= %.1f%% >= %g%% -> grace walk %s .. %s, %d bars = %.1f min, population '
-                         'frozen at %d lines' % (x10[1], rv, len(pop), ln.U(ev), pct, g_pct,
+                         '(%s) = %.1f%% >= %g%% -> grace walk %s .. %s, %d bars = %.1f min, population '
+                         'frozen at %d lines' % (x10[1], rv, len(pop), ln.U(rf), K.FDM_REV_FROM, pct, g_pct,
                                                  ln.U(min(int(xb) + 1, int(B))), ln.U(end),
                                                  end - int(xb), (end - int(xb)) * 5 / 60.0,
                                                  len(pop))))
         hit = None
         for b in range(int(xb) + 1, end + 1):
-            r2 = reversed_since(LN, side, pop, ev, b)
+            r2 = reversed_since(LN, side, pop, rf, b)
             p2 = (r2 / len(pop) * 100.0) if pop else 0.0
             if p2 >= t_pct:
                 hit = (b, r2, p2)
@@ -421,12 +441,12 @@ def walk(LN, side, opn, B):
         if hit is not None:
             rows.append(dict(bar=hit[0], stage='REV-TRADE', ev=ev, k=k, n=n, pop=tuple(pop),
                              rv=hit[1], pct=hit[2], which=x10[1], why='grace walk, %d of %d reversed '
-                             'since %s = %.1f%% >= %g%%'
-                             % (hit[1], len(pop), ln.U(ev), hit[2], t_pct)))
+                             'since %s (%s) = %.1f%% >= %g%%'
+                             % (hit[1], len(pop), ln.U(rf), K.FDM_REV_FROM, hit[2], t_pct)))
             return hit[0], rows
         rows.append(dict(bar=end, stage='NO ACTION', why='grace walk expired at %.1f%%, never '
                          'reached %g%% - wait for the next cadence'
-                         % ((reversed_since(LN, side, pop, ev, end) / len(pop) * 100.0)
+                         % ((reversed_since(LN, side, pop, rf, end) / len(pop) * 100.0)
                             if pop else 0.0, t_pct)))
     return None, rows
 
@@ -472,13 +492,24 @@ def legs(LN, open_at, B, resig=None, cap=None):
     opn, side = int(open_at[0]), int(open_at[1])
     src = str(open_at[2]) if len(open_at) > 2 else 'handed in'
     while opn < int(B):
-        sig, rows = walk(LN, side, opn, int(B))
+        #   THE STOP IS FOUND FIRST, AND IT BOUNDS THE WALK. Before this the walk ran to `B` and
+        #   the stop was applied after, so a leg that stopped still reported the rev-trade signal
+        #   the walk had found LATER - on 2026-09-15 three legs printed a signal 3h10m, 3h26m and
+        #   6h01m after their own exit bar. The signal and every decision row past the stop are
+        #   bars past the leg's own exit, which is lookahead in the report.
+        #   A TIE GOES TO THE STOP: the stop is a price event AT bar t, while a rev-trade signal at
+        #   bar t does not close until t+1. That convention is MINE and it is stated here.
+        stopped = stop_bar(LN, opn, int(B), side, cap) if cap > 0 else None
+        sig, rows = walk(LN, side, opn, int(stopped) if stopped is not None else int(B))
         #   THE ROUTER'S CLOSE+OPEN ARM: the signal's close price bar is s+1 and the next open is
         #   s+2. His *"if it's close then open, consume 2 bars"*.
-        ex = (int(sig) + 1) if sig is not None else int(B)
-        stopped = stop_bar(LN, opn, ex, side, cap) if cap > 0 else None
-        if stopped is not None:
-            ex = int(stopped)
+        if stopped is not None and (sig is None or int(sig) + 1 >= int(stopped)):
+            ex, sig = int(stopped), None
+        else:
+            stopped = None
+            ex = (int(sig) + 1) if sig is not None else int(B)
+        assert sig is None or int(sig) + 1 <= ex, 'a leg reports a signal after its own exit'
+        assert not rows or int(rows[-1]['bar']) <= ex, 'a decision row is past the leg\'s exit'
         assert ex >= opn, 'a leg exits before it opens'
         o = float(close[opn])
         H = np.asarray(phi[opn:ex + 1], float)
@@ -490,7 +521,7 @@ def legs(LN, open_at, B, resig=None, cap=None):
         out.append(dict(
             opn=opn, side=side, src=src, sig=sig, exit=ex, rows=rows,
             ctype=('STOP at %.2f%%' % cap) if stopped is not None
-                  else ('rev-trade' if sig is not None else 'no rev-trade to the tape end'),
+                  else ('rev-trade' if sig is not None else 'no rev-trade before the walk\'s end'),
             mae=min(abs(side * (ap - o) / o * 100.0), cap) if cap > 0
                 else abs(side * (ap - o) / o * 100.0),
             mfe=side * (vp - o) / o * 100.0,

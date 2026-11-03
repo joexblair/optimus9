@@ -1109,10 +1109,17 @@ FDM_X10_WOB = _knob('FDM_X10_WOB', 24, int)     # the ws10x race's hold, 24 bars
 #   HIS 1103 RULING: *"now that we have the grade period, we can leverage a smaller wob: use 24"*.
 #   He had written "wob 24 or 36" and used 36 in his own 1841 example; 36 is the other arm.
 FDM_X10_FRM = os.environ.get('W_V4_FDM_X10_FRM', 'cross')   # 'cross' | 'confirm'.
-#   WHICH BAR OF THE ws10x RACE MUST FOLLOW THE CADENCE EVENT. 'cross' is the default on
-#   PRECEDENT: 1103_fdm's census used it and his own 1841 ws10x-cadence of 18:52:55 came from
-#   it. 'confirm' lets a race that began before the cadence event count, because an event's
-#   identity is its confirm bar. THE KNOB NAME IS MINE and he has not ruled between them.
+#   WHICH BAR OF THE ws10x RACE MUST FOLLOW THE CADENCE EVENT. RULED 'cross' at 1103 - he read the
+#   as-built spec with this marked #MINE and said *"your #MINE lines are all good"*. 'confirm' lets
+#   a race that began before the cadence event count; it is the arm, not the bank.
+FDM_REV_FROM = os.environ.get('W_V4_FDM_REV_FROM', 'event')   # 'event' | 'window'.
+#   WHERE THE REVERSAL COUNT STARTS. HIS 1103 ASK, two poles: *"add a 2-pole knob: 'from the
+#   cadence event bar' and 'from the cadence event bar's window open'"*.
+#     'event'    the cadence event bar - ws1b's oob->ib cross
+#     'window'   the FIRST bar of that cadence event's ws1b oob excursion
+#   'window' always starts earlier, so it can only count the same reversals or more.
+#   'event' IS THE DEFAULT because it is the behaviour every number so far was measured on; he
+#   gave the two poles and did not rule between them, so 'window' is unmeasured.
 FDM_X10_GRACE_PCT = _knob('FDM_X10_GRACE_PCT', 40.0)   # HIS NAME 'fdm-ws10x-cad-grace'. Percent.
 FDM_X10_TRADE_PCT = _knob('FDM_X10_TRADE_PCT', 50.0)   # the grace walk's rev-trade threshold.
 #   HIS VALUE, his *">=50%"*. THE KNOB IS MINE - he named only the 40 as a knob, and a stated
@@ -1394,7 +1401,8 @@ RULED = {
     'FDM_POP_LO': (3, 'HIS 1103 "ws3 to ws30 for both the cadence and the ws10x-cadence". The top comes from L2_MOM_MAXTF 30, not from a second knob'),
     'FDM_STEP1_ABOVE_TF': (3, 'HIS 1103 "above in timeframe" - step 1 scans ws4..ws30. STRICTLY above, so this knob is the excluded rung, not the floor'),
     'FDM_X10_WOB': (24, 'HIS 1103 RULING "now that we have the grade period, we can leverage a smaller wob: use 24". 36 is the other arm, from his own 1841 example'),
-    'FDM_X10_FRM': ('cross', 'DEFAULT ON PRECEDENT, NOT A RULING - the 1103_fdm census used it and his 1841 ws10x-cadence 18:52:55 came from it. "confirm" is the other arm and he has not ruled between them'),
+    'FDM_X10_FRM': ('cross', 'RULED 1103 - he read it marked #MINE in the as-built spec and said "your #MINE lines are all good". "confirm" is the arm'),
+    'FDM_REV_FROM': ('event', 'HIS 1103 2-POLE ASK. "event" is the bank because every number so far was measured on it; "window" starts at the cadence event\'s ws1b excursion open and is unmeasured'),
     'FDM_X10_GRACE_PCT': (40.0, 'HIS OWN KNOB NAME, "fdm-ws10x-cad-grace", at his own value'),
     'FDM_X10_TRADE_PCT': (50.0, 'HIS VALUE ">=50%". The knob is mine - a stated threshold with no knob cannot be moved without an edit'),
     'FDM_X10_GRACE_MIN': (5.0, 'HIS VALUE "we add a 5 minute walk". The knob is mine. 5.0 min = 60 bars at the 5 s grid'),

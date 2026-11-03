@@ -27,11 +27,21 @@ finally:
 
 RE_AT = os.environ.get('W_FDM2_OPEN', '2026-08-03 00:41:30')
 ALL = os.environ.get('W_FDM2_LEGS', '1') == 'all'
+#   W_FDM2_DAY=YYYY-MM-DD runs ONE DAY end to end: the first re-entry at or after 00:00:00 opens,
+#   and the walk stops at 23:59:55. The day bound is HIS - *"pick one day to test it on"* - not a
+#   horizon of mine, and the driver prints both edges so the span is on the page.
+DAY = os.environ.get('W_FDM2_DAY')
 
 LN = F2.load()
 B = len(LN['close']) - 1
-print('# fdm2 | TAPE %d bars, ends %s | RULED_OK %s | the walk runs to %s'
-      % (len(LN['close']), ln.U(B), K.RULED_OK, ln.U(B)))
+A = 0
+if DAY:
+    A, B = ln.K(DAY + ' 00:00:00'), ln.K(DAY + ' 23:59:55')
+    ALL = True
+print('# fdm2 | TAPE %d bars, ends %s | RULED_OK %s'
+      % (len(LN['close']), ln.U(len(LN['close']) - 1), K.RULED_OK))
+print('# THE WALK RUNS %s .. %s%s'
+      % (ln.U(A), ln.U(B), ' - HIS one-day bound' if DAY else ' - the whole tape'))
 print('# THE STOP IS ON: FDM_MAE_CAP %.2f%% adverse from the open, his "yes, move it to default"'
       % float(K.FDM_MAE_CAP))
 print()
@@ -47,6 +57,7 @@ for nm, what in (('FDM_FNC_2080', 'his "fdm-20-80-fnc" - step 1 AND the populati
                  ('FDM_X10_GRACE_MIN', 'the grace walk\'s length, minutes'),
                  ('FDM_MAE_CAP', 'the stop, % adverse from the open'),
                  ('FDM_X10_FRM', 'must the race CROSS follow the cadence event, or only its CONFIRM'),
+                 ('FDM_REV_FROM', 'where the reversal count starts: the cadence event bar, or that event\'s window open'),
                  ('LIFT_WOB', 'the lift-off hold; the reversal STAMP is lift + 7 bars = 35 s')):
     v = getattr(K, nm)
     print('| %s | %s | %s |' % (nm, ('%g' % v) if not isinstance(v, str) else v, what))
@@ -54,11 +65,16 @@ print()
 
 #   ── the open: his banked re-entry ─────────────────────────────────────────────────────────────
 SIGS = RE.signals(LN['G30B'], LN['EMR'])
-k0 = ln.K(RE_AT)
-HIT = [g for g in SIGS if int(g['bar']) == k0]
-assert len(HIT) == 1, ('the %s re-entry signal is not in the list - %d matches'
-                       % (RE_AT, len(HIT)))
-g = HIT[0]
+if DAY:
+    HIT = [x for x in SIGS if A <= int(x['bar']) <= B]
+    assert HIT, 'no fdm re-entry signal inside %s .. %s' % (ln.U(A), ln.U(B))
+    g = HIT[0]
+else:
+    k0 = ln.K(RE_AT)
+    HIT = [x for x in SIGS if int(x['bar']) == k0]
+    assert len(HIT) == 1, ('the %s re-entry signal is not in the list - %d matches'
+                           % (RE_AT, len(HIT)))
+    g = HIT[0]
 D = SG.direction(int(g['side']))
 OPN = SG.fire_bar(g)
 TS = SG.target_side(D)
