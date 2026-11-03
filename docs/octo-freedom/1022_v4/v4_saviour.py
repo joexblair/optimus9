@@ -124,49 +124,66 @@ def _cascade_at(line, tf, side, at_or_before, MG):
     return s, b, (None if c is None else c['verdict']), c
 
 
-def walk(open_bar, target_side, R, MG, U):
+def walk(open_bar, target_side, R, MG, U, RE=None, arm=True):
     """v4saviour on one trade. -> dict with `verdict`, `why` and the bars it used.
 
       open_bar      the bar the trade opened on
       target_side   +1 high, -1 low. Joe #4: LONG = high, SHORT = low
-      R             {1: ws1r, 2: ws2r, 5: ws5r}
+      R             {1: ws1r, 2: ws2r, 5: ws5r}. ws5r is read by the arm only
       MG            {tf: ws{tf}Mage} for tf 1..12, for the cascade
       U             a bar -> timestamp formatter
+      RE            the r lines the LIFT-OFF reads. Defaults to `R`
+      arm           False skips the ws5r walkback arm entirely
+
+    TWO ARMS, AND THE BANKED BEHAVIOUR IS THE DEFAULT. v4_machine.py imports this module, so
+    changing `walk` in place would change the live octo-v4 machine. `RE=None` and `arm=True`
+    reproduce it exactly; fdm2 passes its own.
+
+    `RE` EXISTS BECAUSE THE TWO READS ARE DIFFERENT QUESTIONS. His standing rule is that every value
+    read is chart-matched and lift-off alone stays emerging. The oob runs and the ib crosses are
+    fence reads on `R`; the cascade's anchor is a lift-off, so it reads `RE`. Handing one array for
+    both would put the lift-off on whichever the caller chose for the fences.
+
+    HIS 1103 *"convert it to closed-prev and remove the armed gate"* is fdm2's call for its own use
+    of this mech. v4saviour as an octo-v4 mech keeps its arm.
     """
     o = int(open_bar)
     s = target_side
     want = 'down' if s > 0 else 'up'            # the COUNTER verdict
     why = []
-    r1, r2, r5 = R[1], R[2], R[5]
+    r1, r2 = R[1], R[2]
+    e1, e2 = (RE or R)[1], (RE or R)[2]
 
-    # ---- the arm: no counter-target-side ws5r oob in the WALKBACK from the open
-    #
-    # Joe 1024: *"at trade open, walkback in 5 minute jumps (cap: 30 minutes) to find the ws5r
-    # extrema. if the extrema is oob, the gate is closed and saviour may not fire"*, and *"full
-    # range"* - so the extremum is read over EVERY bar in the span, not at 7 sampled points.
-    #
-    # WHAT IT REPLACED, and why the at-the-open test was not enough. His diagnosis: *"the LONG
-    # trades opening time was delayed by ~ws9 extending the open bar to a point where ws5r had
-    # already left oob"*. The old arm read ws5r at the open bar ALONE, so a trade whose open was
-    # pushed out by a slow rung saw a ws5r that had climbed back in bounds and armed anyway. On the
-    # 2026-09-01 18:55:15 LONG it read 47.99 and armed; the walkback finds 0.98 at 18:35:15.
-    #
-    # CAUSAL. The span is [open - SAV_ARM_WALKBACK, open] - entirely at or before the open bar.
-    wb = max(0, o - K.SAV_ARM_WALKBACK * K.BARS_PER_MIN)
-    seg = np.asarray(r5[wb:o + 1], float)
-    ex = float(np.nanmin(seg)) if -s < 0 else float(np.nanmax(seg))
-    exb = wb + int(np.nanargmin(seg) if -s < 0 else np.nanargmax(seg))
-    assert exb <= o, 'the arm walkback read a bar after the open'
-    armed = not K.oob(ex, -s)
-    why.append(('the open', U(o), 'ws5r %.2f, target-side %s' % (float(r5[o]), 'high' if s > 0 else 'low')))
-    why.append(('the arm walkback, %d min, the COUNTER-TARGET side (%s) extremum'
-                % (K.SAV_ARM_WALKBACK, 'low' if s > 0 else 'high'),
-                '%s to %s' % (U(wb), U(o)),
-                'ws5r %.2f at %s, oob %s -> %s'
-                % (ex, U(exb), 'YES' if not armed else 'no',
-                   'NOT ARMED' if not armed else 'armed')))
-    if not armed:
-        return {'verdict': 'NOT ARMED', 'why': why, 'open': o}
+    if arm:
+        # ---- the arm: no counter-target-side ws5r oob in the WALKBACK from the open
+        #
+        # Joe 1024: *"at trade open, walkback in 5 minute jumps (cap: 30 minutes) to find the ws5r
+        # extrema. if the extrema is oob, the gate is closed and saviour may not fire"*, and *"full
+        # range"* - so the extremum is read over EVERY bar in the span, not at 7 sampled points.
+        #
+        # WHAT IT REPLACED, and why the at-the-open test was not enough. His diagnosis: *"the LONG
+        # trades opening time was delayed by ~ws9 extending the open bar to a point where ws5r had
+        # already left oob"*. The old arm read ws5r at the open bar ALONE, so a trade whose open was
+        # pushed out by a slow rung saw a ws5r that had climbed back in bounds and armed anyway. On the
+        # 2026-09-01 18:55:15 LONG it read 47.99 and armed; the walkback finds 0.98 at 18:35:15.
+        #
+        # CAUSAL. The span is [open - SAV_ARM_WALKBACK, open] - entirely at or before the open bar.
+        r5 = R[5]
+        wb = max(0, o - K.SAV_ARM_WALKBACK * K.BARS_PER_MIN)
+        seg = np.asarray(r5[wb:o + 1], float)
+        ex = float(np.nanmin(seg)) if -s < 0 else float(np.nanmax(seg))
+        exb = wb + int(np.nanargmin(seg) if -s < 0 else np.nanargmax(seg))
+        assert exb <= o, 'the arm walkback read a bar after the open'
+        armed = not K.oob(ex, -s)
+        why.append(('the open', U(o), 'ws5r %.2f, target-side %s' % (float(r5[o]), 'high' if s > 0 else 'low')))
+        why.append(('the arm walkback, %d min, the COUNTER-TARGET side (%s) extremum'
+                    % (K.SAV_ARM_WALKBACK, 'low' if s > 0 else 'high'),
+                    '%s to %s' % (U(wb), U(o)),
+                    'ws5r %.2f at %s, oob %s -> %s'
+                    % (ex, U(exb), 'YES' if not armed else 'no',
+                       'NOT ARMED' if not armed else 'armed')))
+        if not armed:
+            return {'verdict': 'NOT ARMED', 'why': why, 'open': o}
 
     # ---- the cap. ONE timer from the OPEN, covering the whole mech. Joe 1022 raised it to 16 min
     # and moved its start here, *"to also cover the cases where ws1r does not reach oob"*.
@@ -209,7 +226,7 @@ def walk(open_bar, target_side, R, MG, U):
     why.append(('the ws1r oob->ib cross', U(x1), 'ws1r %.2f, held %d bars' % (float(r1[x1]), K.SAV_IB_XWOB)))
 
     # ---- branch A: the cascade at the ws1r reversal print
-    st, lb, vd, c = _cascade_at(r1, 1, s, x1, MG)
+    st, lb, vd, c = _cascade_at(e1, 1, s, x1, MG)
     if st is None:
         why.append(('the ws1r lift-off for the cascade', '-', 'none at or before the cross'))
         return {'verdict': 'STAYS OPEN', 'why': why, 'open': o}
@@ -256,7 +273,7 @@ def walk(open_bar, target_side, R, MG, U):
                     '%d bars, peak %.2f' % (ye - ys + 1, float(np.nanmax(r2[ys:ye+1])))))
         why.append(('the ws2r oob->ib cross', U(x2), 'ws2r %.2f, %d bars inside the cap'
                     % (float(r2[x2]), lim - x2)))
-        st2, lb2, vd2, c2 = _cascade_at(r2, 2, s, x2, MG)
+        st2, lb2, vd2, c2 = _cascade_at(e2, 2, s, x2, MG)
         if st2 is None:
             why.append(('the ws2r lift-off for the cascade', '-', 'none at or before the cross'))
             return {'verdict': 'STAYS OPEN', 'why': why, 'open': o}

@@ -93,7 +93,7 @@ def load():
     hi = int(K.L2_MOM_MAXTF)
     CPR = {t: np.asarray(CP.series(E[t], int(t) * 60), float) for t in range(1, hi + 1)}
     EMR = {t: np.asarray(E[t], float) for t in range(1, hi + 1)}
-    MGE = LL.mage()
+    MGE = LL.mage()          # EMERGING Mage. v4saviour reads the live lines, not chart-matched
     CPM = {t: np.asarray(CP.series(MGE[t], int(t) * 60), float) for t in MGE}
     close, phi, plo = BT.prices()
     #   THE LIFT-OFF STAMPS, PRECOMPUTED PER (TF, SIDE). One lift_off call per pair instead of one
@@ -109,6 +109,7 @@ def load():
         B1=np.asarray(CP.series(np.asarray(ln.line('ws1b'), float), 60), float),
         X10=np.asarray(ln.line('ws10x'), float),            # emerging, his fallback's own ruling
         M10=np.asarray(CP.series(MGE[10], 600), float),
+        MGE={t: np.asarray(MGE[t], float) for t in MGE},
         G30B=np.asarray(LL._g30b(), float),
         close=close, phi=phi, plo=plo)
 

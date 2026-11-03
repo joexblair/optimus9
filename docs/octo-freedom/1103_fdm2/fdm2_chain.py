@@ -295,3 +295,54 @@ if _W:
                  % (t['nestle'][1], t['nestle'][2], t['nestle'][3], t['nestle'][4],
                     ln.U(int(t['nestle'][0]))),
                  'yes' if t['m3'] else 'NO', 'CADENCE EVENT' if ok else fail))
+
+
+#   ── W_FDM2_SAV='<the open bar>': v4saviour on one fdm2 leg ────────────────────────────────────
+#   HIS 1103 *"I think we can use it to reverse the 1356 LONG"*. v4saviour is banked and unchanged;
+#   this only hands it a leg's open bar and the leg's own target side.
+#   THE LINES ARE THE LIVE ONES, as banked. v4saviour was validated against his four 09-01/09-02
+#   examples on the live lines; fdm2's chart-matched reads would move its verdicts off them.
+_S = os.environ.get('W_FDM2_SAV')
+if _S:
+    _e2 = sys.stderr; sys.stderr = io.StringIO()
+    try:
+        import v4_saviour as SAV
+    finally:
+        sys.stderr = _e2
+    k = ln.K(_S)
+    hit = [L for L in LG if int(L['opn']) == k]
+    assert hit, 'no fdm2 leg opens at %s in this run' % _S
+    L = hit[0]
+    #   HIS 1103 *"convert it to closed-prev and remove the armed gate"*.
+    #     R    the fence reads - the oob runs, the ib crosses, the cascade ladder, the past-50
+    #          gate, the route's extrema anchor. CHART-MATCHED
+    #     RE   the lift-off only. EMERGING, his standing rule
+    #     arm  False - the ws5r walkback is out, so ws5r is not read at all
+    #   v4saviour's own default is still the arm ON with one array for both reads, so v4_machine.py
+    #   is untouched.
+    R = {t: LN['CPR'][t] for t in (1, 2)}
+    RE = {t: LN['EMR'][t] for t in (1, 2)}
+    MG = {t: LN['CPM'][t] for t in range(1, 13)}
+    v = SAV.walk(int(L['opn']), int(L['side']), R, MG, ln.U, RE=RE, arm=False)
+    print()
+    print('## v4saviour on the %s %s | target side %s | chart-matched, lift-off emerging, no arm'
+          % (ln.U(L['opn']), 'LONG' if L['side'] > 0 else 'SHORT',
+             'HIGH' if L['side'] > 0 else 'LOW'))
+    print()
+    print('| the step | the bar | what it read |')
+    print('|---|---|---|')
+    for a, b, c in v['why']:
+        print('| %s | %s | %s |' % (a, b, str(c).replace('|', '\\|')))
+    print()
+    print('| the verdict | value |')
+    print('|---|---|')
+    print('| v4saviour | %s |' % v['verdict'])
+    if v.get('fill') is not None:
+        o = float(LN['close'][int(L['opn'])])
+        px = float(LN['close'][int(v['fill'])])
+        print('| it ends the trade at | %s |' % ln.U(int(v['fill'])))
+        print('| it opens the reverse at | %s |' % ln.U(int(v['reopen'])))
+        print('| from | %s |' % v['from_line'])
+        print('| the leg would realise | %+.3f%% |' % (int(L['side']) * (px - o) / o * 100.0))
+    print('| what fdm2 did instead | %s at %s, %+.3f%% |'
+          % (L['ctype'], ln.U(L['exit']), L['rel']))
