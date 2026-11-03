@@ -147,7 +147,7 @@ def towards(r, tf, bar, side):
 
 
 #   ── the cadence event, his revised preamble ───────────────────────────────────────────────────
-def cadence_events(LN, side, A, B):
+def cadence_events(LN, side, A, B, trace=False):
     """His cadence events on `side` in [A, B]. -> [(the event bar, the excursion start, why)].
 
         a cadence event prints on ws1b to ib, IF ws1,2Mage was more deeply oob (further away from
@@ -158,15 +158,27 @@ def cadence_events(LN, side, A, B):
 
     The event is ws1b's oob->ib cross. All three tests are evaluated over the excursion that ENDS
     at that cross, so every read is at or before the event bar - the assert carries that.
+
+    `trace=True` returns EVERY cross on `side` with its per-test verdict instead of only the
+    passes, so a rejection can be read off the data rather than guessed at. The pass path is
+    unchanged either way - one function owns the preamble and the trace is a view of it, not a
+    second copy. His 1103 *"why was 1644 tagged as NO CADENCE EVENT?"* is what it is for.
     """
-    out = []
+    out, tr = [], []
     B1, CPR, CPM = LN['B1'], LN['CPR'], LN['CPM']
+    f3 = float(K.FDM_M3_FNC)
     oob = (B1 >= K.OOB_HI) if int(side) > 0 else (B1 <= K.OOB_LO)
     for c, cf, s in oob_ib_cross(B1, K.OOB_HI, K.OOB_LO, 1):
-        if int(s) != int(side) or not (int(A) <= int(c) <= int(B)):
+        if int(s) != int(side):
+            continue
+        inwin = int(A) <= int(c) <= int(B)
+        if not inwin and not trace:
             continue
         j = int(c) - 1
         if j < 0 or not oob[j]:
+            if trace:
+                tr.append(dict(cross=int(c), inwin=inwin, s0=None, s1=None, t1=None, t2=None,
+                               t3=None, why='the bar before the cross is not oob - no excursion'))
             continue
         while j > 0 and oob[j - 1]:
             j -= 1
@@ -190,25 +202,24 @@ def cadence_events(LN, side, A, B):
                     break
             if t1:
                 break
-        if t1 is None:
-            continue
 
         def anyoob(a):
             seg = a[s0:s1 + 1]
             return bool(((seg >= K.OOB_HI) if side > 0 else (seg <= K.OOB_LO)).any())
 
         #   test 2: each of the three at its OWN bar somewhere in the excursion, not all together
-        if not (anyoob(CPM[1]) and anyoob(B1) and anyoob(CPR[1])):
-            continue
+        t2 = dict(ws1Mage=anyoob(CPM[1]), ws1b=anyoob(B1), ws1r=anyoob(CPR[1]))
         #   test 3: ws3Mage ex-FDM_M3_FNC 25/75 while ws1b is oob
-        f3 = float(K.FDM_M3_FNC)
         m3 = CPM[3][s0:s1 + 1]
-        if not bool(((m3 >= 100.0 - f3) if side > 0 else (m3 <= f3)).any()):
+        t3 = bool(((m3 >= 100.0 - f3) if side > 0 else (m3 <= f3)).any())
+        why = ('ws1b excursion %s..%s, ws%dMage %.2f deeper than ws%dr %.2f at %s'
+               % (ln.U(s0), ln.U(s1), t1[1], t1[2], t1[3], t1[4], ln.U(t1[0]))) if t1 else ''
+        if trace:
+            tr.append(dict(cross=int(c), inwin=inwin, s0=s0, s1=s1, t1=t1, t2=t2, t3=t3, why=why))
+        if t1 is None or not all(t2.values()) or not t3 or not inwin:
             continue
-        out.append((int(c), int(s0),
-                    'ws1b excursion %s..%s, ws%dMage %.2f deeper than ws%dr %.2f at %s'
-                    % (ln.U(s0), ln.U(s1), t1[1], t1[2], t1[3], t1[4], ln.U(t1[0]))))
-    return out
+        out.append((int(c), int(s0), why))
+    return tr if trace else out
 
 
 #   ── the ws10x-cadence ─────────────────────────────────────────────────────────────────────────
