@@ -107,6 +107,56 @@ for i, L in enumerate(LG):
               % (ln.U(L['opn']), 'HIGH' if L['side'] > 0 else 'LOW', ln.U(B)))
     print()
 
+#   ── the population at every ws10x-cadence ─────────────────────────────────────────────────────
+#   HIS 1103 *"how many of the 28 lines were ex-fence and contributed to the ws10x-cadence?"*.
+#   28 lines are eligible, ws3..ws30. A line enters the POPULATION by printing ex-20/80 on the
+#   target side at least once between the trade's open and the ws10x-cadence; it CONTRIBUTES by
+#   also having a lift-off stamp inside the reversal window. The two lists are the row's own, so
+#   this table cannot drift from the decision that used them.
+X = [(L, r) for L in LG for r in L['rows'] if 'pop' in r]
+if X:
+    print('## the 28 eligible lines at every ws10x-cadence | ws%d..ws%d'
+          % (int(K.FDM_POP_LO), int(LN['HI'])))
+    print()
+    print('| the ws10x-cadence | the trade it was deciding | ex-20/80 at least once |'
+          ' contributed a reversal | silent - ex-fence but no reversal | never ex-fence |')
+    print('|---|---|---|---|---|---|')
+    ALLTF = list(range(int(K.FDM_POP_LO), int(LN['HI']) + 1))
+    for L, r in X:
+        pop, rtf = list(r['pop']), list(r.get('rev_tfs') or ())
+        sil = [t for t in pop if t not in rtf]
+        nev = [t for t in ALLTF if t not in pop]
+        f = lambda v: ('ws' + ', ws'.join(str(t) for t in v)) if v else 'none'
+        print('| %s | %s %s | %d of %d - %s | %d of %d - %s | %d - %s | %d - %s |'
+              % (ln.U(int(r['bar'])), ln.U(L['opn']),
+                 'LONG' if L['side'] > 0 else 'SHORT',
+                 len(pop), len(ALLTF), f(pop), len(rtf), len(pop), f(rtf),
+                 len(sil), f(sil), len(nev), f(nev)))
+    print()
+    print('| the roll-up over %d ws10x-cadences | value |' % len(X))
+    print('|---|---|')
+    ps = [len(list(r['pop'])) for _, r in X]
+    rs = [len(list(r.get('rev_tfs') or ())) for _, r in X]
+    print('| eligible lines, every time | %d |' % len(ALLTF))
+    print('| population, smallest .. largest | %d .. %d |' % (min(ps), max(ps)))
+    print('| population, mean | %.1f |' % (sum(ps) / len(ps)))
+    print('| contributed, smallest .. largest | %d .. %d |' % (min(rs), max(rs)))
+    print('| contributed, mean | %.1f |' % (sum(rs) / len(rs)))
+    cnt = {}
+    for _, r in X:
+        for t in list(r.get('rev_tfs') or ()):
+            cnt[t] = cnt.get(t, 0) + 1
+    pcnt = {}
+    for _, r in X:
+        for t in list(r['pop']):
+            pcnt[t] = pcnt.get(t, 0) + 1
+    print()
+    print('| the line | times in the population | times it contributed |')
+    print('|---|---|---|')
+    for t in ALLTF:
+        print('| ws%d | %d of %d | %d of %d |' % (t, pcnt.get(t, 0), len(X), cnt.get(t, 0), len(X)))
+    print()
+
 #   ── the legs ──────────────────────────────────────────────────────────────────────────────────
 print('## the legs | every number carries the FDM_MAE_CAP %.2f%% stop' % float(K.FDM_MAE_CAP))
 print()

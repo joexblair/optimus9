@@ -123,6 +123,11 @@ def ex2080(v, side):
     """Is `v` external of the 20/80 fence on `side`. -> bool.
 
     HIS D: *"ex 20/80"*, and "ex" INCLUDES oob - his standing rule - so the test is at-or-beyond.
+
+    FDM_FNC_2080 HOLDS THE LOWER END of the mirrored pair: 20.0 -> (20, 80), high side at or above
+    80, low side at or below 20. RMOM_FNC holds the UPPER end - 75.0 -> (25, 75) via
+    K.rmom_pair(). The two conventions are opposite, so a value moved from one to the other
+    inverts the test.
     """
     f = float(K.FDM_FNC_2080)
     return (v >= 100.0 - f) if int(side) > 0 else (v <= f)
@@ -281,8 +286,14 @@ def x10_cadence(LN, side, frm, B):
             crossed = (a >= oa and b < ob) if side > 0 else (a <= oa and b > ob)
             if not crossed:
                 continue
+            #   THE CONFIRM MUST FIT INSIDE `B`, not merely inside the tape. The ib arm above
+            #   already tests `cf <= B`; these two arms tested only `i + w <= len(X10)`, so a
+            #   cross near `B` confirmed PAST it. Invisible while `B` was the tape end; the moment
+            #   the stop began bounding the walk it produced a rev-trade 65 s past a leg's own
+            #   exit - 2026-08-19 20:12:40 SHORT, bound 20:51:00, signal 20:52:05 - and the
+            #   'a decision row is past the leg's exit' assert caught it.
             end = i + w
-            if end > len(X10):
+            if end > len(X10) or i + w - 1 > int(B):
                 break
             seg = [(X10[j] < other[j]) if side > 0 else (X10[j] > other[j])
                    for j in range(i, end)]
@@ -354,6 +365,22 @@ def rev_from(ev, s0):
     return b
 
 
+def reversed_tfs(LN, side, pop, a, b):
+    """Which of `pop` have a lift-off STAMP in (a, b]. -> [tf], ascending.
+
+    ONE HOME for the membership test - `reversed_since` is its length. His 1103 *"how many of the
+    28 lines were ex-fence and contributed to the ws10x-cadence?"* needs the LIST, not just the
+    count, and a second implementation of the same test is where the two would drift.
+    """
+    assert int(b) >= int(a), 'a reversal window ends before it starts'
+    out = []
+    for tf in pop:
+        st = LN['LIFT'][(int(tf), int(side))]
+        if st.size and bool(((st > int(a)) & (st <= int(b))).any()):
+            out.append(int(tf))
+    return out
+
+
 def reversed_since(LN, side, pop, a, b):
     """How many of `pop` have a lift-off STAMP in (a, b]. -> int.
 
@@ -362,13 +389,7 @@ def reversed_since(LN, side, pop, a, b):
 
     `a` comes from rev_from, which is the cadence event bar or its window's open.
     """
-    assert int(b) >= int(a), 'a reversal window ends before it starts'
-    n = 0
-    for tf in pop:
-        st = LN['LIFT'][(int(tf), int(side))]
-        if st.size and bool(((st > int(a)) & (st <= int(b))).any()):
-            n += 1
-    return n
+    return len(reversed_tfs(LN, side, pop, a, b))
 
 
 #   ── the walk ──────────────────────────────────────────────────────────────────────────────────
@@ -410,23 +431,24 @@ def walk(LN, side, opn, B):
             continue
         pop = population(LN, side, opn, xb)
         rf = rev_from(ev, s0)
-        rv = reversed_since(LN, side, pop, rf, xb)
+        rtf = reversed_tfs(LN, side, pop, rf, xb)
+        rv = len(rtf)
         pct = (rv / len(pop) * 100.0) if pop else 0.0
         if pct >= t_pct:
             rows.append(dict(bar=xb, stage='REV-TRADE', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
-                             pct=pct, which=x10[1], cross=x10[2],
-                             why='the ws10x-cadence - ws10x crossed to %s %s and confirmed here.'
-                             ' %d of %d reversed since %s (%s) = %.1f%% >= %g%% at the'
+                             pct=pct, which=x10[1], cross=x10[2], rev_tfs=tuple(rtf),
+                             rf=rf, why='the ws10x-cadence - ws10x crossed to %s %s and confirmed'
+                             ' here. %d of %d reversed since %s (%s) = %.1f%% >= %g%% at the'
                              ' ws10x-cadence bar itself'
                              % (x10[1], ln.U(x10[2]), rv, len(pop), ln.U(rf), K.FDM_REV_FROM,
                                 pct, t_pct)))
             return xb, rows
         if pct < g_pct:
             rows.append(dict(bar=xb, stage='NO ACTION', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
-                             pct=pct, which=x10[1], cross=x10[2],
-                             why='the ws10x-cadence - ws10x crossed to %s %s and confirmed here.'
-                             ' %d of %d reversed since %s (%s) = %.1f%% < %g%% - no branch, wait'
-                             ' for the next cadence event'
+                             pct=pct, which=x10[1], cross=x10[2], rev_tfs=tuple(rtf),
+                             rf=rf, why='the ws10x-cadence - ws10x crossed to %s %s and confirmed'
+                             ' here. %d of %d reversed since %s (%s) = %.1f%% < %g%% - no branch,'
+                             ' wait for the next cadence event'
                              % (x10[1], ln.U(x10[2]), rv, len(pop), ln.U(rf), K.FDM_REV_FROM,
                                 pct, g_pct)))
             continue
@@ -438,7 +460,8 @@ def walk(LN, side, opn, B):
         if nxt is not None:
             end = min(end, int(nxt) - 1)
         rows.append(dict(bar=xb, stage='GRACE', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
-                         pct=pct, which=x10[1], cross=x10[2],
+                         pct=pct, which=x10[1], cross=x10[2], rev_tfs=tuple(rtf),
+                         rf=rf,
                          why='the ws10x-cadence - ws10x crossed to %s %s and confirmed here. %d of'
                          ' %d reversed since %s (%s) = %.1f%% >= %g%% -> grace walk %s .. %s, %d'
                          ' bars = %.1f min, population frozen at %d lines'
@@ -448,14 +471,15 @@ def walk(LN, side, opn, B):
                                                  len(pop))))
         hit = None
         for b in range(int(xb) + 1, end + 1):
-            r2 = reversed_since(LN, side, pop, rf, b)
-            p2 = (r2 / len(pop) * 100.0) if pop else 0.0
+            t2 = reversed_tfs(LN, side, pop, rf, b)
+            p2 = (len(t2) / len(pop) * 100.0) if pop else 0.0
             if p2 >= t_pct:
-                hit = (b, r2, p2)
+                hit = (b, len(t2), p2, tuple(t2))
                 break
         if hit is not None:
             rows.append(dict(bar=hit[0], stage='REV-TRADE', ev=ev, k=k, n=n, pop=tuple(pop),
-                             rv=hit[1], pct=hit[2], which=x10[1], why='grace walk, %d of %d reversed '
+                             rv=hit[1], pct=hit[2], which=x10[1], cross=x10[2],
+                             rev_tfs=hit[3], rf=rf, why='grace walk, %d of %d reversed '
                              'since %s (%s) = %.1f%% >= %g%%'
                              % (hit[1], len(pop), ln.U(rf), K.FDM_REV_FROM, hit[2], t_pct)))
             return hit[0], rows
@@ -523,6 +547,16 @@ def legs(LN, open_at, B, resig=None, cap=None):
         else:
             stopped = None
             ex = (int(sig) + 1) if sig is not None else int(B)
+        #   W_FDM2_LEGDBG=on prints each leg's exit arithmetic BEFORE the asserts, so a failure
+        #   names the leg instead of only the rule it broke. It lives here rather than in a
+        #   fragment that re-implements this loop - that is how the 1841 three-row defect got in.
+        if os.environ.get('W_FDM2_LEGDBG') == 'on':
+            print('| %s | %s | %s | %s | %s | %s | %d |'
+                  % (ln.U(opn), 'LONG' if side > 0 else 'SHORT',
+                     ln.U(int(stopped)) if stopped is not None else '-',
+                     ln.U(int(sig)) if sig is not None else '-', ln.U(ex),
+                     ln.U(int(rows[-1]['bar'])) + ' ' + str(rows[-1]['stage']) if rows else '-',
+                     len(rows)))
         assert sig is None or int(sig) + 1 <= ex, 'a leg reports a signal after its own exit'
         assert not rows or int(rows[-1]['bar']) <= ex, 'a decision row is past the leg\'s exit'
         assert ex >= opn, 'a leg exits before it opens'
