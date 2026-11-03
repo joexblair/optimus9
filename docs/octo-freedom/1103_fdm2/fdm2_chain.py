@@ -118,27 +118,21 @@ print('| MFE captured | %.1f%% of MFE |'
 print('| held min, shortest .. longest | %.1f .. %.1f |' % (S['min_held'], S['max_held']))
 
 
-#   ── W_FDM2_VERIFY=on: the machine's own numbers at his two accepted cases ──────────────────────
-#   HIS SIX 08-03 TRADES and the side of the trade being CLOSED at each cadence. The census in
-#   1103_fdm ran these with the RAW lift-off bar and with the population taken over the WHOLE trade
-#   span - both are lookahead. This block runs the same bars through v4_fdm2: the reversal STAMP,
-#   and the population frozen at the ws10x-cadence over [the trade's open, that bar].
+#   ── W_FDM2_VERIFY=on: the machine's own numbers at his six 08-03 trades ───────────────────────
+#   HIS SIX 08-03 TRADES and the side of the trade being CLOSED at each cadence. The span of the
+#   last one, 1841, ENDS AT MIDNIGHT AND THAT BOUND IS MINE - there is no seventh trade to close
+#   it. Every other span ends at the next trade.
+#
+#   THE WALK IS F2.walk, NOT A LOOP OVER THE EVENTS. A hand-rolled loop printed every cadence
+#   event in a span, which for 1841 was three - but the mech CLOSES the trade at its first
+#   rev-trade, so the 21:03 and 23:01 rows were decision points for a trade that ended at 18:51:55,
+#   with populations measured from an open that no longer existed. F2.walk stops where the mech
+#   stops, so the table cannot drift from the machine again.
+#
+#   THE RAW-BAR COLUMNS ARE A DIAGNOSTIC OF THE SUPERSEDED CENSUS, NOT A MACHINE ARM. They count
+#   the lift-off bar itself, which is 35 s of lookahead at LIFT_WOB 8, over the row's OWN frozen
+#   population - so the only difference between the two pcts is the stamp.
 if os.environ.get('W_FDM2_VERIFY') == 'on':
-    HIS = [('0702', '2026-08-03 07:02:00', '2026-08-03 10:08:00', None),
-           ('1008', '2026-08-03 10:08:00', '2026-08-03 13:15:00', +1),
-           ('1315', '2026-08-03 13:15:00', '2026-08-03 14:06:00', -1),
-           ('1406', '2026-08-03 14:06:00', '2026-08-03 16:44:00', +1),
-           ('1644', '2026-08-03 16:44:00', '2026-08-03 18:41:00', -1),
-           ('1841', '2026-08-03 18:41:00', '2026-08-04 00:00:00', +1)]
-    print()
-    print('## his 08-03 cases through v4_fdm2 | ws10x hold FDM_X10_WOB %d bars = %d s |'
-          ' the reversal STAMP, population frozen at the ws10x-cadence'
-          % (int(K.FDM_X10_WOB), int(K.FDM_X10_WOB) * 5))
-    print()
-    #   THE RAW-BAR COLUMN IS A DIAGNOSTIC OF THE SUPERSEDED CENSUS, NOT A MACHINE ARM. It counts
-    #   the lift-off bar itself, which is 35 s of lookahead at LIFT_WOB 8, and it is here only to
-    #   attribute the gap between 1103_fdm's numbers and the machine's. The population is the
-    #   machine's causal one in BOTH columns, so the only difference between them is the stamp.
     from optimus9.analysis.jig import lift_off as _lo
 
     def _raw(sd, pop, a, b):
@@ -149,34 +143,43 @@ if os.environ.get('W_FDM2_VERIFY') == 'on':
                 n += 1
         return n
 
-    print('| the trade | target side | the cadence event | step 1 | the ws10x-cadence | which |'
-          ' reversed, STAMP | pct, STAMP | reversed, RAW lift bar | pct, RAW | the branch |')
+    HIS = [('0702', '2026-08-03 07:02:00', '2026-08-03 10:08:00', None),
+           ('1008', '2026-08-03 10:08:00', '2026-08-03 13:15:00', +1),
+           ('1315', '2026-08-03 13:15:00', '2026-08-03 14:06:00', -1),
+           ('1406', '2026-08-03 14:06:00', '2026-08-03 16:44:00', +1),
+           ('1644', '2026-08-03 16:44:00', '2026-08-03 18:41:00', -1),
+           ('1841', '2026-08-03 18:41:00', '2026-08-04 00:00:00', +1)]
+    print()
+    print('## his 08-03 trades through v4_fdm2 | ws10x hold FDM_X10_WOB %d bars = %d s |'
+          ' each walk STOPS at its first rev-trade, as the mech does'
+          % (int(K.FDM_X10_WOB), int(K.FDM_X10_WOB) * 5))
+    print()
+    print('| the trade | target side | the bar | the stage | step 1 | the ws10x-cadence | which |'
+          ' reversed, STAMP | pct, STAMP | reversed, RAW lift bar | pct, RAW |')
     print('|---|---|---|---|---|---|---|---|---|---|---|')
     for nm, t0, t1, psd in HIS:
         a, b = ln.K(t0), ln.K(t1)
         for sd in ((psd,) if psd is not None else (-1, +1)):
-            evs = F2.cadence_events(LN, sd, a, b)
-            if not evs:
-                print('| %s | %s | none in %s .. %s | - | - | - | - | - | - | - | - |'
-                      % (nm, 'HIGH' if sd > 0 else 'LOW', ln.U(a), ln.U(b)))
+            sn = 'HIGH' if sd > 0 else 'LOW'
+            sig, rows = F2.walk(LN, sd, a, b)
+            if not rows:
+                print('| %s | %s | - | NO CADENCE EVENT | - | - | - | - | - | - | - |' % (nm, sn))
                 continue
-            for ev, s0, why in evs:
-                k, n = F2.step1(LN, sd, ev)
-                x = F2.x10_cadence(LN, sd, ev, B)
-                if x is None:
-                    print('| %s | %s | %s | %d of %d | none to %s | - | - | - | - | - | %s |'
-                          % (nm, 'HIGH' if sd > 0 else 'LOW', ln.U(ev), k, n, ln.U(B),
-                             'REV-TRADE' if k == 0 else 'walk, no ws10x'))
-                    continue
-                pop = F2.population(LN, sd, a, x[0])
-                rv = F2.reversed_since(LN, sd, pop, ev, x[0])
-                pct = (rv / len(pop) * 100.0) if pop else 0.0
-                br = ('REV-TRADE at the cadence event, 0 of %d' % n if k == 0
-                      else 'REV-TRADE at the ws10x' if pct >= float(K.FDM_X10_TRADE_PCT)
-                      else 'grace walk' if pct >= float(K.FDM_X10_GRACE_PCT) else 'no action')
-                rw = _raw(sd, pop, ev, x[0])
-                pr = (rw / len(pop) * 100.0) if pop else 0.0
-                print('| %s | %s | %s | %d of %d | %s | %s | %d of %d | %.1f%% | %d of %d |'
-                      ' %.1f%% | %s |'
-                      % (nm, 'HIGH' if sd > 0 else 'LOW', ln.U(ev), k, n, ln.U(x[0]), x[1],
-                         rv, len(pop), pct, rw, len(pop), pr, br))
+            for r in rows:
+                st = str(r['stage'])
+                k = '%d of %d' % (int(r['k']), int(r['n'])) if 'k' in r else '-'
+                if 'pop' in r:
+                    pop = list(r['pop'])
+                    rw = _raw(sd, pop, int(r['ev']), int(r['bar']))
+                    pr = (rw / len(pop) * 100.0) if pop else 0.0
+                    print('| %s | %s | %s | %s | %s | %s | %s | %d of %d | %.1f%% | %d of %d |'
+                          ' %.1f%% |'
+                          % (nm, sn, ln.U(int(r['bar'])), st, k, ln.U(int(r['bar'])),
+                             r['which'], int(r['rv']), len(pop), float(r['pct']),
+                             rw, len(pop), pr))
+                else:
+                    print('| %s | %s | %s | %s | %s | - | - | - | - | - | - |'
+                          % (nm, sn, ln.U(int(r['bar'])), st, k))
+            if sig is not None:
+                print('| %s | %s | %s | TRADE CLOSES | - | - | - | - | - | - | - |'
+                      % (nm, sn, ln.U(int(sig) + 1)))

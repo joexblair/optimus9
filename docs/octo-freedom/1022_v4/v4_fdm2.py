@@ -337,7 +337,7 @@ def walk(LN, side, opn, B):
         nxt = int(evs[i + 1][0]) if i + 1 < len(evs) else None
         k, n = step1(LN, side, ev)
         if k == 0:
-            rows.append(dict(bar=ev, stage='REV-TRADE', why='cadence event, 0 of %d lines ws%d..'
+            rows.append(dict(bar=ev, stage='REV-TRADE', ev=ev, k=0, n=n, why='cadence event, 0 of %d lines ws%d..'
                              'ws%d printing ex-%g/%g AND towards - his "if the answer is no, then '
                              'rev-trade"' % (n, int(K.FDM_STEP1_ABOVE_TF) + 1, LN['HI'],
                                              K.FDM_FNC_2080, 100.0 - float(K.FDM_FNC_2080))))
@@ -346,7 +346,7 @@ def walk(LN, side, opn, B):
         xb = x10[0] if x10 is not None else None
         win = ('the next cadence event' if nxt is not None and (xb is None or nxt <= xb)
                else ('the ws10x-cadence' if xb is not None else 'nothing - the tape ends'))
-        rows.append(dict(bar=ev, stage='WALK', why='cadence event, %d of %d lines printing ex-%g/%g'
+        rows.append(dict(bar=ev, stage='WALK', ev=ev, k=k, n=n, why='cadence event, %d of %d lines printing ex-%g/%g'
                          ' AND towards -> walk. %s is first%s'
                          % (k, n, K.FDM_FNC_2080, 100.0 - float(K.FDM_FNC_2080), win,
                             '' if xb is None else ' (ws10x %s to %s)' % (ln.U(xb), x10[1]))))
@@ -356,12 +356,14 @@ def walk(LN, side, opn, B):
         rv = reversed_since(LN, side, pop, ev, xb)
         pct = (rv / len(pop) * 100.0) if pop else 0.0
         if pct >= t_pct:
-            rows.append(dict(bar=xb, stage='REV-TRADE', why='ws10x-cadence to %s, %d of %d reversed '
+            rows.append(dict(bar=xb, stage='REV-TRADE', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
+                             pct=pct, which=x10[1], why='ws10x-cadence to %s, %d of %d reversed '
                              'since %s = %.1f%% >= %g%% at the cadence itself'
                              % (x10[1], rv, len(pop), ln.U(ev), pct, t_pct)))
             return xb, rows
         if pct < g_pct:
-            rows.append(dict(bar=xb, stage='NO ACTION', why='ws10x-cadence to %s, %d of %d reversed '
+            rows.append(dict(bar=xb, stage='NO ACTION', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
+                             pct=pct, which=x10[1], why='ws10x-cadence to %s, %d of %d reversed '
                              'since %s = %.1f%% < %g%% - no branch, wait for the next cadence'
                              % (x10[1], rv, len(pop), ln.U(ev), pct, g_pct)))
             continue
@@ -372,7 +374,8 @@ def walk(LN, side, opn, B):
         end = min(int(xb) + g_bars, int(B))
         if nxt is not None:
             end = min(end, int(nxt) - 1)
-        rows.append(dict(bar=xb, stage='GRACE', why='ws10x-cadence to %s, %d of %d reversed since %s '
+        rows.append(dict(bar=xb, stage='GRACE', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
+                         pct=pct, which=x10[1], why='ws10x-cadence to %s, %d of %d reversed since %s '
                          '= %.1f%% >= %g%% -> grace walk %s .. %s, %d bars = %.1f min, population '
                          'frozen at %d lines' % (x10[1], rv, len(pop), ln.U(ev), pct, g_pct,
                                                  ln.U(min(int(xb) + 1, int(B))), ln.U(end),
@@ -386,7 +389,8 @@ def walk(LN, side, opn, B):
                 hit = (b, r2, p2)
                 break
         if hit is not None:
-            rows.append(dict(bar=hit[0], stage='REV-TRADE', why='grace walk, %d of %d reversed '
+            rows.append(dict(bar=hit[0], stage='REV-TRADE', ev=ev, k=k, n=n, pop=tuple(pop),
+                             rv=hit[1], pct=hit[2], which=x10[1], why='grace walk, %d of %d reversed '
                              'since %s = %.1f%% >= %g%%'
                              % (hit[1], len(pop), ln.U(ev), hit[2], t_pct)))
             return hit[0], rows

@@ -52,16 +52,25 @@
 | MFE captured | 77.3% of MFE |
 | held min, shortest .. longest | 140.1 .. 140.1 |
 
-## his 08-03 cases through v4_fdm2 | ws10x hold FDM_X10_WOB 24 bars = 120 s | the reversal STAMP, population frozen at the ws10x-cadence
+## his 08-03 trades through v4_fdm2 | ws10x hold FDM_X10_WOB 24 bars = 120 s | each walk STOPS at its first rev-trade, as the mech does
 
-| the trade | target side | the cadence event | step 1 | the ws10x-cadence | which | reversed, STAMP | pct, STAMP | reversed, RAW lift bar | pct, RAW | the branch |
+| the trade | target side | the bar | the stage | step 1 | the ws10x-cadence | which | reversed, STAMP | pct, STAMP | reversed, RAW lift bar | pct, RAW |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 0702 | LOW | 2026-08-03 07:03:00 | 2 of 27 | 2026-08-03 07:12:20 | ib | 3 of 3 | 100.0% | 3 of 3 | 100.0% | REV-TRADE at the ws10x |
-| 0702 | HIGH | 2026-08-03 09:12:00 | 3 of 27 | 2026-08-03 09:33:10 | ws10Mage | 10 of 11 | 90.9% | 10 of 11 | 90.9% | REV-TRADE at the ws10x |
-| 1008 | HIGH | 2026-08-03 10:09:00 | 15 of 27 | 2026-08-03 10:11:55 | ws10Mage | 4 of 18 | 22.2% | 8 of 18 | 44.4% | no action |
-| 1315 | LOW | 2026-08-03 13:16:00 | 6 of 27 | 2026-08-03 13:18:55 | ws10Mage | 5 of 6 | 83.3% | 3 of 6 | 50.0% | REV-TRADE at the ws10x |
-| 1406 | HIGH | 2026-08-03 14:07:00 | 5 of 27 | 2026-08-03 14:15:45 | ib | 8 of 8 | 100.0% | 7 of 8 | 87.5% | REV-TRADE at the ws10x |
-| 1644 | LOW | none in 2026-08-03 16:44:00 .. 2026-08-03 18:41:00 | - | - | - | - | - | - | - | - |
-| 1841 | HIGH | 2026-08-03 18:42:00 | 10 of 27 | 2026-08-03 18:51:55 | ws10r | 9 of 12 | 75.0% | 10 of 12 | 83.3% | REV-TRADE at the ws10x |
-| 1841 | HIGH | 2026-08-03 21:03:00 | 0 of 27 | 2026-08-03 21:10:35 | ws10r | 12 of 18 | 66.7% | 9 of 18 | 50.0% | REV-TRADE at the cadence event, 0 of 27 |
-| 1841 | HIGH | 2026-08-03 23:01:00 | 3 of 27 | 2026-08-03 23:03:35 | ib | 7 of 21 | 33.3% | 7 of 21 | 33.3% | no action |
+| 0702 | LOW | 2026-08-03 07:03:00 | WALK | 2 of 27 | - | - | - | - | - | - |
+| 0702 | LOW | 2026-08-03 07:12:20 | REV-TRADE | 2 of 27 | 2026-08-03 07:12:20 | ib | 3 of 3 | 100.0% | 3 of 3 | 100.0% |
+| 0702 | LOW | 2026-08-03 07:12:25 | TRADE CLOSES | - | - | - | - | - | - | - |
+| 0702 | HIGH | 2026-08-03 09:12:00 | WALK | 3 of 27 | - | - | - | - | - | - |
+| 0702 | HIGH | 2026-08-03 09:33:10 | REV-TRADE | 3 of 27 | 2026-08-03 09:33:10 | ws10Mage | 10 of 11 | 90.9% | 10 of 11 | 90.9% |
+| 0702 | HIGH | 2026-08-03 09:33:15 | TRADE CLOSES | - | - | - | - | - | - | - |
+| 1008 | HIGH | 2026-08-03 10:09:00 | WALK | 15 of 27 | - | - | - | - | - | - |
+| 1008 | HIGH | 2026-08-03 10:11:55 | NO ACTION | 15 of 27 | 2026-08-03 10:11:55 | ws10Mage | 4 of 18 | 22.2% | 8 of 18 | 44.4% |
+| 1315 | LOW | 2026-08-03 13:16:00 | WALK | 6 of 27 | - | - | - | - | - | - |
+| 1315 | LOW | 2026-08-03 13:18:55 | REV-TRADE | 6 of 27 | 2026-08-03 13:18:55 | ws10Mage | 5 of 6 | 83.3% | 3 of 6 | 50.0% |
+| 1315 | LOW | 2026-08-03 13:19:00 | TRADE CLOSES | - | - | - | - | - | - | - |
+| 1406 | HIGH | 2026-08-03 14:07:00 | WALK | 5 of 27 | - | - | - | - | - | - |
+| 1406 | HIGH | 2026-08-03 14:15:45 | REV-TRADE | 5 of 27 | 2026-08-03 14:15:45 | ib | 8 of 8 | 100.0% | 7 of 8 | 87.5% |
+| 1406 | HIGH | 2026-08-03 14:15:50 | TRADE CLOSES | - | - | - | - | - | - | - |
+| 1644 | LOW | - | NO CADENCE EVENT | - | - | - | - | - | - | - |
+| 1841 | HIGH | 2026-08-03 18:42:00 | WALK | 10 of 27 | - | - | - | - | - | - |
+| 1841 | HIGH | 2026-08-03 18:51:55 | REV-TRADE | 10 of 27 | 2026-08-03 18:51:55 | ws10r | 9 of 12 | 75.0% | 10 of 12 | 83.3% |
+| 1841 | HIGH | 2026-08-03 18:52:00 | TRADE CLOSES | - | - | - | - | - | - | - |
