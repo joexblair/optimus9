@@ -1,0 +1,115 @@
+# fdm2 | TAPE 1632960 bars, ends 2026-10-04 23:59:55 | RULED_OK True
+# THE WALK RUNS 2026-07-02 12:00:00 .. 2026-10-04 23:59:55 - the whole tape
+# THE STOP IS ON: FDM_MAE_CAP 1.10% adverse from the open, his "yes, move it to default"
+
+| the knob | value | what it is |
+|---|---|---|
+| FDM_FNC_2080 | 20 | his "fdm-20-80-fnc" - step 1 AND the population. "ex" includes oob |
+| FDM_STEP1_ABOVE_TF | 3 | step 1 scans STRICTLY above this TF, so ws4..ws30 = 27 lines |
+| FDM_POP_LO | 3 | the reversal population floor, so ws3..ws30 = 28 before the filter |
+| FDM_M3_FNC | 25 | ws3Mage's fence in the preamble, 25 -> 25/75 |
+| FDM_X10_WOB | 24 | the ws10x race hold, bars. His 1103 "use 24" |
+| FDM_X10_GRACE_PCT | 40 | his "fdm-ws10x-cad-grace" - the grace walk's floor, % |
+| FDM_X10_TRADE_PCT | 50 | the grace walk's rev-trade threshold, % |
+| FDM_X10_GRACE_MIN | 5 | the grace walk's length, minutes |
+| FDM_MAE_CAP | 1.1 | the stop, % adverse from the open |
+| FDM_X10_FRM | cross | must the race CROSS follow the cadence event, or only its CONFIRM |
+| FDM_REV_FROM | event | where the reversal count starts: the cadence event bar, or that event's window open |
+| LIFT_WOB | 8 | the lift-off hold; the reversal STAMP is lift + 7 bars = 35 s |
+
+| the open | value |
+|---|---|
+| the re-entry signal bar | 2026-08-03 00:41:30 |
+| the gcws30b window side | HIGH oob |
+| the trade | SHORT |
+| its target side | LOW |
+| the open price bar | 2026-08-03 00:41:35 - the router's "just OPEN", 1 bar |
+| why | gcws30b HIGH window 00:35:00..00:41:30, ws1r AND (ws2r or ws3r) seen past the 75.0 fence - ws1 00:35:00, ws2 00:36:00, ws3 00:36:00 - gate TRUE at the ib cross |
+
+## leg 2026-08-03 00:41:35 | SHORT | target side LOW | fdm re-entry 2026-08-03 00:41:30
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 01:28:00 | WALK | cadence event, 10 of 27 lines printing ex-20/80 AND towards -> walk. the next cadence event is first (ws10x crosses to ws10Mage 2026-08-03 01:41:50, the ws10x-cadence confirms 2026-08-03 01:43:45) |
+| 2026-08-03 01:42:00 | WALK | cadence event, 10 of 27 lines printing ex-20/80 AND towards -> walk. the ws10x-cadence is first (ws10x crosses to ib 2026-08-03 01:42:10, the ws10x-cadence confirms 2026-08-03 01:44:05) |
+| 2026-08-03 01:44:05 | NO ACTION | the ws10x-cadence - ws10x crossed to ib 2026-08-03 01:42:10 and confirmed here. 4 of 23 reversed since 2026-08-03 01:42:00 (event) = 17.4% < 40% - no branch, wait for the next cadence event |
+| 2026-08-03 02:59:00 | WALK | cadence event, 3 of 27 lines printing ex-20/80 AND towards -> walk. the ws10x-cadence is first (ws10x crosses to ws10Mage 2026-08-03 02:59:40, the ws10x-cadence confirms 2026-08-03 03:01:35) |
+| 2026-08-03 03:01:35 | REV-TRADE | the ws10x-cadence - ws10x crossed to ws10Mage 2026-08-03 02:59:40 and confirmed here. 18 of 25 reversed since 2026-08-03 02:59:00 (event) = 72.0% >= 50% at the ws10x-cadence bar itself |
+
+## the 28 eligible lines at every ws10x-cadence | ws3..ws30
+
+| the ws10x-cadence | the trade it was deciding | ex-20/80 at least once | contributed a reversal | silent - ex-fence but no reversal | never ex-fence |
+|---|---|---|---|---|---|
+| 2026-08-03 01:44:05 | 2026-08-03 00:41:35 SHORT | 23 of 28 - ws3, ws4, ws5, ws6, ws12, ws13, ws14, ws15, ws16, ws17, ws18, ws19, ws20, ws21, ws22, ws23, ws24, ws25, ws26, ws27, ws28, ws29, ws30 | 4 of 23 - ws19, ws21, ws22, ws24 | 19 - ws3, ws4, ws5, ws6, ws12, ws13, ws14, ws15, ws16, ws17, ws18, ws20, ws23, ws25, ws26, ws27, ws28, ws29, ws30 | 5 - ws7, ws8, ws9, ws10, ws11 |
+| 2026-08-03 03:01:35 | 2026-08-03 00:41:35 SHORT | 25 of 28 - ws3, ws4, ws5, ws6, ws7, ws8, ws12, ws13, ws14, ws15, ws16, ws17, ws18, ws19, ws20, ws21, ws22, ws23, ws24, ws25, ws26, ws27, ws28, ws29, ws30 | 18 of 25 - ws3, ws4, ws5, ws7, ws12, ws13, ws14, ws15, ws16, ws17, ws19, ws22, ws23, ws24, ws25, ws26, ws28, ws30 | 7 - ws6, ws8, ws18, ws20, ws21, ws27, ws29 | 3 - ws9, ws10, ws11 |
+
+| the roll-up over 2 ws10x-cadences | value |
+|---|---|
+| eligible lines, every time | 28 |
+| population, smallest .. largest | 23 .. 25 |
+| population, mean | 24.0 |
+| contributed, smallest .. largest | 4 .. 18 |
+| contributed, mean | 11.0 |
+
+| the line | times in the population | times it contributed |
+|---|---|---|
+| ws3 | 2 of 2 | 1 of 2 |
+| ws4 | 2 of 2 | 1 of 2 |
+| ws5 | 2 of 2 | 1 of 2 |
+| ws6 | 2 of 2 | 0 of 2 |
+| ws7 | 1 of 2 | 1 of 2 |
+| ws8 | 1 of 2 | 0 of 2 |
+| ws9 | 0 of 2 | 0 of 2 |
+| ws10 | 0 of 2 | 0 of 2 |
+| ws11 | 0 of 2 | 0 of 2 |
+| ws12 | 2 of 2 | 1 of 2 |
+| ws13 | 2 of 2 | 1 of 2 |
+| ws14 | 2 of 2 | 1 of 2 |
+| ws15 | 2 of 2 | 1 of 2 |
+| ws16 | 2 of 2 | 1 of 2 |
+| ws17 | 2 of 2 | 1 of 2 |
+| ws18 | 2 of 2 | 0 of 2 |
+| ws19 | 2 of 2 | 2 of 2 |
+| ws20 | 2 of 2 | 0 of 2 |
+| ws21 | 2 of 2 | 1 of 2 |
+| ws22 | 2 of 2 | 2 of 2 |
+| ws23 | 2 of 2 | 1 of 2 |
+| ws24 | 2 of 2 | 2 of 2 |
+| ws25 | 2 of 2 | 1 of 2 |
+| ws26 | 2 of 2 | 1 of 2 |
+| ws27 | 2 of 2 | 0 of 2 |
+| ws28 | 2 of 2 | 1 of 2 |
+| ws29 | 2 of 2 | 0 of 2 |
+| ws30 | 2 of 2 | 1 of 2 |
+
+## the legs | every number carries the FDM_MAE_CAP 1.10% stop
+
+| the open | the trade | the rev-trade signal | the exit | the exit kind | held min | MAE% | MFE% | realised% |
+|---|---|---|---|---|---|---|---|---|
+| 2026-08-03 00:41:35 | SHORT | 2026-08-03 03:01:35 | 2026-08-03 03:01:40 | rev-trade | 140.1 | 0.140 | 1.615 | +1.249 |
+
+| the aggregate | value |
+|---|---|
+| legs | 1 |
+| stopped | 0 |
+| gross % | +1.249 |
+| drag % | -0.198 (0.1975% round trip x 1 legs) |
+| net % | +1.051 |
+| MAE % total | 0.140 |
+| MFE % total | 1.615 |
+| MFE captured | 77.3% of MFE |
+| held min, shortest .. longest | 140.1 .. 140.1 |
+
+## gcws30b ex-5/95 window opens vs ws1b going oob inside 2 min = 24 bars
+# the whole tape, 1632960 bars, 2026-07-02 12:00:00 .. 2026-10-04 23:59:55
+# ws1b oob means EITHER side - the question is whether it prints oob at all
+
+| the reading | value |
+|---|---|
+| gcws30b window opens, both sides | 9538 |
+| ws1b already oob at the open bar | 4662 |
+| ws1b goes oob inside 2 min | 6612 |
+| ws1b does NOT go oob inside 2 min | 2926 |
+| that share | 30.7% |
+| of the ones that start ib, the lag to oob, shortest .. longest | 30 s .. 120 s |
+| that lag, median | 30 s |

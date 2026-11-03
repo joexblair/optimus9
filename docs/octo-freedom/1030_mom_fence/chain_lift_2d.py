@@ -119,7 +119,7 @@ if CAP is not None:
     if os.environ.get('W_RESIG') == 'old':
         RESIG = L2R.signals(B1, MG)
     else:
-        RESIG = RE.signals(LL._g30b(), E)
+        RESIG = RE.signals(B1, E)   # 1103: the window is ws1b's oob excursion now, not gcws30b's
 lg, zero, op = CH.legs(CL, BD, close, phi, plo, A, B, MG=MG, B1=B1, open_at=OPEN,
                        mae_cap=CAP, resig=RESIG)
 

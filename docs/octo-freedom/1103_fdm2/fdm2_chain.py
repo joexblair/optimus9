@@ -64,7 +64,7 @@ for nm, what in (('FDM_FNC_2080', 'his "fdm-20-80-fnc" - step 1 AND the populati
 print()
 
 #   ── the open: his banked re-entry ─────────────────────────────────────────────────────────────
-SIGS = RE.signals(LN['G30B'], LN['EMR'])
+SIGS = RE.signals(LN['B1'], LN['EMR'])
 if DAY:
     HIT = [x for x in SIGS if A <= int(x['bar']) <= B]
     assert HIT, 'no fdm re-entry signal inside %s .. %s' % (ln.U(A), ln.U(B))
@@ -274,9 +274,10 @@ if _W:
           ' test' % ('HIGH' if _sd > 0 else 'LOW', ln.U(_a), ln.U(_b)))
     print()
     print('| the ws1b cross | the cross is in the window | the ws1b excursion | the nestle |'
+          ' ws3r extremum in the excursion | ws3Mage extremum in the excursion |'
           ' ws3Mage ex-%g/%g | the verdict |'
           % (float(K.FDM_M3_FNC), 100.0 - float(K.FDM_M3_FNC)))
-    print('|---|---|---|---|---|')
+    print('|---|---|---|---|---|---|---|')
     for t in F2.cadence_events(LN, _sd, _a, _b, trace=True):
         if not (_a <= int(t['cross']) <= _b):
             if t['s0'] is None or int(t['s0']) > _b or int(t['s1']) < _a:
@@ -287,13 +288,24 @@ if _W:
                 'no excursion' if t['s0'] is None else
                 'the nestle - no ws1,2Mage deeper than an oob ws1,2,3r' if t['nestle'] is None
                 else 'ws3Mage never ex-fence')
-        print('| %s | %s | %s | %s | %s | %s |'
+        #   ws3r AND ws3Mage AT THEIR DEEPEST IN THE EXCURSION, on the cross's own side. His 1103
+        #   ask on the ws3Mage-gated list: the gate's verdict with no number beside it does not say
+        #   how far short the line came.
+        if t['s0'] is None:
+            _x3r = _x3m = float('nan')
+        else:
+            _g3r = LN['CPR'][3][int(t['s0']):int(t['s1']) + 1]
+            _g3m = LN['CPM'][3][int(t['s0']):int(t['s1']) + 1]
+            _x3r = float(np.nanmax(_g3r)) if _sd > 0 else float(np.nanmin(_g3r))
+            _x3m = float(np.nanmax(_g3m)) if _sd > 0 else float(np.nanmin(_g3m))
+        print('| %s | %s | %s | %s | %.2f | %.2f | %s | %s |'
               % (ln.U(int(t['cross'])), 'yes' if t['inwin'] else 'NO',
                  '-' if t['s0'] is None else '%s .. %s' % (ln.U(int(t['s0'])),
                                                            ln.U(int(t['s1']))),
                  '-' if t['nestle'] is None else 'ws%dMage %.2f vs ws%dr %.2f at %s'
                  % (t['nestle'][1], t['nestle'][2], t['nestle'][3], t['nestle'][4],
                     ln.U(int(t['nestle'][0]))),
+                 _x3r, _x3m,
                  'yes' if t['m3'] else 'NO', 'CADENCE EVENT' if ok else fail))
 
 
@@ -384,3 +396,31 @@ if _S:
         print('| the leg would realise | %+.3f%% |' % (int(L['side']) * (px - o) / o * 100.0))
     print('| what fdm2 did instead | %s at %s, %+.3f%% |'
           % (L['ctype'], ln.U(L['exit']), L['rel']))
+
+
+#   ── W_FDM2_LINE='<name> <from> .. <to>': one line, both reads, bar by bar ──────────────────────
+#   A value read is not a mech - it is here so a timestamp he quotes can be checked against the
+#   same arrays the walk uses, on both reads, without a fragment script.
+_L = os.environ.get('W_FDM2_LINE')
+if _L:
+    _p2 = _L.split(None, 1)
+    _nm = _p2[0]
+    _a1, _b1 = [ln.K(x.strip()) for x in _p2[1].split('..')]
+    if _nm == 'ws1b':
+        _emg, _cp = np.asarray(ln.line('ws1b'), float), LN['B1']
+    elif _nm.endswith('Mage'):
+        _t = int(_nm[2:-4]); _emg, _cp = LN['MGE'][_t], LN['CPM'][_t]
+    else:
+        _t = int(_nm[2:-1]); _emg, _cp = LN['EMR'][_t], LN['CPR'][_t]
+    print()
+    print('## %s bar by bar | %s .. %s | oob is %g/%g'
+          % (_nm, ln.U(_a1), ln.U(_b1), float(K.OOB_LO), float(K.OOB_HI)))
+    print()
+    print('| the bar | %s emerging | %s chart-matched | emerging oob | chart-matched oob |'
+          % (_nm, _nm))
+    print('|---|---|---|---|---|')
+    for _i2 in range(_a1, min(_b1, B) + 1):
+        _e4, _c4 = float(_emg[_i2]), float(_cp[_i2])
+        _f = lambda v: ('HIGH' if v >= float(K.OOB_HI) else
+                        ('LOW' if v <= float(K.OOB_LO) else '-'))
+        print('| %s | %.2f | %.2f | %s | %s |' % (ln.U(_i2), _e4, _c4, _f(_e4), _f(_c4)))

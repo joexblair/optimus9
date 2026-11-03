@@ -1097,10 +1097,8 @@ LIN2_CP_MIN_TF = _knob('LIN2_CP_MIN_TF', 1, int)   # the TF floor for the chart-
 #                        true, open a trade"*
 #   THE SIDE IS THE OOB SIDE THE LINES WERE FOUND ON, his 1102 answer. `v4_signal.direction` then
 #   maps it: a HIGH oob side opens a SHORT. That mapping is banked and not mine.
-FDM_RE_B_FNC = _knob('FDM_RE_B_FNC', 95.0)      # the window's opening fence, 95 -> (5.0, 95.0).
-FDM_RE_IB_XWOB = _knob('FDM_RE_IB_XWOB', 1, int)  # the ib cross hold, in bars.
-#   AT 1 THE CLOSE IS THE CROSS BAR ITSELF, which is the 00:41:30 he banked. A larger hold moves
-#   the fire later: 6 gives 00:41:55 and 12 gives 00:42:25 on that window.
+FDM_RE_IB_XWOB = _knob('FDM_RE_IB_XWOB', 1, int)  # the ws1b ib cross hold, in bars.
+#   1 MEANS THE CROSS BAR ITSELF, the same hold the cadence event uses on the same line.
 FDM_RE_GATE_FNC = _knob('FDM_RE_GATE_FNC', 75.0)  # the gate's fence on ws1r/ws2r/ws3r.
 #   HIS WORD WAS "ex v4mom fence", which is RMOM_FNC 75. It has its OWN knob here so the re-entry
 #   and the walk can move apart; the value is the same today.
@@ -1145,7 +1143,11 @@ FDM_X10_GRACE_MIN = _knob('FDM_X10_GRACE_MIN', 5.0)    # the grace walk's length
 #   THEY ARE fdm2's OWN KNOBS, NOT THE SAV_* ONES. v4_machine.py and v4_sig_saviour.py read
 #   SAV_CASCADE_MIN 4 and SAV_CASCADE_ZOOM 2, so moving those defaults would move the live
 #   octo-v4 machine. Same reason FDM_RE_GATE_FNC is separate from RMOM_FNC.
-FDM_SAV_ON = _knob('FDM_SAV_ON', 1, int)        # 1 wires v4saviour into fdm2's leg walk.
+FDM_SAV_ON = _knob('FDM_SAV_ON', 0, int)        # 1 wires v4saviour into fdm2's leg walk.
+#   OFF, HIS 1103: *"we're dropping saviour for now - I still think it has a place, but only if I
+#   can find the confluence it needs to be stable"*. The settings below keep their measured values
+#   so the config is not lost. What it cost at FDM_SAV_ON 1, each day against its own off arm:
+#   2026-08-03 -1.051% -> -3.103% net on 5 firings, and 2026-09-15 +7.316% -> -15.040% on 9.
 FDM_SAV_READ = os.environ.get('W_V4_FDM_SAV_READ', 'emerging')   # 'emerging' | 'chart'
 #   HIS *"use emerging values, at the emerging ws1Mage extermum"*. At 'emerging' the r fences, the
 #   lift-off and the Mage ladder all read the emerging set and the extremum sampler takes no seam
@@ -1428,8 +1430,7 @@ RULED = {
                                 ' "closed_prev" is the arm'),
     'LIN2_CP_IB': ('emerging', 'BANKED 1101 on his gut - "my gut says emerging: create a knob that'
                                ' tests both options". "closed_prev" is the arm'),
-    'FDM_RE_B_FNC': (95.0, 'HIS 1102 mech - the fdm re-entry window opens on gcws30b at or beyond (5.0, 95.0)'),
-    'FDM_RE_IB_XWOB': (1, 'HIS 1102 bank - the window closes on the ib cross BAR, which is 2026-08-03 00:41:30: "00:41:30 is my view also". A hold would move the fire later'),
+    'FDM_RE_IB_XWOB': (1, 'the ws1b ib cross hold that closes the re-entry window. 1 is the cross bar itself, the same hold the cadence event uses on the same line'),
     'FDM_RE_GATE_FNC': (75.0, 'HIS 1102 "ex v4mom fence" for the ws1r AND (ws2r or ws3r) gate. Same value as RMOM_FNC, its own knob so the two can move apart'),
     'FDM_FNC_2080': (20.0, 'HIS OWN KNOB NAME, "fdm-20-80-fnc", at his own value. Both the step-1 test and the reversal population read it; "ex" includes oob'),
     'FDM_M3_FNC': (25.0, 'HIS 1103 "ws3Mage is settled on 25/75". The knob name is mine; the value is his'),
@@ -1442,7 +1443,7 @@ RULED = {
     'FDM_X10_TRADE_PCT': (50.0, 'HIS VALUE ">=50%". The knob is mine - a stated threshold with no knob cannot be moved without an edit'),
     'FDM_X10_GRACE_MIN': (5.0, 'HIS VALUE "we add a 5 minute walk". The knob is mine. 5.0 min = 60 bars at the 5 s grid'),
     'FDM_MAE_CAP': (1.1, 'HIS 1103 "add the typical mae1.1 stop" + "yes, move it to default". ALWAYS ON, unlike LIN2_MAE_CAP which stayed behind W_MAE_CAP=on'),
-    'FDM_SAV_ON': (1, 'HIS 1103 "wire it into the sandbox" - v4saviour runs on every fdm2 leg'),
+    'FDM_SAV_ON': (0, 'OFF, HIS 1103 "we\'re dropping saviour for now". It was wired and measured: 2026-08-03 -1.051% -> -3.103% net, 2026-09-15 +7.316% -> -15.040%'),
     'FDM_SAV_READ': ('emerging', 'HIS 1103 "use emerging values, at the emerging ws1Mage extermum". "chart" is the other arm'),
     'FDM_SAV_TF_HI': (3, 'HIS 1103 "reduce the cascade to ws1-3". fdm2\'s own knob, not SAV_CASCADE_TF_HI, so the live machine keeps 12'),
     'FDM_SAV_MIN': (3, 'HIS 1103 "SAV_CASCADE_MIN 4 -> 3" - the arm that fired branch B at 2026-09-15 14:04:05. fdm2\'s own knob; SAV_CASCADE_MIN stays 4 for the live machine'),

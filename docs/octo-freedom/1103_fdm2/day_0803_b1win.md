@@ -1,0 +1,237 @@
+# fdm2 | TAPE 1632960 bars, ends 2026-10-04 23:59:55 | RULED_OK True
+# THE WALK RUNS 2026-08-03 00:00:00 .. 2026-08-03 23:59:55 - HIS one-day bound
+# THE STOP IS ON: FDM_MAE_CAP 1.10% adverse from the open, his "yes, move it to default"
+
+| the knob | value | what it is |
+|---|---|---|
+| FDM_FNC_2080 | 20 | his "fdm-20-80-fnc" - step 1 AND the population. "ex" includes oob |
+| FDM_STEP1_ABOVE_TF | 3 | step 1 scans STRICTLY above this TF, so ws4..ws30 = 27 lines |
+| FDM_POP_LO | 3 | the reversal population floor, so ws3..ws30 = 28 before the filter |
+| FDM_M3_FNC | 25 | ws3Mage's fence in the preamble, 25 -> 25/75 |
+| FDM_X10_WOB | 24 | the ws10x race hold, bars. His 1103 "use 24" |
+| FDM_X10_GRACE_PCT | 40 | his "fdm-ws10x-cad-grace" - the grace walk's floor, % |
+| FDM_X10_TRADE_PCT | 50 | the grace walk's rev-trade threshold, % |
+| FDM_X10_GRACE_MIN | 5 | the grace walk's length, minutes |
+| FDM_MAE_CAP | 1.1 | the stop, % adverse from the open |
+| FDM_X10_FRM | cross | must the race CROSS follow the cadence event, or only its CONFIRM |
+| FDM_REV_FROM | event | where the reversal count starts: the cadence event bar, or that event's window open |
+| LIFT_WOB | 8 | the lift-off hold; the reversal STAMP is lift + 7 bars = 35 s |
+
+| the open | value |
+|---|---|
+| the re-entry signal bar | 2026-08-03 01:28:00 |
+| the gcws30b window side | LOW oob |
+| the trade | LONG |
+| its target side | HIGH |
+| the open price bar | 2026-08-03 01:28:05 - the router's "just OPEN", 1 bar |
+| why | ws1b LOW oob window 01:21:00..01:28:00, 7.0 min, ws1r AND (ws2r or ws3r) seen past the 25.0 fence - ws1 01:26:00, ws3 01:21:00 - gate TRUE at the ws1b ib cross |
+
+## leg 2026-08-03 01:28:05 | LONG | target side HIGH | fdm re-entry 2026-08-03 01:28:00
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 01:28:05 | NO CADENCE EVENT | no cadence event on the HIGH side from the open to 2026-08-03 23:59:55 |
+
+## leg 2026-08-03 03:48:05 | LONG | target side HIGH | fdm re-entry 2026-08-03 03:48:00, window side LOW
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 04:43:00 | WALK | cadence event, 9 of 27 lines printing ex-20/80 AND towards -> walk. the ws10x-cadence is first (ws10x crosses to ib 2026-08-03 04:45:00, the ws10x-cadence confirms 2026-08-03 04:46:55) |
+| 2026-08-03 04:46:55 | GRACE | the ws10x-cadence - ws10x crossed to ib 2026-08-03 04:45:00 and confirmed here. 6 of 13 reversed since 2026-08-03 04:43:00 (event) = 46.2% >= 40% -> grace walk 2026-08-03 04:47:00 .. 2026-08-03 04:51:55, 60 bars = 5.0 min, population frozen at 13 lines |
+| 2026-08-03 04:48:55 | REV-TRADE | grace walk, 7 of 13 reversed since 2026-08-03 04:43:00 (event) = 53.8% >= 50% |
+
+## leg 2026-08-03 04:49:05 | SHORT | target side LOW | rev-trade 2026-08-03 04:48:55
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 05:01:00 | REV-TRADE | cadence event, 0 of 27 lines ws4..ws30 printing ex-20/80 AND towards - his "if the answer is no, then rev-trade" |
+
+## leg 2026-08-03 05:01:10 | LONG | target side HIGH | rev-trade 2026-08-03 05:01:00
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 06:11:00 | WALK | cadence event, 4 of 27 lines printing ex-20/80 AND towards -> walk. the ws10x-cadence is first (ws10x crosses to ws10r 2026-08-03 06:20:05, the ws10x-cadence confirms 2026-08-03 06:22:00) |
+| 2026-08-03 06:22:00 | REV-TRADE | the ws10x-cadence - ws10x crossed to ws10r 2026-08-03 06:20:05 and confirmed here. 14 of 14 reversed since 2026-08-03 06:11:00 (event) = 100.0% >= 50% at the ws10x-cadence bar itself |
+
+## leg 2026-08-03 06:22:10 | SHORT | target side LOW | rev-trade 2026-08-03 06:22:00
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 06:50:00 | WALK | cadence event, 2 of 27 lines printing ex-20/80 AND towards -> walk. the next cadence event is first (ws10x crosses to ib 2026-08-03 07:10:25, the ws10x-cadence confirms 2026-08-03 07:12:20) |
+| 2026-08-03 07:03:00 | WALK | cadence event, 2 of 27 lines printing ex-20/80 AND towards -> walk. the ws10x-cadence is first (ws10x crosses to ib 2026-08-03 07:10:25, the ws10x-cadence confirms 2026-08-03 07:12:20) |
+| 2026-08-03 07:12:20 | REV-TRADE | the ws10x-cadence - ws10x crossed to ib 2026-08-03 07:10:25 and confirmed here. 4 of 5 reversed since 2026-08-03 07:03:00 (event) = 80.0% >= 50% at the ws10x-cadence bar itself |
+
+## leg 2026-08-03 07:12:30 | LONG | target side HIGH | rev-trade 2026-08-03 07:12:20
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 09:12:00 | WALK | cadence event, 3 of 27 lines printing ex-20/80 AND towards -> walk. the ws10x-cadence is first (ws10x crosses to ws10Mage 2026-08-03 09:31:15, the ws10x-cadence confirms 2026-08-03 09:33:10) |
+| 2026-08-03 09:33:10 | REV-TRADE | the ws10x-cadence - ws10x crossed to ws10Mage 2026-08-03 09:31:15 and confirmed here. 10 of 11 reversed since 2026-08-03 09:12:00 (event) = 90.9% >= 50% at the ws10x-cadence bar itself |
+
+## leg 2026-08-03 09:33:20 | SHORT | target side LOW | rev-trade 2026-08-03 09:33:10
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 09:33:20 | NO CADENCE EVENT | no cadence event on the LOW side from the open to 2026-08-03 23:59:55 |
+
+## leg 2026-08-03 10:09:05 | SHORT | target side LOW | fdm re-entry 2026-08-03 10:09:00, window side HIGH
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 10:53:00 | WALK | cadence event, 4 of 27 lines printing ex-20/80 AND towards -> walk. the ws10x-cadence is first (ws10x crosses to ib 2026-08-03 11:19:00, the ws10x-cadence confirms 2026-08-03 11:20:55) |
+| 2026-08-03 11:20:55 | REV-TRADE | the ws10x-cadence - ws10x crossed to ib 2026-08-03 11:19:00 and confirmed here. 9 of 9 reversed since 2026-08-03 10:53:00 (event) = 100.0% >= 50% at the ws10x-cadence bar itself |
+
+## leg 2026-08-03 11:21:05 | LONG | target side HIGH | rev-trade 2026-08-03 11:20:55
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 13:25:00 | WALK | cadence event, 1 of 27 lines printing ex-20/80 AND towards -> walk. the ws10x-cadence is first (ws10x crosses to ib 2026-08-03 13:25:45, the ws10x-cadence confirms 2026-08-03 13:27:40) |
+| 2026-08-03 13:27:40 | REV-TRADE | the ws10x-cadence - ws10x crossed to ib 2026-08-03 13:25:45 and confirmed here. 5 of 8 reversed since 2026-08-03 13:25:00 (event) = 62.5% >= 50% at the ws10x-cadence bar itself |
+
+## leg 2026-08-03 13:27:50 | SHORT | target side LOW | rev-trade 2026-08-03 13:27:40
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 13:27:50 | NO CADENCE EVENT | no cadence event on the LOW side from the open to 2026-08-03 23:59:55 |
+
+## leg 2026-08-03 14:07:05 | SHORT | target side LOW | fdm re-entry 2026-08-03 14:07:00, window side HIGH
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 15:59:00 | WALK | cadence event, 5 of 27 lines printing ex-20/80 AND towards -> walk. the ws10x-cadence is first (ws10x crosses to ws10r 2026-08-03 16:01:25, the ws10x-cadence confirms 2026-08-03 16:03:20) |
+| 2026-08-03 16:03:20 | REV-TRADE | the ws10x-cadence - ws10x crossed to ws10r 2026-08-03 16:01:25 and confirmed here. 12 of 12 reversed since 2026-08-03 15:59:00 (event) = 100.0% >= 50% at the ws10x-cadence bar itself |
+
+## leg 2026-08-03 16:03:30 | LONG | target side HIGH | rev-trade 2026-08-03 16:03:20
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 17:17:00 | WALK | cadence event, 2 of 27 lines printing ex-20/80 AND towards -> walk. the ws10x-cadence is first (ws10x crosses to ib 2026-08-03 17:20:25, the ws10x-cadence confirms 2026-08-03 17:22:20) |
+| 2026-08-03 17:22:20 | NO ACTION | the ws10x-cadence - ws10x crossed to ib 2026-08-03 17:20:25 and confirmed here. 1 of 3 reversed since 2026-08-03 17:17:00 (event) = 33.3% < 40% - no branch, wait for the next cadence event |
+| 2026-08-03 18:08:00 | WALK | cadence event, 6 of 27 lines printing ex-20/80 AND towards -> walk. the next cadence event is first (ws10x crosses to ws10Mage 2026-08-03 18:41:10, the ws10x-cadence confirms 2026-08-03 18:43:05) |
+| 2026-08-03 18:11:00 | WALK | cadence event, 6 of 27 lines printing ex-20/80 AND towards -> walk. the next cadence event is first (ws10x crosses to ws10Mage 2026-08-03 18:41:10, the ws10x-cadence confirms 2026-08-03 18:43:05) |
+| 2026-08-03 18:42:00 | WALK | cadence event, 10 of 27 lines printing ex-20/80 AND towards -> walk. the ws10x-cadence is first (ws10x crosses to ws10r 2026-08-03 18:50:00, the ws10x-cadence confirms 2026-08-03 18:51:55) |
+| 2026-08-03 18:51:55 | REV-TRADE | the ws10x-cadence - ws10x crossed to ws10r 2026-08-03 18:50:00 and confirmed here. 13 of 16 reversed since 2026-08-03 18:42:00 (event) = 81.2% >= 50% at the ws10x-cadence bar itself |
+
+## leg 2026-08-03 18:52:05 | SHORT | target side LOW | rev-trade 2026-08-03 18:51:55
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 20:13:00 | WALK | cadence event, 7 of 27 lines printing ex-20/80 AND towards -> walk. the ws10x-cadence is first (ws10x crosses to ws10r 2026-08-03 20:17:30, the ws10x-cadence confirms 2026-08-03 20:19:25) |
+| 2026-08-03 20:19:25 | REV-TRADE | the ws10x-cadence - ws10x crossed to ws10r 2026-08-03 20:17:30 and confirmed here. 10 of 14 reversed since 2026-08-03 20:13:00 (event) = 71.4% >= 50% at the ws10x-cadence bar itself |
+
+## leg 2026-08-03 20:19:35 | LONG | target side HIGH | rev-trade 2026-08-03 20:19:25
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 21:03:00 | REV-TRADE | cadence event, 0 of 27 lines ws4..ws30 printing ex-20/80 AND towards - his "if the answer is no, then rev-trade" |
+
+## leg 2026-08-03 21:03:10 | SHORT | target side LOW | rev-trade 2026-08-03 21:03:00
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 21:17:00 | WALK | cadence event, 7 of 27 lines printing ex-20/80 AND towards -> walk. the ws10x-cadence is first (ws10x crosses to ws10r 2026-08-03 21:21:00, the ws10x-cadence confirms 2026-08-03 21:22:55) |
+| 2026-08-03 21:22:55 | GRACE | the ws10x-cadence - ws10x crossed to ws10r 2026-08-03 21:21:00 and confirmed here. 4 of 9 reversed since 2026-08-03 21:17:00 (event) = 44.4% >= 40% -> grace walk 2026-08-03 21:23:00 .. 2026-08-03 21:27:55, 60 bars = 5.0 min, population frozen at 9 lines |
+| 2026-08-03 21:23:35 | REV-TRADE | grace walk, 6 of 9 reversed since 2026-08-03 21:17:00 (event) = 66.7% >= 50% |
+
+## leg 2026-08-03 21:23:45 | LONG | target side HIGH | rev-trade 2026-08-03 21:23:35
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 21:23:45 | NO CADENCE EVENT | no cadence event on the HIGH side from the open to 2026-08-03 23:59:55 |
+
+## leg 2026-08-03 23:01:05 | SHORT | target side LOW | fdm re-entry 2026-08-03 23:01:00, window side HIGH
+
+| the bar | the stage | why |
+|---|---|---|
+| 2026-08-03 23:01:05 | NO CADENCE EVENT | no cadence event on the LOW side from the open to 2026-08-03 23:59:55 |
+
+## the 28 eligible lines at every ws10x-cadence | ws3..ws30
+
+| the ws10x-cadence | the trade it was deciding | ex-20/80 at least once | contributed a reversal | silent - ex-fence but no reversal | never ex-fence |
+|---|---|---|---|---|---|
+| 2026-08-03 04:46:55 | 2026-08-03 03:48:05 LONG | 13 of 28 - ws3, ws4, ws6, ws7, ws8, ws9, ws10, ws11, ws12, ws13, ws14, ws15, ws16 | 6 of 13 - ws9, ws11, ws12, ws13, ws14, ws15 | 7 - ws3, ws4, ws6, ws7, ws8, ws10, ws16 | 15 - ws5, ws17, ws18, ws19, ws20, ws21, ws22, ws23, ws24, ws25, ws26, ws27, ws28, ws29, ws30 |
+| 2026-08-03 04:48:55 | 2026-08-03 03:48:05 LONG | 13 of 28 - ws3, ws4, ws6, ws7, ws8, ws9, ws10, ws11, ws12, ws13, ws14, ws15, ws16 | 7 of 13 - ws9, ws11, ws12, ws13, ws14, ws15, ws16 | 6 - ws3, ws4, ws6, ws7, ws8, ws10 | 15 - ws5, ws17, ws18, ws19, ws20, ws21, ws22, ws23, ws24, ws25, ws26, ws27, ws28, ws29, ws30 |
+| 2026-08-03 06:22:00 | 2026-08-03 05:01:10 LONG | 14 of 28 - ws3, ws4, ws5, ws6, ws14, ws15, ws16, ws17, ws18, ws19, ws21, ws22, ws24, ws27 | 14 of 14 - ws3, ws4, ws5, ws6, ws14, ws15, ws16, ws17, ws18, ws19, ws21, ws22, ws24, ws27 | 0 - none | 14 - ws7, ws8, ws9, ws10, ws11, ws12, ws13, ws20, ws23, ws25, ws26, ws28, ws29, ws30 |
+| 2026-08-03 07:12:20 | 2026-08-03 06:22:10 SHORT | 5 of 28 - ws3, ws4, ws5, ws6, ws7 | 4 of 5 - ws3, ws5, ws6, ws7 | 1 - ws4 | 23 - ws8, ws9, ws10, ws11, ws12, ws13, ws14, ws15, ws16, ws17, ws18, ws19, ws20, ws21, ws22, ws23, ws24, ws25, ws26, ws27, ws28, ws29, ws30 |
+| 2026-08-03 09:33:10 | 2026-08-03 07:12:30 LONG | 11 of 28 - ws3, ws4, ws5, ws6, ws7, ws8, ws9, ws10, ws11, ws14, ws15 | 10 of 11 - ws3, ws4, ws5, ws6, ws7, ws8, ws9, ws10, ws11, ws14 | 1 - ws15 | 17 - ws12, ws13, ws16, ws17, ws18, ws19, ws20, ws21, ws22, ws23, ws24, ws25, ws26, ws27, ws28, ws29, ws30 |
+| 2026-08-03 11:20:55 | 2026-08-03 10:09:05 SHORT | 9 of 28 - ws3, ws4, ws5, ws6, ws7, ws8, ws9, ws10, ws11 | 9 of 9 - ws3, ws4, ws5, ws6, ws7, ws8, ws9, ws10, ws11 | 0 - none | 19 - ws12, ws13, ws14, ws15, ws16, ws17, ws18, ws19, ws20, ws21, ws22, ws23, ws24, ws25, ws26, ws27, ws28, ws29, ws30 |
+| 2026-08-03 13:27:40 | 2026-08-03 11:21:05 LONG | 8 of 28 - ws3, ws4, ws5, ws6, ws8, ws9, ws11, ws12 | 5 of 8 - ws3, ws4, ws5, ws6, ws12 | 3 - ws8, ws9, ws11 | 20 - ws7, ws10, ws13, ws14, ws15, ws16, ws17, ws18, ws19, ws20, ws21, ws22, ws23, ws24, ws25, ws26, ws27, ws28, ws29, ws30 |
+| 2026-08-03 16:03:20 | 2026-08-03 14:07:05 SHORT | 12 of 28 - ws3, ws4, ws5, ws6, ws7, ws8, ws9, ws10, ws11, ws12, ws13, ws29 | 12 of 12 - ws3, ws4, ws5, ws6, ws7, ws8, ws9, ws10, ws11, ws12, ws13, ws29 | 0 - none | 16 - ws14, ws15, ws16, ws17, ws18, ws19, ws20, ws21, ws22, ws23, ws24, ws25, ws26, ws27, ws28, ws30 |
+| 2026-08-03 17:22:20 | 2026-08-03 16:03:30 LONG | 3 of 28 - ws3, ws4, ws7 | 1 of 3 - ws7 | 2 - ws3, ws4 | 25 - ws5, ws6, ws8, ws9, ws10, ws11, ws12, ws13, ws14, ws15, ws16, ws17, ws18, ws19, ws20, ws21, ws22, ws23, ws24, ws25, ws26, ws27, ws28, ws29, ws30 |
+| 2026-08-03 18:51:55 | 2026-08-03 16:03:30 LONG | 16 of 28 - ws3, ws4, ws6, ws7, ws8, ws9, ws10, ws11, ws12, ws13, ws14, ws15, ws16, ws17, ws18, ws19 | 13 of 16 - ws3, ws4, ws6, ws7, ws9, ws10, ws11, ws12, ws14, ws15, ws16, ws17, ws19 | 3 - ws8, ws13, ws18 | 12 - ws5, ws20, ws21, ws22, ws23, ws24, ws25, ws26, ws27, ws28, ws29, ws30 |
+| 2026-08-03 20:19:25 | 2026-08-03 18:52:05 SHORT | 14 of 28 - ws3, ws4, ws5, ws6, ws7, ws8, ws9, ws10, ws11, ws12, ws13, ws14, ws15, ws16 | 10 of 14 - ws3, ws4, ws5, ws6, ws7, ws8, ws9, ws10, ws11, ws12 | 4 - ws13, ws14, ws15, ws16 | 14 - ws17, ws18, ws19, ws20, ws21, ws22, ws23, ws24, ws25, ws26, ws27, ws28, ws29, ws30 |
+| 2026-08-03 21:22:55 | 2026-08-03 21:03:10 SHORT | 9 of 28 - ws11, ws14, ws15, ws16, ws17, ws18, ws19, ws20, ws22 | 4 of 9 - ws14, ws16, ws19, ws22 | 5 - ws11, ws15, ws17, ws18, ws20 | 19 - ws3, ws4, ws5, ws6, ws7, ws8, ws9, ws10, ws12, ws13, ws21, ws23, ws24, ws25, ws26, ws27, ws28, ws29, ws30 |
+| 2026-08-03 21:23:35 | 2026-08-03 21:03:10 SHORT | 9 of 28 - ws11, ws14, ws15, ws16, ws17, ws18, ws19, ws20, ws22 | 6 of 9 - ws14, ws15, ws16, ws17, ws19, ws22 | 3 - ws11, ws18, ws20 | 19 - ws3, ws4, ws5, ws6, ws7, ws8, ws9, ws10, ws12, ws13, ws21, ws23, ws24, ws25, ws26, ws27, ws28, ws29, ws30 |
+
+| the roll-up over 13 ws10x-cadences | value |
+|---|---|
+| eligible lines, every time | 28 |
+| population, smallest .. largest | 3 .. 16 |
+| population, mean | 10.5 |
+| contributed, smallest .. largest | 1 .. 14 |
+| contributed, mean | 7.8 |
+
+| the line | times in the population | times it contributed |
+|---|---|---|
+| ws3 | 11 of 13 | 8 of 13 |
+| ws4 | 11 of 13 | 7 of 13 |
+| ws5 | 7 of 13 | 7 of 13 |
+| ws6 | 10 of 13 | 8 of 13 |
+| ws7 | 9 of 13 | 7 of 13 |
+| ws8 | 8 of 13 | 4 of 13 |
+| ws9 | 8 of 13 | 7 of 13 |
+| ws10 | 7 of 13 | 5 of 13 |
+| ws11 | 10 of 13 | 7 of 13 |
+| ws12 | 6 of 13 | 6 of 13 |
+| ws13 | 5 of 13 | 3 of 13 |
+| ws14 | 8 of 13 | 7 of 13 |
+| ws15 | 8 of 13 | 5 of 13 |
+| ws16 | 7 of 13 | 5 of 13 |
+| ws17 | 4 of 13 | 3 of 13 |
+| ws18 | 4 of 13 | 1 of 13 |
+| ws19 | 4 of 13 | 4 of 13 |
+| ws20 | 2 of 13 | 0 of 13 |
+| ws21 | 1 of 13 | 1 of 13 |
+| ws22 | 3 of 13 | 3 of 13 |
+| ws23 | 0 of 13 | 0 of 13 |
+| ws24 | 1 of 13 | 1 of 13 |
+| ws25 | 0 of 13 | 0 of 13 |
+| ws26 | 0 of 13 | 0 of 13 |
+| ws27 | 1 of 13 | 1 of 13 |
+| ws28 | 0 of 13 | 0 of 13 |
+| ws29 | 1 of 13 | 1 of 13 |
+| ws30 | 0 of 13 | 0 of 13 |
+
+## the legs | every number carries the FDM_MAE_CAP 1.10% stop
+
+| the open | the trade | the rev-trade signal | the exit | the exit kind | held min | MAE% | MFE% | realised% |
+|---|---|---|---|---|---|---|---|---|
+| 2026-08-03 01:28:05 | LONG | - | 2026-08-03 03:46:50 | STOP at 1.10% | 138.8 | 1.100 | 0.189 | -1.100 |
+| 2026-08-03 03:48:05 | LONG | 2026-08-03 04:48:55 | 2026-08-03 04:49:00 | rev-trade | 60.9 | 0.032 | 0.887 | +0.515 |
+| 2026-08-03 04:49:05 | SHORT | 2026-08-03 05:01:00 | 2026-08-03 05:01:05 | rev-trade | 12.0 | 0.071 | 0.465 | +0.268 |
+| 2026-08-03 05:01:10 | LONG | 2026-08-03 06:22:00 | 2026-08-03 06:22:05 | rev-trade | 80.9 | 0.174 | 0.601 | +0.174 |
+| 2026-08-03 06:22:10 | SHORT | 2026-08-03 07:12:20 | 2026-08-03 07:12:25 | rev-trade | 50.2 | 0.158 | 0.600 | +0.363 |
+| 2026-08-03 07:12:30 | LONG | 2026-08-03 09:33:10 | 2026-08-03 09:33:15 | rev-trade | 140.8 | 0.428 | 1.504 | +1.275 |
+| 2026-08-03 09:33:20 | SHORT | - | 2026-08-03 10:00:30 | STOP at 1.10% | 27.2 | 1.100 | -0.000 | -1.100 |
+| 2026-08-03 10:09:05 | SHORT | 2026-08-03 11:20:55 | 2026-08-03 11:21:00 | rev-trade | 71.9 | 0.023 | 1.826 | +1.540 |
+| 2026-08-03 11:21:05 | LONG | 2026-08-03 13:27:40 | 2026-08-03 13:27:45 | rev-trade | 126.7 | 0.283 | 0.770 | +0.189 |
+| 2026-08-03 13:27:50 | SHORT | - | 2026-08-03 13:52:05 | STOP at 1.10% | 24.2 | 1.100 | 0.682 | -1.100 |
+| 2026-08-03 14:07:05 | SHORT | 2026-08-03 16:03:20 | 2026-08-03 16:03:25 | rev-trade | 116.3 | 0.023 | 1.578 | +1.026 |
+| 2026-08-03 16:03:30 | LONG | 2026-08-03 18:51:55 | 2026-08-03 18:52:00 | rev-trade | 168.5 | 0.720 | 3.190 | +2.090 |
+| 2026-08-03 18:52:05 | SHORT | 2026-08-03 20:19:25 | 2026-08-03 20:19:30 | rev-trade | 87.4 | 0.334 | 0.607 | +0.356 |
+| 2026-08-03 20:19:35 | LONG | 2026-08-03 21:03:00 | 2026-08-03 21:03:05 | rev-trade | 43.5 | 0.494 | 0.570 | +0.076 |
+| 2026-08-03 21:03:10 | SHORT | 2026-08-03 21:23:35 | 2026-08-03 21:23:40 | rev-trade | 20.5 | 0.000 | 0.592 | +0.220 |
+| 2026-08-03 21:23:45 | LONG | - | 2026-08-03 22:06:05 | STOP at 1.10% | 42.3 | 1.100 | 0.015 | -1.100 |
+| 2026-08-03 23:01:05 | SHORT | - | 2026-08-03 23:59:55 | no rev-trade before the walk's end | 58.8 | 0.868 | 0.488 | -0.785 |
+
+| the aggregate | value |
+|---|---|
+| legs | 17 |
+| stopped | 4 |
+| gross % | +2.907 |
+| drag % | -3.357 (0.1975% round trip x 17 legs) |
+| net % | -0.450 |
+| MAE % total | 8.007 |
+| MFE % total | 14.563 |
+| MFE captured | 20.0% of MFE |
+| held min, shortest .. longest | 12.0 .. 168.5 |
