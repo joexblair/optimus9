@@ -1091,6 +1091,37 @@ FDM_RE_GATE_FNC = _knob('FDM_RE_GATE_FNC', 75.0)  # the gate's fence on ws1r/ws2
 #   HIS WORD WAS "ex v4mom fence", which is RMOM_FNC 75. It has its OWN knob here so the re-entry
 #   and the walk can move apart; the value is the same today.
 
+#   ── fdm2, HIS 1103 MACHINE ────────────────────────────────────────────────────────────────────
+#   The bimodal walk-or-rev-trade decision REPLACED the old fdm-cadence body: *"yes, but don't
+#   delete the fdm work.  let's call this sandbox `fdm2`"*. The old body is untouched in
+#   1103_fdm/ and in fdm_spec_VERBATIM.md; nothing of it is read by these knobs.
+FDM_FNC_2080 = _knob('FDM_FNC_2080', 20.0)      # HIS NAME 'fdm-20-80-fnc'. 20 -> (20.0, 80.0).
+#   "ex" INCLUDES oob, his standing rule, so the test is r <= 20 low / r >= 80 high.
+FDM_M3_FNC = _knob('FDM_M3_FNC', 25.0)          # ws3Mage's own fence in the preamble, 25 -> 25/75.
+FDM_POP_LO = _knob('FDM_POP_LO', 3, int)        # the reversal population's floor TF. ws3..ws30.
+#   HIS 1103: *"ws3 to ws30 for both the cadence and the ws10x-cadence"*. The top is L2_MOM_MAXTF
+#   30, so the population is 28 lines before the ex-fence filter.
+FDM_STEP1_ABOVE_TF = _knob('FDM_STEP1_ABOVE_TF', 3, int)   # step 1 scans STRICTLY above this TF.
+#   HIS 1103 *"above in timeframe"* on *"lines printing above ws3r"*, so the scan is ws4..ws30 -
+#   27 lines. DIFFERENT RANGE FROM THE POPULATION, which starts at ws3. Both are his words.
+FDM_X10_WOB = _knob('FDM_X10_WOB', 24, int)     # the ws10x race's hold, 24 bars = 120 s.
+#   HIS 1103 RULING: *"now that we have the grade period, we can leverage a smaller wob: use 24"*.
+#   He had written "wob 24 or 36" and used 36 in his own 1841 example; 36 is the other arm.
+FDM_X10_FRM = os.environ.get('W_V4_FDM_X10_FRM', 'cross')   # 'cross' | 'confirm'.
+#   WHICH BAR OF THE ws10x RACE MUST FOLLOW THE CADENCE EVENT. 'cross' is the default on
+#   PRECEDENT: 1103_fdm's census used it and his own 1841 ws10x-cadence of 18:52:55 came from
+#   it. 'confirm' lets a race that began before the cadence event count, because an event's
+#   identity is its confirm bar. THE KNOB NAME IS MINE and he has not ruled between them.
+FDM_X10_GRACE_PCT = _knob('FDM_X10_GRACE_PCT', 40.0)   # HIS NAME 'fdm-ws10x-cad-grace'. Percent.
+FDM_X10_TRADE_PCT = _knob('FDM_X10_TRADE_PCT', 50.0)   # the grace walk's rev-trade threshold.
+#   HIS VALUE, his *">=50%"*. THE KNOB IS MINE - he named only the 40 as a knob, and a stated
+#   threshold with no knob cannot be moved without an edit.
+FDM_X10_GRACE_MIN = _knob('FDM_X10_GRACE_MIN', 5.0)    # the grace walk's length, minutes.
+#   HIS VALUE, his *"we add a 5 minute walk"*. 5.0 min = 60 bars at the 5 s grid. THE KNOB IS MINE.
+FDM_MAE_CAP = _knob('FDM_MAE_CAP', 1.1)         # the stop, percent adverse from the open.
+#   HIS 1103 *"add the typical mae1.1 stop"* AND *"yes, move it to default"*. ON, always applied -
+#   unlike LIN2_MAE_CAP 1.1, which stayed behind W_MAE_CAP=on in lineage2's sealed driver.
+
 LIN2_CP_LIFT = os.environ.get('W_V4_LIN2_CP_LIFT', 'closed_prev')
 LIN2_CP_WS1R = os.environ.get('W_V4_LIN2_CP_WS1R', 'closed_prev')   # ws1r's VALUE source in
 #   the t1 r gate. BANKED 'closed_prev' on his 1101 *"change ws1r to closed-p"*. THE KNOB NAME IS
@@ -1357,6 +1388,16 @@ RULED = {
     'FDM_RE_B_FNC': (95.0, 'HIS 1102 mech - the fdm re-entry window opens on gcws30b at or beyond (5.0, 95.0)'),
     'FDM_RE_IB_XWOB': (1, 'HIS 1102 bank - the window closes on the ib cross BAR, which is 2026-08-03 00:41:30: "00:41:30 is my view also". A hold would move the fire later'),
     'FDM_RE_GATE_FNC': (75.0, 'HIS 1102 "ex v4mom fence" for the ws1r AND (ws2r or ws3r) gate. Same value as RMOM_FNC, its own knob so the two can move apart'),
+    'FDM_FNC_2080': (20.0, 'HIS OWN KNOB NAME, "fdm-20-80-fnc", at his own value. Both the step-1 test and the reversal population read it; "ex" includes oob'),
+    'FDM_M3_FNC': (25.0, 'HIS 1103 "ws3Mage using 25/75 is valid". The knob name is mine; the value is his'),
+    'FDM_POP_LO': (3, 'HIS 1103 "ws3 to ws30 for both the cadence and the ws10x-cadence". The top comes from L2_MOM_MAXTF 30, not from a second knob'),
+    'FDM_STEP1_ABOVE_TF': (3, 'HIS 1103 "above in timeframe" - step 1 scans ws4..ws30. STRICTLY above, so this knob is the excluded rung, not the floor'),
+    'FDM_X10_WOB': (24, 'HIS 1103 RULING "now that we have the grade period, we can leverage a smaller wob: use 24". 36 is the other arm, from his own 1841 example'),
+    'FDM_X10_FRM': ('cross', 'DEFAULT ON PRECEDENT, NOT A RULING - the 1103_fdm census used it and his 1841 ws10x-cadence 18:52:55 came from it. "confirm" is the other arm and he has not ruled between them'),
+    'FDM_X10_GRACE_PCT': (40.0, 'HIS OWN KNOB NAME, "fdm-ws10x-cad-grace", at his own value'),
+    'FDM_X10_TRADE_PCT': (50.0, 'HIS VALUE ">=50%". The knob is mine - a stated threshold with no knob cannot be moved without an edit'),
+    'FDM_X10_GRACE_MIN': (5.0, 'HIS VALUE "we add a 5 minute walk". The knob is mine. 5.0 min = 60 bars at the 5 s grid'),
+    'FDM_MAE_CAP': (1.1, 'HIS 1103 "add the typical mae1.1 stop" + "yes, move it to default". ALWAYS ON, unlike LIN2_MAE_CAP which stayed behind W_MAE_CAP=on'),
     'LIN2_CP_LIFT': ('closed_prev', 'BANKED 1101 - "lift-off needs a close-p mode - it only reacts to full 1 minute bars". The t1 ws1r reversal BARS; it REVISES his earlier "keeping the lift-off on emerging" and gives up the 0445 reversals. _rev_pairs is not routed'),
     'LIN2_CP_WS1R': ('closed_prev', 'BANKED 1101 - "change ws1r to closed-p". The t1 r gate\'s VALUE read only; the reversal BARS stay emerging'),
     'LIN2_CP_GCWS30B': ('closed_prev', 'BANKED 1101 on his "yes" to routing gcws30b. It moves the t1 cadence AND the arm race - both read CL[\'g30b\']. "emerging" is the other arm'),
