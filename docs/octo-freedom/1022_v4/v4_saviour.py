@@ -107,7 +107,8 @@ def _ib_cross(a, run_end, xwob):
     return c
 
 
-def _cascade_at(line, tf, side, at_or_before, MG, tf_hi=None, anchor=None, sample_bars=None):
+def _cascade_at(line, tf, side, at_or_before, MG, tf_hi=None, anchor=None, sample_bars=None,
+                min_lines=None, zoom=None):
     """the cascade read at ONE bar at or before `at_or_before`.
 
     -> (the anchor bar, the bar it came from, the verdict, the cascade dict) or four Nones
@@ -137,12 +138,14 @@ def _cascade_at(line, tf, side, at_or_before, MG, tf_hi=None, anchor=None, sampl
             return None, None, None, None
         s, b = ok[-1]
     assert s <= int(at_or_before), 'the cascade bar is past the event bar'
-    c = mage_cascade(MG, s, tf_hi=hi, zoom=K.SAV_CASCADE_ZOOM, min_lines=K.SAV_CASCADE_MIN)
+    c = mage_cascade(MG, s, tf_hi=hi,
+                     zoom=int(K.SAV_CASCADE_ZOOM if zoom is None else zoom),
+                     min_lines=int(K.SAV_CASCADE_MIN if min_lines is None else min_lines))
     return s, b, (None if c is None else c['verdict']), c
 
 
 def walk(open_bar, target_side, R, MG, U, RE=None, arm=True, tf_hi=None, anchor=None,
-         sample_bars=None):
+         sample_bars=None, min_lines=None, zoom=None):
     """v4saviour on one trade. -> dict with `verdict`, `why` and the bars it used.
 
       open_bar      the bar the trade opened on
@@ -157,6 +160,8 @@ def walk(open_bar, target_side, R, MG, U, RE=None, arm=True, tf_hi=None, anchor=
       sample_bars   the bars the ws1Mage extremum sampler may use. His 1103 *"the sampling should
                     match closed-prev, ie seam-5s"*, so fdm2 passes v4_closed_prev.seam_bars(60).
                     None keeps the banked lattice, pinned to the event bar
+      min_lines     the lines a cluster must cover. Defaults to SAV_CASCADE_MIN 4
+      zoom          the rungs each cluster step compares across. Defaults to SAV_CASCADE_ZOOM 2
 
     TWO ARMS, AND THE BANKED BEHAVIOUR IS THE DEFAULT. v4_machine.py imports this module, so
     changing `walk` in place would change the live octo-v4 machine. `RE=None` and `arm=True`
@@ -249,7 +254,7 @@ def walk(open_bar, target_side, R, MG, U, RE=None, arm=True, tf_hi=None, anchor=
     why.append(('the ws1r oob->ib cross', U(x1), 'ws1r %.2f, held %d bars' % (float(r1[x1]), K.SAV_IB_XWOB)))
 
     # ---- branch A: the cascade at the ws1r reversal print
-    st, lb, vd, c = _cascade_at(e1, 1, s, x1, MG, tf_hi, anchor, sample_bars)
+    st, lb, vd, c = _cascade_at(e1, 1, s, x1, MG, tf_hi, anchor, sample_bars, min_lines, zoom)
     if st is None:
         why.append(('the ws1r lift-off for the cascade', '-', 'none at or before the cross'))
         return {'verdict': 'STAYS OPEN', 'why': why, 'open': o}
@@ -298,7 +303,8 @@ def walk(open_bar, target_side, R, MG, U, RE=None, arm=True, tf_hi=None, anchor=
                     '%d bars, peak %.2f' % (ye - ys + 1, float(np.nanmax(r2[ys:ye+1])))))
         why.append(('the ws2r oob->ib cross', U(x2), 'ws2r %.2f, %d bars inside the cap'
                     % (float(r2[x2]), lim - x2)))
-        st2, lb2, vd2, c2 = _cascade_at(e2, 2, s, x2, MG, tf_hi, anchor, sample_bars)
+        st2, lb2, vd2, c2 = _cascade_at(e2, 2, s, x2, MG, tf_hi, anchor, sample_bars,
+                                        min_lines, zoom)
         if st2 is None:
             why.append(('the ws2r lift-off for the cascade', '-', 'none at or before the cross'))
             return {'verdict': 'STAYS OPEN', 'why': why, 'open': o}
@@ -319,10 +325,11 @@ def walk(open_bar, target_side, R, MG, U, RE=None, arm=True, tf_hi=None, anchor=
         why.append(('branch B does not fire', U(x2),
                     '%s - the trade stays open, v4saviour is complete' % miss2))
         return {'verdict': 'STAYS OPEN', 'why': why, 'open': o}
-    return _route(route, x1, lim, s, want, MG, why, o, U, tf_hi, sample_bars)
+    return _route(route, x1, lim, s, want, MG, why, o, U, tf_hi, sample_bars, min_lines, zoom)
 
 
-def _route(route, x1, lim, s, want, MG, why, o, U, tf_hi=None, sample_bars=None):
+def _route(route, x1, lim, s, want, MG, why, o, U, tf_hi=None, sample_bars=None,
+           min_lines=None, zoom=None):
     """The ws1Mage route back to the ws1r cascade test, or the cap expiring. -> the verdict dict."""
     if route is None:
         why.append(('the cap expired', U(lim),
@@ -335,7 +342,8 @@ def _route(route, x1, lim, s, want, MG, why, o, U, tf_hi=None, sample_bars=None)
         return {'verdict': 'STAYS OPEN', 'why': why, 'open': o}
     assert cb[0] <= route, 'the ws1Mage anchor is past the stamp'
     c = mage_cascade(MG, cb[0], tf_hi=int(K.SAV_CASCADE_TF_HI if tf_hi is None else tf_hi),
-                     zoom=K.SAV_CASCADE_ZOOM, min_lines=K.SAV_CASCADE_MIN)
+                     zoom=int(K.SAV_CASCADE_ZOOM if zoom is None else zoom),
+                     min_lines=int(K.SAV_CASCADE_MIN if min_lines is None else min_lines))
     vd = None if c is None else c['verdict']
     why.append(('the ws1Mage target-side extrema anchor', U(cb[0]),
                 'ws1Mage %.4f, %d s before the stamp' % (float(MG[1][cb[0]]), (route - cb[0]) * 5)))

@@ -1140,6 +1140,25 @@ FDM_X10_TRADE_PCT = _knob('FDM_X10_TRADE_PCT', 50.0)   # the grace walk's rev-tr
 #   threshold with no knob cannot be moved without an edit.
 FDM_X10_GRACE_MIN = _knob('FDM_X10_GRACE_MIN', 5.0)    # the grace walk's length, minutes.
 #   HIS VALUE, his *"we add a 5 minute walk"*. 5.0 min = 60 bars at the 5 s grid. THE KNOB IS MINE.
+#   ── fdm2's OWN v4saviour SETTINGS, banked 1103 ────────────────────────────────────────────────
+#   HIS 1103: *"bank the config that produced branch B at 1404 and wire it into the sandbox"*.
+#   THEY ARE fdm2's OWN KNOBS, NOT THE SAV_* ONES. v4_machine.py and v4_sig_saviour.py read
+#   SAV_CASCADE_MIN 4 and SAV_CASCADE_ZOOM 2, so moving those defaults would move the live
+#   octo-v4 machine. Same reason FDM_RE_GATE_FNC is separate from RMOM_FNC.
+FDM_SAV_ON = _knob('FDM_SAV_ON', 1, int)        # 1 wires v4saviour into fdm2's leg walk.
+FDM_SAV_READ = os.environ.get('W_V4_FDM_SAV_READ', 'emerging')   # 'emerging' | 'chart'
+#   HIS *"use emerging values, at the emerging ws1Mage extermum"*. At 'emerging' the r fences, the
+#   lift-off and the Mage ladder all read the emerging set and the extremum sampler takes no seam
+#   lattice, because an emerging line steps on every 5 s bar.
+FDM_SAV_TF_HI = _knob('FDM_SAV_TF_HI', 3, int)  # the cascade ladder's top rung. His *"ws1-3"*.
+FDM_SAV_MIN = _knob('FDM_SAV_MIN', 3, int)      # lines a cluster must cover. 3 of the 3-line ladder.
+FDM_SAV_ZOOM = _knob('FDM_SAV_ZOOM', 2, int)    # rungs each cluster step compares across.
+#   MIN 3 WITH ZOOM 2 IS THE PAIR THAT FIRED. Measured on the 2026-09-15 13:56:10 LONG: min 3
+#   zoom 2 reverses at 14:04:05 off branch B; min 4 zoom 2, min 4 zoom 1 and min 3 zoom 1 all
+#   stay open. At zoom 1 the ws2->ws3 step is +1.6574 and breaks the low cluster; zoom 2 compares
+#   ws1 against ws3 directly at -17.4088.
+FDM_SAV_ARM = _knob('FDM_SAV_ARM', 0, int)      # 0 drops the ws5r walkback arm. His *"remove the
+#   armed gate"*. At 0 ws5r is not read at all.
 FDM_MAE_CAP = _knob('FDM_MAE_CAP', 1.1)         # the stop, percent adverse from the open.
 #   HIS 1103 *"add the typical mae1.1 stop"* AND *"yes, move it to default"*. ON, always applied -
 #   unlike LIN2_MAE_CAP 1.1, which stayed behind W_MAE_CAP=on in lineage2's sealed driver.
@@ -1423,6 +1442,12 @@ RULED = {
     'FDM_X10_TRADE_PCT': (50.0, 'HIS VALUE ">=50%". The knob is mine - a stated threshold with no knob cannot be moved without an edit'),
     'FDM_X10_GRACE_MIN': (5.0, 'HIS VALUE "we add a 5 minute walk". The knob is mine. 5.0 min = 60 bars at the 5 s grid'),
     'FDM_MAE_CAP': (1.1, 'HIS 1103 "add the typical mae1.1 stop" + "yes, move it to default". ALWAYS ON, unlike LIN2_MAE_CAP which stayed behind W_MAE_CAP=on'),
+    'FDM_SAV_ON': (1, 'HIS 1103 "wire it into the sandbox" - v4saviour runs on every fdm2 leg'),
+    'FDM_SAV_READ': ('emerging', 'HIS 1103 "use emerging values, at the emerging ws1Mage extermum". "chart" is the other arm'),
+    'FDM_SAV_TF_HI': (3, 'HIS 1103 "reduce the cascade to ws1-3". fdm2\'s own knob, not SAV_CASCADE_TF_HI, so the live machine keeps 12'),
+    'FDM_SAV_MIN': (3, 'HIS 1103 "SAV_CASCADE_MIN 4 -> 3" - the arm that fired branch B at 2026-09-15 14:04:05. fdm2\'s own knob; SAV_CASCADE_MIN stays 4 for the live machine'),
+    'FDM_SAV_ZOOM': (2, 'UNCHANGED FROM THE SHARED VALUE but held separately. Measured: at zoom 1 the 1356 LONG stays open at either min, because the ws2->ws3 step +1.6574 breaks the low cluster'),
+    'FDM_SAV_ARM': (0, 'HIS 1103 "remove the armed gate". At 0 the ws5r walkback is skipped and ws5r is not read'),
     'LIN2_CP_LIFT': ('closed_prev', 'BANKED 1101 - "lift-off needs a close-p mode - it only reacts to full 1 minute bars". The t1 ws1r reversal BARS; it REVISES his earlier "keeping the lift-off on emerging" and gives up the 0445 reversals. _rev_pairs is not routed'),
     'LIN2_CP_WS1R': ('closed_prev', 'BANKED 1101 - "change ws1r to closed-p". The t1 r gate\'s VALUE read only; the reversal BARS stay emerging'),
     'LIN2_CP_GCWS30B': ('closed_prev', 'BANKED 1101 on his "yes" to routing gcws30b. It moves the t1 cadence AND the arm race - both read CL[\'g30b\']. "emerging" is the other arm'),

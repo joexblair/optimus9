@@ -110,6 +110,7 @@ def load():
         X10=np.asarray(ln.line('ws10x'), float),            # emerging, his fallback's own ruling
         M10=np.asarray(CP.series(MGE[10], 600), float),
         MGE={t: np.asarray(MGE[t], float) for t in MGE},
+        SEAM60=CP.seam_bars(60),
         G30B=np.asarray(LL._g30b(), float),
         close=close, phi=phi, plo=plo)
 
@@ -491,6 +492,52 @@ def walk(LN, side, opn, B):
     return None, rows
 
 
+def saviour(LN, side, opn):
+    """v4saviour on one fdm2 leg, with fdm2's own banked settings. -> (the signal bar, the why rows)
+
+    -> (None, rows) when it does not fire.
+
+    HIS 1103: *"bank the config that produced branch B at 1404 and wire it into the sandbox"*. The
+    settings are fdm2's own knobs, because v4_machine.py reads SAV_CASCADE_MIN 4 and
+    SAV_CASCADE_ZOOM 2 and moving those would move the live octo-v4 machine.
+
+      FDM_SAV_READ 'emerging'   every read is the emerging set and the extremum sampler takes no
+                                seam lattice, because an emerging line steps on every 5 s bar
+      FDM_SAV_TF_HI 3          the cascade ladder is ws1..ws3
+      FDM_SAV_MIN 3            a cluster must cover 3 of those 3
+      FDM_SAV_ZOOM 2           each cluster step compares across 2 rungs
+      FDM_SAV_ARM 0            the ws5r walkback is skipped, so ws5r is not read
+
+    THE RETURNED BAR IS A SIGNAL, NOT THE CLOSE. v4saviour's own accounting puts the close at its
+    `fill` and the re-open at `fill + 1` - one bar for both. fdm2's router spends TWO: close at
+    signal + 1, open at signal + 2. So `fill`, which is the ib cross bar and knowable there, is
+    handed back as a SIGNAL and the router does the rest. THAT IS MY READING of the two rules
+    meeting, and it keeps every fdm2 exit on one accounting.
+
+    ONCE PER TRADE has its owner here: `legs` calls this once per leg, which is his #32 with the
+    trade mech holding it.
+    """
+    import v4_saviour as SAV
+    em = str(K.FDM_SAV_READ) == 'emerging'
+    R = {t: (LN['EMR'][t] if em else LN['CPR'][t]) for t in (1, 2, 5)}
+    RE = R if em else {t: LN['EMR'][t] for t in (1, 2, 5)}
+    MG = {t: (LN['MGE'][t] if em else LN['CPM'][t]) for t in range(1, 13)}
+    sb = None if em else LN['SEAM60']
+    v = SAV.walk(int(opn), int(side), R, MG, ln.U, RE=RE, arm=bool(int(K.FDM_SAV_ARM)),
+                 tf_hi=int(K.FDM_SAV_TF_HI), anchor='ws1mage', sample_bars=sb,
+                 min_lines=int(K.FDM_SAV_MIN), zoom=int(K.FDM_SAV_ZOOM))
+    rows = [dict(bar=int(opn), stage='SAVIOUR ' + str(v['verdict']),
+                 why=' | '.join('%s @ %s: %s' % (a2, b2, c2) for a2, b2, c2 in v['why']))]
+    if v.get('fill') is None:
+        return None, rows
+    f = int(v['fill'])
+    assert f >= int(opn), 'a saviour signal precedes its own leg open'
+    rows[0]['bar'] = f
+    rows[0]['why'] = ('v4saviour %s from %s | %s'
+                      % (v['verdict'], v.get('from_line', '-'), rows[0]['why']))
+    return f, rows
+
+
 def stop_bar(LN, opn, ex, side, cap):
     """The first bar the adverse excursion reaches `cap`. -> bar or None. Walked, not inferred.
 
@@ -540,7 +587,18 @@ def legs(LN, open_at, B, resig=None, cap=None):
         #   A TIE GOES TO THE STOP: the stop is a price event AT bar t, while a rev-trade signal at
         #   bar t does not close until t+1. That convention is MINE and it is stated here.
         stopped = stop_bar(LN, opn, int(B), side, cap) if cap > 0 else None
-        sig, rows = walk(LN, side, opn, int(stopped) if stopped is not None else int(B))
+        bound = int(stopped) if stopped is not None else int(B)
+        sig, rows = walk(LN, side, opn, bound)
+        #   v4saviour, WIRED IN. THE EARLIEST SIGNAL WINS, which needs no priority rule: a walk
+        #   forward meets whichever comes first. His #31 *"v4saviour priority"* was about
+        #   v4-lineage's structure; here chronology settles it, and THAT IS MY READING.
+        #   The saviour's own cap is 16 min from the open, so it can only ever fire early in a leg.
+        src_sig = 'rev-trade'
+        svrows = []
+        if int(K.FDM_SAV_ON):
+            sv, svrows = saviour(LN, side, opn)
+            if sv is not None and int(sv) <= bound and (sig is None or int(sv) < int(sig)):
+                sig, src_sig = int(sv), 'saviour'
         #   THE ROUTER'S CLOSE+OPEN ARM: the signal's close price bar is s+1 and the next open is
         #   s+2. His *"if it's close then open, consume 2 bars"*.
         if stopped is not None and (sig is None or int(sig) + 1 >= int(stopped)):
@@ -558,6 +616,12 @@ def legs(LN, open_at, B, resig=None, cap=None):
                      ln.U(int(sig)) if sig is not None else '-', ln.U(ex),
                      ln.U(int(rows[-1]['bar'])) + ' ' + str(rows[-1]['stage']) if rows else '-',
                      len(rows)))
+        #   EVERY ROW IS FILTERED BY THE LEG'S OWN EXIT, and only once `ex` is known. Filtering
+        #   against the walk's `bound` instead let a saviour row at a bar between sig+1 and the
+        #   stop through, and the 'a decision row is past the leg's exit' assert caught it on
+        #   2026-08-03.
+        rows = sorted([r for r in list(rows) + list(svrows) if int(r['bar']) <= ex],
+                      key=lambda r: int(r['bar']))
         assert sig is None or int(sig) + 1 <= ex, 'a leg reports a signal after its own exit'
         assert not rows or int(rows[-1]['bar']) <= ex, 'a decision row is past the leg\'s exit'
         assert ex >= opn, 'a leg exits before it opens'
@@ -571,7 +635,7 @@ def legs(LN, open_at, B, resig=None, cap=None):
         out.append(dict(
             opn=opn, side=side, src=src, sig=sig, exit=ex, rows=rows,
             ctype=('STOP at %.2f%%' % cap) if stopped is not None
-                  else ('rev-trade' if sig is not None else 'no rev-trade before the walk\'s end'),
+                  else (src_sig if sig is not None else 'no rev-trade before the walk\'s end'),
             mae=min(abs(side * (ap - o) / o * 100.0), cap) if cap > 0
                 else abs(side * (ap - o) / o * 100.0),
             mfe=side * (vp - o) / o * 100.0,
