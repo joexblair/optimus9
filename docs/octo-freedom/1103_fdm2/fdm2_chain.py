@@ -143,7 +143,10 @@ if os.environ.get('W_FDM2_VERIFY') == 'on':
                 n += 1
         return n
 
-    HIS = [('0702', '2026-08-03 07:02:00', '2026-08-03 10:08:00', None),
+    #   0702's SIDE IS HIS, 1103: *"0702 is a low side LONG, so 07:12:20 is the banked trade
+    #   timestamp"*. It ran both sides before, because the first trade of the day has no prior
+    #   trade to take a side from. The HIGH row and its 09:33:10 rev-trade are not his trade.
+    HIS = [('0702', '2026-08-03 07:02:00', '2026-08-03 10:08:00', -1),
            ('1008', '2026-08-03 10:08:00', '2026-08-03 13:15:00', +1),
            ('1315', '2026-08-03 13:15:00', '2026-08-03 14:06:00', -1),
            ('1406', '2026-08-03 14:06:00', '2026-08-03 16:44:00', +1),
