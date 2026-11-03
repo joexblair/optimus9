@@ -1094,7 +1094,8 @@ FDM_RE_GATE_FNC = _knob('FDM_RE_GATE_FNC', 75.0)  # the gate's fence on ws1r/ws2
 #   ── fdm2, HIS 1103 MACHINE ────────────────────────────────────────────────────────────────────
 #   The bimodal walk-or-rev-trade decision REPLACED the old fdm-cadence body: *"yes, but don't
 #   delete the fdm work.  let's call this sandbox `fdm2`"*. The old body is untouched in
-#   1103_fdm/ and in fdm_spec_VERBATIM.md; nothing of it is read by these knobs.
+#   1103_fdm/; nothing of it is read by these knobs, and his offline spec notes are out of the
+#   sandbox entirely - his *"theses fdm_spec notes have no place"*.
 FDM_FNC_2080 = _knob('FDM_FNC_2080', 20.0)      # HIS NAME 'fdm-20-80-fnc'. 20 -> (20.0, 80.0).
 #   "ex" INCLUDES oob, his standing rule, so the test is r <= 20 low / r >= 80 high.
 FDM_M3_FNC = _knob('FDM_M3_FNC', 25.0)          # ws3Mage's own fence in the preamble, 25 -> 25/75.
@@ -1389,7 +1390,7 @@ RULED = {
     'FDM_RE_IB_XWOB': (1, 'HIS 1102 bank - the window closes on the ib cross BAR, which is 2026-08-03 00:41:30: "00:41:30 is my view also". A hold would move the fire later'),
     'FDM_RE_GATE_FNC': (75.0, 'HIS 1102 "ex v4mom fence" for the ws1r AND (ws2r or ws3r) gate. Same value as RMOM_FNC, its own knob so the two can move apart'),
     'FDM_FNC_2080': (20.0, 'HIS OWN KNOB NAME, "fdm-20-80-fnc", at his own value. Both the step-1 test and the reversal population read it; "ex" includes oob'),
-    'FDM_M3_FNC': (25.0, 'HIS 1103 "ws3Mage using 25/75 is valid". The knob name is mine; the value is his'),
+    'FDM_M3_FNC': (25.0, 'HIS 1103 "ws3Mage is settled on 25/75". The knob name is mine; the value is his'),
     'FDM_POP_LO': (3, 'HIS 1103 "ws3 to ws30 for both the cadence and the ws10x-cadence". The top comes from L2_MOM_MAXTF 30, not from a second knob'),
     'FDM_STEP1_ABOVE_TF': (3, 'HIS 1103 "above in timeframe" - step 1 scans ws4..ws30. STRICTLY above, so this knob is the excluded rung, not the floor'),
     'FDM_X10_WOB': (24, 'HIS 1103 RULING "now that we have the grade period, we can leverage a smaller wob: use 24". 36 is the other arm, from his own 1841 example'),

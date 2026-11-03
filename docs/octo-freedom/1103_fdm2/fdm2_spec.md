@@ -1,8 +1,11 @@
 # fdm2 - the machine as he ruled it on 1103
 
 HIS NAMING. *"yes, but don't delete the fdm work. let's call this sandbox `fdm2`"*. The old
-`fdm-cadence` body stays untouched in `1103_fdm/` and in `fdm_spec_VERBATIM.md` as the record.
-This file carries ONLY the machine that replaced it. Nothing from the old body is folded in.
+`fdm-cadence` body stays untouched in `1103_fdm/`. This file carries ONLY the machine that replaced
+it. Nothing from the old body is folded in.
+
+HIS OFFLINE SPEC NOTES ARE OUT OF THE SANDBOX. *"we're building in a sandbox presently - so theses
+fdm_spec notes have no place"*. Every line below is cited to HIM, from chat, not to a notes file.
 
 WHAT THE OLD BODY GAVE UP ITS PLACE TO. His six answers, verbatim:
 
@@ -106,7 +109,7 @@ if the ws10x-cadence fires first
 ## THE CADENCE PREAMBLE, AS IT NOW STANDS
 
 HIS 1103 CORRECTION: *"ws1r, ws2r, ws3r are all qualifying lines"*, with the fdm line he handed
-over beside it - `fdm_spec_VERBATIM.md:8-9`:
+over beside it - *"add this (from fdm) to our sandbox"*:
 
     cadence windows open when ws1r or ws2r or ws3r oob AND are nestled inside of ws1Mage or
     ws2Mage at any time during ws1Mage/ws2Mage's oob excursion
@@ -137,9 +140,9 @@ answers - 1644 LOW had 1.95 h with no decision point, and the fallback is ruled 
 | his ruling | what it closes |
 |---|---|
 | *"ws1Mage and ws2Mage oob's job is to nestle ws1,2,3r"* | the Mage lines do not anchor the window. The excursion is ws1b's, his 1103 revised preamble, and that is what the code reads |
-| *"we're on closed-prev bars so they always return to ib on the same 1min bar"* | `fdm_spec_VERBATIM.md:10`'s *"cadence events fire when the cadence window closes"* and the preamble's *"ws1b to ib"* are the SAME bar. Nothing to choose |
+| *"we're on closed-prev bars so they always return to ib on the same 1min bar"* | the window's close and the preamble's *"ws1b to ib"* are the SAME bar. Nothing to choose |
 | *"the real reason why I use ws1b is this: gcws30b swings with more force than gcws30Mage, so it prints ex-5/95-fence excursions that are meaningful. this was useful to us in a previous build, so I'm holding on to it in case I need it again"* | why the b line, not the Mage. His reason, kept here so it is not re-litigated |
-| *"ws3Mage is settled on 25/75"* | `FDM_M3_FNC` 25.0. The 20/80 at `fdm_spec_VERBATIM.md:13` belongs to a different role in the old body |
+| *"ws3Mage is settled on 25/75"* | `FDM_M3_FNC` 25.0. The 20/80 reading of ws3Mage belonged to the old body and is not in the sandbox |
 
 HIS VERBATIM ws1b LINES, all of them:
 
@@ -149,30 +152,22 @@ HIS VERBATIM ws1b LINES, all of them:
 | same | *"-ws1Mage, ws1b, ws1r are all oob at some time during ws1b's oob excursion"* |
 | same | *"-ws3Mage must be ex 25/75 fence while ws1b is oob"* |
 | same | *"--this cadence event can only be tested on target-side"* |
-| `fdm_spec_VERBATIM.md:22` | *"------walk forward until ws1b is ib or is already ib"* |
-| `fdm_spec_1102.md:23` | *"------walk forward until ws1b is ib ELSE walk forward until gcws30b is ib"* |
 
-## THE SIDE IS THE INCOMING TRADE'S - HIS 1103 RULE
+Those four lines are his whole ws1b spec for the sandbox. The two further ws1b lines in his offline
+notes belong to the old body's walk-until and are not read here.
 
-*"we're talking about the same rev-trade, but from different perspectives. I see that I'm confusing
-the mech by refering to the 'outgoing' trade. from now on, I'll only refer to the 'incoming' trade,
-which matches your banked 'SHORT hunts the low oob'. completely delete my 'low side long'
-statement"*.
+## HIS INCOMING-ONLY RULE IS CONVERSATIONAL, NOT A SPEC CHANGE
 
-THE "low side LONG" STATEMENT IS DELETED. 0702 is a LONG, a LONG hunts the HIGH oob, and its
-target side is HIGH. The 07:12:20 that came with that statement goes with it.
+*"from now on, I'll only refer to the 'incoming' trade, which matches your banked 'SHORT hunts the
+low oob'"* / *"completely delete my 'low side long' statement"* / **and then**: *"that was a rule
+for me to adhere to - not for the code or the spec"*.
 
-WHAT IT CORRECTED IN THE VERIFICATION. Each row's span was the INCOMING trade's lifetime while
-its side column held the OUTGOING trade's target - the trade being closed at the span's start.
-They disagreed on every row, so a COUNTER-side cadence was being tested against his own
-*"this cadence event can only be tested on target-side"*.
+NOTHING IN THE MECH MOVES. The side at a cadence event stays the OUTGOING trade's target - the
+trade being closed - which is what the verification table has always used and what reproduced his
+own six trade times at +1.0 min each.
 
-`v4_fdm2.legs` WAS NEVER WRONG - it takes side from `SG.target_side(SG.direction(...))`, the live
-trade's own. Only the verification table carried the outgoing framing, and the first leg's walk
-from 2026-08-03 00:41:30 is unaffected.
-
-HIS OWN 1841 AND 1012 READS WERE MADE IN THE OUTGOING FRAME he is now retiring - his *"if you
-pretend to be the LONG heading towards 1841"* is that frame exactly - so they do not carry over.
+THE "low side LONG" STATEMENT IS DELETED, and with it the only thing that set 0702's side. The
+day's first trade has no prior trade to take a side from, so it runs BOTH sides again.
 
 ## OPEN - WHAT THE BUILD SURFACED
 

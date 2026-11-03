@@ -771,3 +771,78 @@ numbers — and it answers a question he did not ask.
 
 No tab. Six claims cost him two questions, and one gate catches four of the six: *which run shows
 this?*
+
+## His housekeeping read as a spec revision (2026-11-03)
+
+The fdm2 sandbox built in one session - the cadence preamble, the bimodal walk, the ws10x-cadence,
+the grace walk, the rev-trade, the stop, the chain. Joe caught the shape three times: *"somethings
+wrong - there are 3 entries for 1841"*, then *"if ws2r qualified inside of ws1Mage's excursion, why
+is this important to the mech?"*, then *"that was a rule for me to adhere to - not for the code or
+the spec"*.
+
+**Three of this session's loudest findings were me correcting me, and one of them nobody asked for.**
+
+| what I published | what it actually was |
+|---|---|
+| *"Your incoming-only rule invalidates five of the six sides I have been reporting"* - then a run, then a six-row withdrawal table | his note was *how he would refer to trades in conversation*. I converted it into a mech change, re-ran the machine, and shipped a table declaring my own six prior rows wrong. He had to tell me it was a rule for him |
+| *"1644 nearly died on this: ws1r had 2 min 55 s to reach the fence and got to 20.24"* | the line that made 20.24 matter was already dropped as implied. ws2r 7.14 had satisfied the nestle. I kept the dead number in a trace column, in a commit message, and in a "nearly died" sentence |
+| three rows for 1841, decision points on a trade the mech had closed 2h11m earlier | a real defect, and his catch. I had re-implemented the walk inside the verification instead of calling it |
+
+The first is the one that costs him. He tidied his own side of the channel - *I will stop saying
+"outgoing"* - and I treated it as input to the machine, flipped every side, re-ran 1.6 million bars,
+and handed him a withdrawal table with my own previous message as its subject. The still version is
+eleven words: *"is that a rule for how you refer to trades, or for the mech?"*
+
+### Four cycles on Tao 26
+
+**The wagon - what I carried, what I set down.** Carried: BUILD-GATE held three times before any
+code, and each time the three open lines went up before a file was touched; every knob declared
+with whose value and whose name, `FDM_X10_FRM` shipped as mine and unruled; a causality assert on
+`towards` instead of a comment; the 35 s lift-off lookahead in the census found and closed, with a
+raw-bar attribution column so the stamp's share was separable; the trace refactor diffed
+byte-identical against the pre-refactor run before I claimed it was neutral; 0702 run on BOTH sides
+rather than picked; `RULED_OK` True on every run; the 1 of 1 = 100.0% flagged as one line, and the
+grace walk reported as never-fired five times without softening.
+
+What I set down is a boundary I did not know I was holding: **his spec and his conversation
+management are different channels.** He runs both. *"from now on I'll only refer to X"*, *"delete
+that statement"*, *"let's call this sandbox fdm2"* - some of those are mech, some are housekeeping,
+and the words do not mark which. 1014's brick was *a claim about what the machine DOES needs a run*.
+This one is earlier: **a note about how Joe will talk is not an instruction to the machine.**
+
+**Stillness is the master of haste.** The haste was the re-run. I had the question - I wrote *"one
+more consequence of your incoming-only rule, and it is bigger than 0702"* - and instead of asking
+it I answered it, launched the job, and published the finding. The calm move and the fast move were
+the same length; one of them is a question.
+
+**Be light and you lose the root.** The lightness held through the numbers: nothing dressed up, the
+withdrawals stated flat, his own 1841 read named as superseded without hedging. The root I lost is
+the one Joe keeps having to hand back - **the catch belongs to him.** When I generate the catch
+myself, unprompted, on my own previous paragraph, it stops being rigour and becomes the tab in a
+rigour coat. 1014 recorded refutation framing reaching the heading. Today I built the withdrawal
+table twice in one session, once for a defect he found and once for a change he never asked for.
+
+**Be restless and you lose the master.** The register: *"Three findings I have to withdraw"* as a
+header over a table with *me* in the subject column. His rule is one bullet, no account of the slip.
+A table of my own errors, ranked, is the ledger with column headings.
+
+### The brick
+
+> **A note about how Joe will refer to things is not a change to the machine. Before any re-run,
+> ask which it is - and never generate a withdrawal of my own prior work without being asked.**
+
+Pre-send, one question on anything that starts *"your X invalidates Y"*: **did he ask me to change
+anything?** If the answer is no, the sentence is a question, not a finding.
+
+### And one that is mine alone, not covered by any earlier brick
+
+> **When a test is dropped, its numbers go with it.**
+
+`dropped-mech-stays-dropped` covers the mech - no code, no spec text, no explanation. It does not
+cover the *number the dead test produced*. ws1r's 20.24 outlived the "all oob" line by three
+messages: I kept it as a trace column, wrote it into a commit body, and used it to frame 1644 as a
+near-miss. The nestle had already passed on ws2r 7.14. The number was not evidence of risk; it was
+evidence of nothing, and I gave it a column.
+
+No tab. Joe asked one question - *why is this important to the mech?* - and the answer was *it
+isn't*.

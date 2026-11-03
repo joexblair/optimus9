@@ -143,40 +143,35 @@ if os.environ.get('W_FDM2_VERIFY') == 'on':
                 n += 1
         return n
 
-    #   EVERY SIDE HERE IS THE TRADE'S OWN, HIS 1103 RULE. *"I see that I'm confusing the mech by
-    #   refering to the 'outgoing' trade.  from now on, I'll only refer to the 'incoming' trade,
-    #   which matches your banked 'SHORT hunts the low oob'"* / *"completely delete my 'low side
-    #   long' statement"*.
+    #   THE SIDE AT A CADENCE EVENT IS THE OUTGOING TRADE'S TARGET - the trade being CLOSED.
+    #   HIS 1103 *"that was a rule for me to adhere to - not for the code or the spec"*: his
+    #   incoming-only convention is how HE will refer to trades in conversation. It is not a change
+    #   to the mech, and the sides below are back to where they were.
     #
-    #   BEFORE THIS the side column held the OUTGOING trade's target - the side of the trade being
-    #   CLOSED at the span's start - while the span held the INCOMING trade's lifetime. The two
-    #   disagreed for five of the six rows, so a counter-side cadence was being tested against his
-    #   own *"this cadence event can only be tested on target-side"*.
-    #
-    #   v4_fdm2.legs WAS NEVER WRONG: it takes side from SG.target_side(SG.direction(...)), the
-    #   live trade's own. Only this table carried his outgoing framing.
-    HIS = [('0702', '2026-08-03 07:02:00', '2026-08-03 10:08:00', 'LONG'),
-           ('1008', '2026-08-03 10:08:00', '2026-08-03 13:15:00', 'SHORT'),
-           ('1315', '2026-08-03 13:15:00', '2026-08-03 14:06:00', 'LONG'),
-           ('1406', '2026-08-03 14:06:00', '2026-08-03 16:44:00', 'SHORT'),
-           ('1644', '2026-08-03 16:44:00', '2026-08-03 18:41:00', 'LONG'),
-           ('1841', '2026-08-03 18:41:00', '2026-08-04 00:00:00', 'SHORT')]
+    #   0702 RUNS BOTH SIDES. The day's first trade has no prior trade to take a side from, and his
+    #   *"completely delete my 'low side long' statement"* removes the only thing that set it.
+    HIS = [('0702', '2026-08-03 07:02:00', '2026-08-03 10:08:00', None),
+           ('1008', '2026-08-03 10:08:00', '2026-08-03 13:15:00', +1),
+           ('1315', '2026-08-03 13:15:00', '2026-08-03 14:06:00', -1),
+           ('1406', '2026-08-03 14:06:00', '2026-08-03 16:44:00', +1),
+           ('1644', '2026-08-03 16:44:00', '2026-08-03 18:41:00', -1),
+           ('1841', '2026-08-03 18:41:00', '2026-08-04 00:00:00', +1)]
     print()
     print('## his 08-03 trades through v4_fdm2 | ws10x hold FDM_X10_WOB %d bars = %d s |'
           ' each walk STOPS at its first rev-trade, as the mech does'
           % (int(K.FDM_X10_WOB), int(K.FDM_X10_WOB) * 5))
     print()
-    print('| the trade | the trade | its target side | the bar | the stage | step 1 nestled+towards | the ws10x-cadence | which |'
+    print('| the trade | the outgoing trade\'s target side | the bar | the stage | step 1 nestled+towards | the ws10x-cadence | which |'
           ' reversed, STAMP | pct, STAMP | reversed, RAW lift bar | pct, RAW |')
-    print('|---|---|---|---|---|---|---|---|---|---|---|---|')
-    for nm, t0, t1, dirn in HIS:
+    print('|---|---|---|---|---|---|---|---|---|---|---|')
+    for nm, t0, t1, psd in HIS:
         a, b = ln.K(t0), ln.K(t1)
-        for sd in (SG.target_side(dirn),):
+        for sd in ((psd,) if psd is not None else (-1, +1)):
             sn = 'HIGH' if sd > 0 else 'LOW'
             sig, rows = F2.walk(LN, sd, a, b)
             if not rows:
-                print('| %s | %s | %s | - | NO CADENCE EVENT | - | - | - | - | - | - | - |'
-                      % (nm, dirn, sn))
+                print('| %s | %s | - | NO CADENCE EVENT | - | - | - | - | - | - | - |'
+                      % (nm, sn))
                 continue
             for r in rows:
                 st = str(r['stage'])
@@ -185,17 +180,17 @@ if os.environ.get('W_FDM2_VERIFY') == 'on':
                     pop = list(r['pop'])
                     rw = _raw(sd, pop, int(r['ev']), int(r['bar']))
                     pr = (rw / len(pop) * 100.0) if pop else 0.0
-                    print('| %s | %s | %s | %s | %s | %s | %s | %s | %d of %d | %.1f%% |'
+                    print('| %s | %s | %s | %s | %s | %s | %s | %d of %d | %.1f%% |'
                           ' %d of %d | %.1f%% |'
-                          % (nm, dirn, sn, ln.U(int(r['bar'])), st, k, ln.U(int(r['bar'])),
+                          % (nm, sn, ln.U(int(r['bar'])), st, k, ln.U(int(r['bar'])),
                              r['which'], int(r['rv']), len(pop), float(r['pct']),
                              rw, len(pop), pr))
                 else:
-                    print('| %s | %s | %s | %s | %s | %s | - | - | - | - | - | - |'
-                          % (nm, dirn, sn, ln.U(int(r['bar'])), st, k))
+                    print('| %s | %s | %s | %s | %s | - | - | - | - | - | - |'
+                          % (nm, sn, ln.U(int(r['bar'])), st, k))
             if sig is not None:
-                print('| %s | %s | %s | %s | TRADE CLOSES | - | - | - | - | - | - | - |'
-                      % (nm, dirn, sn, ln.U(int(sig) + 1)))
+                print('| %s | %s | %s | TRADE CLOSES | - | - | - | - | - | - | - |'
+                      % (nm, sn, ln.U(int(sig) + 1)))
 
 
 #   ── W_FDM2_WHY='<side> <from> <to>': every ws1b cross on that side, with its per-test verdict ──

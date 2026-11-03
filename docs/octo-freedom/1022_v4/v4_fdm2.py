@@ -3,8 +3,9 @@
 WHAT THIS REPLACED, and what it did NOT delete. His 1103 answer to "does today's bimodal logic
 replace the old fdm-cadence body": *"yes, but don't delete the fdm work.  let's call this sandbox
 `fdm2`"*. The old body - the two-stage level-3 test, the ws2-ws12 upward scan, the blast radius,
-the 10-minute late-ws30r capture - is untouched in docs/octo-freedom/1103_fdm/ and in
-fdm_spec_VERBATIM.md. NOTHING of it is read here.
+the 10-minute late-ws30r capture - is untouched in docs/octo-freedom/1103_fdm/. NOTHING of it is
+read here, and his offline spec notes are out of the sandbox entirely: *"we're building in a sandbox
+presently - so theses fdm_spec notes have no place"*.
 
 NO lineage2. His *"this is a greenfield build - lineage2 has ZERO place in our current work"*.
 `towards` is lifted from v4_lineage2.py:112 with the v4_l2_proxy Board replaced by the array the
@@ -179,9 +180,11 @@ def cadence_events(LN, side, A, B, trace=False):
     rejected 2026-08-03 16:45:00 on ws1r alone, whose deepest reading in that 2m55s excursion was
     20.24 against the 15.0 oob fence while ws2r reached 7.14.
 
-    THE EXCURSION ANCHOR IS ws1b's, his 1103 revision - NOT ws1Mage/ws2Mage's, which is what
-    fdm_spec_VERBATIM.md line 8 anchors the window on. The two are different spans and he has not
-    ruled between them.
+    THE EXCURSION ANCHOR IS ws1b's, SETTLED 1103. His *"ws1Mage and ws2Mage oob's job is to nestle
+    ws1,2,3r"* - the Mage lines do not anchor the window - and his reason for the b line: *"gcws30b
+    swings with more force than gcws30Mage, so it prints ex-5/95-fence excursions that are
+    meaningful"*. On closed-prev ws1Mage and ws1b *"always return to ib on the same 1min bar"*, so
+    the window's close and the ws1b ib cross are one bar.
 
     The event is ws1b's oob->ib cross. Both tests are evaluated over the excursion that ENDS at
     that cross, so every read is at or before the event bar - the assert carries that.
