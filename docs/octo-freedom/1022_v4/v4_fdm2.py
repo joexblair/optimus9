@@ -243,7 +243,12 @@ def cadence_events(LN, side, A, B, trace=False):
 
 #   ── the ws10x-cadence ─────────────────────────────────────────────────────────────────────────
 def x10_cadence(LN, side, frm, B):
-    """The first ws10x race cross strictly after `frm` on `side`. -> (the confirm bar, which)|None.
+    """The first ws10x race cross strictly after `frm` on `side`.
+
+    -> (the confirm bar, which, the cross bar) | None. THE CROSS BAR IS IN THE TUPLE because that
+    is the bar on the chart: his *"I can't see a cadence at 0121"* was 01:21:55, the CONFIRM, while
+    ws10x crossed at 01:20:00 and the 24-bar hold carried it 115 s to the confirm. Only the confirm
+    was being printed.
 
     HIS THREE CANDIDATES: to ib, to ws10r, to ws10Mage - first to confirm wins. Cross OVER on the
     low side, UNDER on the high side, his fallback's own rule and the banked x-cross direction.
@@ -265,7 +270,7 @@ def x10_cadence(LN, side, frm, B):
         if int(s) != int(side) or int(cf) > int(B):
             continue
         if (int(cf) if cf_only else int(c)) > int(frm):
-            hits.append((int(cf), 'ib'))
+            hits.append((int(cf), 'ib', int(c)))
             break
     for nm, other in (('ws10r', R10), ('ws10Mage', M10)):
         for i in range(lo, int(B) + 1):
@@ -282,13 +287,14 @@ def x10_cadence(LN, side, frm, B):
             seg = [(X10[j] < other[j]) if side > 0 else (X10[j] > other[j])
                    for j in range(i, end)]
             if all(seg) and i + w - 1 > int(frm):
-                hits.append((i + w - 1, nm))
+                hits.append((i + w - 1, nm, int(i)))
                 break
     if not hits:
         return None
-    bar, which = min(hits, key=lambda x: x[0])
+    bar, which, cross = min(hits, key=lambda x: x[0])
     assert bar > int(frm), 'a ws10x-cadence is at or before the cadence event it follows'
-    return bar, which
+    assert cross <= bar, 'a ws10x race confirms before it crosses'
+    return bar, which, cross
 
 
 #   ── the bimodal decision's two measures ───────────────────────────────────────────────────────
@@ -398,7 +404,8 @@ def walk(LN, side, opn, B):
         rows.append(dict(bar=ev, stage='WALK', ev=ev, k=k, n=n, why='cadence event, %d of %d lines printing ex-%g/%g'
                          ' AND towards -> walk. %s is first%s'
                          % (k, n, K.FDM_FNC_2080, 100.0 - float(K.FDM_FNC_2080), win,
-                            '' if xb is None else ' (ws10x %s to %s)' % (ln.U(xb), x10[1]))))
+                            '' if xb is None else ' (ws10x crosses to %s %s, the ws10x-cadence'
+                            ' confirms %s)' % (x10[1], ln.U(x10[2]), ln.U(xb)))))
         if win != 'the ws10x-cadence':
             continue
         pop = population(LN, side, opn, xb)
@@ -407,15 +414,21 @@ def walk(LN, side, opn, B):
         pct = (rv / len(pop) * 100.0) if pop else 0.0
         if pct >= t_pct:
             rows.append(dict(bar=xb, stage='REV-TRADE', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
-                             pct=pct, which=x10[1], why='ws10x-cadence to %s, %d of %d reversed '
-                             'since %s (%s) = %.1f%% >= %g%% at the cadence itself'
-                             % (x10[1], rv, len(pop), ln.U(rf), K.FDM_REV_FROM, pct, t_pct)))
+                             pct=pct, which=x10[1], cross=x10[2],
+                             why='the ws10x-cadence - ws10x crossed to %s %s and confirmed here.'
+                             ' %d of %d reversed since %s (%s) = %.1f%% >= %g%% at the'
+                             ' ws10x-cadence bar itself'
+                             % (x10[1], ln.U(x10[2]), rv, len(pop), ln.U(rf), K.FDM_REV_FROM,
+                                pct, t_pct)))
             return xb, rows
         if pct < g_pct:
             rows.append(dict(bar=xb, stage='NO ACTION', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
-                             pct=pct, which=x10[1], why='ws10x-cadence to %s, %d of %d reversed '
-                             'since %s (%s) = %.1f%% < %g%% - no branch, wait for the next cadence'
-                             % (x10[1], rv, len(pop), ln.U(rf), K.FDM_REV_FROM, pct, g_pct)))
+                             pct=pct, which=x10[1], cross=x10[2],
+                             why='the ws10x-cadence - ws10x crossed to %s %s and confirmed here.'
+                             ' %d of %d reversed since %s (%s) = %.1f%% < %g%% - no branch, wait'
+                             ' for the next cadence event'
+                             % (x10[1], ln.U(x10[2]), rv, len(pop), ln.U(rf), K.FDM_REV_FROM,
+                                pct, g_pct)))
             continue
         #   THE GRACE WALK. The clock starts at the ws10x-cadence, the COUNT carries on from its
         #   value there - his *"why would it reset?  the grace fires on a low pct, and the low pct
@@ -425,9 +438,11 @@ def walk(LN, side, opn, B):
         if nxt is not None:
             end = min(end, int(nxt) - 1)
         rows.append(dict(bar=xb, stage='GRACE', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
-                         pct=pct, which=x10[1], why='ws10x-cadence to %s, %d of %d reversed since %s '
-                         '(%s) = %.1f%% >= %g%% -> grace walk %s .. %s, %d bars = %.1f min, population '
-                         'frozen at %d lines' % (x10[1], rv, len(pop), ln.U(rf), K.FDM_REV_FROM, pct, g_pct,
+                         pct=pct, which=x10[1], cross=x10[2],
+                         why='the ws10x-cadence - ws10x crossed to %s %s and confirmed here. %d of'
+                         ' %d reversed since %s (%s) = %.1f%% >= %g%% -> grace walk %s .. %s, %d'
+                         ' bars = %.1f min, population frozen at %d lines'
+                         % (x10[1], ln.U(x10[2]), rv, len(pop), ln.U(rf), K.FDM_REV_FROM, pct, g_pct,
                                                  ln.U(min(int(xb) + 1, int(B))), ln.U(end),
                                                  end - int(xb), (end - int(xb)) * 5 / 60.0,
                                                  len(pop))))
