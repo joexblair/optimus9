@@ -321,19 +321,25 @@ if _S:
     #     arm  False - the ws5r walkback is out, so ws5r is not read at all
     #   v4saviour's own default is still the arm ON with one array for both reads, so v4_machine.py
     #   is untouched.
-    R = {t: LN['CPR'][t] for t in (1, 2)}
-    RE = {t: LN['EMR'][t] for t in (1, 2)}
-    MG = {t: LN['CPM'][t] for t in range(1, 13)}
+    #   HIS 1103 *"use emerging values, at the emerging ws1Mage extermum, and reduce the cascade
+    #   to ws1-3"*. Every read is the EMERGING set now, so R and RE are the same array and the
+    #   chart-matched/lift-off split does not arise. The sampler takes NO seam lattice: an emerging
+    #   line steps on every 5 s bar, so every bar is its own value's bar.
+    SAV_TF_HI = int(os.environ.get('W_FDM2_SAV_TFHI', '3'))
+    R = {t: LN['EMR'][t] for t in (1, 2)}
+    RE = R
+    MG = {t: LN['MGE'][t] for t in range(1, 13)}
     #   THE SAMPLER LANDS ON THE SEAM BARS. His 1103 *"the sampling should match closed-prev, ie
     #   seam-5s"*. ws1Mage is a 60 s line, so its seams are the xx:xx:55 bars, and the array comes
     #   from v4_closed_prev.seam_bars - the same arithmetic that built the closed-prev series.
-    SB = CP.seam_bars(60)
     v = SAV.walk(int(L['opn']), int(L['side']), R, MG, ln.U, RE=RE, arm=False,
-                 tf_hi=6, anchor='ws1mage', sample_bars=SB)
+                 tf_hi=SAV_TF_HI, anchor='ws1mage', sample_bars=None)
     print()
-    print('## v4saviour on the %s %s | target side %s | chart-matched, lift-off emerging, no arm'
+    print('## v4saviour on the %s %s | target side %s | EMERGING reads, the emerging ws1Mage'
+          ' extremum, ws1..ws%d, min %d lines, zoom %d rungs, no arm'
           % (ln.U(L['opn']), 'LONG' if L['side'] > 0 else 'SHORT',
-             'HIGH' if L['side'] > 0 else 'LOW'))
+             'HIGH' if L['side'] > 0 else 'LOW', SAV_TF_HI, int(K.SAV_CASCADE_MIN),
+             int(K.SAV_CASCADE_ZOOM)))
     print()
     print('| the step | the bar | what it read |')
     print('|---|---|---|')
@@ -347,45 +353,24 @@ if _S:
     _AB = [b2 for a2, b2, c2 in v['why'] if a2 in ('the cascade anchor',
                                                    'the ws1Mage target-side extrema anchor')]
     _z = int(K.SAV_CASCADE_ZOOM)
-    for _i, _bar in enumerate(_AB):
+    #   ONE TABLE PER DISTINCT ANCHOR. Branch A's anchor and the route's resolve to the same
+    #   extremum whenever the walk stays inside one of ws1Mage's own steps, and printing it twice
+    #   is noise.
+    for _i, _bar in enumerate(sorted(set(_AB), key=_AB.index)):
         _k = ln.K(_bar)
         print()
-        print('### the ws1..ws6 Mage ladder at %s | zoom %d rungs, a cluster needs %d lines'
-              % (_bar, _z, int(K.SAV_CASCADE_MIN)))
+        print('### the ws1..ws%d Mage ladder at %s | zoom %d rungs, a cluster needs %d lines'
+              % (SAV_TF_HI, _bar, _z, int(K.SAV_CASCADE_MIN)))
         print()
         print('| the line | its value | step to the next rung | step across the zoom to ws%d+ |'
               % _z)
         print('|---|---|---|---|')
-        _v = [float(LN['CPM'][t][_k]) for t in range(1, 7)]
-        for _t in range(1, 7):
-            _n = ('%+.4f' % (_v[_t] - _v[_t - 1])) if _t < 6 else '-'
-            _zz = ('%+.4f' % (_v[_t - 1 + _z] - _v[_t - 1])) if _t - 1 + _z < 6 else '-'
+        _H = SAV_TF_HI
+        _v = [float(LN['MGE'][t][_k]) for t in range(1, _H + 1)]
+        for _t in range(1, _H + 1):
+            _n = ('%+.4f' % (_v[_t] - _v[_t - 1])) if _t < _H else '-'
+            _zz = ('%+.4f' % (_v[_t - 1 + _z] - _v[_t - 1])) if _t - 1 + _z < _H else '-'
             print('| ws%dMage | %.4f | %s | %s |' % (_t, _v[_t - 1], _n, _zz))
-        #   HIS 1103 *"xxxx:05 looks like emerging values. recreate the ladder on closed-prev"*.
-        #   The ladder above IS CPM, the chart-matched set. The anchor bar is off the 1-minute grid
-        #   because mage_cascade_bar's coarse lattice is pinned to the EVENT bar - from the
-        #   14:02:05 cross, SAV_CASCADE_GAP 12 bars = 60 s puts its samples on xx:xx:05. The two
-        #   tables below settle which read produced the numbers: ws1Mage bar by bar on both reads,
-        #   and the same ladder on the emerging set for comparison.
-        print()
-        print('#### ws1Mage bar by bar around the anchor | closed-prev steps on the 1-minute grid')
-        print()
-        print('| the bar | ws1Mage emerging | ws1Mage closed-prev |')
-        print('|---|---|---|')
-        for _b in range(_k - 16, min(_k + 17, B + 1)):
-            print('| %s | %.4f | %.4f |'
-                  % (ln.U(_b), float(LN['MGE'][1][_b]), float(LN['CPM'][1][_b])))
-        print()
-        print('#### the same ladder at %s on the EMERGING set, for comparison only' % _bar)
-        print()
-        print('| the line | its value | step to the next rung | step across the zoom to ws%d+ |'
-              % _z)
-        print('|---|---|---|---|')
-        _e3 = [float(LN['MGE'][t][_k]) for t in range(1, 7)]
-        for _t in range(1, 7):
-            _n = ('%+.4f' % (_e3[_t] - _e3[_t - 1])) if _t < 6 else '-'
-            _zz = ('%+.4f' % (_e3[_t - 1 + _z] - _e3[_t - 1])) if _t - 1 + _z < 6 else '-'
-            print('| ws%dMage | %.4f | %s | %s |' % (_t, _e3[_t - 1], _n, _zz))
     print()
     print('| the verdict | value |')
     print('|---|---|')
