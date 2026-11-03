@@ -143,30 +143,40 @@ if os.environ.get('W_FDM2_VERIFY') == 'on':
                 n += 1
         return n
 
-    #   0702's SIDE IS HIS, 1103: *"0702 is a low side LONG, so 07:12:20 is the banked trade
-    #   timestamp"*. It ran both sides before, because the first trade of the day has no prior
-    #   trade to take a side from. The HIGH row and its 09:33:10 rev-trade are not his trade.
-    HIS = [('0702', '2026-08-03 07:02:00', '2026-08-03 10:08:00', -1),
-           ('1008', '2026-08-03 10:08:00', '2026-08-03 13:15:00', +1),
-           ('1315', '2026-08-03 13:15:00', '2026-08-03 14:06:00', -1),
-           ('1406', '2026-08-03 14:06:00', '2026-08-03 16:44:00', +1),
-           ('1644', '2026-08-03 16:44:00', '2026-08-03 18:41:00', -1),
-           ('1841', '2026-08-03 18:41:00', '2026-08-04 00:00:00', +1)]
+    #   EVERY SIDE HERE IS THE TRADE'S OWN, HIS 1103 RULE. *"I see that I'm confusing the mech by
+    #   refering to the 'outgoing' trade.  from now on, I'll only refer to the 'incoming' trade,
+    #   which matches your banked 'SHORT hunts the low oob'"* / *"completely delete my 'low side
+    #   long' statement"*.
+    #
+    #   BEFORE THIS the side column held the OUTGOING trade's target - the side of the trade being
+    #   CLOSED at the span's start - while the span held the INCOMING trade's lifetime. The two
+    #   disagreed for five of the six rows, so a counter-side cadence was being tested against his
+    #   own *"this cadence event can only be tested on target-side"*.
+    #
+    #   v4_fdm2.legs WAS NEVER WRONG: it takes side from SG.target_side(SG.direction(...)), the
+    #   live trade's own. Only this table carried his outgoing framing.
+    HIS = [('0702', '2026-08-03 07:02:00', '2026-08-03 10:08:00', 'LONG'),
+           ('1008', '2026-08-03 10:08:00', '2026-08-03 13:15:00', 'SHORT'),
+           ('1315', '2026-08-03 13:15:00', '2026-08-03 14:06:00', 'LONG'),
+           ('1406', '2026-08-03 14:06:00', '2026-08-03 16:44:00', 'SHORT'),
+           ('1644', '2026-08-03 16:44:00', '2026-08-03 18:41:00', 'LONG'),
+           ('1841', '2026-08-03 18:41:00', '2026-08-04 00:00:00', 'SHORT')]
     print()
     print('## his 08-03 trades through v4_fdm2 | ws10x hold FDM_X10_WOB %d bars = %d s |'
           ' each walk STOPS at its first rev-trade, as the mech does'
           % (int(K.FDM_X10_WOB), int(K.FDM_X10_WOB) * 5))
     print()
-    print('| the trade | target side | the bar | the stage | step 1 nestled+towards | the ws10x-cadence | which |'
+    print('| the trade | the trade | its target side | the bar | the stage | step 1 nestled+towards | the ws10x-cadence | which |'
           ' reversed, STAMP | pct, STAMP | reversed, RAW lift bar | pct, RAW |')
-    print('|---|---|---|---|---|---|---|---|---|---|---|')
-    for nm, t0, t1, psd in HIS:
+    print('|---|---|---|---|---|---|---|---|---|---|---|---|')
+    for nm, t0, t1, dirn in HIS:
         a, b = ln.K(t0), ln.K(t1)
-        for sd in ((psd,) if psd is not None else (-1, +1)):
+        for sd in (SG.target_side(dirn),):
             sn = 'HIGH' if sd > 0 else 'LOW'
             sig, rows = F2.walk(LN, sd, a, b)
             if not rows:
-                print('| %s | %s | - | NO CADENCE EVENT | - | - | - | - | - | - | - |' % (nm, sn))
+                print('| %s | %s | %s | - | NO CADENCE EVENT | - | - | - | - | - | - | - |'
+                      % (nm, dirn, sn))
                 continue
             for r in rows:
                 st = str(r['stage'])
@@ -175,17 +185,17 @@ if os.environ.get('W_FDM2_VERIFY') == 'on':
                     pop = list(r['pop'])
                     rw = _raw(sd, pop, int(r['ev']), int(r['bar']))
                     pr = (rw / len(pop) * 100.0) if pop else 0.0
-                    print('| %s | %s | %s | %s | %s | %s | %s | %d of %d | %.1f%% | %d of %d |'
-                          ' %.1f%% |'
-                          % (nm, sn, ln.U(int(r['bar'])), st, k, ln.U(int(r['bar'])),
+                    print('| %s | %s | %s | %s | %s | %s | %s | %s | %d of %d | %.1f%% |'
+                          ' %d of %d | %.1f%% |'
+                          % (nm, dirn, sn, ln.U(int(r['bar'])), st, k, ln.U(int(r['bar'])),
                              r['which'], int(r['rv']), len(pop), float(r['pct']),
                              rw, len(pop), pr))
                 else:
-                    print('| %s | %s | %s | %s | %s | - | - | - | - | - | - |'
-                          % (nm, sn, ln.U(int(r['bar'])), st, k))
+                    print('| %s | %s | %s | %s | %s | %s | - | - | - | - | - | - |'
+                          % (nm, dirn, sn, ln.U(int(r['bar'])), st, k))
             if sig is not None:
-                print('| %s | %s | %s | TRADE CLOSES | - | - | - | - | - | - | - |'
-                      % (nm, sn, ln.U(int(sig) + 1)))
+                print('| %s | %s | %s | %s | TRADE CLOSES | - | - | - | - | - | - | - |'
+                      % (nm, dirn, sn, ln.U(int(sig) + 1)))
 
 
 #   ── W_FDM2_WHY='<side> <from> <to>': every ws1b cross on that side, with its per-test verdict ──
@@ -203,9 +213,9 @@ if _W:
           ' test' % ('HIGH' if _sd > 0 else 'LOW', ln.U(_a), ln.U(_b)))
     print()
     print('| the ws1b cross | the cross is in the window | the ws1b excursion | the nestle |'
-          ' ws1r deepest in the excursion | the oob fence | ws3Mage ex-%g/%g | the verdict |'
+          ' ws3Mage ex-%g/%g | the verdict |'
           % (float(K.FDM_M3_FNC), 100.0 - float(K.FDM_M3_FNC)))
-    print('|---|---|---|---|---|---|---|---|')
+    print('|---|---|---|---|---|')
     for t in F2.cadence_events(LN, _sd, _a, _b, trace=True):
         if not (_a <= int(t['cross']) <= _b):
             if t['s0'] is None or int(t['s0']) > _b or int(t['s1']) < _a:
@@ -216,20 +226,11 @@ if _W:
                 'no excursion' if t['s0'] is None else
                 'the nestle - no ws1,2Mage deeper than an oob ws1,2,3r' if t['nestle'] is None
                 else 'ws3Mage never ex-fence')
-        #   ws1r's DEEPEST READING IN THE EXCURSION. It is kept because it is the number that
-        #   rejected 16:45:00 under the "all oob" line his 1103 correction removed.
-        if t['s0'] is None:
-            d1 = float('nan')
-        else:
-            _g = LN['CPR'][1][int(t['s0']):int(t['s1']) + 1]
-            d1 = float(np.nanmax(_g)) if _sd > 0 else float(np.nanmin(_g))
-        print('| %s | %s | %s | %s | %.2f | %s %.1f | %s | %s |'
+        print('| %s | %s | %s | %s | %s | %s |'
               % (ln.U(int(t['cross'])), 'yes' if t['inwin'] else 'NO',
                  '-' if t['s0'] is None else '%s .. %s' % (ln.U(int(t['s0'])),
                                                            ln.U(int(t['s1']))),
                  '-' if t['nestle'] is None else 'ws%dMage %.2f vs ws%dr %.2f at %s'
                  % (t['nestle'][1], t['nestle'][2], t['nestle'][3], t['nestle'][4],
                     ln.U(int(t['nestle'][0]))),
-                 d1, 'at or above' if _sd > 0 else 'at or below',
-                 float(K.OOB_HI) if _sd > 0 else float(K.OOB_LO),
                  'yes' if t['m3'] else 'NO', 'CADENCE EVENT' if ok else fail))

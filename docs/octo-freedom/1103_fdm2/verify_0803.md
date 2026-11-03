@@ -54,22 +54,24 @@
 
 ## his 08-03 trades through v4_fdm2 | ws10x hold FDM_X10_WOB 24 bars = 120 s | each walk STOPS at its first rev-trade, as the mech does
 
-| the trade | target side | the bar | the stage | step 1 nestled+towards | the ws10x-cadence | which | reversed, STAMP | pct, STAMP | reversed, RAW lift bar | pct, RAW |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 0702 | LOW | 2026-08-03 07:03:00 | WALK | 2 of 27 | - | - | - | - | - | - |
-| 0702 | LOW | 2026-08-03 07:12:20 | REV-TRADE | 2 of 27 | 2026-08-03 07:12:20 | ib | 3 of 3 | 100.0% | 3 of 3 | 100.0% |
-| 0702 | LOW | 2026-08-03 07:12:25 | TRADE CLOSES | - | - | - | - | - | - | - |
-| 1008 | HIGH | 2026-08-03 10:09:00 | WALK | 15 of 27 | - | - | - | - | - | - |
-| 1008 | HIGH | 2026-08-03 10:11:55 | NO ACTION | 15 of 27 | 2026-08-03 10:11:55 | ws10Mage | 4 of 18 | 22.2% | 8 of 18 | 44.4% |
-| 1315 | LOW | 2026-08-03 13:16:00 | WALK | 6 of 27 | - | - | - | - | - | - |
-| 1315 | LOW | 2026-08-03 13:18:55 | REV-TRADE | 6 of 27 | 2026-08-03 13:18:55 | ws10Mage | 5 of 6 | 83.3% | 3 of 6 | 50.0% |
-| 1315 | LOW | 2026-08-03 13:19:00 | TRADE CLOSES | - | - | - | - | - | - | - |
-| 1406 | HIGH | 2026-08-03 14:07:00 | WALK | 5 of 27 | - | - | - | - | - | - |
-| 1406 | HIGH | 2026-08-03 14:15:45 | REV-TRADE | 5 of 27 | 2026-08-03 14:15:45 | ib | 8 of 8 | 100.0% | 7 of 8 | 87.5% |
-| 1406 | HIGH | 2026-08-03 14:15:50 | TRADE CLOSES | - | - | - | - | - | - | - |
-| 1644 | LOW | 2026-08-03 16:45:00 | WALK | 7 of 27 | - | - | - | - | - | - |
-| 1644 | LOW | 2026-08-03 16:47:40 | REV-TRADE | 7 of 27 | 2026-08-03 16:47:40 | ws10r | 9 of 10 | 90.0% | 9 of 10 | 90.0% |
-| 1644 | LOW | 2026-08-03 16:47:45 | TRADE CLOSES | - | - | - | - | - | - | - |
-| 1841 | HIGH | 2026-08-03 18:42:00 | WALK | 10 of 27 | - | - | - | - | - | - |
-| 1841 | HIGH | 2026-08-03 18:51:55 | REV-TRADE | 10 of 27 | 2026-08-03 18:51:55 | ws10r | 9 of 12 | 75.0% | 10 of 12 | 83.3% |
-| 1841 | HIGH | 2026-08-03 18:52:00 | TRADE CLOSES | - | - | - | - | - | - | - |
+| the trade | the trade | its target side | the bar | the stage | step 1 nestled+towards | the ws10x-cadence | which | reversed, STAMP | pct, STAMP | reversed, RAW lift bar | pct, RAW |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0702 | LONG | HIGH | 2026-08-03 09:12:00 | WALK | 3 of 27 | - | - | - | - | - | - |
+| 0702 | LONG | HIGH | 2026-08-03 09:33:10 | REV-TRADE | 3 of 27 | 2026-08-03 09:33:10 | ws10Mage | 10 of 11 | 90.9% | 10 of 11 | 90.9% |
+| 0702 | LONG | HIGH | 2026-08-03 09:33:15 | TRADE CLOSES | - | - | - | - | - | - | - |
+| 1008 | SHORT | LOW | 2026-08-03 10:53:00 | WALK | 4 of 27 | - | - | - | - | - | - |
+| 1008 | SHORT | LOW | 2026-08-03 11:20:55 | REV-TRADE | 4 of 27 | 2026-08-03 11:20:55 | ib | 9 of 9 | 100.0% | 9 of 9 | 100.0% |
+| 1008 | SHORT | LOW | 2026-08-03 11:21:00 | TRADE CLOSES | - | - | - | - | - | - | - |
+| 1315 | LONG | HIGH | 2026-08-03 13:25:00 | WALK | 1 of 27 | - | - | - | - | - | - |
+| 1315 | LONG | HIGH | 2026-08-03 13:27:40 | REV-TRADE | 1 of 27 | 2026-08-03 13:27:40 | ib | 1 of 1 | 100.0% | 1 of 1 | 100.0% |
+| 1315 | LONG | HIGH | 2026-08-03 13:27:45 | TRADE CLOSES | - | - | - | - | - | - | - |
+| 1406 | SHORT | LOW | 2026-08-03 15:59:00 | WALK | 5 of 27 | - | - | - | - | - | - |
+| 1406 | SHORT | LOW | 2026-08-03 16:03:20 | REV-TRADE | 5 of 27 | 2026-08-03 16:03:20 | ws10r | 12 of 12 | 100.0% | 10 of 12 | 83.3% |
+| 1406 | SHORT | LOW | 2026-08-03 16:03:25 | TRADE CLOSES | - | - | - | - | - | - | - |
+| 1644 | LONG | HIGH | 2026-08-03 17:17:00 | WALK | 2 of 27 | - | - | - | - | - | - |
+| 1644 | LONG | HIGH | 2026-08-03 17:22:20 | NO ACTION | 2 of 27 | 2026-08-03 17:22:20 | ib | 1 of 3 | 33.3% | 1 of 3 | 33.3% |
+| 1644 | LONG | HIGH | 2026-08-03 18:08:00 | WALK | 6 of 27 | - | - | - | - | - | - |
+| 1644 | LONG | HIGH | 2026-08-03 18:11:00 | WALK | 6 of 27 | - | - | - | - | - | - |
+| 1841 | SHORT | LOW | 2026-08-03 20:13:00 | WALK | 7 of 27 | - | - | - | - | - | - |
+| 1841 | SHORT | LOW | 2026-08-03 20:19:25 | REV-TRADE | 7 of 27 | 2026-08-03 20:19:25 | ws10r | 10 of 14 | 71.4% | 10 of 14 | 71.4% |
+| 1841 | SHORT | LOW | 2026-08-03 20:19:30 | TRADE CLOSES | - | - | - | - | - | - | - |

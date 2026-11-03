@@ -132,19 +132,47 @@ oob fence, while ws2r reached 7.14 and carries the nestle on its own.
 It is the only one of the seven decision paths that moved. It also closes gap C from his own
 answers - 1644 LOW had 1.95 h with no decision point, and the fallback is ruled out of use.
 
-## OPEN - THE EXCURSION ANCHOR
+## THE EXCURSION ANCHOR IS ws1b - SETTLED 1103
 
-| the anchor | the source | what it spans at 16:45:00 |
-|---|---|---|
-| ws1b's oob excursion | his 1103 revised preamble. WHAT THE CODE READS | 16:42:00 .. 16:44:55, 2m55s |
-| ws1Mage / ws2Mage's oob excursion | `fdm_spec_VERBATIM.md:8`, the line he handed over at 1103 | not measured - a different span |
-
-Two further lines hang off it:
-
-| # | the question |
+| his ruling | what it closes |
 |---|---|
-| 7 | `fdm_spec_VERBATIM.md:10` says *"cadence events fire when the cadence window closes"*; the 1103 preamble says the event is ws1b to ib. If the Mage excursion ending is the close, the event bar moves off ws1b entirely |
-| 8 | the spec body carries ws3Mage at **20/80** in a different role (`fdm_spec_VERBATIM.md:13`) while the preamble carries it at 25/75. Two fences for one line are both in play |
+| *"ws1Mage and ws2Mage oob's job is to nestle ws1,2,3r"* | the Mage lines do not anchor the window. The excursion is ws1b's, his 1103 revised preamble, and that is what the code reads |
+| *"we're on closed-prev bars so they always return to ib on the same 1min bar"* | `fdm_spec_VERBATIM.md:10`'s *"cadence events fire when the cadence window closes"* and the preamble's *"ws1b to ib"* are the SAME bar. Nothing to choose |
+| *"the real reason why I use ws1b is this: gcws30b swings with more force than gcws30Mage, so it prints ex-5/95-fence excursions that are meaningful. this was useful to us in a previous build, so I'm holding on to it in case I need it again"* | why the b line, not the Mage. His reason, kept here so it is not re-litigated |
+| *"ws3Mage is settled on 25/75"* | `FDM_M3_FNC` 25.0. The 20/80 at `fdm_spec_VERBATIM.md:13` belongs to a different role in the old body |
+
+HIS VERBATIM ws1b LINES, all of them:
+
+| the source | his line |
+|---|---|
+| his 1103 chat, transcribed in `1103_fdm/fdm_cadence_census.py` | *"a cadence event prints on ws1b to ib, IF ws1,2Mage was more deeply oob (further away from 50) than ws1,2,3r during ws1b's oob excursion"* |
+| same | *"-ws1Mage, ws1b, ws1r are all oob at some time during ws1b's oob excursion"* |
+| same | *"-ws3Mage must be ex 25/75 fence while ws1b is oob"* |
+| same | *"--this cadence event can only be tested on target-side"* |
+| `fdm_spec_VERBATIM.md:22` | *"------walk forward until ws1b is ib or is already ib"* |
+| `fdm_spec_1102.md:23` | *"------walk forward until ws1b is ib ELSE walk forward until gcws30b is ib"* |
+
+## THE SIDE IS THE INCOMING TRADE'S - HIS 1103 RULE
+
+*"we're talking about the same rev-trade, but from different perspectives. I see that I'm confusing
+the mech by refering to the 'outgoing' trade. from now on, I'll only refer to the 'incoming' trade,
+which matches your banked 'SHORT hunts the low oob'. completely delete my 'low side long'
+statement"*.
+
+THE "low side LONG" STATEMENT IS DELETED. 0702 is a LONG, a LONG hunts the HIGH oob, and its
+target side is HIGH. The 07:12:20 that came with that statement goes with it.
+
+WHAT IT CORRECTED IN THE VERIFICATION. Each row's span was the INCOMING trade's lifetime while
+its side column held the OUTGOING trade's target - the trade being closed at the span's start.
+They disagreed on every row, so a COUNTER-side cadence was being tested against his own
+*"this cadence event can only be tested on target-side"*.
+
+`v4_fdm2.legs` WAS NEVER WRONG - it takes side from `SG.target_side(SG.direction(...))`, the live
+trade's own. Only the verification table carried the outgoing framing, and the first leg's walk
+from 2026-08-03 00:41:30 is unaffected.
+
+HIS OWN 1841 AND 1012 READS WERE MADE IN THE OUTGOING FRAME he is now retiring - his *"if you
+pretend to be the LONG heading towards 1841"* is that frame exactly - so they do not carry over.
 
 ## OPEN - WHAT THE BUILD SURFACED
 
