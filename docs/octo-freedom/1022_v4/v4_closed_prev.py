@@ -46,6 +46,29 @@ TS = np.asarray(ln.ts, np.int64)
 _C = {}
 
 
+def seam_bars(tf_seconds, ts=None):
+    """The bars a closed-prev series of `tf_seconds` carries NEW information on. -> int array.
+
+    These are the seam-5s bars: the last 5 s bar of each COMPLETED bucket, midnight-anchored. A
+    closed-prev series is flat between them, so every other bar is a carry-forward and a read
+    taken there has a bar label that does not match the value's own bar.
+
+    HIS 1103: *"the sampling should match closed-prev, ie seam-5s"*. A sampler handed this array
+    lands on the bars the series actually steps on.
+
+    IT IS `series`' OWN ARITHMETIC, not a second copy - the same midnight grid and the same
+    `searchsorted(T, bucket_open) - 1`, so the two cannot disagree.
+    """
+    T = TS if ts is None else np.asarray(ts, np.int64)
+    tf_ms = int(tf_seconds) * 1000
+    day = (T // 86_400_000) * 86_400_000
+    bo = day + ((T - day) // tf_ms) * tf_ms
+    first = np.searchsorted(T, bo, side='left') - 1
+    out = np.unique(first[first >= 0])
+    assert out.size == 0 or int(out.max()) < len(T), 'a seam bar is off the grid'
+    return out.astype(int)
+
+
 def series(emerging, tf_seconds, ts=None):
     """The causal last-closed value of `emerging` at its own timeframe. -> an array, len N.
 

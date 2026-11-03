@@ -208,7 +208,8 @@ MC_TF_LO = 1    # wsf's floor. A low cluster must START here.
 MC_TF_HI = 12   # wsf's ceiling. A high cluster must END here.
 
 
-def mage_cascade_bar(line, bar, side, mode='extrema', gap=MC_GAP, grid=None):
+def mage_cascade_bar(line, bar, side, mode='extrema', gap=MC_GAP, grid=None,
+                     sample_bars=None):
     """[PRODUCER - Joe 1017] THE ONE BAR the mage cascade reads. -> (bar, why) or None.
 
       line   the extrema source on the 5 s grid. ws1Mage today - Joe 1017: *"in our current state,
@@ -223,6 +224,13 @@ def mage_cascade_bar(line, bar, side, mode='extrema', gap=MC_GAP, grid=None):
                         testing, which I'll do when I'm working on the trade list"*. `grid`
                         defaults to `gap`, so the mode carries no number of its own.
              'event'    `bar` itself, the control.
+      sample_bars  OPTIONAL, mode 'extrema' only. A sorted array of the bars the sampler may use,
+             so the coarse walk AND the forward extreme land only on them. Joe 1103: *"the
+             sampling should match closed-prev, ie seam-5s"* - a closed-prev series is flat between
+             its seams, so a sample taken off them has a bar label that is not the value's own bar.
+             None keeps the banked behaviour: every 5 s bar is a candidate and the lattice is
+             pinned to `bar` itself. The CALLER owns the array, because the seam rule lives in
+             v4_closed_prev.seam_bars and must not be re-derived here.
 
     The walk is UNBOUNDED - it runs back to the start of the tape if it must. No cap, Joe's
     standing rule. Returns None when no same-side turn exists before the tape starts.
@@ -240,6 +248,40 @@ def mage_cascade_bar(line, bar, side, mode='extrema', gap=MC_GAP, grid=None):
         g = int(gap if grid is None else grid)
         k = (bar // g) * g
         why = 'snapped down to the %d-bar lattice, %d bars back' % (g, bar - k)
+    elif mode == 'extrema' and sample_bars is not None:
+        sb = np.asarray(sample_bars, int)
+        sb = sb[sb <= bar]
+        if not sb.size:
+            return None
+        start = int(sb[-1])
+        prev = float(line[start])
+        cand, i = None, 1
+        while True:
+            t = start - i * gap
+            e = sb[sb <= t]
+            if not e.size:
+                break
+            j = int(e[-1])
+            v = float(line[j])
+            d = (v - prev) * side
+            if d > 0.0:
+                cand = j
+            elif cand is not None:
+                break
+            prev = v
+            i += 1
+        if cand is None:
+            return None
+        seg_b = sb[(sb >= cand) & (sb <= bar)]
+        seg = line[seg_b]
+        if not np.isfinite(seg).any():
+            return None
+        o = int(np.nanargmax(seg) if side > 0 else np.nanargmin(seg))
+        k = int(seg_b[o])
+        why = ('the %s-side extrema %.2f, %d bars back | the coarse sample bar was %d bars back, '
+               '%d x %d-bar steps | sampled on the seam lattice, %d candidates in the span'
+               % ('high' if side > 0 else 'low', float(line[k]), bar - k, bar - cand,
+                  (start - cand) // gap, gap, seg_b.size))
     elif mode == 'extrema':
         prev = float(line[bar])
         cand, i = None, 1
