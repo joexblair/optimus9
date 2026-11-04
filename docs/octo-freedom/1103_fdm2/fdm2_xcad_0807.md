@@ -237,6 +237,41 @@
 | 2026-08-07 19:05:00 | 2026-08-07 18:49:05 LONG | HIGH, upwards | 2026-08-07 19:02:00 | none | - | 1 of 30 | 25 of 30 | - | - | - | - | - | 2026-08-07 19:05:00 | REV-TRADE at the event, FDM_XCAD_NONE | - | no line is away with its 2 lines above towards | 2026-08-07 19:32:00 |
 | 2026-08-07 20:12:00 | 2026-08-07 19:30:40 SHORT | LOW, downwards | 2026-08-07 20:00:00 | none | - | 4 of 30 | 19 of 30 | - | - | - | - | - | 2026-08-07 20:12:00 | REV-TRADE at the event, FDM_XCAD_NONE | - | no line is away with its 2 lines above towards | 2026-08-07 20:45:20 |
 
+## the emerging values his update 2 collected, per cadence event
+# read at the seam+15s bar, or at the bar the 10.0 min walk truncated on
+# `at the cadence event` is what "tagged" means - a clause-one line already away there is asking nothing new of itself
+# the gap is the side extremum since the trade opened, minus the emerging value
+
+| the cadence event | the bar read | the clause | the line | its emerging value | its own target-side extremum | that extreme was set | the gap | its last reversal | ex-20/80 here | at the cadence event | here |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-08-07 13:07:00 | 2026-08-07 13:12:10 | one - the 2 above | ws7r | 29.3028 | 15.0303 | 2026-08-07 13:04:00 | +14.2725 | 2026-08-07 13:10:00 | no | towards | away |
+| 2026-08-07 13:07:00 | 2026-08-07 13:12:10 | one - the 2 above | ws8r | 33.0598 | 25.7909 | 2026-08-07 13:04:00 | +7.2689 | 2026-08-07 13:10:00 | no | towards | away |
+| 2026-08-07 13:07:00 | 2026-08-07 13:12:10 | two - the ex-20/80 towards lines | ws5r | 38.4428 | 13.7706 | 2026-08-07 13:00:15 | +24.6722 | 2026-08-07 13:10:00 | no | towards | away |
+| 2026-08-07 13:07:00 | 2026-08-07 13:12:10 | two - the ex-20/80 towards lines | ws6r | 25.9681 | 2.2858 | 2026-08-07 13:06:00 | +23.6823 | 2026-08-07 13:10:00 | no | towards | away |
+| 2026-08-07 13:37:00 | 2026-08-07 13:48:10 | one - the 2 above | ws6r | 90.2155 | 98.0322 | 2026-08-07 13:42:00 | +7.8167 | 2026-08-07 13:46:50 | yes | towards | away |
+| 2026-08-07 13:37:00 | 2026-08-07 13:48:10 | one - the 2 above | ws7r | 89.4519 | - | - | - | - | yes | towards | towards |
+| 2026-08-07 13:37:00 | 2026-08-07 13:48:10 | two - the ex-20/80 towards lines | ws3r | 70.6302 | 95.3962 | 2026-08-07 13:45:05 | +24.7660 | 2026-08-07 13:46:20 | no | towards | away |
+| 2026-08-07 13:37:00 | 2026-08-07 13:48:10 | two - the ex-20/80 towards lines | ws4r | 73.1037 | 95.3817 | 2026-08-07 13:40:00 | +22.2781 | 2026-08-07 13:46:05 | no | towards | away |
+| 2026-08-07 13:37:00 | 2026-08-07 13:48:10 | two - the ex-20/80 towards lines | ws5r | 85.3888 | 94.5223 | 2026-08-07 13:45:05 | +9.1335 | 2026-08-07 13:46:05 | yes | towards | away |
+| 2026-08-07 13:46:00 | 2026-08-07 14:03:10 | one - the 2 above | ws7r | 86.4483 | 96.2157 | 2026-08-07 13:53:05 | +9.7674 | 2026-08-07 14:00:00 | yes | towards | away |
+| 2026-08-07 13:46:00 | 2026-08-07 14:03:10 | one - the 2 above | ws8r | 74.7871 | 77.2104 | 2026-08-07 13:58:00 | +2.4233 | 2026-08-07 14:01:35 | no | towards | away |
+| 2026-08-07 13:46:00 | 2026-08-07 14:03:10 | two - the ex-20/80 towards lines | ws3r | 15.5584 | 95.3962 | 2026-08-07 13:45:05 | +79.8378 | 2026-08-07 13:46:20 | no | towards | away |
+| 2026-08-07 13:46:00 | 2026-08-07 14:03:10 | two - the ex-20/80 towards lines | ws4r | 36.8123 | 95.3817 | 2026-08-07 13:40:00 | +58.5694 | 2026-08-07 13:46:05 | no | towards | away |
+| 2026-08-07 13:46:00 | 2026-08-07 14:03:10 | two - the ex-20/80 towards lines | ws6r | 75.4605 | 98.0322 | 2026-08-07 13:42:00 | +22.5717 | 2026-08-07 13:54:35 | no | towards | away |
+| 2026-08-07 16:11:00 | 2026-08-07 16:18:10 | one - the 2 above | ws11r | 85.4184 | - | - | - | - | yes | towards | towards |
+| 2026-08-07 16:11:00 | 2026-08-07 16:18:10 | one - the 2 above | ws12r | 84.2088 | - | - | - | - | yes | towards | towards |
+| 2026-08-07 16:11:00 | 2026-08-07 16:18:10 | two - the ex-20/80 towards lines | ws9r | 82.4228 | 92.0452 | 2026-08-07 16:13:25 | +9.6225 | 2026-08-07 16:17:15 | yes | towards | away |
+| 2026-08-07 16:11:00 | 2026-08-07 16:18:10 | two - the ex-20/80 towards lines | ws10r | 89.1655 | 95.0495 | 2026-08-07 16:10:00 | +5.8840 | 2026-08-07 16:17:20 | yes | towards | away |
+| 2026-08-07 18:42:00 | 2026-08-07 18:48:10 | one - the 2 above | ws5r | 19.9052 | 14.8112 | 2026-08-07 18:45:00 | +5.0939 | 2026-08-07 18:46:35 | yes | towards | away |
+| 2026-08-07 18:42:00 | 2026-08-07 18:48:10 | one - the 2 above | ws6r | 28.1750 | - | - | - | - | no | towards | towards |
+| 2026-08-07 18:42:00 | 2026-08-07 18:48:10 | two - the ex-20/80 towards lines | ws3r | 25.3282 | 11.3645 | 2026-08-07 18:42:00 | +13.9637 | 2026-08-07 18:46:05 | no | towards | away |
+| 2026-08-07 18:42:00 | 2026-08-07 18:48:10 | two - the ex-20/80 towards lines | ws4r | 14.3129 | 5.6031 | 2026-08-07 18:44:40 | +8.7098 | 2026-08-07 18:46:10 | yes | towards | away |
+| 2026-08-07 18:46:00 | 2026-08-07 18:50:10 | one - the 2 above | ws6r | 32.6004 | - | - | - | - | no | towards | towards |
+| 2026-08-07 18:46:00 | 2026-08-07 18:50:10 | one - the 2 above | ws7r | 39.6737 | - | - | - | - | no | away | towards |
+| 2026-08-07 18:46:00 | 2026-08-07 18:50:10 | two - the ex-20/80 towards lines | ws3r | 29.1859 | 11.3645 | 2026-08-07 18:43:00 | +17.8215 | 2026-08-07 18:46:05 | no | towards | away |
+| 2026-08-07 18:46:00 | 2026-08-07 18:50:10 | two - the ex-20/80 towards lines | ws4r | 18.7083 | 5.6031 | 2026-08-07 18:44:40 | +13.1052 | 2026-08-07 18:46:10 | yes | towards | away |
+| 2026-08-07 18:46:00 | 2026-08-07 18:50:10 | two - the ex-20/80 towards lines | ws5r | 25.6054 | 14.8112 | 2026-08-07 18:45:00 | +10.7941 | 2026-08-07 18:48:50 | no | towards | away |
+
 | the director roll-up | value |
 |---|---|
 | legs walked | 16 |

@@ -902,6 +902,7 @@ if os.environ.get('W_FDM2_XCAD') == 'on':
           ' the ws10 race confirm, for comparison |')
     print('|' + '---|' * 18)
     _XN = _XC = _XR = 0
+    _XP = []
     #   THE BOUND IS THE WALK'S OWN, NOT THE LEG'S EXIT. Handing xcad_seam the leg's exit was
     #   circular: that exit is what the walk DECIDED here, so the seam test was being cut off by
     #   its own outcome and printed "past the walk's end". v4_fdm2.walk bounds itself by the stop
@@ -957,6 +958,12 @@ if os.environ.get('W_FDM2_XCAD') == 'on':
             K.FDM_XCAD_C2_SCOPE = _was if _was else ('tagged' if _alt == 'board' else 'board')
             if _sb is not None:
                 _XR += 1
+            _XP.append(dict(ev=int(_evx), sd=_sdx, opn=_ox, s0=int(_s0x), frm=int(_frm),
+                            above=_sab, exf=_sexf,
+                            read=int(_sb) if _sb is not None
+                            else int(LN['SEAM60'][np.searchsorted(LN['SEAM60'], int(_frm),
+                                                                  side='right')])
+                            + int(round(float(K.FDM_XCAD_SEAM_S) / 5.0))))
             print('| %s | %s %s | %s | %s | ws%dr | ws%s | %d of %d | %d of %d | ws%s | ws%s |'
                   ' %s | %s | %s | %s | %s | %s | %s | %s |'
                   % (ln.U(int(_evx)), ln.U(_ox), 'LONG' if _sdx > 0 else 'SHORT',
@@ -970,6 +977,36 @@ if os.environ.get('W_FDM2_XCAD') == 'on':
                      'REV-TRADE' if _sb is not None else 'held',
                      '-' if _sb2 is None else ln.U(int(_sb2)), _swhy,
                      '-' if _r10 is None else ln.U(int(_r10[0]))))
+    #   HIS 1104 *"collect the emerging values ... add this data to the report so I can review"*.
+    #   The verdict table above says WHICH lines held it; this says WHAT THEY READ, from the same
+    #   producer at the same bar with the same gate.
+    if _XP:
+        print()
+        print('## the emerging values his update 2 collected, per cadence event')
+        print('# read at the seam+%gs bar, or at the bar the %.1f min walk truncated on'
+              % (float(K.FDM_XCAD_SEAM_S), float(K.FDM_XCAD_WALK_MIN)))
+        print('# `at the cadence event` is what "tagged" means - a clause-one line already away'
+              ' there is asking nothing new of itself')
+        print('# the gap is the side extremum since the trade opened, minus the emerging value')
+        print()
+        print('| the cadence event | the bar read | the clause | the line |'
+              ' its emerging value | its own target-side extremum | that extreme was set |'
+              ' the gap | its last reversal | ex-20/80 here | at the cadence event | here |')
+        print('|' + '---|' * 12)
+        for _pv in _XP:
+            for _c, _lines in (('one - the %d above' % int(K.FDM_XCAD_ABOVE), _pv['above']),
+                               ('two - the ex-20/80 towards lines', _pv['exf'])):
+                for _d in F2.xcad_probe(LN, _pv['sd'], _pv['s0'], _pv['frm'], _lines,
+                                        _pv['read']):
+                    print('| %s | %s | %s | ws%dr | %.4f | %s | %s | %s | %s | %s | %s | %s |'
+                          % (ln.U(_pv['ev']), ln.U(_pv['read']), _c, _d['tf'], _d['value'],
+                             '-' if not np.isfinite(_d['extremum']) else '%.4f' % _d['extremum'],
+                             '-' if _d['at'] is None else ln.U(int(_d['at'])),
+                             '-' if not np.isfinite(_d['gap']) else '%+.4f' % _d['gap'],
+                             '-' if _d['rev'] is None else ln.U(int(_d['rev'])),
+                             'yes' if _d['exf'] else 'no',
+                             F2.mom_state(LN, _d['tf'], _pv['ev'], _pv['sd'], _pv['opn']),
+                             _d['state']))
     print()
     print('| the director roll-up | value |')
     print('|---|---|')

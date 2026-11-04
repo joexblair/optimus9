@@ -540,6 +540,34 @@ def xcad_seam(LN, side, s0, xb, above, exf_tw, B):
                      ln.U(end)))
 
 
+def xcad_probe(LN, side, s0, xb, lines, bar):
+    """The emerging numbers behind his update-2 verdict, line by line. -> [dict].
+
+    HIS 1104 *"collect the emerging values of the lines that were tagged as `towards` at the
+    cadence"* and *"add this data to the report so I can review"*. xcad_seam returns a verdict;
+    this returns the numbers that verdict came from, read at the SAME bar with the SAME gate, so
+    the two can never disagree.
+
+        tf / value / extremum / at / gap / rev / state / exf / at_event
+
+    `at_event` is the line's state at the cadence event, which is what `tagged` means. It is here
+    so a clause-one line that was ALREADY away at the event is visible as such.
+    """
+    rs = int(s0) if str(K.FDM_XCAD_REV_FROM) == 'window' else None
+    out = []
+    for t in lines:
+        t = int(t)
+        gate = np.asarray([b for b in LN['LIFT'][(t, int(side))]
+                           if (rs if rs is not None else 0) <= b <= int(xb)], int)
+        r = JIG.fdm2_cad_mom_detector(LN['EMR'][t], LN['EMR'][t], int(bar), int(side), int(s0),
+                                      K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL, K.LIFT_WOB,
+                                      stamps=gate, rev_since=rs)
+        out.append(dict(tf=t, value=float(LN['EMR'][t][int(bar)]), extremum=r['extremum'],
+                        at=r['at'], gap=r['gap'], rev=r['rev'], state=r['state'],
+                        exf=ex2080(float(LN['EMR'][t][int(bar)]), side)))
+    return out
+
+
 def x10_cadence(LN, side, frm, B):
     """The first ws10x race cross strictly after `frm` on `side`.
 
