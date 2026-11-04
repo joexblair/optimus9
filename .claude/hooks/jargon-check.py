@@ -67,6 +67,24 @@ HIS = {'lin_hop', 'consumer', 'consumers', 'producer', 'producers', 'oob',
        'lin2_matry_wsf_takeover', 'matryoshka', 'emerg', 'emerging',
        'closed-prev', 'closed_prev', 'closedprev'}
 
+#   AMBIGUITY. Joe 1104: *"can you add an ambiguity check to the hook?  it would need to be
+#   detecting terms like "the machine" and forcing a better description"*. He asked it after I
+#   wrote "closes the incoming trade EARLIER than the machine" with three candidate machines live
+#   in the conversation - fdm2's leg walk, the fdm2-conf machine banked that night, and octo-v4.
+#
+#   THE RULE IS POSITIONAL, NOT A LIST OF FORBIDDEN WORDS. A hit is a determiner sitting DIRECTLY
+#   against one of these nouns, so ANY qualifier between them clears it: "the fdm2-conf machine"
+#   and "the repaired producer" pass, "the machine" and "this producer" do not. The gloss window
+#   clears it too, so "the machine (fdm2's leg walk)" passes.
+#
+#   THE NOUN LIST IS MINE, chosen as the words in this project that already name more than one
+#   thing. He asked for terms "like the machine" and left the list to me.
+AMBIG_NOUNS = ('machine', 'machines', 'mech', 'mechs', 'driver', 'drivers',
+               'producer', 'producers', 'reading', 'readings', 'arm', 'arms',
+               'walk', 'walks', 'chain', 'chains', 'system', 'systems',
+               'pipeline', 'pipelines', 'build', 'builds')
+AMBIG = re.compile(r'\b(?:the|this|that)\s+(?:%s)\b' % '|'.join(AMBIG_NOUNS))
+
 SHAPES = [
     ('a knob or constant name', re.compile(r'\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+){1,}\b')),
     ('a code identifier', re.compile(r'\b[a-z][a-z0-9]*(?:_[a-z0-9]+){1,}\b')),
@@ -158,8 +176,20 @@ def main():
     for term in FORWARD:
         if re.search(r'\b%s\b' % re.escape(term), low_fwd):
             fwd.append(term)
+    #   THE AMBIGUITY SCAN runs on the same unquoted prose, and takes the same gloss exemption:
+    #   naming the thing within the window is exactly the "better description" he asked for.
+    amb = []
+    for m in AMBIG.finditer(unq):
+        tok = m.group(0)
+        key = 'ambig:' + tok.lower()
+        if key in seen:
+            continue
+        if glossed(unq, tok):
+            continue
+        seen.add(key)
+        amb.append(tok)
 
-    if not hits and not fwd:
+    if not hits and not fwd and not amb:
         print(json.dumps({}))
         return
     lines = []
@@ -177,6 +207,13 @@ def main():
                      ' no later bar in hand? If not, recompute it inside the window the mech'
                      ' actually reads, or drop it. A hold of H bars may read the event bar and the'
                      ' H-1 bars after it, and nothing further.')
+    if amb:
+        lines.append('%d phrase(s) that name a thing without saying WHICH one:' % len(amb))
+        lines += ['  - %s' % t for t in amb[:20]]
+        lines.append('Joe cannot tell which one you mean. Name it: which machine, which mech,'
+                     ' which producer, which reading. Put the qualifier before the noun -'
+                     ' "the fdm2 leg walk", "the repaired producer" - or gloss it in the same'
+                     ' sentence.')
     print(json.dumps({'decision': 'block', 'reason': '\n'.join(lines)}))
 
 

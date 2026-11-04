@@ -44,10 +44,18 @@ try:
     import v4_sweep_pivots as SP
     import ln
     from optimus9.analysis.jig import towards_away as TA
+    from optimus9.analysis import jig as JIG
 finally:
     sys.stderr = _e
 
-OUT = os.environ.get('W_FDM2_S1_OUT', 'step1_towards_94d.md')
+OUT = os.environ.get('W_FDM2_S1_OUT', 'step1_repaired_94d.md')
+#   WHICH SECOND READING. 'repaired' is jig.reversal_extremum as he repaired it on 1104 - the
+#   reversal gate first, the side-owned extremum, closed-prev values and the lift-off on emerging.
+#   'towards_away' is the earlier arm, kept runnable because the 297-event figure came off it and
+#   that figure is now stale. HIS 1104: *"that hasn't been reviewed since the jig producer's
+#   repair. now the jig producer does not print rev-trade at 1611"*.
+READ = os.environ.get('W_FDM2_S1_READ', 'repaired')
+assert READ in ('repaired', 'towards_away'), 'W_FDM2_S1_READ is %r' % READ
 LN = F2.load()
 B = len(LN['close']) - 1
 CL = np.asarray(LN['close'], float)
@@ -74,9 +82,17 @@ def counts(side, bar, anchor):
             continue
         if F2.towards(LN['CPR'][tf], tf, bar, side):
             k_old += 1
-        #   THE BANKED MECH READS EMERGING, his 1104 *"emerging must be the answer"*, and its
-        #   anchor is the trade's own open.
-        if TA(LN['EMR'][tf], bar, side, anchor)['state'] == 'towards':
+        #   THE SECOND READING. At 'repaired' every VALUE is closed-prev and only the lift-off
+        #   reads emerging, his 1104 standard, and `away` needs a lift-off reversal in the span.
+        #   The anchor is the trade's own open at either setting.
+        if READ == 'repaired':
+            st = JIG.reversal_extremum(np.asarray(LN['CPR'][tf], float),
+                                       np.asarray(LN['EMR'][tf], float), bar, side, anchor,
+                                       int(K.LIFT_PTS), K.gap_for(tf), float(K.LIFT_TOL),
+                                       int(K.LIFT_WOB))['state']
+        else:
+            st = TA(LN['EMR'][tf], bar, side, anchor)['state']
+        if st == 'towards':
             k_new += 1
     return k_old, k_new
 
@@ -89,6 +105,13 @@ say('# the verdict is binary: 0 fires a rev-trade, 1 or more walks on. Only a 0/
 say('# MAE/MFE is the event bar to the bar sweep-pivots ends the leg on - scoring, hindsight, and')
 say('# no count here reads it. The counts read the event bar and nothing after it.')
 say("# the anchor for the Jig's producer is the trade the cadence event lands inside")
+say('# the second reading is W_FDM2_S1_READ %s' % READ)
+say('# repaired = jig.reversal_extremum: a lift-off reversal must exist in the span, the extremum')
+say('# belongs to the side, values are closed-prev and only the lift-off reads emerging')
+say('# the lift-off: LIFT_PTS %d samples, LIFT_TOL %g r-points, LIFT_WOB %d bars = %d s,'
+    ' GAP_PER_TF %g bars per TF-minute'
+    % (int(K.LIFT_PTS), float(K.LIFT_TOL), int(K.LIFT_WOB), int(K.LIFT_WOB) * 5,
+       float(K.GAP_PER_TF)))
 say()
 say('| the cadence event | the oob side | the trade | its open | its exit | how it ended |'
     ' what it realised %% | what it had in hand here %% | the count now |'
@@ -182,8 +205,8 @@ if _d:
 say('| what this leaves out | a rev-trade also OPENS the opposite trade, so every leg after it'
     ' moves. That is a different run, not a column |')
 say()
-say('| the MAE/MFE difference, by what the two readings do | events | median MAE %% |'
-    ' median MFE %% | sum MAE %% | sum MFE %% | MFE > abs(MAE) |')
+say('| the MAE/MFE difference, by what the two readings do | events | median MAE % |'
+    ' median MFE % | sum MAE % | sum MFE % | MFE > abs(MAE) |')
 say('|---|---|---|---|---|---|---|')
 GRP = (('both rev-trade', lambda r: r['v_old'] == 'rev-trade' and r['v_new'] == 'rev-trade'),
        ('both walk', lambda r: r['v_old'] == 'walk' and r['v_new'] == 'walk'),
