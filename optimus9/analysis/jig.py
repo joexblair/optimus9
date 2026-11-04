@@ -271,6 +271,125 @@ def towards_away(line, bar, side, since):
             'gap': gap}
 
 
+def reversal_extremum(cp, em, bar, side, since, pts, gap, tol, wob):
+    """[PRODUCER - Joe 1104] THE EXTREMUM A REVERSAL PRINTED, and the bar it printed on. -> dict.
+
+    HIS MECH, 1104: *"we have a reversal that printed an extremum, and that extremum (and ts) is
+    what will be stored as the extremum for the away decsion (in this mech only)"*, and the read
+    ruling that goes with it: *"closed-prev is the standard for everything except lift-off"*.
+
+        extremum  the most extreme CLOSED-PREV value on `side` up to the reversal's stamp
+        at        the bar that extremum sat on
+        rev       the reversal's stamp bar, where it became knowable
+        gap       how far the line now sits from that extremum, on `side`
+        state     'away' when the gap is above zero, else 'towards'
+
+      cp     the line's CLOSED-PREV values. Every VALUE comes from here
+      em     the line's EMERGING values. Used for the lift-off and nothing else
+      bar    the bar being read
+      side   the trade's target side, +1 high / -1 low. An INPUT, never derived
+      since  the bar the search starts from
+      pts, gap, tol, wob   the lift-off's own knobs, passed through untouched
+
+    WHY THE TWO READS SPLIT THIS WAY, and it is his ruling not a convenience: a lift-off is an
+    EVENT and it needs the live line to see the turn as it happens. An extremum is a VALUE, and a
+    value on a forming bar is the volatility he ruled out - *"we don't have the risk of volatile
+    emerging bars that would wreck the result"*.
+
+    AWAY REQUIRES A REVERSAL. No lift-off stamp in [since, bar] means there is no extremum to
+    measure from, so the state is 'towards' and `rev` is None. That is his own wording - *"away is
+    travelling away from the low side AFTER it has lift-off reversed"* - put back in the gate.
+
+    THE EXTREMUM BELONGS TO THE SIDE, his 1104 correction of his own wording: *"the extremum needs
+    to belong to the **side**"*, after *"1611 is a highside event, and everything is same-side.
+    most of your extremums are low-side"*. THE SIDE PICKS THE EXTREMUM: a HIGH side keeps the
+    MAXIMUM, a LOW side the MINIMUM, and no other reading of "extremum" exists inside a mech where
+    every read is same-side. The span it is kept over is [since, bar]. It is NOT truncated at the
+    reversal:
+    truncating it stored the maximum of an early, low stretch and called that a high-side extremum.
+    THE REVERSAL IS THE GATE, NOT THE SPAN. A lift-off stamp in [since, bar] is what makes `away`
+    available at all, his *"away is travelling away from the low side AFTER it has lift-off
+    reversed"*. The last stamp is reported as `rev` so the turn's own bar stays on the page.
+
+    CAUSAL: the lift-off STAMP is the bar the event is knowable on, and the extremum is searched
+    only up to that stamp. Nothing after `bar` is read, and the assert carries it.
+    """
+    cp = np.asarray(cp, float)
+    em = np.asarray(em, float)
+    bar, since, side = int(bar), int(since), int(side)
+    assert since <= bar, 'the reversal search starts after the bar it is read at'
+    assert side in (+1, -1), 'side is the TRADE\'s target side: +1 high, -1 low'
+    out = {'extremum': float('nan'), 'at': None, 'rev': None, 'gap': float('nan'),
+           'state': 'towards'}
+    st = [int(b) + int(wob) - 1 for b in lift_off(em, side, pts, gap, tol, wob)]
+    st = [b for b in st if since <= b <= bar]
+    if not st:
+        return out
+    rev = int(st[-1])
+    assert rev <= bar, 'a reversal stamp lands after the bar being read'
+    seg = cp[since:bar + 1]
+    if not np.isfinite(seg).any():
+        return out
+    i = int(np.nanargmax(seg) if side > 0 else np.nanargmin(seg))
+    x = float(seg[i])
+    g = (x - float(cp[bar])) if side > 0 else (float(cp[bar]) - x)
+    return {'extremum': x, 'at': since + i, 'rev': rev, 'gap': g,
+            'state': 'away' if g > 0.0 else 'towards'}
+
+
+def confluence_above(cp, em, bar, side, since, lo, hi, fnc, pts_of, gap_of, tol, wob, above=2):
+    """[PRODUCER - Joe 1104] HIS CONFLUENCE RULE over the lines ex-fence on `side`. -> dict.
+
+    HIS MECH, verbatim:
+
+        -1) the lines in the "ex-20/80 on the HIGH side" bucket are printing away
+        -2) the 2 lines above the highest TF in the 20/80 bucket (example ws11 and ws12) are
+            printing away (confluencing the bucket lines) or not ex-fence
+        -3) for this mech to work, we need the confluence line: at least one of the "2 TFs above
+            the 20/80 bucket" must be printing away
+
+        exf        the timeframes ex-fence on the side at `bar`
+        top        the highest of those
+        above      the `above` timeframes above it
+        step1..3   each test's own verdict
+        fires      every test true
+        state      each timeframe's own state, from reversal_extremum
+
+      cp, em   the closed-prev and emerging ladders, keyed by timeframe
+      lo, hi   the timeframes scanned for the ex-fence set
+      fnc      the fence's SMALLER end, his convention. The side's edge is derived
+      pts_of, gap_of   callables giving the lift-off's samples and gap for a timeframe
+
+    STEP 1 IS A REQUIREMENT, not a description, because his step 3 says *"for this mech to work"* -
+    a rule whose first line were only a description could not fail. THAT READING IS MINE.
+
+    A TIMEFRAME ABOVE THE LADDER'S TOP DOES NOT EXIST, so with fewer than `above` lines above the
+    top, step 2 reads only the ones that exist and step 3 still needs one of them away. With NONE
+    above, step 3 cannot be met and the rule does not fire. THAT IS MINE TOO.
+
+    EVERY VALUE IS CLOSED-PREV and only the lift-off is emerging, his 1104 standard.
+    """
+    lo, hi, side = int(lo), int(hi), int(side)
+    e = (100.0 - float(fnc)) if side > 0 else float(fnc)
+    exf = [t for t in range(lo, hi + 1)
+           if (float(cp[t][int(bar)]) >= e if side > 0 else float(cp[t][int(bar)]) <= e)]
+    st = {}
+    for t in range(lo, hi + 1):
+        st[t] = reversal_extremum(cp[t], em[t], bar, side, since, pts_of(t), gap_of(t), tol, wob)
+    if not exf:
+        return {'exf': (), 'top': None, 'above': (), 'step1': False, 'step2': False,
+                'step3': False, 'fires': False, 'state': st}
+    top = max(exf)
+    ab = [t for t in range(top + 1, top + 1 + int(above)) if lo <= t <= hi]
+    s1 = all(st[t]['state'] == 'away' for t in exf)
+    s2 = all(st[t]['state'] == 'away'
+             or not (float(cp[t][int(bar)]) >= e if side > 0 else float(cp[t][int(bar)]) <= e)
+             for t in ab)
+    s3 = any(st[t]['state'] == 'away' for t in ab)
+    return {'exf': tuple(exf), 'top': top, 'above': tuple(ab), 'step1': s1, 'step2': s2,
+            'step3': s3, 'fires': bool(s1 and s2 and s3), 'state': st}
+
+
 def mage_cascade_bar(line, bar, side, mode='extrema', gap=MC_GAP, grid=None,
                      sample_bars=None):
     """[PRODUCER - Joe 1017] THE ONE BAR the mage cascade reads. -> (bar, why) or None.

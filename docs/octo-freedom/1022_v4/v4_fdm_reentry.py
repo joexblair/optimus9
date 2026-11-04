@@ -227,12 +227,28 @@ def signals(B1, R, side=None, G=None, EMR=None):
     if rd == 'emerging':
         assert EMR is not None, 'the emerging read needs the emerging ladder handed in'
     SRC = R if rd == 'closed_prev' else EMR
-    lo5, hi5 = int(K.FDM_RE_SCAN_LO), int(K.FDM_RE_SCAN_HI)
-    assert lo5 > 6, 'the scan band starts above ws6, his "the wsf TFs above ws6"'
+    #   HIS 1104 PAIR KNOBS: ws5 and ws6 are the default and the spec, and the pair lifts without
+    #   a second copy of this walk. The scan floor follows the gate line by default - the mech's
+    #   own shape - or sits at a fixed TF for his *"scan higher than ws12"* read.
+    tf5, tf6 = int(K.FDM_RE_REV_TF), int(K.FDM_RE_GATE_TF)
+    assert tf6 > tf5, 'the gate line must sit above the reversal line, got ws%d and ws%d' % (tf5, tf6)
+    CLIMB = str(K.FDM_RE_CLIMB)
+    assert CLIMB in ('off', 'value', 'reversal'), \
+        "FDM_RE_CLIMB is 'off', 'value' or 'reversal', got %r" % (CLIMB,)
+    assert int(K.FDM_RE_CLIMB_HI) > tf5, 'the climb ceiling must sit above the reversal line'
+    fl = str(K.FDM_RE_SCAN_FLOOR)
+    if fl == 'gate':
+        lo5 = tf6 + 1
+    else:
+        assert fl == 'ws13', "FDM_RE_SCAN_FLOOR is 'gate' or 'ws13', got %r" % (fl,)
+        lo5 = max(13, tf6 + 1)
+    hi5 = int(K.FDM_RE_SCAN_HI)
+    assert lo5 > tf6, 'the scan band starts above the gate line, his "the TFs above ws6"'
+    assert hi5 >= lo5, 'the scan band ends below where it starts, ws%d..ws%d' % (lo5, hi5)
     out = []
     for sd in sides:
-        L5 = _lift_table(SRC[5], 5, sd)
-        L6 = _lift_table(SRC[6], 6, sd)
+        L5 = _lift_table(SRC[tf5], tf5, sd)
+        L6 = _lift_table(SRC[tf6], tf6, sd)
         e5 = K.side_edge(K.FDM_RE_WS5_FNC, sd)
         for o, c in windows(B1, sd, G):
             #   HIS "walk until ws5 reverses": the FIRST ws5 reversal after the window opens, and
@@ -242,25 +258,55 @@ def signals(B1, R, side=None, G=None, EMR=None):
             if not nx5.size:
                 continue
             b5 = int(nx5[0])
-            v5 = float(np.asarray(R[5], float)[b5])
+            v5 = float(np.asarray(R[tf5], float)[b5])
             #   HIS "stop": the first ws5 reversal is the only test point. Not ex-fence there and
             #   the window produces nothing.
             if not ((v5 >= e5) if sd > 0 else (v5 <= e5)):
                 continue
-            v6 = float(np.asarray(R[6], float)[b5])
+            v6 = float(np.asarray(R[tf6], float)[b5])
             held = _gate6(v6, sd)
-            if held:
-                nx6 = L6[L6 > b5]
-                if not nx6.size:
+            if CLIMB != 'off':
+                #   HIS DYNAMIC CLIMB. Step up from the line above the one that reversed, while
+                #   each rung's r is ex-fence, and stop at the first in-fence rung. 'reversal'
+                #   makes each ex-fence rung print its own lift-off before the climb steps up, so
+                #   the climb carries a bar as well as a verdict.
+                rungs, b6, at = [], None, b5
+                for t in range(tf5 + 1, int(K.FDM_RE_CLIMB_HI) + 1):
+                    v = float(np.asarray(R[t], float)[at])
+                    if _infence(v):
+                        rungs.append((t, v, None))
+                        break
+                    if not _gate6(v, sd):
+                        #   NEITHER in-fence NOR past the gate: the rung says nothing, so the
+                        #   climb ends with no trade rather than stepping over it.
+                        rungs = []
+                        break
+                    if CLIMB == 'reversal':
+                        LT = _lift_table(SRC[t], t, sd)
+                        nx = LT[LT > at]
+                        if not nx.size:
+                            rungs = []
+                            break
+                        at = int(nx[0])
+                        b6 = at
+                    rungs.append((t, v, b6))
+                if not rungs or rungs[-1][2] is not None:
                     continue
-                b6 = int(nx6[0])
-                scan = b6
+                got = (rungs[-1][0],)
+                scan = at
             else:
-                b6, scan = None, b5
-            got = [t for t in range(lo5, hi5 + 1)
-                   if _infence(float(np.asarray(R[t], float)[scan]))]
-            if not got:
-                continue
+                if held:
+                    nx6 = L6[L6 > b5]
+                    if not nx6.size:
+                        continue
+                    b6 = int(nx6[0])
+                    scan = b6
+                else:
+                    b6, scan = None, b5
+                got = tuple(t for t in range(lo5, hi5 + 1)
+                            if _infence(float(np.asarray(R[t], float)[scan])))
+                if not got:
+                    continue
             #   HIS LAST TO FIRE. FDM_RE_FIRE_IB 1 keeps ws1b's ib close in the set, his spec.
             evs = [('the ws5 reversal', b5)]
             if b6 is not None:
@@ -271,16 +317,17 @@ def signals(B1, R, side=None, G=None, EMR=None):
             assert all(fire >= v for _, v in evs), 'the fire bar precedes one of its own events'
             assert fire >= b5 and fire >= int(o), 'the fire bar precedes its own window'
             out.append(dict(SG.signal(fire, sd, MECH, o,
-                                      '%s window %s..%s, %.1f min, opened on %s. ws5 reversed %s at'
-                                      ' %.2f, ex-%g/%g. ws6r %.2f %s the %s gate%s. in-fence %s: %s.'
-                                      ' last to fire %s'
+                                      '%s window %s..%s, %.1f min, opened on %s. ws%d reversed %s'
+                                      ' at %.2f, ex-%g/%g. ws%dr %.2f %s the %s gate%s. in-fence'
+                                      ' %s: %s. last to fire %s'
                                       % ('HIGH' if sd > 0 else 'LOW', SG.why_time(o),
                                          SG.why_time(int(c)), (int(c) - o) * 5 / 60.0,
-                                         K.FDM_RE_WIN_OPEN, SG.why_time(b5), v5,
+                                         K.FDM_RE_WIN_OPEN, tf5, SG.why_time(b5), v5,
                                          *K.fnc_pair(K.FDM_RE_WS5_FNC),
-                                         v6, 'holds' if held else 'fails', K.FDM_RE_WS6_GATE,
+                                         tf6, v6, 'holds' if held else 'fails',
+                                         K.FDM_RE_WS6_GATE,
                                          '' if b6 is None else
-                                         ', ws6 reversed %s' % SG.why_time(b6),
+                                         ', ws%d reversed %s' % (tf6, SG.why_time(b6)),
                                          'ws%d..ws%d' % (lo5, hi5),
                                          ', '.join('ws%d' % t for t in got), lab)),
                             b5=b5, v5=v5, v6=v6, held6=held, b6=b6, scan=scan,

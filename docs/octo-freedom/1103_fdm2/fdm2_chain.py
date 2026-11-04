@@ -18,6 +18,7 @@ os.environ.setdefault('LG_TAPE_END', '2026-10-05')
 _e = sys.stderr; sys.stderr = io.StringIO()
 try:
     from optimus9.analysis.jig import towards_away as TA
+    from optimus9.analysis import jig as JIG
     import v4_knobs as K
     import v4_fdm2 as F2
     import v4_fdm_reentry as RE
@@ -728,88 +729,143 @@ if _AW:
           % (_tn, int(LN['HI']) - _g2, int(LN['HI'])))
 
 
-#   ── W_FDM2_CONF=on: the fdm2-conf table, on the banked towards/away ───────────────────────────
-#   HIS NAME, 1104: *"the table will be known as the fdm2-conf table"*. Renamed from W_FDM2_SETUPS,
-#   the arm it used to answer to - the table has his name now, so the arm carries it.
+#   ── W_FDM2_CONF=on: the fdm2-conf machine, BANKED 1104 ────────────────────────────────────────
+#   HIS NAMES, 1104: *"the table will be known as the fdm2-conf table"* and *"make this the
+#   fdm2-conf machine"*.
 #
-#   HIS 1103 TABLE, built on jig.towards_away, the producer he asked for on the Jig - *"bank this
-#   so that its not lost"*. IT REPLACES NOTHING: v4_fdm2.towards is still what step 1 reads, he
-#   never ruled otherwise, and his 1104 words are *"that conversation was never converted to a
-#   banked mech as far as I'm concerned"*. This table is the only thing that reads the producer.
+#   THE ROW IS A DATA BAR, NOT A LEG. His 1104: *"we haven't proved that the LONG has exited at
+#   1617. 1617 is where we collect data and decide on 1) rev-trade, or 2) the cad walk"*. So a row
+#   is a bar where the mech collects the board and decides, and the trade is STILL OPEN on it.
 #
-#   THE ROWS, his 1104: *"show me all of the reentry legs, stopped or not"*. So every re-entry leg
-#   prints whatever it realised, and an incoming-trade setup still prints only when it realised at
-#   or under zero - the population the table carried before his change. The two longest-run columns
-#   are deleted, also 1104.
+#   INCOMING AND OUTGOING - HIS CURRENT DEFINITION, 1104, which supersedes every earlier reading:
 #
-#   EMERGING VALUES, his ruling: *"if we use closed-p, a ws22 bar will stay the same value for 22
-#   minutes.  that's no bueno, so emerging must be the answer to the larger question"*. A rolling
-#   extremum over a step function cannot update between its steps.
+#       at a trade's OPEN bar it is OUTGOING   - being sent out
+#       at a trade's CLOSE bar it is INCOMING  - arriving
 #
-#   THE EXTREMUM'S ANCHOR. For an incoming-trade setup it is the INCOMING trade's own open - the
-#   trade being closed. For a re-entry setup there is no incoming trade; his 1103 was *"that can
-#   only be derived when the reentry lines qualify.  the mech behaves the same way - at the signal,
-#   measure the lines"*, so the READ is at the signal and THE ANCHOR I USE IS THE RE-ENTRY WINDOW'S
-#   OPEN, the only bar the re-entry owns before its signal. That choice is mine.
+#   *"a single trade is both outgoing and incoming - it all depends on which end of the trade
+#   you're looking at. at 1710, the SHORT is outgoing, and at 1923 the same SHORT is incoming"* /
+#   *"at 1923 a rev-trade happens, so the incoming SHORT is closed, and the outgoing LONG is
+#   opened"*. And the lever: *"we curate the EXIT to improve the ensuing OPEN - this means that
+#   the incoming trade AND ITS SIDE is where we make a `walk` or `rev-trade` decision"*.
+#   SO EVERY BOARD COLUMN READS THE OPEN TRADE'S OWN TARGET SIDE - HIGH for a LONG, LOW for a
+#   SHORT - because at a data bar that trade is the one a rev-trade would close.
+#
+#   TWO OF HIS COLUMNS HAVE NO VALUE AT A DATA BAR, and print `pending`:
+#
+#       the setup opens   the outgoing trade's open, 2 bars past a rev-trade not yet decided
+#       realised %        the outgoing trade's, which needs that trade to exist and then close
+#
+#   Filling either one is a read of bars after the decision. They stay in the table because they
+#   are HIS columns and the gap is the point.
+#
+#   THE PRODUCER IS jig.reversal_extremum, his refined toward/away, and it REPLACES
+#   jig.towards_away here. VALUES COME FROM FDM_CONF_READ 'closed_prev' and only the lift-off
+#   inside the producer reads emerging - his 1104 *"closed-prev is the standard for everything
+#   except lift-off"*.
+#
+#   `towards` CAN ONLY MEAN "sitting exactly at its own running extreme since the anchor": the
+#   producer takes that extreme over a span that INCLUDES the read bar, so its gap is never
+#   negative. Measured at 2026-08-07 16:17:30, 17 of the 18 `towards` lines sat at a gap of
+#   exactly 0.0000 and the 18th had no reversal in the span at all.
+#
+#   NO PROFITABILITY FILTER ON THE ROWS. The old population - every re-entry leg plus an incoming
+#   setup only when it realised at or under zero - cannot be applied at a data bar without reading
+#   past it. THE FILTER IS GONE BY CAUSALITY, and that reading is MINE.
+#
+#   THE ANCHOR is the open trade's own open bar for an incoming-trade row, and the re-entry
+#   window's open for a re-entry row - the only bar a re-entry owns before its signal.
 if os.environ.get('W_FDM2_CONF') == 'on':
-    def _band(lo, hi, since, bar, side):
-        """towards and ex-20/80 counts over ws{lo}..ws{hi} at `bar`, anchored at `since`.
+    _CFR, _CFB = str(K.FDM_CONF_READ), str(K.FDM_CONF_BARS)
+    assert _CFR in ('closed_prev', 'emerging'), 'FDM_CONF_READ is %r' % _CFR
+    assert _CFB in ('event', 'event+x10'), 'FDM_CONF_BARS is %r' % _CFB
 
-        -> (towards, ex2080, the band's line count). The longest-run pair this used to return went
-        with the two columns he deleted, 1104.
+    def _cf_state(tf, bar, side, since):
+        """the refined toward/away for ONE line at ONE bar. -> 'towards' | 'away'."""
+        src = LN['CPR'] if _CFR == 'closed_prev' else LN['EMR']
+        return JIG.reversal_extremum(np.asarray(src[tf], float), np.asarray(LN['EMR'][tf], float),
+                                     int(bar), int(side), int(since), int(K.LIFT_PTS),
+                                     K.gap_for(tf), float(K.LIFT_TOL), int(K.LIFT_WOB))['state']
+
+    def _cf_band(bar, side, since):
+        """-> (travelling `side`, ex-20/80 on `side`, the band's line count) over ws1..ws{HI}."""
+        hi = int(LN['HI'])
+        tw = sum(1 for t in range(1, hi + 1) if _cf_state(t, bar, side, since) == 'towards')
+        ex = sum(1 for t in range(1, hi + 1) if F2.ex2080(float(LN['CPR'][t][bar]), side))
+        return tw, ex, hi
+
+    def _cf_bars(L):
+        """the bars this leg collects the board on. -> [(bar, what put it there)], chronological.
+
+        NONE PAST THE LEG'S OWN EXIT, asserted. A data bar after the exit is a decision the leg
+        was never alive to make.
         """
-        tw, ex = [], []
-        for t in range(lo, hi + 1):
-            r = TA(LN['EMR'][t], bar, side, since)
-            tw.append(r['state'] == 'towards')
-            ex.append(F2.ex2080(float(LN['CPR'][t][bar]), side))
-        return sum(tw), sum(ex), hi - lo + 1
+        sd, a, b = int(L['side']), int(L['opn']) + 1, int(L['exit'])
+        out = []
+        for ev, _s0, _w0 in F2.cadence_events(LN, sd, a, b):
+            out.append((int(ev), 'the ws1b oob-to-ib cadence event'))
+            if _CFB == 'event':
+                continue
+            r = F2.x10_cadence(LN, sd, int(ev), b)
+            if r is not None:
+                out.append((int(r[0]), 'the ws10x race, to %s' % r[1]))
+        out = sorted(set(out), key=lambda x: x[0])
+        for bar, _w1 in out:
+            assert int(L['opn']) <= bar <= b, 'a fdm2-conf data bar is outside its own leg'
+        return out
 
     print()
-    print('## the fdm2-conf table | jig.towards_away on EMERGING values, exact gap, no tolerance')
-    print('# `towards` means the line is AT its own rolling target-side extremum since the anchor')
-    print('# `away` means the gap from that extremum is positive - FOR A SHORT, value minus the')
-    print('# running minimum; FOR A LONG, the running maximum minus value')
-    print('# the anchor is the incoming trade\'s open, or the re-entry window\'s open')
-    print('# ex-20/80 stays on the chart-matched read, his standing rule for a fence')
+    print('## the fdm2-conf machine | the board at every data bar | jig.reversal_extremum')
+    print('# a ROW IS A DATA BAR - a bar where the mech collects the board and decides `walk` or')
+    print('# `rev-trade`. THE TRADE IS STILL OPEN ON IT, his 1104')
+    print('# incoming = the trade at its CLOSE bar, arriving. outgoing = the trade at its OPEN')
+    print('# bar, being sent out. One trade is both, and the bar decides which')
+    print('# every board column reads the OPEN trade\'s own target side - HIGH for a LONG, LOW for')
+    print('# a SHORT - because that is the trade a rev-trade at this bar would close')
+    print('# `the setup opens` and `realised %` are PENDING at a data bar: both need a bar after')
+    print('# the decision')
+    print('# `travelling` means the line sits exactly at its own running extreme since the anchor')
+    print('# the value read is FDM_CONF_READ %s; the lift-off always reads emerging' % _CFR)
+    print('# the data bars are FDM_CONF_BARS %s' % _CFB)
+    print('# the lift-off: LIFT_PTS %d samples, LIFT_TOL %g r-points, LIFT_WOB %d bars = %d s,'
+          ' and GAP_PER_TF %g bars per TF-minute'
+          % (int(K.LIFT_PTS), float(K.LIFT_TOL), int(K.LIFT_WOB), int(K.LIFT_WOB) * 5,
+             float(K.GAP_PER_TF)))
+    print('# the fence is %g/%g, FDM_FNC_2080 %g' % (*K.fnc_pair(K.FDM_FNC_2080), K.FDM_FNC_2080))
+    print('# THE STOP IS ON: FDM_MAE_CAP %.2f%% adverse from the open' % float(K.FDM_MAE_CAP))
     print()
-    print('# every re-entry leg prints, whatever it realised - his 1104. an incoming-trade setup'
-          ' prints when it realised at or under zero')
-    print()
-    print('| the signal bar | the setup | the incoming trade | the outgoing trade |'
-          ' the outgoing realised % | the anchor | towards the incoming way, ws1-ws30 |'
-          ' ex-20/80 the incoming way, ws1-ws30 |'
-          ' towards the incoming way, ws25-ws30 | ex-20/80 the incoming way, ws25-ws30 |'
-          ' towards the outgoing way, ws1-ws30 |')
-    print('|---|---|---|---|---|---|---|---|---|---|---|')
-    for _i0, _L0 in enumerate(LG):
-        _out_sd = int(_L0['side'])
+    print('| the setup opens | the incoming trade | its own side | the setup | what opened it |'
+          ' realised % | ex-20/80 its own way | travelling its own way |'
+          ' travelling the counter way | its unrealised % at the data bar |')
+    print('|---|---|---|---|---|---|---|---|---|---|')
+    _CFN = 0
+    for _c0, _L0 in enumerate(LG):
+        _sd0 = int(_L0['side'])
         _src0 = str(_L0['src'])
-        if not _src0.startswith('fdm re-entry') and float(_L0['rel']) > 0:
-            continue
         if _src0.startswith('fdm re-entry'):
-            _setup, _in_sd = 're-entry based', _out_sd
-            _wo = [g for g in SIGS if SG.fire_bar(g) == int(_L0['opn'])]
-            _anchor = int(_wo[0]['src']) if _wo else int(_L0['opn'])
-            _sig0 = int(_wo[0]['bar']) if _wo else int(_L0['opn'])
-            _in_nm = 'none - a re-entry'
-        elif _i0 > 0:
-            _setup, _in_sd = 'incoming trade based', -_out_sd
-            _anchor = int(LG[_i0 - 1]['opn'])
-            _pr0 = [r for r in LG[_i0 - 1]['rows'] if r['stage'] == 'REV-TRADE']
-            _sig0 = int(_pr0[-1]['bar']) if _pr0 else int(_L0['opn']) - 2
-            _in_nm = 'LONG' if _in_sd > 0 else 'SHORT'
+            _setup0 = 're-entry based'
+            _wo0 = [x for x in SIGS if SG.fire_bar(x) == int(_L0['opn'])]
+            _anc0 = int(_wo0[0]['src']) if _wo0 else int(_L0['opn'])
         else:
-            continue
-        _ib = _band(1, int(LN['HI']), _anchor, _sig0, _in_sd)
-        _i25 = _band(25, int(LN['HI']), _anchor, _sig0, _in_sd)
-        _ob = _band(1, int(LN['HI']), _anchor, _sig0, _out_sd)
-        print('| %s | %s | %s | %s | %+.3f | %s | %d of %d | %d of %d |'
-              ' %d of %d | %d of %d | %d of %d |'
-              % (ln.U(_sig0), _setup, _in_nm, 'LONG' if _out_sd > 0 else 'SHORT', _L0['rel'],
-                 ln.U(_anchor), _ib[0], _ib[2], _ib[1], _ib[2],
-                 _i25[0], _i25[2], _i25[1], _i25[2], _ob[0], _ob[2]))
-
+            _setup0 = 'incoming trade based'
+            _anc0 = int(_L0['opn'])
+        _o0 = float(LN['close'][int(_L0['opn'])])
+        for _b0, _w0 in _cf_bars(_L0):
+            _in0 = _cf_band(_b0, _sd0, _anc0)
+            _ct0 = _cf_band(_b0, -_sd0, _anc0)
+            print('| pending - the decision is at %s | %s %s, still open | %s |'
+                  ' %s | %s | pending - the trade is open | %d of %d | %d of %d | %d of %d |'
+                  ' %+.3f |'
+                  % (ln.U(_b0), ln.U(int(_L0['opn'])), 'LONG' if _sd0 > 0 else 'SHORT',
+                     'HIGH, upwards' if _sd0 > 0 else 'LOW, downwards', _setup0, _w0,
+                     _in0[1], _in0[2], _in0[0], _in0[2], _ct0[0], _ct0[2],
+                     _sd0 * (float(LN['close'][_b0]) - _o0) / _o0 * 100.0))
+            _CFN += 1
+    print()
+    print('| the fdm2-conf roll-up | value |')
+    print('|---|---|')
+    print('| legs walked | %d |' % len(LG))
+    print('| data bars | %d |' % _CFN)
+    print('| the anchor, per row | the open trade\'s own open, or the re-entry window\'s open |')
 
 #   ── W_FDM2_WS5REV='<from> .. <to>': the banked re-entry's own trace ────────────────────────────
 #   THE MECH LIVES IN v4_fdm_reentry.signals, banked 1104. This arm REPORTS it and computes

@@ -1153,6 +1153,29 @@ FDM_RE_WS6_GATE = os.environ.get('W_V4_FDM_RE_WS6_GATE', 'ex2080')
 #   MEASURED on the two days: 11 of 12 trades are identical between the arms. The whole difference
 #   is the 2026-09-15 18:17 / 18:37:30 cluster, where oob opened two trades at -5.470% and -0.133%
 #   and ex-20/80 opens one at -0.824% with +1.428% favourable.
+FDM_RE_REV_TF = _knob('FDM_RE_REV_TF', 5, int)    # the line whose reversal starts the walk.
+FDM_RE_GATE_TF = _knob('FDM_RE_GATE_TF', 6, int)  # the line that gates the wait, read at that bar.
+#   HIS 1104: *"replace ws5 and ws6 with higher TFs, and scan higher than ws12"*. ws5 and ws6 are
+#   the spec he wrote the mech on and they stay the DEFAULT; the knobs exist so the pair can be
+#   lifted without a second copy of the walk. The gate TF must sit above the reversal TF, and the
+#   assert in v4_fdm_reentry.signals carries that.
+FDM_RE_CLIMB = os.environ.get('W_V4_FDM_RE_CLIMB', 'off')
+#   HIS 1104 PROBE: *"it might be a dynamic mech - ride upwards through the TFs until you reach a
+#   tf showing the in fence r line, then open the trade"*.
+#     'off'       the banked ws5/ws6 mech - one gate line, then the fixed scan band. THE BANK
+#     'value'     climb from the reversal line + 1, stepping up while each r is ex-fence, and open
+#                 at the first in-fence r. One bar, one read per rung
+#     'reversal'  the same climb, but each ex-fence rung must print its OWN reversal before the
+#                 climb steps up. His ws6 branch, generalised to every rung
+#   WHAT COUNTS AS EX-FENCE ON A RUNG is FDM_RE_WS6_GATE, the same knob the single gate used.
+FDM_RE_CLIMB_HI = _knob('FDM_RE_CLIMB_HI', 12, int)
+#   THE CLIMB'S CEILING. 12 is wsf's own top, his 1017 band names. A climb that reaches the ceiling
+#   without an in-fence rung produces NO trade, which is the same shape as the band finding nothing.
+FDM_RE_SCAN_FLOOR = os.environ.get('W_V4_FDM_RE_SCAN_FLOOR', 'gate')
+#   WHERE THE SCAN BAND STARTS. His *"scan higher than ws12"* reads two ways and BOTH are arms:
+#     'gate'  the TF above the gate line, which is the mech's own shape - ws7 when the gate is ws6
+#     'ws13'  strictly above ws12, his sentence read literally, whatever the pair is
+#   The band's ceiling is FDM_RE_SCAN_HI. 'gate' with the banked pair reproduces FDM_RE_SCAN_LO 7.
 FDM_RE_SCAN_LO = _knob('FDM_RE_SCAN_LO', 7, int)   # the scan's first TF. ws6 + 1.
 FDM_RE_SCAN_HI = _knob('FDM_RE_SCAN_HI', 12, int)  # the scan's last TF. wsf's own ceiling.
 #   HIS 1104 *"scan the wsf TFs above ws6"*. wsf is ws1-ws12, his 1017 band names, so the band is
@@ -1238,6 +1261,22 @@ FDM_SAV_ARM = _knob('FDM_SAV_ARM', 0, int)      # 0 drops the ws5r walkback arm.
 FDM_MAE_CAP = _knob('FDM_MAE_CAP', 1.1)         # the stop, percent adverse from the open.
 #   HIS 1103 *"add the typical mae1.1 stop"* AND *"yes, move it to default"*. ON, always applied -
 #   unlike LIN2_MAE_CAP 1.1, which stayed behind W_MAE_CAP=on in lineage2's sealed driver.
+
+#   ── the fdm2-conf machine, BANKED 1104 ─────────────────────────────────────────────────────────
+#   HIS 1104: *"make this the fdm2-conf machine"*. The table's row is a DATA BAR - a bar where the
+#   mech collects the board and decides `walk` or `rev-trade` - and the decision is made on the
+#   INCOMING trade AND ITS SIDE, his words.
+FDM_CONF_READ = os.environ.get('W_V4_FDM_CONF_READ', 'closed_prev')   # 'closed_prev' | 'emerging'.
+#   THE VALUE SOURCE for the fdm2-conf table's toward/away. BANKED 'closed_prev' on his 1104
+#   *"make sure that closed-prev is the standard for everything except lift-off"*, which is the
+#   LATER of his two rulings here - the earlier was *"emerging must be the answer to the larger
+#   question"* for this table, and 'emerging' keeps it as the arm. The lift-off inside
+#   jig.reversal_extremum reads EMERGING at either setting; this knob never touches it.
+FDM_CONF_BARS = os.environ.get('W_V4_FDM_CONF_BARS', 'event+x10')   # 'event' | 'event+x10'.
+#   WHICH BARS THE TABLE COLLECTS THE BOARD ON. 'event+x10' is every cadence event plus that
+#   event's own ws10x race confirm - the two bars the machine already owns. 'event' drops the race
+#   confirm. THE KNOB NAME IS MINE. His 1104 ws8x experiment is NOT a value here: the race on a
+#   line other than ws10 has no producer yet, and which line it would run on is unruled.
 
 LIN2_CP_LIFT = os.environ.get('W_V4_LIN2_CP_LIFT', 'closed_prev')
 LIN2_CP_WS1R = os.environ.get('W_V4_LIN2_CP_WS1R', 'closed_prev')   # ws1r's VALUE source in
@@ -1511,7 +1550,12 @@ RULED = {
     'FDM_RE_REV_READ': ('closed_prev', 'BANKED 1104 - his "-use closed-prev" for the ws5 and ws6 reversals, overriding the standing rule that lift-off is the one emerging read. "emerging" is the arm it replaced'),
     'FDM_RE_WS5_FNC': (20.0, 'BANKED 1104 - his "if ws5r reverses while ex-20/80-fence". The smaller end of the pair, and its own knob so a sweep cannot move step 1\'s fence'),
     'FDM_RE_WS6_GATE': ('ex2080', 'BANKED 1104 - his "the ws6r gate might need to move from oob to ex-20/80-fence", then "that looks like our reentry mech". "oob" is the arm it replaced. The one cluster that moved: 2026-09-15 18:17, from -5.470% to -0.824%'),
-    'FDM_RE_SCAN_LO': (7, 'the scan band\'s floor, ws6 + 1, from his "the wsf TFs above ws6"'),
+    'FDM_RE_CLIMB': ('off', 'BANKED OFF - his 1104 probe "ride upwards through the TFs until you reach a tf showing the in fence r line". "value" reads each rung at one bar; "reversal" makes each ex-fence rung print its own reversal first'),
+    'FDM_RE_CLIMB_HI': (12, 'the climb\'s ceiling, wsf\'s own top'),
+    'FDM_RE_REV_TF': (5, 'the line whose reversal starts the walk. His spec is ws5; the knob exists for his 1104 "replace ws5 and ws6 with higher TFs"'),
+    'FDM_RE_GATE_TF': (6, 'the line that gates the wait. His spec is ws6'),
+    'FDM_RE_SCAN_FLOOR': ('gate', 'where the scan band starts: "gate" is the TF above the gate line, the mech\'s own shape; "ws13" is his "scan higher than ws12" read literally'),
+    'FDM_RE_SCAN_LO': (7, 'the scan band\'s floor when FDM_RE_SCAN_FLOOR is a fixed TF rather than the gate + 1'),
     'FDM_RE_SCAN_HI': (12, 'the scan band\'s ceiling. wsf is ws1-ws12, his 1017 band names'),
     'FDM_RE_FIRE_IB': (1, 'BANKED 1104 - ws1b\'s ib close is in the last-to-fire set, his "out of ws5r reversing or ws6r reversal or ws1b crossing to ib". 0 drops it'),
     'FDM_FNC_2080': (20.0, 'HIS OWN KNOB NAME, "fdm-20-80-fnc", at his own value. Both the step-1 test and the reversal population read it; "ex" includes oob'),
@@ -1527,6 +1571,8 @@ RULED = {
     'FDM_X10_TRADE_PCT': (50.0, 'HIS VALUE ">=50%". The knob is mine - a stated threshold with no knob cannot be moved without an edit'),
     'FDM_X10_GRACE_MIN': (5.0, 'HIS VALUE "we add a 5 minute walk". The knob is mine. 5.0 min = 60 bars at the 5 s grid'),
     'FDM_MAE_CAP': (1.1, 'HIS 1103 "add the typical mae1.1 stop" + "yes, move it to default". ALWAYS ON, unlike LIN2_MAE_CAP which stayed behind W_MAE_CAP=on'),
+    'FDM_CONF_READ': ('closed_prev', 'BANKED 1104 - his "make sure that closed-prev is the standard for everything except lift-off", the LATER of his two rulings for this table. "emerging" is the arm it replaced'),
+    'FDM_CONF_BARS': ('event+x10', 'BANKED 1104 - the two data bars the machine owns, the cadence event and that event\'s ws10x race confirm. "event" is the narrower arm. THE KNOB NAME IS MINE'),
     'FDM_SAV_ON': (0, 'OFF, HIS 1103 "we\'re dropping saviour for now". It was wired and measured: 2026-08-03 -1.051% -> -3.103% net, 2026-09-15 +7.316% -> -15.040%'),
     'FDM_SAV_READ': ('emerging', 'HIS 1103 "use emerging values, at the emerging ws1Mage extermum". "chart" is the other arm'),
     'FDM_SAV_TF_HI': (3, 'HIS 1103 "reduce the cascade to ws1-3". fdm2\'s own knob, not SAV_CASCADE_TF_HI, so the live machine keeps 12'),
