@@ -122,3 +122,109 @@ anything has come, and it is 60% of the way there. Lifting the pair off ws5/ws6 
 double the per-leg gross, which is the biggest single move any knob has shown tonight.
 
 On the 4 days he had never seen, (7, 8) is +195.753% and (8, 9) +84.825% against (5, 6) at -13.677%.
+
+## his dynamic climb, stage 11, over 94 days
+
+*"it might be a dynamic mech - ride upwards through the TFs until you reach a tf showing the in
+fence r line, then open the trade"*. 108 configs, both readings of his sentence as arms.
+
+| the arm | all 94 net % | legs |
+|---|---|---|
+| the climb off, the banked ws5/ws6 mech | -4321.605 | 25791 |
+| the climb reading each rung at one bar | -4870.059 | 29601 |
+| the climb waiting for each rung's own reversal | -4332.285 | 26947 |
+| the line it starts from, ws5 | -5372.037 | 33846 |
+| the line it starts from, ws8 | -3543.694 | 27557 |
+| the line it starts from, ws10 | -4608.218 | 20936 |
+
+THE BEST SINGLE CONFIG OF THE WHOLE NIGHT, by gross per leg:
+
+| the config | value |
+|---|---|
+| the climb | waits for each rung's own reversal |
+| the ceiling | ws12 |
+| the rung gate | at 20/80 |
+| the reversal read | live |
+| the line it starts from | ws8 |
+| legs | 883 |
+| gross % | +111.425 |
+| net % | -62.972 |
+| gross per leg % | +0.1262 |
+| days net above zero | 31 of 94 |
+
++0.1262% per leg against the 0.1975% round trip is 64% of the way there, and it beats the fixed
+pair's best (+0.1193%) by a hair. The climb itself is worth little; the START LINE is what moves -
+ws8 against ws5 is the same lever the TF-pair grid found.
+
+## stages 8 and 9
+
+They refused on the first attempt, correctly: the reversal read had been set in the environment,
+which moves the code default, and the control assert will not let config 0 be anything but the
+banked machine. Re-run with the read as a grid slot instead.
+
+## THE MORNING ANSWER, every grid of the night in one table
+
+437 configs with 200 or more legs, over all 94 days, every one of them with the MAE 1.1 stop on.
+
+| the round trip a config has to beat | 0.1975% |
+|---|---|
+| configs whose gross per leg reached it | 0 of 437 |
+| configs with a positive net | 0 of 437 |
+
+| gross per leg % | the grid | legs | gross % | net % | days net>0 | the config |
+|---|---|---|---|---|---|---|
+| +0.1262 | climb | 883 | +111.425 | -62.972 | 31 of 94 | the reversal climb from ws8, ceiling ws12, rung gate at 20/80, live read |
+| +0.1199 | climb | 765 | +91.686 | -59.398 | 30 of 94 | the same, rung gate oob |
+| +0.1193 | tfpair | 862 | +102.815 | -67.434 | 29 of 94 | the pair (8, 9), scan to ws12, live read |
+| +0.1138 | tfpair | 727 | +82.727 | -60.853 | 28 of 94 | the pair (7, 8), scan to ws12, chart-matched read |
+| +0.1092 | rtrip2 | 1150 | +125.631 | -101.496 | 34 of 94 | the r trip (4, 7, 6), live read |
+| -0.0205 | the banked machine | 898 | -18.365 | -195.721 | 19 of 94 | ws5/ws6, chart-matched, scan to ws12 |
+
+THE ONE LEVER THE NIGHT FOUND is the LINE THE WALK STARTS FROM. ws8 instead of ws5 takes the
+per-leg gross from -0.0205% to +0.1193% with the same number of legs. Everything else - the climb
+mechanism, the scan ceiling, the r trip, ws1b's multiplier, all 24 spec knobs one at a time - moves
+it by a fraction of that, and nothing combines to clear the drag.
+
+Stage 12 gives that lever its own curve: the start line at ws5 through ws12, both climb arms, at the
+best config above. It is the last thing running.
+
+## what needs HIS ruling, in order
+
+1. The start line. His spec says ws5; the tape says ws8 and the curve from stage 12 will say
+   whether it keeps climbing. Nothing moves without his word.
+2. The reversal read. His 1104 ruling was chart-matched; every grid of the night says live
+   (emerging), which is also what every other lift-off in the machine already uses.
+3. The drag. No arm of any mech he has specified clears 0.1975% per leg. Either the per-leg move
+   has to get bigger or the leg count has to come down, and both are his calls.
+
+## stage 12: the start line's own curve, and a correction to the night's reading
+
+At the banked chart-matched read, the curve is NOT a trend. It is bumpy:
+
+| the start line | the climb | legs | gross % | net % | gross per leg % | days net>0 |
+|---|---|---|---|---|---|---|
+| ws5, his spec | off | 898 | -18.365 | -195.721 | -0.0205 | 19 of 94 |
+| ws5 | reversal | 877 | +11.064 | -162.145 | +0.0126 | 20 of 94 |
+| ws6 | off | 822 | +30.898 | -131.447 | +0.0376 | 25 of 94 |
+| ws6 | reversal | 828 | +57.432 | -106.092 | +0.0694 | 25 of 94 |
+| ws7 | off | 727 | +82.727 | -60.853 | +0.1138 | 28 of 94 |
+| ws7 | reversal | 743 | +78.227 | -68.514 | +0.1053 | 27 of 94 |
+| ws8 | off | 618 | +17.706 | -104.350 | +0.0287 | 24 of 94 |
+| ws8 | reversal | 648 | +22.230 | -105.753 | +0.0343 | 22 of 94 |
+| ws9 | off | 447 | +46.015 | -42.273 | +0.1029 | 26 of 94 |
+| ws9 | reversal | 532 | +42.136 | -62.939 | +0.0792 | 26 of 94 |
+| ws10 | off | 297 | -18.915 | -77.583 | -0.0637 | 19 of 94 |
+| ws10 | reversal | 350 | -8.619 | -77.750 | -0.0246 | 23 of 94 |
+
+ws11 and ws12 are absent: the gate line is the start line + 1, so with the ceiling at ws12 those
+rungs trip the mech's own assert and are refused.
+
+THE CORRECTION I OWE THE EARLIER READING. I reported "the lever is the start line, ws8 over ws5"
+off the climb and TF-pair grids. The curve says the band ws6..ws9 all beat ws5, but the ranking
+INSIDE that band is not stable: ws8 is the best rung at the live read and ws7 at the chart-matched
+read, with ws8 falling to +0.0287 here. Picking one rung on one grid would be fitting the noise.
+What survives is the band, not the rung.
+
+AND THE SECOND HALF OF THE HONEST READING: the net improves as the start line rises mostly because
+the LEG COUNT FALLS - 898 legs at ws5 against 447 at ws9. Less trading, less drag. The per-leg gross
+still never reaches 0.1975% anywhere in 449 configs.

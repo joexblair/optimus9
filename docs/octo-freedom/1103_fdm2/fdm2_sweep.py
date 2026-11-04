@@ -73,19 +73,113 @@ RTRIP_GRID = (('R_TRIP', tuple(TRIPS)),)
 #   resolves through sub_line, its own spec.
 BMULT_GRID = (('B_MULT', (0.95, 0.85, 0.90, 1.00, 1.05)),)
 
-GRID = {'knobs': KNOB_GRID, 'rtrip': RTRIP_GRID, 'bmult': BMULT_GRID}[MODE]
+#   ── HIS 1104 COVERAGE GRID: every knob the spec collects, one at a time ───────────────────────
+#   THE RULED VALUE IS THE FIRST RUNG of every curve. The rungs are mine and they are stated as
+#   such: he has never ruled a range for any of these, so each curve is a probe, not a proposal.
+CURVE = (
+    ('FDM_RE_WIN_OPEN', ('both', 'ws1b', 'gcws30b', 'first', 'sameside')),
+    ('FDM_RE_WIN_CLOSE', ('ws1b', 'gcws30b')),
+    ('FDM_RE_B_FNC', (5.0, 10.0, 15.0, 20.0)),
+    ('FDM_RE_IB_XWOB', (1, 3, 6, 12)),
+    ('FDM_RE_WS5_FNC', (20.0, 15.0, 25.0, 30.0, 35.0)),
+    ('FDM_M3_FNC', (25.0, 15.0, 20.0, 30.0, 35.0)),
+    ('FDM_M3_RESCUE_ON', (1, 0)),
+    ('FDM_M3_RESCUE_FNC', (40.0, 30.0, 35.0, 45.0, 50.0)),
+    ('FDM_FNC_2080', (20.0, 15.0, 25.0, 30.0)),
+    ('FDM_STEP1_ABOVE_TF', (3, 1, 5, 8, 12)),
+    ('FDM_POP_LO', (3, 1, 5, 8, 12)),
+    ('FDM_X10_WOB', (24, 12, 18, 36, 48)),
+    ('FDM_X10_FRM', ('cross', 'confirm')),
+    ('FDM_X10_GRACE_PCT', (40.0, 20.0, 30.0, 50.0, 60.0)),
+    ('FDM_X10_TRADE_PCT', (50.0, 40.0, 60.0, 70.0, 80.0)),
+    ('FDM_X10_GRACE_MIN', (5.0, 2.5, 10.0, 15.0, 30.0)),
+    ('FDM_REV_FROM', ('event', 'window')),
+    ('FDM_MAE_CAP', (1.1, 0.8, 1.5, 2.0, 3.0)),
+    ('FDM_SAV_ON', (0, 1)),
+    ('LIFT_PTS', (6, 4, 8, 10)),
+    ('LIFT_TOL', (2.0, 1.0, 3.0, 4.0)),
+    ('LIFT_WOB', (8, 4, 6, 12, 16)),
+    ('TRAJ_MIN_TRAVEL', (0.0, 0.5, 1.0, 2.0)),
+    ('L2_MOM_MAXTF', (30, 20, 25)),
+)
+#   THESE ARE READ INSIDE v4_fdm2.load, so a rung change needs the arrays rebuilt.
+RELOAD = {'LIFT_PTS', 'LIFT_TOL', 'LIFT_WOB', 'L2_MOM_MAXTF'}
+CURVE_CFGS = [{'KNOB': n, 'RUNG': v} for n, vs in CURVE for v in vs]
+
+#   ── HIS 1104 STAGE 7: *"replace ws5 and ws6 with higher TFs, and scan higher than ws12"* ──────
+#   THE PAIR IS ONE SLOT, because the two knobs are not independent - the gate line must sit above
+#   the reversal line. (5, 6) is his spec and stays first, so config 0 is the ruled machine.
+#   THE SCAN FLOOR CARRIES BOTH READINGS of his sentence, 'gate' and 'ws13', as arms.
+#   A pair whose gate sits at or above the ceiling trips the mech's own assert and prints as a
+#   REFUSED row rather than being quietly dropped.
+TFPAIR_GRID = (
+    ('TF_PAIR', ((5, 6), (7, 8), (8, 9), (10, 11), (12, 13), (15, 16), (20, 21))),
+    ('FDM_RE_SCAN_FLOOR', ('gate', 'ws13')),
+    ('FDM_RE_SCAN_HI', (12, 18, 24, 30)),
+    ('FDM_RE_REV_READ', ('closed_prev', 'emerging')),
+)
+
+#   ── HIS 1104 STAGE 11: the dynamic climb ─────────────────────────────────────────────────────
+#   *"it might be a dynamic mech - ride upwards through the TFs until you reach a tf showing the in
+#   fence r line, then open the trade"*. 'off' is the banked ws5/ws6 mech and stays config 0.
+CLIMB_GRID = (
+    ('FDM_RE_CLIMB', ('off', 'value', 'reversal')),
+    ('FDM_RE_CLIMB_HI', (12, 20, 30)),
+    ('FDM_RE_WS6_GATE', ('ex2080', 'oob')),
+    ('FDM_RE_REV_READ', ('closed_prev', 'emerging')),
+    ('FDM_RE_REV_TF', (5, 8, 10)),
+)
+
+#   ── STAGES 8 AND 9: the line config crossed with the reversal read ───────────────────────────
+#   THE READ IS A GRID SLOT, NOT AN ENV OVERRIDE. Setting it in the environment moves the code
+#   default, and the control assert refused the run for exactly that reason - config 0 has to BE
+#   the banked machine or no arm can be read against it.
+RTRIP2_GRID = (('R_TRIP', tuple(TRIPS)), ('FDM_RE_REV_READ', ('closed_prev', 'emerging')))
+BMULT2_GRID = (('B_MULT', (0.95, 0.85, 0.90, 1.00, 1.05)),
+               ('FDM_RE_REV_READ', ('closed_prev', 'emerging')))
+
+#   ── STAGE 12: the start line's own curve, at the best config the night found ─────────────────
+#   THE DATA POINTED HERE, not a new idea of mine. Across the TF-pair grid and the climb grid the
+#   one slot that moved the per-leg gross was the LINE THE WALK STARTS FROM - ws8 against ws5 - and
+#   neither grid gave it more than three rungs. This gives it eight, at the best config found:
+#   the reversal climb, ceiling ws12, rung gate at 20/80, the live read.
+#   ws5 IS FIRST so config 0 is still the banked machine's start line.
+STARTLINE_GRID = (
+    ('FDM_RE_REV_TF', (5, 6, 7, 8, 9, 10, 11, 12)),
+    ('FDM_RE_CLIMB', ('off', 'reversal')),
+)
+
+GRID = {'knobs': KNOB_GRID, 'rtrip': RTRIP_GRID, 'bmult': BMULT_GRID, 'tfpair': TFPAIR_GRID,
+        'climb': CLIMB_GRID, 'rtrip2': RTRIP2_GRID, 'bmult2': BMULT2_GRID,
+        'startline': STARTLINE_GRID,
+        'curve': (('KNOB', tuple(n for n, _ in CURVE)), ('RUNG', ('-',)))}[MODE]
 NAMES = [n for n, _ in GRID]
-CFGS = [dict(zip(NAMES, c)) for c in itertools.product(*[v for _, v in GRID])]
-RULED = {n: v[0] for n, v in GRID}
-assert CFGS[0] == RULED, 'the ruled config is not the first row of the sweep'
-KNOB_NAMES = [n for n, _ in KNOB_GRID]
+if MODE == 'curve':
+    CFGS = CURVE_CFGS
+    RULED = CFGS[0]
+else:
+    CFGS = [dict(zip(NAMES, c)) for c in itertools.product(*[v for _, v in GRID])]
+    RULED = {n: v[0] for n, v in GRID}
+    assert CFGS[0] == RULED, 'the ruled config is not the first row of the sweep'
+KNOB_NAMES = [n for n, _ in KNOB_GRID] + ['FDM_RE_REV_TF', 'FDM_RE_GATE_TF',
+                                           'FDM_RE_SCAN_FLOOR', 'FDM_RE_CLIMB',
+                                           'FDM_RE_CLIMB_HI']
 BANKED = {n: getattr(K, n) for n in KNOB_NAMES}
-for n in KNOB_NAMES:
-    assert BANKED[n] == dict(KNOB_GRID)[n][0], \
-        'the code default for %s is %r, the sweep calls %r ruled' % (n, BANKED[n],
-                                                                    dict(KNOB_GRID)[n][0])
+#   THE CODE DEFAULT AND THE SWEEP'S "RULED" MUST AGREE, for the pair knobs too. A disagreement
+#   means config 0 is not the machine and no arm in the grid can be read against it.
+for n, v in (list(dict(KNOB_GRID).items())
+             + [('FDM_RE_REV_TF', (5,)), ('FDM_RE_GATE_TF', (6,)),
+                ('FDM_RE_SCAN_FLOOR', ('gate',)), ('FDM_RE_CLIMB', ('off',)),
+                ('FDM_RE_CLIMB_HI', (12,))]):
+    assert BANKED[n] == v[0], \
+        'the code default for %s is %r, the sweep calls %r ruled' % (n, BANKED[n], v[0])
 
 _LINE_SPEC_B = ln.SPEC['b']
+
+
+CURVE_BANKED = {}
+if MODE == 'curve':
+    CURVE_BANKED = {n: getattr(K, n) for n, _ in CURVE}
 
 
 def arrays(cfg):
@@ -152,12 +246,33 @@ T0 = time.time()
 ROWS = []
 LN = None
 for ci, cfg in enumerate(CFGS):
-    if MODE == 'knobs':
+    if MODE == 'curve':
+        #   EVERY OTHER KNOB BACK TO THE BANK before each rung, so a curve reads one knob only.
+        for n, v in CURVE_BANKED.items():
+            setattr(K, n, v)
+        setattr(K, cfg['KNOB'], cfg['RUNG'])
+        if cfg['KNOB'] in RELOAD or LN is None:
+            LN = F2.load()
+    elif MODE in ('knobs', 'tfpair', 'climb', 'startline'):
+        #   TF_PAIR IS ONE SLOT HOLDING TWO KNOBS: the gate line must sit above the reversal line,
+        #   so they are swept together and never as a cross.
         for n in NAMES:
-            setattr(K, n, cfg[n])
+            if n == 'TF_PAIR':
+                K.FDM_RE_REV_TF, K.FDM_RE_GATE_TF = cfg[n]
+            else:
+                setattr(K, n, cfg[n])
+                if n == 'FDM_RE_REV_TF':
+                    #   THE GATE LINE FOLLOWS THE REVERSAL LINE, +1, which is the banked
+                    #   relationship. Without this the pair assert trips on every rung but ws5.
+                    K.FDM_RE_GATE_TF = int(cfg[n]) + 1
         if LN is None:
             LN = arrays(cfg)
     else:
+        #   THE LINE-CONFIG GRIDS MAY ALSO CARRY KNOB SLOTS, so every name that is not a line slot
+        #   is applied as a knob before the arrays are built.
+        for n in NAMES:
+            if n not in ('R_TRIP', 'B_MULT'):
+                setattr(K, n, cfg[n])
         LN = arrays(cfg)
     tape_end = len(LN['close']) - 1
     try:
@@ -187,6 +302,8 @@ for ci, cfg in enumerate(CFGS):
 
 for n in KNOB_NAMES:
     setattr(K, n, BANKED[n])
+for n, v in CURVE_BANKED.items():
+    setattr(K, n, v)
 
 say()
 say('| the config | %s | days with a trade | legs | stopped | gross %% | drag %% | net %% |'

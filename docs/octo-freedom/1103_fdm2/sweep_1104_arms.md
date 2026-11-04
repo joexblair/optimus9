@@ -184,3 +184,88 @@
 | RUNG confirm | +8.345 | -2.009 | -191.754 | -185.418 | 1 | 887 |
 | RUNG gcws30b | +3.592 | -5.999 | -353.882 | -356.289 | 2 | 1772 |
 | RUNG sameside | +1.664 | -2.009 | -195.376 | -195.721 | 1 | 898 |
+
+## sweep_1104_climb_94d.md | 108 configs x 94 days
+# the control row, config 0 against the banked machine: HOLDS on 4 of 4 banked days
+# every number is a sum of that cut's per-day nets over every config holding the arm
+
+| the arm | your 4 days net % | the 4 random days net % | the other 86 days net % | all 94 net % | configs | legs |
+|---|---|---|---|---|---|---|
+| FDM_RE_CLIMB off | +164.400 | +164.139 | -4650.144 | -4321.605 | 36 | 25791 |
+| FDM_RE_CLIMB value | +207.403 | +130.980 | -5208.442 | -4870.059 | 36 | 29601 |
+| FDM_RE_CLIMB reversal | +187.188 | +108.972 | -4628.445 | -4332.285 | 36 | 26947 |
+| FDM_RE_CLIMB_HI 12 | +186.929 | +144.747 | -4731.125 | -4399.449 | 36 | 26929 |
+| FDM_RE_CLIMB_HI 20 | +185.772 | +127.866 | -4879.486 | -4565.848 | 36 | 27687 |
+| FDM_RE_CLIMB_HI 30 | +186.290 | +131.478 | -4876.420 | -4558.652 | 36 | 27723 |
+| the ws6r gate oob | +287.459 | +180.773 | -6586.280 | -6118.048 | 54 | 37468 |
+| the ws6r gate at 20/80 | +271.532 | +223.318 | -7900.751 | -7405.901 | 54 | 44871 |
+| the reversal read live | +370.370 | +374.829 | -7737.545 | -6992.346 | 54 | 47377 |
+| the reversal read chart-matched | +188.621 | +29.262 | -6749.486 | -6531.603 | 54 | 34962 |
+| FDM_RE_REV_TF 5 | +299.165 | -25.403 | -5645.799 | -5372.037 | 36 | 33846 |
+| FDM_RE_REV_TF 8 | +278.944 | +236.137 | -4058.775 | -3543.694 | 36 | 27557 |
+| FDM_RE_REV_TF 10 | -19.118 | +193.357 | -4782.457 | -4608.218 | 36 | 20936 |
+
+## sweep_1104_rtrip2_94d.md | 54 configs x 94 days
+# the control row, config 0 against the banked machine: HOLDS on 4 of 4 banked days
+# every number is a sum of that cut's per-day nets over every config holding the arm
+
+| the arm | your 4 days net % | the 4 random days net % | the other 86 days net % | all 94 net % | configs | legs |
+|---|---|---|---|---|---|---|
+| the r trip (rsi, stoch range, stoch len) (4, 7, 6) | +18.949 | -16.160 | -238.463 | -235.674 | 2 | 2043 |
+| the r trip (rsi, stoch range, stoch len) (4, 7, 7) | +42.611 | -24.517 | -277.570 | -259.476 | 2 | 1727 |
+| the r trip (rsi, stoch range, stoch len) (4, 7, 8) | +25.931 | -20.779 | -322.232 | -317.080 | 2 | 1492 |
+| the r trip (rsi, stoch range, stoch len) (4, 8, 6) | +7.684 | -18.843 | -294.753 | -305.912 | 2 | 2125 |
+| the r trip (rsi, stoch range, stoch len) (4, 8, 7) | +26.455 | -9.153 | -297.204 | -279.902 | 2 | 1846 |
+| the r trip (rsi, stoch range, stoch len) (4, 8, 8) | +16.197 | -14.052 | -341.808 | -339.663 | 2 | 1598 |
+| the r trip (rsi, stoch range, stoch len) (4, 9, 6) | -8.913 | -3.954 | -364.399 | -377.266 | 2 | 2195 |
+| the r trip (rsi, stoch range, stoch len) (4, 9, 7) | +43.863 | +0.073 | -374.008 | -330.072 | 2 | 1894 |
+| the r trip (rsi, stoch range, stoch len) (4, 9, 8) | +29.443 | -18.517 | -391.550 | -380.624 | 2 | 1652 |
+| the r trip (rsi, stoch range, stoch len) (5, 7, 6) | +13.678 | -29.776 | -300.475 | -316.573 | 2 | 2152 |
+| the r trip (rsi, stoch range, stoch len) (5, 7, 7) | +21.039 | -8.982 | -324.639 | -312.582 | 2 | 1900 |
+| the r trip (rsi, stoch range, stoch len) (5, 7, 8) | +12.065 | -18.299 | -366.270 | -372.504 | 2 | 1608 |
+| the r trip (rsi, stoch range, stoch len) (5, 8, 6) | -1.754 | +5.036 | -349.138 | -345.856 | 2 | 2268 |
+| the r trip (rsi, stoch range, stoch len) (5, 8, 7) | +16.447 | +1.059 | -346.546 | -329.040 | 2 | 1975 |
+| the r trip (rsi, stoch range, stoch len) (5, 8, 8) | +11.610 | +0.355 | -331.570 | -319.605 | 2 | 1732 |
+| the r trip (rsi, stoch range, stoch len) (5, 9, 6) | -12.308 | +7.075 | -353.831 | -359.064 | 2 | 2280 |
+| the r trip (rsi, stoch range, stoch len) (5, 9, 7) | +36.471 | +3.793 | -410.030 | -369.766 | 2 | 1997 |
+| the r trip (rsi, stoch range, stoch len) (5, 9, 8) | +2.602 | +6.307 | -384.482 | -375.573 | 2 | 1815 |
+| the r trip (rsi, stoch range, stoch len) (6, 7, 6) | -1.231 | -15.567 | -327.428 | -344.226 | 2 | 2199 |
+| the r trip (rsi, stoch range, stoch len) (6, 7, 7) | +21.090 | -5.082 | -314.873 | -298.865 | 2 | 1993 |
+| the r trip (rsi, stoch range, stoch len) (6, 7, 8) | +10.292 | -9.796 | -426.587 | -426.091 | 2 | 1718 |
+| the r trip (rsi, stoch range, stoch len) (6, 8, 6) | -3.527 | -18.058 | -295.212 | -316.797 | 2 | 2303 |
+| the r trip (rsi, stoch range, stoch len) (6, 8, 7) | +37.935 | +10.647 | -345.396 | -296.814 | 2 | 2063 |
+| the r trip (rsi, stoch range, stoch len) (6, 8, 8) | +7.874 | +10.640 | -394.537 | -376.023 | 2 | 1860 |
+| the r trip (rsi, stoch range, stoch len) (6, 9, 6) | -5.798 | -6.860 | -342.914 | -355.572 | 2 | 2270 |
+| the r trip (rsi, stoch range, stoch len) (6, 9, 7) | +35.473 | +9.301 | -389.969 | -345.195 | 2 | 2095 |
+| the r trip (rsi, stoch range, stoch len) (6, 9, 8) | -1.752 | -0.299 | -382.951 | -385.002 | 2 | 1947 |
+| the reversal read live | +273.707 | -51.442 | -4637.184 | -4414.919 | 27 | 28865 |
+| the reversal read chart-matched | +128.719 | -132.966 | -4651.651 | -4655.898 | 27 | 23882 |
+
+## sweep_1104_bmult2_94d.md | 10 configs x 94 days
+# the control row, config 0 against the banked machine: HOLDS on 4 of 4 banked days
+# every number is a sum of that cut's per-day nets over every config holding the arm
+
+| the arm | your 4 days net % | the 4 random days net % | the other 86 days net % | all 94 net % | configs | legs |
+|---|---|---|---|---|---|---|
+| ws1b's multiplier 0.9 | +23.788 | +0.205 | -331.055 | -307.062 | 2 | 1999 |
+| ws1b's multiplier 1.0 | +18.541 | +3.517 | -344.570 | -322.512 | 2 | 1915 |
+| ws1b's multiplier 0.85 | +18.490 | -2.421 | -356.957 | -340.888 | 2 | 2004 |
+| ws1b's multiplier 0.95 | +16.447 | +1.059 | -346.546 | -329.040 | 2 | 1975 |
+| ws1b's multiplier 1.05 | +23.713 | -5.029 | -343.122 | -324.438 | 2 | 1890 |
+| the reversal read live | +77.706 | +11.404 | -802.218 | -713.108 | 5 | 5349 |
+| the reversal read chart-matched | +23.273 | -14.073 | -920.032 | -910.832 | 5 | 4434 |
+
+## sweep_1104_startline_94d.md | 12 configs x 94 days
+# the control row, config 0 against the banked machine: HOLDS on 4 of 4 banked days
+# every number is a sum of that cut's per-day nets over every config holding the arm
+
+| the arm | your 4 days net % | the 4 random days net % | the other 86 days net % | all 94 net % | configs | legs |
+|---|---|---|---|---|---|---|
+| FDM_RE_REV_TF 5 | -0.525 | -12.784 | -344.557 | -357.866 | 2 | 1775 |
+| FDM_RE_REV_TF 6 | +4.403 | +14.256 | -256.198 | -237.539 | 2 | 1650 |
+| FDM_RE_REV_TF 7 | +8.834 | +21.594 | -159.795 | -129.367 | 2 | 1470 |
+| FDM_RE_REV_TF 8 | +17.231 | +0.206 | -227.540 | -210.103 | 2 | 1266 |
+| FDM_RE_REV_TF 9 | -23.502 | +23.705 | -105.415 | -105.212 | 2 | 979 |
+| FDM_RE_REV_TF 10 | -5.093 | +9.609 | -159.849 | -155.333 | 2 | 647 |
+| FDM_RE_CLIMB off | +1.269 | +33.840 | -647.336 | -612.227 | 6 | 3809 |
+| FDM_RE_CLIMB reversal | +0.079 | +22.746 | -606.018 | -583.193 | 6 | 3978 |

@@ -16,3 +16,35 @@
 | 2026-11-04 08:55:23 | coverage grid running, nothing to relaunch |
 | 2026-11-04 09:08:09 | coverage grid at config 85 of 97, ~8 min left; climb patch queued for the idle gap |
 | 2026-11-04 09:18:50 | coverage grid finished, 97 rungs over 24 knobs, control holds. Its own report is sweep_1104_curve_report.md (fdm2_arms.py cuts a cross grid, not a curve). Best single rung by gross per leg: the stop at 3.0% = +0.0412%, still a fifth of the round trip. Climb grid launched, 108 configs. |
+| 2026-11-04 09:24:55 | climb grid running |
+| 2026-11-04 09:41:58 | climb grid running |
+| 2026-11-04 09:55:15 | climb grid running |
+| 2026-11-04 10:07:56 | climb grid running |
+| 2026-11-04 10:24:56 | climb grid running |
+| 2026-11-04 10:41:55 | climb grid running |
+| 2026-11-04 10:55:18 | climb grid running |
+| 2026-11-04 11:07:55 | climb grid running |
+| 2026-11-04 11:24:56 | climb grid running |
+| 2026-11-04 11:41:55 | climb grid running |
+| 2026-11-04 11:55:22 | climb grid running |
+| 2026-11-04 12:07:56 | climb grid running |
+| 2026-11-04 12:25:00 | climb grid running |
+| 2026-11-04 12:41:55 | climb grid running |
+| 2026-11-04 12:55:23 | climb grid running |
+| 2026-11-04 13:08:11 | climb grid running |
+| 2026-11-04 13:24:56 | climb grid running |
+| 2026-11-04 13:41:55 | climb grid running |
+| 2026-11-04 13:55:24 | climb grid running |
+| 2026-11-04 14:08:11 | climb grid running |
+| 2026-11-04 14:25:00 | climb at config 106 of 108, ~6 min left |
+| 2026-11-04 14:32:44 | climb grid finished, control holds. Best per-leg gross of the night: the reversal climb from ws8, ceiling ws12, rung gate at 20/80, live read = +0.1262% over 883 legs, net -62.972%. The climb beats the fixed pair by a hair (+0.1193%). Stages 8 and 9 refused on my env override - the read is now a grid slot and both relaunched. |
+| 2026-11-04 14:42:15 | stages 8 and 9 running as grids |
+| 2026-11-04 14:55:26 | stage 8 running |
+| 2026-11-04 15:07:57 | stage 8 running |
+| 2026-11-04 15:24:56 | stage 8 running |
+| 2026-11-04 15:37:30 | stages 8 and 9 done, control holds on both. Night summary: 437 configs over 94 days, 0 reached the 0.1975% round trip and 0 netted positive. Best is +0.1262% gross per leg. The one lever is the start line, ws8 over ws5. Stage 12 (start line ws5..ws12) launched. |
+| 2026-11-04 15:41:54 | stage 12 start-line curve running |
+| 2026-11-04 15:55:23 | stage 12 start-line curve at config 3 of 16 |
+| 2026-11-04 16:07:57 | stage 12 running |
+| 2026-11-04 16:25:02 | stage 12 running |
+| 2026-11-04 16:29:38 | stage 12 done, control holds. The start-line curve is bumpy, not a trend: ws7 peaks at +0.1138% gross per leg on the chart-matched read while ws8 falls to +0.0287%. The band ws6..ws9 beats ws5; the rung inside it is unstable across grids. Queue empty. |
