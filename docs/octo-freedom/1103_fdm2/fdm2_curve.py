@@ -47,6 +47,25 @@ for path in sys.argv[1:]:
     print('# every other knob sits at the bank for every row, so a row is that knob alone')
     print('# the first rung of each knob is the RULED value and carries the control numbers')
     print('# gross per leg is what the %.4f%% round trip has to be beaten by' % DRAG)
+    #   EVERY CURVE'S OWN RULED RUNG IS A CONTROL ROW. Checking only the file's first config let
+    #   the TRAJ_MIN_TRAVEL curve print 917 legs against the control row's 898 without a word.
+    _base = None
+    _drift = []
+    for (kn, rg), rs in curves:
+        nl = sum(r['legs'] for r in rs)
+        nt = sum(r['net'] for r in rs)
+        if _base is None:
+            _base = (nl, nt)
+        elif kn not in [c[0][0] for c in curves[:[c[0] for c in curves].index((kn, rg))]]:
+            if abs(nl - _base[0]) or abs(nt - _base[1]) > 0.0015:
+                _drift.append((kn, rg, nl, nt))
+    print('# per-curve control check: %s'
+          % ('every curve\'s ruled rung matches the grid\'s own baseline of %d legs / %+.3f net'
+             % _base if not _drift else
+             'DRIFTED on %d curve(s) - ' % len(_drift)
+             + ', '.join('%s ruled rung %s gives %d legs / %+.3f against %d / %+.3f'
+                         % (k, r, n, t, _base[0], _base[1]) for k, r, n, t in _drift)
+             + '. THOSE CURVES ARE VOID'))
     print()
     print('| the knob | the rung | ruled | legs | stopped | gross % | net % | gross per leg % |'
           ' days net>0 | his 4 days net % | the 4 random net % |')

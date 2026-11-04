@@ -245,14 +245,20 @@ say('|' + '---|' * (len(NAMES) + 11))
 T0 = time.time()
 ROWS = []
 LN = None
+_last_reload = False
 for ci, cfg in enumerate(CFGS):
     if MODE == 'curve':
         #   EVERY OTHER KNOB BACK TO THE BANK before each rung, so a curve reads one knob only.
         for n, v in CURVE_BANKED.items():
             setattr(K, n, v)
         setattr(K, cfg['KNOB'], cfg['RUNG'])
-        if cfg['KNOB'] in RELOAD or LN is None:
+        #   THE RELOAD IS NEEDED WHEN THIS RUNG NEEDS ONE *OR WHEN THE LAST ONE DID*. A reload
+        #   knob leaves the arrays built at ITS last rung, so the next curve would run on arrays
+        #   that do not match its own ruled values. That is exactly how the TRAJ_MIN_TRAVEL curve
+        #   came out at 917 legs against the control row's 898 - it inherited LIFT_WOB 16's arrays.
+        if cfg['KNOB'] in RELOAD or _last_reload or LN is None:
             LN = F2.load()
+        _last_reload = cfg['KNOB'] in RELOAD
     elif MODE in ('knobs', 'tfpair', 'climb', 'startline'):
         #   TF_PAIR IS ONE SLOT HOLDING TWO KNOBS: the gate line must sit above the reversal line,
         #   so they are swept together and never as a cross.

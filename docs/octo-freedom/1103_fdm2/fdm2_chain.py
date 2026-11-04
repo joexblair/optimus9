@@ -732,7 +732,10 @@ if _AW:
 #   HIS NAME, 1104: *"the table will be known as the fdm2-conf table"*. Renamed from W_FDM2_SETUPS,
 #   the arm it used to answer to - the table has his name now, so the arm carries it.
 #
-#   HIS 1103 TABLE, rebuilt on jig.towards_away rather than the superseded two-sided `towards`.
+#   HIS 1103 TABLE, built on jig.towards_away, the producer he asked for on the Jig - *"bank this
+#   so that its not lost"*. IT REPLACES NOTHING: v4_fdm2.towards is still what step 1 reads, he
+#   never ruled otherwise, and his 1104 words are *"that conversation was never converted to a
+#   banked mech as far as I'm concerned"*. This table is the only thing that reads the producer.
 #
 #   THE ROWS, his 1104: *"show me all of the reentry legs, stopped or not"*. So every re-entry leg
 #   prints whatever it realised, and an incoming-trade setup still prints only when it realised at
