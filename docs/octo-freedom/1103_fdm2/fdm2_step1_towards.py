@@ -49,7 +49,7 @@ finally:
     sys.stderr = _e
 
 OUT = os.environ.get('W_FDM2_S1_OUT', 'step1_repaired_94d.md')
-#   WHICH SECOND READING. 'repaired' is jig.reversal_extremum as he repaired it on 1104 - the
+#   WHICH SECOND READING. 'repaired' is jig.fdm2_cad_mom_detector as he repaired it on 1104 - the
 #   reversal gate first, the side-owned extremum, closed-prev values and the lift-off on emerging.
 #   'towards_away' is the earlier arm, kept runnable because the 297-event figure came off it and
 #   that figure is now stale. HIS 1104: *"that hasn't been reviewed since the jig producer's
@@ -86,7 +86,7 @@ def counts(side, bar, anchor):
         #   reads emerging, his 1104 standard, and `away` needs a lift-off reversal in the span.
         #   The anchor is the trade's own open at either setting.
         if READ == 'repaired':
-            st = JIG.reversal_extremum(np.asarray(LN['CPR'][tf], float),
+            st = JIG.fdm2_cad_mom_detector(np.asarray(LN['CPR'][tf], float),
                                        np.asarray(LN['EMR'][tf], float), bar, side, anchor,
                                        int(K.LIFT_PTS), K.gap_for(tf), float(K.LIFT_TOL),
                                        int(K.LIFT_WOB))['state']
@@ -106,7 +106,7 @@ say('# MAE/MFE is the event bar to the bar sweep-pivots ends the leg on - scorin
 say('# no count here reads it. The counts read the event bar and nothing after it.')
 say("# the anchor for the Jig's producer is the trade the cadence event lands inside")
 say('# the second reading is W_FDM2_S1_READ %s' % READ)
-say('# repaired = jig.reversal_extremum: a lift-off reversal must exist in the span, the extremum')
+say('# repaired = jig.fdm2_cad_mom_detector: a lift-off reversal must exist in the span, the extremum')
 say('# belongs to the side, values are closed-prev and only the lift-off reads emerging')
 say('# the lift-off: LIFT_PTS %d samples, LIFT_TOL %g r-points, LIFT_WOB %d bars = %d s,'
     ' GAP_PER_TF %g bars per TF-minute'

@@ -758,7 +758,7 @@ if _AW:
 #   Filling either one is a read of bars after the decision. They stay in the table because they
 #   are HIS columns and the gap is the point.
 #
-#   THE PRODUCER IS jig.reversal_extremum, his refined toward/away, and it REPLACES
+#   THE PRODUCER IS jig.fdm2_cad_mom_detector, his refined toward/away, and it REPLACES
 #   jig.towards_away here. VALUES COME FROM FDM_CONF_READ 'closed_prev' and only the lift-off
 #   inside the producer reads emerging - his 1104 *"closed-prev is the standard for everything
 #   except lift-off"*.
@@ -782,7 +782,7 @@ if os.environ.get('W_FDM2_CONF') == 'on':
     def _cf_state(tf, bar, side, since):
         """the refined toward/away for ONE line at ONE bar. -> 'towards' | 'away'."""
         src = LN['CPR'] if _CFR == 'closed_prev' else LN['EMR']
-        return JIG.reversal_extremum(np.asarray(src[tf], float), np.asarray(LN['EMR'][tf], float),
+        return JIG.fdm2_cad_mom_detector(np.asarray(src[tf], float), np.asarray(LN['EMR'][tf], float),
                                      int(bar), int(side), int(since), int(K.LIFT_PTS),
                                      K.gap_for(tf), float(K.LIFT_TOL), int(K.LIFT_WOB))['state']
 
@@ -814,7 +814,7 @@ if os.environ.get('W_FDM2_CONF') == 'on':
         return out
 
     print()
-    print('## the fdm2-conf machine | the board at every data bar | jig.reversal_extremum')
+    print('## the fdm2-conf machine | the board at every data bar | jig.fdm2_cad_mom_detector')
     print('# a ROW IS A DATA BAR - a bar where the mech collects the board and decides `walk` or')
     print('# `rev-trade`. THE TRADE IS STILL OPEN ON IT, his 1104')
     print('# incoming = the trade at its CLOSE bar, arriving. outgoing = the trade at its OPEN')
@@ -866,6 +866,99 @@ if os.environ.get('W_FDM2_CONF') == 'on':
     print('| legs walked | %d |' % len(LG))
     print('| data bars | %d |' % _CFN)
     print('| the anchor, per row | the open trade\'s own open, or the re-entry window\'s open |')
+
+#   ── W_FDM2_XCAD=on: the fdm2-wsxcad-director's own report, HIS 1104 ───────────────────────────
+#   HIS UPDATE 2 CLOSER: *"add this data to the report so I can review"*.
+#
+#   ONE ROW PER CADENCE EVENT on every leg, in order, and the trade is STILL OPEN on each - the
+#   same rule as the fdm2-conf machine: `the setup opens` and `realised %` cannot be read at a
+#   decision bar, so this report carries neither.
+#
+#   IT CHANGES NOTHING. FDM_XCAD_ON is 0, so v4_fdm2.walk still races ws10 and no banked number
+#   moves. This arm calls the director directly so its verdict can be read beside the walk's.
+if os.environ.get('W_FDM2_XCAD') == 'on':
+    print()
+    print('## the fdm2-wsxcad-director | one row per cadence event | FDM_XCAD_ON %d'
+          % int(K.FDM_XCAD_ON))
+    print('# the candidate is `fdm-conf-xcross-candidate`, HIS knob name: the highest line')
+    print('# printing away while the %d lines above it print towards AND ex-%g/%g'
+          % (int(K.FDM_XCAD_ABOVE), *K.fnc_pair(K.FDM_FNC_2080)))
+    print('# FDM_XCAD_RULE %s, FDM_XCAD_EXF %d, FDM_XCAD_FRM %s, FDM_XCAD_TAG_AT %s'
+          % (K.FDM_XCAD_RULE, int(K.FDM_XCAD_EXF), K.FDM_XCAD_FRM, K.FDM_XCAD_TAG_AT))
+    print('# the seam read is the next ws1 seam + %gs = %d bars, then a %.1f min walk that'
+          ' truncates on the first pass'
+          % (float(K.FDM_XCAD_SEAM_S), int(round(float(K.FDM_XCAD_SEAM_S) / 5.0)),
+             float(K.FDM_XCAD_WALK_MIN)))
+    print('# the reversal gate spans the cadence window open to the confirmed cross bar,'
+          ' FDM_XCAD_REV_FROM %s' % K.FDM_XCAD_REV_FROM)
+    print('# no candidate means FDM_XCAD_NONE %s' % K.FDM_XCAD_NONE)
+    print('# every value is closed-prev at the cadence event and EMERGING at the seam re-read')
+    print()
+    print('| the cadence event | the incoming trade | its own side | the cadence window opened |'
+          ' the candidate | the lines above it | ex-20/80 at the event | towards at the event |'
+          ' the x cross | the x confirm | which target | the seam+%gs bar | the seam verdict |'
+          ' the rev-trade bar | why | the ws10 race confirm, for comparison |'
+          % float(K.FDM_XCAD_SEAM_S))
+    print('|' + '---|' * 16)
+    _XN = _XC = _XR = 0
+    for _Lx in LG:
+        _sdx, _ox, _ex = int(_Lx['side']), int(_Lx['opn']), int(_Lx['exit'])
+        for _evx, _s0x, _whyx in F2.cadence_events(LN, _sdx, _ox + 1, _ex):
+            _XN += 1
+            _tf, _ab, _cwhy = F2.xcad_candidate(LN, _sdx, int(_evx), _ox)
+            _tag = tuple(t for t in range(1, int(LN['HI']) + 1)
+                         if F2.mom_state(LN, t, int(_evx), _sdx, _ox) == 'towards')
+            _exn = sum(1 for t in range(1, int(LN['HI']) + 1)
+                       if F2.ex2080(float(LN['CPR'][t][int(_evx)]), _sdx))
+            _r10 = F2.x10_cadence(LN, _sdx, int(_evx), _ex)
+            if _tf is None:
+                print('| %s | %s %s | %s | %s | none | - | %d of %d | %d of %d | - | - | - |'
+                      ' - | - | %s | %s | %s |'
+                      % (ln.U(int(_evx)), ln.U(_ox), 'LONG' if _sdx > 0 else 'SHORT',
+                         'HIGH, upwards' if _sdx > 0 else 'LOW, downwards', ln.U(int(_s0x)),
+                         _exn, int(LN['HI']), len(_tag), int(LN['HI']),
+                         'rev-trade at the event, FDM_XCAD_NONE'
+                         if str(K.FDM_XCAD_NONE) == 'rev-trade' else 'no action',
+                         _cwhy, '-' if _r10 is None else ln.U(int(_r10[0]))))
+                continue
+            _XC += 1
+            _rx = F2.x_race(LN, _tf, _sdx, int(_evx), _ex)
+            if _rx is None:
+                print('| %s | %s %s | %s | %s | ws%dr | ws%s | %d of %d | %d of %d |'
+                      ' no cross before the leg exits | - | - | - | - | - | %s | %s |'
+                      % (ln.U(int(_evx)), ln.U(_ox), 'LONG' if _sdx > 0 else 'SHORT',
+                         'HIGH, upwards' if _sdx > 0 else 'LOW, downwards', ln.U(int(_s0x)),
+                         _tf, ', ws'.join(str(u) for u in _ab), _exn, int(LN['HI']),
+                         len(_tag), int(LN['HI']), _cwhy,
+                         '-' if _r10 is None else ln.U(int(_r10[0]))))
+                continue
+            _cf, _which, _cr = _rx
+            _frm = _cf if str(K.FDM_XCAD_FRM) == 'confirm' else _cr
+            _tagx = _tag if str(K.FDM_XCAD_TAG_AT) == 'event' else tuple(
+                t for t in range(1, int(LN['HI']) + 1)
+                if F2.mom_state(LN, t, int(_frm), _sdx, _ox) == 'towards')
+            _sb, _swhy = F2.xcad_seam(LN, _sdx, int(_s0x), int(_frm), _tagx, _ex)
+            if _sb is not None:
+                _XR += 1
+            print('| %s | %s %s | %s | %s | ws%dr | ws%s | %d of %d | %d of %d | %s | %s | %s |'
+                  ' %s | %s | %s | %s | %s |'
+                  % (ln.U(int(_evx)), ln.U(_ox), 'LONG' if _sdx > 0 else 'SHORT',
+                     'HIGH, upwards' if _sdx > 0 else 'LOW, downwards', ln.U(int(_s0x)),
+                     _tf, ', ws'.join(str(u) for u in _ab), _exn, int(LN['HI']),
+                     len(_tagx), int(LN['HI']), ln.U(int(_cr)), ln.U(int(_cf)), _which,
+                     '-' if _sb is None else ln.U(int(_sb)),
+                     'REV-TRADE' if _sb is not None else 'held',
+                     '-' if _sb is None else ln.U(int(_sb)), _swhy,
+                     '-' if _r10 is None else ln.U(int(_r10[0]))))
+    print()
+    print('| the director roll-up | value |')
+    print('|---|---|')
+    print('| legs walked | %d |' % len(LG))
+    print('| cadence events | %d |' % _XN)
+    print('| events with a candidate | %d |' % _XC)
+    print('| events with no candidate | %d |' % (_XN - _XC))
+    print('| events whose seam read or walk sent a rev-trade | %d |' % _XR)
+
 
 #   ── W_FDM2_WS5REV='<from> .. <to>': the banked re-entry's own trace ────────────────────────────
 #   THE MECH LIVES IN v4_fdm_reentry.signals, banked 1104. This arm REPORTS it and computes

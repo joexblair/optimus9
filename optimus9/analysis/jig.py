@@ -271,8 +271,24 @@ def towards_away(line, bar, side, since):
             'gap': gap}
 
 
-def reversal_extremum(cp, em, bar, side, since, pts, gap, tol, wob):
-    """[PRODUCER - Joe 1104] THE EXTREMUM A REVERSAL PRINTED, and the bar it printed on. -> dict.
+def fdm2_cad_mom_detector(cp, em, bar, side, since, pts, gap, tol, wob, stamps=None,
+                         rev_since=None):
+    """[PRODUCER - Joe 1104] `fdm2-cad-mom-detector`, HIS NAME. -> dict.
+
+    HE NAMED IT ON 1104, after asking whether `fdm2-wsxcad-director` fitted: *"name the reader
+    `fdm2-cad-mom-detector`"*. It was `reversal_extremum`, which was mine. It reads ONE line at
+    ONE bar on ONE side and returns `towards` or `away`; the director is what consumes it.
+
+    `stamps`     OPTIONAL precomputed lift-off stamp bars for this (line, side), from the
+                 caller's own LIFT table. Handing them in skips the lift_off call, which is
+                 the whole cost when the walk re-reads 30 lines on every 5 s bar. The stamps
+                 must already carry the wob offset, exactly as lift_stamp applies it.
+    `rev_since`  OPTIONAL start bar for the REVERSAL GATE alone, when it differs from `since`.
+                 His 1104 update-2 ruling: *"the target-side reversal must fire between the
+                 opening of the cadence window and the confirmed x-cross bar"*, which is a
+                 different span from the extremum's anchor. None keeps both on `since`.
+
+    THE EXTREMUM A REVERSAL PRINTED, and the bar it printed on.
 
     HIS MECH, 1104: *"we have a reversal that printed an extremum, and that extremum (and ts) is
     what will be stored as the extremum for the away decsion (in this mech only)"*, and the read
@@ -321,8 +337,13 @@ def reversal_extremum(cp, em, bar, side, since, pts, gap, tol, wob):
     assert side in (+1, -1), 'side is the TRADE\'s target side: +1 high, -1 low'
     out = {'extremum': float('nan'), 'at': None, 'rev': None, 'gap': float('nan'),
            'state': 'towards'}
-    st = [int(b) + int(wob) - 1 for b in lift_off(em, side, pts, gap, tol, wob)]
-    st = [b for b in st if since <= b <= bar]
+    r0 = since if rev_since is None else int(rev_since)
+    assert r0 <= bar, 'the reversal gate starts after the bar it is read at'
+    if stamps is None:
+        st = [int(b) + int(wob) - 1 for b in lift_off(em, side, pts, gap, tol, wob)]
+    else:
+        st = [int(b) for b in stamps]
+    st = [b for b in st if r0 <= b <= bar]
     if not st:
         return out
     rev = int(st[-1])
@@ -353,7 +374,7 @@ def confluence_above(cp, em, bar, side, since, lo, hi, fnc, pts_of, gap_of, tol,
         above      the `above` timeframes above it
         step1..3   each test's own verdict
         fires      every test true
-        state      each timeframe's own state, from reversal_extremum
+        state      each timeframe's own state, from fdm2_cad_mom_detector
 
       cp, em   the closed-prev and emerging ladders, keyed by timeframe
       lo, hi   the timeframes scanned for the ex-fence set
@@ -375,7 +396,8 @@ def confluence_above(cp, em, bar, side, since, lo, hi, fnc, pts_of, gap_of, tol,
            if (float(cp[t][int(bar)]) >= e if side > 0 else float(cp[t][int(bar)]) <= e)]
     st = {}
     for t in range(lo, hi + 1):
-        st[t] = reversal_extremum(cp[t], em[t], bar, side, since, pts_of(t), gap_of(t), tol, wob)
+        st[t] = fdm2_cad_mom_detector(cp[t], em[t], bar, side, since,
+                                      pts_of(t), gap_of(t), tol, wob)
     if not exf:
         return {'exf': (), 'top': None, 'above': (), 'step1': False, 'step2': False,
                 'step3': False, 'fires': False, 'state': st}

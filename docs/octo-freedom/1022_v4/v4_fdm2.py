@@ -73,6 +73,7 @@ try:
     import v4_backstop_trades as BT
     import ln
     from optimus9.analysis.jig import oob_ib_cross, lift_off
+    from optimus9.analysis import jig as JIG
     from optimus9.compute.rule2_trajectory import opposed_extrema
 finally:
     sys.stderr = _e
@@ -281,6 +282,222 @@ def cadence_events(LN, side, A, B, trace=False):
 
 
 #   ── the ws10x-cadence ─────────────────────────────────────────────────────────────────────────
+#   ── fdm2-wsxcad-director, HIS NAME 1104 ───────────────────────────────────────────────────────
+def x_of(LN, tf):
+    """The ws{tf}x line, loaded once and kept. -> array, EMERGING.
+
+    LAZY ON PURPOSE. All 30 ws{TF}x lines exist on the tape, but loading every one at startup
+    costs the whole run when only the director's chosen line is read. That choice is MINE.
+    """
+    X = LN.setdefault('X', {})
+    t = int(tf)
+    if t not in X:
+        X[t] = np.asarray(ln.line('ws%dx' % t), float)
+    return X[t]
+
+
+def x_race(LN, tf, side, frm, B):
+    """The first ws{tf}x race cross strictly after `frm` on `side`. -> (confirm, which, cross)|None.
+
+    x10_cadence WAS THIS FUNCTION WITH tf PINNED TO 10. His 1104 update 1 made the timeframe
+    dynamic - *"instead of using a static TF10 to create the ws10x-cadence, we will set the TF
+    dynamically"* - so the race moved here and x10_cadence now calls it with 10. Nothing about
+    the ws10 behaviour changed: LN['M10'] and LN['CPM'][10] are the same array, both
+    CP.series(MGE[10], 600).
+
+    HIS THREE CANDIDATES, unchanged: to ib, to ws{tf}r, to ws{tf}Mage - first to confirm wins.
+    His 1104 *"race:{ib, Mage, r}"* names the same three. Cross OVER on the low side, UNDER on
+    the high side - his *"crosses under for a high target-side, crosses over for a low
+    target-side"*, which is the banked x-cross rule.
+
+    THE HOLD IS FDM_X10_WOB 24 bars = 120 s, shared with the ws10 race because he moved the
+    timeframe and nothing else.
+    """
+    w = max(1, int(K.FDM_X10_WOB))
+    X, R, M = x_of(LN, tf), LN['CPR'][int(tf)], LN['CPM'][int(tf)]
+    #   WHICH BAR MUST FOLLOW THE CADENCE EVENT: the race's CROSS, or only its CONFIRM. At 'cross'
+    #   a race that began before the cadence event is not this walk's race even when it confirms
+    #   after it. THAT IS THE ARM HIS OWN 1841 NUMBER CAME FROM - 1103_fdm's census used it - so it
+    #   is the default on precedent, not on preference. At 'confirm' the event's identity is its
+    #   confirm bar and an in-flight race counts.
+    cf_only = str(K.FDM_X10_FRM) == 'confirm'
+    lo = max(1, int(frm) - w + 2) if cf_only else int(frm) + 1
+    hits = []
+    for c, cf, s in oob_ib_cross(X, K.OOB_HI, K.OOB_LO, w):
+        if int(s) != int(side) or int(cf) > int(B):
+            continue
+        if (int(cf) if cf_only else int(c)) > int(frm):
+            hits.append((int(cf), 'ib', int(c)))
+            break
+    for nm, other in (('ws%dr' % int(tf), R), ('ws%dMage' % int(tf), M)):
+        for i in range(lo, int(B) + 1):
+            a, b = X[i - 1], X[i]
+            oa, ob = other[i - 1], other[i]
+            if not np.isfinite([a, b, oa, ob]).all():
+                continue
+            crossed = (a >= oa and b < ob) if side > 0 else (a <= oa and b > ob)
+            if not crossed:
+                continue
+            #   THE CONFIRM MUST FIT INSIDE `B`, not merely inside the tape. The ib arm above
+            #   already tests `cf <= B`; these two arms tested only `i + w <= len(X)`, so a cross
+            #   near `B` confirmed PAST it. Invisible while `B` was the tape end; the moment the
+            #   stop began bounding the walk it produced a rev-trade 65 s past a leg's own exit -
+            #   2026-08-19 20:12:40 SHORT, bound 20:51:00, signal 20:52:05 - and the 'a decision
+            #   row is past the leg's exit' assert caught it.
+            end = i + w
+            if end > len(X) or i + w - 1 > int(B):
+                break
+            seg = [(X[j] < other[j]) if side > 0 else (X[j] > other[j]) for j in range(i, end)]
+            if all(seg) and i + w - 1 > int(frm):
+                hits.append((i + w - 1, nm, int(i)))
+                break
+    if not hits:
+        return None
+    bar, which, cross = min(hits, key=lambda x: x[0])
+    assert bar > int(frm), 'a ws%dx-cadence is at or before the cadence event it follows' % int(tf)
+    assert cross <= bar, 'a race confirms before its own cross'
+    return bar, which, cross
+
+
+def mom_state(LN, tf, bar, side, since, rev_since=None, read='closed_prev'):
+    """fdm2-cad-mom-detector on one line, with fdm2's own arrays. -> 'towards' | 'away'.
+
+    THE LIFT-OFF STAMPS COME FROM LN['LIFT'], already carrying the wob offset, so the detector
+    never re-runs lift_off inside a per-bar walk.
+    """
+    src = LN['CPR'] if read == 'closed_prev' else LN['EMR']
+    r = JIG.fdm2_cad_mom_detector(src[int(tf)], LN['EMR'][int(tf)], int(bar), int(side),
+                                  int(since), K.LIFT_PTS, K.gap_for(int(tf)), K.LIFT_TOL,
+                                  K.LIFT_WOB, stamps=LN['LIFT'][(int(tf), int(side))],
+                                  rev_since=rev_since)
+    return r['state']
+
+
+def xcad_candidate(LN, side, bar, since):
+    """`fdm-conf-xcross-candidate` - HIS KNOB NAME. The line whose x line races. -> (tf, above, why).
+
+    HIS UPDATE 1, verbatim: *"we will set the TF dynamically based on the highest TF
+    (`fdm-conf-xcross-candidate`) that is printing `away` while the TF lines above
+    `fdm-conf-xcross-candidate` are `towards` and ex-20/80-fence"*.
+
+    TWO READINGS OF *"the TF lines above"*, FDM_XCAD_RULE:
+
+        'B'  the next FDM_XCAD_ABOVE 2 lines above it, each `towards` AND ex-20/80. HIS CHOICE for
+             now - *"unsure.  use B for now, we can change it to A if the data doesn't match my
+             eye's verdict"*
+        'A'  every ex-20/80 line above it is `towards`, however many there are
+
+    Both pick ws8r at his own 2026-08-07 16:11:00 example. At FDM_XCAD_ABOVE 3 that example yields
+    NO candidate, so his example rules 3 out.
+
+    THE CANDIDATE DOES NOT HAVE TO BE EX-20/80 ITSELF - FDM_XCAD_EXF 0, his flat *"no"*.
+    THE SCAN IS ws1..ws{HI} and the HIGHEST qualifying line wins, his *"the highest TF"*.
+    EVERY READ IS AT `bar` and the extremum anchor is `since`, so nothing after `bar` is touched.
+    -> (None, (), why) when no line qualifies; FDM_XCAD_NONE says what that means to the caller.
+    """
+    hi, rule = int(LN['HI']), str(K.FDM_XCAD_RULE)
+    assert rule in ('A', 'B'), 'FDM_XCAD_RULE is %r' % rule
+    n_above = int(K.FDM_XCAD_ABOVE)
+    st = {t: mom_state(LN, t, bar, side, since) for t in range(1, hi + 1)}
+    exf = {t: ex2080(float(LN['CPR'][t][int(bar)]), side) for t in range(1, hi + 1)}
+    for t in range(hi, 0, -1):
+        if st[t] != 'away':
+            continue
+        if int(K.FDM_XCAD_EXF) and not exf[t]:
+            continue
+        if rule == 'B':
+            ab = [u for u in range(t + 1, t + 1 + n_above) if u <= hi]
+            if len(ab) < n_above:
+                continue
+            ok = all(st[u] == 'towards' and exf[u] for u in ab)
+        else:
+            ab = [u for u in range(t + 1, hi + 1) if exf[u]]
+            ok = bool(ab) and all(st[u] == 'towards' for u in ab)
+        if ok:
+            return t, tuple(ab), ('ws%dr is the highest away line and ws%s are towards%s'
+                                  % (t, ', ws'.join(str(u) for u in ab),
+                                     ' and ex-%g/%g' % K.fnc_pair(K.FDM_FNC_2080)
+                                     if rule == 'B' else ' (rule A, the ex-fence lines above)'))
+    return None, (), 'no line is away with its %s above towards' % (
+        '%d lines' % n_above if rule == 'B' else 'ex-fence lines')
+
+
+def xcad_seam(LN, side, s0, xb, tagged, B):
+    """His update 2 - the emerging re-read at the ws1 seam. -> (the rev-trade bar, why) | (None, why).
+
+    HIS UPDATE 2, verbatim: *"when the ws{TF}x cross fires, walk to the next ws1 seam+15s and
+    collect the emerging values of the lines that were tagged as `towards` at the cadence. if the
+    emerging values show `away` for all of the `towards` tagged lines, AND there are no more
+    ex-20/80-fence lines tagged as `towards`, THEN send a rev-trade to router"*.
+
+      s0      the cadence WINDOW's open - the start of the reversal gate's span, his 1104 *"the
+              target-side reversal must fire between the opening of the cadence window and the
+              confirmed x-cross bar"*
+      xb      the bar the walk starts from. FDM_XCAD_FRM 'confirm' is his *"the conf bar"*
+      tagged  the lines that read `towards` at the cadence event bar, his *"tagged at the cadence
+              event bar"*
+
+    THE SECOND CLAUSE RANGES OVER EVERY LINE, not only the tagged ones. If it only re-tested the
+    tagged set it would add nothing to the first clause, which already requires all of them away.
+    Read wide it is his own earlier mech update - *"because there are towards lines that are
+    ex-20/80-fence, the cadence cannot print a rev-trade"*. THAT READING IS MINE.
+
+    EVERY READ IN HERE IS EMERGING, both the value and the fence, because he asked for the
+    emerging values at this bar. THAT READING IS MINE TOO.
+
+    THE REVERSAL GATE'S SPAN IS FIXED AT [s0, xb] and does NOT grow as the walk proceeds - he
+    named the confirmed x-cross bar as its end. Since xb <= every test bar, the gate reads no bar
+    the test bar has not already reached.
+
+    THE WALK IS THE GRACE WALK'S SHAPE, which he called *"the established walk"*: re-test every
+    5 s bar and break out on the first pass. FDM_XCAD_WALK_MIN 10.0 min = 120 bars, his value.
+    """
+    hi = int(LN['HI'])
+    seam = [int(b) for b in LN['SEAM60'] if int(b) > int(xb)]
+    if not seam:
+        return None, 'no ws1 seam after %s before the tape ends' % ln.U(int(xb))
+    b0 = int(seam[0]) + int(round(float(K.FDM_XCAD_SEAM_S) / 5.0))
+    if b0 > int(B):
+        return None, ('the seam+%gs bar %s is past the walk\'s end %s'
+                      % (float(K.FDM_XCAD_SEAM_S), ln.U(b0), ln.U(int(B))))
+    rs = int(s0) if str(K.FDM_XCAD_REV_FROM) == 'window' else None
+    gate = {t: np.asarray([b for b in LN['LIFT'][(t, int(side))]
+                           if (rs if rs is not None else 0) <= b <= int(xb)], int)
+            for t in range(1, hi + 1)}
+
+    def passes(b):
+        """both of his clauses at bar `b`, on emerging values. -> (bool, why)."""
+        st = {}
+        for t in range(1, hi + 1):
+            st[t] = JIG.fdm2_cad_mom_detector(LN['EMR'][t], LN['EMR'][t], int(b), int(side),
+                                              int(s0), K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL,
+                                              K.LIFT_WOB, stamps=gate[t], rev_since=rs)['state']
+        still = [t for t in tagged if st[t] != 'away']
+        exf_tw = [t for t in range(1, hi + 1)
+                  if st[t] == 'towards' and ex2080(float(LN['EMR'][t][int(b)]), side)]
+        if still:
+            return False, 'ws%s of the %d tagged lines are not away yet' % (
+                ', ws'.join(str(t) for t in still), len(tagged))
+        if exf_tw:
+            return False, 'ws%s are ex-%g/%g AND towards, so no rev-trade' % (
+                ', ws'.join(str(t) for t in exf_tw), *K.fnc_pair(K.FDM_FNC_2080))
+        return True, 'all %d tagged lines away and no ex-%g/%g line towards' % (
+            len(tagged), *K.fnc_pair(K.FDM_FNC_2080))
+
+    ok, why = passes(b0)
+    if ok:
+        return b0, 'the ws1 seam+%gs bar %s - %s' % (float(K.FDM_XCAD_SEAM_S), ln.U(b0), why)
+    end = min(b0 + int(round(float(K.FDM_XCAD_WALK_MIN) * 60.0 / 5.0)), int(B))
+    for b in range(b0 + 1, end + 1):
+        ok2, why2 = passes(b)
+        if ok2:
+            return b, ('the %.1f min walk from %s, truncated at %s - %s'
+                       % (float(K.FDM_XCAD_WALK_MIN), ln.U(b0), ln.U(b), why2))
+    return None, ('the seam+%gs bar %s failed (%s) and the %.1f min walk to %s never passed'
+                  % (float(K.FDM_XCAD_SEAM_S), ln.U(b0), why, float(K.FDM_XCAD_WALK_MIN),
+                     ln.U(end)))
+
+
 def x10_cadence(LN, side, frm, B):
     """The first ws10x race cross strictly after `frm` on `side`.
 
@@ -295,54 +512,12 @@ def x10_cadence(LN, side, frm, B):
     THE HOLD IS FDM_X10_WOB 24 bars = 120 s, his 1103 ruling *"now that we have the grade period,
     we can leverage a smaller wob: use 24"*. 36 is the other arm, from his own 1841 example.
     """
-    w = max(1, int(K.FDM_X10_WOB))
-    X10, R10, M10 = LN['X10'], LN['CPR'][10], LN['M10']
-    #   WHICH BAR MUST FOLLOW THE CADENCE EVENT: the race's CROSS, or only its CONFIRM. At 'cross'
-    #   a race that began before the cadence event is not this walk's ws10x even when it confirms
-    #   after it. THAT IS THE ARM HIS OWN 1841 NUMBER CAME FROM - 1103_fdm's census used it - so it
-    #   is the default on precedent, not on preference. At 'confirm' the event's identity is its
-    #   confirm bar and an in-flight race counts.
-    cf_only = str(K.FDM_X10_FRM) == 'confirm'
-    lo = max(1, int(frm) - w + 2) if cf_only else int(frm) + 1
-    hits = []
-    for c, cf, s in oob_ib_cross(X10, K.OOB_HI, K.OOB_LO, w):
-        if int(s) != int(side) or int(cf) > int(B):
-            continue
-        if (int(cf) if cf_only else int(c)) > int(frm):
-            hits.append((int(cf), 'ib', int(c)))
-            break
-    for nm, other in (('ws10r', R10), ('ws10Mage', M10)):
-        for i in range(lo, int(B) + 1):
-            a, b = X10[i - 1], X10[i]
-            oa, ob = other[i - 1], other[i]
-            if not np.isfinite([a, b, oa, ob]).all():
-                continue
-            crossed = (a >= oa and b < ob) if side > 0 else (a <= oa and b > ob)
-            if not crossed:
-                continue
-            #   THE CONFIRM MUST FIT INSIDE `B`, not merely inside the tape. The ib arm above
-            #   already tests `cf <= B`; these two arms tested only `i + w <= len(X10)`, so a
-            #   cross near `B` confirmed PAST it. Invisible while `B` was the tape end; the moment
-            #   the stop began bounding the walk it produced a rev-trade 65 s past a leg's own
-            #   exit - 2026-08-19 20:12:40 SHORT, bound 20:51:00, signal 20:52:05 - and the
-            #   'a decision row is past the leg's exit' assert caught it.
-            end = i + w
-            if end > len(X10) or i + w - 1 > int(B):
-                break
-            seg = [(X10[j] < other[j]) if side > 0 else (X10[j] > other[j])
-                   for j in range(i, end)]
-            if all(seg) and i + w - 1 > int(frm):
-                hits.append((i + w - 1, nm, int(i)))
-                break
-    if not hits:
-        return None
-    bar, which, cross = min(hits, key=lambda x: x[0])
-    assert bar > int(frm), 'a ws10x-cadence is at or before the cadence event it follows'
-    assert cross <= bar, 'a ws10x race confirms before it crosses'
-    return bar, which, cross
+    #   HIS 1104 UPDATE 1 MOVED THE RACE TO x_race, WITH THE TIMEFRAME AS AN ARGUMENT. This name
+    #   stays because every caller, spec line and banked number says ws10x; it now pins 10.
+    return x_race(LN, 10, side, frm, B)
 
 
-#   ── the bimodal decision's two measures ───────────────────────────────────────────────────────
+#   ── the bimodal decision's two measures ───────────────────────────────────────────────
 def step1(LN, side, bar):
     """His step 1 at `bar`. -> (the count printing both, the lines scanned).
 

@@ -1271,8 +1271,49 @@ FDM_CONF_READ = os.environ.get('W_V4_FDM_CONF_READ', 'closed_prev')   # 'closed_
 #   *"make sure that closed-prev is the standard for everything except lift-off"*, which is the
 #   LATER of his two rulings here - the earlier was *"emerging must be the answer to the larger
 #   question"* for this table, and 'emerging' keeps it as the arm. The lift-off inside
-#   jig.reversal_extremum reads EMERGING at either setting; this knob never touches it.
+#   jig.fdm2_cad_mom_detector reads EMERGING at either setting; this knob never touches it.
 FDM_CONF_BARS = os.environ.get('W_V4_FDM_CONF_BARS', 'event+x10')   # 'event' | 'event+x10'.
+
+#   ── fdm2-wsxcad-director, HIS NAME 1104 ────────────────────────────────────────────────────────
+#   HIS UPDATE 1: *"instead of using a static TF10 to create the ws10x-cadence, we will set the TF
+#   dynamically based on the highest TF (`fdm-conf-xcross-candidate`) that is printing `away` while
+#   the TF lines above `fdm-conf-xcross-candidate` are `towards` and ex-20/80-fence"*.
+#   `fdm-conf-xcross-candidate` IS HIS KNOB NAME for the chosen line. The others here are mine.
+FDM_XCAD_ON = _knob('FDM_XCAD_ON', 0, int)      # 1 routes the cadence through the director.
+#   OFF is the bank until it is measured: at 0 the race stays on ws10 and nothing moves.
+FDM_XCAD_RULE = os.environ.get('W_V4_FDM_XCAD_RULE', 'B')   # 'B' | 'A'.
+#   WHICH READING OF *"the TF lines above"*. HIS 1104 *"unsure.  use B for now, we can change it
+#   to A if the data doesn't match my eye's verdict"*.
+#     'B'  the next FDM_XCAD_ABOVE lines above the candidate, each towards AND ex-20/80
+#     'A'  every ex-20/80 line above the candidate is towards, however many there are
+#   Both pick ws8r at his own 2026-08-07 16:11:00 example; they part on other bars.
+FDM_XCAD_ABOVE = _knob('FDM_XCAD_ABOVE', 2, int)    # lines above, rule 'B' only.
+#   2 IS HIS OWN COUNT, from his confluence rule *"the 2 lines above the highest TF"*. At 3 his
+#   16:11:00 example produces NO candidate, so 3 is ruled out by his example.
+FDM_XCAD_EXF = _knob('FDM_XCAD_EXF', 0, int)    # 1 requires the candidate line to be ex-20/80.
+#   0 IS HIS RULING, 1104: asked whether the candidate must be ex-20/80 he answered *"no"*.
+FDM_XCAD_FRM = os.environ.get('W_V4_FDM_XCAD_FRM', 'confirm')   # 'confirm' | 'cross'.
+#   WHICH BAR UPDATE 2 STARTS FROM. HIS 1104 *"the conf bar"*. At his example the confirm is
+#   16:17:30 and the cross 16:15:35.
+FDM_XCAD_TAG_AT = os.environ.get('W_V4_FDM_XCAD_TAG_AT', 'event')   # 'event' | 'xbar'.
+#   WHERE THE `towards` TAGS COME FROM. HIS 1104 *"tagged at the cadence event bar"*. At his
+#   example that is 16 of 30 lines at 16:11:00 against 18 of 30 at 16:17:30.
+FDM_XCAD_REV_FROM = os.environ.get('W_V4_FDM_XCAD_REV_FROM', 'window')   # 'window' | 'event'.
+#   WHERE THE REVERSAL GATE'S SPAN STARTS for update 2's re-read. HIS 1104 *"the target-side
+#   reversal must fire between the opening of the cadence window and the confirmed x-cross bar"*,
+#   so 'window' is the bank. IT GATES ONLY THE REVERSAL - the extremum keeps the trade's own open
+#   as its anchor, because he named the span for the reversal and nothing else. THAT READING IS MINE.
+FDM_XCAD_SEAM_S = _knob('FDM_XCAD_SEAM_S', 15.0)    # seconds past the ws1 seam, HIS value.
+#   HIS 1104 *"walk to the next ws1 seam+15s"*. 15 s = 3 bars at the 5 s grid.
+FDM_XCAD_WALK_MIN = _knob('FDM_XCAD_WALK_MIN', 10.0)    # the truncating walk, minutes. HIS value.
+#   HIS 1104 *"walk forward 10 minutes, test for `away` at each emerging bar, truncate the walk if
+#   the test passes"*. The SHAPE is the grace walk's, which he called "the established walk":
+#   re-test every 5 s bar and break out on the first pass. 10.0 min = 120 bars.
+FDM_XCAD_NONE = os.environ.get('W_V4_FDM_XCAD_NONE', 'rev-trade')   # 'rev-trade' | 'no-action'.
+#   WHAT NO CANDIDATE MEANS. HIS 1104 *"unless I'm wrong, no candidates = rev-trade.  validate
+#   this in the existing code"* - validated: v4_fdm2.walk already returns a REV-TRADE row the
+#   moment step 1's count is 0, so "no qualifying lines fires a rev-trade" is the code's own
+#   precedent. Step 1's set is a different set from the director's, which is why this is a knob.
 #   WHICH BARS THE TABLE COLLECTS THE BOARD ON. 'event+x10' is every cadence event plus that
 #   event's own ws10x race confirm - the two bars the machine already owns. 'event' drops the race
 #   confirm. THE KNOB NAME IS MINE. His 1104 ws8x experiment is NOT a value here: the race on a
@@ -1573,6 +1614,16 @@ RULED = {
     'FDM_MAE_CAP': (1.1, 'HIS 1103 "add the typical mae1.1 stop" + "yes, move it to default". ALWAYS ON, unlike LIN2_MAE_CAP which stayed behind W_MAE_CAP=on'),
     'FDM_CONF_READ': ('closed_prev', 'BANKED 1104 - his "make sure that closed-prev is the standard for everything except lift-off", the LATER of his two rulings for this table. "emerging" is the arm it replaced'),
     'FDM_CONF_BARS': ('event+x10', 'BANKED 1104 - the two data bars the machine owns, the cadence event and that event\'s ws10x race confirm. "event" is the narrower arm. THE KNOB NAME IS MINE'),
+    'FDM_XCAD_ON': (0, 'OFF is the bank until the director is measured. At 0 the race stays on ws10 and no number moves'),
+    'FDM_XCAD_RULE': ('B', 'HIS 1104 "unsure.  use B for now, we can change it to A if the data doesn\'t match my eye\'s verdict"'),
+    'FDM_XCAD_ABOVE': (2, 'HIS OWN COUNT from the confluence rule, "the 2 lines above the highest TF". At 3 his 16:11:00 example produces no candidate'),
+    'FDM_XCAD_EXF': (0, 'HIS 1104 "no" - the candidate line does not have to be ex-20/80 itself'),
+    'FDM_XCAD_FRM': ('confirm', 'HIS 1104 "the conf bar". "cross" is the arm, 1 min 55 s earlier at his own example'),
+    'FDM_XCAD_TAG_AT': ('event', 'HIS 1104 "tagged at the cadence event bar"'),
+    'FDM_XCAD_REV_FROM': ('window', 'HIS 1104 "the target-side reversal must fire between the opening of the cadence window and the confirmed x-cross bar". It gates the reversal only; the extremum keeps the trade open as its anchor, and THAT reading is mine'),
+    'FDM_XCAD_SEAM_S': (15.0, 'HIS VALUE "the next ws1 seam+15s". 15 s = 3 bars'),
+    'FDM_XCAD_WALK_MIN': (10.0, 'HIS VALUE "walk forward 10 minutes". The shape is the grace walk he called "the established walk" - re-test every 5 s bar, break on the first pass'),
+    'FDM_XCAD_NONE': ('rev-trade', 'HIS 1104 "no candidates = rev-trade", validated against v4_fdm2.walk which already rev-trades when step 1 counts 0'),
     'FDM_SAV_ON': (0, 'OFF, HIS 1103 "we\'re dropping saviour for now". It was wired and measured: 2026-08-03 -1.051% -> -3.103% net, 2026-09-15 +7.316% -> -15.040%'),
     'FDM_SAV_READ': ('emerging', 'HIS 1103 "use emerging values, at the emerging ws1Mage extermum". "chart" is the other arm'),
     'FDM_SAV_TF_HI': (3, 'HIS 1103 "reduce the cascade to ws1-3". fdm2\'s own knob, not SAV_CASCADE_TF_HI, so the live machine keeps 12'),
