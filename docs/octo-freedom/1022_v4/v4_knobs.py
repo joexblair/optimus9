@@ -1279,8 +1279,9 @@ FDM_CONF_BARS = os.environ.get('W_V4_FDM_CONF_BARS', 'event+x10')   # 'event' | 
 #   dynamically based on the highest TF (`fdm-conf-xcross-candidate`) that is printing `away` while
 #   the TF lines above `fdm-conf-xcross-candidate` are `towards` and ex-20/80-fence"*.
 #   `fdm-conf-xcross-candidate` IS HIS KNOB NAME for the chosen line. The others here are mine.
-FDM_XCAD_ON = _knob('FDM_XCAD_ON', 0, int)      # 1 routes the cadence through the director.
-#   OFF is the bank until it is measured: at 0 the race stays on ws10 and nothing moves.
+FDM_XCAD_ON = _knob('FDM_XCAD_ON', 1, int)      # 1 routes the cadence through the director.
+#   ON, HIS 1104 *"apply the update to the code so that ws10 does not interfere with the intention
+#   of the spec"*. At 0 the race stays pinned to ws10 and every banked fdm2 number is reproduced.
 FDM_XCAD_RULE = os.environ.get('W_V4_FDM_XCAD_RULE', 'B')   # 'B' | 'A'.
 #   WHICH READING OF *"the TF lines above"*. HIS 1104 *"unsure.  use B for now, we can change it
 #   to A if the data doesn't match my eye's verdict"*.
@@ -1295,6 +1296,14 @@ FDM_XCAD_EXF = _knob('FDM_XCAD_EXF', 0, int)    # 1 requires the candidate line 
 FDM_XCAD_FRM = os.environ.get('W_V4_FDM_XCAD_FRM', 'confirm')   # 'confirm' | 'cross'.
 #   WHICH BAR UPDATE 2 STARTS FROM. HIS 1104 *"the conf bar"*. At his example the confirm is
 #   16:17:30 and the cross 16:15:35.
+FDM_XCAD_C2_SCOPE = os.environ.get('W_V4_FDM_XCAD_C2_SCOPE', 'tagged')  # 'tagged' | 'board'.
+#   HIS SECOND CLAUSE, *"AND there are no more ex-20/80-fence lines tagged as `towards`"*, has two
+#   readings and his word "tagged" is what splits them:
+#     'tagged'  the lines that were BOTH ex-20/80 AND towards at the cadence event. None of them
+#               may still read towards at the test bar
+#     'board'   any line that is ex-20/80 AND towards AT THE TEST BAR blocks it, tagged or not
+#   'tagged' is the default because he wrote "tagged". THE REPORT PRINTS BOTH VERDICTS so the
+#   reading can be settled on numbers. THE KNOB IS MINE.
 FDM_XCAD_TAG_AT = os.environ.get('W_V4_FDM_XCAD_TAG_AT', 'event')   # 'event' | 'xbar'.
 #   WHERE THE `towards` TAGS COME FROM. HIS 1104 *"tagged at the cadence event bar"*. At his
 #   example that is 16 of 30 lines at 16:11:00 against 18 of 30 at 16:17:30.
@@ -1614,7 +1623,8 @@ RULED = {
     'FDM_MAE_CAP': (1.1, 'HIS 1103 "add the typical mae1.1 stop" + "yes, move it to default". ALWAYS ON, unlike LIN2_MAE_CAP which stayed behind W_MAE_CAP=on'),
     'FDM_CONF_READ': ('closed_prev', 'BANKED 1104 - his "make sure that closed-prev is the standard for everything except lift-off", the LATER of his two rulings for this table. "emerging" is the arm it replaced'),
     'FDM_CONF_BARS': ('event+x10', 'BANKED 1104 - the two data bars the machine owns, the cadence event and that event\'s ws10x race confirm. "event" is the narrower arm. THE KNOB NAME IS MINE'),
-    'FDM_XCAD_ON': (0, 'OFF is the bank until the director is measured. At 0 the race stays on ws10 and no number moves'),
+    'FDM_XCAD_ON': (1, 'ON, HIS 1104 "apply the update to the code so that ws10 does not interfere with the intention of the spec". At 0 the race pins ws10 and every banked fdm2 number is reproduced'),
+    'FDM_XCAD_C2_SCOPE': ('tagged', 'HIS WORD "tagged" in the second clause. "board" tests every ex-20/80 line at the test bar instead. The report prints both verdicts; THE KNOB IS MINE'),
     'FDM_XCAD_RULE': ('B', 'HIS 1104 "unsure.  use B for now, we can change it to A if the data doesn\'t match my eye\'s verdict"'),
     'FDM_XCAD_ABOVE': (2, 'HIS OWN COUNT from the confluence rule, "the 2 lines above the highest TF". At 3 his 16:11:00 example produces no candidate'),
     'FDM_XCAD_EXF': (0, 'HIS 1104 "no" - the candidate line does not have to be ex-20/80 itself'),

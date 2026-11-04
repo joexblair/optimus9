@@ -896,35 +896,46 @@ if os.environ.get('W_FDM2_XCAD') == 'on':
     print()
     print('| the cadence event | the incoming trade | its own side | the cadence window opened |'
           ' the candidate | the lines above it | ex-20/80 at the event | towards at the event |'
-          ' the x cross | the x confirm | which target | the seam+%gs bar | the seam verdict |'
-          ' the rev-trade bar | why | the ws10 race confirm, for comparison |'
-          % float(K.FDM_XCAD_SEAM_S))
-    print('|' + '---|' * 16)
+          ' the ex-20/80 towards lines | clause one tests | the x cross | the x confirm |'
+          ' which target | the rev-trade bar | the seam verdict |'
+          ' the rev-trade bar on the other clause-two reading | why |'
+          ' the ws10 race confirm, for comparison |')
+    print('|' + '---|' * 18)
     _XN = _XC = _XR = 0
+    #   THE BOUND IS THE WALK'S OWN, NOT THE LEG'S EXIT. Handing xcad_seam the leg's exit was
+    #   circular: that exit is what the walk DECIDED here, so the seam test was being cut off by
+    #   its own outcome and printed "past the walk's end". v4_fdm2.walk bounds itself by the stop
+    #   or by B, and this arm now does the same. The event scan stops at the leg's own signal
+    #   because that is where the walk stopped, and nothing past it is a decision the leg made.
     for _Lx in LG:
-        _sdx, _ox, _ex = int(_Lx['side']), int(_Lx['opn']), int(_Lx['exit'])
-        for _evx, _s0x, _whyx in F2.cadence_events(LN, _sdx, _ox + 1, _ex):
+        _sdx, _ox = int(_Lx['side']), int(_Lx['opn'])
+        _bx = int(_Lx['exit']) if _Lx['stopped'] else int(B)
+        _sigx = int(_Lx['sig']) if _Lx['sig'] is not None else _bx
+        for _evx, _s0x, _whyx in F2.cadence_events(LN, _sdx, _ox + 1, _bx):
+            if int(_evx) > _sigx:
+                break
             _XN += 1
             _tf, _ab, _cwhy = F2.xcad_candidate(LN, _sdx, int(_evx), _ox)
             _tag = tuple(t for t in range(1, int(LN['HI']) + 1)
                          if F2.mom_state(LN, t, int(_evx), _sdx, _ox) == 'towards')
             _exn = sum(1 for t in range(1, int(LN['HI']) + 1)
                        if F2.ex2080(float(LN['CPR'][t][int(_evx)]), _sdx))
-            _r10 = F2.x10_cadence(LN, _sdx, int(_evx), _ex)
+            _r10 = F2.x10_cadence(LN, _sdx, int(_evx), _bx)
             if _tf is None:
-                print('| %s | %s %s | %s | %s | none | - | %d of %d | %d of %d | - | - | - |'
-                      ' - | - | %s | %s | %s |'
+                print('| %s | %s %s | %s | %s | none | - | %d of %d | %d of %d | - | - |'
+                      ' - | - | - | %s | %s | - | %s | %s |'
                       % (ln.U(int(_evx)), ln.U(_ox), 'LONG' if _sdx > 0 else 'SHORT',
                          'HIGH, upwards' if _sdx > 0 else 'LOW, downwards', ln.U(int(_s0x)),
                          _exn, int(LN['HI']), len(_tag), int(LN['HI']),
-                         'rev-trade at the event, FDM_XCAD_NONE'
+                         ln.U(int(_evx)) if str(K.FDM_XCAD_NONE) == 'rev-trade' else '-',
+                         'REV-TRADE at the event, FDM_XCAD_NONE'
                          if str(K.FDM_XCAD_NONE) == 'rev-trade' else 'no action',
                          _cwhy, '-' if _r10 is None else ln.U(int(_r10[0]))))
                 continue
             _XC += 1
-            _rx = F2.x_race(LN, _tf, _sdx, int(_evx), _ex)
+            _rx = F2.x_race(LN, _tf, _sdx, int(_evx), _bx)
             if _rx is None:
-                print('| %s | %s %s | %s | %s | ws%dr | ws%s | %d of %d | %d of %d |'
+                print('| %s | %s %s | %s | %s | ws%dr | ws%s | %d of %d | %d of %d | - | - |'
                       ' no cross before the leg exits | - | - | - | - | - | %s | %s |'
                       % (ln.U(int(_evx)), ln.U(_ox), 'LONG' if _sdx > 0 else 'SHORT',
                          'HIGH, upwards' if _sdx > 0 else 'LOW, downwards', ln.U(int(_s0x)),
@@ -934,21 +945,30 @@ if os.environ.get('W_FDM2_XCAD') == 'on':
                 continue
             _cf, _which, _cr = _rx
             _frm = _cf if str(K.FDM_XCAD_FRM) == 'confirm' else _cr
-            _tagx = _tag if str(K.FDM_XCAD_TAG_AT) == 'event' else tuple(
-                t for t in range(1, int(LN['HI']) + 1)
-                if F2.mom_state(LN, t, int(_frm), _sdx, _ox) == 'towards')
-            _sb, _swhy = F2.xcad_seam(LN, _sdx, int(_s0x), int(_frm), _tagx, _ex)
+            #   HIS 1104 NARROWING: clause one reads only the FDM_XCAD_ABOVE 2 lines above the
+            #   highest ex-20/80 line that is tagged `towards` at the cadence event.
+            _sab, _sexf, _stwhy = F2.xcad_tags(LN, _sdx, int(_evx), _ox)
+            _sb, _swhy = F2.xcad_seam(LN, _sdx, int(_s0x), int(_frm), _sab, _sexf, _bx)
+            #   BOTH READINGS OF CLAUSE TWO, so his word "tagged" is settled on numbers.
+            _was = os.environ.get('W_V4_FDM_XCAD_C2_SCOPE')
+            _alt = 'board' if str(K.FDM_XCAD_C2_SCOPE) == 'tagged' else 'tagged'
+            K.FDM_XCAD_C2_SCOPE = _alt
+            _sb2, _swhy2 = F2.xcad_seam(LN, _sdx, int(_s0x), int(_frm), _sab, _sexf, _bx)
+            K.FDM_XCAD_C2_SCOPE = _was if _was else ('tagged' if _alt == 'board' else 'board')
             if _sb is not None:
                 _XR += 1
-            print('| %s | %s %s | %s | %s | ws%dr | ws%s | %d of %d | %d of %d | %s | %s | %s |'
-                  ' %s | %s | %s | %s | %s |'
+            print('| %s | %s %s | %s | %s | ws%dr | ws%s | %d of %d | %d of %d | ws%s | ws%s |'
+                  ' %s | %s | %s | %s | %s | %s | %s | %s |'
                   % (ln.U(int(_evx)), ln.U(_ox), 'LONG' if _sdx > 0 else 'SHORT',
                      'HIGH, upwards' if _sdx > 0 else 'LOW, downwards', ln.U(int(_s0x)),
                      _tf, ', ws'.join(str(u) for u in _ab), _exn, int(LN['HI']),
-                     len(_tagx), int(LN['HI']), ln.U(int(_cr)), ln.U(int(_cf)), _which,
+                     len(_tag), int(LN['HI']),
+                     ', ws'.join(str(u) for u in _sexf) or ' none',
+                     ', ws'.join(str(u) for u in _sab) or ' none',
+                     ln.U(int(_cr)), ln.U(int(_cf)), _which,
                      '-' if _sb is None else ln.U(int(_sb)),
                      'REV-TRADE' if _sb is not None else 'held',
-                     '-' if _sb is None else ln.U(int(_sb)), _swhy,
+                     '-' if _sb2 is None else ln.U(int(_sb2)), _swhy,
                      '-' if _r10 is None else ln.U(int(_r10[0]))))
     print()
     print('| the director roll-up | value |')

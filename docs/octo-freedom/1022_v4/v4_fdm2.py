@@ -422,7 +422,39 @@ def xcad_candidate(LN, side, bar, since):
         '%d lines' % n_above if rule == 'B' else 'ex-fence lines')
 
 
-def xcad_seam(LN, side, s0, xb, tagged, B):
+def xcad_tags(LN, side, bar, since):
+    """The lines his update-2 clauses read, taken at the cadence event. -> (above, exf_towards, why).
+
+    HIS 1104 NARROWING of his own update 2: *"I should have stated 'consider only the 2 TF above
+    the highest ex-20/80-fence TF that is tagged `towards`' - at 1611, those 2 TFs are 11 and 12"*.
+
+        exf_towards   the lines ex-20/80 on the side that read `towards` here. At 2026-08-07
+                      16:11:00 HIGH those are ws9 and ws10, out of the ex-fence set ws7..ws10
+        above         the FDM_XCAD_ABOVE 2 lines above the HIGHEST of them, so ws11 and ws12 -
+                      the exact pair he named
+        clause one    every line in `above` must read `away` at the test bar
+        clause two    none of `exf_towards` may still read `towards` there, FDM_XCAD_C2_SCOPE
+                      'tagged'
+
+    WITH NO EX-20/80 `towards` LINE there is no highest one to measure from, so `above` is empty
+    and clause two has nothing to fail on. The test then passes on its own terms. THAT READING IS
+    MINE, and the report names it so a trivial pass is never mistaken for a measured one.
+    """
+    hi = int(LN['HI'])
+    exf_tw = [t for t in range(1, hi + 1)
+              if ex2080(float(LN['CPR'][t][int(bar)]), side)
+              and mom_state(LN, t, int(bar), side, int(since)) == 'towards']
+    if not exf_tw:
+        return (), (), 'no line is both ex-%g/%g and towards here' % K.fnc_pair(K.FDM_FNC_2080)
+    top = max(exf_tw)
+    ab = tuple(u for u in range(top + 1, top + 1 + int(K.FDM_XCAD_ABOVE)) if u <= hi)
+    return ab, tuple(exf_tw), ('ws%d is the highest ex-%g/%g towards line, so the %d above it are'
+                               ' ws%s' % (top, *K.fnc_pair(K.FDM_FNC_2080),
+                                          int(K.FDM_XCAD_ABOVE),
+                                          ', ws'.join(str(u) for u in ab) or 'none'))
+
+
+def xcad_seam(LN, side, s0, xb, above, exf_tw, B):
     """His update 2 - the emerging re-read at the ws1 seam. -> (the rev-trade bar, why) | (None, why).
 
     HIS UPDATE 2, verbatim: *"when the ws{TF}x cross fires, walk to the next ws1 seam+15s and
@@ -434,13 +466,17 @@ def xcad_seam(LN, side, s0, xb, tagged, B):
               target-side reversal must fire between the opening of the cadence window and the
               confirmed x-cross bar"*
       xb      the bar the walk starts from. FDM_XCAD_FRM 'confirm' is his *"the conf bar"*
-      tagged  the lines that read `towards` at the cadence event bar, his *"tagged at the cadence
-              event bar"*
+      above   the FDM_XCAD_ABOVE 2 lines above the highest ex-20/80 `towards` line at the
+              cadence event - his 1104 narrowing, *"consider only the 2 TF above the highest
+              ex-20/80-fence TF that is tagged `towards`"*. Clause one tests these
+      exf_tw  the ex-20/80 lines that read `towards` at the cadence event. Clause two tests these
+              at FDM_XCAD_C2_SCOPE 'tagged'
 
-    THE SECOND CLAUSE RANGES OVER EVERY LINE, not only the tagged ones. If it only re-tested the
-    tagged set it would add nothing to the first clause, which already requires all of them away.
-    Read wide it is his own earlier mech update - *"because there are towards lines that are
-    ex-20/80-fence, the cadence cannot print a rev-trade"*. THAT READING IS MINE.
+    THE SECOND CLAUSE'S SCOPE IS FDM_XCAD_C2_SCOPE. At 'tagged', his own word, it tests only the
+    lines that were ex-20/80 AND `towards` at the cadence event. At 'board' any line that is
+    ex-20/80 AND `towards` at the test bar blocks it, which is his earlier mech update read wide -
+    *"because there are towards lines that are ex-20/80-fence, the cadence cannot print a
+    rev-trade"*. BOTH VERDICTS ARE REPORTED, so the reading is settled on numbers not on my pick.
 
     EVERY READ IN HERE IS EMERGING, both the value and the fence, because he asked for the
     emerging values at this bar. THAT READING IS MINE TOO.
@@ -472,17 +508,23 @@ def xcad_seam(LN, side, s0, xb, tagged, B):
             st[t] = JIG.fdm2_cad_mom_detector(LN['EMR'][t], LN['EMR'][t], int(b), int(side),
                                               int(s0), K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL,
                                               K.LIFT_WOB, stamps=gate[t], rev_since=rs)['state']
-        still = [t for t in tagged if st[t] != 'away']
-        exf_tw = [t for t in range(1, hi + 1)
-                  if st[t] == 'towards' and ex2080(float(LN['EMR'][t][int(b)]), side)]
+        still = [t for t in above if st[t] != 'away']
+        if str(K.FDM_XCAD_C2_SCOPE) == 'tagged':
+            blockers = [t for t in exf_tw if st[t] == 'towards']
+        else:
+            blockers = [t for t in range(1, hi + 1)
+                        if st[t] == 'towards' and ex2080(float(LN['EMR'][t][int(b)]), side)]
         if still:
-            return False, 'ws%s of the %d tagged lines are not away yet' % (
-                ', ws'.join(str(t) for t in still), len(tagged))
-        if exf_tw:
-            return False, 'ws%s are ex-%g/%g AND towards, so no rev-trade' % (
-                ', ws'.join(str(t) for t in exf_tw), *K.fnc_pair(K.FDM_FNC_2080))
-        return True, 'all %d tagged lines away and no ex-%g/%g line towards' % (
-            len(tagged), *K.fnc_pair(K.FDM_FNC_2080))
+            return False, 'ws%s of the %d lines above are not away yet' % (
+                ', ws'.join(str(t) for t in still), len(above))
+        if blockers:
+            return False, 'ws%s are ex-%g/%g AND towards (%s), so no rev-trade' % (
+                ', ws'.join(str(t) for t in blockers), *K.fnc_pair(K.FDM_FNC_2080),
+                K.FDM_XCAD_C2_SCOPE)
+        return True, ('%s away and no ex-%g/%g line towards (%s)'
+                      % ('ws' + ', ws'.join(str(t) for t in above) if above
+                         else 'no line above to test', *K.fnc_pair(K.FDM_FNC_2080),
+                         K.FDM_XCAD_C2_SCOPE))
 
     ok, why = passes(b0)
     if ok:
@@ -627,18 +669,58 @@ def walk(LN, side, opn, B):
                              'rev-trade"' % (n, int(K.FDM_STEP1_ABOVE_TF) + 1, LN['HI'],
                                              *K.fnc_pair(K.FDM_FNC_2080))))
             return ev, rows
-        x10 = x10_cadence(LN, side, ev, int(B))
+        #   ── fdm2-wsxcad-director, HIS 1104 UPDATE 1 ───────────────────────────────────────
+        #   THE RACE'S TIMEFRAME IS CHOSEN HERE, not pinned to ws10. His *"apply the update to
+        #   the code so that ws10 does not interfere with the intention of the spec"*: at
+        #   FDM_XCAD_ON 1 the ws10 race is not run at all, so it can neither end this leg nor
+        #   truncate the director's own walk. At 0 every banked number is reproduced.
+        xtf, xabove, xcwhy = (None, (), '')
+        if int(K.FDM_XCAD_ON):
+            xtf, xabove, xcwhy = xcad_candidate(LN, side, ev, opn)
+            if xtf is None:
+                #   HIS RULING: *"no candidates = rev-trade"*, validated against this function's
+                #   own step-1 branch above, which already rev-trades on a count of 0.
+                if str(K.FDM_XCAD_NONE) == 'rev-trade':
+                    rows.append(dict(bar=ev, stage='REV-TRADE', ev=ev, k=k, n=n, cwhy=why,
+                                     why='the director found no candidate - %s. His "no'
+                                     ' candidates = rev-trade"' % xcwhy))
+                    return ev, rows
+                rows.append(dict(bar=ev, stage='NO ACTION', ev=ev, k=k, n=n, cwhy=why,
+                                 why='the director found no candidate - %s, and FDM_XCAD_NONE is'
+                                 ' no-action' % xcwhy))
+                continue
+        rtf_tf = int(xtf) if xtf is not None else 10
+        x10 = x_race(LN, rtf_tf, side, ev, int(B))
         xb = x10[0] if x10 is not None else None
+        xnm = 'the ws%dx-cadence' % rtf_tf
         win = ('the next cadence event' if nxt is not None and (xb is None or nxt <= xb)
-               else ('the ws10x-cadence' if xb is not None else 'nothing - the tape ends'))
-        rows.append(dict(bar=ev, stage='WALK', ev=ev, k=k, n=n, cwhy=why,
+               else (xnm if xb is not None else 'nothing - the tape ends'))
+        rows.append(dict(bar=ev, stage='WALK', ev=ev, k=k, n=n, cwhy=why, xtf=rtf_tf,
                          why='cadence event, %d of %d lines printing ex-%g/%g'
-                         ' AND towards -> walk. %s is first%s'
-                         % (k, n, *K.fnc_pair(K.FDM_FNC_2080), win,
-                            '' if xb is None else ' (ws10x crosses to %s %s, the ws10x-cadence'
-                            ' confirms %s)' % (x10[1], ln.U(x10[2]), ln.U(xb)))))
-        if win != 'the ws10x-cadence':
+                         ' AND towards -> walk. the race runs on ws%d%s. %s is first%s'
+                         % (k, n, *K.fnc_pair(K.FDM_FNC_2080), rtf_tf,
+                            '' if xtf is None else ' (%s)' % xcwhy, win,
+                            '' if xb is None else ' (ws%dx crosses to %s %s, %s confirms %s)'
+                            % (rtf_tf, x10[1], ln.U(x10[2]), xnm, ln.U(xb)))))
+        if win != xnm:
             continue
+        #   ── HIS 1104 UPDATE 2: the emerging re-read at the ws1 seam ───────────────────────────
+        #   IT RUNS BEFORE the population branch, because his update 2 ends *"THEN send a
+        #   rev-trade to router"*. On a hold the population branch below still gets its turn -
+        #   he narrowed update 2 and never dropped the 50% rule or the grace walk, so neither is
+        #   deleted here. THAT IS MY READING and it is the one thing in this block that is mine.
+        if int(K.FDM_XCAD_ON):
+            sfrm = xb if str(K.FDM_XCAD_FRM) == 'confirm' else int(x10[2])
+            sab, sexf, stwhy = xcad_tags(LN, side, ev, opn)
+            sbar, swhy = xcad_seam(LN, side, s0, sfrm, sab, sexf, int(B))
+            rows.append(dict(bar=int(sfrm), stage='SEAM', ev=ev, k=k, n=n, xtf=rtf_tf,
+                             why='the director\'s seam read from %s - %s. %s'
+                             % (ln.U(int(sfrm)), stwhy, swhy)))
+            if sbar is not None:
+                rows.append(dict(bar=int(sbar), stage='REV-TRADE', ev=ev, k=k, n=n, xtf=rtf_tf,
+                                 which=x10[1], cross=x10[2],
+                                 why='the director - %s' % swhy))
+                return int(sbar), rows
         pop = population(LN, side, opn, xb)
         rf = rev_from(ev, s0)
         rtf = reversed_tfs(LN, side, pop, rf, xb)
@@ -647,20 +729,22 @@ def walk(LN, side, opn, B):
         if pct >= t_pct:
             rows.append(dict(bar=xb, stage='REV-TRADE', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
                              pct=pct, which=x10[1], cross=x10[2], rev_tfs=tuple(rtf),
-                             rf=rf, why='the ws10x-cadence - ws10x crossed to %s %s and confirmed'
+                             rf=rf, xtf=rtf_tf,
+                             why='%s - ws%dx crossed to %s %s and confirmed'
                              ' here. %d of %d reversed since %s (%s) = %.1f%% >= %g%% at the'
-                             ' ws10x-cadence bar itself'
-                             % (x10[1], ln.U(x10[2]), rv, len(pop), ln.U(rf), K.FDM_REV_FROM,
-                                pct, t_pct)))
+                             ' race bar itself'
+                             % (xnm, rtf_tf, x10[1], ln.U(x10[2]), rv, len(pop), ln.U(rf),
+                                K.FDM_REV_FROM, pct, t_pct)))
             return xb, rows
         if pct < g_pct:
             rows.append(dict(bar=xb, stage='NO ACTION', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
                              pct=pct, which=x10[1], cross=x10[2], rev_tfs=tuple(rtf),
-                             rf=rf, why='the ws10x-cadence - ws10x crossed to %s %s and confirmed'
+                             rf=rf, xtf=rtf_tf,
+                             why='%s - ws%dx crossed to %s %s and confirmed'
                              ' here. %d of %d reversed since %s (%s) = %.1f%% < %g%% - no branch,'
                              ' wait for the next cadence event'
-                             % (x10[1], ln.U(x10[2]), rv, len(pop), ln.U(rf), K.FDM_REV_FROM,
-                                pct, g_pct)))
+                             % (xnm, rtf_tf, x10[1], ln.U(x10[2]), rv, len(pop), ln.U(rf),
+                                K.FDM_REV_FROM, pct, g_pct)))
             continue
         #   THE GRACE WALK. The clock starts at the ws10x-cadence, the COUNT carries on from its
         #   value there - his *"why would it reset?  the grace fires on a low pct, and the low pct
@@ -672,10 +756,12 @@ def walk(LN, side, opn, B):
         rows.append(dict(bar=xb, stage='GRACE', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
                          pct=pct, which=x10[1], cross=x10[2], rev_tfs=tuple(rtf),
                          rf=rf,
-                         why='the ws10x-cadence - ws10x crossed to %s %s and confirmed here. %d of'
+                         xtf=rtf_tf,
+                         why='%s - ws%dx crossed to %s %s and confirmed here. %d of'
                          ' %d reversed since %s (%s) = %.1f%% >= %g%% -> grace walk %s .. %s, %d'
                          ' bars = %.1f min, population frozen at %d lines'
-                         % (x10[1], ln.U(x10[2]), rv, len(pop), ln.U(rf), K.FDM_REV_FROM, pct, g_pct,
+                         % (xnm, rtf_tf, x10[1], ln.U(x10[2]), rv, len(pop), ln.U(rf),
+                            K.FDM_REV_FROM, pct, g_pct,
                                                  ln.U(min(int(xb) + 1, int(B))), ln.U(end),
                                                  end - int(xb), (end - int(xb)) * 5 / 60.0,
                                                  len(pop))))
