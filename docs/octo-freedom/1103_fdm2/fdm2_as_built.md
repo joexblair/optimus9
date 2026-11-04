@@ -14,7 +14,7 @@ if there is no trade open
 -the window CLOSES on the bar ws1b crosses back to ib, held 1 bar
 --one window per close: several opens before one close collapse onto that close
 -at the close bar, test ws1r AND (ws2r or ws3r)
---a line passes if it printed ex 75/25 at any one bar inside the window
+--a line passes if it printed oob at any one bar inside the window
 --they do not have to pass at the same bar, and they do not have to hold
 -if the test is true, open a trade
 --the side is ws1b's own oob side
@@ -140,13 +140,21 @@ it is OFF
 
 ## fdm2's own, all banked 1103
 
+- every fence knob holds the SMALLER end of its pair - his 1103 ruling, *"the way that I
+  should be supplying a knob is (100 - {knob:15}), ie I use the smallest number to describe
+  the fence's max"*
+- the pair and the per-side edge come from K.fnc_pair / K.side_edge, the one home, which
+  asserts a fence knob is at or under 50
+- RMOM_FNC 75.0 is the one fence still held at its upper end - lineage2 and the live octo-v4
+  machine read it through K.fence(), so it is out of fdm2's scope to move
+
 | the knob | value | units | what it does | whose value |
 |---|---|---|---|---|
 | FDM_RE_WIN_OPEN | both | - | what opens the re-entry window: ws1b oob AND gcws30b ex-fence | his, arm E |
 | FDM_RE_WIN_CLOSE | ws1b | - | what closes it: ws1b's oob to ib cross | his |
-| FDM_RE_B_FNC | 95.0 | r-points | gcws30b's fence in the opener, 95 -> (5, 95) | his |
+| FDM_RE_B_FNC | 5.0 | r-points | gcws30b's fence in the opener, 5 -> (5, 95) | his |
 | FDM_RE_IB_XWOB | 1 | bars | the ws1b ib cross hold that closes the window | his |
-| FDM_RE_GATE_FNC | 75.0 | r-points | the gate's fence on ws1r/ws2r/ws3r, 75 -> (25, 75) | his |
+| FDM_RE_GATE_FNC | 15.0 | r-points | the gate's fence on ws1r/ws2r/ws3r - oob, 15 -> (15, 85) | his, 1103 |
 | FDM_M3_FNC | 25.0 | r-points | ws3Mage's fence in the cadence event, 25 -> (25, 75) | his |
 | FDM_M3_RESCUE_ON | 1 | - | runs the ws3Mage gate's rescue | his |
 | FDM_M3_RESCUE_FNC | 40.0 | r-points | the rescue's ws3Mage fence, 40 -> (40, 60) | his |

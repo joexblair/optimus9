@@ -208,6 +208,69 @@ MC_TF_LO = 1    # wsf's floor. A low cluster must START here.
 MC_TF_HI = 12   # wsf's ceiling. A high cluster must END here.
 
 
+def towards_away(line, bar, side, since):
+    """[PRODUCER - Joe 1103] A TRADE'S DIRECTION SETS towards AND away. -> dict.
+
+    HIS MECH, verbatim:
+
+        a trade's direction sets `towards` and `away`
+        -if the trade is SHORT, `towards` means "travelling to a low side", and `away` is
+         travelling away from the low side after it has lift-off reversed
+        -inverse for a LONG trade
+
+    and the test he settled on, after the lift-off reading failed to reproduce his own example:
+
+        track the trade's target-side extremum for each line (rolling update of the value at each
+        bar). if the value for a line is printing further away from the target side extremum, the
+        line is deemed `away`
+
+      line   the line's values. EMERGING, his 1103 ruling - see below
+      bar    the bar being read. The state is for THIS bar
+      side   THE TRADE'S target side, +1 high / -1 low. An INPUT, never derived
+      since  the bar the rolling extremum starts from: the trade's own open
+
+    ONE ANCHOR, SO THE TWO STATES CANNOT BOTH HOLD. The old `towards` asked
+    rule2_trajectory.opposed_extrema per side, so each side anchored on its OWN opposed extreme - a
+    line between its block's high and its block low satisfied both. Joe caught it: *"there's a
+    potential discrepancy: the sum of travelling incoming and travelling outgoing is greater than
+    the set size"*. Measured at 2026-09-15 01:21:55, 6 of 30 lines were `towards` both ways.
+
+    THE GAP'S ARITHMETIC INVERTS WITH THE SIDE, and his correction is why this is spelled out:
+    *"away by the gap being positive FOR A SHORT"*.
+
+        SHORT, low target    the extremum is the running MINIMUM. gap = value - minimum
+        LONG,  high target   the extremum is the running MAXIMUM. gap = maximum - value
+
+    A positive gap on either side means the line is further from the extremum than the extremum
+    itself, so `away`. A gap of exactly zero means the line IS at its own rolling extremum, which
+    is `towards` - his *"yes - the rolling extremum is the reason why"*.
+
+    EMERGING, NOT CHART-MATCHED, and his reason is the measure's own: *"if we use closed-p, a ws22
+    bar will stay the same value for 22 minutes. that's no bueno, so emerging must be the answer"*.
+    A rolling extremum over a step function cannot update between its steps. THE CALLER PASSES THE
+    ARRAY, so this producer holds no opinion about which read it is.
+
+    THE TEST IS EXACT, no tolerance. His 1103: *"keep it exact for now. if we can't get a working
+    model then this will be a knob we try"*. At 2026-09-15 01:21:55 ws27r reads `away` on a gap
+    under 0.005, which is a true positive the display rounds to zero.
+
+    CAUSAL: the span is [since, bar], asserted, so no bar after the one being read is touched.
+    """
+    v = np.asarray(line, float)
+    bar, since, side = int(bar), int(since), int(side)
+    assert since <= bar, 'the rolling extremum starts after the bar it is read at'
+    assert side in (+1, -1), 'side is the TRADE\'s target side: +1 high, -1 low'
+    seg = v[since:bar + 1]
+    if not np.isfinite(seg).any():
+        return {'state': None, 'extremum': float('nan'), 'at': None, 'gap': float('nan')}
+    i = int(np.nanargmax(seg) if side > 0 else np.nanargmin(seg))
+    x = float(seg[i])
+    gap = (x - float(v[bar])) if side > 0 else (float(v[bar]) - x)
+    assert gap >= 0.0 or not np.isfinite(gap), 'a gap from the rolling extremum went negative'
+    return {'state': 'away' if gap > 0.0 else 'towards', 'extremum': x, 'at': since + i,
+            'gap': gap}
+
+
 def mage_cascade_bar(line, bar, side, mode='extrema', gap=MC_GAP, grid=None,
                      sample_bars=None):
     """[PRODUCER - Joe 1017] THE ONE BAR the mage cascade reads. -> (bar, why) or None.

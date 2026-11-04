@@ -1099,7 +1099,7 @@ LIN2_CP_MIN_TF = _knob('LIN2_CP_MIN_TF', 1, int)   # the TF floor for the chart-
 #   maps it: a HIGH oob side opens a SHORT. That mapping is banked and not mine.
 FDM_RE_IB_XWOB = _knob('FDM_RE_IB_XWOB', 1, int)  # the window's ib cross hold, in bars.
 #   1 MEANS THE CROSS BAR ITSELF, the same hold the cadence event uses on ws1b.
-FDM_RE_B_FNC = _knob('FDM_RE_B_FNC', 95.0)      # gcws30b's own fence, 95 -> (5.0, 95.0).
+FDM_RE_B_FNC = _knob('FDM_RE_B_FNC', 5.0)       # gcws30b's own fence, 5 -> (5.0, 95.0).
 #   READ ONLY BY THE ARMS THAT NAME gcws30b. The banked window is ws1b at both ends.
 FDM_RE_WIN_OPEN = os.environ.get('W_V4_FDM_RE_WIN_OPEN', 'both')
 FDM_RE_WIN_CLOSE = os.environ.get('W_V4_FDM_RE_WIN_CLOSE', 'ws1b')
@@ -1116,9 +1116,13 @@ FDM_RE_WIN_CLOSE = os.environ.get('W_V4_FDM_RE_WIN_CLOSE', 'ws1b')
 #     close 'gcws30b'  gcws30b's oob->ib cross on the side, read at the oob pair
 #   'both', 'first' and 'sameside' ARE MINE - he asked whether other permutations exist and told me
 #   to run them. They are not permutations of the two slots; they are new opening tests.
-FDM_RE_GATE_FNC = _knob('FDM_RE_GATE_FNC', 75.0)  # the gate's fence on ws1r/ws2r/ws3r.
-#   HIS WORD WAS "ex v4mom fence", which is RMOM_FNC 75. It has its OWN knob here so the re-entry
-#   and the walk can move apart; the value is the same today.
+FDM_RE_GATE_FNC = _knob('FDM_RE_GATE_FNC', 15.0)  # the gate's fence on ws1r/ws2r/ws3r.
+#   HIS 1103 UPDATE: the gate's lines must have printed **oob**, not ex-v4mom-fence. WAS 75.0, his
+#   earlier "ex v4mom fence".
+#   15.0 IS oob's SMALLER END, his 1103 convention: *"I use the smallest number to describe the
+#   fence's max"*. Every read goes through K.side_edge, which asserts the value is at or under 50.
+#   WAS 85.0 for one commit, the upper end, before he ruled the convention.
+#   oob 15/85 IS TIGHTER THAN 75/25, so fewer windows pass the gate and fewer trades open.
 
 #   ── fdm2, HIS 1103 MACHINE ────────────────────────────────────────────────────────────────────
 #   The bimodal walk-or-rev-trade decision REPLACED the old fdm-cadence body: *"yes, but don't
@@ -1461,10 +1465,10 @@ RULED = {
     'LIN2_CP_IB': ('emerging', 'BANKED 1101 on his gut - "my gut says emerging: create a knob that'
                                ' tests both options". "closed_prev" is the arm'),
     'FDM_RE_IB_XWOB': (1, 'the ib cross hold that closes the re-entry window. 1 is the cross bar itself, the same hold the cadence event uses on ws1b'),
-    'FDM_RE_B_FNC': (95.0, 'gcws30b\'s own fence, read only by the arms that name gcws30b. The banked window is ws1b at both ends'),
+    'FDM_RE_B_FNC': (5.0, 'gcws30b\'s own fence, 5 -> (5, 95), the smaller end per his 1103 convention. WAS 95.0'),
     'FDM_RE_WIN_OPEN': ('both', 'BANKED 1103 - his "let\'s bank E, and make it the machine". Arm E opens the window where ws1b is oob AND gcws30b is ex-5/95. The 28-run sweep: E is the ONLY arm positive on 08-03 at +0.152% and ties the best on 09-15 at +14.325%. The arms are ws1b, gcws30b, first and sameside'),
     'FDM_RE_WIN_CLOSE': ('ws1b', 'HIS 1103 "close the window on ws1b to ib". "gcws30b" is the arm it replaced'),
-    'FDM_RE_GATE_FNC': (75.0, 'HIS 1102 "ex v4mom fence" for the ws1r AND (ws2r or ws3r) gate. Same value as RMOM_FNC, its own knob so the two can move apart'),
+    'FDM_RE_GATE_FNC': (15.0, 'HIS 1103 UPDATE - the gate\'s lines must have printed oob, replacing his 1102 "ex v4mom fence". 15.0 is oob\'s smaller end, his "(100 - {knob:15})" convention'),
     'FDM_FNC_2080': (20.0, 'HIS OWN KNOB NAME, "fdm-20-80-fnc", at his own value. Both the step-1 test and the reversal population read it; "ex" includes oob'),
     'FDM_M3_FNC': (25.0, 'HIS 1103 "ws3Mage is settled on 25/75". The knob name is mine; the value is his'),
     'FDM_M3_RESCUE_ON': (1, 'HIS 1103 MECH UPDATE - a cadence gated on ws3Mage staying infence is rescued when ws3r went oob and ws3Mage reached ex-40/60 in the gcws30b-to-ws1b window'),
@@ -1744,6 +1748,39 @@ def gap_for(tf):
     Joe 1022 ruled the rounding: *"38, yes"* to round(). ws3 8.4 -> 8, ws7 19.6 -> 20.
     """
     return max(1, int(round(int(tf) * GAP_PER_TF)))
+
+
+def fnc_pair(fnc):
+    """A fence knob's mirrored pair. -> (lo, hi). ONE HOME FOR HIS CONVENTION.
+
+    HIS 1103 RULING: *"the way that I should be supplying a knob is (100 - {knob:15}), ie I use
+    the smallest number to describe the fence's max"*. So a fence knob ALWAYS holds the SMALLER
+    end, and hi is derived.
+
+    WHAT IT PREVENTS. Before this, fence knobs stored opposite ends of the same kind of thing -
+    FDM_FNC_2080 20.0 held the lower, FDM_RE_GATE_FNC 85.0 and RMOM_FNC 75.0 held the upper - and
+    the mirror expression at each read site had to match its own knob. Writing a lower-end value
+    into an upper-end site inverts the test and nothing errors: that voided the ws10x gate's first
+    run, where RMOM_FNC 75.0 went into a lower-end formula and produced a fence near 50.
+
+    THE ASSERT IS THE GATE, not the comment. A value above 50 is an upper-end number in a
+    lower-end slot, which is the exact mistake this exists to catch.
+    """
+    f = float(fnc)
+    assert 0.0 <= f <= 50.0, \
+        ('a fence knob must hold the SMALLER end of its pair, his "(100 - {knob:15})" - got %r,'
+         ' which is an upper-end value in a lower-end slot' % f)
+    return f, 100.0 - f
+
+
+def side_edge(fnc, side):
+    """The edge a line must reach on `side` for a fence knob. -> float.
+
+    `side` +1 high / -1 low. A HIGH side reads the pair's hi, a LOW side its lo.
+    """
+    lo, hi = fnc_pair(fnc)
+    assert int(side) in (+1, -1), 'side is +1 high / -1 low'
+    return hi if int(side) > 0 else lo
 
 
 def lift_stamp(b):

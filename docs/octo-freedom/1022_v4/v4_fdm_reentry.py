@@ -5,7 +5,7 @@ HIS SPEC AS IT NOW STANDS, after two 1103 rulings replaced gcws30b with ws1b:
     -IF there is no trade open (because of a STOP, or because the machine is starting)
     --IF ws1b crosses to oob                     <- the window OPENS here
     ---the window CLOSES when ws1b crosses back to ib
-    ---the gate is ws1r AND (ws2r or ws3r), each SEEN ex-v4mom-fence anywhere inside the window
+    ---the gate is ws1r AND (ws2r or ws3r), each SEEN oob anywhere inside the window
     ---tested at the window's close. If the test is true, open a trade
 
 WHAT REPLACED WHAT, and both are his.
@@ -25,6 +25,12 @@ WHAT EACH PIECE IS, and every one of them is his:
 
   the window         ws1b's oob excursion on one side: the bar it crosses to oob, through to the
                      confirm bar of its oob->ib cross at FDM_RE_IB_XWOB
+  the gate's fence   HIS 1103 UPDATE: *"a line passes if it printed oob at any one bar inside the
+                     window"*, replacing his 1102 *"ex v4mom fence"*. FDM_RE_GATE_FNC moves
+                     75.0 -> 15.0, oob's SMALLER end, per his 1103 convention *"I use the
+                     smallest number to describe the fence's max"*. Every read goes through
+                     K.side_edge, which derives the pair and asserts the knob is at or under 50.
+                     oob 15/85 is TIGHTER than 75/25, so fewer windows pass
   the gate           SEEN, not dwelling: *"the lines need to be seen in the window, but do not
                      need to dwell for the window's full range"*. Membership is recorded as the
                      walk passes each bar and never expires inside the window
@@ -71,10 +77,16 @@ MECH = 'fdm-reentry'
 
 
 def _beyond(a, side, fnc):
-    """Is `a` at or beyond the mirrored `fnc` pair on `side`. -> bool array."""
+    """Is `a` at or beyond the mirrored `fnc` pair on `side`. -> bool array.
+
+    `fnc` IS THE KNOB, NOT AN EDGE. It holds the SMALLER end of its pair - his 1103 convention -
+    and K.side_edge derives the end this `side` reads, asserting the value is at or under 50.
+    Handing in an already-resolved edge, K.OOB_HI 85.0 for a high side, trips that assert: the
+    one home cannot tell an upper-end edge from an upper-end knob, and that is the point.
+    """
     x = np.asarray(a, float)
-    hi = float(fnc)
-    return (x >= hi) if int(side) > 0 else (x <= 100.0 - hi)
+    e = K.side_edge(fnc, side)
+    return (x >= e) if int(side) > 0 else (x <= e)
 
 
 def _opens(B1, G, side):
@@ -90,8 +102,7 @@ def _opens(B1, G, side):
 
     The last three are MINE - he asked whether other permutations exist and said to run them.
     """
-    w1 = _beyond(B1, side, float(K.OOB_HI)) if int(side) > 0 else \
-        (np.asarray(B1, float) <= float(K.OOB_LO))
+    w1 = _beyond(B1, side, K.OOB_FNC)
     m = str(K.FDM_RE_WIN_OPEN)
     if m == 'ws1b':
         hold = w1
@@ -150,7 +161,7 @@ def signals(B1, R, side=None, G=None):
     fnc = float(K.FDM_RE_GATE_FNC)
     out = []
     for sd in sides:
-        edge = fnc if sd > 0 else (100.0 - fnc)
+        edge = K.side_edge(fnc, sd)
         for o, c in windows(B1, sd, G):
             seen = {}
             for tf in (1, 2, 3):

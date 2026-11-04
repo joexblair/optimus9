@@ -126,13 +126,15 @@ def ex2080(v, side):
 
     HIS D: *"ex 20/80"*, and "ex" INCLUDES oob - his standing rule - so the test is at-or-beyond.
 
-    FDM_FNC_2080 HOLDS THE LOWER END of the mirrored pair: 20.0 -> (20, 80), high side at or above
-    80, low side at or below 20. RMOM_FNC holds the UPPER end - 75.0 -> (25, 75) via
-    K.rmom_pair(). The two conventions are opposite, so a value moved from one to the other
-    inverts the test.
+    HIS 1103 CONVENTION, *"I use the smallest number to describe the fence's max"*: a fence knob
+    holds the SMALLER end of its pair. FDM_FNC_2080 20.0 -> (20, 80) - high side at or above 80,
+    low side at or below 20. The edge for the side comes from K.side_edge, the ONE home for the
+    convention, which asserts the knob is at or under 50 so an upper-end value in a lower-end slot
+    cannot pass silently. RMOM_FNC 75.0 is the one knob still held at its UPPER end, read raw by
+    v4_l2_proxy for lineage2 and the live octo-v4 machine - it is not routed through here.
     """
-    f = float(K.FDM_FNC_2080)
-    return (v >= 100.0 - f) if int(side) > 0 else (v <= f)
+    e = K.side_edge(K.FDM_FNC_2080, side)
+    return (v >= e) if int(side) > 0 else (v <= e)
 
 
 def towards(r, tf, bar, side):
@@ -201,7 +203,7 @@ def cadence_events(LN, side, A, B, trace=False):
     """
     out, tr = [], []
     B1, CPR, CPM = LN['B1'], LN['CPR'], LN['CPM']
-    f3 = float(K.FDM_M3_FNC)
+    e3 = K.side_edge(K.FDM_M3_FNC, side)
     oob = (B1 >= K.OOB_HI) if int(side) > 0 else (B1 <= K.OOB_LO)
     for c, cf, s in oob_ib_cross(B1, K.OOB_HI, K.OOB_LO, 1):
         if int(s) != int(side):
@@ -235,7 +237,7 @@ def cadence_events(LN, side, A, B, trace=False):
             if nestle:
                 break
         m3seg = CPM[3][s0:s1 + 1]
-        m3 = bool(((m3seg >= 100.0 - f3) if side > 0 else (m3seg <= f3)).any())
+        m3 = bool(((m3seg >= e3) if side > 0 else (m3seg <= e3)).any())
         #   HIS 1103 WS3MAGE GATE UPDATE. A cross gated because ws3Mage stayed infence is rescued
         #   when, inside the gcws30b-ex-fence-to-ws1b-ib window, ws3r went oob AND ws3Mage reached
         #   ex-FDM_M3_RESCUE_FNC 40/60. HIS WINDOW, NOT THE EXCURSION: it starts at gcws30b's cross
@@ -254,9 +256,9 @@ def cadence_events(LN, side, A, B, trace=False):
                 w0 = int(gx[-1])
                 r3 = CPR[3][w0:int(c) + 1]
                 m3b = CPM[3][w0:int(c) + 1]
-                fr = float(K.FDM_M3_RESCUE_FNC)
+                er = K.side_edge(K.FDM_M3_RESCUE_FNC, side)
                 r3ok = bool(((r3 >= K.OOB_HI) if side > 0 else (r3 <= K.OOB_LO)).any())
-                m3ok = bool(((m3b >= 100.0 - fr) if side > 0 else (m3b <= fr)).any())
+                m3ok = bool(((m3b >= er) if side > 0 else (m3b <= er)).any())
                 assert w0 <= int(c), 'the rescue window opens after the cross it serves'
                 if r3ok and m3ok:
                     rsc = (w0, float(np.nanmax(r3) if side > 0 else np.nanmin(r3)),
@@ -370,8 +372,7 @@ def population(LN, side, opn, bar):
     FROZEN BY THE CALLER. His 1103 "no" to the population growing during the grace walk means this
     is called ONCE, at the ws10x-cadence, and the list is held for the 5 minutes.
     """
-    f = float(K.FDM_FNC_2080)
-    edge = (100.0 - f) if int(side) > 0 else f
+    edge = K.side_edge(K.FDM_FNC_2080, side)
     out = []
     for tf in range(int(K.FDM_POP_LO), int(LN['HI']) + 1):
         seg = LN['CPR'][tf][int(opn):int(bar) + 1]
@@ -449,7 +450,7 @@ def walk(LN, side, opn, B):
                              why='cadence event, 0 of %d lines ws%d..'
                              'ws%d printing ex-%g/%g AND towards - his "if the answer is no, then '
                              'rev-trade"' % (n, int(K.FDM_STEP1_ABOVE_TF) + 1, LN['HI'],
-                                             K.FDM_FNC_2080, 100.0 - float(K.FDM_FNC_2080))))
+                                             *K.fnc_pair(K.FDM_FNC_2080))))
             return ev, rows
         x10 = x10_cadence(LN, side, ev, int(B))
         xb = x10[0] if x10 is not None else None
@@ -458,7 +459,7 @@ def walk(LN, side, opn, B):
         rows.append(dict(bar=ev, stage='WALK', ev=ev, k=k, n=n, cwhy=why,
                          why='cadence event, %d of %d lines printing ex-%g/%g'
                          ' AND towards -> walk. %s is first%s'
-                         % (k, n, K.FDM_FNC_2080, 100.0 - float(K.FDM_FNC_2080), win,
+                         % (k, n, *K.fnc_pair(K.FDM_FNC_2080), win,
                             '' if xb is None else ' (ws10x crosses to %s %s, the ws10x-cadence'
                             ' confirms %s)' % (x10[1], ln.U(x10[2]), ln.U(xb)))))
         if win != 'the ws10x-cadence':
