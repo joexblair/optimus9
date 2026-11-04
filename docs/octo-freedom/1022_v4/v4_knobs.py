@@ -1116,13 +1116,53 @@ FDM_RE_WIN_CLOSE = os.environ.get('W_V4_FDM_RE_WIN_CLOSE', 'ws1b')
 #     close 'gcws30b'  gcws30b's oob->ib cross on the side, read at the oob pair
 #   'both', 'first' and 'sameside' ARE MINE - he asked whether other permutations exist and told me
 #   to run them. They are not permutations of the two slots; they are new opening tests.
-FDM_RE_GATE_FNC = _knob('FDM_RE_GATE_FNC', 15.0)  # the gate's fence on ws1r/ws2r/ws3r.
-#   HIS 1103 UPDATE: the gate's lines must have printed **oob**, not ex-v4mom-fence. WAS 75.0, his
-#   earlier "ex v4mom fence".
-#   15.0 IS oob's SMALLER END, his 1103 convention: *"I use the smallest number to describe the
-#   fence's max"*. Every read goes through K.side_edge, which asserts the value is at or under 50.
-#   WAS 85.0 for one commit, the upper end, before he ruled the convention.
-#   oob 15/85 IS TIGHTER THAN 75/25, so fewer windows pass the gate and fewer trades open.
+#   ── THE RE-ENTRY'S OWN WALK, BANKED 1104 ──────────────────────────────────────────────────────
+#   HIS 1104 SPEC, which REPLACED the ws1r AND (ws2r or ws3r) gate outright - his *"that looks like
+#   our reentry mech ... bake this into the machine, and make this the machine"*, and his *"replace
+#   it"* when asked whether the old gate survived:
+#
+#     -if a cadence window opens
+#     --walk until ws5 reverses
+#     ---if ws5r reverses while ex-20/80-fence
+#     ----if ws6r is oob
+#     -----walk forward until ws6r reverses
+#     ----else if ws6r is not oob
+#     -----scan the wsf TFs above ws6 for a wsf ws{higher TF}r that is infence
+#     -----if a higher wsf TF r is infence
+#     ------open a trade on the last to fire, out of ws5r reversing or ws6r reversal or ws1b
+#           crossing to ib
+#     #all signals are sameside of the cadence
+#
+#   FDM_RE_GATE_FNC IS GONE with the gate it served. Nothing reads it.
+FDM_RE_REV_READ = os.environ.get('W_V4_FDM_RE_REV_READ', 'closed_prev')
+#   WHICH READ THE ws5 AND ws6 REVERSALS COME OFF. His 1104 *"-use closed-prev"*, which OVERRIDES
+#   the standing fdm rule that lift-off is the one emerging read. 'emerging' is the arm it replaced.
+#   MEASURED on 2026-09-15 and 2026-09-16, per distinct trade: closed-prev cut the trade count from
+#   23 to 13 and moved every reversal onto the line's own 5 or 6 minute grid, and it is what let the
+#   ws6r gate below catch the 18:17 window. The two are banked together because he ruled them in
+#   sequence against the same window.
+FDM_RE_WS5_FNC = _knob('FDM_RE_WS5_FNC', 20.0)   # ws5r's fence AT its reversal, 20 -> (20, 80).
+#   HIS 1104 *"if ws5r reverses while ex-20/80-fence"*. The smaller end, his convention. It is a
+#   SEPARATE knob from FDM_FNC_2080 so sweeping it cannot move step 1's fence or the population's.
+FDM_RE_WS6_GATE = os.environ.get('W_V4_FDM_RE_WS6_GATE', 'ex2080')
+#   WHAT MAKES THE WALK WAIT FOR ws6 TO REVERSE. His 1104 *"the ws6r gate might need to move from
+#   oob to ex-20/80-fence"*, then banked with *"that looks like our reentry mech"*.
+#     'ex2080'  ws6r at or past the FDM_FNC_2080 pair on the side. THE BANK
+#     'oob'     ws6r oob on the side. The arm it replaced, his first spec
+#   ex-20/80 is a SUPERSET of oob, so the bank can only send MORE windows down the wait branch.
+#   MEASURED on the two days: 11 of 12 trades are identical between the arms. The whole difference
+#   is the 2026-09-15 18:17 / 18:37:30 cluster, where oob opened two trades at -5.470% and -0.133%
+#   and ex-20/80 opens one at -0.824% with +1.428% favourable.
+FDM_RE_SCAN_LO = _knob('FDM_RE_SCAN_LO', 7, int)   # the scan's first TF. ws6 + 1.
+FDM_RE_SCAN_HI = _knob('FDM_RE_SCAN_HI', 12, int)  # the scan's last TF. wsf's own ceiling.
+#   HIS 1104 *"scan the wsf TFs above ws6"*. wsf is ws1-ws12, his 1017 band names, so the band is
+#   ws7..ws12. A line passes when it is STRICTLY inside the FDM_FNC_2080 pair - "ex" includes oob,
+#   his rule, so a line past either end is not in-fence.
+FDM_RE_FIRE_IB = _knob('FDM_RE_FIRE_IB', 1, int)
+#   IS ws1b's ib CLOSE IN THE LAST-TO-FIRE SET. His 1104 *"open a trade on the last to fire, out of
+#   ws5r reversing or ws6r reversal or ws1b crossing to ib"*, so 1 is his spec. 0 drops the ib close
+#   and leaves the two reversals, which is the arm his update replaced.
+#   ON THE TWO DAYS the ib close was last on 1 of 19 trade rows under the banked gate.
 
 #   ── fdm2, HIS 1103 MACHINE ────────────────────────────────────────────────────────────────────
 #   The bimodal walk-or-rev-trade decision REPLACED the old fdm-cadence body: *"yes, but don't
@@ -1176,7 +1216,7 @@ FDM_X10_GRACE_MIN = _knob('FDM_X10_GRACE_MIN', 5.0)    # the grace walk's length
 #   HIS 1103: *"bank the config that produced branch B at 1404 and wire it into the sandbox"*.
 #   THEY ARE fdm2's OWN KNOBS, NOT THE SAV_* ONES. v4_machine.py and v4_sig_saviour.py read
 #   SAV_CASCADE_MIN 4 and SAV_CASCADE_ZOOM 2, so moving those defaults would move the live
-#   octo-v4 machine. Same reason FDM_RE_GATE_FNC is separate from RMOM_FNC.
+#   octo-v4 machine. Same reason FDM_RE_WS5_FNC is separate from FDM_FNC_2080.
 FDM_SAV_ON = _knob('FDM_SAV_ON', 0, int)        # 1 wires v4saviour into fdm2's leg walk.
 #   OFF, HIS 1103: *"we're dropping saviour for now - I still think it has a place, but only if I
 #   can find the confluence it needs to be stable"*. The settings below keep their measured values
@@ -1468,7 +1508,12 @@ RULED = {
     'FDM_RE_B_FNC': (5.0, 'gcws30b\'s own fence, 5 -> (5, 95), the smaller end per his 1103 convention. WAS 95.0'),
     'FDM_RE_WIN_OPEN': ('both', 'BANKED 1103 - his "let\'s bank E, and make it the machine". Arm E opens the window where ws1b is oob AND gcws30b is ex-5/95. The 28-run sweep: E is the ONLY arm positive on 08-03 at +0.152% and ties the best on 09-15 at +14.325%. The arms are ws1b, gcws30b, first and sameside'),
     'FDM_RE_WIN_CLOSE': ('ws1b', 'HIS 1103 "close the window on ws1b to ib". "gcws30b" is the arm it replaced'),
-    'FDM_RE_GATE_FNC': (15.0, 'HIS 1103 UPDATE - the gate\'s lines must have printed oob, replacing his 1102 "ex v4mom fence". 15.0 is oob\'s smaller end, his "(100 - {knob:15})" convention'),
+    'FDM_RE_REV_READ': ('closed_prev', 'BANKED 1104 - his "-use closed-prev" for the ws5 and ws6 reversals, overriding the standing rule that lift-off is the one emerging read. "emerging" is the arm it replaced'),
+    'FDM_RE_WS5_FNC': (20.0, 'BANKED 1104 - his "if ws5r reverses while ex-20/80-fence". The smaller end of the pair, and its own knob so a sweep cannot move step 1\'s fence'),
+    'FDM_RE_WS6_GATE': ('ex2080', 'BANKED 1104 - his "the ws6r gate might need to move from oob to ex-20/80-fence", then "that looks like our reentry mech". "oob" is the arm it replaced. The one cluster that moved: 2026-09-15 18:17, from -5.470% to -0.824%'),
+    'FDM_RE_SCAN_LO': (7, 'the scan band\'s floor, ws6 + 1, from his "the wsf TFs above ws6"'),
+    'FDM_RE_SCAN_HI': (12, 'the scan band\'s ceiling. wsf is ws1-ws12, his 1017 band names'),
+    'FDM_RE_FIRE_IB': (1, 'BANKED 1104 - ws1b\'s ib close is in the last-to-fire set, his "out of ws5r reversing or ws6r reversal or ws1b crossing to ib". 0 drops it'),
     'FDM_FNC_2080': (20.0, 'HIS OWN KNOB NAME, "fdm-20-80-fnc", at his own value. Both the step-1 test and the reversal population read it; "ex" includes oob'),
     'FDM_M3_FNC': (25.0, 'HIS 1103 "ws3Mage is settled on 25/75". The knob name is mine; the value is his'),
     'FDM_M3_RESCUE_ON': (1, 'HIS 1103 MECH UPDATE - a cadence gated on ws3Mage staying infence is rescued when ws3r went oob and ws3Mage reached ex-40/60 in the gcws30b-to-ws1b window'),

@@ -1,6 +1,7 @@
 # fdm2 - the spec as the code reads it
 
-# every line read is the chart-matched value, except lift-off which is emerging
+# every line read is the chart-matched value, and since 1104 the re-entry's ws5/ws6 lift-off
+# is chart-matched too - every other lift-off in the machine is still emerging
 # "ex" means external of a fence, and it includes oob
 # oob is 15/85
 # a bar is 5 seconds
@@ -13,15 +14,33 @@ if there is no trade open
 --either side for gcws30b, the window's own side for ws1b
 -the window CLOSES on the bar ws1b crosses back to ib, held 1 bar
 --one window per close: several opens before one close collapse onto that close
--at the close bar, test ws1r AND (ws2r or ws3r)
---a line passes if it printed oob at any one bar inside the window
---they do not have to pass at the same bar, and they do not have to hold
--if the test is true, open a trade
+-walk forward from the window's open until ws5 reverses
+--the reversal is a lift-off on ws5r, on the window's own side
+--the reversal is read on the chart-matched line, so it lands on ws5's own 5 minute step
+--the bar used is the lift-off stamp, 35 s after the lift, which is when it is knowable
+--the walk is NOT bounded by the window's close
+-if ws5r is ex-20/80 at that reversal
+--if ws6r holds the ex-20/80 fence there
+---walk forward until ws6 reverses, then scan
+--if ws6r is inside the fence there
+---scan at the ws5 reversal bar
+-the scan looks at ws7r to ws12r at the scan bar
+--a line passes if it is strictly inside 20/80, both ends
+-if at least one of ws7r to ws12r is inside the fence, open a trade
 --the side is ws1b's own oob side
 --a high side opens a SHORT, a low side opens a LONG
---the trade opens 1 bar after the window closed
+--the trade opens 1 bar after the LAST of these to fire
+---the ws5 reversal
+---the ws6 reversal, when that branch ran
+---ws1b crossing back to ib, the window's close
+if ws5r is NOT ex-20/80 at its first reversal, the window produces nothing
+-the first ws5 reversal is the only test point
+if no line from ws7r to ws12r is inside the fence, the window produces nothing
 nothing bounds the window
 -a long running ws1b excursion is a sign of a trending leg that hasn't stopped yet
+2026-09-15 13:31 is accepted as it stands
+-there is no available high side cadence to close that 1331 LONG before it is stopped
+the limited re-entries on 2026-09-16 follow the ~11 hours of consolidation on that day
 
 ## the cadence event
 
@@ -154,7 +173,12 @@ it is OFF
 | FDM_RE_WIN_CLOSE | ws1b | - | what closes it: ws1b's oob to ib cross | his |
 | FDM_RE_B_FNC | 5.0 | r-points | gcws30b's fence in the opener, 5 -> (5, 95) | his |
 | FDM_RE_IB_XWOB | 1 | bars | the ws1b ib cross hold that closes the window | his |
-| FDM_RE_GATE_FNC | 15.0 | r-points | the gate's fence on ws1r/ws2r/ws3r - oob, 15 -> (15, 85) | his, 1103 |
+| FDM_RE_REV_READ | closed_prev | - | which read the ws5 and ws6 reversals come off | his, 1104 |
+| FDM_RE_WS5_FNC | 20.0 | r-points | ws5r's fence at its own reversal, 20 -> (20, 80) | his, 1104 |
+| FDM_RE_WS6_GATE | ex2080 | - | what makes the walk wait for ws6 to reverse; oob is the arm it replaced | his, 1104 |
+| FDM_RE_SCAN_LO | 7 | timeframe | the scan band's floor, ws6 + 1 | his "above ws6" |
+| FDM_RE_SCAN_HI | 12 | timeframe | the scan band's ceiling, wsf's own top | his band names, 1017 |
+| FDM_RE_FIRE_IB | 1 | - | ws1b's ib close is in the last-to-fire set | his, 1104 |
 | FDM_M3_FNC | 25.0 | r-points | ws3Mage's fence in the cadence event, 25 -> (25, 75) | his |
 | FDM_M3_RESCUE_ON | 1 | - | runs the ws3Mage gate's rescue | his |
 | FDM_M3_RESCUE_FNC | 40.0 | r-points | the rescue's ws3Mage fence, 40 -> (40, 60) | his |

@@ -78,13 +78,15 @@ print()
 #   moment FDM_RE_WIN_OPEN moved to 'both', so every read-only arm asserted on a stale default.
 #   EVERY PURE-READ ARM GOES IN THIS ONE LIST. Adding an arm and forgetting the list is how
 #   W_FDM2_AWAY hit the stale 2026-08-03 00:41:30 default on its first run.
-READ_ARMS = ('W_FDM2_WHY', 'W_FDM2_LINE', 'W_FDM2_BOARD', 'W_FDM2_AWAY')
-#   W_FDM2_SETUPS needs the chain, so it is NOT a read arm
+READ_ARMS = ('W_FDM2_WHY', 'W_FDM2_LINE', 'W_FDM2_BOARD', 'W_FDM2_AWAY', 'W_FDM2_WS5REV')
+#   W_FDM2_CONF needs the chain, so it is NOT a read arm
 READONLY = (not DAY) and any(os.environ.get(v) for v in READ_ARMS)
 LG = []
 
 #   ── the open: his banked re-entry ─────────────────────────────────────────────────────────────
-SIGS = [] if READONLY else RE.signals(LN['B1'], LN['EMR'], G=LN['G30B'])
+#   HIS 1104 BANK: the re-entry reads the CHART-MATCHED ladder, and the emerging one is handed
+#   in only so FDM_RE_REV_READ='emerging' can be run as the arm it replaced.
+SIGS = [] if READONLY else RE.signals(LN['B1'], LN['CPR'], G=LN['G30B'], EMR=LN['EMR'])
 if not READONLY:
     if DAY:
         HIT = [x for x in SIGS if A <= int(x['bar']) <= B]
@@ -213,7 +215,7 @@ if not READONLY:
         print()
         print('## each day\'s contribution | a leg counts on the day it OPENED')
         print()
-        print('| the day | legs | stopped | gross %% | drag %% | net %% | MAE %% | MFE %% | MFE'
+        print('| the day | legs | stopped | gross % | drag % | net % | MAE % | MFE % | MFE'
               ' captured | rescued cadences |')
         print('|---|---|---|---|---|---|---|---|---|---|')
         for _dd in _days:
@@ -648,7 +650,7 @@ if os.environ.get('W_FDM2_STOPSRC') == 'on':
     print('| net negative once drag is taken | %d |' % (len(_np) + len(_ud)))
     if _ud:
         print()
-        print('| the leg positive but under drag | its side | the exit kind | realised %% |')
+        print('| the leg positive but under drag | its side | the exit kind | realised % |')
         print('|---|---|---|---|')
         for _L8 in _ud:
             print('| %s | %s | %s | %+.3f |'
@@ -726,8 +728,16 @@ if _AW:
           % (_tn, int(LN['HI']) - _g2, int(LN['HI'])))
 
 
-#   ── W_FDM2_SETUPS=on: his trade-setup table, on the banked towards/away ────────────────────────
+#   ── W_FDM2_CONF=on: the fdm2-conf table, on the banked towards/away ───────────────────────────
+#   HIS NAME, 1104: *"the table will be known as the fdm2-conf table"*. Renamed from W_FDM2_SETUPS,
+#   the arm it used to answer to - the table has his name now, so the arm carries it.
+#
 #   HIS 1103 TABLE, rebuilt on jig.towards_away rather than the superseded two-sided `towards`.
+#
+#   THE ROWS, his 1104: *"show me all of the reentry legs, stopped or not"*. So every re-entry leg
+#   prints whatever it realised, and an incoming-trade setup still prints only when it realised at
+#   or under zero - the population the table carried before his change. The two longest-run columns
+#   are deleted, also 1104.
 #
 #   EMERGING VALUES, his ruling: *"if we use closed-p, a ws22 bar will stay the same value for 22
 #   minutes.  that's no bueno, so emerging must be the answer to the larger question"*. A rolling
@@ -738,52 +748,42 @@ if _AW:
 #   only be derived when the reentry lines qualify.  the mech behaves the same way - at the signal,
 #   measure the lines"*, so the READ is at the signal and THE ANCHOR I USE IS THE RE-ENTRY WINDOW'S
 #   OPEN, the only bar the re-entry owns before its signal. That choice is mine.
-if os.environ.get('W_FDM2_SETUPS') == 'on':
-    def _runlen2(flags):
-        best = cur = a = b = ba = bb = 0
-        for i, v in enumerate(flags):
-            if v:
-                cur += 1
-                if cur == 1:
-                    a = i
-                b = i
-                if cur > best:
-                    best, ba, bb = cur, a, b
-            else:
-                cur = 0
-        return best, ba + 1, bb + 1
-
+if os.environ.get('W_FDM2_CONF') == 'on':
     def _band(lo, hi, since, bar, side):
-        """towards / away / ex-20/80 over ws{lo}..ws{hi} at `bar`, anchored at `since`."""
+        """towards and ex-20/80 counts over ws{lo}..ws{hi} at `bar`, anchored at `since`.
+
+        -> (towards, ex2080, the band's line count). The longest-run pair this used to return went
+        with the two columns he deleted, 1104.
+        """
         tw, ex = [], []
         for t in range(lo, hi + 1):
             r = TA(LN['EMR'][t], bar, side, since)
             tw.append(r['state'] == 'towards')
             ex.append(F2.ex2080(float(LN['CPR'][t][bar]), side))
-        trn, ta, tb = _runlen2(tw)
-        ern, ea, eb = _runlen2(ex)
-        return (sum(tw), trn, lo + ta - 1, lo + tb - 1, sum(ex), ern, lo + ea - 1, lo + eb - 1,
-                hi - lo + 1)
+        return sum(tw), sum(ex), hi - lo + 1
 
     print()
-    print('## his trade-setup table | jig.towards_away on EMERGING values, exact gap, no tolerance')
+    print('## the fdm2-conf table | jig.towards_away on EMERGING values, exact gap, no tolerance')
     print('# `towards` means the line is AT its own rolling target-side extremum since the anchor')
     print('# `away` means the gap from that extremum is positive - FOR A SHORT, value minus the')
     print('# running minimum; FOR A LONG, the running maximum minus value')
     print('# the anchor is the incoming trade\'s open, or the re-entry window\'s open')
     print('# ex-20/80 stays on the chart-matched read, his standing rule for a fence')
     print()
+    print('# every re-entry leg prints, whatever it realised - his 1104. an incoming-trade setup'
+          ' prints when it realised at or under zero')
+    print()
     print('| the signal bar | the setup | the incoming trade | the outgoing trade |'
-          ' the outgoing realised %% | the anchor | towards the incoming way, ws1-ws30 |'
-          ' its longest run | ex-20/80 the incoming way, ws1-ws30 | its longest run |'
+          ' the outgoing realised % | the anchor | towards the incoming way, ws1-ws30 |'
+          ' ex-20/80 the incoming way, ws1-ws30 |'
           ' towards the incoming way, ws25-ws30 | ex-20/80 the incoming way, ws25-ws30 |'
           ' towards the outgoing way, ws1-ws30 |')
-    print('|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+    print('|---|---|---|---|---|---|---|---|---|---|---|')
     for _i0, _L0 in enumerate(LG):
-        if float(_L0['rel']) > 0:
-            continue
         _out_sd = int(_L0['side'])
         _src0 = str(_L0['src'])
+        if not _src0.startswith('fdm re-entry') and float(_L0['rel']) > 0:
+            continue
         if _src0.startswith('fdm re-entry'):
             _setup, _in_sd = 're-entry based', _out_sd
             _wo = [g for g in SIGS if SG.fire_bar(g) == int(_L0['opn'])]
@@ -801,8 +801,116 @@ if os.environ.get('W_FDM2_SETUPS') == 'on':
         _ib = _band(1, int(LN['HI']), _anchor, _sig0, _in_sd)
         _i25 = _band(25, int(LN['HI']), _anchor, _sig0, _in_sd)
         _ob = _band(1, int(LN['HI']), _anchor, _sig0, _out_sd)
-        print('| %s | %s | %s | %s | %+.3f | %s | %d of %d | %d, ws%d-ws%d | %d of %d |'
-              ' %d, ws%d-ws%d | %d of %d | %d of %d | %d of %d |'
+        print('| %s | %s | %s | %s | %+.3f | %s | %d of %d | %d of %d |'
+              ' %d of %d | %d of %d | %d of %d |'
               % (ln.U(_sig0), _setup, _in_nm, 'LONG' if _out_sd > 0 else 'SHORT', _L0['rel'],
-                 ln.U(_anchor), _ib[0], _ib[8], _ib[1], _ib[2], _ib[3], _ib[4], _ib[8],
-                 _ib[5], _ib[6], _ib[7], _i25[0], _i25[8], _i25[4], _i25[8], _ob[0], _ob[8]))
+                 ln.U(_anchor), _ib[0], _ib[2], _ib[1], _ib[2],
+                 _i25[0], _i25[2], _i25[1], _i25[2], _ob[0], _ob[2]))
+
+
+#   ── W_FDM2_WS5REV='<from> .. <to>': the banked re-entry's own trace ────────────────────────────
+#   THE MECH LIVES IN v4_fdm_reentry.signals, banked 1104. This arm REPORTS it and computes
+#   nothing: the second implementation that used to live here is exactly how the 1841 three-row
+#   defect got in, and his own rule is one driver per state.
+#   EVERY COLUMN COMES OFF THE SIGNAL DICT the mech hands back.
+_W5 = os.environ.get('W_FDM2_WS5REV')
+if _W5:
+    import v4_sweep_pivots as SP
+    if _W5 != 'on':
+        _w5d = [x.strip() for x in _W5.split('..')] if '..' in _W5 else [_W5.strip()] * 2
+        _W5A, _W5B = ln.K(_w5d[0] + ' 00:00:00'), ln.K(_w5d[1] + ' 23:59:55')
+    else:
+        _W5A, _W5B = (A, B) if DAY else (0, len(LN['close']) - 1)
+    _w5cl = np.asarray(LN['close'], float)
+    _w5sig = [g for g in RE.signals(LN['B1'], LN['CPR'], G=LN['G30B'], EMR=LN['EMR'])
+              if _W5A <= int(g['bar']) <= _W5B]
+    print()
+    print('## the banked re-entry | the ws5/ws6 reversal walk | %s .. %s'
+          % (ln.U(_W5A), ln.U(_W5B)))
+    print('# the window is arm E: ws1b oob AND gcws30b ex-%g/%g, same side, paired with its own'
+          ' ws1b ib close' % K.fnc_pair(K.FDM_RE_B_FNC))
+    print('# the reversal read is %s, the ws6r gate is %s, the ws5r fence is %g/%g, the scan band'
+          ' is ws%d..ws%d, the ib close is %s the last-to-fire set'
+          % (K.FDM_RE_REV_READ, K.FDM_RE_WS6_GATE, *K.fnc_pair(K.FDM_RE_WS5_FNC),
+             int(K.FDM_RE_SCAN_LO), int(K.FDM_RE_SCAN_HI),
+             'IN' if int(K.FDM_RE_FIRE_IB) else 'OUT of'))
+    print('# the open is the signal bar + 1, the router\'s "just OPEN, 1 bar"')
+    print('# NO STOP AND NO EXIT RULE ON THESE NUMBERS: the scale is sweep-pivots, from the open')
+    print('# sweep-pivots: ' + ', '.join('%s %s' % (n, v) for n, v, _ in SP.knobs()))
+    print()
+    print('| the window open | the oob side | the window close, ws1b ib | the ws5 reversal |'
+          ' ws5r there | ws6r there | the ws6 branch | the ws6 reversal | the scan bar |'
+          ' in-fence ws%d..ws%d | the last to fire | the signal bar | the trade | its open |'
+          ' MAE %% | MFE %% | the scale TF | the leg close | the leg MFE %% |'
+          % (int(K.FDM_RE_SCAN_LO), int(K.FDM_RE_SCAN_HI)))
+    print('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+    _W5MAE, _W5MFE, _W5LEG, _W5D = [], [], [], {}
+    for _g5 in _w5sig:
+        _sd5 = int(_g5['side'])
+        _op5 = SG.fire_bar(_g5)
+        _ts5 = SG.target_side(SG.direction(_sd5))
+        _sw5 = SP.swing(int(_op5), _sd5, _w5cl) if _op5 < len(_w5cl) else None
+        _mae5 = _mfe5 = None
+        if _sw5 and _sw5.get('close') is not None:
+            _z5 = int(_sw5['close'])
+            _a5, _b5x = min(int(_op5), _z5), max(int(_op5), _z5)
+            _sg5 = _w5cl[_a5:_b5x + 1]
+            _pb5 = float(_w5cl[int(_op5)])
+            if np.isfinite(_sg5).any():
+                _up5 = (float(np.nanmax(_sg5)) - _pb5) / _pb5 * 100.0
+                _dn5 = (float(np.nanmin(_sg5)) - _pb5) / _pb5 * 100.0
+                _mfe5, _mae5 = (_up5, _dn5) if _ts5 > 0 else (-_dn5, -_up5)
+                _W5MAE.append(_mae5)
+                _W5MFE.append(_mfe5)
+                _W5LEG.append(float(_sw5['mfe_pct']))
+                _W5D.setdefault(int(_op5), (_mae5, _mfe5, float(_sw5['mfe_pct'])))
+        print('| %s | %s | %s | %s | %.2f | %.2f | %s | %s | %s | %s | %s | %s | %s | %s | %s |'
+              ' %s | %s | %s | %s |'
+              % (ln.U(int(_g5['src'])), 'HIGH' if _sd5 > 0 else 'LOW', ln.U(int(_g5['close'])),
+                 ln.U(int(_g5['b5'])), _g5['v5'], _g5['v6'],
+                 'held, waited' if _g5['held6'] else 'failed, scanned at once',
+                 '-' if _g5['b6'] is None else ln.U(int(_g5['b6'])), ln.U(int(_g5['scan'])),
+                 ', '.join('ws%d' % t for t in _g5['got']), _g5['last'], ln.U(int(_g5['bar'])),
+                 SG.direction(_sd5), ln.U(int(_op5)),
+                 '-' if _mae5 is None else '%+.3f' % _mae5,
+                 '-' if _mfe5 is None else '%+.3f' % _mfe5,
+                 '-' if _sw5 is None else _sw5['tf'],
+                 '-' if _sw5 is None or _sw5.get('close') is None else ln.U(int(_sw5['close'])),
+                 '-' if _sw5 is None else '%.3f' % _sw5['mfe_pct']))
+    _w5med = lambda v: sorted(v)[len(v) // 2] if v else float('nan')
+    print()
+    print('| the population | value |')
+    print('|---|---|')
+    print('| re-entry signals in the span | %d |' % len(_w5sig))
+    print('| of those, HIGH oob | %d |' % sum(1 for g in _w5sig if int(g['side']) > 0))
+    print('| of those, LOW oob | %d |' % sum(1 for g in _w5sig if int(g['side']) < 0))
+    print('| distinct open bars | %d |' % len(_W5D))
+    for _lb in ('the ws5 reversal', 'the ws6 reversal', 'the ws1b ib close'):
+        print('| last to fire was %s | %d |' % (_lb, sum(1 for g in _w5sig if g['last'] == _lb)))
+    print('| ws6r held the gate so the walk waited | %d |' % sum(1 for g in _w5sig if g['held6']))
+    print('| ws6r failed the gate so the scan ran at once | %d |'
+          % sum(1 for g in _w5sig if not g['held6']))
+    _dm5 = sorted(_W5D.items())
+    print()
+    print('| the MAE/MFE per DISTINCT open, the open bar to the leg close | value |')
+    print('|---|---|')
+    print('| distinct opens scored | %d |' % len(_dm5))
+    if _dm5:
+        _m5 = [v[0] for _, v in _dm5]
+        _f5 = [v[1] for _, v in _dm5]
+        _l5 = [v[2] for _, v in _dm5]
+        print('| sum MAE %% | %+.3f |' % sum(_m5))
+        print('| sum MFE %% | %+.3f |' % sum(_f5))
+        print('| median MAE %% | %+.3f |' % _w5med(_m5))
+        print('| median MFE %% | %+.3f |' % _w5med(_f5))
+        print('| worst MAE %% | %+.3f |' % min(_m5))
+        print('| best MFE %% | %+.3f |' % max(_f5))
+        print('| MFE > abs(MAE) | %d of %d |'
+              % (sum(1 for m, f in zip(_m5, _f5) if f > abs(m)), len(_m5)))
+        print('| MAE past -%.2f%%, the fdm2 stop - NOT applied here | %d of %d |'
+              % (float(K.FDM_MAE_CAP), sum(1 for m in _m5 if m < -float(K.FDM_MAE_CAP)), len(_m5)))
+        print('| median leg MFE %% | %.3f |' % _w5med(_l5))
+        print('| the MFE as a share of the leg MFE, median of %d | %.1f%% |'
+              % (len(_l5), 100.0 * _w5med([f / g for f, g in zip(_f5, _l5) if g > 0])))
+    print('| the span | the open bar to the bar sweep-pivots ends the leg on - NOT a horizon'
+          ' chosen here |')

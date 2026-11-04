@@ -69,7 +69,7 @@ try:
     import v4_knobs as K
     import v4_signal as SG
     import ln
-    from optimus9.analysis.jig import oob_ib_cross
+    from optimus9.analysis.jig import oob_ib_cross, lift_off
 finally:
     sys.stderr = _e
 
@@ -150,36 +150,139 @@ def windows(B1, side, G=None):
     return out
 
 
-def signals(B1, R, side=None, G=None):
-    """Every fdm re-entry signal on the tape, bar-ordered. -> list of signals.
+def _lift_table(a, tf, side):
+    """The lift-off STAMPS on one line for one side. -> int array.
 
-    `B1` is ws1b - the line whose oob excursion IS the window - and `R` the r ladder keyed by
-    timeframe, both handed in by the caller so this file holds no opinion about which read they
-    came from. `side` runs both when None.
+    The LIFT-OFF KNOBS ARE THE MACHINE'S: LIFT_PTS samples, K.gap_for(tf) bars apart, LIFT_TOL
+    r-points of tolerance, LIFT_WOB bars of hold, and K.lift_stamp puts the bar where the event is
+    KNOWABLE. Only the series handed in changes with FDM_RE_REV_READ.
+    """
+    b = lift_off(np.asarray(a, float), int(side), int(K.LIFT_PTS), K.gap_for(int(tf)),
+                 float(K.LIFT_TOL), int(K.LIFT_WOB))
+    return np.asarray([K.lift_stamp(int(x)) for x in b], int)
+
+
+def _gate6(v, side):
+    """Does ws6r hold the gate on `side`, so the walk waits for ws6 to reverse. -> bool.
+
+    FDM_RE_WS6_GATE 'ex2080' is the bank, 'oob' the arm it replaced. ex-20/80 is a SUPERSET of
+    oob, so the bank can only send more windows down the wait branch.
+    """
+    g = str(K.FDM_RE_WS6_GATE)
+    if g == 'ex2080':
+        e = K.side_edge(K.FDM_FNC_2080, side)
+        return (float(v) >= e) if int(side) > 0 else (float(v) <= e)
+    assert g == 'oob', "FDM_RE_WS6_GATE is 'ex2080' or 'oob', got %r" % (g,)
+    return (float(v) >= float(K.OOB_HI)) if int(side) > 0 else (float(v) <= float(K.OOB_LO))
+
+
+def _infence(v):
+    """STRICTLY inside the FDM_FNC_2080 pair, both ends. -> bool.
+
+    "ex" INCLUDES oob, his standing rule, so a line past EITHER end is not in-fence.
+    """
+    lo, hi = K.fnc_pair(K.FDM_FNC_2080)
+    return bool(lo < float(v) < hi)
+
+
+def signals(B1, R, side=None, G=None, EMR=None):
+    """HIS 1104 RE-ENTRY: the ws5/ws6 reversal walk. -> list of signals, bar-ordered.
+
+    HIS SPEC, verbatim and in his indentation:
+
+        -if a cadence window opens
+        --walk until ws5 reverses
+        ---if ws5r reverses while ex-20/80-fence
+        ----if ws6r is oob
+        -----walk forward until ws6r reverses
+        ----else if ws6r is not oob
+        -----scan the wsf TFs above ws6 for a wsf ws{higher TF}r that is infence
+        -----if a higher wsf TF r is infence
+        ------open a trade on the last to fire, out of ws5r reversing or ws6r reversal or ws1b
+              crossing to ib
+        #all signals are sameside of the cadence
+
+    IT REPLACED THE ws1r AND (ws2r or ws3r) GATE OUTRIGHT, his 1104 *"replace it"*. That gate
+    tested membership over the window and fired at the window's close; this walks forward from the
+    open and fires on the last of three named events.
+
+    `B1` is ws1b, the line whose oob excursion IS the window. `R` is the CHART-MATCHED r ladder and
+    `EMR` the emerging one, needed only when FDM_RE_REV_READ is 'emerging'. `side` runs both when
+    None. THE SIDE IS THE WINDOW'S OOB SIDE and v4_signal.direction maps it - a HIGH oob window
+    opens a SHORT.
+
+    THE SIGNAL BAR IS THE LAST-TO-FIRE BAR, so the router's fire_bar puts the open one bar later,
+    his "just OPEN, 1 bar". Every read is at or before that bar: the two reversals are STAMPS and
+    the ib close is a CONFIRM bar, so nothing here is knowable later than the bar it is read on.
+    The asserts carry that rather than a comment.
+
+    HIS ONE ACCEPTED LOSS, 1104: *"the only one that we have to accept is 09-15 1331 - there's no
+    available high side cadence to close the 1331 LONG before it is stopped"*. That window is not
+    special-cased anywhere; it is accepted as the mech's own output.
     """
     sides = (-1, +1) if side is None else (int(side),)
-    fnc = float(K.FDM_RE_GATE_FNC)
+    rd = str(K.FDM_RE_REV_READ)
+    assert rd in ('closed_prev', 'emerging'), \
+        "FDM_RE_REV_READ is 'closed_prev' or 'emerging', got %r" % (rd,)
+    if rd == 'emerging':
+        assert EMR is not None, 'the emerging read needs the emerging ladder handed in'
+    SRC = R if rd == 'closed_prev' else EMR
+    lo5, hi5 = int(K.FDM_RE_SCAN_LO), int(K.FDM_RE_SCAN_HI)
+    assert lo5 > 6, 'the scan band starts above ws6, his "the wsf TFs above ws6"'
     out = []
     for sd in sides:
-        edge = K.side_edge(fnc, sd)
+        L5 = _lift_table(SRC[5], 5, sd)
+        L6 = _lift_table(SRC[6], 6, sd)
+        e5 = K.side_edge(K.FDM_RE_WS5_FNC, sd)
         for o, c in windows(B1, sd, G):
-            seen = {}
-            for tf in (1, 2, 3):
-                a = np.asarray(R[tf], float)
-                #   SEEN, not dwelling - his 1102 ruling. The slice ends at the close bar, so
-                #   nothing after the bar the gate is evaluated on is read.
-                hit = np.flatnonzero((a[o:c + 1] >= edge) if sd > 0 else (a[o:c + 1] <= edge))
-                seen[tf] = (o + int(hit[0])) if len(hit) else None
-                assert seen[tf] is None or seen[tf] <= c, 'a membership bar is after the close'
-            if seen[1] is None or (seen[2] is None and seen[3] is None):
+            #   HIS "walk until ws5 reverses": the FIRST ws5 reversal after the window opens, and
+            #   it is NOT bounded by the window's close - his *"regardless of when ws1b returns to
+            #   ib"*.
+            nx5 = L5[L5 > int(o)]
+            if not nx5.size:
                 continue
-            got = [t for t in (1, 2, 3) if seen[t] is not None]
-            out.append(SG.signal(c, sd, MECH, o,
-                                 '%s window %s..%s, %.1f min, opened on %s and closed on %s,'
-                                 ' ws1r AND (ws2r or ws3r) seen past the %.1f fence - %s - gate'
-                                 ' TRUE at the close'
-                                 % ('HIGH' if sd > 0 else 'LOW', SG.why_time(o), SG.why_time(c),
-                                    (c - o) * 5 / 60.0, K.FDM_RE_WIN_OPEN,
-                                    K.FDM_RE_WIN_CLOSE, edge,
-                                    ', '.join('ws%d %s' % (t, SG.why_time(seen[t])) for t in got))))
+            b5 = int(nx5[0])
+            v5 = float(np.asarray(R[5], float)[b5])
+            #   HIS "stop": the first ws5 reversal is the only test point. Not ex-fence there and
+            #   the window produces nothing.
+            if not ((v5 >= e5) if sd > 0 else (v5 <= e5)):
+                continue
+            v6 = float(np.asarray(R[6], float)[b5])
+            held = _gate6(v6, sd)
+            if held:
+                nx6 = L6[L6 > b5]
+                if not nx6.size:
+                    continue
+                b6 = int(nx6[0])
+                scan = b6
+            else:
+                b6, scan = None, b5
+            got = [t for t in range(lo5, hi5 + 1)
+                   if _infence(float(np.asarray(R[t], float)[scan]))]
+            if not got:
+                continue
+            #   HIS LAST TO FIRE. FDM_RE_FIRE_IB 1 keeps ws1b's ib close in the set, his spec.
+            evs = [('the ws5 reversal', b5)]
+            if b6 is not None:
+                evs.append(('the ws6 reversal', b6))
+            if int(K.FDM_RE_FIRE_IB):
+                evs.append(('the ws1b ib close', int(c)))
+            lab, fire = max(evs, key=lambda x: x[1])
+            assert all(fire >= v for _, v in evs), 'the fire bar precedes one of its own events'
+            assert fire >= b5 and fire >= int(o), 'the fire bar precedes its own window'
+            out.append(dict(SG.signal(fire, sd, MECH, o,
+                                      '%s window %s..%s, %.1f min, opened on %s. ws5 reversed %s at'
+                                      ' %.2f, ex-%g/%g. ws6r %.2f %s the %s gate%s. in-fence %s: %s.'
+                                      ' last to fire %s'
+                                      % ('HIGH' if sd > 0 else 'LOW', SG.why_time(o),
+                                         SG.why_time(int(c)), (int(c) - o) * 5 / 60.0,
+                                         K.FDM_RE_WIN_OPEN, SG.why_time(b5), v5,
+                                         *K.fnc_pair(K.FDM_RE_WS5_FNC),
+                                         v6, 'holds' if held else 'fails', K.FDM_RE_WS6_GATE,
+                                         '' if b6 is None else
+                                         ', ws6 reversed %s' % SG.why_time(b6),
+                                         'ws%d..ws%d' % (lo5, hi5),
+                                         ', '.join('ws%d' % t for t in got), lab)),
+                            b5=b5, v5=v5, v6=v6, held6=held, b6=b6, scan=scan,
+                            got=tuple(got), last=lab, close=int(c)))
     return sorted(out, key=lambda x: x['bar'])
