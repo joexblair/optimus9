@@ -58,3 +58,7 @@
 | 2026-11-04 17:55:16 | curve re-run running |
 | 2026-11-04 18:07:58 | curve re-run running; 08-07 step-1 trace delivered, and my gap column mixes the chart-matched value with the emerging extremum - a measurement defect, flagged to him, re-run offered |
 | 2026-11-04 18:25:14 | curve re-run finished and reported; per-curve control now passes on all 24 curves, only the 4 travel-floor rows moved. Queue empty, nothing running. |
+| 2026-11-04 18:42:37 | queue empty, nothing running. All grids reported. Working his step-1 question in the foreground; no machine change proposed or made. |
+| 2026-11-04 18:55:17 | queue empty, nothing running, all 9 grids carry their final line |
+| 2026-11-04 19:09:56 | queue empty, nothing running |
+| 2026-11-04 19:25:10 | queue empty, nothing running. His 1104 finding: the Jig producer reaches `away` from the gap alone and never reads a lift-off reversal, which his own mech wording requires. Fix order he set: the reversal gate first, the exact-gap test second. Awaiting his spec on what the gate reads. |

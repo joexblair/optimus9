@@ -90,10 +90,11 @@ say('# MAE/MFE is the event bar to the bar sweep-pivots ends the leg on - scorin
 say('# no count here reads it. The counts read the event bar and nothing after it.')
 say("# the anchor for the Jig's producer is the trade the cadence event lands inside")
 say()
-say('| the cadence event | the oob side | the trade it decides | its open | the count now |'
-    " the count on the Jig's producer | the verdict now | on the Jig's producer | they |"
-    ' MAE % | MFE % | the leg close |')
-say('|---|---|---|---|---|---|---|---|---|---|---|---|')
+say('| the cadence event | the oob side | the trade | its open | its exit | how it ended |'
+    ' what it realised %% | what it had in hand here %% | the count now |'
+    ' the count on the Jig | the verdict now | on the Jig | they |'
+    ' rev-trading here realises %% | the difference %% | MAE %% | MFE %% |')
+say('|' + '---|' * 17)
 
 SIGS = RE.signals(LN['B1'], LN['CPR'], G=LN['G30B'], EMR=LN['EMR'])
 assert SIGS, 'no re-entry signals on the tape'
@@ -121,15 +122,29 @@ for L in LEGS:
                 up = (float(np.nanmax(seg)) - pb) / pb * 100.0
                 dn = (float(np.nanmin(seg)) - pb) / pb * 100.0
                 mfe, mae = (up, dn) if sd > 0 else (-dn, -up)
+        #   ── THE TRADING DECISION, his 1104: *"the 2 tables are missing the most important
+        #      part - the trading decision. isn't that what we're working to resolve?"* ──────────
+        #   WHAT THE MACHINE DID: it walked on at this event and the leg exited where it exited.
+        #   WHAT THE OTHER READING WOULD DO: rev-trade HERE, which closes the leg at the router's
+        #   own close bar, the event bar + 1. Both are priced off the leg's own open, signed by
+        #   the leg's side, so the two are the same measurement on the same leg.
+        #   THIS IS LEG-LEVEL ONLY. A rev-trade also OPENS the opposite trade and every leg after
+        #   it moves, which no column can carry - it is a different run.
+        po = float(CL[int(o)])
+        here = sd * (float(CL[min(int(evb) + 1, B)]) - po) / po * 100.0
         ROWS.append(dict(ev=int(evb), sd=sd, opn=o, k_old=k_old, k_new=k_new,
-                         v_old=v_old, v_new=v_new, mae=mae, mfe=mfe, z=z))
-        say('| %s | %s | %s | %s | %d of %d | %d of %d | %s | %s | %s | %s | %s | %s |'
+                         v_old=v_old, v_new=v_new, mae=mae, mfe=mfe, z=z,
+                         exit=int(L['exit']), ctype=str(L['ctype']), rel=float(L['rel']),
+                         here=here, diff=here - float(L['rel'])))
+        say('| %s | %s | %s | %s | %s | %s | %+.3f | %+.3f | %d of %d | %d of %d | %s | %s |'
+            ' %s | %+.3f | %+.3f | %s | %s |'
             % (ln.U(int(evb)), 'HIGH' if sd > 0 else 'LOW',
-               'LONG' if sd > 0 else 'SHORT', ln.U(o), k_old, HI - LO + 1, k_new, HI - LO + 1,
+               'LONG' if sd > 0 else 'SHORT', ln.U(o), ln.U(int(L['exit'])), str(L['ctype']),
+               float(L['rel']), here, k_old, HI - LO + 1, k_new, HI - LO + 1,
                v_old, v_new, 'agree' if v_old == v_new else 'DISAGREE',
+               here, here - float(L['rel']),
                '-' if mae is None else '%+.3f' % mae,
-               '-' if mfe is None else '%+.3f' % mfe,
-               '-' if z is None else ln.U(z)))
+               '-' if mfe is None else '%+.3f' % mfe))
 
 med = lambda v: sorted(v)[len(v) // 2] if v else float('nan')
 say()
@@ -146,6 +161,26 @@ say('| rev-trade verdicts, as it runs now | %d |' % sum(1 for r in ROWS if r['v_
 say("| rev-trade verdicts, on the Jig's producer | %d |" % sum(1 for r in ROWS if r['v_new'] == 'rev-trade'))
 say('| median count now | %s |' % med([r['k_old'] for r in ROWS]))
 say("| median count on the Jig's producer | %s |" % med([r['k_new'] for r in ROWS]))
+say()
+#   ── THE TRADING DECISION, aggregated over the events where the two readings differ ───────────
+_d = [r for r in ROWS if r['v_old'] != r['v_new']]
+say('| the trading decision on the %d events where they differ | value |' % len(_d))
+say('|---|---|')
+if _d:
+    say('| what those legs actually realised, summed %% | %+.3f |' % sum(r['rel'] for r in _d))
+    say('| what rev-trading at the event realises, summed %% | %+.3f |' % sum(r['here'] for r in _d))
+    say('| the difference, summed %% | %+.3f |' % sum(r['diff'] for r in _d))
+    say('| the difference, median %% | %+.3f |' % med([r['diff'] for r in _d]))
+    say('| events where rev-trading here is BETTER | %d of %d |'
+        % (sum(1 for r in _d if r['diff'] > 0), len(_d)))
+    say('| events where rev-trading here is WORSE | %d of %d |'
+        % (sum(1 for r in _d if r['diff'] < 0), len(_d)))
+    say('| the best single difference %% | %+.3f |' % max(r['diff'] for r in _d))
+    say('| the worst single difference %% | %+.3f |' % min(r['diff'] for r in _d))
+    say('| of those legs, how many the stop ended | %d of %d |'
+        % (sum(1 for r in _d if 'STOP' in r['ctype']), len(_d)))
+say('| what this leaves out | a rev-trade also OPENS the opposite trade, so every leg after it'
+    ' moves. That is a different run, not a column |')
 say()
 say('| the MAE/MFE difference, by what the two readings do | events | median MAE %% |'
     ' median MFE %% | sum MAE %% | sum MFE %% | MFE > abs(MAE) |')
