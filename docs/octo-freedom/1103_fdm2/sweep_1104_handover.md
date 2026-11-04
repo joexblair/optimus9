@@ -80,3 +80,45 @@ because the tape starts 12:00:00 that day) and sweep_days.txt (his 4 plus the 4 
 The 94-day result against the 8-day result. The 8 days said the live reversal read was worth
 +351% summed over its 24 configs; the 94 days say every arm is negative and the drag is the wall.
 The direction he was given at 06:30 UTC did not survive the wider tape, and that is the finding.
+
+## the r trip and ws1b's multiplier, both over 94 days
+
+Neither rescues the machine. Every rung is deeply negative; the spread is real but it never crosses
+zero.
+
+| the rung | all 94 net % | legs |
+|---|---|---|
+| the best r trip, (rsi 4, stoch range 7, stoch len 7) | -121.284 | 755 |
+| the banked r trip, (5, 8, 7) | -195.721 | 898 |
+| the worst r trip, (5, 9, 7) | -204.794 | 928 |
+| the best ws1b multiplier, 0.90 | -164.949 | 905 |
+| the banked ws1b multiplier, 0.95 | -195.721 | 898 |
+| the worst ws1b multiplier, 1.00 | -187.829 | 866 |
+
+So the r config is worth about 75 percentage points across its 27 rungs and ws1b's multiplier about
+31 across its 5, against a 196-point hole. Both are second-order next to the per-leg gross edge.
+
+## his TF replacement, stage 7, over 94 days
+
+*"replace ws5 and ws6 with higher TFs, and scan higher than ws12"*. 88 of the 112 configs ran; the
+rest were REFUSED by the mech's own assert, a pair whose gate sits at or above the scan ceiling.
+
+| the pair | gross per leg % | legs | all 94 net % |
+|---|---|---|---|
+| (5, 6), his spec | +0.0271 | 14293 | -2435.171 |
+| (7, 8) | +0.0656 | 12629 | -1665.912 |
+| (8, 9) | +0.0644 | 12312 | -1638.987 |
+| (10, 11) | -0.0271 | 10696 | -2402.812 |
+| (12, 13) | +0.0334 | 8942 | -1467.126 |
+| (15, 16) | +0.0485 | 6932 | -1032.808 |
+| (20, 21) | +0.0163 | 3738 | -677.388 |
+
+The best single config is the pair (8, 9) with the scan to ws12 on the live read: +0.1193% gross per
+leg over 862 legs, net -67.434%, positive on 29 of 94 days. The best net is the pair (20, 21), scan
+ceiling 24, chart-matched, at -42.914% - and that is thin, 287 legs over 94 days.
+
+STILL NO ARM CLEARS THE DRAG. +0.1193% gross per leg against a 0.1975% round trip is the closest
+anything has come, and it is 60% of the way there. Lifting the pair off ws5/ws6 is worth roughly
+double the per-leg gross, which is the biggest single move any knob has shown tonight.
+
+On the 4 days he had never seen, (7, 8) is +195.753% and (8, 9) +84.825% against (5, 6) at -13.677%.
