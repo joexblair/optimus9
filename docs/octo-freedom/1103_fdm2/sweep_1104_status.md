@@ -48,3 +48,6 @@
 | 2026-11-04 16:07:57 | stage 12 running |
 | 2026-11-04 16:25:02 | stage 12 running |
 | 2026-11-04 16:29:38 | stage 12 done, control holds. The start-line curve is bumpy, not a trend: ws7 peaks at +0.1138% gross per leg on the chart-matched read while ws8 falls to +0.0287%. The band ws6..ws9 beats ws5; the rung inside it is unstable across grids. Queue empty. |
+| 2026-11-04 16:42:07 | queue empty, all stages done. Isolated the re-entry openings over 94 days: 737 distinct opens, 502 with MFE beating MAE, 64.6% of the leg MFE captured - the opening is not the weak stage. |
+| 2026-11-04 16:55:52 | queue empty. Added a realised-at-leg-close reporting column to the trace arm and running it over the whole tape: what the openings make with no rev-trade and no stop, against the 0.1975% round trip. |
+| 2026-11-04 16:56:43 | THE RESULT: the same 737 openings held to their own sweep-pivot leg close realise +0.6059% per open with 456 of 737 clearing the 0.1975% round trip, against the machine -0.0205% per leg. The leg close is a hindsight read so it is a CEILING, not a tradeable number. The exit is where it is lost. |

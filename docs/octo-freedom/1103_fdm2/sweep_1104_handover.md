@@ -228,3 +228,39 @@ What survives is the band, not the rung.
 AND THE SECOND HALF OF THE HONEST READING: the net improves as the start line rises mostly because
 the LEG COUNT FALLS - 898 legs at ws5 against 447 at ws9. Less trading, less drag. The per-leg gross
 still never reaches 0.1975% anywhere in 449 configs.
+
+## THE NIGHT'S STRONGEST RESULT: the opening is sound and the exit is where it is lost
+
+Two runs over all 94 days, the same 737 distinct re-entry openings, differing only in what ends
+the trade.
+
+| what ends the trade | per open or leg % | the round trip | opens or legs clearing it |
+|---|---|---|---|
+| the bar sweep-pivots ends the leg on, no rev-trade, no stop | +0.6059 | 0.1975 | 456 of 737 |
+| the machine's own rev-trade and 1.1% stop | -0.0205 | 0.1975 | 0 of 898 legs |
+
+| the opening's own quality, 737 distinct opens over 94 days | value |
+|---|---|
+| MFE beat its own MAE | 502 of 737 |
+| the MFE captured, median, of the leg's own MFE | 64.6% |
+| median realised at the leg close | +0.395% |
+| sum realised at the leg close | +446.578% |
+| MAE past -1.10% before the leg turned | 141 of 737 |
+
+THE CAVEAT THAT MUST TRAVEL WITH THE +0.6059%: sweep-pivots closes a leg with FULL HINDSIGHT - its
+own module says so, *"given that a sweep allows full lookahead"*, and it is scoring only. So
++0.6059% per open is NOT a tradeable number. It is the CEILING a causal exit would be chasing, and
+it says the ceiling is well clear of the round trip.
+
+| the stage | what it does with the move | measured |
+|---|---|---|
+| the opening | finds +0.9692% of MFE per leg, captures 64.6% of its own leg's swing | yes |
+| a hindsight exit at the leg close | keeps +0.6059% per open, 456 of 737 clear the round trip | yes |
+| the machine's rev-trade walk and 1.1% stop | keeps -2.1% of the MFE, -0.0205% per leg | yes |
+
+So the gap between +0.6059% and -0.0205% is the exit mech's to close, and 0.1975% of that gap is
+only the round trip. NOTHING in the night's 449 configs touched the exit: the rev-trade walk and
+the stop were swept one knob at a time in the coverage grid and never as a mech.
+
+THE QUESTION FOR HIM, and it is the only one that matters now: the exit. The opening does not need
+fixing.

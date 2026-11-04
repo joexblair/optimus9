@@ -844,7 +844,7 @@ if _W5:
           ' MAE %% | MFE %% | the scale TF | the leg close | the leg MFE %% |'
           % (int(K.FDM_RE_SCAN_LO), int(K.FDM_RE_SCAN_HI)))
     print('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
-    _W5MAE, _W5MFE, _W5LEG, _W5D = [], [], [], {}
+    _W5MAE, _W5MFE, _W5LEG, _W5REL, _W5D = [], [], [], [], {}
     for _g5 in _w5sig:
         _sd5 = int(_g5['side'])
         _op5 = SG.fire_bar(_g5)
@@ -860,10 +860,17 @@ if _W5:
                 _up5 = (float(np.nanmax(_sg5)) - _pb5) / _pb5 * 100.0
                 _dn5 = (float(np.nanmin(_sg5)) - _pb5) / _pb5 * 100.0
                 _mfe5, _mae5 = (_up5, _dn5) if _ts5 > 0 else (-_dn5, -_up5)
+                #   THE REALISED AT THE LEG'S OWN CLOSE, signed by the trade's side. It answers
+                #   one question and only one: what the open would have made with NO rev-trade and
+                #   NO stop, riding to the bar sweep-pivots ends the leg on. It is a REPORTING
+                #   column - nothing in the mech reads it, and the leg close is a lookahead read
+                #   that only scoring may touch.
+                _rel5 = _ts5 * (float(_w5cl[_z5]) - _pb5) / _pb5 * 100.0
                 _W5MAE.append(_mae5)
                 _W5MFE.append(_mfe5)
                 _W5LEG.append(float(_sw5['mfe_pct']))
-                _W5D.setdefault(int(_op5), (_mae5, _mfe5, float(_sw5['mfe_pct'])))
+                _W5REL.append(_rel5)
+                _W5D.setdefault(int(_op5), (_mae5, _mfe5, float(_sw5['mfe_pct']), _rel5))
         print('| %s | %s | %s | %s | %.2f | %.2f | %s | %s | %s | %s | %s | %s | %s | %s | %s |'
               ' %s | %s | %s | %s |'
               % (ln.U(int(_g5['src'])), 'HIGH' if _sd5 > 0 else 'LOW', ln.U(int(_g5['close'])),
@@ -912,5 +919,12 @@ if _W5:
         print('| median leg MFE %% | %.3f |' % _w5med(_l5))
         print('| the MFE as a share of the leg MFE, median of %d | %.1f%% |'
               % (len(_l5), 100.0 * _w5med([f / g for f, g in zip(_f5, _l5) if g > 0])))
+        _r5v = [v[3] for _, v in _dm5]
+        print('| the realised at the leg close, sum %% | %+.3f |' % sum(_r5v))
+        print('| the realised at the leg close, per open %% | %+.4f |' % (sum(_r5v) / len(_r5v)))
+        print('| the round trip it has to beat %% | %.4f |' % F2.DRAG_PCT)
+        print('| opens whose realised cleared the round trip | %d of %d |'
+              % (sum(1 for v in _r5v if v > F2.DRAG_PCT), len(_r5v)))
+        print('| median realised %% | %+.3f |' % _w5med(_r5v))
     print('| the span | the open bar to the bar sweep-pivots ends the leg on - NOT a horizon'
           ' chosen here |')
