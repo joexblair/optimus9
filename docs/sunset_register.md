@@ -53,3 +53,21 @@ Code disabled and marked for removal after a review period. Review before deleti
 - **How it is disabled:** it binds no momentum bank, so it raises on its first momentum call.
   Nothing imports it — checked 0903.
 - **Removal criteria:** Joe's word. The two tables are untouched.
+
+## lazy-g — the 1003 spec doc
+
+- **Sunset:** 2026-11-05 (Joe: *"sunset this spec and drop the words"*).
+- **What:** `docs/octo-freedom/1003_lazy_g_spec.md`, the 3-stage lazy-g spec and its concepts table.
+- **Why:** he struck it while ruling out the age test in fdm2-blaster. The sentence he aimed at was
+  mine, not his - *"The order is guaranteed, not incidental: every line shares one config and
+  differs only in bar width, so a shorter bar reaches its turn first by construction"* - and I had
+  quoted it back to him as the reason the matryoshka order needs no test. It is deleted from this
+  doc and from `docs/wsf_setup_model.md` 3.12.
+- **What replaces it:** nothing. His matryoshka and blast-radius words stay where he said them,
+  0824 and 0825, in `docs/wsf_setup_model.md` 3.12 and 3.21.2. fdm2-blaster is the live reading and
+  it lives in `docs/octo-freedom/1105_fdm2_blaster.md`.
+- **How it is sunset:** a banner at the doc's head. NOT deleted - two files still reference it,
+  `docs/octo-freedom/1005_knobs.md` (the `g5extrema_lookback` provenance) and
+  `docs/octo-freedom/1005_scoring/branchD.py` (branch D's spec pointer).
+- **Removal criteria:** re-home the `g5extrema_lookback` provenance note and branch D's pointer,
+  then delete.

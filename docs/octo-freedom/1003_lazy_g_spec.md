@@ -1,4 +1,10 @@
-# lazy-g — the spec as Joe has given it, 1003
+# lazy-g — SUNSET 2026-11-05. The spec as Joe has given it, 1003
+
+**SUNSET 2026-11-05, Joe: *"sunset this spec and drop the words"*.** Nothing here is a live
+authority. The claim that the matryoshka order is guaranteed by construction - mine, not his - is
+deleted from the concepts table below and from `docs/wsf_setup_model.md` 3.12. Two files still
+reference this doc: `docs/octo-freedom/1005_knobs.md` and `docs/octo-freedom/1005_scoring/branchD.py`.
+See `docs/sunset_register.md`.
 
 Joe's words are quoted. Everything not quoted is a reading of them, marked as such.
 
@@ -155,7 +161,7 @@ convenient one-number summary of a cascade - that is the resurrection, and it wa
 
 | concept | Joe's words |
 |---|---|
-| **matryoshka** | 0824: *"a lower TF (~1 to ~4) r line will always stall or curl before the higher TFs - it's the matryoshka nature of lines sharing the same config ... you can visualise the r line curling (reversing) in a per-TF falling dominoes effect. ie, the LTFs are leading the way"*. The order is guaranteed, not incidental: every line shares one config and differs only in bar width, so a shorter bar reaches its turn first by construction |
+| **matryoshka** | 0824: *"a lower TF (~1 to ~4) r line will always stall or curl before the higher TFs - it's the matryoshka nature of lines sharing the same config ... you can visualise the r line curling (reversing) in a per-TF falling dominoes effect. ie, the LTFs are leading the way"* |
 | **blast radius** | 0825: *"each r line has a small blast radius"* — a line reaches its NEIGHBOURS on the ladder, not across it |
 
 - branch C says *"leading"*, which is the matryoshka order read on **Mage** rather than on `r`.

@@ -191,25 +191,38 @@ if not READONLY:
     #   rev-trade signal`"*. The reason comes off the leg's OWN last REV-TRADE row, so the column
     #   cannot drift from the decision that produced it.
     def _why_rev(L):
-        """Which mech produced this leg's rev-trade signal. -> short label."""
+        """WHY DID THIS TRADE EXIT. -> his own words for the mech that ended it.
+
+        HIS 1105: *"`the reason` needs to print 'why did this trade exit?' eg, ws10x cad walk,
+        ws10x cadence, no linhop candidates, etc"*. The label comes off the leg's OWN rows, so it
+        cannot drift from the decision that produced it. The x line's timeframe is in the row
+        because the director chooses it per event.
+        """
+        if L['stopped']:
+            return 'mae%.2f stop' % float(K.FDM_MAE_CAP)
         if L['sig'] is None:
-            return '-'
+            return 'no rev-trade before the day ends'
         rr = [r for r in L['rows'] if r['stage'] == 'REV-TRADE']
         if not rr:
             return 'unlabelled'
-        w = str(rr[-1]['why'])
-        if 'if the answer is no' in w or 'printing ex-' in w and 'AND towards' in w:
-            return 'step 1, 0 of %d' % int(rr[-1].get('n') or 0)
-        if w.startswith('the director - '):
-            return "the director's seam read"
+        r = rr[-1]
+        w = str(r['why'])
+        tf = r.get('xtf')
+        x = ('ws%dx' % int(tf)) if tf else 'ws{TF}x'
         if 'found no candidate' in w:
-            return 'the director, no candidate'
+            return 'no linhop candidates'
+        if w.startswith('the director - '):
+            if 'min walk from' in w:
+                return '%s cad walk' % x
+            return '%s cadence' % x
         if 'grace walk,' in w:
-            return 'the grace walk'
-        if 'the race bar itself' in w or 'crossed to' in w:
-            return 'the race, %d of %d reversed' % (int(rr[-1].get('rv') or 0),
-                                                    len(rr[-1].get('pop') or ()))
-        if 'SAVIOUR' in str(rr[-1]['stage']):
+            return '%s cad grace walk' % x
+        if 'reversed since' in w:
+            return '%s cadence, %d of %d reversed' % (x, int(r.get('rv') or 0),
+                                                      len(r.get('pop') or ()))
+        if 'AND towards' in w and 'if the answer is no' in w:
+            return 'step 1, 0 of %d' % int(r.get('n') or 0)
+        if 'SAVIOUR' in str(r['stage']):
             return 'v4saviour'
         return w[:48]
 

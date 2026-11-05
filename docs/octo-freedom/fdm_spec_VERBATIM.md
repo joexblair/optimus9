@@ -23,10 +23,6 @@ cadence windows open when ws1r or ws2r or ws3r oob AND are nestled inside of ws1
 -----ELSE
 ------walk forward until gcws30b is ib or is already ib #ie we will use the fast gcws30 line in the absence of exfence lines
 -----if any ws{>25}r has printed ex-fence inside the last two cadence events. IF two prior cadence events do not exist in this trade THEN use the trade open bar
-------collect the number of lines that are 1) a TF that is lower than the highest "ex-20/80-fence wsf or dtf line" and 2) have reversed since the prior same-side cadence window opened
-------#this is the blast-radius test - do the lines within {knob:5,'fdm-blst-rad-conf-tfs'} TFs of the highest TF ex-20/80-fence reverse?  if yes, then it is more likely that the highest TF will follow them, so exhaust can be printed:
-------IF 4 of the 5 fdm-blst-rad-conf-tfs r lines have reversed
--------EXHAUST and send rev-trade to router #stub
 ------walk forward an additional 10 minutes #to capture a late ws30r
 ------IF ws30r reverses inside the 10 minute range
 -------truncate the 10 minute walk forward, and print exhaust, and send rev-trade to router
@@ -80,9 +76,7 @@ delete the current ws5Mage reentry (from spec and code)
 |---|---|
 | fdm-20-80-fnc | 20, read as (100 - 20) = (20.0, 80.0) |
 | what "ex" means on ANY fence he names | "external of", and it INCLUDES oob - *"note my preference: ex-any-fence includes oob - this is my literal use of "ex" meaning "external of""*. So ex-20/80 low means r <= 20, which contains the oob lines at r <= 15 and everything below. Never read a fence as a band |
-| fdm-blst-rad-conf-tfs | 5 TFs, selected dynamically as the lines within 5 TFs of the highest ex-20/80-fence TF. 4 of those 5 must have reversed |
 | the level-4 scan's range | ws2 to ws12, upwards only |
-| the blast radius's reversal origin | the prior same-side cadence window's OPENING bar |
 | the ws{>25}r ex-fence lookback | the last two SAME-SIDE cadence events. If two do not exist in this trade, the trade's open bar |
 | every lift-off in this machine | emerging bars, always |
 | EVERY OTHER LINE READ in this machine | the chart-matched read - *"we're using emerging in lift-off only.  all other line activities are closed-prev"*. A value, a fence test, oob, ex-fence, a cross, an excursion's start: all chart-matched |

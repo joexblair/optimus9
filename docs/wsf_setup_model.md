@@ -806,8 +806,8 @@ not the whole signal - **WHICH** timeframes are away carries information the cou
 board with ws1 to ws4 away and ws5 to ws8 still toward is a reversal in progress with the higher
 timeframes still to fall. The same count spread differently is not the same setup.
 
-It also explains why the order is guaranteed rather than incidental: every ws{n}r shares one config,
-7|5|8|close, and differs only in bar width. A shorter bar reaches its turn first by construction.
+DROPPED 1105 on his word: a claim of mine that the order is guaranteed by construction. He struck
+it with the lazy-g spec - *"sunset this spec and drop the words"*.
 
 WHAT THE SETUP ROW CARRIES BECAUSE OF THIS, none of it thresholded:
 

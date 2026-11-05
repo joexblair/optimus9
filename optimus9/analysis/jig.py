@@ -412,6 +412,112 @@ def confluence_above(cp, em, bar, side, since, lo, hi, fnc, pts_of, gap_of, tol,
             'step3': s3, 'fires': bool(s1 and s2 and s3), 'state': st}
 
 
+def fdm2_blaster(rows, bar, head_tfs=(1, 2), lo=2, hi=None):
+    """[PRODUCER - Joe 1105] `fdm2-blaster`, HIS NAME. The tail's two readings at ONE bar. -> dict.
+
+    HE NAMED IT 1105: *"9: fdm2-blaster"*. IT RETURNS NO VERDICT AND HOLDS NO THRESHOLD - his
+    *"nothing yet - modelling will answer the question"* on what the board's upper cluster does,
+    and his *"this needs modelling"* on which lines form the actionable one. Every field here is a
+    measurement a model can be fitted to later.
+
+    HIS LOGIC, 1105, after he confirmed both readings as *"all correct"*:
+
+        the reformed question is two readings, not one count
+        - are ws1r and ws2r away at this bar
+        - the highest TF in an unbroken run from ws2 upward that is away, with each rung
+          stamped after the rung below it
+
+    WHY IT IS NOT A COUNT, his tail logic. Every ws{n}r is the SAME line binned at a different bar
+    width, so ws4r's value contains ws1r's recent history binned coarser. ws4r cannot turn unless
+    the move that turned ws1r survived into 4-minute bins, which makes the cluster's size a
+    DURATION reading in disguise. ws1r away with ws2r still towards says only that the finest bin
+    has turned. ws3r/ws4r away while ws1r/ws2r are towards is the coarse bins holding an OLD turn.
+
+      rows      {tf: the fdm2_cad_mom_detector dict for that tf at `bar`} - state and rev at least.
+                THE CALLER OWNS THE READS. This producer touches no array, so it costs nothing in
+                a per-bar walk and adds no causality surface of its own.
+      bar       the bar every row was read at. Asserted against every stamp.
+      head_tfs  the timeframes his *"depends on ws1 and ws2"* names. (1, 2).
+      lo        the rung the run starts from, his *"from ws2 upward"*. 2.
+      hi        the rung the scan stops at. None scans the WHOLE ladder in `rows` - he has named no
+                top for the run and his standing rule forbids a cap he did not set. `FDM2_MATR_LFTOF_CONF`
+                10 caps the FLATTENING SAMPLE CAPTURE, a different reading, and is not applied here.
+
+    -> head        {tf: 'away'|'towards'} for head_tfs. NO verdict - his *"does ws1r alone open the
+                   head, or must ws2r confirm"* is unsettled, so both states are returned raw
+       head_away   how many of head_tfs read away. A COUNT, not a gate
+       head_age    {tf: bars from that tf's stamp to `bar`} - the staleness his open value needs
+       away_run    the highest TF in an unbroken `away` run from `lo`
+       away_tfs    the rungs in that run
+       broke_at    the rung that ended the run, and `why` names it
+       lags        {tf: bars from the rung below's stamp to this rung's} over away_tfs - REPORTING
+                   ONLY, never a gate. His 1105: *"keep the data for reporting only"*
+       rows        passed through untouched
+
+    THERE IS NO ORDER TEST AND NO AGE TEST. I built one - each rung's stamp had to land at or after
+    the rung below's - and HE STRUCK IT, 1105: *"if the towards and aways are telling us the truth,
+    why is the aging important?"* and *"it shouldn't matter, so long as the away/towards mech is
+    printing correctly. we'll wait for a fault to investigate / keep the data for reporting only"*.
+    It was also measurably wrong: `rev` is the LAST stamp in the span, so a fine line re-turning
+    pushed its own stamp past its coarser neighbour's and the rule then rejected the neighbour. On
+    2026-08-07 at 08:30:00 that dropped the run from ws3 to ws2 while ws2r..ws6r were all away.
+    `head_age` and `lags` carry the numbers and gate nothing.
+
+    A SKINNY BLIP IS NOT FILTERED. Joe 1105 on ws2r's 08:12:30 stamp landing 12 min before ws1r's:
+    *"the 0812 print was a skinny blip that can be ignored. it has no consequence: ws2r will
+    reprint `away` after it cycles through low exfence at ~0828, which is the point of the cad
+    walk"*. So an out-of-order rung simply holds `carry` short until the rung reprints, and
+    fdm2-blaster re-reads at every bar of the auto-called cad walk - his *"it fires contiuously
+    during the autocalled cad walk, using FDM_XCAD_WALK_MIN 10.0 min"*. NO blip test exists here.
+    """
+    bar = int(bar)
+    tfs = sorted(int(t) for t in rows)
+    assert tfs, 'fdm2-blaster was handed no rows'
+    top = max(tfs) if hi is None else int(hi)
+    lo = int(lo)
+
+    def stamp(t):
+        v = rows[t].get('rev')
+        return None if v is None else int(v)
+
+    for t in tfs:
+        r = stamp(t)
+        assert r is None or r <= bar, 'a row read at bar %d carries a stamp at %d' % (bar, r)
+        assert rows[t]['state'] != 'away' or r is not None, \
+            'ws%dr reads away with no reversal stamp' % t
+
+    head = {int(t): rows[int(t)]['state'] for t in head_tfs if int(t) in rows}
+    head_age = {}
+    for t in head:
+        r = stamp(t)
+        head_age[t] = None if r is None else bar - r
+    head_both = bool(head) and all(v == 'away' for v in head.values())
+
+    run, broke, why = [], None, None
+    for t in range(lo, top + 1):
+        if t not in rows:
+            broke, why = t, 'ws%dr is not on the ladder handed in' % t
+            break
+        if rows[t]['state'] != 'away':
+            broke, why = t, 'ws%dr reads %s' % (t, rows[t]['state'])
+            break
+        run.append(t)
+    if broke is None:
+        why = 'the run reached ws%d, the top of the scan' % top
+    lags = {}
+    for i in range(1, len(run)):
+        a, b = stamp(run[i - 1]), stamp(run[i])
+        if a is not None and b is not None:
+            lags[run[i]] = b - a
+    assert all(run[i] + 1 == run[i + 1] for i in range(len(run) - 1)), \
+        'the away run is not contiguous'
+    return {'head': head, 'head_both': head_both,
+            'head_away': sum(1 for v in head.values() if v == 'away'),
+            'head_age': head_age, 'away_run': (run[-1] if run else None),
+            'away_tfs': tuple(run), 'broke_at': broke, 'why': why,
+            'lags': lags, 'rows': rows}
+
+
 def mage_cascade_bar(line, bar, side, mode='extrema', gap=MC_GAP, grid=None,
                      sample_bars=None):
     """[PRODUCER - Joe 1017] THE ONE BAR the mage cascade reads. -> (bar, why) or None.

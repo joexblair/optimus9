@@ -1449,6 +1449,34 @@ FDM_XCAD_FALLBACK = os.environ.get('W_V4_FDM_XCAD_FALLBACK', 'exfnc')  # 'exfnc'
 #   above each line - the same 2 as LIN_HOP. The two knobs are left separate because one belongs
 #   to the director and the other to lineage; the VALUE is identical so nothing moves. SAY SO IF
 #   THEY SHOULD BE ONE KNOB.
+#   ── fdm2-blaster, HIS NAME 1105 ───────────────────────────────────────────────────────────────
+#   The matryoshka + blast-radius reading of the board. NO READER YET: he put modelling on hold -
+#   *"this is on hold - I need to improve the cadence event before we can accurately model"* - and
+#   the flattening read lands after he picks its tolerance. These three hold his values so they are
+#   not lost between sessions.
+FDM2_BLAST_SCAN_HI = _knob('FDM2_BLAST_SCAN_HI', 12, int)   # the away run's top rung. HIS VALUE.
+#   HIS 1105 answer to "a top for the carry's scan": *"ws12"*. THE NAME IS MINE, the value is his,
+#   and 12 is wsf's own ceiling - the same number FDM_RE_SCAN_HI carries for the re-entry's scan.
+FDM2_MATR_LFTOF_CONF = _knob('FDM2_MATR_LFTOF_CONF', 10, int)   # HIS KNOB NAME AND HIS VALUE.
+#   HIS 1105, on which lines contribute a flattening sample: *"the samples should only be captured
+#   for ws{{<={knob:10,`FDM2_MATR_LFTOF_CONF`}}r"*. So ws1r..ws10r, and it caps the SAMPLE CAPTURE
+#   only - it is not the away run's top, which is FDM2_BLAST_SCAN_HI.
+FDM2_CAD_FLATIN_WIDTH = _knob('FDM2_CAD_FLATIN_WIDTH', 3, int)  # HIS KNOB NAME AND HIS VALUE.
+#   HIS 1105, on whether each line reads its flattening over its own span: *"they should be in
+#   sync. let's use ws{knob:3,'FDM2_CAD_FLATIN_WIDTH}"*. So EVERY line's flattening is sampled on
+#   ws3's lattice - gap_for(3) = 8 bars, (LIFT_PTS 6 - 1) x 8 = 40 bars = 200 s - instead of its
+#   own. Without this a ws10r flatness was judged over 700 s and a ws1r over 75 s.
+FDM2_CAD_FLATIN_TOL = _knob('FDM2_CAD_FLATIN_TOL', 8, int)  # HIS VALUE 40 s. Bars.
+#   HOW FAR APART THE FLATTENING STARTS MAY BE and still count as his *"~same wallclock"*. He set
+#   40 s on 1105 and left the label to me: *"40s for the falttening tolerance. make it a knob -
+#   your call on the label"*. 8 bars = 40 s at the 5 s grid.
+#   WHY 40 s IS THE SAME NUMBER TWICE: it is one sample step on ws3's lattice, gap_for(3) = 8 bars,
+#   AND it is LIFT_WOB 8 - the hold a lift-off already has to clear before it is knowable. The two
+#   in-use numbers agree, which is why it was the recommendation.
+#   IT IS STORED IN BARS, not seconds, because the lattice it is anchored to is a bar lattice and
+#   LIFT_WOB is in bars. THAT CHOICE IS MINE. If FDM2_CAD_FLATIN_WIDTH moves off 3, this 8 no longer
+#   equals one sample step and the agreement above stops holding - it does not follow the width.
+#   THE TOLERANCE ON "~SAME WALLCLOCK" IS STILL HIS: he asked for quick decision mode on it.
 FDM_XCAD_NONE = os.environ.get('W_V4_FDM_XCAD_NONE', 'rev-trade')   # 'rev-trade' | 'no-action'.
 #   WHAT NO CANDIDATE MEANS. HIS 1104 *"unless I'm wrong, no candidates = rev-trade.  validate
 #   this in the existing code"* - validated: v4_fdm2.walk already returns a REV-TRADE row the
@@ -1779,6 +1807,10 @@ RULED = {
     'FDM_XCAD_WALK_MIN': (10.0, 'HIS VALUE "walk forward 10 minutes". The shape is the grace walk he called "the established walk" - re-test every 5 s bar, break on the first pass'),
     'FDM_XCAD_FALLBACK': ('exfnc', 'HIS 1105 "scan the entire range for ex-20/80-fence lines instead. if any are found, the cadence verdict is keep on walking". "off" is the arm it replaced, where no candidate went straight to FDM_XCAD_NONE'),
     'FDM_XCAD_NONE': ('rev-trade', 'HIS 1104 "no candidates = rev-trade", validated against v4_fdm2.walk which already rev-trades when step 1 counts 0'),
+    'FDM2_BLAST_SCAN_HI': (12, 'HIS 1105 VALUE "ws12" for the away run\'s top rung. The knob NAME is mine; 12 is wsf\'s ceiling, the same number FDM_RE_SCAN_HI carries'),
+    'FDM2_MATR_LFTOF_CONF': (10, 'HIS OWN KNOB NAME AND VALUE, 1105 - "the samples should only be captured for ws{{<={knob:10,`FDM2_MATR_LFTOF_CONF`}}r". It caps the flattening SAMPLE CAPTURE, not the away run'),
+    'FDM2_CAD_FLATIN_WIDTH': (3, 'HIS OWN KNOB NAME AND VALUE, 1105 - "they should be in sync. let\'s use ws{knob:3,\'FDM2_CAD_FLATIN_WIDTH}". Every line\'s flattening reads ws3\'s lattice: gap 8 bars, span 40 bars = 200 s'),
+    'FDM2_CAD_FLATIN_TOL': (8, 'HIS VALUE 40 s, 1105, label mine - "make it a knob - your call on the label". How far apart the flattening starts may be and still read as his "~same wallclock". 8 bars = 40 s, which is both one sample step on ws3\'s lattice and LIFT_WOB 8'),
     'FDM_SAV_ON': (0, 'OFF, HIS 1103 "we\'re dropping saviour for now". It was wired and measured: 2026-08-03 -1.051% -> -3.103% net, 2026-09-15 +7.316% -> -15.040%'),
     'FDM_SAV_READ': ('emerging', 'HIS 1103 "use emerging values, at the emerging ws1Mage extermum". "chart" is the other arm'),
     'FDM_SAV_TF_HI': (3, 'HIS 1103 "reduce the cascade to ws1-3". fdm2\'s own knob, not SAV_CASCADE_TF_HI, so the live machine keeps 12'),
@@ -2200,10 +2232,16 @@ def table():
              'LIFT_PTS': 'samples', 'LIFT_TOL': 'r-points', 'LIFT_WOB': 'bars',
              'OOB_HI': 'r-points',
              'GAP_PER_TF': 'bars per TF-minute', 'SAV_CASCADE_ZOOM': 'rungs',
+             'SAV_CASCADE_TF_HI': 'TF',   # missing since the registry row was added; table() raised KeyError
              'SAV_CASCADE_MIN': 'lines', 'SAV_CASCADE_MODE': 'mode', 'OOB_HI': 'r-points',
              'OOB_FNC': 'r-points', 'MID_FNC': 'r-points',
-             'BSTOP_SYNC_MIN': 'minutes', 'BSTOP_POOL_HI': 'TF'}
+             'BSTOP_SYNC_MIN': 'minutes', 'BSTOP_POOL_HI': 'TF',
+             'FDM2_BLAST_SCAN_HI': 'TF', 'FDM2_MATR_LFTOF_CONF': 'TF',
+             'FDM2_CAD_FLATIN_WIDTH': 'TF', 'FDM2_CAD_FLATIN_TOL': 'bars'}
     for k, (v, why) in RULED.items():
         rows.append('| `%s` | %s | %s | %s | %s |'
-                    % (k, here[k], units[k], 'YES' if here[k] == v else 'NO - off the bank', why))
+                    % (k, here[k], units.get(k, '?'),
+                       'YES' if here[k] == v else 'NO - off the bank', why))
+    #   a '?' in the units column means the knob has no entry in `units` - it printed a
+    #   KeyError and killed the whole table before 1105, which is why it is a .get now
     return '\n'.join(rows)

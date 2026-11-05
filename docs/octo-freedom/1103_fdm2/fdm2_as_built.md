@@ -226,3 +226,63 @@ These are read by the machine and none of them was ever ruled FOR fdm2. They cam
   before it counts as `towards` at all.
 - these three shape step 1 and the reversal count more than any fdm2 knob does, and he has never
   been asked about any of them.
+
+## WHAT 1105 ADDED — his words, and what each one moved
+
+HIS BANK INSTRUCTION, 1105: *"I don't think there is anything outstanding for that mech. if you
+agree then bank everything, commit and push, update specs and store all knobs, and make that config
+the machine"*.
+
+### the reason column on the leg table
+
+HIS 1105: *"`the reason` needs to print 'why did this trade exit?' eg, ws10x cad walk, ws10x
+cadence, no linhop candidates, etc"*. `fdm2_chain._why_rev` reads the leg's OWN last REV-TRADE row,
+so the label cannot drift from the decision that produced it. The x line's timeframe comes off the
+row because the fdm2-wsxcad-director chooses it per event, so the label prints `ws12x cad walk` and
+not a fixed `ws10x`.
+
+| what it prints | when |
+|---|---|
+| `mae1.10 stop` | the leg hit FDM_MAE_CAP |
+| `ws{TF}x cadence` | the director's seam read fired at a cadence event |
+| `ws{TF}x cad walk` | the director's seam read fired inside the truncating walk |
+| `no linhop candidates` | the director found no candidate |
+| `step 1, 0 of n` | step 1 counted zero |
+| `v4saviour` | the saviour signal won on chronology |
+| `no rev-trade before the day ends` | the leg ran to the day's end |
+
+### fdm2-blaster — HIS NAME, a PRODUCER WITH NO CALLER
+
+`optimus9/analysis/jig.fdm2_blaster(rows, bar, head_tfs=(1, 2), lo=2, hi=None)`. It holds no
+threshold and returns no verdict: `head`, `head_both`, `head_away`, `head_age`, `away_run`,
+`away_tfs`, `broke_at`, `why`, `lags`. It touches no array - the caller hands in the
+`fdm2_cad_mom_detector` rows it already builds.
+
+**IT IS NOT WIRED INTO THE LEG WALK, AND THAT IS HIS HOLD, NOT AN OPEN ITEM.** His 1105: *"how to
+model: this is on hold - I need to improve the cadence event before we can accurately model"*. So
+the 2026-08-07 08:26:00 cadence still prints WALK in the ruled machine; `fdm2_router_probe.py`
+measures what the router does when a signal IS supplied, under a loud banner saying so.
+
+### the four knobs 1105 added
+
+| the knob | value | units | whose name | whose value |
+|---|---|---|---|---|
+| FDM2_BLAST_SCAN_HI | 12 | timeframe | mine | HIS, *"ws12"* |
+| FDM2_MATR_LFTOF_CONF | 10 | timeframe | HIS | HIS |
+| FDM2_CAD_FLATIN_WIDTH | 3 | timeframe | HIS | HIS |
+| FDM2_CAD_FLATIN_TOL | 8 | bars = 40 s | mine, on his *"your call on the label"* | HIS, *"40s"* |
+
+None of them has a reader yet - the flattening read lands after the cadence event work. They are in
+the RULED registry so the values survive a session and an off-ruled run refuses:
+
+    RuntimeError: OFF-RULED v4 run refused. FDM2_BLAST_SCAN_HI is 10, ruled 12 ...
+    Set W_V4_EXPERIMENT=1 to run it as an experiment.
+
+### what was STRUCK from the spec at 1105
+
+| what went | his word |
+|---|---|
+| the 4-of-5 blast-radius gate, its `fdm-blst-rad-conf-tfs` row and its reversal-origin row | *"no"* to whether it survives |
+| the lazy-g spec as a reference, and the "order is guaranteed by construction" sentence - MINE, in two files | *"sunset this spec and drop the words"* |
+| the ws1r exception and its rulings 1, 2 and 4 | *"that nulls my concerns about ws1r, and cancels #1,#2,#4 rulings"* |
+| my order/age gate inside fdm2-blaster | *"if the towards and aways are telling us the truth, why is the aging important?"* |
