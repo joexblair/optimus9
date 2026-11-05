@@ -923,14 +923,23 @@ if os.environ.get('W_FDM2_XCAD') == 'on':
                        if F2.ex2080(float(LN['CPR'][t][int(_evx)]), _sdx))
             _r10 = F2.x10_cadence(LN, _sdx, int(_evx), _bx)
             if _tf is None:
+                #   HIS 1105 FALLBACK, shown in the report: a no-candidate event with any
+                #   ex-20/80 line on the side is a WALK, not a rev-trade.
+                _fb = [t for t in range(1, int(LN['HI']) + 1)
+                       if F2.ex2080(float(LN['CPR'][t][int(_evx)]), _sdx)]
+                _fbv = ('WALK - %d ex-20/80 on the side: ws%s'
+                        % (len(_fb), ', ws'.join(str(t) for t in _fb))) if (
+                            _fb and str(K.FDM_XCAD_FALLBACK) == 'exfnc') else (
+                            'REV-TRADE at the event, FDM_XCAD_NONE'
+                            if str(K.FDM_XCAD_NONE) == 'rev-trade' else 'no action')
                 print('| %s | %s %s | %s | %s | none | - | %d of %d | %d of %d | - | - |'
                       ' - | - | - | %s | %s | - | %s | %s |'
                       % (ln.U(int(_evx)), ln.U(_ox), 'LONG' if _sdx > 0 else 'SHORT',
                          'HIGH, upwards' if _sdx > 0 else 'LOW, downwards', ln.U(int(_s0x)),
                          _exn, int(LN['HI']), len(_tag), int(LN['HI']),
-                         ln.U(int(_evx)) if str(K.FDM_XCAD_NONE) == 'rev-trade' else '-',
-                         'REV-TRADE at the event, FDM_XCAD_NONE'
-                         if str(K.FDM_XCAD_NONE) == 'rev-trade' else 'no action',
+                         '-' if _fbv.startswith('WALK') or
+                         str(K.FDM_XCAD_NONE) != 'rev-trade' else ln.U(int(_evx)),
+                         _fbv,
                          _cwhy, '-' if _r10 is None else ln.U(int(_r10[0]))))
                 continue
             _XC += 1

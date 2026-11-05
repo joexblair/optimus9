@@ -716,6 +716,24 @@ def walk(LN, side, opn, B):
         if int(K.FDM_XCAD_ON):
             xtf, xabove, xcwhy = xcad_candidate(LN, side, ev, opn)
             if xtf is None:
+                #   ── HIS 1105 FALLBACK ───────────────────────────────────────────────────────
+                #   *"IF the scan for TFs inside of {linhop} jumps shows no candidates, then scan
+                #   the entire range for ex-20/80-fence lines instead. if any are found, the
+                #   cadence verdict is 'keep on walking'"*. It sits BEFORE FDM_XCAD_NONE, so a
+                #   board with any ex-fence line on the side keeps the trade open instead of
+                #   rev-trading at the event.
+                if str(K.FDM_XCAD_FALLBACK) == 'exfnc':
+                    exf2 = [t for t in range(1, int(LN['HI']) + 1)
+                            if ex2080(float(LN['CPR'][t][ev]), side)]
+                    if exf2:
+                        rows.append(dict(bar=ev, stage='WALK', ev=ev, k=k, n=n, cwhy=why,
+                                         why='the director found no candidate - %s - BUT %d of %d'
+                                         ' lines are ex-%g/%g on the side: ws%s. His "keep on'
+                                         ' walking"'
+                                         % (xcwhy, len(exf2), int(LN['HI']),
+                                            *K.fnc_pair(K.FDM_FNC_2080),
+                                            ', ws'.join(str(t) for t in exf2))))
+                        continue
                 #   HIS RULING: *"no candidates = rev-trade"*, validated against this function's
                 #   own step-1 branch above, which already rev-trades on a count of 0.
                 if str(K.FDM_XCAD_NONE) == 'rev-trade':

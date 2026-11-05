@@ -1375,6 +1375,17 @@ FDM_XCAD_WALK_MIN = _knob('FDM_XCAD_WALK_MIN', 10.0)    # the truncating walk, m
 #   HIS 1104 *"walk forward 10 minutes, test for `away` at each emerging bar, truncate the walk if
 #   the test passes"*. The SHAPE is the grace walk's, which he called "the established walk":
 #   re-test every 5 s bar and break out on the first pass. 10.0 min = 120 bars.
+FDM_XCAD_FALLBACK = os.environ.get('W_V4_FDM_XCAD_FALLBACK', 'exfnc')  # 'exfnc' | 'off'.
+#   HIS 1105 ADDITION: *"IF the scan for TFs inside of {linhop} jumps shows no candidates, then
+#   scan the entire range for ex-20/80-fence lines instead. if any are found, the cadence verdict
+#   is 'keep on walking'"*.
+#     'exfnc'  no candidate -> scan ws1..ws{HI} for ex-20/80 lines on the side. Any found and the
+#              verdict is WALK. THE BANK
+#     'off'    no candidate goes straight to FDM_XCAD_NONE, the arm this replaced
+#   HIS *"{linhop} jumps"* NAMES THE EXISTING CANDIDATE TEST, which looks FDM_XCAD_ABOVE 2 lines
+#   above each line - the same 2 as LIN_HOP. The two knobs are left separate because one belongs
+#   to the director and the other to lineage; the VALUE is identical so nothing moves. SAY SO IF
+#   THEY SHOULD BE ONE KNOB.
 FDM_XCAD_NONE = os.environ.get('W_V4_FDM_XCAD_NONE', 'rev-trade')   # 'rev-trade' | 'no-action'.
 #   WHAT NO CANDIDATE MEANS. HIS 1104 *"unless I'm wrong, no candidates = rev-trade.  validate
 #   this in the existing code"* - validated: v4_fdm2.walk already returns a REV-TRADE row the
@@ -1697,6 +1708,7 @@ RULED = {
     'FDM_XCAD_REV_TO': ('read', 'HIS 1104 CORRECTION "the window\'s end can\'t be the confirmed x-cross - that would mean the grace period has zero value". At "confirm" the turn count is frozen for the whole walk'),
     'FDM_XCAD_SEAM_S': (15.0, 'HIS VALUE "the next ws1 seam+15s". 15 s = 3 bars'),
     'FDM_XCAD_WALK_MIN': (10.0, 'HIS VALUE "walk forward 10 minutes". The shape is the grace walk he called "the established walk" - re-test every 5 s bar, break on the first pass'),
+    'FDM_XCAD_FALLBACK': ('exfnc', 'HIS 1105 "scan the entire range for ex-20/80-fence lines instead. if any are found, the cadence verdict is keep on walking". "off" is the arm it replaced, where no candidate went straight to FDM_XCAD_NONE'),
     'FDM_XCAD_NONE': ('rev-trade', 'HIS 1104 "no candidates = rev-trade", validated against v4_fdm2.walk which already rev-trades when step 1 counts 0'),
     'FDM_SAV_ON': (0, 'OFF, HIS 1103 "we\'re dropping saviour for now". It was wired and measured: 2026-08-03 -1.051% -> -3.103% net, 2026-09-15 +7.316% -> -15.040%'),
     'FDM_SAV_READ': ('emerging', 'HIS 1103 "use emerging values, at the emerging ws1Mage extermum". "chart" is the other arm'),

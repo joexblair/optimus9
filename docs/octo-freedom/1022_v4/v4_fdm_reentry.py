@@ -1,62 +1,16 @@
-"""THE fdm RE-ENTRY. Joe 1102: *"bank this and make it the reentry machine"*.
+"""THE fdm RE-ENTRY. The live spec is docs/octo-freedom/1103_fdm2/fdm2_reentry_machine.md.
 
-HIS SPEC AS IT NOW STANDS, after two 1103 rulings replaced gcws30b with ws1b:
+HIS 1105: the 1102/1103 spec that used to be quoted here is *"an old spec that can't be
+referenced"*, and he told me to delete it. It is gone, and so is every mention of what it tested.
 
-    -IF there is no trade open (because of a STOP, or because the machine is starting)
-    --IF ws1b crosses to oob                     <- the window OPENS here
-    ---the window CLOSES when ws1b crosses back to ib
-    ---the gate is ws1r AND (ws2r or ws3r), each SEEN oob anywhere inside the window
-    ---tested at the window's close. If the test is true, open a trade
+WHAT THIS MODULE DOES: `signals` returns one signal per re-entry window. The window opens on ws1b
+oob on a side and closes on ws1b's own ib cross confirm. Within it the walk waits for the trigger
+line's reversal, and his 1105 x-cross mod can carry the window instead. Every value, every fence
+and every line is a knob, and the doc above holds the spec with his own words beside each one.
 
-WHAT REPLACED WHAT, and both are his.
-
-  1103, the close    *"make the window open on gcws30b ex-5/95, and close the window on ws1b to
-                     ib"*. Before this, gcws30b's own ib cross closed it
-  1103, the open     *"this table tells me that gcws30b is dangerous / replace gcws30b crossing to
-                     ex-5/95 with ws1b crossing to oob"*. gcws30b is out of this mech entirely
-
-WHAT THE TABLE SAID. Over the whole tape, 9538 gcws30b ex-5/95 opens on both sides, 2926 of them
-with no ws1b oob inside 2 minutes - 30.7%. Of those 2926, 2142 were followed by a ws1r/ws2r/ws3r
-oob on the event's own side at a MEDIAN LAG OF 0 s, so the r was already oob when gcws30b opened.
-The 2026-09-15 14:00:00 HIGH open is the case he read it from: ws1r already 98.85 HIGH oob, and
-ws1b stayed ib for 33 minutes before going oob at 14:33:00 - on the LOW side, the opposite way.
-
-WHAT EACH PIECE IS, and every one of them is his:
-
-  the window         ws1b's oob excursion on one side: the bar it crosses to oob, through to the
-                     confirm bar of its oob->ib cross at FDM_RE_IB_XWOB
-  the gate's fence   HIS 1103 UPDATE: *"a line passes if it printed oob at any one bar inside the
-                     window"*, replacing his 1102 *"ex v4mom fence"*. FDM_RE_GATE_FNC moves
-                     75.0 -> 15.0, oob's SMALLER end, per his 1103 convention *"I use the
-                     smallest number to describe the fence's max"*. Every read goes through
-                     K.side_edge, which derives the pair and asserts the knob is at or under 50.
-                     oob 15/85 is TIGHTER than 75/25, so fewer windows pass
-  the gate           SEEN, not dwelling: *"the lines need to be seen in the window, but do not
-                     need to dwell for the window's full range"*. Membership is recorded as the
-                     walk passes each bar and never expires inside the window
-  the fire bar       the window's close. *"tested at gcws30b window's close.  if the test is true,
-                     open a trade"* - the sentence survives its subject's replacement
-  the side           the oob side the lines were found on, his 1102 answer, which is now ws1b's own
-                     oob side. `v4_signal.direction` maps it and that mapping is banked: a HIGH oob
-                     side opens a SHORT
-  the long window    his 1103: *"a long running ws1b excursion is a sign of a trending leg that
-                     hasn't stopped yet"*. NOTHING BOUNDS IT - the gate's membership span is the
-                     whole excursion, however long
-
-THE WINDOW IS NOW THE SAME SPAN AS THE CADENCE WINDOW, and that is worth stating plainly: both are
-ws1b's oob excursion ending at its ib cross. The two mechs read DIFFERENT TESTS over it - the
-cadence event needs the nestle and ws3Mage ex-25/75, the re-entry needs ws1r AND (ws2r or ws3r)
-past the v4mom fence - and they fire for different reasons, one to decide an open trade and one to
-open a trade from flat.
-
-THE LINEAGE WALK IS GONE FROM THIS MECH. His 1101 draft had *"the highest TF is tagged as the
-rider / follow the lineage walk (baton pass on rider to ib) / IF lineage prints exhaustion"*. On
-1102 he dropped all three: *"drop the lineage walk. make the gate ws1r AND (ws2r or ws3r), tested
-at gcws30b window's close"*. There is no rider here and no baton.
-
-CAUSAL, AND THE ASSERTS CARRY IT. Membership is read at or before the bar it is recorded on. The
-close is `oob_ib_cross`'s own confirm bar, which that producer documents as the first bar the cross
-is KNOWABLE. The gate is evaluated at the close using only bars from the open to the close.
+CAUSAL, AND THE ASSERTS CARRY IT. Every read is at or before the bar it is recorded on; the
+window's close is `oob_ib_cross`'s own confirm bar, which that producer documents as the first bar
+the cross is KNOWABLE; the mod's confirm is its cross plus the hold minus one.
 """
 import io
 import sys
@@ -340,10 +294,6 @@ def signals(B1, R, side=None, G=None, EMR=None):
         ------open a trade on the last to fire, out of ws5r reversing or ws6r reversal or ws1b
               crossing to ib
         #all signals are sameside of the cadence
-
-    IT REPLACED THE ws1r AND (ws2r or ws3r) GATE OUTRIGHT, his 1104 *"replace it"*. That gate
-    tested membership over the window and fired at the window's close; this walks forward from the
-    open and fires on the last of three named events.
 
     `B1` is ws1b, the line whose oob excursion IS the window. `R` is the CHART-MATCHED r ladder and
     `EMR` the emerging one, needed only when FDM_RE_REV_READ is 'emerging'. `side` runs both when
