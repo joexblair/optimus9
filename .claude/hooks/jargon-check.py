@@ -172,10 +172,22 @@ def main():
         if re.search(r'\b%s\b' % re.escape(term), low) and term not in seen:
             seen.add(term)
             hits.append((term, 'my own shorthand'))
+    #   A FORWARD PHRASE ONLY COUNTS WHEN A NUMBER SITS IN THE SAME SENTENCE. Joe 1105 took this
+    #   gate: *"keep the block, add the phrase list to the UserPromptSubmit hook, and gate FORWARD
+    #   on a number-in-the-sentence test"* / *"taken"*. Two hits that day were design prose - "one
+    #   of the two reversal producers would have to carry it" and "the head reads not-both until it
+    #   resolves" - and neither read a bar. A claim ABOUT bars carries a timestamp or a value; a
+    #   sentence about which producer to use does not.
+    #   A MARKDOWN TABLE ROW IS ONE SENTENCE HERE - the split does not break on `|`, because the
+    #   phrase and its number often sit in different cells of the same record.
     fwd = []
-    for term in FORWARD:
-        if re.search(r'\b%s\b' % re.escape(term), low_fwd):
-            fwd.append(term)
+    for seg in re.finditer(r'[^.!?\n]+', low_fwd):
+        sent = seg.group(0)
+        if not re.search(r'\d', sent):
+            continue
+        for term in FORWARD:
+            if term not in fwd and re.search(r'\b%s\b' % re.escape(term), sent):
+                fwd.append(term)
     #   THE AMBIGUITY SCAN runs on the same unquoted prose, and takes the same gloss exemption:
     #   naming the thing within the window is exactly the "better description" he asked for.
     amb = []
