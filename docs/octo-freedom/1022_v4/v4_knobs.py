@@ -1157,7 +1157,7 @@ FDM_RE_WS6_GATE = os.environ.get('W_V4_FDM_RE_WS6_GATE', 'ex2080')
 #   MEASURED on the two days: 11 of 12 trades are identical between the arms. The whole difference
 #   is the 2026-09-15 18:17 / 18:37:30 cluster, where oob opened two trades at -5.470% and -0.133%
 #   and ex-20/80 opens one at -0.824% with +1.428% favourable.
-FDM_RE_REV_TF = _knob('FDM_RE_REV_TF', 5, int)    # the line whose reversal starts the walk.
+FDM_RE_REV_TF = _knob('FDM_RE_REV_TF', 4, int)    # the line whose reversal starts the walk.
 FDM_RE_GATE_TF = _knob('FDM_RE_GATE_TF', 6, int)  # the line that gates the wait, read at that bar.
 #   HIS 1104: *"replace ws5 and ws6 with higher TFs, and scan higher than ws12"*. ws5 and ws6 are
 #   the spec he wrote the mech on and they stay the DEFAULT; the knobs exist so the pair can be
@@ -1280,6 +1280,37 @@ FDM_MAE_CAP = _knob('FDM_MAE_CAP', 1.1)         # the stop, percent adverse from
 #       ----rev-trade
 #   HIS 1104 CORRECTION on the direction: *"1, under for highside"*, which restores the banked
 #   x-cross rule - under for a high side, over for a low one.
+#   ── his 1105 Mage support gate on the trigger line ───────────────────────────────────────────
+#   HIS SPEC, verbatim:
+#       -IF ws4r has reversed
+#       --IF ws4Mage is NOT ex-23/77-fence
+#       ---STOP
+#   *"08-07 0013 fired too early because ws4r wasn't fully supported by ws4Mage"* / *"the same is
+#   true for highside 0432 and 0520, and many more"*.
+#   ── how the fdm2-reentry walk detects a reversal ──────────────────────────────────────────────
+FDM_RE_REV_MECH = os.environ.get('W_V4_FDM_RE_REV_MECH', 'cp')   # 'cp' | 'liftoff'.
+#   HIS 1105: *"because we're using closed-prev, the wob can be cut for the closed-prev
+#   reversals"*.
+#     'cp'       jig.cp_reversal - the first bar the closed-prev value steps AGAINST the target
+#                side. NO HOLD, so the reversal bar IS the bar it is knowable on. THE BANK
+#     'liftoff'  jig.lift_off with LIFT_PTS 6, LIFT_TOL 2.0 and LIFT_WOB 8 bars = 40 s, stamped
+#                at lift + 7. The arm it replaced
+#   MEASURED on 2026-08-07 ws4, 04:00..06:30: the two fire on the SAME bar and the lift-off then
+#   waits out its hold, so 'cp' is 7 bars = 35 s earlier every time. 'cp' also fires far more
+#   often - 16 against 4 on the HIGH side, 21 against 3 on the LOW.
+FDM_RE_M4_ON = _knob('FDM_RE_M4_ON', 1, int)     # 1 wires his support gate in.
+FDM_RE_M4_FNC = _knob('FDM_RE_M4_FNC', 23.0)     # the fence, HIS value. 23 -> 23/77.
+#   HIS FENCE CONVENTION: the knob holds the SMALLER end, so K.side_edge derives 23 on the LOW
+#   side and 77 on the HIGH. SAME SIDE as the window, his *"sameside ex-23/77-fence"*.
+FDM_RE_M4_AT = os.environ.get('W_V4_FDM_RE_M4_AT', 'extremum')   # 'extremum' | 'reversal'.
+#   WHERE ws4Mage IS READ. HIS 1105 *"ws4Mage is tested at the ws4r extremum, eg highside 0430,
+#   0512, 0600"*, so 'extremum' - the bar the trigger line printed its side's extreme between the
+#   window's open and its reversal. 'reversal' reads the reversal stamp bar instead.
+#   THE SPAN THE EXTREMUM IS TAKEN OVER is the window's open to the reversal bar, and the series
+#   is FDM_RE_REV_READ's - the same one the reversal itself was found on. BOTH ARE MY CALL.
+#   ws4Mage ITSELF IS READ CLOSED-PREV, the standing rule for a value that is not a lift-off.
+#   HIS STOP KILLS THE WHOLE PROCESS, his 1105 *"the STOP kills the fdm2-reentry process"* - so
+#   the x-cross mod cannot carry a window this gate stops.
 FDM_RE_XCROSS_ON = _knob('FDM_RE_XCROSS_ON', 1, int)   # 1 wires his mod into the re-entry walk.
 FDM_RE_XWOB = _knob('FDM_RE_XWOB', 12, int)      # his hold, bars. 12 bars = 60 s.
 #   HIS VALUE, *"wob 12"*. Same number as LIN2_CROSS_WOB 12, which lives in lineage2 and is a
@@ -1328,12 +1359,44 @@ FDM_CONF_BARS = os.environ.get('W_V4_FDM_CONF_BARS', 'event+x10')   # 'event' | 
 #   dynamically based on the highest TF (`fdm-conf-xcross-candidate`) that is printing `away` while
 #   the TF lines above `fdm-conf-xcross-candidate` are `towards` and ex-20/80-fence"*.
 #   `fdm-conf-xcross-candidate` IS HIS KNOB NAME for the chosen line. The others here are mine.
+#   ── how an ex-20/80 test reads a line ─────────────────────────────────────────────────────────
+FDM_EXF_READ = os.environ.get('W_V4_FDM_EXF_READ', 'either')  # 'either'|'closed_prev'|'emerging'
+FDM_EXF_EM_BARS = _knob('FDM_EXF_EM_BARS', 12, int)   # bars the emerging read spans. 12 = 60 s.
+#   HIS 1105: *"I think you were on to a good thread when you proposed taking the values based on
+#   the highest/lowest emerging bar between the seams"*. The emerging side of the test is no longer
+#   one bar's value - it is the SIDE'S EXTREME over the FDM_EXF_EM_BARS bars ENDING at the read bar:
+#   the HIGHEST emerging value for a high side, the LOWEST for a low one.
+#   12 bars = 60 s IS ONE MINUTE, the span between his 1-minute closed-prev seams. At 1 the read is
+#   the single bar's value, which is the behaviour it replaced.
+#   KNOWABLE AT THE READ BAR: the window ENDS there, so no bar after it is touched.
+#   MEASURED at 2026-08-07 08:50:55: the single-bar read found 1 of 30 lines past 80; the minute
+#   extreme found 2, catching ws2r at 84.2444 which it printed at 08:50:00 and had fallen to
+#   76.9815 by the seam.
+#   HIS 1105 MECH UPDATE: *"when testing for lines that are ex-20/80-fence, collect the closed-prev
+#   and the emerging value for each line. if either closed-prev or emerging values qualify then
+#   walk to the next cadence"*.
+#     'either'       a line qualifies if EITHER its closed-prev OR its emerging value is past the
+#                    fence. THE BANK
+#     'closed_prev'  closed-prev alone, the read it replaced
+#     'emerging'     emerging alone
+#   WHAT DROVE IT: at 2026-08-07 08:51:00 the HIGH-side board had 0 lines past 80 on closed-prev -
+#   ws4r read 71.3259 - so step 1 counted 0 and rev-traded, and his chart showed ws4 oob on the
+#   live line. Closed-prev holds the last completed 4-minute bar, so it can sit well below a spike.
+#
+#   HIS VERDICT PHRASE *"walk to the next cadence"* NAMES THE CADENCE SIDE, so this routes every
+#   ex-20/80 test there: step 1, the reversal population, the director's candidate, both of his
+#   update-2 clauses, and the fallback. THE fdm2-REENTRY SCAN IS NOT ROUTED - it has its own
+#   FDM_RE_REV_READ and its verdict is an open, not a cadence walk. THAT BOUNDARY IS MINE.
 FDM_XCAD_ON = _knob('FDM_XCAD_ON', 1, int)      # 1 routes the cadence through the director.
 #   ON, HIS 1104 *"apply the update to the code so that ws10 does not interfere with the intention
 #   of the spec"*. At 0 the race stays pinned to ws10 and every banked fdm2 number is reproduced.
-FDM_XCAD_RULE = os.environ.get('W_V4_FDM_XCAD_RULE', 'B')   # 'B' | 'A'.
+FDM_XCAD_RULE = os.environ.get('W_V4_FDM_XCAD_RULE', 'A')   # 'A' | 'B'.
 #   WHICH READING OF *"the TF lines above"*. HIS 1104 *"unsure.  use B for now, we can change it
-#   to A if the data doesn't match my eye's verdict"*.
+#   to A if the data doesn't match my eye's verdict"*, then his 1105 ruling to A after reading the
+#   2026-08-07 02:20:00 event: B found no candidate and the leg ran into the stop at 03:56:30 for
+#   -1.100, while A picks ws20r - the highest away line, with ws23, ws24, ws27 and ws28 the only
+#   ex-20/80 lines above it and all towards - races ws20x to ws20Mage confirming 02:22:15, and the
+#   seam read sends the rev-trade at 02:23:10. The leg closes 02:23:15, 93 min 15 s before the stop.
 #     'B'  the next FDM_XCAD_ABOVE lines above the candidate, each towards AND ex-20/80
 #     'A'  every ex-20/80 line above the candidate is towards, however many there are
 #   Both pick ws8r at his own 2026-08-07 16:11:00 example; they part on other bars.
@@ -1670,7 +1733,7 @@ RULED = {
     'FDM_RE_WS6_GATE': ('ex2080', 'BANKED 1104 - his "the ws6r gate might need to move from oob to ex-20/80-fence", then "that looks like our reentry mech". "oob" is the arm it replaced. The one cluster that moved: 2026-09-15 18:17, from -5.470% to -0.824%'),
     'FDM_RE_CLIMB': ('off', 'BANKED OFF - his 1104 probe "ride upwards through the TFs until you reach a tf showing the in fence r line". "value" reads each rung at one bar; "reversal" makes each ex-fence rung print its own reversal first'),
     'FDM_RE_CLIMB_HI': (12, 'the climb\'s ceiling, wsf\'s own top'),
-    'FDM_RE_REV_TF': (5, 'the line whose reversal starts the walk. His spec is ws5; the knob exists for his 1104 "replace ws5 and ws6 with higher TFs"'),
+    'FDM_RE_REV_TF': (4, 'HIS 1105 "set FDM_RE_REV_TF 4". WAS 5, from his 1104 "walk until ws5 reverses". The walk\'s first target is now ws4r and his support gate reads ws4Mage'),
     'FDM_RE_GATE_TF': (6, 'the line that gates the wait. His spec is ws6'),
     'FDM_RE_SCAN_FLOOR': ('gate', 'where the scan band starts: "gate" is the TF above the gate line, the mech\'s own shape; "ws13" is his "scan higher than ws12" read literally'),
     'FDM_RE_SCAN_LO': (7, 'the scan band\'s floor when FDM_RE_SCAN_FLOOR is a fixed TF rather than the gate + 1'),
@@ -1689,6 +1752,10 @@ RULED = {
     'FDM_X10_TRADE_PCT': (50.0, 'HIS VALUE ">=50%". The knob is mine - a stated threshold with no knob cannot be moved without an edit'),
     'FDM_X10_GRACE_MIN': (5.0, 'HIS VALUE "we add a 5 minute walk". The knob is mine. 5.0 min = 60 bars at the 5 s grid'),
     'FDM_MAE_CAP': (1.1, 'HIS 1103 "add the typical mae1.1 stop" + "yes, move it to default". ALWAYS ON, unlike LIN2_MAE_CAP which stayed behind W_MAE_CAP=on'),
+    'FDM_RE_REV_MECH': ('cp', 'HIS 1105 "because we are using closed-prev, the wob can be cut for the closed-prev reversals". Measured 35 s earlier than the lift-off on every 2026-08-07 ws4 reversal, and 4 to 7 times as many firings. "liftoff" is the arm it replaced'),
+    'FDM_RE_M4_ON': (1, 'ON, his 1105 support gate. At 0 the trigger line fires with no Mage support test'),
+    'FDM_RE_M4_FNC': (23.0, 'HIS VALUE "sameside ex-23/77-fence". The knob holds the smaller end, his convention'),
+    'FDM_RE_M4_AT': ('extremum', 'HIS 1105 "ws4Mage is tested at the ws4r extremum, eg highside 0430, 0512, 0600". "reversal" reads the stamp bar. The extremum SPAN and the SERIES are my call, stated in the knob note'),
     'FDM_RE_XCROSS_ON': (1, 'ON, his 1104 "let\'s make a small mod to the reentry". At 0 the re-entry walk is the 1104 banked one and every number before this mod is reproduced'),
     'FDM_RE_XWOB': (12, 'HIS VALUE "wob 12" = 60 s. Held apart from LIN2_CROSS_WOB 12, a different mechanic'),
     'FDM_RE_XCROSS_LO': (4, 'HIS 1105 "make ws4 the lowest TF". It is NOT tied to the trigger line - that floor was mine and it hid the ws4x cross at 2026-08-07 05:44:20 which is the only one in that stretch to pass all three of his gates'),
@@ -1697,9 +1764,11 @@ RULED = {
     'FDM_RE_XCROSS_UP_READ': ('closed_prev', 'his own example number "ws6r is 43" is the closed-prev value; emerging reads 40.79 there. THE READ IS MY CALL'),
     'FDM_CONF_READ': ('closed_prev', 'BANKED 1104 - his "make sure that closed-prev is the standard for everything except lift-off", the LATER of his two rulings for this table. "emerging" is the arm it replaced'),
     'FDM_CONF_BARS': ('event+x10', 'BANKED 1104 - the two data bars the machine owns, the cadence event and that event\'s ws10x race confirm. "event" is the narrower arm. THE KNOB NAME IS MINE'),
+    'FDM_EXF_EM_BARS': (12, 'HIS 1105 "taking the values based on the highest/lowest emerging bar between the seams". 12 bars = 60 s, one minute, ending AT the read bar. At 1 it is the single bar\'s value, the read it replaced'),
+    'FDM_EXF_READ': ('either', 'HIS 1105 "collect the closed-prev and the emerging value for each line. if either qualify then walk to the next cadence". Driven by 2026-08-07 08:51:00, where closed-prev had 0 lines past 80 and his chart showed ws4 oob. Routes the cadence side only; the re-entry scan keeps FDM_RE_REV_READ. THAT BOUNDARY IS MINE'),
     'FDM_XCAD_ON': (1, 'ON, HIS 1104 "apply the update to the code so that ws10 does not interfere with the intention of the spec". At 0 the race pins ws10 and every banked fdm2 number is reproduced'),
     'FDM_XCAD_C2_SCOPE': ('tagged', 'HIS WORD "tagged" in the second clause. "board" tests every ex-20/80 line at the test bar instead. The report prints both verdicts; THE KNOB IS MINE'),
-    'FDM_XCAD_RULE': ('B', 'HIS 1104 "unsure.  use B for now, we can change it to A if the data doesn\'t match my eye\'s verdict"'),
+    'FDM_XCAD_RULE': ('A', 'HIS 1105 ruling after reading the 2026-08-07 02:20:00 event. WAS \'B\' from his 1104 "use B for now, we can change it to A if the data doesn\'t match my eye\'s verdict". At B that event found no candidate and the leg stopped at -1.100; at A it picks ws20r and the leg closes 02:23:15'),
     'FDM_XCAD_ABOVE': (2, 'HIS OWN COUNT from the confluence rule, "the 2 lines above the highest TF". At 3 his 16:11:00 example produces no candidate'),
     'FDM_XCAD_EXF': (0, 'HIS 1104 "no" - the candidate line does not have to be ex-20/80 itself'),
     'FDM_XCAD_FRM': ('confirm', 'HIS 1104 "the conf bar". "cross" is the arm, 1 min 55 s earlier at his own example'),

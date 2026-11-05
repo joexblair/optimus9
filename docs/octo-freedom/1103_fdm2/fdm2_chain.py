@@ -87,7 +87,7 @@ LG = []
 #   ── the open: his banked re-entry ─────────────────────────────────────────────────────────────
 #   HIS 1104 BANK: the re-entry reads the CHART-MATCHED ladder, and the emerging one is handed
 #   in only so FDM_RE_REV_READ='emerging' can be run as the arm it replaced.
-SIGS = [] if READONLY else RE.signals(LN['B1'], LN['CPR'], G=LN['G30B'], EMR=LN['EMR'])
+SIGS = [] if READONLY else RE.signals(LN['B1'], LN['CPR'], G=LN['G30B'], EMR=LN['EMR'], CPM=LN['CPM'])
 if not READONLY:
     if DAY:
         HIT = [x for x in SIGS if A <= int(x['bar']) <= B]
@@ -187,12 +187,38 @@ if not READONLY:
     #   ── the legs ──────────────────────────────────────────────────────────────────────────────────
     print('## the legs | every number carries the FDM_MAE_CAP %.2f%% stop' % float(K.FDM_MAE_CAP))
     print()
-    print('| the open | the trade | the rev-trade signal | the exit | the exit kind | held min |'
-          ' MAE% | MFE% | realised% |')
-    print('|---|---|---|---|---|---|---|---|---|')
+    #   HIS 1105: *"add the reason for the rev-trade signal, between `the trade` and `the
+    #   rev-trade signal`"*. The reason comes off the leg's OWN last REV-TRADE row, so the column
+    #   cannot drift from the decision that produced it.
+    def _why_rev(L):
+        """Which mech produced this leg's rev-trade signal. -> short label."""
+        if L['sig'] is None:
+            return '-'
+        rr = [r for r in L['rows'] if r['stage'] == 'REV-TRADE']
+        if not rr:
+            return 'unlabelled'
+        w = str(rr[-1]['why'])
+        if 'if the answer is no' in w or 'printing ex-' in w and 'AND towards' in w:
+            return 'step 1, 0 of %d' % int(rr[-1].get('n') or 0)
+        if w.startswith('the director - '):
+            return "the director's seam read"
+        if 'found no candidate' in w:
+            return 'the director, no candidate'
+        if 'grace walk,' in w:
+            return 'the grace walk'
+        if 'the race bar itself' in w or 'crossed to' in w:
+            return 'the race, %d of %d reversed' % (int(rr[-1].get('rv') or 0),
+                                                    len(rr[-1].get('pop') or ()))
+        if 'SAVIOUR' in str(rr[-1]['stage']):
+            return 'v4saviour'
+        return w[:48]
+
+    print('| the open | the trade | the reason | the rev-trade signal | the exit |'
+          ' the exit kind | held min | MAE% | MFE% | realised% |')
+    print('|---|---|---|---|---|---|---|---|---|---|')
     for L in LG:
-        print('| %s | %s | %s | %s | %s | %.1f | %.3f | %.3f | %+.3f |'
-              % (ln.U(L['opn']), 'LONG' if L['side'] > 0 else 'SHORT',
+        print('| %s | %s | %s | %s | %s | %s | %.1f | %.3f | %.3f | %+.3f |'
+              % (ln.U(L['opn']), 'LONG' if L['side'] > 0 else 'SHORT', _why_rev(L),
                  '-' if L['sig'] is None else ln.U(int(L['sig'])), ln.U(L['exit']), L['ctype'],
                  L['held_min'], L['mae'], L['mfe'], L['rel']))
     print()
@@ -503,7 +529,7 @@ if _BD:
         for _t3 in range(1, int(LN['HI']) + 1):
             _a3 = LN['CPR'][_t3]
             _v3 = float(_a3[_bk])
-            _e7 = F2.ex2080(_v3, _sb)
+            _e7 = F2.ex2080_line(LN, _t3, _bk, _sb)
             _th = F2.towards(_a3, _t3, _bk, +1)
             _tl = F2.towards(_a3, _t3, _bk, -1)
             _t7 = _th if _sb > 0 else _tl
@@ -519,19 +545,19 @@ if _BD:
         print('| the count at %s | ws1..ws30 | ws4..ws30 |' % ln.U(_bk))
         print('|---|---|---|')
         _e4b = sum(1 for t in range(1, int(LN['HI']) + 1)
-                   if F2.ex2080(float(LN['CPR'][t][_bk]), _sb))
+                   if F2.ex2080_line(LN, t, _bk, _sb))
         _t4b = sum(1 for t in range(1, int(LN['HI']) + 1)
                    if F2.towards(LN['CPR'][t], t, _bk, _sb))
         _lo4 = int(K.FDM_STEP1_ABOVE_TF) + 1
         _e4c = sum(1 for t in range(_lo4, int(LN['HI']) + 1)
-                   if F2.ex2080(float(LN['CPR'][t][_bk]), _sb))
+                   if F2.ex2080_line(LN, t, _bk, _sb))
         _t4c = sum(1 for t in range(_lo4, int(LN['HI']) + 1)
                    if F2.towards(LN['CPR'][t], t, _bk, _sb))
         _b4b = sum(1 for t in range(1, int(LN['HI']) + 1)
-                   if F2.ex2080(float(LN['CPR'][t][_bk]), _sb)
+                   if F2.ex2080_line(LN, t, _bk, _sb)
                    and F2.towards(LN['CPR'][t], t, _bk, _sb))
         _b4c = sum(1 for t in range(_lo4, int(LN['HI']) + 1)
-                   if F2.ex2080(float(LN['CPR'][t][_bk]), _sb)
+                   if F2.ex2080_line(LN, t, _bk, _sb)
                    and F2.towards(LN['CPR'][t], t, _bk, _sb))
         _bothn = sum(1 for t in range(1, int(LN['HI']) + 1)
                      if F2.towards(LN['CPR'][t], t, _bk, +1)
@@ -587,7 +613,7 @@ if os.environ.get('W_FDM2_STOPSRC') == 'on':
         return best, ba + 1, bb + 1
 
     def _bd(bar, side):
-        ex = [F2.ex2080(float(LN['CPR'][t][bar]), side) for t in range(1, int(LN['HI']) + 1)]
+        ex = [F2.ex2080_line(LN, t, bar, side) for t in range(1, int(LN['HI']) + 1)]
         tw = [F2.towards(LN['CPR'][t], t, bar, side) for t in range(1, int(LN['HI']) + 1)]
         re_, ra, rb = _runlen(ex)
         tr, ta, tb = _runlen(tw)
@@ -790,7 +816,7 @@ if os.environ.get('W_FDM2_CONF') == 'on':
         """-> (travelling `side`, ex-20/80 on `side`, the band's line count) over ws1..ws{HI}."""
         hi = int(LN['HI'])
         tw = sum(1 for t in range(1, hi + 1) if _cf_state(t, bar, side, since) == 'towards')
-        ex = sum(1 for t in range(1, hi + 1) if F2.ex2080(float(LN['CPR'][t][bar]), side))
+        ex = sum(1 for t in range(1, hi + 1) if F2.ex2080_line(LN, t, bar, side))
         return tw, ex, hi
 
     def _cf_bars(L):
@@ -920,13 +946,13 @@ if os.environ.get('W_FDM2_XCAD') == 'on':
             _tag = tuple(t for t in range(1, int(LN['HI']) + 1)
                          if F2.mom_state(LN, t, int(_evx), _sdx, _ox) == 'towards')
             _exn = sum(1 for t in range(1, int(LN['HI']) + 1)
-                       if F2.ex2080(float(LN['CPR'][t][int(_evx)]), _sdx))
+                       if F2.ex2080_line(LN, t, int(_evx), _sdx))
             _r10 = F2.x10_cadence(LN, _sdx, int(_evx), _bx)
             if _tf is None:
                 #   HIS 1105 FALLBACK, shown in the report: a no-candidate event with any
                 #   ex-20/80 line on the side is a WALK, not a rev-trade.
                 _fb = [t for t in range(1, int(LN['HI']) + 1)
-                       if F2.ex2080(float(LN['CPR'][t][int(_evx)]), _sdx)]
+                       if F2.ex2080_line(LN, t, int(_evx), _sdx)]
                 _fbv = ('WALK - %d ex-20/80 on the side: ws%s'
                         % (len(_fb), ', ws'.join(str(t) for t in _fb))) if (
                             _fb and str(K.FDM_XCAD_FALLBACK) == 'exfnc') else (
@@ -1040,7 +1066,7 @@ if _W5:
     else:
         _W5A, _W5B = (A, B) if DAY else (0, len(LN['close']) - 1)
     _w5cl = np.asarray(LN['close'], float)
-    _w5sig = [g for g in RE.signals(LN['B1'], LN['CPR'], G=LN['G30B'], EMR=LN['EMR'])
+    _w5sig = [g for g in RE.signals(LN['B1'], LN['CPR'], G=LN['G30B'], EMR=LN['EMR'], CPM=LN['CPM'])
               if _W5A <= int(g['bar']) <= _W5B]
     print()
     print('## the banked re-entry | the ws5/ws6 reversal walk | %s .. %s'

@@ -3007,6 +3007,29 @@ def at_extreme_mask(r, side, pts, gap, tol):
     return out
 
 
+def cp_reversal_pivot(cp, side):
+    """[PRODUCER - Joe 1105] THE PIVOT BEHIND EACH CLOSED-PREV REVERSAL. -> {reversal: pivot}.
+
+    A closed-prev series is a staircase: flat between its seams, stepping at each one. A reversal
+    is the first bar it steps AGAINST the target side. The value it stepped down from is the
+    extreme, and THE PIVOT is the first bar of that plateau - the bar the extreme was printed on.
+
+    No span, no sampling window and no hold: the staircase itself says where the pivot is.
+    Every returned pivot is before its own reversal bar, asserted.
+    """
+    v = np.asarray(cp, float)
+    out = {}
+    for b in cp_reversal(v, side):
+        b = int(b)
+        top = v[b - 1]
+        i = b - 1
+        while i > 0 and v[i - 1] == top:
+            i -= 1
+        assert i < b, 'a closed-prev pivot is at or after its own reversal bar'
+        out[b] = int(i)
+    return out
+
+
 def lift_off(r, side, pts, gap, tol, wob):
     """[PRODUCER - Joe 1022] THE LIFT-OFF BARS: where at_extreme stops holding. -> int array.
 
@@ -3037,6 +3060,65 @@ def lift_off(r, side, pts, gap, tol, wob):
     return np.asarray(keep, int)
 
 
+def lift_off_pivot(r, side, pts, gap, tol, wob):
+    """[PRODUCER - Joe 1105] THE PIVOT THAT CREATED EACH LIFT-OFF REVERSAL. -> {lift bar: pivot}.
+
+    HIS 1105, asked where his ws4Mage support gate reads: *"the pivot that created the reversal
+    that the walk has stopped on"*. The pivot belongs to the LIFT-OFF, not to any span a caller
+    picks over the window - that span was mine and he removed it.
+
+    at_extreme holds over a RUN of consecutive bars while the line sits within `tol` of its
+    sampled window's extreme. A lift-off is the first bar that run fails. THE PIVOT is the bar
+    inside that run where the line printed the side's own extreme - the high for a HIGH side, the
+    low for a LOW one.
+
+    The returned bar is always at or before its own lift-off bar, asserted, so nothing after the
+    reversal is read. Keys are lift-off BARS, not stamps; the caller adds the wob as always.
+    """
+    r = np.asarray(r, float)
+    m = at_extreme_mask(r, side, pts, gap, tol)
+    offs = lift_off(r, side, pts, gap, tol, wob)
+    out = {}
+    for b in offs:
+        b = int(b)
+        #   the run of held bars that ENDS at b - 1
+        i = b - 1
+        while i >= 0 and m[i]:
+            i -= 1
+        a0 = i + 1
+        if a0 > b - 1:
+            continue
+        seg = r[a0:b]
+        if not np.isfinite(seg).any():
+            continue
+        k = int(np.nanargmax(seg) if int(side) > 0 else np.nanargmin(seg))
+        pv = a0 + k
+        assert pv <= b, 'a lift-off pivot is after its own lift-off bar'
+        out[b] = pv
+    return out
+
+
+def cp_reversal(cp, side):
+    """[PRODUCER - Joe 1105] A STRAIGHT CLOSED-PREV BAR-TO-BAR REVERSAL. -> int array.
+
+    HIS 1105: *"compare lift-off against a straight closed-prev bar-to-bar reversal, where
+    closed-prev prints reversal on the first bar that prints a value opposite to target-sides
+    path. I want to know which is faster"*.
+
+        a HIGH target side   the path is up, so a reversal is the first bar whose value is LOWER
+                             than the bar before it
+        a LOW target side    the path is down, so a reversal is the first bar whose value is
+                             HIGHER than the bar before it
+
+    A closed-prev series is flat between its seams, so a bar-to-bar comparison only ever fires on
+    a seam step - no extra sampling rule is needed and none is added.
+
+    NO HOLD. There is no wob here, because he described none: the bar the value steps the wrong
+    way IS the reversal, and it is knowable at that bar.
+    """
+    v = np.asarray(cp, float)
+    d = np.diff(v)
+    return np.flatnonzero((d < 0) if int(side) > 0 else (d > 0)) + 1
 def stoch_out_extreme(stoch_out):
     """[PRODUCER · 0824] Is the reading LEAVING the seven-bar window at an extreme?
 

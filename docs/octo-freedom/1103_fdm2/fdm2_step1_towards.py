@@ -119,7 +119,7 @@ say('| the cadence event | the oob side | the trade | its open | its exit | how 
     ' rev-trading here realises %% | the difference %% | MAE %% | MFE %% |')
 say('|' + '---|' * 17)
 
-SIGS = RE.signals(LN['B1'], LN['CPR'], G=LN['G30B'], EMR=LN['EMR'])
+SIGS = RE.signals(LN['B1'], LN['CPR'], G=LN['G30B'], EMR=LN['EMR'], CPM=LN['CPM'])
 assert SIGS, 'no re-entry signals on the tape'
 ROWS = []
 g = SIGS[0]

@@ -54,3 +54,69 @@ Yes. The 2026-08-07 03:28:00 rev-trade came from the director, which reads ws1..
 
 The director's ws1 floor and ws30 ceiling are MINE, stated when it was built. `FDM_RE_SCAN_HI` 12
 is his, from the 1104 re-entry spec.
+
+## PARKED for optimisation - ws4r sliced to 1-minute seams (2026-11-05)
+
+His 1105: *"slice ws4r into 4 seams per bar, each seam at 01:00 -5s, and test if the ws4r '1
+minute seams' create an early reversal"*, then *"it'll come in handy when we start optimising
+after the mech is behaving better"*.
+
+PARKED BY HIM. Nothing is wired: `FDM_RE_REV_READ` is still the 240 s closed-prev read. The
+numbers are kept here so the test does not have to be re-run.
+
+The slice is ws4r read at 60 s seams - four per ws4 bar, each at the minute minus 5 s, so
+00:00:55, 00:01:55 and so on. Both series are read by `jig.cp_reversal`, no hold.
+
+| 2026-08-07 ws4r HIGH, his pivot | the 240 s series reversal | the 60 s series reversal | the slice is earlier by |
+|---|---|---|---|
+| 00:08 | 00:16:00 | 00:10:00 | 360 s |
+| 01:00 | 01:08:00 | 01:02:00 | 360 s |
+| 04:00 | 04:00:00 | 04:01:00 | -60 s |
+| 04:28 | 04:36:00 | 04:31:00 | 300 s |
+| 06:16 | 06:16:00 | 06:17:00 | -60 s |
+| 07:04 | 07:04:00 | 07:05:00 | -60 s |
+
+| 2026-08-07 ws4r LOW, his pivot | the 240 s series reversal | the 60 s series reversal | the slice is earlier by |
+|---|---|---|---|
+| 00:08 | 00:08:00 | 00:08:00 | 0 |
+| 01:00 | 01:00:00 | 01:00:00 | 0 |
+| 04:00 | 04:08:00 | 04:05:00 | 180 s |
+| 04:28 | 04:28:00 | 04:28:00 | 0 |
+| 06:16 | 07:00:00 | 06:16:00 | 2640 s |
+| 07:04 | 07:12:00 | 07:04:00 | 480 s |
+
+| the whole day's reversal count | HIGH | LOW |
+|---|---|---|
+| the 240 s series | 176 | 164 |
+| the 60 s series | 562 | 532 |
+
+HIS OWN CAVEAT, recorded in his words: *"there's a few flips from high to low in there that would
+make it a bit challenging (0704 and 0705, 0100 and 0102), but we might be able to temper them with
+the ws1r line"*. The ws1r tempering is his idea and is not built.
+
+The script is `/home/joe/.claude/jobs/7c82535c/tmp/seam60.py`; it needs no repo state.
+
+## NEXT, from his 1105: a minimum TF for the ws{TF}x-cadence
+
+> *"the next problem to face will be the ws10x cadence that fires next. ws2x and ws4x are likely
+> too wavy for a reliable ws10x cadence, maybe it needs a minimum TF"*
+
+HIS OBSERVATION, not built. Nothing has a minimum-TF floor on the director's candidate today.
+
+| the setting | value | what it does |
+|---|---|---|
+| the director's candidate scan | ws1..ws30 | the floor and the ceiling are MINE, stated when built |
+| FDM_XCAD_RULE | A | the highest away line with its ex-20/80 lines above all towards |
+| FDM_XCAD_EXF | 0 | the candidate need not be ex-20/80 itself, his flat "no" |
+
+What the 2026-08-07 data already shows about low-TF candidates:
+
+| the cadence event | the candidate rule A picked | the race it ran |
+|---|---|---|
+| 02:20:00 | ws20r | ws20x to ws20Mage, confirmed 02:22:15 |
+| 08:50:55 and 08:51:55 | ws1r | - |
+| 03:21:00, LOW re-entry window | ws4x carried the window |
+| 00:47:00, HIGH re-entry window | ws12x carried the window |
+
+So the director has already selected ws1r at two bars on 08-07, which is the case his observation
+names. A floor knob would be his value and his name; nothing is added until he gives both.

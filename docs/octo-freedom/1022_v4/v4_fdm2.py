@@ -138,6 +138,48 @@ def ex2080(v, side):
     return (v >= e) if int(side) > 0 else (v <= e)
 
 
+def ex2080_line(LN, tf, bar, side):
+    """Is ws{tf}r ex-20/80 on `side` at `bar`, by FDM_EXF_READ. -> bool.
+
+    HIS 1105: *"when testing for lines that are ex-20/80-fence, collect the closed-prev and the
+    emerging value for each line. if either closed-prev or emerging values qualify then walk to
+    the next cadence"*.
+
+    ONE HOME for that rule. Every ex-20/80 test on the cadence side goes through here, so a
+    reading cannot differ between the decision and the report that shows it.
+
+      'either'       either read past the fence qualifies. THE BANK
+      'closed_prev'  closed-prev alone, the read it replaced
+      'emerging'     the emerging read alone
+
+    THE EMERGING READ IS AN EXTREME, not one bar. His 1105: *"taking the values based on the
+    highest/lowest emerging bar between the seams"*. It is the side's extreme over the
+    FDM_EXF_EM_BARS 12 bars = 60 s ENDING at `bar` - the highest for a high side, the lowest for a
+    low one. One minute is the span between his 1-minute closed-prev seams. At 1 the read is the
+    single bar's value.
+
+    CAUSAL: both reads are at `bar`. The emerging value at a bar is knowable at that bar - it is
+    the forming value, not a later one - so reading it adds no lookahead.
+    """
+    m = str(K.FDM_EXF_READ)
+    assert m in ('either', 'closed_prev', 'emerging'), 'FDM_EXF_READ is %r' % m
+    t, b = int(tf), int(bar)
+    if m != 'emerging' and ex2080(float(LN['CPR'][t][b]), side):
+        return True
+    if m == 'closed_prev':
+        return False
+    #   THE EMERGING SIDE IS THE SIDE'S EXTREME over the FDM_EXF_EM_BARS bars ENDING at `bar`,
+    #   his 1105 *"the highest/lowest emerging bar between the seams"*. 12 bars = 60 s is one
+    #   minute, the span between his 1-minute seams. At 1 it is the single bar's value.
+    n = max(1, int(K.FDM_EXF_EM_BARS))
+    a0 = max(0, b - n + 1)
+    seg = np.asarray(LN['EMR'][t], float)[a0:b + 1]
+    if not np.isfinite(seg).any():
+        return False
+    v = float(np.nanmax(seg) if int(side) > 0 else np.nanmin(seg))
+    return bool(ex2080(v, side))
+
+
 def towards(r, tf, bar, side):
     """Is ws{tf}r travelling TOWARD `side` at `bar`. -> bool.
 
@@ -399,7 +441,7 @@ def xcad_candidate(LN, side, bar, since):
     assert rule in ('A', 'B'), 'FDM_XCAD_RULE is %r' % rule
     n_above = int(K.FDM_XCAD_ABOVE)
     st = {t: mom_state(LN, t, bar, side, since) for t in range(1, hi + 1)}
-    exf = {t: ex2080(float(LN['CPR'][t][int(bar)]), side) for t in range(1, hi + 1)}
+    exf = {t: ex2080_line(LN, t, bar, side) for t in range(1, hi + 1)}
     for t in range(hi, 0, -1):
         if st[t] != 'away':
             continue
@@ -442,7 +484,7 @@ def xcad_tags(LN, side, bar, since):
     """
     hi = int(LN['HI'])
     exf_tw = [t for t in range(1, hi + 1)
-              if ex2080(float(LN['CPR'][t][int(bar)]), side)
+              if ex2080_line(LN, t, bar, side)
               and mom_state(LN, t, int(bar), side, int(since)) == 'towards']
     if not exf_tw:
         return (), (), 'no line is both ex-%g/%g and towards here' % K.fnc_pair(K.FDM_FNC_2080)
@@ -521,7 +563,7 @@ def xcad_seam(LN, side, s0, xb, above, exf_tw, B):
             blockers = [t for t in exf_tw if st[t] == 'towards']
         else:
             blockers = [t for t in range(1, hi + 1)
-                        if st[t] == 'towards' and ex2080(float(LN['EMR'][t][int(b)]), side)]
+                        if st[t] == 'towards' and ex2080_line(LN, t, b, side)]
         if still:
             return False, 'ws%s of the %d lines above are not away yet' % (
                 ', ws'.join(str(t) for t in still), len(above))
@@ -574,7 +616,7 @@ def xcad_probe(LN, side, s0, xb, lines, bar):
                                       stamps=gate, rev_since=rs)
         out.append(dict(tf=t, value=float(LN['EMR'][t][int(bar)]), extremum=r['extremum'],
                         at=r['at'], gap=r['gap'], rev=r['rev'], state=r['state'],
-                        exf=ex2080(float(LN['EMR'][t][int(bar)]), side)))
+                        exf=ex2080_line(LN, t, bar, side)))
     return out
 
 
@@ -613,7 +655,7 @@ def step1(LN, side, bar):
     lo = int(K.FDM_STEP1_ABOVE_TF) + 1
     tfs = list(range(lo, int(LN['HI']) + 1))
     for tf in tfs:
-        if ex2080(float(LN['CPR'][tf][int(bar)]), side) and towards(LN['CPR'][tf], tf, bar, side):
+        if ex2080_line(LN, tf, bar, side) and towards(LN['CPR'][tf], tf, bar, side):
             k += 1
     return k, len(tfs)
 
@@ -724,7 +766,7 @@ def walk(LN, side, opn, B):
                 #   rev-trading at the event.
                 if str(K.FDM_XCAD_FALLBACK) == 'exfnc':
                     exf2 = [t for t in range(1, int(LN['HI']) + 1)
-                            if ex2080(float(LN['CPR'][t][ev]), side)]
+                            if ex2080_line(LN, t, ev, side)]
                     if exf2:
                         rows.append(dict(bar=ev, stage='WALK', ev=ev, k=k, n=n, cwhy=why,
                                          why='the director found no candidate - %s - BUT %d of %d'

@@ -23,7 +23,8 @@ try:
     import v4_knobs as K
     import v4_signal as SG
     import ln
-    from optimus9.analysis.jig import oob_ib_cross, lift_off
+    from optimus9.analysis.jig import (oob_ib_cross, lift_off, lift_off_pivot,
+                                       cp_reversal, cp_reversal_pivot)
 finally:
     sys.stderr = _e
 
@@ -122,15 +123,48 @@ def windows(B1, side, G=None):
 
 
 def _lift_table(a, tf, side):
-    """The lift-off STAMPS on one line for one side. -> int array.
+    """The reversal bars on one line for one side, as the walk may ACT on them. -> int array.
 
-    The LIFT-OFF KNOBS ARE THE MACHINE'S: LIFT_PTS samples, K.gap_for(tf) bars apart, LIFT_TOL
-    r-points of tolerance, LIFT_WOB bars of hold, and K.lift_stamp puts the bar where the event is
-    KNOWABLE. Only the series handed in changes with FDM_RE_REV_READ.
+    FDM_RE_REV_MECH picks the mech, his 1105 *"because we're using closed-prev, the wob can be
+    cut for the closed-prev reversals"*:
+
+      'cp'       jig.cp_reversal. The first bar the value steps against the side. NO HOLD, so the
+                 reversal bar IS the bar it is knowable on. THE BANK
+      'liftoff'  jig.lift_off at LIFT_PTS samples, K.gap_for(tf) bars apart, LIFT_TOL r-points of
+                 tolerance and LIFT_WOB bars of hold, with K.lift_stamp putting the bar where the
+                 event is knowable - lift + 7 at wob 8
+
+    Only the series handed in changes with FDM_RE_REV_READ.
     """
-    b = lift_off(np.asarray(a, float), int(side), int(K.LIFT_PTS), K.gap_for(int(tf)),
+    v = np.asarray(a, float)
+    m = str(K.FDM_RE_REV_MECH)
+    assert m in ('cp', 'liftoff'), 'FDM_RE_REV_MECH is %r' % m
+    if m == 'cp':
+        return np.asarray(cp_reversal(v, int(side)), int)
+    b = lift_off(v, int(side), int(K.LIFT_PTS), K.gap_for(int(tf)),
                  float(K.LIFT_TOL), int(K.LIFT_WOB))
     return np.asarray([K.lift_stamp(int(x)) for x in b], int)
+
+
+def _pivot_table(a, tf, side):
+    """The pivot behind each lift-off on one line, keyed by that lift-off's STAMP. -> dict.
+
+    HIS 1105: *"the pivot that created the reversal that the walk has stopped on"*. The walk holds
+    stamps, so the keys are stamps and the lookup is direct. jig.lift_off_pivot owns the pivot's
+    definition - the bar inside the held run where the line printed the side's own extreme - and
+    nothing about it is re-derived here.
+
+    Verified against his chart on 2026-08-07 ws4: HIGH pivots 04:32:00, 04:40:35, 05:20:00,
+    06:12:00 and LOW pivots 04:04:00, 04:52:00, 05:44:00 - his *"your times match my ws4r
+    pivots"*. The 05:44:00 one reads 15.6775, the value he read off the chart himself.
+    """
+    v = np.asarray(a, float)
+    if str(K.FDM_RE_REV_MECH) == 'cp':
+        #   NO STAMP TO ADD: a closed-prev reversal is knowable on its own bar.
+        return {int(b): int(p) for b, p in cp_reversal_pivot(v, int(side)).items()}
+    pv = lift_off_pivot(v, int(side), int(K.LIFT_PTS), K.gap_for(int(tf)),
+                        float(K.LIFT_TOL), int(K.LIFT_WOB))
+    return {int(K.lift_stamp(int(b))): int(p) for b, p in pv.items()}
 
 
 def _gate6(v, side):
@@ -278,7 +312,7 @@ def _xmod(EM, R, tf, frm, side, e_fence, hi_tf):
                                                                         last)
 
 
-def signals(B1, R, side=None, G=None, EMR=None):
+def signals(B1, R, side=None, G=None, EMR=None, CPM=None):
     """HIS 1104 RE-ENTRY: the ws5/ws6 reversal walk. -> list of signals, bar-ordered.
 
     HIS SPEC, verbatim and in his indentation:
@@ -319,6 +353,10 @@ def signals(B1, R, side=None, G=None, EMR=None):
     #   HIS 1104 MOD READS EMERGING, *"using emerging values"*, whatever the reversal read is.
     assert not int(K.FDM_RE_XCROSS_ON) or EMR is not None, \
         'his x-cross mod needs the emerging ladder handed in'
+    #   HIS 1105 SUPPORT GATE READS THE CLOSED-PREV Mage LADDER. It is handed in rather than
+    #   rebuilt here, so this module holds no second copy of a line the caller already has.
+    assert not int(K.FDM_RE_M4_ON) or CPM is not None, \
+        'his Mage support gate needs the closed-prev Mage ladder handed in'
     #   HIS 1104 PAIR KNOBS: ws5 and ws6 are the default and the spec, and the pair lifts without
     #   a second copy of this walk. The scan floor follows the gate line by default - the mech's
     #   own shape - or sits at a fixed TF for his *"scan higher than ws12"* read.
@@ -340,6 +378,9 @@ def signals(B1, R, side=None, G=None, EMR=None):
     out = []
     for sd in sides:
         L5 = _lift_table(SRC[tf5], tf5, sd)
+        #   ONCE PER SIDE, not per window. The 1105 lesson: anything that does not depend on the
+        #   window is hoisted out of the window loop.
+        P5 = _pivot_table(SRC[tf5], tf5, sd) if int(K.FDM_RE_M4_ON) else {}
         L6 = _lift_table(SRC[tf6], tf6, sd)
         e5 = K.side_edge(K.FDM_RE_WS5_FNC, sd)
         for o, c in windows(B1, sd, G):
@@ -396,6 +437,25 @@ def signals(B1, R, side=None, G=None, EMR=None):
                                 scan=None, got=(), last='HIS MOD', close=int(c)))
                 continue
             b5 = int(nx5[0])
+            #   ── HIS 1105 SUPPORT GATE ─────────────────────────────────────────────────────────
+            #       -IF ws{tf5}r has reversed
+            #       --IF ws{tf5}Mage is NOT ex-FDM_RE_M4_FNC 23/77, same side
+            #       ---STOP
+            #   HIS STOP KILLS THE WHOLE PROCESS - *"the STOP kills the fdm2-reentry process"* -
+            #   so this sits BEFORE anything uses the mod's bar and continues without it.
+            #   ws{tf5}Mage is read AT THE ws{tf5}r EXTREMUM, his *"tested at the ws4r extremum"*.
+            #   THE SPAN is the window's open to the reversal and THE SERIES is the reversal
+            #   read's own; ws{tf5}Mage itself is closed-prev. All three are MY CALL, and the
+            #   knob note says so.
+            if int(K.FDM_RE_M4_ON):
+                eM = K.side_edge(K.FDM_RE_M4_FNC, sd)
+                #   THE PIVOT, HIS 1105 *"the pivot that created the reversal that the walk has
+                #   stopped on"*. The span I had invented over the window is gone.
+                xb5 = P5.get(b5, b5) if str(K.FDM_RE_M4_AT) == 'extremum' else b5
+                assert xb5 <= b5, 'a pivot is after the reversal it belongs to'
+                vM = float(np.asarray(CPM[tf5], float)[xb5])
+                if not ((vM >= eM) if sd > 0 else (vM <= eM)):
+                    continue
             v5 = float(np.asarray(R[tf5], float)[b5])
             #   HIS "stop": the first ws5 reversal is the only test point for the BASE walk.
             #   Not ex-fence there and the base walk produces nothing - BUT HIS 1105 MOD IS AN

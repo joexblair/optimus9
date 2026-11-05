@@ -282,7 +282,7 @@ for ci, cfg in enumerate(CFGS):
         LN = arrays(cfg)
     tape_end = len(LN['close']) - 1
     try:
-        sigs = RE.signals(LN['B1'], LN['CPR'], G=LN['G30B'], EMR=LN['EMR'])
+        sigs = RE.signals(LN['B1'], LN['CPR'], G=LN['G30B'], EMR=LN['EMR'], CPM=LN['CPM'])
     except AssertionError as ex:
         say('| - | %d | %s | REFUSED: %s |'
             % (ci, ' | '.join(str(cfg[n]) for n in NAMES), ex))

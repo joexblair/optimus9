@@ -61,7 +61,7 @@ print('# target-side extremum since the trade opened, and calls a line towards o
 print('# every value is read AT the event bar. The MAE/MFE is sweep-pivots\' scoring scale')
 print()
 
-SIGS = RE.signals(LN['B1'], LN['CPR'], G=LN['G30B'], EMR=LN['EMR'])
+SIGS = RE.signals(LN['B1'], LN['CPR'], G=LN['G30B'], EMR=LN['EMR'], CPM=LN['CPM'])
 g = SIGS[0]
 LEGS = F2.legs(LN, (SG.fire_bar(g), SG.target_side(SG.direction(int(g['side']))),
                     'fdm re-entry %s' % ln.U(int(g['bar']))), len(LN['close']) - 1, resig=SIGS)
