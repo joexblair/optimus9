@@ -1101,7 +1101,7 @@ FDM_RE_IB_XWOB = _knob('FDM_RE_IB_XWOB', 1, int)  # the window's ib cross hold, 
 #   1 MEANS THE CROSS BAR ITSELF, the same hold the cadence event uses on ws1b.
 FDM_RE_B_FNC = _knob('FDM_RE_B_FNC', 5.0)       # gcws30b's own fence, 5 -> (5.0, 95.0).
 #   READ ONLY BY THE ARMS THAT NAME gcws30b. The banked window is ws1b at both ends.
-FDM_RE_WIN_OPEN = os.environ.get('W_V4_FDM_RE_WIN_OPEN', 'both')
+FDM_RE_WIN_OPEN = os.environ.get('W_V4_FDM_RE_WIN_OPEN', 'ws1b')
 FDM_RE_WIN_CLOSE = os.environ.get('W_V4_FDM_RE_WIN_CLOSE', 'ws1b')
 #   WHAT OPENS AND WHAT CLOSES THE RE-ENTRY WINDOW. His 1103: *"other than this binary option, do
 #   you see any other permuatations of ws1b and gcws30b?  if so, test the net outputs"* / *"run EFG
@@ -1116,6 +1116,10 @@ FDM_RE_WIN_CLOSE = os.environ.get('W_V4_FDM_RE_WIN_CLOSE', 'ws1b')
 #     close 'gcws30b'  gcws30b's oob->ib cross on the side, read at the oob pair
 #   'both', 'first' and 'sameside' ARE MINE - he asked whether other permutations exist and told me
 #   to run them. They are not permutations of the two slots; they are new opening tests.
+#   HIS 1105 PURGE: *"purge '--gcws30b is past the 5/95 fence, on either side' from the reentry
+#   spec"*. The gcws30b clause is OUT of the opening test, so the open is 'ws1b' alone - ws1b oob
+#   on the side and nothing else. gcws30b is still read by the cadence-event mech and by the
+#   window's own close arm; this purge is the OPENING test only.
 #   ── THE RE-ENTRY'S OWN WALK, BANKED 1104 ──────────────────────────────────────────────────────
 #   HIS 1104 SPEC, which REPLACED the ws1r AND (ws2r or ws3r) gate outright - his *"that looks like
 #   our reentry mech ... bake this into the machine, and make this the machine"*, and his *"replace
@@ -1280,10 +1284,32 @@ FDM_RE_XCROSS_ON = _knob('FDM_RE_XCROSS_ON', 1, int)   # 1 wires his mod into th
 FDM_RE_XWOB = _knob('FDM_RE_XWOB', 12, int)      # his hold, bars. 12 bars = 60 s.
 #   HIS VALUE, *"wob 12"*. Same number as LIN2_CROSS_WOB 12, which lives in lineage2 and is a
 #   different mechanic, so the two are held apart.
-FDM_RE_XCROSS_TFS = os.environ.get('W_V4_FDM_RE_XCROSS_TFS', 'both')  # 'both'|'rev'|'gate'.
-#   WHICH WAITING POINTS THE MOD WATCHES. HIS 1104 answer to which lines: *"any lines that
-#   fdm2-reentry needs"*, so 'both' - the line whose reversal starts the walk (FDM_RE_REV_TF 5)
-#   and the line whose reversal the walk then waits on (FDM_RE_GATE_TF 6). THE KNOB NAME IS MINE.
+FDM_RE_XCROSS_TFS = os.environ.get('W_V4_FDM_RE_XCROSS_TFS', 'band')  # 'band'|'both'|'rev'|'gate'.
+FDM_RE_XCROSS_LO = _knob('FDM_RE_XCROSS_LO', 4, int)   # the LOWEST line the mod watches.
+#   HIS 1105: *"make ws4 the lowest TF"*. 4, not the trigger line - the floor being the trigger
+#   line was my own choice and it hid the one cross that passes at 2026-08-07 05:44:20, ws4x with
+#   ws4r having reached 12.1980 past the 20 fence at 05:44:00 and ws5r 30.4863 in-fence. Every
+#   line from ws5 up fails the fence in that stretch; ws5r's deepest is 20.8752, 0.88 short.
+#   WHICH LINES THE MOD WATCHES. HIS 1105: *"in my spec, I intentionally referd to `a TF`, so
+#   that you would see the dynamic nature of the mod"*, and his 1104 *"any lines that fdm2-reentry
+#   needs"*.
+#     'band'   EVERY line from FDM_RE_REV_TF 5 up to FDM_RE_SCAN_HI 12 - the lines the re-entry
+#              reads. THE BANK, his dynamic reading. The earliest qualifying confirm across the
+#              band fires
+#     'both'   only the reversal line and the gate line, two fixed points. The arm it replaced
+#     'rev'    the reversal line alone
+#     'gate'   the gate line alone
+#   THE BAND'S TOP IS FDM_RE_SCAN_HI, not a knob of its own: those are the lines the re-entry
+#   already reads, and a line above them would need him to say so. THAT CHOICE IS MINE.
+FDM_RE_XCROSS_FNC_AT = os.environ.get('W_V4_FDM_RE_XCROSS_FNC_AT', 'stretch')  # 'stretch'|'cross'
+#   WHERE HIS EX-20/80 CONDITION IS READ. HIS 1105 CORRECTION: *"there was no such 'ws4r is not
+#   past the 20 fence' gate on the ws{a TF}x cross"*. In his spec the fence sits on the OUTER
+#   line - *"a ws{a TF}r line IS ex-20/80-fence and waiting to reverse"* - so it is the STATE the
+#   line is in while waiting, not a test at the cross bar.
+#     'stretch'  the line was past the fence at some bar from the window's open to the cross.
+#                THE BANK, his reading
+#     'cross'    the line is past the fence AT the cross bar. The arm I had built, which added a
+#                gate he did not write
 FDM_RE_XCROSS_UP_READ = os.environ.get('W_V4_FDM_RE_XCROSS_UP_READ', 'closed_prev')
 #   THE ws{TF+1}r IN-FENCE READ. 'closed_prev' because his own example number, *"ws6r is 43"*, is
 #   the closed-prev value at that bar - emerging reads 40.79 there. THE KNOB NAME IS MINE and the
@@ -1626,7 +1652,7 @@ RULED = {
                                ' tests both options". "closed_prev" is the arm'),
     'FDM_RE_IB_XWOB': (1, 'the ib cross hold that closes the re-entry window. 1 is the cross bar itself, the same hold the cadence event uses on ws1b'),
     'FDM_RE_B_FNC': (5.0, 'gcws30b\'s own fence, 5 -> (5, 95), the smaller end per his 1103 convention. WAS 95.0'),
-    'FDM_RE_WIN_OPEN': ('both', 'BANKED 1103 - his "let\'s bank E, and make it the machine". Arm E opens the window where ws1b is oob AND gcws30b is ex-5/95. The 28-run sweep: E is the ONLY arm positive on 08-03 at +0.152% and ties the best on 09-15 at +14.325%. The arms are ws1b, gcws30b, first and sameside'),
+    'FDM_RE_WIN_OPEN': ('ws1b', 'HIS 1105 PURGE of the gcws30b clause: "purge \'--gcws30b is past the 5/95 fence, on either side\' from the reentry spec". WAS \'both\', banked 1103 on his "let\'s bank E, and make it the machine" - that arm opened where ws1b was oob AND gcws30b ex-5/95, and the 28-run sweep had it the only arm positive on 08-03 at +0.152% and tied best on 09-15 at +14.325%. The other settings are gcws30b, both, first and sameside'),
     'FDM_RE_WIN_CLOSE': ('ws1b', 'HIS 1103 "close the window on ws1b to ib". "gcws30b" is the arm it replaced'),
     'FDM_RE_REV_READ': ('closed_prev', 'BANKED 1104 - his "-use closed-prev" for the ws5 and ws6 reversals, overriding the standing rule that lift-off is the one emerging read. "emerging" is the arm it replaced'),
     'FDM_RE_WS5_FNC': (20.0, 'BANKED 1104 - his "if ws5r reverses while ex-20/80-fence". The smaller end of the pair, and its own knob so a sweep cannot move step 1\'s fence'),
@@ -1654,7 +1680,9 @@ RULED = {
     'FDM_MAE_CAP': (1.1, 'HIS 1103 "add the typical mae1.1 stop" + "yes, move it to default". ALWAYS ON, unlike LIN2_MAE_CAP which stayed behind W_MAE_CAP=on'),
     'FDM_RE_XCROSS_ON': (1, 'ON, his 1104 "let\'s make a small mod to the reentry". At 0 the re-entry walk is the 1104 banked one and every number before this mod is reproduced'),
     'FDM_RE_XWOB': (12, 'HIS VALUE "wob 12" = 60 s. Held apart from LIN2_CROSS_WOB 12, a different mechanic'),
-    'FDM_RE_XCROSS_TFS': ('both', 'HIS 1104 "any lines that fdm2-reentry needs" - the reversal line and the gate line. THE KNOB NAME IS MINE'),
+    'FDM_RE_XCROSS_LO': (4, 'HIS 1105 "make ws4 the lowest TF". It is NOT tied to the trigger line - that floor was mine and it hid the ws4x cross at 2026-08-07 05:44:20 which is the only one in that stretch to pass all three of his gates'),
+    'FDM_RE_XCROSS_TFS': ('band', 'HIS 1105 "I intentionally referd to `a TF`, so that you would see the dynamic nature of the mod" - every line from FDM_RE_REV_TF up to FDM_RE_SCAN_HI. WAS \'both\', two fixed waiting points. THE KNOB NAME AND THE BAND\'S TOP ARE MINE'),
+    'FDM_RE_XCROSS_FNC_AT': ('stretch', 'HIS 1105 "there was no such ws4r is not past the 20 fence gate on the ws{a TF}x cross" - the fence is the state the line is in while waiting, read across the stretch from the window open to the cross. "cross" is the arm I had wrongly built'),
     'FDM_RE_XCROSS_UP_READ': ('closed_prev', 'his own example number "ws6r is 43" is the closed-prev value; emerging reads 40.79 there. THE READ IS MY CALL'),
     'FDM_CONF_READ': ('closed_prev', 'BANKED 1104 - his "make sure that closed-prev is the standard for everything except lift-off", the LATER of his two rulings for this table. "emerging" is the arm it replaced'),
     'FDM_CONF_BARS': ('event+x10', 'BANKED 1104 - the two data bars the machine owns, the cadence event and that event\'s ws10x race confirm. "event" is the narrower arm. THE KNOB NAME IS MINE'),

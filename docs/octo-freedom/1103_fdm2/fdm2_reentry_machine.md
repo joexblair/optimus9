@@ -3,6 +3,20 @@
 The mech lives in `docs/octo-freedom/1022_v4/v4_fdm_reentry.py`, function `signals`. It is the
 only way into a trade from flat, so every chain's first leg comes from it.
 
+## the window, after his 1105 purge
+
+```
+-a window opens when ws1b is oob on the side
+-the window closes when ws1b crosses back inside on the same side
+--the close bar is the bar that cross confirms on
+--a window with no close after it never fires
+--one window per close, so two opens before one close collapse onto it
+```
+
+His 1105: *"purge '--gcws30b is past the 5/95 fence, on either side' from the reentry spec"*.
+`FDM_RE_WIN_OPEN` moves from 'both' to 'ws1b'. gcws30b is still read by the cadence-event mech;
+this purge is the OPENING test only.
+
 ## his 1104 walk, the banked base
 
 ```
@@ -35,6 +49,41 @@ His example: ws5r low side, 2026-08-07 06:50 to 07:05, ws5x crossing over ws5r, 
 **"rev-trade" is his generic word for sending the signal to the router.** From flat the router's
 action is an OPEN only, 1 bar - his *"the router knows there isn't an incoming trade"*.
 
+### his 1105 corrections to it, all banked
+
+| what he corrected | what changed |
+|---|---|
+| *"there was no such 'ws4r is not past the 20 fence' gate on the ws{a TF}x cross"* | the fence is the STATE the line is in while waiting - past it at some bar from the window's open to the cross - not a test at the cross bar. `FDM_RE_XCROSS_FNC_AT` 'stretch' |
+| *"are you saying that ws4x didn't cross ws4r?"* | it had. `_xcross` returned only the FIRST cross and the caller tested it once. It now returns every confirming cross and the first that passes all three gates fires |
+| *"I intentionally referd to `a TF`, so that you would see the dynamic nature of the mod"* | it watches every line from `FDM_RE_XCROSS_LO` to `FDM_RE_SCAN_HI`, not two fixed points. `FDM_RE_XCROSS_TFS` 'band' |
+| *"make ws4 the lowest TF"* | `FDM_RE_XCROSS_LO` 4. It is NOT tied to the trigger line - that floor was mine and it hid the only qualifying cross |
+
+Three defects of mine were found in the same stretch and are fixed:
+
+| the defect | what it did |
+|---|---|
+| a base-walk stop ran before the mod's bar was used and `continue`d out of the window | the 2026-08-07 05:33:00 window lost its 05:45:15 signal |
+| both mod appends carried none of the 9 fields the trace report reads past `SG.signal` | `KeyError: 'close'` |
+| two of those fields are `None` for a mod-fired window and the report called `int()` on them | `TypeError` on `int(None)`; the report now prints `-`, as it already did for `b6` |
+
+### his 1105 acceptance test, met
+
+| the 2026-08-07 05:33:00 LOW window | value |
+|---|---|
+| the window opened, ws1b oob LOW | 2026-08-07 05:33:00 |
+| its ws1b ib close | 2026-08-07 05:36:00 |
+| the base walk's ws5 reversal | 2026-08-07 05:50:35, ws5r 29.13, not past 20 - the base walk stops |
+| what carried it | HIS MOD |
+| the signal bar | **2026-08-07 05:45:15** |
+| the cross behind it | ws4x crossed ws4r 05:44:20 on emerging, held 12 bars = 60 s |
+| ws4r past the fence while waiting | 12.1980 at 05:44:00 |
+| ws5r in-fence at the cross | 30.4863 |
+| the trade | LONG, open 2026-08-07 05:45:20 |
+
+The whole 2026-08-07 signal list is `fdm2_reentry_0807.md` in this directory. The day's first
+signal moves from 06:57:40 to **00:13:10**: the ws4 floor, the stretch-read fence and testing
+every cross widen the mech a long way, and the day's net is measured by the leg chain, not here.
+
 ### the two waiting points it watches
 
 | the waiting point | the line | the line above it | where the search starts |
@@ -50,7 +99,9 @@ His answer on which lines: *"any lines that fdm2-reentry needs"*.
 |---|---|---|
 | FDM_RE_XCROSS_ON | 1 | ON. At 0 the walk is the 1104 base and every earlier number is reproduced |
 | FDM_RE_XWOB | 12 | his hold, 12 bars = 60 s. Held apart from LIN2_CROSS_WOB 12, a different mechanic |
-| FDM_RE_XCROSS_TFS | both | both waiting points. 'rev' or 'gate' narrows it. THE KNOB NAME IS MINE |
+| FDM_RE_XCROSS_TFS | band | every line from FDM_RE_XCROSS_LO to FDM_RE_SCAN_HI. 'both', 'rev' and 'gate' are the fixed-point settings it replaced. THE KNOB NAME IS MINE |
+| FDM_RE_XCROSS_LO | 4 | the lowest line it watches, his *"make ws4 the lowest TF"* |
+| FDM_RE_XCROSS_FNC_AT | stretch | the fence is read across the waiting stretch, his 1105 correction. 'cross' reads it at the cross bar |
 | FDM_RE_XCROSS_UP_READ | closed_prev | the ws{TF+1}r in-fence read. His own 43 is the closed-prev value; emerging reads 40.79 there. THE READ IS MY CALL |
 
 ### what is mine in it, stated

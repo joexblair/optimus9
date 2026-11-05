@@ -1047,6 +1047,9 @@ if _W5:
     print('# NO STOP AND NO EXIT RULE ON THESE NUMBERS: the scale is sweep-pivots, from the open')
     print('# sweep-pivots: ' + ', '.join('%s %s' % (n, v) for n, v, _ in SP.knobs()))
     print()
+    #   A MOD-FIRED ROW HAS NO ws5 REVERSAL BAR AND NO SCAN BAR. His 1105 mod can carry a window
+    #   whose base walk never reached either, so those two columns print '-' rather than being
+    #   zero-filled in the signal. The guard belongs here, in the reporting layer.
     print('| the window open | the oob side | the window close, ws1b ib | the ws5 reversal |'
           ' ws5r there | ws6r there | the ws6 branch | the ws6 reversal | the scan bar |'
           ' in-fence ws%d..ws%d | the last to fire | the signal bar | the trade | its open |'
@@ -1083,9 +1086,10 @@ if _W5:
         print('| %s | %s | %s | %s | %.2f | %.2f | %s | %s | %s | %s | %s | %s | %s | %s | %s |'
               ' %s | %s | %s | %s |'
               % (ln.U(int(_g5['src'])), 'HIGH' if _sd5 > 0 else 'LOW', ln.U(int(_g5['close'])),
-                 ln.U(int(_g5['b5'])), _g5['v5'], _g5['v6'],
+                 '-' if _g5['b5'] is None else ln.U(int(_g5['b5'])), _g5['v5'], _g5['v6'],
                  'held, waited' if _g5['held6'] else 'failed, scanned at once',
-                 '-' if _g5['b6'] is None else ln.U(int(_g5['b6'])), ln.U(int(_g5['scan'])),
+                 '-' if _g5['b6'] is None else ln.U(int(_g5['b6'])),
+                 '-' if _g5['scan'] is None else ln.U(int(_g5['scan'])),
                  ', '.join('ws%d' % t for t in _g5['got']), _g5['last'], ln.U(int(_g5['bar'])),
                  SG.direction(_sd5), ln.U(int(_op5)),
                  '-' if _mae5 is None else '%+.3f' % _mae5,

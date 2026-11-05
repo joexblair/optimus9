@@ -75,6 +75,23 @@ finally:
 
 MECH = 'fdm-reentry'
 
+#   THE x LINES, LOADED ONCE EACH. _xmod runs per window AND per side, so a fresh ln.line call on
+#   every visit was roughly 720 database loads for a single day - the whole cost of his 1105 mod,
+#   and it took a one-day run past 15 minutes. Keyed by timeframe and never invalidated, because
+#   a line's values do not change inside a run.
+_XL = {}
+
+
+def _xline(tf):
+    """The ws{tf}x line, loaded once per process. -> array, or None when it does not load."""
+    t = int(tf)
+    if t not in _XL:
+        try:
+            _XL[t] = np.asarray(ln.line('ws%dx' % t), float)
+        except Exception:
+            _XL[t] = None
+    return _XL[t]
+
 
 def _beyond(a, side, fnc):
     """Is `a` at or beyond the mirrored `fnc` pair on `side`. -> bool array.
@@ -188,7 +205,12 @@ def _infence(v):
 def _xcross(X, Rl, frm, side, wob):
     """HIS 1104 MOD: the first bar ws{tf}x's cross of its own r CONFIRMS, after `frm`.
 
-    -> (the confirm bar, the cross bar) | None.
+    -> [(the confirm bar, the cross bar)], every confirming cross after `frm`, chronological.
+
+    IT RETURNS THEM ALL, not the first. Returning only the first was a defect of mine: at
+    2026-08-07 the ws4x cross at 05:37:50 failed his fence test and no later cross was looked at,
+    although ws4r sat past the fence from 05:44:00 to 05:47:55. HIS 1105: *"are you saying that
+    ws4x didn't cross ws4r?"* - it did, and the caller must test each cross against his gates.
 
     HIS SPEC: *"IF a ws{a TF}x crosses the ws{a TF}r line using emerging values and wob 12"*, with
     his own correction on direction - *"under for highside"*, which is the banked x-cross rule:
@@ -202,31 +224,43 @@ def _xcross(X, Rl, frm, side, wob):
     NO SEARCH BOUND. His spec gives none, and a bound would be a cap he did not ask for.
     CAUSAL: the confirm bar is asserted to be the last bar the hold reads.
     """
+    #   VECTORISED, SAME ANSWER. The bar-by-bar loop walked to the end of the tape for every
+    #   line and every window - 9 lines x 1.6 M bars of pure Python - and one day's run went past
+    #   15 minutes without printing. The search is still UNBOUNDED, his spec gives no end, and no
+    #   cap is introduced here. Only the arithmetic changed.
     X, Rl = np.asarray(X, float), np.asarray(Rl, float)
     n, w = len(X), max(1, int(wob))
-    for i in range(int(frm) + 1, n):
-        a0, b0, oa, ob = X[i - 1], X[i], Rl[i - 1], Rl[i]
-        if not np.isfinite([a0, b0, oa, ob]).all():
-            continue
-        crossed = (a0 >= oa and b0 < ob) if int(side) > 0 else (a0 <= oa and b0 > ob)
-        if not crossed:
-            continue
-        end = i + w
-        if end > n:
-            break
-        seg = [(X[j] < Rl[j]) if int(side) > 0 else (X[j] > Rl[j]) for j in range(i, end)]
-        if all(seg):
-            cf = i + w - 1
-            assert cf >= i, 'a cross confirms before it crosses'
-            return cf, i
-    return None
+    fin = np.isfinite(X) & np.isfinite(Rl)
+    past = (X < Rl) if int(side) > 0 else (X > Rl)      # the side the hold needs
+    before = (X >= Rl) if int(side) > 0 else (X <= Rl)  # the side it came from
+    #   a cross AT i: finite on both bars, `before` at i-1 and `past` at i
+    cr = np.flatnonzero(fin[:-1] & fin[1:] & before[:-1] & past[1:]) + 1
+    cr = cr[cr > int(frm)]
+    if not cr.size:
+        return []
+    #   the hold: `past` on all w bars from the cross. A prefix sum answers every candidate at once.
+    cs = np.concatenate(([0], np.cumsum(past.astype(np.int64))))
+    cr = cr[cr + w <= n]
+    if not cr.size:
+        return []
+    held = (cs[cr + w] - cs[cr]) == w
+    out = [(int(i) + w - 1, int(i)) for i in cr[held]]
+    for cf, i in out:
+        assert cf >= i, 'a cross confirms before it crosses'
+        assert cf < n, 'a confirm bar is past the tape'
+    return out
 
 
 def _xmod(EM, R, tf, frm, side, e_fence, hi_tf):
     """HIS 1104 MOD, one waiting point. -> (the fire bar, why) | (None, why).
 
     HIS SPEC, in order:
-      1  ws{tf}r is ex-20/80 on the side and waiting to reverse
+      0  EVERY confirming cross is tested, and the FIRST one that passes all three gates
+         fires. His 1105 *"ws4x didn't cross ws4r?"* - it had, and only that first cross was
+         being tested
+      1  ws{tf}r is ex-20/80 on the side and waiting to reverse. FDM_RE_XCROSS_FNC_AT
+         'stretch' reads that as the STATE over [frm, the cross] - his 1105 correction, *"there
+         was no such gate on the ws{a TF}x cross"*
       2  ws{tf}x crosses ws{tf}r on EMERGING values and holds FDM_RE_XWOB 12 bars = 60 s
       3  ws{tf+1}r is in-fence
       4  rev-trade - his generic *"send a signal to the router, and let the router handle the
@@ -244,26 +278,50 @@ def _xmod(EM, R, tf, frm, side, e_fence, hi_tf):
     """
     if int(tf) + 1 > int(hi_tf):
         return None, 'ws%d has no line above it on this ladder' % int(tf)
-    try:
-        X = np.asarray(ln.line('ws%dx' % int(tf)), float)
-    except Exception as ex:
-        return None, 'ws%dx does not load - %s' % (int(tf), type(ex).__name__)
-    r = _xcross(X, EM[int(tf)], int(frm), int(side), int(K.FDM_RE_XWOB))
-    if r is None:
+    X = _xline(tf)
+    if X is None:
+        return None, 'ws%dx does not load' % int(tf)
+    xs = _xcross(X, EM[int(tf)], int(frm), int(side), int(K.FDM_RE_XWOB))
+    if not xs:
         return None, 'ws%dx never crosses ws%dr after %s' % (int(tf), int(tf), ln.U(int(frm)))
-    cf, cr = r
-    vr = float(np.asarray(EM[int(tf)], float)[cr])
-    if not ((vr >= e_fence) if int(side) > 0 else (vr <= e_fence)):
-        return None, ('ws%dr is %.2f at the %s cross, not past %g'
-                      % (int(tf), vr, ln.U(cr), e_fence))
     up = R if str(K.FDM_RE_XCROSS_UP_READ) == 'closed_prev' else EM
-    vu = float(np.asarray(up[int(tf) + 1], float)[cr])
-    if not _infence(vu):
-        return None, ('ws%dr is %.2f at the %s cross, not in-fence'
-                      % (int(tf) + 1, vu, ln.U(cr)))
-    return cf, ('ws%dx crossed ws%dr %s and held %d bars to %s, ws%dr %.2f past %g, ws%dr %.2f'
-                ' in-fence' % (int(tf), int(tf), ln.U(cr), int(K.FDM_RE_XWOB), ln.U(cf), int(tf),
-                               vr, e_fence, int(tf) + 1, vu))
+    last = ''
+    at = str(K.FDM_RE_XCROSS_FNC_AT)
+    assert at in ('stretch', 'cross'), 'FDM_RE_XCROSS_FNC_AT is %r' % at
+    EL = np.asarray(EM[int(tf)], float)
+    for cf, cr in xs:
+        #   HIS EX-20/80 CONDITION. At 'stretch' it is the STATE the line was in while waiting -
+        #   past the fence at SOME bar from `frm` to the cross - which is his 1105 correction. At
+        #   'cross' it is read at the cross bar alone, the gate he did not write.
+        if at == 'stretch':
+            seg = EL[int(frm):cr + 1]
+            ok = bool(np.any(seg >= e_fence) if int(side) > 0 else np.any(seg <= e_fence))
+            if ok:
+                i = int(np.nanargmax(seg) if int(side) > 0 else np.nanargmin(seg))
+                fwhy = ('ws%dr reached %.2f past %g at %s while waiting'
+                        % (int(tf), float(seg[i]), e_fence, ln.U(int(frm) + i)))
+            else:
+                last = ('ws%dr never reaches %g between %s and the %s cross'
+                        % (int(tf), e_fence, ln.U(int(frm)), ln.U(cr)))
+        else:
+            vr = float(EL[cr])
+            ok = (vr >= e_fence) if int(side) > 0 else (vr <= e_fence)
+            fwhy = 'ws%dr %.2f past %g at the cross' % (int(tf), vr, e_fence)
+            if not ok:
+                last = ('ws%dr is %.2f at the %s cross, not past %g'
+                        % (int(tf), vr, ln.U(cr), e_fence))
+        if not ok:
+            continue
+        vu = float(np.asarray(up[int(tf) + 1], float)[cr])
+        if not _infence(vu):
+            last = ('ws%dr is %.2f at the %s cross, not in-fence'
+                    % (int(tf) + 1, vu, ln.U(cr)))
+            continue
+        return cf, ('ws%dx crossed ws%dr %s and held %d bars to %s, %s, ws%dr %.2f in-fence'
+                    % (int(tf), int(tf), ln.U(cr), int(K.FDM_RE_XWOB), ln.U(cf), fwhy,
+                       int(tf) + 1, vu))
+    return None, 'no ws%dx cross after %s passes - the last one: %s' % (int(tf), ln.U(int(frm)),
+                                                                        last)
 
 
 def signals(B1, R, side=None, G=None, EMR=None):
@@ -345,8 +403,25 @@ def signals(B1, R, side=None, G=None, EMR=None):
             #   forward meets whichever comes first - the same rule the cadence walk uses and it
             #   needs no priority knob.
             xm, xwhy = (None, 'off')
-            if int(K.FDM_RE_XCROSS_ON) and str(K.FDM_RE_XCROSS_TFS) in ('both', 'rev'):
-                xm, xwhy = _xmod(EMR, R, tf5, int(o), sd, e5, int(K.L2_MOM_MAXTF))
+            if int(K.FDM_RE_XCROSS_ON):
+                #   HIS 1105 *"a TF"* IS DYNAMIC. At 'band' every line the re-entry reads is
+                #   watched and the EARLIEST qualifying confirm across them fires; the other
+                #   settings keep the two fixed waiting points this replaced.
+                mode = str(K.FDM_RE_XCROSS_TFS)
+                assert mode in ('band', 'both', 'rev', 'gate'), \
+                    'FDM_RE_XCROSS_TFS is %r' % mode
+                #   THE FLOOR IS FDM_RE_XCROSS_LO 4, his 1105 *"make ws4 the lowest TF"*, and
+                #   it is NOT tied to the trigger line. Tying it there was mine and it hid the
+                #   only cross that passes at 2026-08-07 05:44:20.
+                band = (range(int(K.FDM_RE_XCROSS_LO), int(K.FDM_RE_SCAN_HI) + 1)
+                        if mode == 'band' else (tf5,) if mode in ('both', 'rev') else ())
+                assert int(K.FDM_RE_XCROSS_LO) >= 1, 'the mod cannot watch a line below ws1'
+                for t in band:
+                    m2, w2 = _xmod(EMR, R, t, int(o), sd, e5, int(K.L2_MOM_MAXTF))
+                    if m2 is not None and (xm is None or int(m2) < int(xm)):
+                        xm, xwhy = int(m2), w2
+                    elif xm is None:
+                        xwhy = w2
             nx5 = L5[L5 > int(o)]
             if not nx5.size:
                 #   NO ws{tf5} REVERSAL AT ALL. Before the mod this window produced nothing; now
@@ -358,18 +433,45 @@ def signals(B1, R, side=None, G=None, EMR=None):
                 if int(K.FDM_RE_FIRE_IB):
                     fb = max(fb, int(c))
                 assert fb >= int(o), 'a mod fire bar precedes its own window open'
-                out.append(dict(bar=fb, side=sd, src=int(o),
-                                why='%s window %s..%s. HIS MOD, no ws%d reversal: %s%s'
+                #   THROUGH SG.signal LIKE EVERY OTHER RETURN, so the mech field and the
+                #   src <= bar assert are carried. A raw dict here skipped both.
+                out.append(dict(SG.signal(fb, sd, MECH, o,
+                                why='%s window %s..%s, opened on %s. HIS MOD, no ws%d reversal'
+                                ' at all: %s%s'
                                 % ('HIGH' if sd > 0 else 'LOW', ln.U(int(o)), ln.U(int(c)),
-                                   tf5, xwhy,
+                                   K.FDM_RE_WIN_OPEN, tf5, xwhy,
                                    '' if fb == int(xm) else
-                                   '; ws1b ib close %s is the last to fire' % ln.U(int(c)))))
+                                   '; ws1b ib close %s is the last to fire' % ln.U(int(c)))),
+                                b5=None, v5=float('nan'), v6=float('nan'), held6=False, b6=None,
+                                scan=None, got=(), last='HIS MOD', close=int(c)))
                 continue
             b5 = int(nx5[0])
             v5 = float(np.asarray(R[tf5], float)[b5])
-            #   HIS "stop": the first ws5 reversal is the only test point. Not ex-fence there and
-            #   the window produces nothing.
+            #   HIS "stop": the first ws5 reversal is the only test point for the BASE walk.
+            #   Not ex-fence there and the base walk produces nothing - BUT HIS 1105 MOD IS AN
+            #   ALTERNATIVE TRIGGER, so a base-walk stop must not kill a window the mod has
+            #   already fired. Before this the `continue` ran first and threw the mod's bar away:
+            #   at 2026-08-07 the 05:33:00 window lost its 05:45:15 ws4x signal that way.
             if not ((v5 >= e5) if sd > 0 else (v5 <= e5)):
+                if xm is None:
+                    continue
+                fb = int(xm)
+                if int(K.FDM_RE_FIRE_IB):
+                    fb = max(fb, int(c))
+                assert fb >= int(o), 'a mod fire bar precedes its own window open'
+                out.append(dict(SG.signal(fb, sd, MECH, o,
+                                          why='%s window %s..%s, opened on %s. ws%d reversed %s'
+                                          ' at %.2f, NOT past %g so the base walk stops. HIS MOD'
+                                          ' carries it: %s%s'
+                                          % ('HIGH' if sd > 0 else 'LOW', ln.U(int(o)),
+                                             ln.U(int(c)), K.FDM_RE_WIN_OPEN, tf5, ln.U(b5), v5,
+                                             e5, xwhy,
+                                             '' if fb == int(xm) else
+                                             '; ws1b ib close %s is the last to fire'
+                                             % ln.U(int(c)))),
+                                b5=b5, v5=v5, v6=float(np.asarray(R[tf6], float)[b5]),
+                                held6=False, b6=None, scan=None, got=(), last='HIS MOD',
+                                close=int(c)))
                 continue
             v6 = float(np.asarray(R[tf6], float)[b5])
             held = _gate6(v6, sd)
@@ -426,6 +528,9 @@ def signals(B1, R, side=None, G=None, EMR=None):
             #   ── HIS 1104 MOD, waiting point two, and the race between the two paths ────────
             #   Waiting point two is the walk waiting for ws{tf6}r to reverse, which only exists
             #   on the `held` branch. Its search starts at the ws{tf5} reversal.
+            #   THE GATE LINE'S OWN WAITING POINT, for the two fixed-point settings. At 'band'
+            #   the scan above already covers the gate line from the window's open, which is the
+            #   earlier start, so re-running it from b5 can only find a later bar.
             if (int(K.FDM_RE_XCROSS_ON) and held
                     and str(K.FDM_RE_XCROSS_TFS) in ('both', 'gate')):
                 e6 = K.side_edge(K.FDM_RE_WS5_FNC, sd)

@@ -103,3 +103,45 @@ The two rows that were built by hand first, and which the driver reproduces exac
 
 The 2026-08-07 16:17:30 row from his ws8x experiment is absent for the reason under
 **what is NOT in it**.
+
+## the definition, in his indented style
+
+```
+-every trade has two ends: the bar it opens on, and the bar it closes on
+-at the bar a trade opens, that trade is the OUTGOING trade
+--outgoing means it is being sent out
+-at the bar a trade closes, that same trade is the INCOMING trade
+--incoming means it is arriving
+-so one trade is both, and the bar you are standing on tells you which one it is
+
+-a rev-trade bar closes one trade and opens another on the opposite side
+--the trade being closed on that bar is the incoming trade
+--the trade being opened on that bar is the outgoing trade
+
+-we curate the exit to improve the open that follows it
+--so the walk-or-rev-trade decision is made on the incoming trade
+--and it is read on the incoming trade's own side
+---an incoming LONG reads the high side
+---an incoming SHORT reads the low side
+
+-at a bar where nothing has been decided yet, the open trade is the incoming trade
+--because a rev-trade on that bar would be the bar that closes it
+--its own side is the side every line is read on
+--the trade that would be opened does not exist yet
+---so nothing about that trade can be read at this bar
+---its open bar is unknown
+---what it realises is unknown
+```
+
+## no overlap with the mech that creates cadence events
+
+The two read disjoint inputs. The cadence-event mech decides WHICH BARS exist to decide on; this
+producer decides WHAT ONE LINE READS at a bar it is handed.
+
+| the mech | what it reads |
+|---|---|
+| cadence events | ws1b, the r ladder, the Mage ladder, gcws30b for the rescue, the oob fence 15/85, FDM_M3_FNC 25 |
+| this producer | ONE line's values, that same line's emerging copy for the lift-off, LIFT_PTS 6, the per-TF gap, LIFT_TOL 2.0, LIFT_WOB 8 |
+
+This producer cannot declare a bar - it takes `bar` as an argument. So it has not overtaken the
+cadence-event mech and cannot.
