@@ -481,9 +481,11 @@ def xcad_seam(LN, side, s0, xb, above, exf_tw, B):
     EVERY READ IN HERE IS EMERGING, both the value and the fence, because he asked for the
     emerging values at this bar. THAT READING IS MINE TOO.
 
-    THE REVERSAL GATE'S SPAN IS FIXED AT [s0, xb] and does NOT grow as the walk proceeds - he
-    named the confirmed x-cross bar as its end. Since xb <= every test bar, the gate reads no bar
-    the test bar has not already reached.
+    THE REVERSAL GATE'S SPAN runs from `s0` to THE BAR BEING READ, FDM_XCAD_REV_TO 'read'. His
+    1104 correction of his own ruling: *"the window's end can't be the confirmed x-cross - that
+    would mean the grace period has zero value"*. At 'confirm' the span ends at `xb` and the turn
+    count is frozen for the whole walk, which is the arm he struck out. Either way the gate reads
+    no bar past the one being read, so nothing after the test bar is touched.
 
     THE WALK IS THE GRACE WALK'S SHAPE, which he called *"the established walk"*: re-test every
     5 s bar and break out on the first pass. FDM_XCAD_WALK_MIN 10.0 min = 120 bars, his value.
@@ -497,8 +499,14 @@ def xcad_seam(LN, side, s0, xb, above, exf_tw, B):
         return None, ('the seam+%gs bar %s is past the walk\'s end %s'
                       % (float(K.FDM_XCAD_SEAM_S), ln.U(b0), ln.U(int(B))))
     rs = int(s0) if str(K.FDM_XCAD_REV_FROM) == 'window' else None
-    gate = {t: np.asarray([b for b in LN['LIFT'][(t, int(side))]
-                           if (rs if rs is not None else 0) <= b <= int(xb)], int)
+    #   THE GATE'S UPPER END. At FDM_XCAD_REV_TO 'read' the stamps are handed over unclipped and
+    #   the detector's own [rev_since, bar] filter ends the span at the bar being read, so a turn
+    #   that lands during the walk counts the moment its stamp lands. At 'confirm' the stamps are
+    #   clipped here and the count cannot move for the whole walk.
+    to_read = str(K.FDM_XCAD_REV_TO) == 'read'
+    gate = {t: (np.asarray(LN['LIFT'][(t, int(side))], int) if to_read
+                else np.asarray([b for b in LN['LIFT'][(t, int(side))]
+                                 if (rs if rs is not None else 0) <= b <= int(xb)], int))
             for t in range(1, hi + 1)}
 
     def passes(b):
@@ -554,11 +562,13 @@ def xcad_probe(LN, side, s0, xb, lines, bar):
     so a clause-one line that was ALREADY away at the event is visible as such.
     """
     rs = int(s0) if str(K.FDM_XCAD_REV_FROM) == 'window' else None
+    to_read = str(K.FDM_XCAD_REV_TO) == 'read'
     out = []
     for t in lines:
         t = int(t)
-        gate = np.asarray([b for b in LN['LIFT'][(t, int(side))]
-                           if (rs if rs is not None else 0) <= b <= int(xb)], int)
+        gate = (np.asarray(LN['LIFT'][(t, int(side))], int) if to_read
+                else np.asarray([b for b in LN['LIFT'][(t, int(side))]
+                                 if (rs if rs is not None else 0) <= b <= int(xb)], int))
         r = JIG.fdm2_cad_mom_detector(LN['EMR'][t], LN['EMR'][t], int(bar), int(side), int(s0),
                                       K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL, K.LIFT_WOB,
                                       stamps=gate, rev_since=rs)

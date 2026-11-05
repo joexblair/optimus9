@@ -185,6 +185,87 @@ def _infence(v):
     return bool(lo < float(v) < hi)
 
 
+def _xcross(X, Rl, frm, side, wob):
+    """HIS 1104 MOD: the first bar ws{tf}x's cross of its own r CONFIRMS, after `frm`.
+
+    -> (the confirm bar, the cross bar) | None.
+
+    HIS SPEC: *"IF a ws{a TF}x crosses the ws{a TF}r line using emerging values and wob 12"*, with
+    his own correction on direction - *"under for highside"*, which is the banked x-cross rule:
+
+        a HIGH side   x crosses UNDER its own r
+        a LOW side    x crosses OVER its own r
+
+    THE HOLD IS FDM_RE_XWOB 12 bars = 60 s, his value, and the confirm bar is cross + wob - 1 so
+    the hold is read on the cross bar and the 11 bars after it, never further.
+
+    NO SEARCH BOUND. His spec gives none, and a bound would be a cap he did not ask for.
+    CAUSAL: the confirm bar is asserted to be the last bar the hold reads.
+    """
+    X, Rl = np.asarray(X, float), np.asarray(Rl, float)
+    n, w = len(X), max(1, int(wob))
+    for i in range(int(frm) + 1, n):
+        a0, b0, oa, ob = X[i - 1], X[i], Rl[i - 1], Rl[i]
+        if not np.isfinite([a0, b0, oa, ob]).all():
+            continue
+        crossed = (a0 >= oa and b0 < ob) if int(side) > 0 else (a0 <= oa and b0 > ob)
+        if not crossed:
+            continue
+        end = i + w
+        if end > n:
+            break
+        seg = [(X[j] < Rl[j]) if int(side) > 0 else (X[j] > Rl[j]) for j in range(i, end)]
+        if all(seg):
+            cf = i + w - 1
+            assert cf >= i, 'a cross confirms before it crosses'
+            return cf, i
+    return None
+
+
+def _xmod(EM, R, tf, frm, side, e_fence, hi_tf):
+    """HIS 1104 MOD, one waiting point. -> (the fire bar, why) | (None, why).
+
+    HIS SPEC, in order:
+      1  ws{tf}r is ex-20/80 on the side and waiting to reverse
+      2  ws{tf}x crosses ws{tf}r on EMERGING values and holds FDM_RE_XWOB 12 bars = 60 s
+      3  ws{tf+1}r is in-fence
+      4  rev-trade - his generic *"send a signal to the router, and let the router handle the
+         decisions"*, which from flat is an OPEN
+
+    `EM` IS THE EMERGING LADDER, not the re-entry's own reversal-read source. His spec says
+    *"using emerging values"*, and the cross plus the ex-fence test both read it - they describe
+    the same bar and the same line, so they take the same series. THAT PAIRING IS MY CALL.
+    `R` is the chart-matched ladder and carries only the ws{tf+1}r in-fence test, at
+    FDM_RE_XCROSS_UP_READ 'closed_prev', because his own example number 43 is that value.
+
+    `e_fence` is the side's own edge of the fence ws{tf}r must be past. Test 1 is read AT THE
+    CROSS BAR, because that is the bar his *"is ex-20/80-fence and waiting to reverse"* describes.
+    `hi_tf` is the ladder's top, so a waiting point at the top has no line above it and cannot fire.
+    """
+    if int(tf) + 1 > int(hi_tf):
+        return None, 'ws%d has no line above it on this ladder' % int(tf)
+    try:
+        X = np.asarray(ln.line('ws%dx' % int(tf)), float)
+    except Exception as ex:
+        return None, 'ws%dx does not load - %s' % (int(tf), type(ex).__name__)
+    r = _xcross(X, EM[int(tf)], int(frm), int(side), int(K.FDM_RE_XWOB))
+    if r is None:
+        return None, 'ws%dx never crosses ws%dr after %s' % (int(tf), int(tf), ln.U(int(frm)))
+    cf, cr = r
+    vr = float(np.asarray(EM[int(tf)], float)[cr])
+    if not ((vr >= e_fence) if int(side) > 0 else (vr <= e_fence)):
+        return None, ('ws%dr is %.2f at the %s cross, not past %g'
+                      % (int(tf), vr, ln.U(cr), e_fence))
+    up = R if str(K.FDM_RE_XCROSS_UP_READ) == 'closed_prev' else EM
+    vu = float(np.asarray(up[int(tf) + 1], float)[cr])
+    if not _infence(vu):
+        return None, ('ws%dr is %.2f at the %s cross, not in-fence'
+                      % (int(tf) + 1, vu, ln.U(cr)))
+    return cf, ('ws%dx crossed ws%dr %s and held %d bars to %s, ws%dr %.2f past %g, ws%dr %.2f'
+                ' in-fence' % (int(tf), int(tf), ln.U(cr), int(K.FDM_RE_XWOB), ln.U(cf), int(tf),
+                               vr, e_fence, int(tf) + 1, vu))
+
+
 def signals(B1, R, side=None, G=None, EMR=None):
     """HIS 1104 RE-ENTRY: the ws5/ws6 reversal walk. -> list of signals, bar-ordered.
 
@@ -227,6 +308,9 @@ def signals(B1, R, side=None, G=None, EMR=None):
     if rd == 'emerging':
         assert EMR is not None, 'the emerging read needs the emerging ladder handed in'
     SRC = R if rd == 'closed_prev' else EMR
+    #   HIS 1104 MOD READS EMERGING, *"using emerging values"*, whatever the reversal read is.
+    assert not int(K.FDM_RE_XCROSS_ON) or EMR is not None, \
+        'his x-cross mod needs the emerging ladder handed in'
     #   HIS 1104 PAIR KNOBS: ws5 and ws6 are the default and the spec, and the pair lifts without
     #   a second copy of this walk. The scan floor follows the gate line by default - the mech's
     #   own shape - or sits at a fixed TF for his *"scan higher than ws12"* read.
@@ -254,8 +338,32 @@ def signals(B1, R, side=None, G=None, EMR=None):
             #   HIS "walk until ws5 reverses": the FIRST ws5 reversal after the window opens, and
             #   it is NOT bounded by the window's close - his *"regardless of when ws1b returns to
             #   ib"*.
+            #   ── HIS 1104 MOD, waiting point one ───────────────────────────────────────────
+            #   The walk is waiting for ws{tf5}r to reverse. If ws{tf5}x crosses ws{tf5}r first
+            #   and holds, and the line above is in-fence, the signal fires at that confirm bar
+            #   instead. The EARLIER of this and the normal path's fire bar wins, because a walk
+            #   forward meets whichever comes first - the same rule the cadence walk uses and it
+            #   needs no priority knob.
+            xm, xwhy = (None, 'off')
+            if int(K.FDM_RE_XCROSS_ON) and str(K.FDM_RE_XCROSS_TFS) in ('both', 'rev'):
+                xm, xwhy = _xmod(EMR, R, tf5, int(o), sd, e5, int(K.L2_MOM_MAXTF))
             nx5 = L5[L5 > int(o)]
             if not nx5.size:
+                #   NO ws{tf5} REVERSAL AT ALL. Before the mod this window produced nothing; now
+                #   the mod can still carry it, so the early exit only applies when the mod is
+                #   silent too.
+                if xm is None:
+                    continue
+                fb = int(xm)
+                if int(K.FDM_RE_FIRE_IB):
+                    fb = max(fb, int(c))
+                assert fb >= int(o), 'a mod fire bar precedes its own window open'
+                out.append(dict(bar=fb, side=sd, src=int(o),
+                                why='%s window %s..%s. HIS MOD, no ws%d reversal: %s%s'
+                                % ('HIGH' if sd > 0 else 'LOW', ln.U(int(o)), ln.U(int(c)),
+                                   tf5, xwhy,
+                                   '' if fb == int(xm) else
+                                   '; ws1b ib close %s is the last to fire' % ln.U(int(c)))))
                 continue
             b5 = int(nx5[0])
             v5 = float(np.asarray(R[tf5], float)[b5])
@@ -313,9 +421,29 @@ def signals(B1, R, side=None, G=None, EMR=None):
                 evs.append(('the ws6 reversal', b6))
             if int(K.FDM_RE_FIRE_IB):
                 evs.append(('the ws1b ib close', int(c)))
-            lab, fire = max(evs, key=lambda x: x[1])
+            lab, fire, by_mod = (*max(evs, key=lambda x: x[1]), False)
             assert all(fire >= v for _, v in evs), 'the fire bar precedes one of its own events'
-            assert fire >= b5 and fire >= int(o), 'the fire bar precedes its own window'
+            #   ── HIS 1104 MOD, waiting point two, and the race between the two paths ────────
+            #   Waiting point two is the walk waiting for ws{tf6}r to reverse, which only exists
+            #   on the `held` branch. Its search starts at the ws{tf5} reversal.
+            if (int(K.FDM_RE_XCROSS_ON) and held
+                    and str(K.FDM_RE_XCROSS_TFS) in ('both', 'gate')):
+                e6 = K.side_edge(K.FDM_RE_WS5_FNC, sd)
+                xm6, xwhy6 = _xmod(EMR, R, tf6, b5, sd, e6, int(K.L2_MOM_MAXTF))
+                if xm6 is not None and (xm is None or int(xm6) < int(xm)):
+                    xm, xwhy = int(xm6), 'ws%d waiting: %s' % (tf6, xwhy6)
+            if xm is not None:
+                xfb = int(xm)
+                if int(K.FDM_RE_FIRE_IB):
+                    xfb = max(xfb, int(c))
+                if xfb < fire:
+                    lab, fire, by_mod = 'HIS MOD - %s' % xwhy, xfb, True
+            #   THE INVARIANT SPLITS, because his 1104 mod fires BEFORE the ws{tf5} reversal
+            #   on purpose. The window-open half holds for every path; the reversal half holds
+            #   only for the normal one, and the mod's exception is named rather than dropped.
+            assert fire >= int(o), 'the fire bar precedes its own window open'
+            assert fire >= b5 or by_mod, \
+                'the fire bar precedes the ws%d reversal with no mod firing' % tf5
             out.append(dict(SG.signal(fire, sd, MECH, o,
                                       '%s window %s..%s, %.1f min, opened on %s. ws%d reversed %s'
                                       ' at %.2f, ex-%g/%g. ws%dr %.2f %s the %s gate%s. in-fence'

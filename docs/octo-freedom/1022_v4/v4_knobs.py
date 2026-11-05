@@ -1266,6 +1266,29 @@ FDM_MAE_CAP = _knob('FDM_MAE_CAP', 1.1)         # the stop, percent adverse from
 #   HIS 1104: *"make this the fdm2-conf machine"*. The table's row is a DATA BAR - a bar where the
 #   mech collects the board and decides `walk` or `rev-trade` - and the decision is made on the
 #   INCOMING trade AND ITS SIDE, his words.
+#   ── his 1104 re-entry mod: the x-cross of a waiting line's own r ──────────────────────────────
+#   HIS SPEC, verbatim:
+#       -IF a ws{a TF}r line is ex-20/80-fence and waiting to reverse before handing over to the
+#        next highest TF (example ws5r lowside, 08-07 0650 to 0705)
+#       --IF a ws{a TF}x crosses the ws{a TF}r line using emerging values and wob 12 (crosses over
+#         for lowside, crosses UNDER for highside) (example ws5x crossing over ws5r at 0702)
+#       ---IF ws{a TF +1}r is infence (example at 0702, ws6r is 43)
+#       ----rev-trade
+#   HIS 1104 CORRECTION on the direction: *"1, under for highside"*, which restores the banked
+#   x-cross rule - under for a high side, over for a low one.
+FDM_RE_XCROSS_ON = _knob('FDM_RE_XCROSS_ON', 1, int)   # 1 wires his mod into the re-entry walk.
+FDM_RE_XWOB = _knob('FDM_RE_XWOB', 12, int)      # his hold, bars. 12 bars = 60 s.
+#   HIS VALUE, *"wob 12"*. Same number as LIN2_CROSS_WOB 12, which lives in lineage2 and is a
+#   different mechanic, so the two are held apart.
+FDM_RE_XCROSS_TFS = os.environ.get('W_V4_FDM_RE_XCROSS_TFS', 'both')  # 'both'|'rev'|'gate'.
+#   WHICH WAITING POINTS THE MOD WATCHES. HIS 1104 answer to which lines: *"any lines that
+#   fdm2-reentry needs"*, so 'both' - the line whose reversal starts the walk (FDM_RE_REV_TF 5)
+#   and the line whose reversal the walk then waits on (FDM_RE_GATE_TF 6). THE KNOB NAME IS MINE.
+FDM_RE_XCROSS_UP_READ = os.environ.get('W_V4_FDM_RE_XCROSS_UP_READ', 'closed_prev')
+#   THE ws{TF+1}r IN-FENCE READ. 'closed_prev' because his own example number, *"ws6r is 43"*, is
+#   the closed-prev value at that bar - emerging reads 40.79 there. THE KNOB NAME IS MINE and the
+#   read is my call, stated. 'emerging' is the other arm.
+
 FDM_CONF_READ = os.environ.get('W_V4_FDM_CONF_READ', 'closed_prev')   # 'closed_prev' | 'emerging'.
 #   THE VALUE SOURCE for the fdm2-conf table's toward/away. BANKED 'closed_prev' on his 1104
 #   *"make sure that closed-prev is the standard for everything except lift-off"*, which is the
@@ -1312,6 +1335,14 @@ FDM_XCAD_REV_FROM = os.environ.get('W_V4_FDM_XCAD_REV_FROM', 'window')   # 'wind
 #   reversal must fire between the opening of the cadence window and the confirmed x-cross bar"*,
 #   so 'window' is the bank. IT GATES ONLY THE REVERSAL - the extremum keeps the trade's own open
 #   as its anchor, because he named the span for the reversal and nothing else. THAT READING IS MINE.
+FDM_XCAD_REV_TO = os.environ.get('W_V4_FDM_XCAD_REV_TO', 'read')   # 'read' | 'confirm'.
+#   WHERE THE REVERSAL GATE'S SPAN ENDS. HIS 1104 CORRECTION OF HIS OWN RULING: *"the window's end
+#   can't be the confirmed x-cross - that would mean the grace period has zero value. update my
+#   statement to suit"*. At 'read' the span ends at the bar being read, so a turn that lands
+#   during the walk is counted the moment its stamp lands. At 'confirm' it ends at the confirmed
+#   cross and the count is frozen for the whole walk, which is what he just struck out.
+#   MEASURED on 2026-08-07 16:11:00: at 'confirm' ws11 and ws12 both counted 0 turns for all 10
+#   minutes although ws11 turned at 16:17:45 and ws12 at 16:18:25.
 FDM_XCAD_SEAM_S = _knob('FDM_XCAD_SEAM_S', 15.0)    # seconds past the ws1 seam, HIS value.
 #   HIS 1104 *"walk to the next ws1 seam+15s"*. 15 s = 3 bars at the 5 s grid.
 FDM_XCAD_WALK_MIN = _knob('FDM_XCAD_WALK_MIN', 10.0)    # the truncating walk, minutes. HIS value.
@@ -1621,6 +1652,10 @@ RULED = {
     'FDM_X10_TRADE_PCT': (50.0, 'HIS VALUE ">=50%". The knob is mine - a stated threshold with no knob cannot be moved without an edit'),
     'FDM_X10_GRACE_MIN': (5.0, 'HIS VALUE "we add a 5 minute walk". The knob is mine. 5.0 min = 60 bars at the 5 s grid'),
     'FDM_MAE_CAP': (1.1, 'HIS 1103 "add the typical mae1.1 stop" + "yes, move it to default". ALWAYS ON, unlike LIN2_MAE_CAP which stayed behind W_MAE_CAP=on'),
+    'FDM_RE_XCROSS_ON': (1, 'ON, his 1104 "let\'s make a small mod to the reentry". At 0 the re-entry walk is the 1104 banked one and every number before this mod is reproduced'),
+    'FDM_RE_XWOB': (12, 'HIS VALUE "wob 12" = 60 s. Held apart from LIN2_CROSS_WOB 12, a different mechanic'),
+    'FDM_RE_XCROSS_TFS': ('both', 'HIS 1104 "any lines that fdm2-reentry needs" - the reversal line and the gate line. THE KNOB NAME IS MINE'),
+    'FDM_RE_XCROSS_UP_READ': ('closed_prev', 'his own example number "ws6r is 43" is the closed-prev value; emerging reads 40.79 there. THE READ IS MY CALL'),
     'FDM_CONF_READ': ('closed_prev', 'BANKED 1104 - his "make sure that closed-prev is the standard for everything except lift-off", the LATER of his two rulings for this table. "emerging" is the arm it replaced'),
     'FDM_CONF_BARS': ('event+x10', 'BANKED 1104 - the two data bars the machine owns, the cadence event and that event\'s ws10x race confirm. "event" is the narrower arm. THE KNOB NAME IS MINE'),
     'FDM_XCAD_ON': (1, 'ON, HIS 1104 "apply the update to the code so that ws10 does not interfere with the intention of the spec". At 0 the race pins ws10 and every banked fdm2 number is reproduced'),
@@ -1631,6 +1666,7 @@ RULED = {
     'FDM_XCAD_FRM': ('confirm', 'HIS 1104 "the conf bar". "cross" is the arm, 1 min 55 s earlier at his own example'),
     'FDM_XCAD_TAG_AT': ('event', 'HIS 1104 "tagged at the cadence event bar"'),
     'FDM_XCAD_REV_FROM': ('window', 'HIS 1104 "the target-side reversal must fire between the opening of the cadence window and the confirmed x-cross bar". It gates the reversal only; the extremum keeps the trade open as its anchor, and THAT reading is mine'),
+    'FDM_XCAD_REV_TO': ('read', 'HIS 1104 CORRECTION "the window\'s end can\'t be the confirmed x-cross - that would mean the grace period has zero value". At "confirm" the turn count is frozen for the whole walk'),
     'FDM_XCAD_SEAM_S': (15.0, 'HIS VALUE "the next ws1 seam+15s". 15 s = 3 bars'),
     'FDM_XCAD_WALK_MIN': (10.0, 'HIS VALUE "walk forward 10 minutes". The shape is the grace walk he called "the established walk" - re-test every 5 s bar, break on the first pass'),
     'FDM_XCAD_NONE': ('rev-trade', 'HIS 1104 "no candidates = rev-trade", validated against v4_fdm2.walk which already rev-trades when step 1 counts 0'),

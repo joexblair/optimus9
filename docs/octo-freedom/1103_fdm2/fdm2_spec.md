@@ -91,7 +91,7 @@ if the ws10x-cadence fires first
 | the cadence event, his revised preamble | `1103_fdm/fdm_cadence_census.py:cadence_events` | runs. Lands on his own 6 trade times + 1.0 min |
 | the ws10x race, 3 candidates | `1103_fdm/fdm_cadence_census.py:x10_race` | runs at wob 24 and 36, both |
 | the towards / reversal census | `1103_fdm/fdm_cadence_census.py:census` | runs |
-| the fdm re-entry | `1022_v4/v4_fdm_reentry.py` | banked. Verified 2026-08-03 00:41:30 |
+| the fdm re-entry | `1022_v4/v4_fdm_reentry.py` | banked. Verified 2026-08-03 00:41:30. HIS 1104 x-cross mod is IN and live - see `fdm2_reentry_machine.md` |
 | the mae1.1 stop | `1022_v4/v4_fdm2.py:stop_bar` | carried by value from `v4_chain`. ON by default |
 | the bimodal decision | `1022_v4/v4_fdm2.py:step1` + `walk` | built, runs |
 | the grace walk | `1022_v4/v4_fdm2.py:walk` | built, runs. Per 5 s bar, population frozen |
