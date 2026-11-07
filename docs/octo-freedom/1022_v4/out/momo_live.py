@@ -154,6 +154,87 @@ def answer(q):
         if not late:
             out.append(R.row('none', '-', '-', '-', '-'))
         return out
+    if kind == 'board':
+        #   THE BOARD AT ONE BAR, from v4_fdm2.xcad_probe - the producer the director's own seam
+        #   read uses. Not a second implementation: the report and the verdict read the same call.
+        bar = ln.K(str(q['at']))
+        sd = +1 if str(q.get('side', 'HIGH')).upper() == 'HIGH' else -1
+        s0 = ln.K(str(q['since'])) if q.get('since') else bar
+        hi = int(LN['HI'])
+        pr = F2.xcad_probe(LN, sd, s0, bar, list(range(1, hi + 1)), bar)
+        out += ['', '# the board at %s, %s side' % (str(q['at']), q.get('side', 'HIGH')), '']
+        out += ['| the read | value |', '|---|---|']
+        out.append(R.row('the bar', ln.U(bar)))
+        out.append(R.row('the target side', 'HIGH' if sd > 0 else 'LOW'))
+        out.append(R.row('the extremum anchor', '%s - the cadence window open, '
+                         'FDM_XCAD_REV_FROM %s' % (ln.U(s0), K.FDM_XCAD_REV_FROM)))
+        out.append(R.row('ex-fence', 'at or past %g/%g, FDM_EXF_READ %s'
+                         % (*K.fnc_pair(K.FDM_FNC_2080), K.FDM_EXF_READ)))
+        aw = [z for z in pr if z['state'] == 'away']
+        tw = [z for z in pr if z['state'] == 'towards']
+        ot = [z for z in pr if z['state'] not in ('away', 'towards')]
+        out.append(R.row('away', '%d lines - ws%s' % (len(aw), ', ws'.join(str(z['tf'])
+                                                                          for z in aw)) if aw
+                         else '0 lines'))
+        out.append(R.row('towards', '%d lines - ws%s' % (len(tw), ', ws'.join(str(z['tf'])
+                                                                             for z in tw)) if tw
+                         else '0 lines'))
+        if ot:
+            out.append(R.row('neither', '%d lines - ws%s'
+                             % (len(ot), ', ws'.join(str(z['tf']) for z in ot))))
+        out.append(R.row('ex-fence AND towards', '%d lines - ws%s'
+                         % (len([z for z in tw if z['exf']]),
+                            ', ws'.join(str(z['tf']) for z in tw if z['exf']))
+                         if [z for z in tw if z['exf']] else '0 lines'))
+        out += ['', '| the line | its value | its state | ex-fence | the extremum | at | the gap | '
+                'its reversal stamp |', '|---|---|---|---|---|---|---|---|']
+        for z in pr:
+            out.append(R.row('ws%d' % z['tf'], '%.2f' % z['value'], z['state'],
+                             'yes' if z['exf'] else 'NO',
+                             '%.2f' % z['extremum'] if z['extremum'] is not None else '-',
+                             ln.U(int(z['at'])) if z['at'] is not None else '-',
+                             '%.2f' % z['gap'] if z['gap'] is not None else '-',
+                             ln.U(int(z['rev'])) if z['rev'] is not None else 'none'))
+        return out
+    if kind == 'legfrom':
+        #   HIS 1107: a leg opened at a bar HE names, with a side HE names, walked by the chain's
+        #   own v4_fdm2.walk. It is how a hypothetical open - *"an incoming SHORT which would have
+        #   opened at high 0730-0733 on fdm-3r-cadence"* - gets tested without inventing a leg.
+        opn = ln.K(str(q['open']))
+        sd = +1 if str(q.get('dir', 'LONG')).upper() == 'LONG' else -1
+        B = ln.K(str(q['to'])) if q.get('to') else len(LN['close']) - 1
+        sig, rws = F2.walk(LN, sd, opn, int(B))
+        out += ['', '# a %s opened at %s, target side %s, walked to %s'
+                % ('LONG' if sd > 0 else 'SHORT', ln.U(opn), 'HIGH' if sd > 0 else 'LOW',
+                   ln.U(int(B))), '']
+        out += ['| the walk | value |', '|---|---|']
+        out.append(R.row('the open', ln.U(opn)))
+        out.append(R.row('the target side', 'HIGH' if sd > 0 else 'LOW'))
+        out.append(R.row('walked to', ln.U(int(B))))
+        out.append(R.row('the rev-trade signal', ln.U(int(sig)) if sig is not None
+                         else 'none before the walk ended'))
+        out.append(R.row('the decision rows', len(rws)))
+        out += ['', '| the bar | min from the open | the event | what it says |',
+                '|---|---|---|---|']
+        for r in sorted(rws, key=lambda z: (int(z['bar']), str(z['stage']))):
+            out.append('| %s | %.1f | %s | %s |'
+                       % (ln.U(int(r['bar'])), (int(r['bar']) - opn) * 5 / 60.0,
+                          str(r['stage']), str(r['why']).replace('|', '\\|')))
+        return out
+    if kind == 'cad3r':
+        #   HIS 1107 `fdm2-3r-cadence`. A REPORT on his own markers - no leg reads it.
+        mk = ln.K(str(q['at']))
+        sd = +1 if str(q.get('side', 'HIGH')).upper() == 'HIGH' else -1
+        out += ['', '# fdm2-3r-cadence at %s, %s side' % (str(q['at']), q.get('side', 'HIGH')), '']
+        out += R.cad3r_table(LN, sd, mk)
+        return out
+    if kind == 'trail':
+        #   HIS 1107 FIVE-CLAUSE SPEC. A raw read at one of his own markers - no mech, no verdict.
+        mk = ln.K(str(q['at']))
+        sd = +1 if str(q.get('side', 'HIGH')).upper() == 'HIGH' else -1
+        out += ['', '# the trail at %s, %s side' % (str(q['at']), q.get('side', 'HIGH')), '']
+        out += R.trail_table(LN, sd, mk)
+        return out
     if kind == 'window':
         #   HIS 1107 ws3r-opener question. A pure line read in a bar range - no mech, no chain.
         day = str(q['day'])
