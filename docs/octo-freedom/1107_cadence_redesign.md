@@ -273,3 +273,34 @@ event"*. Only step 1's zero count and the no-candidate branch still print `cad_r
 
 - 2026-08-23 banked 93 rows across 11 legs and 16 kinds, knob hash `08e57da0aad1`, arm `momo_ON=1`
 - the 4-pronged test needs no schema change when it lands: the kind is a column, not a table
+
+---
+
+# THE `4-pronged-exfence-test`, SETTLED 1107
+
+HIS CONFIRMATION, asked as *"confirm that the 4-prong test is testing each wsf{in-range}r line for
+both their emerging and closed-prev values, for the ex-20/80-fence test"*, and on the range:
+*"my 'in range' was refering to the lines allocated to 4-prong. ws4 to ws30 - so your A is
+correct"*.
+
+| the item | settled |
+|---|---|
+| the lines | ws4..ws30 = 27 lines. His *"keep it the minTF at ws4"* with the top at ws30 |
+| the reads, per line | BOTH - the closed-prev value and the emerging side's extreme |
+| how the two combine | either one qualifying calls the line ex-20/80-fence. FDM_EXF_READ = either, his 1105 ruling |
+| the bars | the 1min bar ending at the ws1 seam BEFORE the cadence event, and the 1min bar ending at the seam AFTER it |
+| what it prints | `passed` when ANY of those 27 lines is `towards` while ex-20/80-fence |
+| `passed` means | walk on. HIS word, and the code's `exf_passed` now carries HIS polarity |
+
+## A PROPERTY THAT REMOVES WORK FROM TWO OF THE FOUR PRONGS
+
+`ws{t}r`'s closed-prev holds one value for t minutes at a time, so for ws4 and above it is FLAT
+across any 1-minute span. Its minute high, its minute low and its single value are the same number.
+
+- the two closed-prev prongs need no extremum logic at all
+- his 1105 *"for a high target side, report the bars' high"* bites only on the two emerging prongs
+- so the test is 4 prongs but only 2 extremum computations
+
+## WHAT REMAINS BEFORE IT CAN BE BUILT
+
+Nothing. Every concretion is ruled. The build is the next step and it has not started.
