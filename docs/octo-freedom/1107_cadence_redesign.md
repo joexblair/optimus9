@@ -228,3 +228,48 @@ Every one of the seven knobs still has a LIVE reader, because the redesign is no
   the fallback and the cad walk's start bar.
 - SO ITEM 2 WAITS for the redesign to land. The same applies to renaming FDM_STEP1_ABOVE_TF: it has
   16 readers and its value is now his minTF, so the rename goes in with the redesign.
+
+---
+
+# HIS 1107 EVENT LIST, BANKED - `fdm2_leg_event`
+
+HIS ASK: *"actioanable events to cache (and to report on in the leg report)"*, and on the
+infrastructure: *"DB tables are in your wheelhouse - you have complete control of the infra"*.
+
+## WHAT HE ASKED FOR, AND WHAT IT IS CALLED NOW
+
+| his event | the kind | the owner | rows on 2026-08-23 |
+|---|---|---|---|
+| cadence window open | `cad_window_open` | the cadence event | 11 |
+| cadence window closed | `cad_window_closed` | the cadence event | 11 |
+| any race results | `cad_race` | the cadence event | 6 |
+| ws{TF}x cross | `cwsx_cross` the raw cross, `cwsx_confirm` after the hold | the ws{TF}x-cross event | 6 and 6 |
+| 50% test decisions | `cwsx_pct` | the ws{TF}x-cross event | 2 |
+| grace walk events | `cwsx_grace_start`, `cwsx_grace_expired` | the ws{TF}x-cross event | 0 - the grace walk did not run that day |
+| fdm2-momo decisions | `cwlk_momo_vote` | the cad walk | 3 |
+| rev-trade signal | `leg_rev_trade_signal` | the leg | 5 |
+| exit event | `leg_exit` | the leg | 11 |
+| 4-pronged-exfence-test decisions | NOT BUILT | - | - the redesign has to land first |
+
+ALSO BANKED, because a timeline without them cannot be read: `leg_open`, `cad_walk`,
+`cad_rev_trade`, `cad_no_action`, `cwlk_seam`, `cwlk_start`, `cwlk_rev_trade`, `cwsx_rev_trade`,
+`cwsx_no_action`.
+
+HIS RULING 3 IS APPLIED TO THE LABELS: the 50% rule's verdict, the grace walk's hit and the
+under-40% branch all moved from `cad_` to `cwsx_`, because *"these all belong to the ws{TF}cross
+event"*. Only step 1's zero count and the no-candidate branch still print `cad_rev_trade`.
+
+## THE TABLE
+
+| the choice | why |
+|---|---|
+| ONE table, NULLable per-kind columns | the house pattern, `l2_live_seam_event`. A table per kind would split one leg's timeline across ten joins to read it in order |
+| `f2e_knobs` in the unique key | a 12-char hash over EVERY banked knob. His own rule, and the fault that bit us on 1106 - ab_legs.json held 2,453 rows with no record of the knobs behind them, so a report replayed a superseded arm |
+| `f2e_tape_end` in the key | a different tape is different rows |
+| `f2e_seq` in the key, NOT NULL DEFAULT 0 | MySQL lets two genuinely distinct events collide on a key, and a silent overwrite is worse than a duplicate. The re-entry producer already emits two signals on one bar |
+| `f2e_tf` NOT NULL DEFAULT 0 | the precedent's own lesson: a NULL inside a UNIQUE KEY never collides in MySQL, so every re-run would duplicate the rows that have no timeframe |
+| every write an upsert | a re-run is safe |
+| `f2e_arm` beside the hash | so a reader does not have to decode the hash to see which arm produced the row |
+
+- 2026-08-23 banked 93 rows across 11 legs and 16 kinds, knob hash `08e57da0aad1`, arm `momo_ON=1`
+- the 4-pronged test needs no schema change when it lands: the kind is a column, not a table

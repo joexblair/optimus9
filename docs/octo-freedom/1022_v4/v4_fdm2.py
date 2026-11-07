@@ -1029,7 +1029,20 @@ def walk(LN, side, opn, B):
     g_pct, t_pct = float(K.FDM_X10_GRACE_PCT), float(K.FDM_X10_TRADE_PCT)
     g_bars = int(round(float(K.FDM_X10_GRACE_MIN) * 60.0 / 5.0))
     evs = cadence_events(LN, side, int(opn) + 1, int(B))
+    #   HIS 1107 EVENT LIST, verbatim: *"actioanable events to cache (and to report on in the leg
+    #   report) -cadence window open -cadence window closed -any race results -grace walk events
+    #   -50% test decisions -4-pronged-exfence-test decisions -ws{TF}x cross -fdm-momo2 decisions
+    #   -rev-trade signal -exit event"*. Each one now gets its OWN timestamped row instead of
+    #   living inside another row's text. The 4-pronged test's rows land with the 1107 redesign.
     for i, (ev, s0, why) in enumerate(evs):
+        rows.append(dict(bar=int(s0), stage='cad_window_open', ev=ev, k=0, n=0,
+                         why='the cadence window opens - ws1b goes oob on the %s side, and this is '
+                             'the first bar of the excursion the preamble reads'
+                             % ('HIGH' if int(side) > 0 else 'LOW')))
+        rows.append(dict(bar=int(ev), stage='cad_window_closed', ev=ev, k=0, n=0,
+                         why='the cadence window closes - ws1b crosses back to ib after %d bars = '
+                             '%.1f min oob. %s'
+                             % (int(ev) - int(s0), (int(ev) - int(s0)) * 5 / 60.0, why)))
         nxt = int(evs[i + 1][0]) if i + 1 < len(evs) else None
         k, n = step1(LN, side, ev)
         if k == 0:
@@ -1083,6 +1096,25 @@ def walk(LN, side, opn, B):
         xnm = 'the ws%dx-cadence' % rtf_tf
         win = ('the next cadence event' if nxt is not None and (xb is None or nxt <= xb)
                else (xnm if xb is not None else 'nothing - the tape ends'))
+        if xb is not None:
+            rows.append(dict(bar=int(x10[2]), stage='cwsx_cross', ev=ev, k=k, n=n, xtf=rtf_tf,
+                             which=x10[1], cross=x10[2],
+                             why='ws%dx crosses to %s - the RAW cross bar, before the hold'
+                                 % (rtf_tf, x10[1])))
+            rows.append(dict(bar=int(xb), stage='cwsx_confirm', ev=ev, k=k, n=n, xtf=rtf_tf,
+                             which=x10[1], cross=x10[2],
+                             why='the ws%dx-cadence confirms - the cross at %s held FDM_X10_WOB %d '
+                                 'bars = %d s to here'
+                                 % (rtf_tf, ln.U(int(x10[2])), int(K.FDM_X10_WOB),
+                                    int(K.FDM_X10_WOB) * 5)))
+        rows.append(dict(bar=int(nxt) if (win == 'the next cadence event' and nxt is not None)
+                         else (int(xb) if xb is not None else int(ev)),
+                         stage='cad_race', ev=ev, k=k, n=n, xtf=rtf_tf,
+                         why='the race from the cadence event %s is won by %s%s'
+                             % (ln.U(ev), win,
+                                '' if win != 'the next cadence event' else
+                                ' - the ws%dx-cadence at %s is dropped'
+                                % (rtf_tf, ln.U(int(xb)) if xb is not None else 'never'))))
         rows.append(dict(bar=ev, stage='cad_walk', ev=ev, k=k, n=n, cwhy=why, xtf=rtf_tf,
                          why='cadence event, %d of %d lines printing ex-%g/%g'
                          ' AND towards -> walk. the race runs on ws%d%s. %s is first%s'
@@ -1149,8 +1181,18 @@ def walk(LN, side, opn, B):
         rtf = reversed_tfs(LN, side, pop, rf, xb)
         rv = len(rtf)
         pct = (rv / len(pop) * 100.0) if pop else 0.0
+        #   HIS 1107 *"50% test decisions"* - its own row at the bar it is taken, whatever it
+        #   decides, so the figures are not only visible inside the verdict it happens to produce.
+        rows.append(dict(bar=xb, stage='cwsx_pct', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
+                         pct=pct, which=x10[1], cross=x10[2], rev_tfs=tuple(rtf), rf=rf,
+                         xtf=rtf_tf,
+                         why='the 50%% test at the ws%dx-cadence confirm - %d of %d reversed since '
+                             '%s (%s) = %.1f%%, against FDM_X10_TRADE_PCT %g%% to trade and '
+                             'FDM_X10_GRACE_PCT %g%% for the grace walk'
+                             % (rtf_tf, rv, len(pop), ln.U(rf), K.FDM_REV_FROM, pct, t_pct,
+                                g_pct)))
         if pct >= t_pct:
-            rows.append(dict(bar=xb, stage='cad_rev_trade', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
+            rows.append(dict(bar=xb, stage='cwsx_rev_trade', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
                              pct=pct, which=x10[1], cross=x10[2], rev_tfs=tuple(rtf),
                              rf=rf, xtf=rtf_tf,
                              why='%s - ws%dx crossed to %s %s and confirmed'
@@ -1160,7 +1202,7 @@ def walk(LN, side, opn, B):
                                 K.FDM_REV_FROM, pct, t_pct)))
             return xb, rows
         if pct < g_pct:
-            rows.append(dict(bar=xb, stage='cad_no_action', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
+            rows.append(dict(bar=xb, stage='cwsx_no_action', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
                              pct=pct, which=x10[1], cross=x10[2], rev_tfs=tuple(rtf),
                              rf=rf, xtf=rtf_tf,
                              why='%s - ws%dx crossed to %s %s and confirmed'
@@ -1176,7 +1218,7 @@ def walk(LN, side, opn, B):
         end = min(int(xb) + g_bars, int(B))
         if nxt is not None:
             end = min(end, int(nxt) - 1)
-        rows.append(dict(bar=xb, stage='GRACE', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
+        rows.append(dict(bar=xb, stage='cwsx_grace_start', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
                          pct=pct, which=x10[1], cross=x10[2], rev_tfs=tuple(rtf),
                          rf=rf,
                          xtf=rtf_tf,
@@ -1196,13 +1238,14 @@ def walk(LN, side, opn, B):
                 hit = (b, len(t2), p2, tuple(t2))
                 break
         if hit is not None:
-            rows.append(dict(bar=hit[0], stage='cad_rev_trade', ev=ev, k=k, n=n, pop=tuple(pop),
+            rows.append(dict(bar=hit[0], stage='cwsx_rev_trade', ev=ev, k=k, n=n, pop=tuple(pop),
                              rv=hit[1], pct=hit[2], which=x10[1], cross=x10[2],
                              rev_tfs=hit[3], rf=rf, why='grace walk, %d of %d reversed '
                              'since %s (%s) = %.1f%% >= %g%%'
                              % (hit[1], len(pop), ln.U(rf), K.FDM_REV_FROM, hit[2], t_pct)))
             return hit[0], rows
-        rows.append(dict(bar=end, stage='cad_no_action', why='grace walk expired at %.1f%%, never '
+        rows.append(dict(bar=end, stage='cwsx_grace_expired',
+                         why='grace walk expired at %.1f%%, never '
                          'reached %g%% - wait for the next cadence'
                          % ((reversed_since(LN, side, pop, rf, end) / len(pop) * 100.0)
                             if pop else 0.0, t_pct)))
