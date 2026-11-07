@@ -154,6 +154,41 @@ def answer(q):
         if not late:
             out.append(R.row('none', '-', '-', '-', '-'))
         return out
+    if kind == 'window':
+        #   HIS 1107 ws3r-opener question. A pure line read in a bar range - no mech, no chain.
+        day = str(q['day'])
+        A = ln.K(str(q.get('from', day + ' 00:00:00')))
+        B = ln.K(str(q.get('to', day + ' 23:59:55')))
+        sd = +1 if str(q.get('side', 'HIGH')).upper() == 'HIGH' else -1
+        out += ['', '# the oob crosses of ws1b and ws1r, ws2r, ws3r, %s side' % q.get('side'), '']
+        out += R.window_table(LN, sd, A, B)
+        return out
+    if kind == 'pct50':
+        #   HIS 1107: *"show me the 50% test table for 0232"*. The cadence event and the
+        #   ws{TF}x-cadence are taken from the leg's OWN rows, so the table describes the decision
+        #   the chain actually made rather than a pair of bars I chose.
+        day = str(q['day'])
+        LG, TR = chain(day)
+        want = str(q.get('at', ''))
+        hit = None
+        for L in LG:
+            for r in L['rows']:
+                if str(r['stage']) == 'cwsx_pct' and (not want or ln.U(int(r['bar'])) == want
+                                                      or ln.U(int(r['bar'])).endswith(want)
+                                                      or want in ln.U(int(r['bar']))):
+                    hit = (L, r)
+                    break
+            if hit:
+                break
+        assert hit, 'no 50%% test row matching %r on %s' % (want, day)
+        L, r = hit
+        ev = int(r['ev'])
+        s0 = next(int(z['bar']) for z in L['rows']
+                  if str(z['stage']) == 'cad_window_open' and int(z['ev']) == ev)
+        out += ['', '# the 50%% test at %s' % ln.U(int(r['bar'])), '']
+        out += R.pct50_table(LN, int(L['side']), int(L['opn']), ev, s0, int(r['bar']),
+                             'ws%dx to %s' % (int(r.get('xtf') or 0), r.get('which', '?')))
+        return out
     if kind == 'day':
         day = str(q['day'])
         LG, TR = chain(day)

@@ -17,6 +17,7 @@ sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1022_v4')
 import v4_knobs as K        # noqa: E402
 import v4_fdm2 as F2        # noqa: E402
 import ln                   # noqa: E402
+from optimus9.analysis import jig as JIG   # noqa: E402
 
 
 def row(*c):
@@ -146,10 +147,19 @@ def leg_table(LN, L, SIGS, drop_misses=True):
     EV.append((ex, 'EXIT', '%s at %.6f, realised %+.3f%%'
                % (str(L['ctype']), float(LN['close'][ex]), float(L['rel']))))
     assert all(b <= ex for b, _, _ in EV), 'a leg event reads past the leg\'s own exit'
+    #   HIS 1107: *"when a rev-trade event prints, add the trade direction (SHORT/LONG)"*. A
+    #   rev-trade closes the incoming trade and opens the opposite, so BOTH directions are named -
+    #   his own 1106 question was about the incoming one, and the outgoing one is what the router
+    #   produces. Naming only one of them is the ambiguity he asked to be called out.
+    inc = 'LONG' if sd > 0 else 'SHORT'
+    outg = 'SHORT' if sd > 0 else 'LONG'
+    tag = ' [closes the %s, opens a %s]' % (inc, outg)
     out += ['', '| the bar | min from the open | the event | what it says |', '|---|---|---|---|']
     for b, stage, why in sorted(EV, key=lambda z: (z[0], z[1])):
         out.append('| %s | %.1f | %s | %s |'
-                   % (ln.U(int(b)), (int(b) - o) * 5 / 60.0, stage, why.replace('|', '\\|')))
+                   % (ln.U(int(b)), (int(b) - o) * 5 / 60.0, stage,
+                      (why + (tag if 'rev_trade' in stage or 'REV-TRADE' in stage
+                              else '')).replace('|', '\\|')))
     return out
 
 
@@ -208,4 +218,124 @@ def cadwalk_table(TR, b0):
     if pas:
         out += ['', row('the rev-trade bar', '%s, %d s into the cad walk'
                         % (ln.U(pas[0]['bar']), pas[0]['since_s']))]
+    return out
+
+def pct50_table(LN, side, opn, ev, s0, xb, which):
+    """HIS ESTABLISHED 50% TEST TABLE, from his 1103 00:34 ask and the 01:24 census. -> [str].
+
+    HIS ASK, verbatim: *"report the percentage of towards (at the cadence event) against the
+    percentage of reversals (at the ws10x-cadence) --report in TF ranges to curtail the data, ie
+    ws3 to ws9, ws10 to ws16, ws17 to ws23, ws24 to ws30"*.
+
+    THE COLUMNS AND THE DENOMINATOR ARE THE ONES THAT TABLE ALREADY USED, found by searching the
+    transcript rather than rebuilt - HIS 1107 *"you'll need to find the genesis of the mech in the
+    transcript to find the correct report. if you can't find it, don't invent a new one without
+    talking to me first"*. The denominator per range is the lines in it that printed ex-20/80 at
+    least once inside the trade's span, and "ex" includes oob.
+
+    EVERY FIGURE COMES FROM THE SAME PRODUCERS THE DECISION USES - population, towards and
+    reversed_tfs - so the table and the verdict cannot disagree.
+    """
+    RANGES = ((3, 9), (10, 16), (17, 23), (24, 30))
+    pop = F2.population(LN, side, opn, xb)
+    rf = F2.rev_from(ev, s0)
+    rev = set(F2.reversed_tfs(LN, side, pop, rf, xb))
+    tw = {t for t in pop if F2.towards(LN['CPR'][t], t, int(ev), int(side))}
+    out = ['| the census | value |', '|---|---|']
+    out.append(row('the trade', '%s %s, %s'
+                   % (ln.U(int(opn)), 'LONG' if int(side) > 0 else 'SHORT',
+                      'high' if int(side) > 0 else 'low')))
+    out.append(row('the cadence event', ln.U(int(ev))))
+    out.append(row('the ws{TF}x-cadence', ln.U(int(xb))))
+    out.append(row('the winner', str(which)))
+    out.append(row('the reversal count starts at', '%s (FDM_REV_FROM %s)'
+                   % (ln.U(int(rf)), K.FDM_REV_FROM)))
+    out.append(row('the ex-fence population', '%d lines - the lines ex-%g/%g at least once in '
+                                              '%s .. %s. "ex" includes oob'
+                   % (len(pop), *K.fnc_pair(K.FDM_FNC_2080), ln.U(int(opn)), ln.U(int(xb)))))
+    out.append(row('the thresholds', 'FDM_X10_TRADE_PCT %g%% to trade, FDM_X10_GRACE_PCT %g%% for '
+                                     'the grace walk' % (float(K.FDM_X10_TRADE_PCT),
+                                                         float(K.FDM_X10_GRACE_PCT))))
+    out += ['', '| the trade | the cadence event | the ws{TF}x-cadence | the winner | the TF range '
+            '| towards at the event | reversed by the ws{TF}x-cadence | the ex-fence population |',
+            '|---|---|---|---|---|---|---|---|']
+    for lo, hi in RANGES:
+        sub = [t for t in pop if lo <= t <= hi]
+        out.append(row('%s %s, %s' % (ln.U(int(opn)), 'LONG' if int(side) > 0 else 'SHORT',
+                                      'high' if int(side) > 0 else 'low'),
+                       ln.U(int(ev)), ln.U(int(xb)), str(which), 'ws%d to ws%d' % (lo, hi),
+                       '%d of %d' % (len([t for t in sub if t in tw]), len(sub)),
+                       '%d of %d' % (len([t for t in sub if t in rev]), len(sub)),
+                       len(sub)))
+    out.append(row('**the whole population**', ln.U(int(ev)), ln.U(int(xb)), str(which),
+                   '**ws%d to ws%d**' % (min(pop) if pop else 0, max(pop) if pop else 0),
+                   '**%d of %d**' % (len(tw), len(pop)),
+                   '**%d of %d = %.1f%%**' % (len(rev), len(pop),
+                                              (len(rev) / len(pop) * 100.0) if pop else 0.0),
+                   '**%d**' % len(pop)))
+    out += ['', '| the lines, one row each | in range | ex-fence population | towards at the event '
+            '| reversed by the ws{TF}x-cadence |', '|---|---|---|---|---|']
+    for t in range(int(K.FDM_POP_LO), int(LN['HI']) + 1):
+        rg = next(('ws%d to ws%d' % (lo, hi) for lo, hi in RANGES if lo <= t <= hi), '-')
+        out.append(row('ws%d' % t, rg, 'yes' if t in pop else 'NO',
+                       'yes' if t in tw else ('.' if t in pop else '-'),
+                       'YES' if t in rev else ('.' if t in pop else '-')))
+    return out
+
+
+def window_table(LN, side, A, B):
+    """The RAW oob->ib crosses of ws1b and ws1r/ws2r/ws3r in a range, side-filtered. -> [str].
+
+    HIS 1107: *"my eyes say that the 0232 LONG would be reversed at 0250. 0250 uses ws3r oob as a
+    replacement for ws1b oob - this a mech that I speced in the last few weeks, but I might have
+    overlooked banking it"*.
+
+    IT BUILDS NO MECH. His fdm_spec_VERBATIM.md line 8 opens the cadence window on ws1r OR ws2r OR
+    ws3r oob; the code opens it on ws1b's oob excursion, from his 1103 preamble. This read shows
+    what each of those four lines actually did in the range, so the two openers can be compared on
+    data instead of on either of our recollections.
+
+    EVERY CROSS COMES FROM jig.oob_ib_cross AT xwob 1 - the raw first-ib bar, no hold - and the
+    excursion's start is walked back from it while the line was still oob. Causal: nothing past the
+    cross bar is read.
+    """
+    import numpy as _np
+    lines = [('ws1b', LN['B1'])] + [('ws%dr' % t, LN['CPR'][t]) for t in (1, 2, 3)]
+    out = ['| the read | value |', '|---|---|']
+    out.append(row('the range', '%s .. %s' % (ln.U(int(A)), ln.U(int(B)))))
+    out.append(row('the side', '%s - oob means %s' % ('HIGH' if int(side) > 0 else 'LOW',
+                                                      'at or above %g' % K.OOB_HI if int(side) > 0
+                                                      else 'at or below %g' % K.OOB_LO)))
+    out.append(row('what opens the window today', "ws1b's oob excursion, his 1103 preamble"))
+    out.append(row('what his verbatim spec opens it on',
+                   'ws1r OR ws2r OR ws3r oob, and it closes when the LOWEST of those that is oob '
+                   'crosses to ib while ws3Mage is ex-%g/%g' % K.fnc_pair(K.FDM_FNC_2080)))
+    out += ['', '| the line | the excursion opens | the excursion closes, the first ib bar | '
+            'bars oob | the side extreme in it | ws3Mage at the close | ws3Mage ex-%g/%g there |'
+            % K.fnc_pair(K.FDM_FNC_2080), '|---|---|---|---|---|---|---|']
+    m3 = _np.asarray(LN['CPM'][3], float)
+    lo3, hi3 = K.fnc_pair(K.FDM_FNC_2080)
+    rows_ = []
+    for nm, ser in lines:
+        v = _np.asarray(ser, float)
+        oob = (v >= K.OOB_HI) if int(side) > 0 else (v <= K.OOB_LO)
+        for c, cf, sd in JIG.oob_ib_cross(v, K.OOB_HI, K.OOB_LO, 1):
+            if int(sd) != int(side) or not (int(A) <= int(c) <= int(B)):
+                continue
+            j = int(c) - 1
+            if j < 0 or not oob[j]:
+                continue
+            s1 = j
+            while s1 > 0 and oob[s1 - 1]:
+                s1 -= 1
+            seg = v[s1:int(c)]
+            ext = float(_np.nanmax(seg)) if int(side) > 0 else float(_np.nanmin(seg))
+            mv = float(m3[int(c)])
+            exf = (mv >= hi3) if int(side) > 0 else (mv <= lo3)
+            rows_.append((int(c), nm, s1, ext, mv, exf))
+    for c, nm, s1, ext, mv, exf in sorted(rows_):
+        out.append(row(nm, ln.U(s1), ln.U(c), c - s1, '%.2f' % ext, '%.2f' % mv,
+                       'yes' if exf else 'NO'))
+    if not rows_:
+        out.append(row('none', '-', '-', '-', '-', '-', '-'))
     return out
