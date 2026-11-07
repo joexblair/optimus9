@@ -95,3 +95,29 @@ He is right, and the word "banked" was mine. What is true:
 So by his own standard - a bank moves the default and an off-ruled run refuses - it was never banked.
 It was recorded so it would not be lost, which is exactly what he asked for and all he asked for.
 MY FRAMING OF IT AS A "MECH MISMATCH" ASSERTED A RULING HE NEVER MADE.
+
+## PARKED 1106 — bolt the cad walk onto the cadence event, regardless of the ws10x-cadence
+
+HIS WORDS, 1106: *"I recall suggesting that we bolt the cad walk on to the cadence event by default,
+regardless of the ws10x-cadence. I didn't follow up on it so that's on me. stash the idea for me,
+we'll come back to it after momo is baked"*.
+
+WHAT RAISED IT. He asked why the cad walk started 4 min 10 s after its cadence event on the
+2026-08-07 08:26:10 LONG, and the answer was three stacked waits:
+
+| the wait | seconds | what it waits for |
+|---|---|---|
+| 08:51:00 -> 08:52:20 | 80 | ws1x to cross ws1Mage. Price, not a rule |
+| 08:52:20 -> 08:54:15 | 115 | FDM_X10_WOB 24 bars of hold before the cross counts |
+| 08:54:15 -> 08:54:55 | 40 | the next ws1 closed-prev seam, which lands at :55 |
+| 08:54:55 -> 08:55:10 | 15 | FDM_XCAD_SEAM_S 15.0, his own number |
+| total | 250 | |
+
+HIS POINT: *"that's what happens if the x-cross fires"*. When no x-cross fires there is no cad walk
+at all, so anything that reads inside a cad walk - fdm2-momo included - never gets a bar to read.
+
+NO CODE, NO SPEC TEXT, NO KNOB. Parked until he says momo is baked.
+
+THE MEASUREMENT THAT WOULD SIZE IT is already in the fdm2-momo run: it counts the truncations that
+had a cad walk against those that fired on the ws1 seam+15s bar with no walk at all. That number is
+the floor on how much the bolt-on would add.

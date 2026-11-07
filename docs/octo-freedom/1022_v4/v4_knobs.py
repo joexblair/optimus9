@@ -1449,6 +1449,74 @@ FDM_XCAD_FALLBACK = os.environ.get('W_V4_FDM_XCAD_FALLBACK', 'exfnc')  # 'exfnc'
 #   above each line - the same 2 as LIN_HOP. The two knobs are left separate because one belongs
 #   to the director and the other to lineage; the VALUE is identical so nothing moves. SAY SO IF
 #   THEY SHOULD BE ONE KNOB.
+#   ── fdm2-momo, HIS NAME 1106 ──────────────────────────────────────────────────────────────────
+#   HIS WIRING, verbatim: *"we need to see fdm2-momo (the new mech's name) fire only once when
+#   we're cad walking, then we know we're safe to walk to a ex-20/80-fence bar without being
+#   rev-traded"*, with *"per cad walk is my answer to 3"* and, on what ends the latch, *"the
+#   revtrade.  I'm basing this on our 085x example"*.
+#   HIS 1106 RCA REPLACED THE LATCH WITH A PER-BAR VETO: *"if there is a walk verdict, there is no
+#   need to truncate the cad walk.  there is no harm caused if the verdict continues to be `walk`
+#   after the intial `walk` verdict, but if the verdict flips inside of the cad walk's max time
+#   then we don't miss that **correcting** verdict (ie rev-trade) and are able to react
+#   accordingly"*.
+#   WHAT IT DOES NOW: the three signals vote at EVERY bar of the cad walk. A vote reaching the
+#   floor is his `walk` verdict and it vetoes the truncation test AT THAT BAR ONLY.
+#   THE THREE SIGNALS READ DIFFERENT CARRIER SETS, his 1106 rulings 1 and 6: r-pred and
+#   Mage-beyond-x on ws4..ws{FDM2_MOMO_MAX_TF}, pinned on ws4..ws{HI}. The bar the
+#   verdict stops being `walk` is decided by the cad walk's own test, which can print the
+#   rev-trade. The cad walk always runs its full FDM_XCAD_WALK_MIN length.
+#   WHAT IT DID BEFORE, and why that is gone: one read at the cad walk's first bar, and a fire
+#   silenced the whole cad walk. On the 94.5-day tape the 28 legs that shape held longer went
+#   +32.523% to +25.974%, and the read bar was the weakest-signal bar of the cad walk.
+FDM2_MOMO_ON = _knob('FDM2_MOMO_ON', 0, int)        # OFF. The banked machine is unchanged.
+#   1 runs the arm. The A/B sets this at runtime; the BANKED value is 0 until he banks the arm.
+FDM2_MOMO_VOTES = _knob('FDM2_MOMO_VOTES', 3, int)  # the vote floor, of 3.
+#   3 is the row the measurement named: on the 220 with-walk truncations, emerging, 3 votes fires
+#   on 118 with 22.9% of them seeing no carrier, against 39.0% at one vote. HE HAS NOT SET THIS.
+FDM2_MOMO_READ = os.environ.get('W_V4_FDM2_MOMO_READ', 'emerging')   # 'emerging' | 'closed_prev'.
+#   EMERGING, because it is the only read that is monotone on the with-walk population: 39.0 ->
+#   34.9 -> 22.9 across the vote. Closed-prev reads 42.9% at 0 votes against 63.1% at 1, on 7 cases.
+FDM2_MOMO_MAX_TF = _knob('FDM2_MOMO_MAX_TF', 10, int)   # r-pred and Mage-beyond-x stop at this TF
+#   HIS 1106: *"I think r-pred would be better served with a maxTF of 10 or 12 (ie ws11r/ws13r to
+#   ws30r are not queried by r-pred)"* and, asked which, *"set it at 10"*. Also *"reduce `signal 2`
+#   to maxTF 10 or 12 (same as r-pred)"* - ONE knob, because he said "same as".
+#   IT DOES NOT REACH PINNED. His ruling 6 was *"unsure.  report on both ws10 and ws12"*, so signal
+#   3 stays on ws4..ws30 and the two capped sets are reported instead of applied.
+FDM2_MOMO_FLOOR_RPRED = _knob('FDM2_MOMO_FLOOR_RPRED', 1, int)   # r-pred's floor: carriers, not a median
+#   A FLOOR, NOT A MEDIAN, and the name moved with the meaning. HIS 1106 option A: *"go for A"* -
+#   *"re-measure Mage-beyond-x's median on ws4..ws10, and give r-pred a floor of 1"*. r-pred's
+#   median is 0 on every carrier set measured - ws4..ws10, ws4..ws12 and ws4..ws30, both reads - so
+#   a median makes its vote a constant. 1 is the mechanic's own floor: at least one carrier is
+#   predicted to breach. On the 50,457 cad-walk bars it fires on 9,470 = 18.8%.
+FDM2_MOMO_MED_MX = _knob('FDM2_MOMO_MED_MX', 7, int)         # the fast-versus-slow median
+FDM2_MOMO_MED_PIN = _knob('FDM2_MOMO_MED_PIN', 9, int)       # the pinned median
+FDM2_MOMO_XWIN = _knob('FDM2_MOMO_XWIN', 12, int)   # the x-crosses-Mage window, 12 bars = 60 s
+#   HIS 1106 *"if x has crossed Mage in the last minute, then Mage will follow x **because of
+#   matryoshka**"*. One minute at the 5 s grid, ending at the bar being read. REPORT-ONLY: his
+#   rulings 3, 4 and 5 all said *"report-only"*, so this read never touches the vote.
+#   THE THREE MEDIANS ARE MEASURED, NOT CHOSEN - over all 417 cad-walk first bars on the 94.5-day
+#   tape, on emerging. The closed-prev set is 2 / 4 / 9.
+#   RE-MEASURED ON THE PER-BAR POPULATION, 1106. His RCA reads every bar of the cad walk, so the
+#   417 first bars became a subset of the bars the medians govern. out/momo_meds.py re-measured
+#   them over all 50,457 cad-walk bars - 417 cad walks x 121 bars - off the cached walk0/side with
+#   one tape load and no leg-chain re-run, his *"no need to recreate the 94.5 day data yet"*.
+#   ITS CONTROL: the 417 first bars, emerging, ws4..ws30 return 0 / 7 / 9 - the banked values, bar
+#   for bar against momo_vote. A first draft harvested the TRUNCATION bar instead and the control
+#   is what caught it.
+#   WHAT MOVED, AND WHAT DID NOT, on the 50,457 bars:
+#     FDM2_MOMO_MED_MX   7 on ws4..ws10 emerging - UNCHANGED. The count sits AT 7 on more than half
+#                        the bars, so "under 7 of 7" is not degenerate: it fires on 49.3%
+#     FDM2_MOMO_MED_PIN  9 on ws4..ws30 emerging - UNCHANGED. Fires on 51.0%
+#     r-pred             0 on every set, so it became FDM2_MOMO_FLOOR_RPRED above
+#   THE LIVE MIX, emerging: r-pred >= 1 at 18.8%, Mage-beyond-x < 7 at 49.3%, pinned >= 9 at 51.0%,
+#   and 3 of 3 on 8,178 of 50,457 = 16.2%. No vote is a constant.
+#   THE SPAN IS A SUPERSET of what a cad walk reaches - a cad walk ends at its first unvetoed pass,
+#   and which bar that is depends on the vote, so the realised prefix would define the median in
+#   terms of its own answer. The full 121-bar span is the non-circular population.
+#   ONE FLAW, STATED: r-pred's emerging median is 0, so "at or above 0" is ALWAYS true and its vote
+#   is a constant. On emerging the floor of 3 is in truth "both of the other two fired". That is why
+#   the emerging 0-vote row has no cases at all. The closed-prev median is 2 and does vary.
+
 #   ── fdm2-blaster, HIS NAME 1105 ───────────────────────────────────────────────────────────────
 #   The matryoshka + blast-radius reading of the board. NO READER YET: he put modelling on hold -
 #   *"this is on hold - I need to improve the cadence event before we can accurately model"* - and
@@ -1807,6 +1875,14 @@ RULED = {
     'FDM_XCAD_WALK_MIN': (10.0, 'HIS VALUE "walk forward 10 minutes". The shape is the grace walk he called "the established walk" - re-test every 5 s bar, break on the first pass'),
     'FDM_XCAD_FALLBACK': ('exfnc', 'HIS 1105 "scan the entire range for ex-20/80-fence lines instead. if any are found, the cadence verdict is keep on walking". "off" is the arm it replaced, where no candidate went straight to FDM_XCAD_NONE'),
     'FDM_XCAD_NONE': ('rev-trade', 'HIS 1104 "no candidates = rev-trade", validated against v4_fdm2.walk which already rev-trades when step 1 counts 0'),
+    'FDM2_MOMO_ON': (0, 'OFF. The banked machine is unchanged until he banks the arm. 1 runs fdm2-momo, HIS 1106 name'),
+    'FDM2_MOMO_VOTES': (3, 'the vote floor. 3 is the row the measurement named - 118 of 220 with-walk truncations fire, 22.9% seeing no carrier against 39.0% at one vote. HE HAS NOT SET THIS'),
+    'FDM2_MOMO_READ': ('emerging', 'the only read monotone on the with-walk population: 39.0 -> 34.9 -> 22.9 across the vote'),
+    'FDM2_MOMO_MAX_TF': (10, 'HIS 1106 *"set it at 10"*. r-pred and Mage-beyond-x read ws4..ws10 = 7 lines; pinned stays on ws4..ws30, his ruling 6 *"unsure.  report on both ws10 and ws12"*'),
+    'FDM2_MOMO_FLOOR_RPRED': (1, "r-pred's FLOOR, not a median: at least one carrier predicted to breach. HIS option A, because r-pred's median is 0 on every carrier set and a median makes its vote a constant. Fires on 9,470 of 50,457 cad-walk bars = 18.8%"),
+    'FDM2_MOMO_MED_MX': (7, 'the fast-versus-slow median, re-measured over all 50,457 cad-walk bars on ws4..ws10 emerging. UNCHANGED from the 27-line value. Fires on 49.3%'),
+    'FDM2_MOMO_MED_PIN': (9, 'the pinned median over the same 50,457 bars, ws4..ws30 emerging. UNCHANGED. Fires on 51.0%'),
+    'FDM2_MOMO_XWIN': (12, 'the x-crosses-Mage window, HIS 1106 *"in the last minute"* = 12 bars = 60 s ending at the bar read. REPORT-ONLY, his rulings 3 to 5'),
     'FDM2_BLAST_SCAN_HI': (12, 'HIS 1105 VALUE "ws12" for the away run\'s top rung. The knob NAME is mine; 12 is wsf\'s ceiling, the same number FDM_RE_SCAN_HI carries'),
     'FDM2_MATR_LFTOF_CONF': (10, 'HIS OWN KNOB NAME AND VALUE, 1105 - "the samples should only be captured for ws{{<={knob:10,`FDM2_MATR_LFTOF_CONF`}}r". It caps the flattening SAMPLE CAPTURE, not the away run'),
     'FDM2_CAD_FLATIN_WIDTH': (3, 'HIS OWN KNOB NAME AND VALUE, 1105 - "they should be in sync. let\'s use ws{knob:3,\'FDM2_CAD_FLATIN_WIDTH}". Every line\'s flattening reads ws3\'s lattice: gap 8 bars, span 40 bars = 200 s'),
@@ -2237,7 +2313,11 @@ def table():
              'OOB_FNC': 'r-points', 'MID_FNC': 'r-points',
              'BSTOP_SYNC_MIN': 'minutes', 'BSTOP_POOL_HI': 'TF',
              'FDM2_BLAST_SCAN_HI': 'TF', 'FDM2_MATR_LFTOF_CONF': 'TF',
-             'FDM2_CAD_FLATIN_WIDTH': 'TF', 'FDM2_CAD_FLATIN_TOL': 'bars'}
+             'FDM2_CAD_FLATIN_WIDTH': 'TF', 'FDM2_CAD_FLATIN_TOL': 'bars',
+             'FDM2_MOMO_ON': 'on/off', 'FDM2_MOMO_VOTES': 'votes',
+             'FDM2_MOMO_READ': 'mode', 'FDM2_MOMO_FLOOR_RPRED': 'lines',
+             'FDM2_MOMO_MED_MX': 'lines', 'FDM2_MOMO_MED_PIN': 'lines',
+             'FDM2_MOMO_MAX_TF': 'timeframe', 'FDM2_MOMO_XWIN': 'bars'}
     for k, (v, why) in RULED.items():
         rows.append('| `%s` | %s | %s | %s | %s |'
                     % (k, here[k], units.get(k, '?'),

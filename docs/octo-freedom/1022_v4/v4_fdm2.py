@@ -75,6 +75,7 @@ try:
     from optimus9.analysis.jig import oob_ib_cross, lift_off
     from optimus9.analysis import jig as JIG
     from optimus9.compute.rule2_trajectory import opposed_extrema
+    from optimus9.compute.breaching_line import predict_breach
 finally:
     sys.stderr = _e
 
@@ -496,8 +497,223 @@ def xcad_tags(LN, side, bar, since):
                                           ', ws'.join(str(u) for u in ab) or 'none'))
 
 
-def xcad_seam(LN, side, s0, xb, above, exf_tw, B):
-    """His update 2 - the emerging re-read at the ws1 seam. -> (the rev-trade bar, why) | (None, why).
+_MOMO = {}
+
+#   ── the cad walk's per-bar trace sink, HIS 1106 ASK ───────────────────────────────────────────
+#   *"to make it real, you need to walk forward on the cad-walk after 0755 and pick when rev-trade
+#   will fire"*. A reporting script sets this to a list before calling legs(); every bar of every
+#   cad walk then records what decided it. None means no recording and no cost, which is the state
+#   every chain run is in. IT IS A SINK, NOT A KNOB: it changes no verdict, and the rows it holds
+#   are the SAME calls the decision made, not a second computation of them.
+XCAD_TRACE = None
+
+
+def _momo_lines(LN):
+    """The x and m ladders fdm2-momo needs, built ONCE and only when the arm is on.
+
+    LN already carries r, Mage and the lift stamps. It does not carry the per-timeframe x or m
+    lines, and building 108 arrays costs real time, so this is lazy: an arm that is off pays
+    nothing. The closed-prev forms go through v4_closed_prev.series, the same call load() uses.
+    """
+    if _MOMO:
+        return _MOMO
+    lo = int(K.FDM_STEP1_ABOVE_TF) + 1
+    tfs = list(range(lo, int(LN['HI']) + 1))
+    xe = {t: np.asarray(ln.line('ws%dx' % t), float) for t in tfs}
+    me = {t: np.asarray(ln.line('ws%dm' % t), float) for t in tfs}
+    _MOMO.update(tfs=tfs, XEM=xe, MEM=me,
+                 XCP={t: np.asarray(CP.series(xe[t], t * 60), float) for t in tfs},
+                 MCP={t: np.asarray(CP.series(me[t], t * 60), float) for t in tfs})
+    #   r-pred once per (timeframe, read) over the whole tape. predict_breach is vectorised, so a
+    #   per-bar call would be 1.6M times the work for the same answer.
+    for read, kk, mm, gg in (('closed_prev', LN['CPR'], _MOMO['MCP'], LN['CPM']),
+                             ('emerging', LN['EMR'], _MOMO['MEM'], LN['MGE'])):
+        for t in tfs:
+            _MOMO[('RP', read, t)] = predict_breach(np.asarray(kk[t], float), mm[t],
+                                                    np.asarray(gg[t], float))
+    for sd in (+1, -1):
+        for t in tfs:
+            _MOMO[('PIN', t, sd)] = JIG.at_extreme_mask(LN['EMR'][t], sd, K.LIFT_PTS,
+                                                        K.gap_for(t), K.LIFT_TOL)
+    return _MOMO
+
+
+def momo_vote(LN, bar, side, report=False, ev=None):
+    """`fdm2-momo` - HIS NAME, 1106. The three signals at ONE bar, and the vote. -> dict.
+
+    HIS 1106 RCA, verbatim: *"if there is a walk verdict, there is no need to truncate the cad
+    walk... but if the verdict flips inside of the cad walk's max time then we don't miss that
+    **correcting** verdict (ie rev-trade)"*. The caller reads this at EVERY bar of the cad walk. A
+    vote reaching FDM2_MOMO_VOTES is his `walk` verdict and vetoes the truncation test AT THAT BAR
+    ONLY. His earlier wording *"fire only once when we're cad walking"* was read as a latch over
+    the whole cad walk, and that reading is the one he corrected.
+
+    THE THREE LIVE SIGNALS, AND THEIR CARRIER SETS ARE NOT THE SAME - his 1106 rulings 1 and 6:
+
+      rpred   how many carriers breaching_line.predict_breach flags on `side`, over
+              ws{FDM_STEP1_ABOVE_TF+1}..ws{FDM2_MOMO_MAX_TF}. HIS OWN mech, carried in as the
+              benchmark rather than rebuilt. Its test is a FLOOR - FDM2_MOMO_FLOOR_RPRED 1, at
+              least one carrier - because its median is 0 on every set and a median makes it a
+              constant. HIS option A.
+      mx      how many have Mage beyond x toward `side` over the SAME capped set - the 38-bar %B
+              against the 5-bar %B. Its test is `count < FDM2_MOMO_MED_MX`: FEWER means more
+              carriers can still arrive
+      pin     how many sit within LIFT_TOL of their sampled extreme, over the FULL set
+              ws{FDM_STEP1_ABOVE_TF+1}..ws{HI} - his ruling 6 was *"unsure.  report on both ws10
+              and ws12"*, so the cap does not reach it. Read on EMERGING whatever
+              FDM2_MOMO_READ says, because a pin is a lift-off read and that is his standing rule
+
+    THE TWO MEDIANS ARE MEASURED over all 50,457 cad-walk bars on the 94.5-day tape - 417 cad walks
+    by 121 bars - not over the 417 first bars the one-shot read saw. Both came back unchanged.
+
+    REPORT-ONLY, HIS 1106 RULINGS 2 TO 6. None of these touches `votes` or `fires`. They are
+    computed only when `report` is set, which the caller does at a verdict-transition bar, so the
+    per-bar scan pays nothing for them:
+
+      gated       ruling 2 - r-pred's count if it were gated by `towards`, read on CLOSED-PREV
+                  (step1's own precedent). *"report-only on this"*
+      cross       ruling 5 - how many carriers had x cross Mage inside FDM2_MOMO_XWIN
+      cwalk/crev  ruling 3 - his four cases. A SHORT reading x cross UNDER Mage is a `walk` vote,
+                  OVER is a `rev-trade` vote; a LONG is the mirror. *"Mage will follow x because
+                  of matryoshka"*
+      s2_either   ruling 3 - signal 2 under *"either one firing is enough"*: the count test OR a
+                  `walk` cross
+      votes_sub   ruling 4 - the vote with one subtracted when a `rev-trade` cross is present
+      pin_cap     ruling 6 - pinned on the capped set, beside the live full-set count
+      traj        ruling 3's third dimension - both lines' slope from the cadence event `ev` to
+                  this bar on emerging, and the bar their fitted paths cross. NO HORIZON: the
+                  crossing is derived from the two slopes and is unbounded
+
+    CAUSAL: every read is AT `bar` or earlier. Nothing after it is touched, and the asserts carry
+    it. The trajectory fit reads `ev`..`bar` inclusive and no bar beyond.
+    """
+    bar, side = int(bar), int(side)
+    assert bar <= len(LN['close']) - 1, 'fdm2-momo was asked about a bar past the tape'
+    M = _momo_lines(LN)
+    read = str(K.FDM2_MOMO_READ)
+    mg = LN['CPM'] if read == 'closed_prev' else LN['MGE']
+    xs = M['XCP'] if read == 'closed_prev' else M['XEM']
+    cap = int(K.FDM2_MOMO_MAX_TF)
+    capped = [t for t in M['tfs'] if t <= cap]
+    nr = nx = npn = npc = 0
+    for t in capped:
+        if int(M[('RP', read, t)][bar]) == side:
+            nr += 1
+        if (float(np.asarray(mg[t], float)[bar]) - float(np.asarray(xs[t], float)[bar])) * side > 0:
+            nx += 1
+        if M[('PIN', t, side)][bar]:
+            npc += 1
+    for t in M['tfs']:
+        if M[('PIN', t, side)][bar]:
+            npn += 1
+    f_r = nr >= int(K.FDM2_MOMO_FLOOR_RPRED)
+    f_x = nx < int(K.FDM2_MOMO_MED_MX)
+    f_p = npn >= int(K.FDM2_MOMO_MED_PIN)
+    v = int(f_r) + int(f_x) + int(f_p)
+    out = {'bar': bar, 'votes': v, 'rpred': nr, 'mx': nx, 'pin': npn, 'read': read,
+           'cap': cap, 'lines': len(capped), 'lines_full': len(M['tfs']),
+           'fires': bool(v >= int(K.FDM2_MOMO_VOTES)),
+           'why': ('fdm2-momo %d of 3 at %s on %s - r-pred %d of %d ws4..ws%d (floor %d), '
+                   'Mage-beyond-x %d of %d ws4..ws%d (median %d, carry side is BELOW), '
+                   'pinned %d of %d ws4..ws%d (median %d)'
+                   % (v, ln.U(bar), read, nr, len(capped), cap,
+                      int(K.FDM2_MOMO_FLOOR_RPRED), nx, len(capped), cap,
+                      int(K.FDM2_MOMO_MED_MX), npn, len(M['tfs']), int(LN['HI']),
+                      int(K.FDM2_MOMO_MED_PIN)))}
+    if not report:
+        return out
+
+    #   ── REPORT-ONLY from here. Nothing below is read by `votes` or `fires`. ───────────────────
+    xw = max(1, int(K.FDM2_MOMO_XWIN))
+    ng = ncr = nw = nrv = 0
+    for t in capped:
+        if int(M[('RP', read, t)][bar]) == side and towards(LN['CPR'][t], t, bar, side):
+            ng += 1
+        dif = np.asarray(xs[t], float) - np.asarray(mg[t], float)
+        w = dif[max(0, bar - xw): bar + 1]
+        dirn = 0
+        for q in range(1, len(w)):
+            a, c = w[q - 1], w[q]
+            if np.isfinite(a) and np.isfinite(c) and a != 0.0 and (a > 0) != (c > 0):
+                dirn = -1 if a > 0 else +1          # -1 = x crossed UNDER Mage
+        if dirn:
+            ncr += 1
+            #   HIS FOUR CASES: a SHORT (side -1) reading x UNDER Mage votes `walk`, OVER votes
+            #   `rev-trade`. A LONG (side +1) is the mirror.
+            if (dirn < 0) == (side < 0):
+                nw += 1
+            else:
+                nrv += 1
+    pc = int(K.FDM2_MOMO_FLOOR_RPRED)
+    out.update(gated=ng, cross=ncr, cwalk=nw, crev=nrv, pin_cap=npc, xwin=xw,
+               s2_either=bool(f_x or nw > 0),
+               votes_sub=v - (1 if nrv > 0 else 0),
+               fires_sub=bool(v - (1 if nrv > 0 else 0) >= int(K.FDM2_MOMO_VOTES)),
+               gated_fires=bool(ng >= pc))
+    traj = []
+    if ev is not None and int(ev) <= bar:
+        bb = np.arange(int(ev), bar + 1, dtype=float)
+        for t in capped:
+            xv = np.asarray(M['XEM'][t], float)[int(ev):bar + 1]
+            gv = np.asarray(LN['MGE'][t], float)[int(ev):bar + 1]
+            ok = np.isfinite(xv) & np.isfinite(gv)
+            if ok.sum() < 2:
+                continue
+            sx, ix = np.polyfit(bb[ok], xv[ok], 1)
+            sm, im = np.polyfit(bb[ok], gv[ok], 1)
+            d, rel = (sx * bar + ix) - (sm * bar + im), sx - sm
+            btc = (-d / rel) if rel != 0 else float('inf')
+            away_x = (sx > 0) if side < 0 else (sx < 0)
+            away_m = (sm > 0) if side < 0 else (sm < 0)
+            traj.append(dict(tf=t, sx=float(sx * 12.0), sm=float(sm * 12.0), gap=float(d),
+                             bars_to_cross=float(btc), away_x=bool(away_x),
+                             away_m=bool(away_m), both_away=bool(away_x and away_m),
+                             cross_away=bool(btc > 0 and np.isfinite(btc) and away_x)))
+        assert int(ev) <= bar, 'the trajectory fit started after the bar it is read at'
+    out['traj'] = traj
+    out['traj_both_away'] = sum(1 for z in traj if z['both_away'])
+    out['traj_cross_away'] = sum(1 for z in traj if z['cross_away'])
+    out['why_report'] = (
+        'REPORT-ONLY at %s - towards-gated r-pred %d of %d (closed-prev gate), x-crossed-Mage %d '
+        'in %d bars = %d s (%d `walk`, %d `rev-trade`), signal 2 under "either" %s, the vote with '
+        'a rev-trade cross subtracted %d of 3, pinned on ws4..ws%d %d, trajectory %d of %d with '
+        'both lines away and %d with a fitted cross travelling away'
+        % (ln.U(bar), ng, len(capped), ncr, xw, xw * 5, nw, nrv,
+           'fires' if (f_x or nw > 0) else 'does not fire', out['votes_sub'], cap, npc,
+           out['traj_both_away'], len(traj), out['traj_cross_away']))
+    return out
+
+
+def _trace_row(bar, b0, side, mv, ok, why):
+    """One XCAD_TRACE row: what decided `bar` of the cad walk that started at `b0`. -> dict.
+
+    `ok` is None when fdm2-momo's `walk` verdict vetoed the bar, so the truncation test never ran.
+    """
+    return dict(bar=int(bar), b0=int(b0), side=int(side), since_s=(int(bar) - int(b0)) * 5,
+                vetoed=bool(mv is not None and mv['fires']),
+                votes=(int(mv['votes']) if mv else None),
+                rpred=(int(mv['rpred']) if mv else None),
+                mx=(int(mv['mx']) if mv else None),
+                pin=(int(mv['pin']) if mv else None),
+                tested=ok is not None, ok=ok,
+                why=(('`walk` verdict, the truncation test did not run - ' + mv['why'])
+                     if ok is None else str(why)))
+
+
+def xcad_seam(LN, side, s0, xb, B, ev=None):
+    """His update 2 - the emerging re-read at the ws1 seam. -> dict.
+
+        bar     the rev-trade bar, or None when this cad walk printed none
+        b0      THE CAD WALK'S FIRST BAR, the ws1 seam + FDM_XCAD_SEAM_S. It comes back so the
+                caller can stamp a CAD WALK row on it - his 1106 housekeeping
+        votes   the fdm2-momo verdict TRANSITIONS, oldest first, empty when the arm is off
+        why     the one line that says what happened
+
+    A DICT AND NOT A TUPLE, because this contract grew three times on 1106 and a positional return
+    makes every caller a place the next field can be dropped. Each one is handed back so the caller can stamp a row on that
+    verdict's OWN bar rather than leaving the only trace of it inside this function's `why`
+    string. His 1106 RCA made the vote a per-bar veto, so there can be several of them; the latch
+    that produced exactly one is gone.
 
     HIS UPDATE 2, verbatim: *"when the ws{TF}x cross fires, walk to the next ws1 seam+15s and
     collect the emerging values of the lines that were tagged as `towards` at the cadence. if the
@@ -508,17 +724,15 @@ def xcad_seam(LN, side, s0, xb, above, exf_tw, B):
               target-side reversal must fire between the opening of the cadence window and the
               confirmed x-cross bar"*
       xb      the bar the walk starts from. FDM_XCAD_FRM 'confirm' is his *"the conf bar"*
-      above   the FDM_XCAD_ABOVE 2 lines above the highest ex-20/80 `towards` line at the
-              cadence event - his 1104 narrowing, *"consider only the 2 TF above the highest
-              ex-20/80-fence TF that is tagged `towards`"*. Clause one tests these
-      exf_tw  the ex-20/80 lines that read `towards` at the cadence event. Clause two tests these
-              at FDM_XCAD_C2_SCOPE 'tagged'
+    HIS 1104 NARROWING IS STRUCK OUT, 1106. `above` and `exf_tw` are gone from the signature: the
+    two-lines-above clause is his *"unwanted drag"* and the tagged scope went with it, because the
+    test is now the whole board at the bar being read. xcad_tags still runs in walk(), but only to
+    name the qualifying lines in the SEAM row's text - it no longer feeds the decision.
 
-    THE SECOND CLAUSE'S SCOPE IS FDM_XCAD_C2_SCOPE. At 'tagged', his own word, it tests only the
-    lines that were ex-20/80 AND `towards` at the cadence event. At 'board' any line that is
-    ex-20/80 AND `towards` at the test bar blocks it, which is his earlier mech update read wide -
-    *"because there are towards lines that are ex-20/80-fence, the cadence cannot print a
-    rev-trade"*. BOTH VERDICTS ARE REPORTED, so the reading is settled on numbers not on my pick.
+    THERE IS ONE TEST, AND IT IS THE WHOLE BOARD AT THE BAR BEING READ. His 1106 *"any r printing
+    "towards while ex-20/80-fence""*, which is his earlier mech update read wide - *"because there
+    are towards lines that are ex-20/80-fence, the cadence cannot print a rev-trade"*. The
+    FDM_XCAD_C2_SCOPE 'tagged' arm and the FDM_XCAD_ABOVE clause are both struck out.
 
     EVERY READ IN HERE IS EMERGING, both the value and the fence, because he asked for the
     emerging values at this bar. THAT READING IS MINE TOO.
@@ -535,11 +749,13 @@ def xcad_seam(LN, side, s0, xb, above, exf_tw, B):
     hi = int(LN['HI'])
     seam = [int(b) for b in LN['SEAM60'] if int(b) > int(xb)]
     if not seam:
-        return None, 'no ws1 seam after %s before the tape ends' % ln.U(int(xb))
+        return dict(bar=None, b0=None, votes=[],
+                    why='no ws1 seam after %s before the tape ends' % ln.U(int(xb)))
     b0 = int(seam[0]) + int(round(float(K.FDM_XCAD_SEAM_S) / 5.0))
     if b0 > int(B):
-        return None, ('the seam+%gs bar %s is past the walk\'s end %s'
-                      % (float(K.FDM_XCAD_SEAM_S), ln.U(b0), ln.U(int(B))))
+        return dict(bar=None, b0=b0, votes=[],
+                    why=('the seam+%gs bar %s is past the leg walk\'s end %s'
+                         % (float(K.FDM_XCAD_SEAM_S), ln.U(b0), ln.U(int(B)))))
     rs = int(s0) if str(K.FDM_XCAD_REV_FROM) == 'window' else None
     #   THE GATE'S UPPER END. At FDM_XCAD_REV_TO 'read' the stamps are handed over unclipped and
     #   the detector's own [rev_since, bar] filter ends the span at the bar being read, so a turn
@@ -551,43 +767,117 @@ def xcad_seam(LN, side, s0, xb, above, exf_tw, B):
                                  if (rs if rs is not None else 0) <= b <= int(xb)], int))
             for t in range(1, hi + 1)}
 
-    def passes(b):
-        """both of his clauses at bar `b`, on emerging values. -> (bool, why)."""
+    def exf_passed(b):
+        """HIS `passed`: is ANY r towards while ex-fence at bar `b`, on emerging. -> (bool, why).
+
+        THE NAME AND THE POLARITY ARE HIS, 1107. This used to be `passes`, returning True when NO
+        line qualified - the opposite of his word, which caused exactly the confusion he asked to be
+        called out: *"if it's ever ambiguous, call me out"*. His `passed` means a line IS towards
+        while ex-fence, which is the `walk` verdict. The caller now reads `not passed` to decide a
+        rev-trade, so the two readings cannot be mixed up again.
+
+        HIS 1106 SECOND RCA, verbatim: *"the whole purpose of momo is to walk forward in the absence
+        of any `r` printing "towards while ex-20/80-fence"  -at 1207, there is a line that qualifies
+        (ws30, and probably others) so the code's only option is to walk to the next cadence or
+        wsx-cadence event"*, and on the two-lines-above clause: *"this is unwanted drag.  in this
+        context, the mech that drives momo's initialisation is very simple: any r printing "towards
+        while ex-20/80-fence""*.
+
+        WHAT HE STRUCK OUT, and the bar it was caught on. Clause one asked whether the
+        FDM_XCAD_ABOVE lines ABOVE the highest ex-20/80 `towards` line had turned away. At
+        2026-08-23 12:07:15 the highest such line was ws30, so there was nothing above it, the
+        clause passed because it had nothing to check, and the rev-trade closed a +4.978% LONG at
+        12:08:10 - the trade he wanted held. Its own text printed the fault: "no line above to test
+        away".
+
+        THE LINE SET IS ws{FDM_STEP1_ABOVE_TF+1}..ws{HI}, his 1107 *"keep it the minTF at ws4"*.
+        I FIRST WROTE THIS OVER ws1..ws30, reading his *"any r"* with his 1016 ruling that `board`
+        means the full range; he settled it the other way, and this is the correction.
+
+        CAUSAL: `ex2080_line` and the detector both read `b` or earlier, and the reversal gate's
+        stamps are clipped to `b` by the detector itself.
+        """
+        lo = int(K.FDM_STEP1_ABOVE_TF) + 1
         st = {}
-        for t in range(1, hi + 1):
+        for t in range(lo, hi + 1):
             st[t] = JIG.fdm2_cad_mom_detector(LN['EMR'][t], LN['EMR'][t], int(b), int(side),
                                               int(s0), K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL,
                                               K.LIFT_WOB, stamps=gate[t], rev_since=rs)['state']
-        still = [t for t in above if st[t] != 'away']
-        if str(K.FDM_XCAD_C2_SCOPE) == 'tagged':
-            blockers = [t for t in exf_tw if st[t] == 'towards']
-        else:
-            blockers = [t for t in range(1, hi + 1)
-                        if st[t] == 'towards' and ex2080_line(LN, t, b, side)]
-        if still:
-            return False, 'ws%s of the %d lines above are not away yet' % (
-                ', ws'.join(str(t) for t in still), len(above))
-        if blockers:
-            return False, 'ws%s are ex-%g/%g AND towards (%s), so no rev-trade' % (
-                ', ws'.join(str(t) for t in blockers), *K.fnc_pair(K.FDM_FNC_2080),
-                K.FDM_XCAD_C2_SCOPE)
-        return True, ('%s away and no ex-%g/%g line towards (%s)'
-                      % ('ws' + ', ws'.join(str(t) for t in above) if above
-                         else 'no line above to test', *K.fnc_pair(K.FDM_FNC_2080),
-                         K.FDM_XCAD_C2_SCOPE))
+        hits = [t for t in range(lo, hi + 1)
+                if st[t] == 'towards' and ex2080_line(LN, t, b, side)]
+        if hits:
+            return True, ('ws%s %s ex-%g/%g AND towards on ws%d..ws%d, so `passed` - walk on'
+                          % (', ws'.join(str(t) for t in hits),
+                             'is' if len(hits) == 1 else 'are',
+                             *K.fnc_pair(K.FDM_FNC_2080), lo, hi))
+        return False, ('no line on ws%d..ws%d is ex-%g/%g AND towards, so NOT `passed`'
+                       % (lo, hi, *K.fnc_pair(K.FDM_FNC_2080)))
 
-    ok, why = passes(b0)
-    if ok:
-        return b0, 'the ws1 seam+%gs bar %s - %s' % (float(K.FDM_XCAD_SEAM_S), ln.U(b0), why)
+    #   ── fdm2-momo's vote, HIS 1106 RCA ────────────────────────────────────────────────────────
+    #   HIS CORRECTION, verbatim: *"if there is a walk verdict, there is no need to truncate the
+    #   cad walk.  there is no harm caused if the verdict continues to be `walk` after the intial
+    #   `walk` verdict, but if the verdict flips inside of the cad walk's max time then we don't
+    #   miss that **correcting** verdict (ie rev-trade) and are able to react accordingly"*.
+    #
+    #   SO THE VOTE IS A PER-BAR VETO AND NOT A LATCH. It is read at EVERY bar of the cad walk and
+    #   it suppresses the truncation test AT THAT BAR ONLY. The bar its verdict stops being `walk`
+    #   is decided by the cad walk's own test, which is what prints his *"correcting verdict"*.
+    #   Nothing is sticky, nothing is silenced, and the cad walk runs its full length either way.
+    #
+    #   WHAT THIS REPLACED, kept because the number is his evidence against it: the vote was read
+    #   ONCE, at b0 = the cad walk's first bar, and a fire returned no rev-trade for the whole cad
+    #   walk. On the 94.5-day tape the 28 legs that shape held longer went +32.523% to +25.974%.
+    #   The read bar was also the weakest-signal bar, which is the RCA he named.
+    #
+    #   THE ROWS ARE THE VERDICT'S TRANSITIONS: one at the first bar and one at every bar the
+    #   verdict changes, so the flip he asked not to miss is itself a timestamped event. Every bar
+    #   is READ; only a change is STAMPED, because 121 identical rows per cad walk buries the leg
+    #   report they exist to serve. The counts of read and vetoed bars ride in the returned why.
     end = min(b0 + int(round(float(K.FDM_XCAD_WALK_MIN) * 60.0 / 5.0)), int(B))
-    for b in range(b0 + 1, end + 1):
-        ok2, why2 = passes(b)
-        if ok2:
-            return b, ('the %.1f min walk from %s, truncated at %s - %s'
-                       % (float(K.FDM_XCAD_WALK_MIN), ln.U(b0), ln.U(b), why2))
-    return None, ('the seam+%gs bar %s failed (%s) and the %.1f min walk to %s never passed'
-                  % (float(K.FDM_XCAD_SEAM_S), ln.U(b0), why, float(K.FDM_XCAD_WALK_MIN),
-                     ln.U(end)))
+    votes, prev, nv, nt, lastw, lastb = [], None, 0, 0, '', None
+    for b in range(b0, end + 1):
+        mv = None
+        if int(K.FDM2_MOMO_ON):
+            mv = momo_vote(LN, b, side)
+            assert int(mv['bar']) == int(b), 'fdm2-momo answered about a bar it was not asked'
+            if mv['fires'] != prev:
+                #   THE REPORT-ONLY READS ARE TAKEN ONLY ON A TRANSITION BAR, which is the only
+                #   bar that gets a row. His rulings 2 to 6 never vote, and the `towards` gate
+                #   costs an opposed-extremum scan per line, so paying for them at all 121 bars
+                #   would buy nothing. The second call reads the SAME bar.
+                mv = momo_vote(LN, b, side, report=True, ev=ev)
+                votes.append(mv)
+                prev = mv['fires']
+            if mv['fires']:
+                nv += 1
+                if XCAD_TRACE is not None:
+                    XCAD_TRACE.append(_trace_row(b, b0, side, mv, None, None))
+                continue
+        passed, why = exf_passed(b)
+        ok = not passed      # HIS POLARITY: `passed` means walk on, so the rev-trade needs NOT it
+        nt += 1
+        lastw, lastb = why, b
+        if XCAD_TRACE is not None:
+            XCAD_TRACE.append(_trace_row(b, b0, side, mv, bool(ok), why))
+        if not ok:
+            continue
+        tail = ('' if not nv else
+                ' - fdm2-momo voted walk on %d of the %d bars from %s'
+                % (nv, b - b0, ln.U(b0)))
+        if b == b0:
+            return dict(bar=b0, b0=b0, votes=votes,
+                        why='the ws1 seam+%gs bar %s - %s%s'
+                            % (float(K.FDM_XCAD_SEAM_S), ln.U(b0), why, tail))
+        return dict(bar=b, b0=b0, votes=votes,
+                    why='the %.1f min cad walk from %s, truncated at %s - %s%s'
+                        % (float(K.FDM_XCAD_WALK_MIN), ln.U(b0), ln.U(b), why, tail))
+    return dict(bar=None, b0=b0, votes=votes,
+                why='the seam+%gs bar %s and the %.1f min cad walk to %s never passed - %s'
+                    % (float(K.FDM_XCAD_SEAM_S), ln.U(b0), float(K.FDM_XCAD_WALK_MIN), ln.U(end),
+                       ('fdm2-momo voted walk on every one of the %d bars, so the one test was '
+                        'never reached' % nv) if not nt else
+                       ('%d bars tested, %d vetoed by fdm2-momo, the last test at %s - %s'
+                        % (nt, nv, ln.U(int(lastb)), lastw))))
 
 
 def xcad_probe(LN, side, s0, xb, lines, bar):
@@ -743,7 +1033,7 @@ def walk(LN, side, opn, B):
         nxt = int(evs[i + 1][0]) if i + 1 < len(evs) else None
         k, n = step1(LN, side, ev)
         if k == 0:
-            rows.append(dict(bar=ev, stage='REV-TRADE', ev=ev, k=0, n=n, cwhy=why,
+            rows.append(dict(bar=ev, stage='cad_rev_trade', ev=ev, k=0, n=n, cwhy=why,
                              why='cadence event, 0 of %d lines ws%d..'
                              'ws%d printing ex-%g/%g AND towards - his "if the answer is no, then '
                              'rev-trade"' % (n, int(K.FDM_STEP1_ABOVE_TF) + 1, LN['HI'],
@@ -768,7 +1058,7 @@ def walk(LN, side, opn, B):
                     exf2 = [t for t in range(1, int(LN['HI']) + 1)
                             if ex2080_line(LN, t, ev, side)]
                     if exf2:
-                        rows.append(dict(bar=ev, stage='WALK', ev=ev, k=k, n=n, cwhy=why,
+                        rows.append(dict(bar=ev, stage='cad_walk', ev=ev, k=k, n=n, cwhy=why,
                                          why='the director found no candidate - %s - BUT %d of %d'
                                          ' lines are ex-%g/%g on the side: ws%s. His "keep on'
                                          ' walking"'
@@ -779,11 +1069,11 @@ def walk(LN, side, opn, B):
                 #   HIS RULING: *"no candidates = rev-trade"*, validated against this function's
                 #   own step-1 branch above, which already rev-trades on a count of 0.
                 if str(K.FDM_XCAD_NONE) == 'rev-trade':
-                    rows.append(dict(bar=ev, stage='REV-TRADE', ev=ev, k=k, n=n, cwhy=why,
+                    rows.append(dict(bar=ev, stage='cad_rev_trade', ev=ev, k=k, n=n, cwhy=why,
                                      why='the director found no candidate - %s. His "no'
                                      ' candidates = rev-trade"' % xcwhy))
                     return ev, rows
-                rows.append(dict(bar=ev, stage='NO ACTION', ev=ev, k=k, n=n, cwhy=why,
+                rows.append(dict(bar=ev, stage='cad_no_action', ev=ev, k=k, n=n, cwhy=why,
                                  why='the director found no candidate - %s, and FDM_XCAD_NONE is'
                                  ' no-action' % xcwhy))
                 continue
@@ -793,7 +1083,7 @@ def walk(LN, side, opn, B):
         xnm = 'the ws%dx-cadence' % rtf_tf
         win = ('the next cadence event' if nxt is not None and (xb is None or nxt <= xb)
                else (xnm if xb is not None else 'nothing - the tape ends'))
-        rows.append(dict(bar=ev, stage='WALK', ev=ev, k=k, n=n, cwhy=why, xtf=rtf_tf,
+        rows.append(dict(bar=ev, stage='cad_walk', ev=ev, k=k, n=n, cwhy=why, xtf=rtf_tf,
                          why='cadence event, %d of %d lines printing ex-%g/%g'
                          ' AND towards -> walk. the race runs on ws%d%s. %s is first%s'
                          % (k, n, *K.fnc_pair(K.FDM_FNC_2080), rtf_tf,
@@ -809,13 +1099,48 @@ def walk(LN, side, opn, B):
         #   deleted here. THAT IS MY READING and it is the one thing in this block that is mine.
         if int(K.FDM_XCAD_ON):
             sfrm = xb if str(K.FDM_XCAD_FRM) == 'confirm' else int(x10[2])
+            #   xcad_tags STILL RUNS, but only to NAME the qualifying lines in the SEAM row's
+            #   text. His 1106 struck its two-lines-above clause out of the decision - *"this is
+            #   unwanted drag"* - so `sab` and `sexf` are no longer handed to the seam read.
             sab, sexf, stwhy = xcad_tags(LN, side, ev, opn)
-            sbar, swhy = xcad_seam(LN, side, s0, sfrm, sab, sexf, int(B))
-            rows.append(dict(bar=int(sfrm), stage='SEAM', ev=ev, k=k, n=n, xtf=rtf_tf,
+            sm = xcad_seam(LN, side, s0, sfrm, int(B), ev=ev)
+            sbar, swhy, smomo = sm['bar'], sm['why'], sm['votes']
+            rows.append(dict(bar=int(sfrm), stage='cwlk_seam', ev=ev, k=k, n=n, xtf=rtf_tf,
                              why='the director\'s seam read from %s - %s. %s'
                              % (ln.U(int(sfrm)), stwhy, swhy)))
+            #   HIS 1106 HOUSEKEEPING: *"the debug table needs to print `CADENCE EVENT` when there
+            #   is a cadence event, and `CAD WALK` if the cad walk is starting"*. The cad walk's
+            #   first bar gets its own row, so a reader sees where the 10-minute re-test began
+            #   rather than having to find it inside the SEAM row's text.
+            if sm['b0'] is not None:
+                rows.append(dict(bar=int(sm['b0']), stage='cwlk_start', ev=ev, k=k, n=n, xtf=rtf_tf,
+                                 why='the cad walk starts - the ws1 seam+%gs bar after %s, and it '
+                                     're-tests every 5 s bar for FDM_XCAD_WALK_MIN %.1f min = %d '
+                                     'bars'
+                                     % (float(K.FDM_XCAD_SEAM_S), ln.U(int(sfrm)),
+                                        float(K.FDM_XCAD_WALK_MIN),
+                                        int(round(float(K.FDM_XCAD_WALK_MIN) * 60.0 / 5.0)))))
+            #   EVERY fdm2-momo VERDICT TRANSITION GETS ITS OWN TIMESTAMPED ROW, so a leg report
+            #   reads the verdict and its flip as events rather than as a clause inside the SEAM
+            #   row's text. HIS 1106: the leg reports need every timestamped event prepared, and
+            #   his RCA named the flip - *"we don't miss that **correcting** verdict"* - as the
+            #   thing the one-shot latch threw away.
+            for mv in smomo:
+                rows.append(dict(bar=int(mv['bar']), stage='cwlk_momo_vote', ev=ev, k=k, n=n,
+                                 xtf=rtf_tf, votes=int(mv['votes']),
+                                 rpred=int(mv['rpred']), mx=int(mv['mx']),
+                                 pin=int(mv['pin']),
+                                 why=('`walk` verdict, no rev-trade from this bar - '
+                                      if mv['fires'] else
+                                      'the `walk` verdict ends here, the cad walk\'s own test '
+                                      'decides this bar - ') + mv['why']
+                                     + ('. ' + mv['why_report'] if 'why_report' in mv else '')))
             if sbar is not None:
-                rows.append(dict(bar=int(sbar), stage='REV-TRADE', ev=ev, k=k, n=n, xtf=rtf_tf,
+                #   THIS ONE IS THE CAD WALK'S, not the cadence event's - his 1106 *"I'm calling
+                #   this out specifically to ensure there is a strict distinction between `cadence
+                #   event`'s verdicts and `cad walk`'s verdicts"*. It is the only rev-trade row
+                #   that comes out of the seam read's own walk.
+                rows.append(dict(bar=int(sbar), stage='cwlk_rev_trade', ev=ev, k=k, n=n, xtf=rtf_tf,
                                  which=x10[1], cross=x10[2],
                                  why='the director - %s' % swhy))
                 return int(sbar), rows
@@ -825,7 +1150,7 @@ def walk(LN, side, opn, B):
         rv = len(rtf)
         pct = (rv / len(pop) * 100.0) if pop else 0.0
         if pct >= t_pct:
-            rows.append(dict(bar=xb, stage='REV-TRADE', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
+            rows.append(dict(bar=xb, stage='cad_rev_trade', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
                              pct=pct, which=x10[1], cross=x10[2], rev_tfs=tuple(rtf),
                              rf=rf, xtf=rtf_tf,
                              why='%s - ws%dx crossed to %s %s and confirmed'
@@ -835,7 +1160,7 @@ def walk(LN, side, opn, B):
                                 K.FDM_REV_FROM, pct, t_pct)))
             return xb, rows
         if pct < g_pct:
-            rows.append(dict(bar=xb, stage='NO ACTION', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
+            rows.append(dict(bar=xb, stage='cad_no_action', ev=ev, k=k, n=n, pop=tuple(pop), rv=rv,
                              pct=pct, which=x10[1], cross=x10[2], rev_tfs=tuple(rtf),
                              rf=rf, xtf=rtf_tf,
                              why='%s - ws%dx crossed to %s %s and confirmed'
@@ -871,13 +1196,13 @@ def walk(LN, side, opn, B):
                 hit = (b, len(t2), p2, tuple(t2))
                 break
         if hit is not None:
-            rows.append(dict(bar=hit[0], stage='REV-TRADE', ev=ev, k=k, n=n, pop=tuple(pop),
+            rows.append(dict(bar=hit[0], stage='cad_rev_trade', ev=ev, k=k, n=n, pop=tuple(pop),
                              rv=hit[1], pct=hit[2], which=x10[1], cross=x10[2],
                              rev_tfs=hit[3], rf=rf, why='grace walk, %d of %d reversed '
                              'since %s (%s) = %.1f%% >= %g%%'
                              % (hit[1], len(pop), ln.U(rf), K.FDM_REV_FROM, hit[2], t_pct)))
             return hit[0], rows
-        rows.append(dict(bar=end, stage='NO ACTION', why='grace walk expired at %.1f%%, never '
+        rows.append(dict(bar=end, stage='cad_no_action', why='grace walk expired at %.1f%%, never '
                          'reached %g%% - wait for the next cadence'
                          % ((reversed_since(LN, side, pop, rf, end) / len(pop) * 100.0)
                             if pop else 0.0, t_pct)))

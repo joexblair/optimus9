@@ -85,6 +85,21 @@ AMBIG_NOUNS = ('machine', 'machines', 'mech', 'mechs', 'driver', 'drivers',
                'pipeline', 'pipelines', 'build', 'builds')
 AMBIG = re.compile(r'\b(?:the|this|that)\s+(?:%s)\b' % '|'.join(AMBIG_NOUNS))
 
+#   HIS 1106: *"your hook shouldn't have let b0 and passes() through - I don't know what they
+#   are"*. BACKTICKS WERE A BLANKET EXEMPTION, because inline code is where a KNOB name belongs and
+#   he reads knob names. A local variable and a function call out of my own code are not names he
+#   has ever seen, and a backtick made them invisible to every check. So the inline-code spans now
+#   get their own scan, with the SAME gloss exemption as every other shape.
+#
+#   THE VARIABLE FORM REQUIRES A DIGIT. A plain 1-4 letter token in backticks cannot be told apart
+#   from a word he uses - `away`, `towards`, `yes`, `oob` - so only a letters-then-digits name is
+#   flagged. That catches b0, s0, b1 and leaves his words alone.
+LINEWORD = re.compile(r'^(?:ws\d+|g\d+|gc\w+)[a-z]*$')
+INLINE = [
+    ('a local variable out of my code', re.compile(r'^[a-z]{1,4}\d{1,2}$')),
+    ('a function call out of my code', re.compile(r'^[a-z][a-z0-9_]*\(\s*\)$')),
+]
+
 SHAPES = [
     ('a knob or constant name', re.compile(r'\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+){1,}\b')),
     ('a code identifier', re.compile(r'\b[a-z][a-z0-9]*(?:_[a-z0-9]+){1,}\b')),
@@ -128,6 +143,22 @@ def glossed(text, token):
     return bool(GLOSS.search(tail))
 
 
+def glossed_code(text, tok):
+    """The gloss window after an inline-code token, with every OTHER code span blanked first.
+
+    A neighbouring `passes()` carried its own '(' into the window and cleared a bare `b0` on this
+    scan's first run. Only the token being judged keeps its backticks.
+    """
+    mark = '\x00%s\x00' % tok
+    t = re.sub(r'`[^`]*`',
+               lambda m: mark if m.group(0).strip('`').strip() == tok else ' ', text)
+    i = t.find(mark)
+    if i < 0:
+        return True
+    tail = t[i + len(mark): i + len(mark) + GLOSS_WINDOW]
+    return bool(GLOSS.search(tail))
+
+
 def main():
     try:
         data = json.load(sys.stdin)
@@ -139,6 +170,8 @@ def main():
         return
     #   code fences and inline code are where a label BELONGS - strip them before checking prose.
     prose = re.sub(r'```.*?```', ' ', text, flags=re.S)
+    #   THE INLINE-CODE TOKENS ARE KEPT, not discarded - the INLINE scan below reads them.
+    code = [m.group(1).strip() for m in re.finditer(r'`([^`]*)`', prose)]
     prose = re.sub(r'`[^`]*`', ' ', prose)
 
     #   QUOTED SPANS COME OUT BEFORE BOTH CHECKS. The span limit was 200 characters and a
@@ -162,6 +195,17 @@ def main():
                 continue
             seen.add(tok.lower())
             hits.append((tok, why))
+    #   THE INLINE-CODE SCAN, his 1106 gap. The gloss is checked against the ORIGINAL text with its
+    #   backticks intact, so `b0` (the cad walk's first bar) clears and a bare `b0` does not.
+    for tok in code:
+        if not tok or tok.lower() in seen or tok.lower() in HIS or LINEWORD.match(tok):
+            continue
+        for why, rx in INLINE:
+            if rx.match(tok):
+                if not glossed_code(text, tok):
+                    seen.add(tok.lower())
+                    hits.append((tok, why))
+                break
     #   The same exemption carries the forward-read scan: a phrase NAMED in quotes is being
     #   discussed, not claimed. That check blocked its own explanation on its first live run.
     low = unq.lower()
