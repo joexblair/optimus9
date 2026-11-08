@@ -242,9 +242,16 @@ def r_block(LN, side, ev, xtf):
     3 THE x-CROSS: x_race on ws{xtf} from the cadence event. 4 THE REPORT ROWS: the walk back to look forward
     from that cross, on the cadence side, then the r values, EMERGING, at both bars.
     """
-    r = F2.x_race(LN, xtf, side, ev, race_bound(LN, ev))
+    bnd = race_bound(LN, ev)
+    r = F2.x_race(LN, xtf, side, ev, bnd)
     if r is None:
-        return None, 'ws%dx has no cross before the tape ends' % xtf
+        #   HIS 1108 race bound is the next cadence event, so the message must name THAT bar. It
+        #   read "before the tape ends" after the bound moved, which is a label describing a rule
+        #   the code no longer runs.
+        end = len(LN['close']) - 1
+        return None, ('ws%dx has no cross before the next cadence event %s'
+                      % (xtf, ln.U(int(bnd))) if int(bnd) != int(end)
+                      else 'ws%dx has no cross before the tape ends' % xtf)
     cf, which, c = r
     X = F2.x_of(LN, xtf)
     wb = JIG.mage_cascade_bar(X, c, side, mode='extrema', gap=JIG.MC_GAP)
