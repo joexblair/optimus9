@@ -1,4 +1,4 @@
-# sandbox x-cross, 2026-08-25, LOW side
+# xcross validator report, 2026-08-25, LOW side
 
 | the read                           | value                                                                                                                                                                            |
 |------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -6,7 +6,7 @@
 | the cadence side                   | LOW                                                                                                                                                                              |
 | cadence events on the day          | 13                                                                                                                                                                               |
 | the tape                           | 1632960 bars, 2026-07-02 12:00:00 .. 2026-10-04 23:59:55                                                                                                                         |
-| the knob hash                      | b695f7d59338, off the bank: none                                                                                                                                                 |
+| the knob hash                      | 54c74cbe591f, off the bank: none                                                                                                                                                 |
 | the cadence                        | the BUILT version: ws1b oob excursion, nestle, ws3Mage ex-25/75 (rescue on)                                                                                                      |
 | the TF                             | the highest line ex-20/80 AND towards at the cadence event. ex-fence reads either: closed-prev, or the emerging extreme over 12 bars = 60 s                                      |
 | the x-cross                        | the first of ws{TF}x to ib, to ws{TF}r, to ws{TF}Mage that holds 24 bars = 120 s, counting the cross bar. ws{TF}x is emerging, its r and Mage racers are closed-prev, as built   |
@@ -21,7 +21,7 @@
 | MINE: the walk back is not bounded | the extremum may sit before the cadence event. Bounding it at the event is the alternative                                                                                       |
 
 ====================================================================================================
-LOW cadence event 2026-08-25 07:02:00  (1 of 13)
+xcross validator report · LOW cadence event 2026-08-25 07:02:00  (1 of 13)
 ====================================================================================================
 
 | line · timestamp                             | ws30  | ws29  | ws28  | ws27  | ws26  | ws25  | ws24  | ws23  | ws22  | ws21  | ws20  | ws19  | ws18  | ws17  | ws16  | ws15   | ws14   | ws13  | ws12  | ws11  | ws10  |
@@ -36,7 +36,7 @@ LOW cadence event 2026-08-25 07:02:00  (1 of 13)
 | r · ws5x direction of the diff               | down  | flat  | down  | flat  | flat  | flat  | flat  | flat  | up    | up    | down  | up    | flat  | flat  | flat  | down   | down   | flat  | down  | up    | up    |
 
 ====================================================================================================
-LOW cadence event 2026-08-25 07:54:00  (2 of 13)
+xcross validator report · LOW cadence event 2026-08-25 07:54:00  (2 of 13)
 ====================================================================================================
 
 | line · timestamp                             | ws30  | ws29   | ws28  | ws27  | ws26   | ws25   | ws24  | ws23  | ws22  | ws21  | ws20  | ws19  | ws18  | ws17  | ws16  | ws15   | ws14   | ws13   | ws12   | ws11  | ws10   |
@@ -51,7 +51,7 @@ LOW cadence event 2026-08-25 07:54:00  (2 of 13)
 | r · ws5x direction of the diff               | up    | down   | flat  | up    | down   | flat   | flat  | flat  | flat  | up    | flat  | down  | up    | down  | flat  | up     | up     | up     | up     | up    | down   |
 
 ====================================================================================================
-LOW cadence event 2026-08-25 08:08:00  (3 of 13)
+xcross validator report · LOW cadence event 2026-08-25 08:08:00  (3 of 13)
 ====================================================================================================
 
 | line · timestamp                             | ws30  | ws29   | ws28  | ws27  | ws26   | ws25   | ws24  | ws23  | ws22  | ws21  | ws20  | ws19  | ws18  | ws17  | ws16  | ws15   | ws14   | ws13   | ws12   | ws11  | ws10   |
@@ -66,7 +66,7 @@ LOW cadence event 2026-08-25 08:08:00  (3 of 13)
 | r · ws5x direction of the diff               | up    | down   | flat  | up    | down   | flat   | flat  | flat  | flat  | up    | flat  | down  | up    | down  | flat  | up     | up     | up     | up     | up    | down   |
 
 ====================================================================================================
-LOW cadence event 2026-08-25 10:04:00  (4 of 13)
+xcross validator report · LOW cadence event 2026-08-25 10:04:00  (4 of 13)
 ====================================================================================================
 
 | line · timestamp                             | ws30  | ws29  | ws28  | ws27  | ws26  | ws25  | ws24  | ws23  | ws22  | ws21  | ws20  | ws19  | ws18  | ws17  | ws16  | ws15   | ws14  | ws13  | ws12  | ws11  | ws10  |
@@ -81,7 +81,7 @@ LOW cadence event 2026-08-25 10:04:00  (4 of 13)
 | r · ws5x direction of the diff               | up    | flat  | flat  | up    | up    | down  | down  | up    | down  | flat  | up    | flat  | up    | up    | flat  | down   | down  | down  | down  | up    | down  |
 
 ====================================================================================================
-LOW cadence event 2026-08-25 13:26:00  (5 of 13)
+xcross validator report · LOW cadence event 2026-08-25 13:26:00  (5 of 13)
 ====================================================================================================
 
 | line · timestamp                            | ws30  | ws29  | ws28  | ws27  | ws26  | ws25  | ws24  | ws23  | ws22  | ws21  | ws20  | ws19  | ws18   | ws17  | ws16  | ws15   | ws14  | ws13  | ws12  | ws11  | ws10  |
@@ -96,7 +96,7 @@ LOW cadence event 2026-08-25 13:26:00  (5 of 13)
 | r · ws5x direction of the diff              | up    | up    | up    | down  | flat  | up    | flat  | up    | up    | flat  | up    | up    | down   | up    | up    | down   | flat  | flat  | flat  | up    | up    |
 
 ====================================================================================================
-LOW cadence event 2026-08-25 13:31:00  (6 of 13)
+xcross validator report · LOW cadence event 2026-08-25 13:31:00  (6 of 13)
 ====================================================================================================
 
 | line · timestamp                            | ws30  | ws29  | ws28  | ws27  | ws26  | ws25  | ws24  | ws23  | ws22  | ws21  | ws20  | ws19  | ws18  | ws17  | ws16  | ws15  | ws14  | ws13  | ws12  | ws11  | ws10  |
@@ -111,7 +111,7 @@ LOW cadence event 2026-08-25 13:31:00  (6 of 13)
 | r · ws5x direction of the diff              | up    | up    | up    | up    | up    | up    | up    | up    | up    | up    | up    | up    | up    | up    | up    | up    | up    | up    | up    | up    | up    |
 
 ====================================================================================================
-LOW cadence event 2026-08-25 17:10:00  (7 of 13)
+xcross validator report · LOW cadence event 2026-08-25 17:10:00  (7 of 13)
 ====================================================================================================
 
 | line · timestamp                            | ws30  | ws29  | ws28  | ws27  | ws26  | ws25  | ws24   | ws23  | ws22   | ws21   | ws20  | ws19  | ws18  | ws17  | ws16  | ws15  | ws14  | ws13  | ws12   | ws11   | ws10  |
@@ -126,7 +126,7 @@ LOW cadence event 2026-08-25 17:10:00  (7 of 13)
 | r · ws5x direction of the diff              | up    | up    | up    | flat  | up    | up    | down   | down  | down   | down   | flat  | up    | up    | up    | up    | down  | flat  | up    | down   | down   | up    |
 
 ====================================================================================================
-LOW cadence event 2026-08-25 17:13:00  (8 of 13)
+xcross validator report · LOW cadence event 2026-08-25 17:13:00  (8 of 13)
 ====================================================================================================
 
 | line · timestamp                            | ws30  | ws29  | ws28  | ws27   | ws26  | ws25  | ws24  | ws23  | ws22   | ws21  | ws20  | ws19  | ws18  | ws17  | ws16  | ws15  | ws14  | ws13  | ws12  | ws11   | ws10  |
@@ -141,7 +141,7 @@ LOW cadence event 2026-08-25 17:13:00  (8 of 13)
 | r · ws5x direction of the diff              | up    | up    | up    | flat   | up    | up    | down  | down  | down   | down  | flat  | up    | up    | up    | up    | down  | flat  | up    | down  | down   | up    |
 
 ====================================================================================================
-LOW cadence event 2026-08-25 19:35:00  (9 of 13)
+xcross validator report · LOW cadence event 2026-08-25 19:35:00  (9 of 13)
 ====================================================================================================
 
 | line · timestamp                            | ws30  | ws29  | ws28  | ws27  | ws26  | ws25  | ws24  | ws23  | ws22   | ws21  | ws20  | ws19  | ws18   | ws17  | ws16  | ws15   | ws14  | ws13  | ws12   | ws11   | ws10  |
@@ -156,7 +156,7 @@ LOW cadence event 2026-08-25 19:35:00  (9 of 13)
 | r · ws5x direction of the diff              | up    | up    | up    | down  | flat  | flat  | up    | up    | down   | flat  | flat  | flat  | down   | flat  | flat  | down   | flat  | flat  | down   | down   | flat  |
 
 ====================================================================================================
-LOW cadence event 2026-08-25 19:39:00  (10 of 13)
+xcross validator report · LOW cadence event 2026-08-25 19:39:00  (10 of 13)
 ====================================================================================================
 
 | line · timestamp                            | ws30  | ws29  | ws28  | ws27  | ws26  | ws25  | ws24  | ws23  | ws22   | ws21  | ws20  | ws19  | ws18   | ws17  | ws16  | ws15   | ws14  | ws13  | ws12   | ws11   | ws10  |
@@ -171,7 +171,7 @@ LOW cadence event 2026-08-25 19:39:00  (10 of 13)
 | r · ws5x direction of the diff              | up    | up    | up    | down  | flat  | flat  | up    | up    | down   | flat  | flat  | flat  | down   | flat  | flat  | down   | flat  | flat  | down   | down   | flat  |
 
 ====================================================================================================
-LOW cadence event 2026-08-25 20:52:00  (11 of 13)
+xcross validator report · LOW cadence event 2026-08-25 20:52:00  (11 of 13)
 ====================================================================================================
 
 | line · timestamp                             | ws30   | ws29   | ws28   | ws27  | ws26   | ws25   | ws24   | ws23  | ws22  | ws21   | ws20  | ws19  | ws18   | ws17   | ws16   | ws15   | ws14   | ws13  | ws12   | ws11  | ws10  |
@@ -186,7 +186,7 @@ LOW cadence event 2026-08-25 20:52:00  (11 of 13)
 | r · ws5x direction of the diff               | down   | flat   | down   | flat  | flat   | flat   | flat   | flat  | flat  | down   | down  | flat  | down   | down   | flat   | up     | up     | flat  | up     | flat  | down  |
 
 ====================================================================================================
-LOW cadence event 2026-08-25 21:01:00  (12 of 13)
+xcross validator report · LOW cadence event 2026-08-25 21:01:00  (12 of 13)
 ====================================================================================================
 
 | line · timestamp                             | ws30   | ws29   | ws28   | ws27  | ws26   | ws25   | ws24   | ws23  | ws22   | ws21   | ws20  | ws19  | ws18   | ws17  | ws16   | ws15   | ws14   | ws13  | ws12  | ws11  | ws10  |
@@ -201,7 +201,7 @@ LOW cadence event 2026-08-25 21:01:00  (12 of 13)
 | r · ws5x direction of the diff               | down   | flat   | down   | flat  | flat   | flat   | flat   | flat  | flat   | down   | down  | flat  | down   | up    | flat   | up     | up     | flat  | up    | flat  | up    |
 
 ====================================================================================================
-LOW cadence event 2026-08-25 23:52:00  (13 of 13)
+xcross validator report · LOW cadence event 2026-08-25 23:52:00  (13 of 13)
 ====================================================================================================
 
 | line · timestamp                             | ws30  | ws29  | ws28  | ws27  | ws26  | ws25  | ws24  | ws23  | ws22  | ws21  | ws20  | ws19  | ws18  | ws17  | ws16  | ws15  | ws14  | ws13  | ws12  | ws11  | ws10  |

@@ -1,4 +1,8 @@
-"""The sandbox x-cross mech, Joe 1107. One report per cadence event, printed consecutively. -> text files.
+"""`fdm2-xcv` - HIS NAME, 1108. One xcross validator report per cadence event. -> text files.
+
+HIS 1108: *"take ownership of the files. bank them as the fdm2-xcv mech"*. Built in another session
+and handed over at chat log #46; owned here from 1108. The indented spec is section 0 of
+docs/octo-freedom/1107_sandbox_xcross.md.
 
 HIS FOUR ITEMS, in his words: *"the next data collection will be built by these 4 items: the cadence, the
 highest TF selected, the ws{TF}x cross after the cadence, and the report"*.
@@ -11,7 +15,8 @@ highest TF selected, the ws{TF}x cross after the cadence, and the report"*.
                      this means you can use the side of the cadence to dictate the side of the ws{}x cross"*
     3 the x-cross    v4_fdm2.x_race on that TF, from the cadence event: the first of {ib, ws{TF}r, ws{TF}Mage}
                      to hold FDM_X10_WOB bars
-    4 the report     his 1107 table: ws30..ws10 r, emerging, at the ws{TF}x extremum and at the cross, the
+    4 the report     THE xcross validator report, his 1108 name (*"let's name that report "xcross validator
+                     report" - it matches what it does"*). His 1107 table: ws30..ws10 r, emerging, at the ws{TF}x extremum and at the cross, the
                      diff and its direction - then the same r rows on ws5x, his *"drop the r2 rows, and replace
                      them with r rows that were calculated on ws5x"*. The extremum is jig.mage_cascade_bar's walk back to
                      look forward from the cross bar, on the cadence side
@@ -75,6 +80,7 @@ import sandbox_knobs as SK
 OUT = os.path.dirname(os.path.abspath(__file__))
 TFS = list(range(SK.REPORT_TF_HI, SK.REPORT_TF_LO - 1, -1))     # his report's columns, ws30 down to ws10
 SIDE_NAME = {+1: 'HIGH', -1: 'LOW'}
+REPORT_NAME = 'xcross validator report'  # HIS 1108 name, printed in every file title and every report banner
 R2_CFG = KLine(k_len=SK.R2_KLEN, rsi=SK.R2_RSI, stc=SK.R2_STC, src=SK.R2_SRC)    # HIS 1107 ws{TF}r2, 6|6|10|close
 R2 = {}                                  # tf -> the ws{tf}r2 array, built once per run by r2_lines()
 #   r2_lines() IS NOT READ BY THE REPORT. Joe 1107 dropped the r2 rows for the ws5x ones; the producer stays so
@@ -169,7 +175,10 @@ def table(rows):
 
 
 def report(LN, side, ev, n_of):
-    """One cadence event's report table. -> [str].
+    """THE xcross validator report for one cadence event: its banner and its r table. -> [str].
+
+    HIS 1108: *"bank the latest version, the one that has ws5x as a static line for each table"* - every
+    report carries the selected ws{TF}x block AND the fixed ws5x block (WS5X_TF, banked 5).
 
     HIS 1107: the per-event item table (the cadence, the TF, the cross, the extremum) is DELETED from the
     files - his *"delete these sections from both files"*. The cadence event stays in the banner, the
@@ -180,7 +189,8 @@ def report(LN, side, ev, n_of):
     tw = [t for t in range(1, hi + 1)
           if F2.ex2080_line(LN, t, ev, side) and F2.towards(LN['CPR'][t], t, ev, side)]
     tf = max(tw) if tw else None
-    out = ['', '=' * 100, '%s cadence event %s  (%s)' % (SIDE_NAME[side], ln.U(ev), n_of), '=' * 100, '']
+    out = ['', '=' * 100, '%s · %s cadence event %s  (%s)' % (REPORT_NAME, SIDE_NAME[side], ln.U(ev), n_of),
+           '=' * 100, '']
     g = [('line · timestamp',) + tuple('ws%d' % t for t in TFS)]
     notes = []
     #   HIS 1107: *"drop the r2 rows, and replace them with r rows that were calculated on ws5x"* - the
@@ -255,7 +265,7 @@ def legend(LN, day, side, n):
             ('MINE: the first report row', 'the ws{TF}x extremum. The other candidate is the cadence event bar'),
             ('MINE: the walk back is not bounded', 'the extremum may sit before the cadence event. '
              'Bounding it at the event is the alternative')]
-    return ['# sandbox x-cross, %s, %s side' % (day, SIDE_NAME[side]), ''] + table(rows)
+    return ['# %s, %s, %s side' % (REPORT_NAME, day, SIDE_NAME[side]), ''] + table(rows)
 
 
 def main(day):

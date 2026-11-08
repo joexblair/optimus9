@@ -1,4 +1,5 @@
-"""The sandbox x-cross mech's knobs, BANKED. Joe 1108: *"bank, update specs and make knobs durable"*.
+"""`fdm2-xcv`'s knobs, BANKED. Joe 1108: *"bank, update specs and make knobs durable"*, and
+*"take ownership of the files. bank them as the fdm2-xcv mech"*.
 
 BANKED MEANS THE DEFAULT MOVES AND AN OFF-RULED RUN REFUSES. Joe's standing rule, in v4_knobs' own form.
 Every value below is one he set in the 1107 sandbox work; a run with any of them overridden refuses
@@ -26,7 +27,8 @@ def _knob(name, default, cast=float):
 REPORT_TF_HI = _knob('REPORT_TF_HI', 30, int)       # the report's first r column, ws30r
 REPORT_TF_LO = _knob('REPORT_TF_LO', 10, int)       # the report's last r column, ws10r
 #   THE SECOND r BLOCK, HIS 1107: *"drop the r2 rows, and replace them with r rows that were calculated on
-#   ws5x"* - the same race and walk back on ws5x, whatever TF the cadence selected
+#   ws5x"* - the same race and walk back on ws5x, whatever TF the cadence selected. BANKED 1108: *"bank the latest
+#   version, the one that has ws5x as a static line for each table"*
 WS5X_TF = _knob('WS5X_TF', 5, int)
 
 # ── ws{TF}r2, HIS 1107: *"create a new `ws{TF}r2` stochrsi line: klen:6, rsilen:6, stochrange:10, src close"*
@@ -53,7 +55,8 @@ FAKE_TO = _knob('FAKE_TO', '19:20:00', str)
 RULED = {
     'REPORT_TF_HI': (30, 'TF', '"report the ws30r to ws10r emerging values in a 22 column table"'),
     'REPORT_TF_LO': (10, 'TF', '"report the ws30r to ws10r emerging values in a 22 column table"'),
-    'WS5X_TF': (5, 'TF', '"replace them with r rows that were calculated on ws5x"'),
+    'WS5X_TF': (5, 'TF', '"replace them with r rows that were calculated on ws5x", then 1108 "bank the latest '
+                         'version, the one that has ws5x as a static line for each table"'),
     'R2_KLEN': (6, 'bars', '"klen:6"'),
     'R2_RSI': (6, 'bars', '"rsilen:6"'),
     'R2_STC': (10, 'bars', '"stochrange:10"'),

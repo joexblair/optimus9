@@ -2218,3 +2218,7 @@ a587447f6286  show the list of reports onscreen - no summaries
 ace41953576a  can you code it? it would have its own label for any events that it claims: `{bearish,bullish}-rsi`
 25a664d616ec  that's better. bank it and update the jig producer
 ba387a12a2ca  your preference. these 2 options should be chosen by a knob
+5ab31bd464b8  let's name that report "xcross validator report" - it matches what it does
+a02d287ea716  bank the latest version, the one that has ws5x as a static line for each table
+8a83668429ac  share the sandbox mech and the associated report with your workmate.  I'll guide them through the wiring
+53408e5cbdd3  share the sandbox mech and the associated report with your workmate. I'll guide them through the wiring

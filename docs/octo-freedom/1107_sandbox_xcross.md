@@ -1,9 +1,14 @@
-# The sandbox x-cross mech, and the reads built beside it, 2026-11-07
+# `fdm2-xcv`, and the reads built beside it, 2026-11-07
+
+HIS 1108 NAME AND GO: *"take ownership of the files. bank them as the fdm2-xcv mech. commit and
+push all files, yours or not"*. The mech was built in another session and handed over at log entry
+#46; it is mine from 1108 and `fdm2-xcv` is its name. Earlier text in this file saying "the sandbox
+x-cross mech" means `fdm2-xcv`.
 
 HIS 1108: *"bank, update specs and make knobs durable"*.
 
-PLAINLY: the sandbox x-cross mech prints one report per cadence event. Each report lists the r values
-ws30r..ws10r at a ws{TF}x extremum and at its cross. Beside the mech sit a fake cadence (experimental), two
+PLAINLY: the sandbox x-cross mech prints one **xcross validator report** per cadence event. Each report lists
+the r values ws30r..ws10r at a ws{TF}x extremum and at its cross, then again on ws5x. Beside the mech sit a fake cadence (experimental), two
 lines he named (ws{TF}e and ws{TF}r2), and the RSI divergence read `bullish-rsi` / `bearish-rsi`. Every knob is
 banked: the default is his value, and a run with a knob off the bank refuses unless it declares itself an
 experiment.
@@ -12,7 +17,34 @@ The code is `1107_sandbox_xcross/`. The knobs are `1107_sandbox_xcross/sandbox_k
 
 ---
 
-## 1. THE SANDBOX x-CROSS MECH - HIS FOUR ITEMS
+## 0. `fdm2-xcv` - THE INDENTED SPEC
+
+His indentation rule: a deeper level nests INSIDE the one above, so `--` under `-` reads as AND.
+
+```
+1) IF a cadence event prints on `side` - the BUILT cadence: ws1b's oob excursion, its cross back to
+   ib, the nestle, and ws3Mage ex-25/75 with its rescue
+2) -IF any line ws1..ws30 is ex-20/80 AND towards at that cadence event bar
+3) --THEN the TF is the HIGHEST such line, and the cadence event's own side is the ws{TF}x side
+4) ---IF ws{TF}x emerging then crosses, strictly after the cadence event bar, to the first of
+       in-bounds, OR its own closed-prev ws{TF}r, OR its own closed-prev ws{TF}Mage
+5) ----IF that cross holds for FDM_X10_WOB 24 bars = 120 s, counting the cross bar
+6) -----THEN walk back to look forward from the cross bar, in MC_GAP 48-bar = 240 s steps, to the
+         ws{TF}x extremum on the cadence event's side
+7) ------THEN print one xcross validator report: ws30r..ws10r EMERGING at that extremum, the same
+          21 columns at the cross bar, their difference, and its direction
+8) -------AND print the same four rows again on ws5x, with no TF selection
+```
+
+- the trade is never read. His *"the trade won't be considered. this means you can use the side of
+  the cadence to dictate the side of the ws{}x cross"*.
+- every read is same-side. oob is 15/85, ex-fence is 20/80.
+- HIGH and LOW cadence events go to separate files.
+- nothing in clauses 1 to 8 opens, closes or scores a trade. `fdm2-xcv` is a report.
+
+---
+
+## 1. `fdm2-xcv` - HIS FOUR ITEMS
 
 HIS 1107: *"the next data collection will be built by these 4 items: the cadence, the highest TF selected, the
 ws{TF}x cross after the cadence, and the report"*.
@@ -22,7 +54,7 @@ ws{TF}x cross after the cadence, and the report"*.
 | 1 | the cadence | `v4_fdm2.cadence_events`, the BUILT version: ws1b's oob excursion, the cross back to ib, the nestle, the ws3Mage ex-25/75 gate with its rescue | *"we'll be using the built version"* |
 | 2 | the TF | the highest line ws1..ws30 that is ex-20/80 AND towards at the cadence event | *"at the cadence event, find the highest es-20/80-fence towards line and make that the TF for the ws{TF}x cross"* |
 | 3 | the x-cross | `v4_fdm2.x_race` on that TF, from the cadence event: the first of ws{TF}x to ib, to ws{TF}r, to ws{TF}Mage that holds 24 bars = 120 s, counting the cross bar | *"the trade won't be considered. this means you can use the side of the cadence to dictate the side of the ws{}x cross"* |
-| 4 | the report | the r table below, one per cadence event, printed one after another | *"the reports will be printed consecutively, in a text file"* |
+| 4 | the report | the xcross validator report below, one per cadence event, printed one after another | *"the reports will be printed consecutively, in a text file"* |
 
 - HIGH and LOW cadence events go to separate files, his *"repeat the mech's run for the lowside cadence events,
   and dump their consecutive reports into a separate text file"*.
@@ -30,7 +62,11 @@ ws{TF}x cross after the cadence, and the report"*.
 - ex-20/80 is `v4_fdm2.ex2080_line`, reading either: the closed-prev value, or the emerging extreme over 12 bars =
   60 s (`FDM_EXF_READ` 'either', `FDM_EXF_EM_BARS` 12, both in v4_knobs).
 
-## 2. THE REPORT
+## 2. THE xcross validator report
+
+HIS 1108 NAME: *"let's name that report "xcross validator report" - it matches what it does"*. HIS 1108 BANK:
+*"bank the latest version, the one that has ws5x as a static line for each table"* - the version below, with the
+selected ws{TF}x block and the fixed ws5x block in every report. `WS5X_TF` is banked 5.
 
 HIS 1107: *"report the ws30r to ws10r emerging values in a 22 column table"*, then *"delete these sections from
 both files"* (the per-event item table) and *"drop the r2 rows, and replace them with r rows that were calculated
@@ -38,7 +74,7 @@ on ws5x"*.
 
 | row | what it holds |
 |---|---|
-| banner | the cadence side, the cadence event's time, and "n of N" |
+| banner | `xcross validator report · `, the cadence side, the cadence event's time, and "n of N" |
 | r · extremum | ws30r..ws10r, EMERGING, at the ws{TF}x extremum: `jig.mage_cascade_bar`'s walk back to look forward, in 48-bar = 240 s steps from the cross bar |
 | r · cross | ws30r..ws10r, EMERGING, at the ws{TF}x cross bar |
 | r · diff | cross minus extremum, per column |
@@ -71,8 +107,9 @@ onscreen - no summaries"*.
 
 - A fake event is a closed-prev ws1b cross from the high oob (85) back to ib, inside 17:45:00..19:20:00.
 - It is kept when closed-prev ws1Mage is at or over 85 on at least one bar of the oob excursion before the cross.
-- Each kept event runs through the sandbox mech's own report, banner `HIGH FAKE cadence event`. That banner is MY
-  label: he has not named this report (asked 1108, *"what did we name this report"*).
+- Each kept event runs through the same xcross validator report, banner `xcross validator report · HIGH FAKE
+  cadence event`. He named the report 1108, asked about this banner: *"what did we name this report"*, then
+  *"let's name that report "xcross validator report" - it matches what it does"*. "FAKE" in the banner is my label.
 - One comment line prints per ws1b cross in the window, kept or not, with the excursion and its ws1Mage maximum.
 - It lives in `sandbox_xcross.py` (`fake_events`, `fake_main`), so it reads the same driver as the real cadence.
 
@@ -136,7 +173,7 @@ The sandbox knobs, `sandbox_knobs.py`, env `W_SBX_<NAME>`:
 |---|---|---|---|---|
 | `REPORT_TF_HI` | 30 | TF | YES | "report the ws30r to ws10r emerging values in a 22 column table" |
 | `REPORT_TF_LO` | 10 | TF | YES | "report the ws30r to ws10r emerging values in a 22 column table" |
-| `WS5X_TF` | 5 | TF | YES | "replace them with r rows that were calculated on ws5x" |
+| `WS5X_TF` | 5 | TF | YES | "replace them with r rows that were calculated on ws5x", then 1108 "bank the latest version, the one that has ws5x as a static line for each table" |
 | `R2_KLEN` | 6 | bars | YES | "klen:6" |
 | `R2_RSI` | 6 | bars | YES | "rsilen:6" |
 | `R2_STC` | 10 | bars | YES | "stochrange:10" |
@@ -193,6 +230,7 @@ director range are v4_fdm2's, in `1022_v4/v4_knobs.py`; the walk back's 48-bar s
 | control | result |
 |---|---|
 | the tape | 1,632,960 bars, 2026-07-02 12:00:00 .. 2026-10-04 23:59:55 |
+| the 1108 rename rerun, against commit f8224e6 | HIGH, LOW and fake identical apart from the name in each file title and banner; the ws5x block in 15 of 15 HIGH, 13 of 13 LOW, 7 of 7 fake reports |
 | the 1108 rerun on the banked knobs, against the files from before | HIGH, LOW, fake and the ws2b pine byte-identical; the ws2b events file identical but for one legend row |
 | that legend row, corrected 1108 | the RSI-level-gate row read "off - gcws30b oob only" on the ws2b run; it now names the gate it ran on, ws2b |
 | ws1r rebuilt from the read's RSI, 1,440 bars of the day | max difference 7.1e-14 |
