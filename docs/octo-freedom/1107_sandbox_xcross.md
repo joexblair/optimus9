@@ -337,6 +337,75 @@ after the cross: xcv 9 on a smallest counted diff of 0.0035, xcv 11 on 0.2228.
 The exact value -14.2857 prints on 3 of the 4 lines at 21:09:00. 100 / 7 = 14.2857 and the cache's
 `S0` is 7. WHETHER THE TWO ARE RELATED IS UNMEASURED.
 
+### HIS 1108 OPPOSING-VERDICT RULE, AND THE TEST HE ASKED FOR
+
+HIS RULE: *"if a (race winner) prints a verdict that matches the side (ie UP for high, DOWN for
+low), continue the walk cad to either a) its cap or b) until an 'opposing' verdict prints"*, with
+*"both xcv 3-of-4, and rline-enhancer are racing"*. So a side-matching verdict is NOT the answer:
+a HIGH cadence event wants `down`, a LOW event wants `up`.
+
+HIS TEST: *"does a DOWN verdict from either mech print inside the 10 minute cad walk cap?"*. The
+cap is HIS - `FDM_XCAD_WALK_MIN` 10.0 min = 120 bars at the 5 s grid - and it is measured FROM THE
+ws5x CROSS, because that is where this walk starts. The reader is the `xcvopp` request kind.
+
+ANSWER: YES. 23 of the 24 rows that have a cross get an opposing verdict inside the cap.
+
+| the measurement over 2026-08-25 | rows |
+|---|---|
+| cadence events | 28 |
+| no ws5x cross, nothing to walk | 4 |
+| rows with a cross | 24 |
+| the first verdict already OPPOSES the side | 17 |
+| the first verdict MATCHES the side, so the walk continues | 7 |
+| of those 7, an opposing verdict inside the 10 min cap | 6 |
+| of those 7, NO opposing verdict inside the cap | 1 |
+| every row with a cross: opposing verdict inside the cap | 23 of 24 |
+
+THE 7 ROWS HIS RULE ACTUALLY CHANGES - the matching verdict is discarded and the walk carries on:
+
+| xcv row | the cadence event | side | the matching verdict that does NOT count | the first OPPOSING verdict | its mech | s from the cross | inside the cap |
+|---|---|---|---|---|---|---|---|
+| 5 | 2026-08-25 05:28:00 | HIGH | up at 2026-08-25 05:35:05 | 2026-08-25 05:38:35 | fdm2-rline-enhance | 3 min 35 s | YES |
+| 6 | 2026-08-25 05:41:00 | HIGH | up at 2026-08-25 05:35:05 | 2026-08-25 05:38:35 | fdm2-rline-enhance | 3 min 35 s | YES |
+| 7 | 2026-08-25 07:02:00 | LOW | down at 2026-08-25 07:12:00 | 2026-08-25 07:12:05 | the xcv 3-of-4 | 9 min 50 s | YES |
+| 19 | 2026-08-25 17:40:00 | HIGH | up at 2026-08-25 17:35:05 | 2026-08-25 17:37:20 | fdm2-rline-enhance | 2 min 20 s | YES |
+| 21 | 2026-08-25 17:53:00 | HIGH | up at 2026-08-25 18:00:05 | 2026-08-25 18:08:55 | fdm2-rline-enhance | 8 min 55 s | YES |
+| 22 | 2026-08-25 18:04:00 | HIGH | up at 2026-08-25 18:00:05 | 2026-08-25 18:08:55 | fdm2-rline-enhance | 8 min 55 s | YES |
+| 26 | 2026-08-25 21:01:00 | LOW | down at 2026-08-25 21:09:00 | 2026-08-25 22:57:00 | the xcv 3-of-4 | 117 min 00 s | NO |
+
+HIS OWN EXAMPLE, 0535: the `up` at 2026-08-25 05:35:05 matches the HIGH side, so it is discarded.
+The walk carries on and `down` prints at 2026-08-25 05:38:35 from `fdm2-rline-enhance`, 3 min 35 s
+after the cross - inside the cap. It covers xcv 5 and xcv 6, which share that cross.
+
+HOW LONG AFTER THE CROSS the opposing verdict printed, every row with a cross:
+
+| the delay | rows |
+|---|---|
+| 0 min 05 s | 12 |
+| 0 min 10 s | 2 |
+| 0 min 15 s | 1 |
+| 0 min 40 s | 1 |
+| 2 min 20 s | 1 |
+| 3 min 35 s | 2 |
+| 8 min 55 s | 2 |
+| 9 min 50 s | 1 |
+| 9 min 55 s | 1 |
+| none inside the cap | 1 |
+
+| which racer printed the opposing verdict | rows |
+|---|---|
+| the xcv 3-of-4 | 16 |
+| `fdm2-rline-enhance` | 8 |
+
+HIS PARKED FLOOR IS NOW TWICE IN FRONT OF HIM: 12 of the 24 opposing verdicts print ONE BAR after
+the cross, 5 s. At 1 dp a one-bar move has to shift a tenth to register, so those verdicts rest on
+moves around 0.1 on three of four lines. NO FLOOR IS APPLIED - he ruled none and parked it as the
+first troubleshooting target for early firing.
+
+NOT BUILT INTO THE xcv TABLE. This is the measurement he asked for, in its own reader. The xcv
+table still reports the FIRST verdict either racer prints, matching or not, because his rule was
+*"test and report"*.
+
 ### WHY THE WOB IS NECESSARY - the measurement that reversed his own ruling
 
 He asked why the report showed 2026-08-25 02:31:55 for the 02:22:00 HIGH event while the

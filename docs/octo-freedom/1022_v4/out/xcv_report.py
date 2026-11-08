@@ -437,3 +437,101 @@ def cadlist_table(LN, frm_s, to_s):
     if not ev:
         out.append('| none | - | - | - | - |')
     return out
+
+def xcvopp_table(LN, day, tf=5, cap_min=None):
+    """HIS 1108 TEST: does an OPPOSING verdict print inside the cad walk's cap? -> [str].
+
+    HIS RULE: *"if a (race winner) prints a verdict that matches the side (ie UP for high, DOWN for
+    low), continue the walk cad to either a) its cap or b) until an 'opposing' verdict prints"*,
+    and *"both xcv 3-of-4, and rline-enhancer are racing"*.
+
+    So a side-matching verdict is NOT the answer: on a HIGH cadence event the usable verdict is
+    `down`, on a LOW event it is `up`. This walks from the bar after the cross and tests BOTH
+    racers at every bar, and reports the first opposing verdict either of them prints.
+
+    THE CAP IS HIS, not mine: *"does a DOWN verdict from either mech print inside the 10 minute cad
+    walk cap?"*. `FDM_XCAD_WALK_MIN` carries that 10.0 minutes and is where the default comes
+    from. It is measured FROM THE CROSS, because the cross is where this walk starts.
+    """
+    out = []
+    import numpy as _np
+    from optimus9.analysis import jig as _JIG
+    tf = int(tf)
+    cap_bars = int(round(float(cap_min if cap_min is not None else K.FDM_XCAD_WALK_MIN) * 60 / 5))
+    A, B = ln.K(day + ' 00:00:00'), ln.K(day + ' 23:59:55')
+    NB = len(LN['close']) - 1
+    LEFT = (30, 29, 28, 27)
+    dp = int(K.FDM2_RLINE_DP)
+    X = F2.x_of(LN, tf)
+    EM = LN['EMR']
+    allcad = sorted(set(int(e[0]) for sd2 in (+1, -1)
+                        for e in F2.cadence_events(LN, sd2, 0, NB)))
+
+    def bound(ev):
+        i = _bisect.bisect_right(allcad, int(ev))
+        return allcad[i] if i < len(allcad) else NB
+
+    def raw34(anchor, bar):
+        c = [direction(EM[t][int(anchor)], EM[t][int(bar)]) for t in LEFT]
+        u, d = c.count('up'), c.count('down')
+        return ('up' if u >= 3 else 'down' if d >= 3 else 'none'), c
+
+    ev = []
+    for sd2 in (+1, -1):
+        for e in F2.cadence_events(LN, sd2, A, B):
+            ev.append((int(e[0]), sd2, int(e[1])))
+    out += ['', '# fdm2-xcv: does an OPPOSING verdict print inside the cap, ws%dx, %s' % (tf, day),
+            '']
+    out += [R.row('the cap', '%.1f min = %d bars at 5 s, from the ws%dx cross. FDM_XCAD_WALK_MIN'
+                  % (cap_bars * 5 / 60.0, cap_bars, tf)),
+            R.row('the opposing verdict', 'HIGH side wants `down`, LOW side wants `up` - HIS RULE'),
+            R.row('both racers test every bar', 'the xcv 3-of-4 raw read, and fdm2-rline-enhance'),
+            '']
+    out += ['| # | the cadence event | side | the ws%dx cross | the opposing verdict wanted | the '
+            'first verdict either racer prints | its mech | does it match the side | the first '
+            'OPPOSING verdict | its mech | s from the cross | inside the cap |' % tf,
+            '|' + '---|' * 12]
+    n = 0
+    for b, sd2, s0 in sorted(ev):
+        n += 1
+        side = 'HIGH' if sd2 > 0 else 'LOW'
+        want = 'down' if sd2 > 0 else 'up'
+        r = F2.x_race(LN, tf, sd2, int(s0) - 1, bound(b))
+        if r is None:
+            out.append('| %d | %s | %s | NONE | %s | - | - | - | - | - | - | - |'
+                       % (n, ln.U(b), side, want))
+            continue
+        cf, which, c = r
+        c = int(c)
+        first_v, first_m = None, '-'
+        opp_bar, opp_m = None, '-'
+        #   EVERY BAR FROM THE CROSS ONWARD. The cross bar itself is read too: the xcv table's own
+        #   3-of-4 is cross-against-extremum, and this walk is bar-against-cross, so at the cross
+        #   the raw read is all-flat by construction and only a later bar can say anything.
+        for t3 in range(c, NB + 1):
+            rv, _ = raw34(c, t3)
+            e = _JIG.rline_enhance(EM, LN['PIN'], LN['RSID'], LEFT, c, t3, need=3, dp=dp)
+            ev2 = e['verdict'] if e['spawn'] else None
+            for v, m in ((rv if rv != 'none' else None, 'the xcv 3-of-4'),
+                         (ev2, 'fdm2-rline-enhance')):
+                if v is None:
+                    continue
+                if first_v is None:
+                    first_v, first_m, first_bar = v, m, t3
+                if v == want and opp_bar is None:
+                    opp_bar, opp_m = t3, m
+            if opp_bar is not None:
+                break
+        if first_v is None:
+            out.append('| %d | %s | %s | %s | %s | none to the tape end | - | - | none | - | - | no |'
+                       % (n, ln.U(b), side, ln.U(c), want))
+            continue
+        d = (opp_bar - c) * 5 if opp_bar is not None else None
+        out.append('| %d | %s | %s | %s | %s | %s at %s | %s | %s | %s | %s | %s | %s |'
+                   % (n, ln.U(b), side, ln.U(c), want, first_v, ln.U(first_bar), first_m,
+                      'YES - keep walking' if first_v != want else 'no - it opposes already',
+                      ln.U(opp_bar) if opp_bar is not None else 'none to the tape end', opp_m,
+                      ('%d min %02d s' % (d // 60, d % 60)) if d is not None else '-',
+                      ('YES' if d is not None and d <= cap_bars * 5 else 'NO') if d is not None
+                      else 'NO'))
+    return out

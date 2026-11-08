@@ -172,6 +172,10 @@ def answer(q):
                                 label=str(q.get('label', 'cross')),
                                 anchor=q.get('anchor'))
         return out
+    if kind == 'xcvopp':
+        out += XR.xcvopp_table(LN, str(q['day']), tf=int(q.get('tf', 5)),
+                               cap_min=q.get('cap_min'))
+        return out
     if kind == 'xcv':
         out += XR.xcv_table(LN, str(q['day']), tf=int(q.get('tf', 5)))
         return out
