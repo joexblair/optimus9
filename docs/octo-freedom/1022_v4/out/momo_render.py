@@ -23,6 +23,9 @@ import v4_sweep_pivots as SP # noqa: E402
 from optimus9.analysis import jig as JIG   # noqa: E402
 
 
+DRAG_PCT = 0.1975   # the round trip, percent of the open. ONE name, not fourteen literals: it was
+#                     written as a bare number at fourteen sites in this file and any two of them
+#                     could have drifted apart without a single test failing.
 _C3R = {}      # ws3b and the ws1Mage lift-off sets, built once per import
 
 
@@ -99,8 +102,8 @@ def legs_table(LN, LG):
     out.append(row('realised %, median', '%+.3f' % float(np.median(rel))))
     out.append(row('realised %, total', '%+.3f' % sum(rel)))
     out.append(row('MFE over MAE, median', '%.2f' % float(np.median(rat)) if rat else 'nan'))
-    out.append(row('drag %', '-%.3f (0.1975%% round trip x %d legs)' % (0.1975 * len(LG), len(LG))))
-    out.append(row('net %', '%+.3f' % (sum(rel) - 0.1975 * len(LG))))
+    out.append(row('drag %', '-%.3f (%.4f%% round trip x %d legs)' % (DRAG_PCT * len(LG), DRAG_PCT, len(LG))))
+    out.append(row('net %', '%+.3f' % (sum(rel) - DRAG_PCT * len(LG))))
     out.append(row('MFE captured', '%.1f%% of MFE' % (sum(rel) / sum(mfe) * 100.0)
                    if sum(mfe) else 'nan'))
     return out
@@ -822,9 +825,9 @@ def pivstop_table(LN, A, B, lab='ws3r emerging, rest closed-prev', gaps=(24, 48,
         out.append(row(g, g * 5 // 60, n, len(agg[g]) - n,
                        '%.3f' % float(_np.median(d)), '%.3f' % d[0], '%.3f' % d[-1],
                        len(res), n - len(res),
-                       '%+.3f' % tr, '%.3f' % (-0.1975 * len(res)),
-                       '%+.3f' % (tr - 0.1975 * len(res)),
-                       '%+.3f' % ta, '%+.3f' % (ta - 0.1975 * n)))
+                       '%+.3f' % tr, '%.3f' % (-DRAG_PCT * len(res)),
+                       '%+.3f' % (tr - DRAG_PCT * len(res)),
+                       '%+.3f' % ta, '%+.3f' % (ta - DRAG_PCT * n)))
     return out
 
 
@@ -1002,9 +1005,9 @@ def c3rmage_table(LN, A, B, lab='ws3r emerging, rest closed-prev'):
                        sum(1 for x in g if x['how'].startswith('CLOSED')),
                        '%.3f' % float(_np.median([x['mae'] for x in g])),
                        '%+.3f' % float(_np.median([x['mfe'] for x in g])),
-                       '%+.3f' % sum(rl), '%.3f' % (-0.1975 * n),
-                       '%+.3f' % (sum(rl) - 0.1975 * n),
-                       '%+.4f' % ((sum(rl) - 0.1975 * n) / n)))
+                       '%+.3f' % sum(rl), '%.3f' % (-DRAG_PCT * n),
+                       '%+.3f' % (sum(rl) - DRAG_PCT * n),
+                       '%+.4f' % ((sum(rl) - DRAG_PCT * n) / n)))
 
     for gate in GATES:
         out += ['', '## every signal under the `%s` gate' % gate, '']
@@ -1141,6 +1144,7 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     #   level is a RAW kline HIGH; a LOW arm's LONG takes a raw LOW.
     RAW = {+1: phi, -1: plo}
     #   HIS 1108 ws1Mage WAIT, BANKED AT GATE `oob`. The stamps are built once per side.
+    DRAG = DRAG_PCT
     MW = int(K.FDM2_C3R_MAGE_ON)
     MG = str(K.FDM2_C3R_MAGE_GATE)
     LF = {sd2: c3r_mage_stamps(LN, sd2) for sd2 in (+1, -1)} if MW else None
@@ -1163,11 +1167,17 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
         out.append(row('none', '-', '-', '-', '-', '-', '-', '-', '-', '-'))
 
     out += ['', '## the firings, with the outgoing trade scored', '']
+    #   HIS 1108 COLUMN SET. *"add a column: the timestamp of the pivot that created the stop /
+    #   drop mfe over mae, held min"*. The pivot's bar and the level's distance come out of the
+    #   exit-kind text and into their own columns, and `realised %` is GROSS - drag is its own
+    #   column and net is its own, per his standing rule that the cost never hides inside a net.
     out += head('the c3r firing bar', 'the side it fired on', 'branch',
                 'the ws1Mage %s reversal' % (str(K.FDM2_C3R_MAGE_GATE)
                                              if int(K.FDM2_C3R_MAGE_ON) else 'wait is OFF'),
-                'the wait, min', 'the OUTGOING trade', 'it opens at', 'the open price', 'the exit',
-                'the exit kind', 'held min', 'MAE %', 'MFE %', 'realised %', 'MFE over MAE')
+                'the wait, min', 'the OUTGOING trade', 'it opens at', 'the open price',
+                'the pivot that set the stop', 'the stop level', 'the stop distance %',
+                'the exit', 'the exit kind', 'MAE %', 'MFE %', 'realised % GROSS', 'drag %',
+                'net %')
     mae_l, mfe_l, mfer_l, rel_l, stop_l, cap_l, how_l = [], [], [], [], [], [], []
     out_rows_skipped = []
     #   HIS 1108 *"consolidate and count the trade as a single evemt"*. Several ws1r oob entries
@@ -1201,8 +1211,7 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
             out.append(row(ln.U(int(E['x4'])), 'HIGH' if sd > 0 else 'LOW', E['branch'],
                            ln.U(sig) if MW else '-',
                            '%.1f' % ((sig - int(E['x4'])) * 5 / 60.0) if MW else '-',
-                           'SHORT' if osd < 0 else 'LONG', 'past the span', '-', '-', '-', '-',
-                           '-', '-', '-', '-'))
+                           'SHORT' if osd < 0 else 'LONG', 'past the span', *['-'] * 10))
             continue
         #   HIS 1108 TWO-SERIES STOP. The LEVEL is a raw kline extreme found by his walk back;
         #   the TRIGGER is pxs reaching that absolute price. `cap` is kept as the level's distance
@@ -1224,9 +1233,8 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
         if cb is not None and (sb is None or int(cb) < int(sb)):
             ex, how = int(cb), 'CLOSED at the target-side cadence'
         elif sb is not None:
-            ex, how = int(sb), ('STOP at %.3f%% - the raw extreme %.6f at %s, pxs reached it'
-                                % (cap, price, lvl) if price is not None
-                                else 'STOP at %.3f%% off %s' % (cap, lvl))
+            ex, how = int(sb), ('STOP - pxs reached the raw extreme' if price is not None
+                                else 'STOP - the FDM_MAE_CAP fallback')
         else:
             ex, how = int(B), 'still open at the span end'
         op = float(close[opn])
@@ -1253,16 +1261,16 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
         out.append(row(ln.U(int(E['x4'])), 'HIGH' if sd > 0 else 'LOW', E['branch'],
                        ln.U(sig) if MW else '-',
                        '%.1f' % ((sig - int(E['x4'])) * 5 / 60.0) if MW else '-',
-                       'SHORT' if osd < 0 else 'LONG', ln.U(opn), '%.6f' % op, ln.U(ex),
-                       how,
-                       '%.1f' % ((ex - opn) * 5 / 60.0), '%.3f' % mae, '%+.3f' % mfe,
-                       '%+.3f' % rel, '%.2f' % (mfe / mae) if mae > 0 else 'nan'))
+                       'SHORT' if osd < 0 else 'LONG', ln.U(opn), '%.6f' % op,
+                       lvl, '%.6f' % price if price is not None else '-', '%.3f' % cap,
+                       ln.U(ex), how, '%.3f' % mae, '%+.3f' % mfe, '%+.3f' % rel,
+                       '%.4f' % -DRAG, '%+.3f' % (rel - DRAG)))
     for sig0, sd0 in out_rows_skipped:
         out.append(row(ln.U(int(sig0)), 'HIGH' if sd0 > 0 else 'LOW', '-',
                        'no ws1Mage %s reversal before the span ends'
-                       % str(K.FDM2_C3R_MAGE_GATE), *['-'] * 11))
+                       % str(K.FDM2_C3R_MAGE_GATE), *['-'] * 13))
     if not fired:
-        out.append(row(*(['none'] + ['-'] * 14)))
+        out.append(row(*(['none'] + ['-'] * 16)))
     else:
         out += ['', '| the aggregate, every number carrying HIS DYNAMIC stop - the walk back to '
                 'look forward at gap %d bars = %d min, FDM_MAE_CAP %.2f%% only as the fallback '
@@ -1315,18 +1323,19 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
                        '%+.3f' % float(_np.median(mfer_l))))
         out.append(row('MFE %, total - on the RAW kline high/low instead of pxs',
                        '%+.3f' % sum(mfer_l)))
-        out.append(row('realised %, median', '%+.3f' % float(_np.median(rel_l))))
-        out.append(row('realised %, total', '%+.3f' % sum(rel_l)))
+        out.append(row('realised %, median - GROSS, before drag',
+                       '%+.3f' % float(_np.median(rel_l))))
+        out.append(row('net %%, median - after the %.4f%% round trip' % DRAG,
+                       '%+.3f' % float(_np.median([r - DRAG for r in rel_l]))))
+        out.append(row('realised %, total - GROSS, before drag', '%+.3f' % sum(rel_l)))
         out.append(row('the dynamic stop distance %, median', '%.3f' % float(_np.median(cap_l))))
         out.append(row('the dynamic stop distance %, min .. max',
                        '%.3f .. %.3f' % (min(cap_l), max(cap_l))))
         out.append(row('rows that fell back to FDM_MAE_CAP %.2f%%' % float(K.FDM_MAE_CAP),
                        sum(1 for c in cap_l if abs(c - float(K.FDM_MAE_CAP)) < 1e-12)))
-        out.append(row('MFE over MAE, median',
-                       '%.2f' % float(_np.median([f / m for f, m in zip(mfe_l, mae_l) if m > 0]))))
-        out.append(row('drag %', '-%.3f (0.1975%% round trip x %d)'
-                       % (0.1975 * len(rel_l), len(rel_l))))
-        out.append(row('net %', '%+.3f' % (sum(rel_l) - 0.1975 * len(rel_l))))
+        out.append(row('drag %', '-%.3f (%.4f%% round trip x %d)'
+                       % (DRAG_PCT * len(rel_l), DRAG_PCT, len(rel_l))))
+        out.append(row('net %', '%+.3f' % (sum(rel_l) - DRAG_PCT * len(rel_l))))
     return out
 
 
