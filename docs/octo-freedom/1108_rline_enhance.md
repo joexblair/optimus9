@@ -11,7 +11,80 @@ at any level, not only at an extreme - while the RSI keeps moving. At a bar wher
 ws30r, ws29r, ws28r and ws27r read `flat` against the anchor, the four lines say nothing and the
 RSI under them is the only thing left. This reads that RSI and spawns a verdict there.
 
-NOTHING IS BUILT. Every rule below is settled; the code is not written.
+## 10. IT IS BUILT AND THE RACE IS RUNNING - 2026-08-25, RULED_OK True
+
+| the piece | where |
+|---|---|
+| `IndicatorComputer._k_developing` | the developing K chain's intermediates, extracted verbatim. One Wilder update in the tree |
+| `IndicatorComputer.f_k_pin` | `(pin, rsi_d)` off that helper |
+| `LineReader.pin` / `BiasWindow.pin` | the pin read on the SAME event tape and remap the line itself uses - a pin off another tape would not line up |
+| `v4_pin_cache.py` | 30 TFs built through one Jig per batch of 24, in 22 s, cached per line spec with a `pin` tag |
+| `v4_fdm2.load` | hands them out as `LN['PIN']` and `LN['RSID']` |
+| `jig.rline_enhance` | HIS reader. Spawns ONLY where every line reads flat, then takes the RSI's own direction over the caller's span |
+| `jig.rline_tenths` / `jig.rline_direction` | the 1 dp integer read |
+| `xcv_report.xcv_table` | 3 new columns: the spawn bar, its verdict, which racer won |
+| `FDM2_RLINE_ON` 1, `FDM2_RLINE_DP` 1 | banked ON, HIS *"knob ON by default"*. 210 knobs on the bank |
+
+### THE PIN LINES UP WITH THE LINE IT DESCRIBES
+
+Every one of the 7 flats measured on 1108 is pinned on EVERY bar, and the pin side matches which
+way the line was stuck:
+
+| xcv rows | the line | the measured flat | bars | the r line moved | pinned bars | pin HIGH | pin LOW |
+|---|---|---|---|---|---|---|---|
+| 1 | ws29r | 2026-08-25 00:39:20 .. 2026-08-25 00:57:55 | 224 | 0 | 224 | 224 | 0 |
+| 5, 6 | ws30r | 2026-08-25 05:32:20 .. 2026-08-25 05:58:55 | 320 | 0 | 320 | 320 | 0 |
+| 7 | ws27r | 2026-08-25 06:46:20 .. 2026-08-25 07:11:55 | 308 | 0 | 308 | 0 | 308 |
+| 19, 20 | ws30r | 2026-08-25 17:31:50 .. 2026-08-25 17:59:55 | 338 | 0 | 338 | 338 | 0 |
+| 19, 20 | ws27r | 2026-08-25 17:46:50 .. 2026-08-25 17:59:55 | 158 | 0 | 158 | 158 | 0 |
+| 25, 26 | ws27r | 2026-08-25 20:42:25 .. 2026-08-25 21:08:55 | 319 | 0 | 319 | 0 | 319 |
+| 25 | ws29r | 2026-08-25 20:47:00 .. 2026-08-25 21:15:55 | 348 | 0 | 348 | 0 | 348 |
+
+THE INVARIANT HOLDS. A line pinned the same way as the bar before it, inside one candle, does not
+move at 1 dp - 0 violations on ws30r, ws29r, ws28r and ws27r over the whole day, on the MIDNIGHT
+candle grid the reader anchors to. An epoch grid shows 7, 3 and 8 violations on the three lines
+that do not divide a day, which is the test's error and not the producer's.
+
+### THE RACE, AND IT IS NOT GOOD NEWS
+
+| the race over 2026-08-25 | rows |
+|---|---|
+| cadence events | 28 |
+| a verdict at the cross, no race | 11 |
+| NO ROWS, goto START | 4 |
+| `fdm2-rline-enhance` won | 8 |
+| the cad walk won | 5 |
+| of the 8 wins, the verdict AGREES with the cad walk | 3 |
+| of the 8 wins, the verdict FLIPS | 5 |
+
+| xcv row | the cadence event | the cad walk fires | its verdict | the spawn bar | its verdict | how much earlier | do they agree |
+|---|---|---|---|---|---|---|---|
+| 1 | 2026-08-25 00:52:00 | 2026-08-25 00:58:00 | up | 2026-08-25 00:50:05 | down | 7 min 55 s | NO - it flips |
+| 5 | 2026-08-25 05:28:00 | 2026-08-25 05:59:00 | down | 2026-08-25 05:35:05 | up | 23 min 55 s | NO - it flips |
+| 6 | 2026-08-25 05:41:00 | 2026-08-25 05:59:00 | down | 2026-08-25 05:35:05 | up | 23 min 55 s | NO - it flips |
+| 19 | 2026-08-25 17:40:00 | 2026-08-25 18:00:00 | up | 2026-08-25 17:35:05 | up | 24 min 55 s | YES |
+| 20 | 2026-08-25 17:51:00 | 2026-08-25 18:00:00 | up | 2026-08-25 17:50:05 | down | 9 min 55 s | NO - it flips |
+| 21 | 2026-08-25 17:53:00 | 2026-08-25 18:30:00 | up | 2026-08-25 18:00:05 | up | 29 min 55 s | YES |
+| 22 | 2026-08-25 18:04:00 | 2026-08-25 18:30:00 | up | 2026-08-25 18:00:05 | up | 29 min 55 s | YES |
+| 25 | 2026-08-25 20:52:00 | 2026-08-25 21:09:00 | down | 2026-08-25 20:50:30 | up | 18 min 30 s | NO - it flips |
+
+HIS 1108 CHECK, ANSWERED: he asked to be sure xcv 19, 20, 21 and 22 all read `up`. Under the race
+19, 21 and 22 spawn `up`; **20 spawns `down`** against the cad walk's `up`. His expectation holds
+on three of the four.
+
+FIVE ROWS NEVER SPAWN. The reader walks to the tape end without a 4-flat bar that gives 3 agreeing:
+
+| the row | the cad walk fired |
+|---|---|
+| xcv 7, cadence 2026-08-25 07:02:00 | 2026-08-25 07:12:00, down |
+| xcv 9, cadence 2026-08-25 08:08:00 | 2026-08-25 08:14:35, up |
+| xcv 10, cadence 2026-08-25 10:04:00 | 2026-08-25 10:09:10, up |
+| xcv 11, cadence 2026-08-25 11:40:00 | 2026-08-25 11:40:05, down |
+| xcv 26, cadence 2026-08-25 21:01:00 | 2026-08-25 21:09:00, down |
+
+WHICH VERDICT IS RIGHT IS NOT MEASURED. Neither racer is ground truth, and an agreement test is
+lookahead - see section 7. What price did after each spawn is the next measurement, on his
+two-stage rule: the causal timestamps are banked now, the scoring is separate. Every rule below is settled; the code is not written.
 
 ---
 

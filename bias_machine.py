@@ -184,6 +184,11 @@ class BiasWindow:
         """Developing (emerging) line — thin delegator to LineReader.emerging."""
         return self._lines.emerging(ind_name, anchor)
 
+    def pin(self, ind_name, anchor='midnight'):
+        """Where a developing K line is BLIND, and the RSI still moving under it - thin delegator
+        to LineReader.pin. -> (pin, rsi_d). `fdm2-rline-enhance` reads it."""
+        return self._lines.pin(ind_name, anchor)
+
     def line(self, ind_name):
         """THE value_mode-honoring line read (#42) — the one place every consumer should call. Dispatches
         on the line's DB value_mode ('emerging' → developing, 'closed' → base-aligned) inside LineReader.

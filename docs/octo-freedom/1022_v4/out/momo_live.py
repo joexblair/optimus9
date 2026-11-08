@@ -341,7 +341,8 @@ def serve():
                 globals()['F2'] = importlib.reload(F2)
                 globals()['R'] = importlib.reload(R)
                 globals()['XR'] = importlib.reload(XR)
-                assert set(LN) >= {'close', 'CPR', 'EMR', 'MGE', 'CPM', 'HI'}, \
+                assert set(LN) >= {'close', 'CPR', 'EMR', 'MGE', 'CPM', 'HI', 'PIN',
+                                   'RSID'}, \
                     'load() contract changed - the held arrays are no longer valid'
                 globals()['M'] = F2._momo_lines(LN)
                 CHAIN.clear()

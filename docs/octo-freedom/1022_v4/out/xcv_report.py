@@ -229,22 +229,30 @@ def xcv_table(LN, day, tf=5):
         for e in F2.cadence_events(LN, sd2, A, B):
             ev.append((int(e[0]), sd2, int(e[1])))
     out += ['', '# fdm2-xcv, ws%dx, %s' % (tf, day), '']
+    #   HIS 1108 RACE: *"the earliest 4-flat bar be in a race with the cad-walks fires"*, and
+    #   *"whatever mech created the earliest 4-flat bar timestamps is where the verdict will be
+    #   spawned from"*. `fdm2-rline-enhance` spawns only at a bar where ALL FOUR left lines read
+    #   flat; the cad walk needs 3 raw tokens agreeing so it can only fire with at most one flat.
+    #   The two triggers are disjoint, so the earlier bar wins and a tie cannot happen.
+    on = int(K.FDM2_RLINE_ON)
+    dp = int(K.FDM2_RLINE_DP)
     out += ['| # | the cadence event | side | the ws%dx extremum | the ws%dx cross | his branch '
-            '| ws30 ws29 ws28 ws27 | the 3-of-4 read | the cad-walked timestamp | the verdict |'
-            % (tf, tf), '|---|---|---|---|---|---|---|---|---|---|']
+            '| ws30 ws29 ws28 ws27 | the 3-of-4 read | the cad-walked timestamp | the verdict '
+            '| the rline-enhance spawn | its verdict | which racer won |'
+            % (tf, tf), '|' + '---|' * 13]
     n = 0
     for b, sd2, s0 in sorted(ev):
         n += 1
         r = F2.x_race(LN, tf, sd2, int(s0) - 1, bound(b))
         if r is None:
-            out.append('| %d | %s | %s | - | NONE | goto START | - | NO ROWS | - | - |'
+            out.append('| %d | %s | %s | - | NONE | goto START | - | NO ROWS | - | - | - | - | - |'
                        % (n, ln.U(b), 'HIGH' if sd2 > 0 else 'LOW'))
             continue
         cf, which, c = r
         Mx = _JIG.mage_cascade_bar(X, int(c), int(sd2), mode='extrema',
                                    gap=int(_JIG.MC_GAP))
         if Mx is None:
-            out.append('| %d | %s | %s | none | %s | - | - | NO EXTREMUM | - | - |'
+            out.append('| %d | %s | %s | none | %s | - | - | NO EXTREMUM | - | - | - | - | - |'
                        % (n, ln.U(b), 'HIGH' if sd2 > 0 else 'LOW', ln.U(int(c))))
             continue
         ext = int(Mx[0])
@@ -266,9 +274,31 @@ def xcv_table(LN, day, tf=5):
                     break
             else:
                 cw, cv = 'never to the tape end', 'none'
-        out.append('| %d | %s | %s | %s | %s | %s | %s | %s | %s | %s |'
+        #   THE OTHER RACER, run from the SAME anchor over the SAME span. It walks forward from
+        #   the bar after the cross and stops at the FIRST bar that spawns a verdict - no bound,
+        #   because he has not ruled one here either.
+        rw, rv = '-', '-'
+        if on and v == 'none':
+            for t3 in range(int(c) + 1, NB + 1):
+                e = _JIG.rline_enhance(EM, LN['PIN'], LN['RSID'], LEFT, int(c), t3, need=3, dp=dp)
+                if e['spawn'] and e['verdict']:
+                    rw, rv = ln.U(t3), e['verdict']
+                    break
+            else:
+                rw, rv = 'never to the tape end', 'none'
+        won = '-'
+        if v != 'none':
+            won = 'the 3-of-4 read at the cross'
+        elif rw not in ('-', 'never to the tape end') and cw not in ('never to the tape end',):
+            won = ('fdm2-rline-enhance' if ln.K(rw) < ln.K(cw)
+                   else 'the cad walk' if ln.K(cw) < ln.K(rw) else 'a tie - both at this bar')
+        elif rw not in ('-', 'never to the tape end'):
+            won = 'fdm2-rline-enhance'
+        elif cw != 'never to the tape end':
+            won = 'the cad walk'
+        out.append('| %d | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |'
                    % (n, ln.U(b), 'HIGH' if sd2 > 0 else 'LOW', ln.U(ext), ln.U(int(c)), br,
-                      ' '.join(d4), v, cw, cv))
+                      ' '.join(d4), v, cw, cv, rw, rv, won))
     return out
 
 

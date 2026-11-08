@@ -66,6 +66,32 @@ class LineReader:
             out = IC.f_k_lookahead(b, tf_sec, cfg[3], cfg[1], cfg[2], cfg[4], anchor=anc, memo=self._memo)
         return out[self._evt_remap] if self._evt_remap is not None else out   # remap event grid → full 5s grid
 
+    # ── the pin: where an emerging K line is BLIND, and the RSI still moving under it ──
+    def pin(self, ind_name, anchor=None):
+        """Where this line's developing stoch is pinned, and the developing RSI. -> (pin, rsi_d).
+
+        THE SAME BASIS AS `emerging`, deliberately: the same `_lbase` (the event tape when
+        filler-invisible), the same resample memo, the same `_evt_remap` back onto the full 5s
+        grid. A pin read off a different tape would not line up with the line it describes.
+
+        pin  +1  the developing RSI is at or above the window of closed RSI values, so the
+                 developing stoch is pinned at 100 and the line cannot move again this bar's
+                 candle - while the RSI keeps rising
+             -1  at or below the window's min, pinned at 0 - the mirror
+              0  the line is tracking the RSI, or the window is degenerate. Do not substitute.
+
+        `fdm2-rline-enhance` reads this: `docs/octo-freedom/1108_rline_enhance.md`. Only a K line
+        has a pin - a BB line raises, because asking for one is a caller error, not a 0.
+        """
+        tf_sec, cfg = self._store.resolve(ind_name)
+        anc = anchor if anchor is not None else self._anchor
+        assert cfg[0] != 'bb', 'a BB line has no developing-stoch pin: %s' % ind_name
+        pn, rsi_d = IC.f_k_pin(self._lbase, tf_sec, cfg[3], cfg[1], cfg[2], cfg[4],
+                               anchor=anc, memo=self._memo)
+        if self._evt_remap is None:
+            return pn, rsi_d
+        return pn[self._evt_remap], rsi_d[self._evt_remap]
+
     # ── THE value_mode-honouring read (#42) — the one place every consumer should land ──
     def line(self, ind_name):
         """'emerging' → developing (f_*_lookahead); 'closed' → base-aligned. The toggle lives in the DB

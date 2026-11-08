@@ -271,6 +271,89 @@ def towards_away(line, bar, side, since):
             'gap': gap}
 
 
+#   ── `fdm2-rline-enhance` - HIS 1108 NAME ──────────────────────────────────────────────────────
+#   RLINE_DP - the decimal places a line value is READ at, so a direction cannot be decided by a
+#   last bit. HIS 1108: *"can you int test it or reduce the dp? I only need 1dp for line values -
+#   there must be a way to handle it so that the float variance doesn't bite us"*. The v4 knob
+#   FDM2_RLINE_DP carries the same 1 and is what the mech passes in.
+RLINE_DP = int(os.environ.get('W_RLINE_DP', 1))
+
+
+def rline_tenths(v, dp=RLINE_DP):
+    """A line value as an INTEGER at `dp` decimal places. -> int, or None for NaN.
+
+    THE INTEGER IS THE POINT, not the rounding: two ints are either equal or they are not. The
+    developing stoch inside a K line computes `(100 * numerator) / denominator` rather than
+    `100 * (numerator / denominator)`, so on a HIGH pin - where those are the same quantity - it
+    lands on 100.00000000000001 and the line JITTERS by up to 1.42e-14 while mathematically frozen.
+    On the real cached arrays for 2026-08-25 that is 78 sub-1e-9 moves on ws30r alone.
+    """
+    return None if v != v else int(round(float(v) * (10.0 ** int(dp))))
+
+
+def rline_direction(anchor_v, bar_v, dp=RLINE_DP):
+    """The direction of a value's move from one bar to another, at `dp`. -> 'up'|'down'|'flat'."""
+    a, b = rline_tenths(anchor_v, dp), rline_tenths(bar_v, dp)
+    if a is None or b is None:
+        return 'flat'
+    return 'up' if b > a else 'down' if b < a else 'flat'
+
+
+def rline_enhance(r, pin, rsi_d, tfs, anchor, bar, need=3, dp=RLINE_DP):
+    """[PRODUCER - Joe 1108] `fdm2-rline-enhance`, HIS NAME. -> dict.
+
+        r        {tf: the emerging r line}
+        pin      {tf: the developing-stoch pin, +1 at the window max, -1 at the min, 0 free}
+        rsi_d    {tf: the developing RSI under that line}
+        tfs      the lines to read, in the order the caller reports them
+        anchor   the bar every direction is measured FROM - the caller's own anchor
+        bar      the bar being read
+        need     how many of `tfs` must agree. HIS RULE is 3 of the 4 left lines
+        dp       the decimal places a value is read at. HIS 1108 ruling is 1
+
+    HIS MECH, 1108: inside a forming candle only the developing term of an r line can move. When
+    the RSI under it runs past the window of closed RSI values that term pins - at 100 or at 0 -
+    and the line is FROZEN for the rest of that candle while the RSI keeps going. At a bar where
+    ALL of `tfs` read `flat` against the anchor, the lines say nothing and the RSI under them is
+    the only thing left, so the verdict is spawned from the RSI instead.
+
+    HIS SPAWN RULE, and it replaced mine: *"whatever mech created the earliest 4-flat bar
+    timestamps is where the verdict will be spawned from"*. NOTHING SPAWNS unless every line in
+    `tfs` reads `flat` - not 3 of 4, not 2 of 4. That is what makes his race real: the raw 3-of-4
+    read needs `need` raw tokens agreeing so it can only fire with at most one flat, and this can
+    only fire with all of them flat, so neither can pre-empt the other.
+
+    A SUBSTITUTED TOKEN IS THE RSI'S OWN DIRECTION over the SAME span, anchor to bar - not the pin
+    side. The pin only says the line is blind. A direction measured from the pin's own start would
+    describe a shorter span than the tokens it sits beside.
+
+    HIS 1108 RULING on three substituted tokens carrying a verdict alone: *"yes"*.
+
+    -> {'spawn': bool, 'verdict': 'up'|'down'|None, 'raw': {tf: token}, 'sub': {tf: token},
+        'pin': {tf: +1|-1|0|None}, 'why': str}. `spawn` False means the lines were not all flat.
+
+    CAUSAL: every array is indexed at `anchor` or `bar` only, both handed in by the caller.
+    """
+    a, b = int(anchor), int(bar)
+    raw = {t: rline_direction(r[t][a], r[t][b], dp) for t in tfs}
+    if any(v != 'flat' for v in raw.values()):
+        return dict(spawn=False, verdict=None, raw=raw, sub={}, pin={},
+                    why='not every line reads flat - %s'
+                        % ' '.join('ws%d %s' % (t, raw[t]) for t in tfs if raw[t] != 'flat'))
+    pn = {t: (None if pin[t][b] != pin[t][b] else int(pin[t][b])) for t in tfs}
+    sub = {}
+    for t in tfs:
+        #   A LINE THAT IS NOT PINNED IS TRACKING ITS RSI, so its own `flat` is the truth and no
+        #   substitution is made for it. Only a blind line hands its direction to the RSI.
+        sub[t] = rline_direction(rsi_d[t][a], rsi_d[t][b], dp) if pn[t] else 'flat'
+    u = sum(1 for v in sub.values() if v == 'up')
+    d = sum(1 for v in sub.values() if v == 'down')
+    v = 'up' if u >= int(need) else 'down' if d >= int(need) else None
+    return dict(spawn=True, verdict=v, raw=raw, sub=sub, pin=pn,
+                why='%d up / %d down / %d flat of %d, %d needed'
+                    % (u, d, len(tfs) - u - d, len(tfs), int(need)))
+
+
 def fdm2_cad_mom_detector(cp, em, bar, side, since, pts, gap, tol, wob, stamps=None,
                          rev_since=None):
     """[PRODUCER - Joe 1104] `fdm2-cad-mom-detector`, HIS NAME. -> dict.

@@ -61,6 +61,7 @@ import numpy as np
 sys.path.insert(0, '/home/joe/thecodes')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import v4_knobs as K
+import v4_pin_cache as PC
 import v4_signal as SG
 #   THE SWALLOW COVERS THE NOISY IMPORTS ONLY, and `finally` restores stderr whatever happens.
 #   Without it a refusal from v4_knobs.check() - an off-ruled run with no W_V4_EXPERIMENT=1 - goes
@@ -95,6 +96,13 @@ def load():
     hi = int(K.L2_MOM_MAXTF)
     CPR = {t: np.asarray(CP.series(E[t], int(t) * 60), float) for t in range(1, hi + 1)}
     EMR = {t: np.asarray(E[t], float) for t in range(1, hi + 1)}
+    #   `fdm2-rline-enhance`'s two arrays per line, off the same disk cache the lines come from.
+    #   A Jig run is unavoidable to BUILD them - a base frame rebuilt from klines_hl.npz does not
+    #   reproduce the cached lines, ws27 differs by 51.8 - so v4_pin_cache builds them once
+    #   through BiasWindow.pin, which uses the lines' own event tape and remap.
+    PINS = PC.load(range(1, hi + 1))
+    PIN = {t: PINS[t][0] for t in PINS}
+    RSID = {t: PINS[t][1] for t in PINS}
     MGE = LL.mage()          # EMERGING Mage. v4saviour reads the live lines, not chart-matched
     CPM = {t: np.asarray(CP.series(MGE[t], int(t) * 60), float) for t in MGE}
     close, phi, plo = BT.prices()
@@ -107,7 +115,7 @@ def load():
             b = lift_off(EMR[t], sd, K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL, K.LIFT_WOB)
             LIFT[(t, sd)] = np.asarray([K.lift_stamp(int(x)) for x in b], int)
     return dict(
-        HI=hi, CPR=CPR, EMR=EMR, CPM=CPM, LIFT=LIFT,
+        HI=hi, CPR=CPR, EMR=EMR, CPM=CPM, LIFT=LIFT, PIN=PIN, RSID=RSID,
         B1=np.asarray(CP.series(np.asarray(ln.line('ws1b'), float), 60), float),
         X10=np.asarray(ln.line('ws10x'), float),            # emerging, his fallback's own ruling
         M10=np.asarray(CP.series(MGE[10], 600), float),

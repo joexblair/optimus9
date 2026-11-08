@@ -1468,6 +1468,15 @@ FDM_XCAD_FALLBACK = os.environ.get('W_V4_FDM_XCAD_FALLBACK', 'exfnc')  # 'exfnc'
 #   WHAT IT DID BEFORE, and why that is gone: one read at the cad walk's first bar, and a fire
 #   silenced the whole cad walk. On the 94.5-day tape the 28 legs that shape held longer went
 #   +32.523% to +25.974%, and the read bar was the weakest-signal bar of the cad walk.
+#   ── `fdm2-rline-enhance`, HIS 1108 NAME AND HIS 1108 DEFAULT ──────────────────────────────────
+#   HIS RULING: *"knob ON by default"*. It is the first reading added since 1022 to bank ON, and he
+#   ruled it ON because his own instruction was *"review the 08-25 xcv table with rline-enhancer
+#   baked (it should be already)"* - the xcv table is meant to carry the race, not sit beside it.
+FDM2_RLINE_ON = _knob('FDM2_RLINE_ON', 1, int)      # ON. 0 takes the race out of fdm2-xcv.
+#   THE 1 dp READ, HIS 1108: *"I only need 1dp for line values"*. A direction is compared on the
+#   INTEGER tenths of a line value, so the 1.42e-14 jitter in a frozen line cannot read as a
+#   direction. 1 is his number; it is a knob so the read is named rather than buried.
+FDM2_RLINE_DP = _knob('FDM2_RLINE_DP', 1, int)      # decimal places a line value is read at.
 FDM2_MOMO_ON = _knob('FDM2_MOMO_ON', 0, int)        # OFF. The banked machine is unchanged.
 #   1 runs the arm. The A/B sets this at runtime; the BANKED value is 0 until he banks the arm.
 FDM2_MOMO_VOTES = _knob('FDM2_MOMO_VOTES', 3, int)  # the vote floor, of 3.
@@ -1919,6 +1928,8 @@ RULED = {
     'FDM_XCAD_WALK_MIN': (10.0, 'HIS VALUE "walk forward 10 minutes". The shape is the grace walk he called "the established walk" - re-test every 5 s bar, break on the first pass'),
     'FDM_XCAD_FALLBACK': ('exfnc', 'HIS 1105 "scan the entire range for ex-20/80-fence lines instead. if any are found, the cadence verdict is keep on walking". "off" is the arm it replaced, where no candidate went straight to FDM_XCAD_NONE'),
     'FDM_XCAD_NONE': ('rev-trade', 'HIS 1104 "no candidates = rev-trade", validated against v4_fdm2.walk which already rev-trades when step 1 counts 0'),
+    'FDM2_RLINE_ON': (1, 'ON - HIS 1108 *"knob ON by default"*. Runs `fdm2-rline-enhance`: at a bar where all 4 left r lines read flat, the RSI under them spawns the xcv verdict, racing the cad walk. 0 takes it out'),
+    'FDM2_RLINE_DP': (1, 'HIS 1108 *"I only need 1dp for line values"*. A direction is read on the integer tenths of a line value, so a 1.42e-14 jitter in a frozen line cannot read as a direction'),
     'FDM2_MOMO_ON': (0, 'OFF. The banked machine is unchanged until he banks the arm. 1 runs fdm2-momo, HIS 1106 name'),
     'FDM2_MOMO_VOTES': (3, 'the vote floor. 3 is the row the measurement named - 118 of 220 with-walk truncations fire, 22.9% seeing no carrier against 39.0% at one vote. HE HAS NOT SET THIS'),
     'FDM2_MOMO_READ': ('emerging', 'the only read monotone on the with-walk population: 39.0 -> 34.9 -> 22.9 across the vote'),
@@ -2365,6 +2376,7 @@ def table():
              'BSTOP_SYNC_MIN': 'minutes', 'BSTOP_POOL_HI': 'TF',
              'FDM2_BLAST_SCAN_HI': 'TF', 'FDM2_MATR_LFTOF_CONF': 'TF',
              'FDM2_CAD_FLATIN_WIDTH': 'TF', 'FDM2_CAD_FLATIN_TOL': 'bars',
+             'FDM2_RLINE_ON': 'on/off', 'FDM2_RLINE_DP': 'decimal places',
              'FDM2_MOMO_ON': 'on/off', 'FDM2_MOMO_VOTES': 'votes',
              'FDM2_MOMO_READ': 'mode', 'FDM2_MOMO_FLOOR_RPRED': 'lines',
              'FDM2_MOMO_MED_MX': 'lines', 'FDM2_MOMO_MED_PIN': 'lines',
