@@ -169,6 +169,82 @@ AND THE FLAT ALSO SETS THE FIRING BAR. 6 of the 11 distinct firing bars are the 
 | 25 | 2026-08-25 21:09:00 | ws27r 37.94 → 23.65 | 2026-08-25 20:42:25 .. 2026-08-25 21:08:55 = 1595 s |
 | 26 | 2026-08-25 21:09:00 | ws27r 37.94 → 23.65 | 2026-08-25 20:42:25 .. 2026-08-25 21:08:55 = 1595 s |
 
+### CAN THE RSI BE READ WHILE THE r LINE IS FLAT - HIS 1108 QUESTION, ANSWERED FROM THE PRODUCER
+
+His question: *"is there a case when you can use rsi when the r line is flat?"*. YES, and the
+producer says exactly when. `optimus9/compute/indicator_computer.py:593-643`, the emerging r value
+at any 5 s bar inside a forming TF candle:
+
+| the term | what it is |
+|---|---|
+| `R_RSI` 5 | the RSI length |
+| `R_STC` 8 | the stoch length, so the window is the previous `8 - 1` = 7 CLOSED RSI values |
+| `R_KLEN` 7 | the %K average length, so 6 CLOSED stoch terms + 1 DEVELOPING term |
+| `rsi_d` | the developing RSI - a Wilder one-step update from the last closed RSI state onto the developing bar's close |
+| `lb_rsi_min`, `lb_rsi_max` | min and max of those 7 closed RSI values |
+| `stoch_min` | `min(lb_rsi_min, rsi_d)` |
+| `stoch_max` | `max(lb_rsi_max, rsi_d)` |
+| `stoch_d` | `100 * (rsi_d - stoch_min) / (stoch_max - stoch_min)`, or `50.0` when that range is 0 |
+| the r value | `(the 6 closed stoch terms + stoch_d) / 7` |
+
+ONLY `stoch_d` CAN MOVE INSIDE THE CANDLE. The three states that freeze it:
+
+| the state | `stoch_d` | what the r line does | what the RSI does |
+|---|---|---|---|
+| `rsi_d` at or above `lb_rsi_max` | 100 exactly | FROZEN for the rest of the candle | keeps rising, invisible to the line |
+| `rsi_d` at or below `lb_rsi_min` | 0 exactly | FROZEN for the rest of the candle | keeps falling, invisible to the line |
+| `lb_rsi_max` equals `lb_rsi_min` | 50.0 by the else branch | FROZEN | the line says nothing at all |
+| `lb_rsi_min` < `rsi_d` < `lb_rsi_max` | tracks `rsi_d` | moves with the RSI | the line carries it |
+
+THE FROZEN LEVEL IS NOT AN EXTREME. The 6 closed terms set the level, so a line pinned by `stoch_d`
+can sit at 77.39 or 37.94. That is why these flats do not look like a pinned indicator.
+
+MEASURED ON 2026-08-25 - the flats that set the cad-walk firing bars, with what price did inside
+them. The r line did not change on a single bar in any of them:
+
+| xcv rows | the line | the flat | length | the r value, held | bars the r line moved | pxs at the start | pxs at the end | pxs net across the flat | pxs low → high | the pxs range |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | ws29r | 2026-08-25 00:39:20 .. 2026-08-25 00:57:55 | 1120 s | 86.1006 | 0 of 224 | 0.180520 | 0.183980 | +1.917% | 0.180460 → 0.185060 | 2.549% |
+| 5, 6 | ws30r | 2026-08-25 05:32:20 .. 2026-08-25 05:58:55 | 1600 s | 66.1728 | 0 of 320 | 0.189130 | 0.189550 | +0.222% | 0.189130 → 0.193700 | 2.416% |
+| 7 | ws27r | 2026-08-25 06:46:20 .. 2026-08-25 07:11:55 | 1540 s | 31.9762 | 0 of 308 | 0.186050 | 0.183900 | -1.156% | 0.181510 → 0.186380 | 2.683% |
+| 19, 20 | ws30r | 2026-08-25 17:31:50 .. 2026-08-25 17:59:55 | 1690 s | 77.3897 | 0 of 338 | 0.182250 | 0.187930 | +3.117% | 0.182160 → 0.187930 | 3.168% |
+| 19, 20 | ws27r | 2026-08-25 17:46:50 .. 2026-08-25 17:59:55 | 790 s | 87.6950 | 0 of 158 | 0.183460 | 0.187930 | +2.436% | 0.183450 → 0.187930 | 2.442% |
+| 25, 26 | ws27r | 2026-08-25 20:42:25 .. 2026-08-25 21:08:55 | 1595 s | 37.9373 | 0 of 319 | 0.184600 | 0.179720 | -2.644% | 0.177670 → 0.184600 | 3.900% |
+| 25 | ws29r | 2026-08-25 20:47:00 .. 2026-08-25 21:15:55 | 1740 s | 48.6384 | 0 of 348 | 0.182750 | 0.180880 | -1.023% | 0.177670 → 0.182840 | 2.910% |
+
+Price covering 2.416% to 3.900% with ZERO movement in the line means `rsi_d` was outside the closed
+window for the whole stretch - the first two states above.
+
+HOW MUCH OF THE DAY THE LINES SIT UNCHANGED, 2026-08-25:
+
+| the line | bars where the r line did NOT change | of bars | share of the day |
+|---|---|---|---|
+| ws30r | 5875 | 17279 | 34.0% |
+| ws29r | 5987 | 17279 | 34.6% |
+| ws28r | 5108 | 17279 | 29.6% |
+| ws27r | 6178 | 17279 | 35.8% |
+| ws10r | 6723 | 17279 | 38.9% |
+| ws5r | 6598 | 17279 | 38.2% |
+| ws3r | 6680 | 17279 | 38.7% |
+| ws1r | 6164 | 17279 | 35.7% |
+
+THE -14.2857 IS EXPLAINED. `R_KLEN` is 7, so one closed stoch term flipping 0 to 100 at a candle
+roll moves the r line by exactly 100 / 7 = 14.2857. That is the step seen on 3 lines at
+2026-08-25 21:09:00, and it is not a defect.
+
+OPEN - NOTHING IS BUILT:
+
+| the gap | the question |
+|---|---|
+| which RSI | `rsi_d`, the developing RSI at the 5 s grid that the line itself uses, or the CLOSED-bar RSI that the banked `bullish-rsi` / `bearish-rsi` reads - one value per TF close, which for ws30 is one value per 30 min and cannot resolve a flat shorter than its own bar |
+| whose read | a new reader, or an extension of `bullish-rsi` / `bearish-rsi` with `RSIDIV_LINES` widened past its banked `ws1r, gcws30r` |
+| the build cost | `rsi_d`, `lb_rsi_min` and `lb_rsi_max` are computed inside `f_k_lookahead` and discarded. They would need returning or recomputing, and the cache would need a new array per TF |
+| the name | unnamed. He names it if he wants it built |
+
+NOT A DOCUMENTED PRACTICE. The external reading confirms StochRSI pins at the extremes and that an
+extreme is a condition rather than a trigger, but no source recommends reading the plain RSI while
+the StochRSI is flat, and none covers a flat at a MID-RANGE level.
+
 ### THE DIFF READER HAS NO MINIMUM MAGNITUDE - OPEN, NOT RULED
 
 `up if d > 0 else down if d < 0 else flat`. A diff of +0.0035 on a 0-100 line counts as `up`
