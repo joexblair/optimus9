@@ -232,7 +232,7 @@ THE -14.2857 IS EXPLAINED. `R_KLEN` is 7, so one closed stoch term flipping 0 to
 roll moves the r line by exactly 100 / 7 = 14.2857. That is the step seen on 3 lines at
 2026-08-25 21:09:00, and it is not a defect.
 
-### `fdm2-name-me-joe` - HIS 1108 RULINGS
+### `fdm2-rline-enhance` - HIS 1108 RULINGS
 
 | his ruling | his words |
 |---|---|
@@ -240,7 +240,7 @@ roll moves the r line by exactly 100 / 7 = 14.2857. That is the step seen on 3 l
 | which RSI | *"developing"* - `rsi_d` at the 5 s grid, the series the r line itself uses. NOT the closed-bar RSI that `bullish-rsi` / `bearish-rsi` reads |
 | whose read | *"new reader, on the jig"* - not an extension of `bullish-rsi` / `bearish-rsi`, and `RSIDIV_LINES` stays at its banked `ws1r, gcws30r` |
 | the build cost | *"the cost is accepted"* |
-| the name | `fdm2-name-me-joe`, his placeholder - *"I'll come back to it"* |
+| the name | `fdm2-rline-enhance`, HIS NAME 1108. It replaced his placeholder `fdm2-name-me-joe` the same day |
 
 NOTHING IS BUILT. The gate below is open.
 
