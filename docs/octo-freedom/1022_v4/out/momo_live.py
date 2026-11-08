@@ -164,6 +164,17 @@ def answer(q):
                 % (str(q['from']), str(q['to'])), '']
         out += R.c3rmage_table(LN, A, B, lab)
         return out
+    if kind == 'legmfe':
+        #   HIS 1108: *"can you derive that from sweep-pivots? using a rolling 8 hour window, and
+        #   measuring on TF1,2,3 and gcws30 timeframes, what MFE differences can you detect inside
+        #   of 08-08 to 08-30?"*
+        A, B = ln.K(str(q['from'])), ln.K(str(q['to']))
+        tfs = tuple(q.get('tfs') or ('ws1Mage', 'ws2Mage', 'ws3Mage', 'gcws30Mage'))
+        out += ['', '# the leg MFE per timeframe, rolling %g h, %s to %s'
+                % (float(q.get('win_h', 8.0)), str(q['from']), str(q['to'])), '']
+        out += R.legmfe_table(LN, A, B, tfs, float(q.get('win_h', 8.0)),
+                              float(q.get('step_h', 1.0)))
+        return out
     if kind == 'cadlist':
         #   HIS 1108 CHECK on three c3r rows: *"the low cadence at 0853"*, *"high side cadence at
         #   1226"*, *"the leg ultimately lands on low side 1634 cadence"*. His eyes are a

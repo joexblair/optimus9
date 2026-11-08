@@ -148,9 +148,24 @@ def crosses(tf, xwob=None):
     xwob = XWOB if xwob is None else xwob
     key = (tf, xwob)
     if key not in _CX:
-        v = np.asarray(ln.line(tf), float)
-        _CX[key] = oob_ib_cross(v, K.OOB_HI, K.OOB_LO, xwob)
+        _CX[key] = oob_ib_cross(mage(tf), K.OOB_HI, K.OOB_LO, xwob)
     return _CX[key]
+
+
+def mage(tf):
+    """One Mage line by name. -> array. ws1Mage .. ws30Mage AND the sub-wsf names.
+
+    HIS 1108 asked for *"TF1,2,3 and gcws30"*. `ln.line` parses ws{tf}{role} and multiplies the
+    digits by 60, so `ln.line('gcws30Mage')` cannot resolve a 30 s line at all - it raises on the
+    digit scan. v4_live_lines.sub_line is the resolver that reads the production LineStore spec, so
+    a sub-wsf name comes back as the same array the live tree reads. One place decides which
+    resolver a name needs, so no caller has to know.
+    """
+    tf = str(tf)
+    if tf.startswith('ws') and tf[2].isdigit():
+        return np.asarray(ln.line(tf), float)
+    import v4_live_lines as _LL
+    return np.asarray(_LL.sub_line(tf), float)
 
 
 def legs(tf, xwob=None):

@@ -831,6 +831,124 @@ def pivstop_table(LN, A, B, lab='ws3r emerging, rest closed-prev', gaps=(24, 48,
     return out
 
 
+def legmfe_table(LN, A, B, tfs=('ws1Mage', 'ws2Mage', 'ws3Mage', 'gcws30Mage'),
+                 win_h=8.0, step_h=1.0):
+    """How much each Mage's legs travel, over a rolling window. -> the markdown.
+
+    HIS 1108: *"the stop loss needs to be larger when the swings are producing more profit between
+    pivots"*, then *"before I invent something new, can you derive that from sweep-pivots? using a
+    rolling 8 hour window, and measuring on TF1,2,3 and gcws30 timeframes, what MFE differences
+    can you detect inside of 08-08 to 08-30?"*.
+
+    THE LEG IS sweep-pivots' OWN. `SP.legs(name)` brackets a leg with that Mage's consecutive
+    opposite-side oob->ib crosses - no pct and no horizon, which is the whole reason that module
+    exists. A leg's MFE is the favourable travel from its own extremum to its end, which is his
+    *"profit between pivots"*.
+
+    CAUSALITY. A leg is knowable only once its CLOSING cross has confirmed, at close + SP_XWOB - 1.
+    Each window therefore counts only the legs confirmed at or before its own right edge, so every
+    number is one a reader at that bar could have had. No leg still running is counted.
+
+    THE WINDOW IS HIS - 8 hours. THE STEP IS MINE and stated: %g h, so consecutive windows overlap
+    rather than tile. Changing it changes how many windows print and nothing about a leg.
+    """ % step_h
+    import numpy as _np
+    close = _np.asarray(LN['close'], float)
+    W = int(round(float(win_h) * 3600 / 5))
+    ST = int(round(float(step_h) * 3600 / 5))
+    out = ['| the read | value |', '|---|---|']
+    out.append(row('the leg', "sweep-pivots' own: a Mage oob->ib cross to its next OPPOSITE-side "
+                              'cross of the same line'))
+    out.append(row("the leg's MFE", 'the favourable travel from the leg\'s own extremum to its '
+                                    'end, in percent of that extremum - HIS *"profit between '
+                                    'pivots"*'))
+    out.append(row('the window', '%g h = %d bars - HIS NUMBER' % (float(win_h), W)))
+    out.append(row('the step', '%g h = %d bars - MINE, stated' % (float(step_h), ST)))
+    out.append(row('what a window counts', 'every leg whose CLOSING cross confirmed inside it. '
+                                           'Confirm is close + SP_XWOB %d - 1 bars, so nothing '
+                                           'unknowable at the right edge is counted'
+                   % int(K.SP_XWOB)))
+    out.append(row('the span', '%s .. %s' % (ln.U(int(A)), ln.U(int(B)))))
+    out.append(row('the price series', 'pxs = DEMA(close, 2) on the 5 s grid'))
+
+    xw = int(K.SP_XWOB)
+    LEG = {}
+    for tf in tfs:
+        rows = []
+        for o, z, sd in SP.legs(tf):
+            if z + xw - 1 > int(B) or o < 0:
+                continue
+            seg = close[int(o):int(z) + 1]
+            if not _np.isfinite(seg).any():
+                continue
+            fav = -int(sd)                      # a LOW-opened leg rises off its low
+            p0 = float(_np.nanmin(seg)) if fav > 0 else float(_np.nanmax(seg))
+            ext = float(_np.nanmax(seg)) if fav > 0 else float(_np.nanmin(seg))
+            if p0 <= 0:
+                continue
+            rows.append((int(z) + xw - 1, abs(ext - p0) / p0 * 100.0, int(z) - int(o)))
+        rows.sort()
+        LEG[tf] = rows
+
+    out += ['', '## every leg, per timeframe, across the whole span', '']
+    out += head('the timeframe', 'legs confirmed in the span', "the leg's MFE %, min",
+                "the leg's MFE %, median", "the leg's MFE %, max",
+                'the leg length, min - median', 'the leg length, min - max')
+    for tf in tfs:
+        r = [x for x in LEG[tf] if int(A) <= x[0] <= int(B)]
+        if not r:
+            out.append(row(tf, 0, *['-'] * 5))
+            continue
+        m = sorted(x[1] for x in r)
+        L = sorted(x[2] * 5 / 60.0 for x in r)
+        out.append(row(tf, len(r), '%.3f' % m[0], '%.3f' % m[len(m) // 2], '%.3f' % m[-1],
+                       '%.1f' % L[len(L) // 2], '%.1f' % L[-1]))
+
+    out += ['', '## the rolling %g h window - how far the median leg MFE moves' % float(win_h), '']
+    out += head('the timeframe', 'windows with at least one leg', 'windows with none',
+                'legs per window, median', 'the window median MFE %, min',
+                'the window median MFE %, median', 'the window median MFE %, max',
+                'max over min - how many times bigger the widest window is')
+    SER = {}
+    for tf in tfs:
+        rows = LEG[tf]
+        bars = [x[0] for x in rows]
+        ser, empty = [], 0
+        e = int(A) + W
+        while e <= int(B):
+            lo = _bisect.bisect_left(bars, e - W + 1)
+            hi = _bisect.bisect_right(bars, e)
+            g = [rows[i][1] for i in range(lo, hi)]
+            if g:
+                ser.append((e, float(_np.median(g)), len(g)))
+            else:
+                empty += 1
+            e += ST
+        SER[tf] = ser
+        if not ser:
+            out.append(row(tf, 0, empty, *['-'] * 5))
+            continue
+        v = sorted(x[1] for x in ser)
+        n = sorted(x[2] for x in ser)
+        out.append(row(tf, len(ser), empty, n[len(n) // 2], '%.3f' % v[0],
+                       '%.3f' % v[len(v) // 2], '%.3f' % v[-1],
+                       '%.1fx' % (v[-1] / v[0]) if v[0] > 0 else 'nan'))
+
+    for tf in tfs:
+        out += ['', '## %s - every rolling window, chronological' % tf, '']
+        out += head('the window ends at', 'the window opens at', 'legs confirmed in it',
+                    'the median leg MFE %', 'the smallest leg MFE %', 'the largest leg MFE %')
+        rows = LEG[tf]
+        bars = [x[0] for x in rows]
+        for e, med, cnt in SER[tf]:
+            lo = _bisect.bisect_left(bars, e - W + 1)
+            hi = _bisect.bisect_right(bars, e)
+            g = sorted(rows[i][1] for i in range(lo, hi))
+            out.append(row(ln.U(int(e)), ln.U(int(e) - W + 1), cnt, '%.3f' % med,
+                           '%.3f' % g[0], '%.3f' % g[-1]))
+    return out
+
+
 def c3r_mage_gate(v, sd, gate, lo_f, hi_f):
     """Does ws1Mage at `v` satisfy `gate` on side `sd`? -> bool.
 
@@ -1225,12 +1343,17 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
                 'net %')
     mae_l, mfe_l, mfer_l, rel_l, stop_l, cap_l, how_l = [], [], [], [], [], [], []
     out_rows_skipped = []
-    #   HIS 1108 *"consolidate and count the trade as a single evemt"*. Several ws1r oob entries
-    #   converge on one firing bar and used to print byte-identical rows; the trade is one trade.
+    #   HIS 1108, TWICE. First *"consolidate and count the trade as a single evemt"*, which deduped
+    #   on the c3r firing bar. The ws1Mage wait then moved the collision one step later - three
+    #   firings waited into 2026-08-31 00:52:30 and opened the same SHORT at one price - so his
+    #   second ruling: *"we can't have duplicate trades firing off at the same consolidated moment
+    #   (like ws1Mage for c3r, and for any other mech where individual signals boil down to one
+    #   bar)"*. SO THE DEDUP IS ON THE BAR THE TRADE OPENS ON, not on the signal that found it, and
+    #   the EARLIEST firing keeps the row because it is the one that got there first.
     _seen = {}
     for q, sd, E in sorted(fired):
         _seen.setdefault((int(E['x4']), int(sd)), (q, sd, E))
-    waited, nomage = [], 0
+    waited, nomage, _open_seen, _dupes = [], 0, set(), 0
     for q, sd, E in [v for _, v in sorted(_seen.items())]:
         sig = int(E['x4'])
         #   THE ws1Mage WAIT. His 1108 ruling moves the rev-trade off the clause-4 bar and onto the
@@ -1247,8 +1370,15 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
                     break
             if land is None:
                 nomage += 1
-                out_rows_skipped.append((sig, sd))
+                out_rows_skipped.append((sig, sd, 'no ws1Mage %s reversal before the span ends'
+                                         % MG))
                 continue
+            if (int(land), int(sd)) in _open_seen:
+                _dupes += 1
+                out_rows_skipped.append((int(E['x4']), sd,
+                                         'DROPPED - a trade already opens at %s' % ln.U(int(land))))
+                continue
+            _open_seen.add((int(land), int(sd)))
             waited.append((land - sig) * 5 / 60.0)
             sig = land
         opn = sig + 2
@@ -1311,10 +1441,8 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
                        lvl, '%.6f' % price if price is not None else '-', '%.3f' % cap,
                        ln.U(ex), how, '%.3f' % mae, '%+.3f' % mfe, '%+.3f' % rel,
                        '%.4f' % -DRAG, '%+.3f' % (rel - DRAG)))
-    for sig0, sd0 in out_rows_skipped:
-        out.append(row(ln.U(int(sig0)), 'HIGH' if sd0 > 0 else 'LOW', '-',
-                       'no ws1Mage %s reversal before the span ends'
-                       % str(K.FDM2_C3R_MAGE_GATE), *['-'] * 13))
+    for sig0, sd0, why0 in out_rows_skipped:
+        out.append(row(ln.U(int(sig0)), 'HIGH' if sd0 > 0 else 'LOW', '-', why0, *['-'] * 13))
     if not fired:
         out.append(row(*(['none'] + ['-'] * 16)))
     else:
@@ -1342,6 +1470,7 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
                            '%.1f' % max(waited) if waited else '-'))
             out.append(row('signals with no ws1Mage %s reversal before the span ends' % MG,
                            nomage))
+            out.append(row('signals DROPPED because a trade already opens on that bar', _dupes))
         out.append(row('outgoing trades scored', len(mae_l)))
         out.append(row('that stopped', sum(1 for r in stop_l if r)))
         out.append(row('that closed at a target-side cadence event',
