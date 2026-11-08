@@ -154,6 +154,34 @@ def answer(q):
         if not late:
             out.append(R.row('none', '-', '-', '-', '-'))
         return out
+    if kind == 'c3rscan':
+        #   HIS 1108: *"we'll need a list of the firings across 08-25 to 08-31 (with maemfe) to
+        #   validate the change"* / *"run the 7 day anyway"*.
+        A, B = ln.K(str(q['from'])), ln.K(str(q['to']))
+        lab = str(q.get('read', 'ws3r emerging, rest closed-prev'))
+        out += ['', '# fdm2-3r-cadence, every arm from %s to %s' % (str(q['from']), str(q['to'])),
+                '']
+        out += R.cad3r_scan(LN, A, B, lab)
+        return out
+    if kind == 'vals':
+        #   HIS 1108: raw per-bar values, both reads, with the oob and ex-fence flags beside each.
+        nms = q.get('lines') or [str(q.get('line', 'ws1Mage'))]
+        if isinstance(nms, str):
+            nms = [x.strip() for x in nms.split(',') if x.strip()]
+        sd = +1 if str(q.get('side', 'HIGH')).upper() == 'HIGH' else -1
+        A, B = ln.K(str(q['from'])), ln.K(str(q['to']))
+        out += ['', '# %s values, %s side, %s .. %s'
+                % (', '.join(nms), q.get('side', 'HIGH'), str(q['from']), str(q['to'])), '']
+        out += R.vals_table(LN, nms, sd, A, B)
+        return out
+    if kind == 'runs':
+        #   HIS 1108: *"I need the range where ws3r is ex-20/80-fence to understand your data"*.
+        nm = str(q.get('line', 'ws3r'))
+        sd = +1 if str(q.get('side', 'HIGH')).upper() == 'HIGH' else -1
+        A, B = ln.K(str(q['from'])), ln.K(str(q['to']))
+        out += ['', '# %s ex-20/80 and oob runs, %s side' % (nm, q.get('side', 'HIGH')), '']
+        out += R.runs_table(LN, nm, sd, A, B)
+        return out
     if kind == 'board':
         #   THE BOARD AT ONE BAR, from v4_fdm2.xcad_probe - the producer the director's own seam
         #   read uses. Not a second implementation: the report and the verdict read the same call.
