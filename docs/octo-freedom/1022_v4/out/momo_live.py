@@ -165,6 +165,69 @@ def answer(q):
                 % (str(q['from']), str(q['to'])), '']
         out += R.c3rmage_table(LN, A, B, lab)
         return out
+    if kind == 'tawaway':
+        #   HIS 1108: *"show the towards/away data at 0551, for ws10 to ws30. add a column that
+        #   tells how long an away line has been printing away"*.
+        #   THE SAME READ THE CAD WALK USES. exf_passed calls JIG.fdm2_cad_mom_detector on
+        #   LN['EMR'][t] with the cadence window's own s0, the LIFT_* knobs, the lift-off stamp
+        #   gate and rev_since - FDM_XCAD_REV_FROM 'window' puts rev_since at s0. Reproduced here
+        #   bar for bar so the two cannot disagree.
+        import numpy as _np
+        from optimus9.analysis import jig as _JIG
+        at = ln.K(str(q['at']))
+        sd = +1 if str(q.get('side', 'HIGH')).upper() == 'HIGH' else -1
+        ev = ln.K(str(q['ev']))
+        s0 = ln.K(str(q['s0']))
+        TFS = list(range(int(q.get('hi', 30)), int(q.get('lo', 10)) - 1, -1))
+        rs = int(s0) if str(K.FDM_XCAD_REV_FROM) == 'window' else None
+        to_read = str(K.FDM_XCAD_REV_TO) == 'read'
+        gate = {t: (_np.asarray(LN['LIFT'][(t, int(sd))], int) if to_read
+                    else _np.asarray([b for b in LN['LIFT'][(t, int(sd))]
+                                      if (rs if rs is not None else 0) <= b <= int(ev)], int))
+                for t in TFS}
+
+        def state(t, b):
+            return _JIG.fdm2_cad_mom_detector(LN['EMR'][t], LN['EMR'][t], int(b), int(sd),
+                                              int(s0), K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL,
+                                              K.LIFT_WOB, stamps=gate[t], rev_since=rs)['state']
+        out += ['', '# towards / away at %s, %s side. The cadence event %s, its window opens %s'
+                % (ln.U(at), q.get('side', 'HIGH'), ln.U(ev), ln.U(s0)), '']
+        out += ['| the line | the state at %s | ex-20/80 there | its r value | how long it has held '
+                'that state | since |' % ln.U(at), '|---|---|---|---|---|---|']
+        for t in TFS:
+            st = state(t, at)
+            #   HOW LONG: walk BACK bar by bar while the state is unchanged. NO CAP - it runs to
+            #   the cadence window's open and reports that it reached it, rather than inventing a
+            #   lookback. Every bar it reads is at or before `at`.
+            b = int(at)
+            while b - 1 >= int(s0) and state(t, b - 1) == st:
+                b -= 1
+            n = int(at) - b + 1
+            hit = (b > int(s0))
+            out.append('| ws%dr | %s | %s | %.2f | %d bars = %.1f min | %s |'
+                       % (t, st,
+                          'EXF' if F2.ex2080_line(LN, t, int(at), int(sd)) else '.',
+                          float(LN['EMR'][t][int(at)]), n, n * 5 / 60.0,
+                          ln.U(b) if hit else 'the window open %s or earlier' % ln.U(int(s0))))
+        out += ['']
+        sts = [state(t, at) for t in TFS]
+        out.append(R.row('towards', '%d of %d' % (sts.count('towards'), len(TFS))))
+        out.append(R.row('away', '%d of %d' % (sts.count('away'), len(TFS))))
+        out.append(R.row('neither', '%d of %d' % (len(TFS) - sts.count('towards')
+                                                  - sts.count('away'), len(TFS))))
+        hits = [t for t in TFS if state(t, at) == 'towards'
+                and F2.ex2080_line(LN, t, int(at), int(sd))]
+        out.append(R.row('towards AND ex-20/80 - the 4-pronged test over this range',
+                         ', '.join('ws%d' % t for t in hits) if hits else 'none'))
+        out.append(R.row('the knobs', 'FDM_XCAD_REV_FROM %s, FDM_XCAD_REV_TO %s, LIFT_PTS %d, '
+                                      'LIFT_TOL %g, LIFT_WOB %d'
+                         % (K.FDM_XCAD_REV_FROM, K.FDM_XCAD_REV_TO, int(K.LIFT_PTS),
+                            float(K.LIFT_TOL), int(K.LIFT_WOB))))
+        out.append(R.row('the range read', 'ws%d..ws%d - HIS ASK. The cad walk\'s own test reads '
+                                           'ws%d..ws%d' % (TFS[-1], TFS[0],
+                                                           int(K.FDM_STEP1_ABOVE_TF) + 1,
+                                                           int(LN['HI']))))
+        return out
     if kind == 'xcvdiff':
         #   HIS 1108: *"show the 'xcross validator report · HIGH' report that created the up
         #   verdict at 0551. show also the report at 0535"*. The 0535 block is in the report FILE;
