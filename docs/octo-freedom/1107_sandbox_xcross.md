@@ -232,14 +232,17 @@ THE -14.2857 IS EXPLAINED. `R_KLEN` is 7, so one closed stoch term flipping 0 to
 roll moves the r line by exactly 100 / 7 = 14.2857. That is the step seen on 3 lines at
 2026-08-25 21:09:00, and it is not a defect.
 
-OPEN - NOTHING IS BUILT:
+### `fdm2-name-me-joe` - HIS 1108 RULINGS
 
-| the gap | the question |
+| his ruling | his words |
 |---|---|
-| which RSI | `rsi_d`, the developing RSI at the 5 s grid that the line itself uses, or the CLOSED-bar RSI that the banked `bullish-rsi` / `bearish-rsi` reads - one value per TF close, which for ws30 is one value per 30 min and cannot resolve a flat shorter than its own bar |
-| whose read | a new reader, or an extension of `bullish-rsi` / `bearish-rsi` with `RSIDIV_LINES` widened past its banked `ws1r, gcws30r` |
-| the build cost | `rsi_d`, `lb_rsi_min` and `lb_rsi_max` are computed inside `f_k_lookahead` and discarded. They would need returning or recomputing, and the cache would need a new array per TF |
-| the name | unnamed. He names it if he wants it built |
+| it is worth trying | *"if it works, good, if not: at least we tried"* - on the finding being ours and not a documented practice |
+| which RSI | *"developing"* - `rsi_d` at the 5 s grid, the series the r line itself uses. NOT the closed-bar RSI that `bullish-rsi` / `bearish-rsi` reads |
+| whose read | *"new reader, on the jig"* - not an extension of `bullish-rsi` / `bearish-rsi`, and `RSIDIV_LINES` stays at its banked `ws1r, gcws30r` |
+| the build cost | *"the cost is accepted"* |
+| the name | `fdm2-name-me-joe`, his placeholder - *"I'll come back to it"* |
+
+NOTHING IS BUILT. The gate below is open.
 
 NOT A DOCUMENTED PRACTICE. The external reading confirms StochRSI pins at the extremes and that an
 extreme is a condition rather than a trigger, but no source recommends reading the plain RSI while
