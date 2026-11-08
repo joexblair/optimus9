@@ -154,12 +154,38 @@ def answer(q):
         if not late:
             out.append(R.row('none', '-', '-', '-', '-'))
         return out
+    if kind == 'cadlist':
+        #   HIS 1108 CHECK on three c3r rows: *"the low cadence at 0853"*, *"high side cadence at
+        #   1226"*, *"the leg ultimately lands on low side 1634 cadence"*. His eyes are a
+        #   measurement, so the cadence events are read off F2.cadence_events and listed beside
+        #   his quoted times rather than taken on trust either way.
+        A, B = ln.K(str(q['from'])), ln.K(str(q['to']))
+        out += ['', '# every cadence event, both sides, %s to %s'
+                % (str(q['from']), str(q['to'])), '']
+        #   THE pxs PRICE AT THE EVENT BAR rides along: his 1108 three rows ask what the outgoing
+        #   trade would realise if an opposite-side cadence event closed it, and that needs the
+        #   price on the event bar, not just its timestamp.
+        import numpy as _np
+        _px = _np.asarray(LN['close'], float)
+        out += ['| the cadence event | side | the ws1b excursion opened at | pxs at the event bar '
+                '| why |', '|---|---|---|---|---|']
+        ev = []
+        for sd in (+1, -1):
+            for e in F2.cadence_events(LN, sd, A, B):
+                ev.append((int(e[0]), sd, int(e[1]), str(e[2])))
+        for b, sd, s0, why in sorted(ev):
+            out.append('| %s | %s | %s | %.6f | %s |'
+                       % (ln.U(b), 'HIGH' if sd > 0 else 'LOW', ln.U(s0), float(_px[b]),
+                          why.replace('|', '\\|')))
+        if not ev:
+            out.append('| none | - | - | - | - |')
+        return out
     if kind == 'pivstop':
         #   HIS 1108: *"lets see if you can use your research to find a dynamic stop for each
         #   signal"*. The structural stop off the last CONFIRMED price pivot, per c3r firing.
         A, B = ln.K(str(q['from'])), ln.K(str(q['to']))
         lab = str(q.get('read', 'ws3r emerging, rest closed-prev'))
-        pcs = tuple(float(x) for x in q.get('pcts', (0.3, 0.5, 0.9, 1.5, 2.0)))
+        pcs = tuple(int(x) for x in q.get('gaps', (24, 48, 60)))
         out += ['', '# the structural stop per c3r signal, %s to %s'
                 % (str(q['from']), str(q['to'])), '']
         out += R.pivstop_table(LN, A, B, lab, pcs)

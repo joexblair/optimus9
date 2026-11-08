@@ -18,6 +18,7 @@ import v4_knobs as K        # noqa: E402
 import v4_fdm2 as F2        # noqa: E402
 import v4_closed_prev as CP # noqa: E402
 import ln                   # noqa: E402
+import v4_sweep_pivots as SP # noqa: E402
 from optimus9.analysis import jig as JIG   # noqa: E402
 
 
@@ -61,8 +62,12 @@ def stamp(LN):
                                                    for n in off) if off else 'none'))
     out.append(row('the bank check', 'RULED_OK %s' % K.RULED_OK))
     out.append(row('fdm2-momo', 'ON' if int(K.FDM2_MOMO_ON) else 'OFF'))
-    out.append(row('the stop', 'FDM_MAE_CAP %.2f%% adverse from the open, carried by every number '
-                               'below' % float(K.FDM_MAE_CAP)))
+    #   THE STOP ROW NAMES THE CAP, NOT THE RULE IN USE. Every report that scores against a
+    #   different stop says so in its own block; this row said *"carried by every number below"*
+    #   while cad3r_scan was running his 1108 dynamic level, which is a label that misreports its
+    #   own table. It now states the cap's value and nothing about what a given report used.
+    out.append(row('FDM_MAE_CAP', '%.2f%% adverse from the open. Each report names the stop IT ran '
+                                  'under in its own block' % float(K.FDM_MAE_CAP)))
     return out
 
 
@@ -525,7 +530,7 @@ def cad3r_eval(LN, side, mark, lab):
 
     R = dict(read=lab, side=sd, mark=mk, kill=None, arm=None, oob1=None, ib1=None, oob3=None,
              x4=None, branch=None, c3_bar=None, c3_mage=None, c3_b=None, c5_ext=None,
-             c5_oob=None, c5_exf=None, ret=None, fires=False, why={})
+             c5_oob=None, c5_exf=None, ret=None, dwell=None, fires=False, why={})
 
     o1 = oob(r1)
     a = mk
@@ -595,6 +600,23 @@ def cad3r_eval(LN, side, mark, lab):
         R['why']['4'] = 'neither branch fired before the tape ends'
         return R
     x4 = R['x4']
+    #   HIS 1108 ws3r MINIMUM DWELL: *"ws3r minimum dwell should be 3 minutes"*, `FDM2_C3R_DWELL`
+    #   36 bars = 180 s. THE SPAN IS MINE AND STATED: the run of CONSECUTIVE oob bars that starts
+    #   at `oob3`, counted forward and stopped at the clause-4 bar. Branch B is still oob at x4 so
+    #   its run is the whole window; branch A's run ends where ws3r left oob. Reading forward from
+    #   oob3 to x4 only touches bars at or before x4, so the gate is knowable AT x4 and nowhere
+    #   earlier - a run that would reach 36 bars after x4 does not count, because at x4 it had not.
+    dw, t = 0, R['oob3']
+    while t <= x4 and o3b[t]:
+        dw += 1
+        t += 1
+    R['dwell'] = dw
+    R['why']['dwell'] = ("ws3r's consecutive oob run from %s is %d bars = %d s, against the %d bar "
+                         '= %d s minimum' % (ln.U(R['oob3']), dw, dw * 5, int(K.FDM2_C3R_DWELL),
+                                             int(K.FDM2_C3R_DWELL) * 5))
+    if dw < int(K.FDM2_C3R_DWELL):
+        R['kill'] = 'dwell'
+        return R
     R['why']['4'] = ('ws3r crosses to in-%g/%g at %.2f' % (lo_f, hi_f, r3[x4])
                      if R['branch'] == 'A' else
                      ('ws1Mage lift-off STAMP here, ws1Mage %.2f oob, ws3r %.2f still oob, ws4r '
@@ -633,38 +655,56 @@ def cad3r_eval(LN, side, mark, lab):
     return R
 
 
-def pivstop_table(LN, A, B, lab='ws3r emerging, rest closed-prev', pcts=(0.3, 0.5, 0.9, 1.5, 2.0)):
-    """A stop distance read off the last confirmed price pivot, per c3r firing. -> the markdown.
+def pivstop_table(LN, A, B, lab='ws3r emerging, rest closed-prev', gaps=(24, 48, 60)):
+    """The stop level from HIS walk-back-to-look-forward mech, per c3r firing. -> the markdown.
 
-    HIS 1108: *"if we follow the last pivot idea, the 0724 HIGH would need a 1.9% stop. lets see
-    if you can use your research to find a dynamic stop for each signal"*.
+    HIS 1108: *"if you're using sweep pivots to find it, it won't show up. to find the 'last
+    pivot', it will need to be handled manually: use the 'walk back to look forward' mech"*.
 
-    THE RESEARCH'S RULE, AS THE SIXTEEN SOURCES STATE IT: a SHORT's stop sits above the most
-    recent confirmed swing HIGH, a LONG's below the most recent confirmed swing LOW, plus a
-    buffer. The buffer has no agreed size across those sources and HE HAS NOT RULED ONE, so the
-    buffer here is 0.00% and the raw structural distance is what prints. He picks the buffer from
-    this distribution.
+    SO THE PRODUCER IS `jig.mage_cascade_bar(line, bar, side, mode='extrema', gap=...)`. My first
+    build used the percentage zigzag in optimus9/compute/swing_detect.py, and at every scale I
+    read it the 0724 HIGH came back 0.325%, 2.283% or 5.055% - never his 1.9%. That read is
+    withdrawn for this purpose.
 
-    CAUSALITY. The pivot is read through find_pivots_confirmed, which returns each pivot's
-    CONFIRM BAR - the bar the retrace made it knowable. Only pivots with confirm_bar <= the open
-    bar are eligible, so the level was on the board before the trade opened. find_pivots alone
-    returns the pivot's own index, which is always earlier than its confirm bar, and selecting on
-    that index would be lookahead.
+    HIS MECH, 1017, quoted in the jig: *"to find the extrema, look back from the event bar in 4
+    minute gaps until you see an extrema, then step back another 4 minutes to validate the
+    extrema"*, and *"the whole point of walking back to look forward for the extrema is to confirm
+    the only extrema it can see"*. The coarse walk back finds a sample bar; the level is the
+    series' true extreme FORWARD of it, bounded by the event bar.
+
+    THE LINE IS pxs. His own docstring: *"the extrema source on the 5 s grid. ws1Mage today ...
+    The TF is the CALLER'S"*. The caller hands it a series, so price is admissible, and pxs is the
+    series his 1108 stop ruling put the stop on.
+
+    THE SIDE IS THE c3r ARM'S SIDE. His rule: *"extrema must be same-side as the event's side
+    (not the events' SHORT or LONG verdict)"*. A HIGH-side arm opens a SHORT, whose stop sits
+    above the last HIGH extreme, so the level side and the arm side are the same number.
+
+    sample_bars IS NONE. That argument exists for a closed-prev series, which is flat between its
+    seams; pxs carries its own value on every 5 s bar, so every bar is a candidate.
+
+    THE GAPS SWEPT ARE ALL HIS OWN NUMBERS, not a spread of mine: 24 bars = 2 min from *"walk
+    backwards in 2 minute gaps to look forward for the counter-side extrema"*, 48 bars = 4 min =
+    `MC_GAP` from *"look back from the event bar in 4 minute gaps"*, 60 bars = 5 min from *"at
+    trade open, walkback in 5 minute jumps"*.
+
+    THE BUFFER IS 0.00%. The sixteen sources read on 1108 give 0.5%..1.0%, $0.10..$0.50 or
+    0.5x..3.5x ATR and agree on nothing, and HE HAS NOT RULED ONE. The raw structural distance
+    prints so he can pick a buffer from the distribution.
 
     THE OUTCOME COLUMNS GO THROUGH F2.stop_bar, his own stop walk, with the structural distance
-    handed in as the cap. Nothing else about the scoring changes, so these rows sit beside the
-    FDM_MAE_CAP rows in cad3r_scan and the only difference is the cap that was handed in.
+    handed in as the cap. Nothing else about the scoring changes.
     """
     import numpy as _np
     import sys as _sys
     if '/home/joe/thecodes' not in _sys.path:
         _sys.path.insert(0, '/home/joe/thecodes')
-    from optimus9.compute.swing_detect import find_pivots_confirmed
+    from optimus9.analysis import jig as _jig
     close = _np.asarray(LN['close'], float)
     _, fired = cad3r_arms(LN, A, B, lab)
     #   ONE ROW PER DISTINCT FIRING BAR AND SIDE. Several ws1r oob entry arms converge on one
     #   firing bar and produce byte-identical rows; a per-signal stop read has one record per
-    #   signal. The 64-row-per-arm count is still in cad3r_scan, unchanged.
+    #   signal. The 64-row-per-arm count stays in cad3r_scan, unchanged.
     sigs = {}
     for q, sd, E in fired:
         sigs.setdefault((int(E['x4']), int(sd)), E)
@@ -672,32 +712,29 @@ def pivstop_table(LN, A, B, lab='ws3r emerging, rest closed-prev', pcts=(0.3, 0.
     out = ['| the read | value |', '|---|---|']
     out.append(row('the firings read', '%d distinct firing bars, from %d arms that fired'
                    % (len(keys), len(fired))))
-    out.append(row('the rule', "a SHORT's stop above the last confirmed swing HIGH, a LONG's "
-                               'below the last confirmed swing LOW - the one rule all sixteen '
-                               'sources agree on'))
-    out.append(row('the buffer', '0.00% - the sixteen sources give 0.5%..1.0%, $0.10..$0.50 or '
-                                 '0.5x..3.5x ATR and agree on nothing. HE HAS NOT RULED ONE'))
-    out.append(row('the pivot producer', '`find_pivots_confirmed(pxs, pct)` - eligible only when '
-                                         'its confirm bar is at or before the open bar'))
+    out.append(row('the producer', "`jig.mage_cascade_bar(pxs, the open bar, the arm's side, "
+                                   "mode='extrema', gap=...)` - HIS walk back to look forward"))
+    out.append(row('the level', "the extreme FORWARD of the coarse sample bar, bounded by the "
+                                'open bar. One extrema, not many'))
+    out.append(row('the side', "the c3r arm's own side, his *extrema must be same-side as the "
+                               "event's side* rule"))
     out.append(row('the price series', 'pxs = DEMA(close, 2) on the 5 s grid, his 1108 ruling'))
+    out.append(row('the sampling', 'every 5 s bar - `sample_bars` is for a closed-prev series, '
+                                   'and pxs is not one'))
+    out.append(row('the walk', 'UNBOUNDED back, his standing rule. No cap'))
+    out.append(row('the buffer', '0.00% - the sixteen sources agree on nothing and HE HAS NOT '
+                                 'RULED ONE'))
     out.append(row('the stop walk', 'F2.stop_bar, unchanged, with the structural distance handed '
                                     'in as the cap'))
-    out.append(row('the swing scales swept', ', '.join('%.1f%%' % x for x in pcts)
-                   + ' - THE SPREAD IS MINE. 0.9% is the repo default `cfg.swing_pct`'))
-
-    PV = {}
-    for pc in pcts:
-        PV[pc] = find_pivots_confirmed(close, float(pc))
-
-    def level(pc, opn, want):
-        """The last confirmed pivot of kind `want` knowable at `opn`. -> (bar, confirm, price)."""
-        best = None
-        for i, k, c in PV[pc]:
-            if int(c) > int(opn):
-                break
-            if k == want and int(i) <= int(opn):
-                best = (int(i), int(c), float(close[int(i)]))
-        return best
+    out.append(row('the gaps swept', ', '.join('%d bars = %d min' % (g, g * 5 // 60) for g in gaps)
+                   + ' - EVERY ONE IS HIS OWN NUMBER'))
+    #   HIS 1108: *"isn't one of the points of sweep-pivots is to print the MFE based on the next
+    #   pivot after a signal opens?"*. It is, and this table never called it. The MFE columns above
+    #   are the excursion across my own hold-to-the-stop span, which is not a swing at all.
+    #   sweep-pivots bounds the leg with a Mage oob->ib cross and sets the swing scale from which
+    #   TF's pivot marks the event, so its mfe_pct is the number he is asking for.
+    for nm, val, why in SP.knobs():
+        out.append(row('sweep-pivots `%s`' % nm, '%s - %s' % (val, why)))
 
     def score(opn, osd, capd):
         sb = F2.stop_bar(LN, opn, int(B), osd, capd)
@@ -707,67 +744,86 @@ def pivstop_table(LN, A, B, lab='ws3r emerging, rest closed-prev', pcts=(0.3, 0.
         return dict(ex=ex, sb=sb, mae=abs(float(_np.nanmin(pp))), mfe=float(_np.nanmax(pp)),
                     rel=-capd if sb is not None else osd * (float(close[ex]) - op) / op * 100.0)
 
-    DEF = 0.9 if 0.9 in pcts else pcts[0]
-    out += ['', '## the structural stop per signal, swing scale %.1f%%' % DEF, '']
+    DEF = 48 if 48 in gaps else gaps[0]
+    out += ['', '## the structural stop per signal, gap %d bars = %d min' % (DEF, DEF * 5 // 60), '']
     out += head('the firing bar', 'the side it fired on', 'the OUTGOING trade', 'it opens at',
-                'the open price', 'the pivot bar', 'the pivot became knowable at', 'the pivot price',
-                'the stop distance %', 'the exit', 'the exit kind', 'held min', 'MAE %', 'MFE %',
-                'realised %')
-    agg = {pc: [] for pc in pcts}
+                'the open price', 'the extrema bar', 'bars back', 'the extrema price',
+                'the stop distance %', 'the exit', 'the exit kind', 'held min', 'MAE %',
+                'MFE % - MY hold-to-the-stop span', 'realised %',
+                'sweep-pivots marking TF', 'sweep-pivots leg opened at',
+                'sweep-pivots leg closed at', 'sweep-pivots pivot bar',
+                'sweep-pivots mfe_pct - THE SWING MFE', 'sweep-pivots given_pct',
+                'sweep-pivots share', 'why the coarse walk stopped there')
+    agg = {g: [] for g in gaps}
     for (x4, sd) in keys:
         opn = int(x4) + 2
         osd = -int(sd)
-        want = 'H' if osd < 0 else 'L'
         if opn > int(B):
             continue
         op = float(close[opn])
-        for pc in pcts:
-            L = level(pc, opn, want)
-            if L is None:
-                agg[pc].append(None)
-                continue
-            d = osd * (L[2] - op) / op * -100.0      # the level sits adverse to the trade
-            if d <= 0:
-                agg[pc].append(None)
-                if pc == DEF:
+        for g in gaps:
+            W = SP.swing(opn, int(sd), close) if g == DEF else None
+            sp = (['-'] * 7 if W is None else
+                  [W['tf'], ln.U(int(W['open'])), ln.U(int(W['close'])), ln.U(int(W['pivot'])),
+                   '%+.3f' % W['mfe_pct'], '%+.3f' % W['given_pct'],
+                   '%.2f' % W['share'] if W['share'] is not None else 'nan'])
+            M = _jig.mage_cascade_bar(close, opn, int(sd), mode='extrema', gap=int(g))
+            if M is None:
+                agg[g].append(None)
+                if g == DEF:
                     out.append(row(ln.U(x4), 'HIGH' if sd > 0 else 'LOW',
                                    'SHORT' if osd < 0 else 'LONG', ln.U(opn), '%.6f' % op,
-                                   ln.U(L[0]), ln.U(L[1]), '%.6f' % L[2],
-                                   'the pivot is already favourable', '-', '-', '-', '-', '-', '-'))
+                                   'none', '-', '-', 'no same-side extrema back to the tape start',
+                                   '-', '-', '-', '-', '-', '-', *sp, '-'))
+                continue
+            k, why = M
+            lv = float(close[int(k)])
+            d = -osd * (lv - op) / op * 100.0        # positive when the level sits adverse
+            if d <= 0:
+                agg[g].append(None)
+                if g == DEF:
+                    out.append(row(ln.U(x4), 'HIGH' if sd > 0 else 'LOW',
+                                   'SHORT' if osd < 0 else 'LONG', ln.U(opn), '%.6f' % op,
+                                   ln.U(int(k)), opn - int(k), '%.6f' % lv,
+                                   'the extrema is already favourable', '-', '-', '-', '-', '-',
+                                   '-', *sp, why))
                 continue
             S = score(opn, osd, d)
-            agg[pc].append(dict(d=d, **S))
-            if pc == DEF:
+            agg[g].append(dict(d=d, **S))
+            if g == DEF:
                 out.append(row(ln.U(x4), 'HIGH' if sd > 0 else 'LOW',
                                'SHORT' if osd < 0 else 'LONG', ln.U(opn), '%.6f' % op,
-                               ln.U(L[0]), ln.U(L[1]), '%.6f' % L[2], '%.3f' % d,
+                               ln.U(int(k)), opn - int(k), '%.6f' % lv, '%.3f' % d,
                                ln.U(S['ex']),
                                'STOP at %.3f%%' % d if S['sb'] is not None
                                else 'still open at the span end',
                                '%.1f' % ((S['ex'] - opn) * 5 / 60.0), '%.3f' % S['mae'],
-                               '%+.3f' % S['mfe'], '%+.3f' % S['rel']))
+                               '%+.3f' % S['mfe'], '%+.3f' % S['rel'], *sp, why))
 
-    out += ['', '## the swing scale curve, every scale on the same signals', '']
-    out += head('the swing scale %', 'signals with a usable adverse pivot',
-                'signals whose last pivot is already FAVOURABLE, so there is no stop level',
-                'the stop distance %, median', 'the stop distance %, min', 'the stop distance %, max',
-                'that stopped', 'still open at the span end', 'MFE %, median', 'realised %, total',
-                'drag %', 'net %')
-    for pc in pcts:
-        g = [x for x in agg[pc] if x]
-        n = len(g)
+    out += ['', '## the gap curve, every gap on the same signals', '']
+    out += head('the gap, bars', 'the gap, min', 'signals with an adverse extrema',
+                'signals whose extrema is already FAVOURABLE, so there is no stop level',
+                'the stop distance %, median', 'the stop distance %, min',
+                'the stop distance %, max', 'that stopped', 'still open at the span end',
+                'realised %, total - RESOLVED ROWS ONLY', 'drag % - resolved rows',
+                'net % - RESOLVED ROWS ONLY', 'realised %, total - every row',
+                'net % - every row')
+    for g in gaps:
+        grp = [x for x in agg[g] if x]
+        n = len(grp)
         if not n:
-            out.append(row('%.1f' % pc, 0, len(agg[pc]), *['-'] * 9))
+            out.append(row(g, g * 5 // 60, 0, len(agg[g]), *['-'] * 10))
             continue
-        d = sorted(x['d'] for x in g)
-        rl = [x['rel'] for x in g]
-        out.append(row('%.1f' % pc, n, len(agg[pc]) - n,
+        d = sorted(x['d'] for x in grp)
+        res = [x for x in grp if x['sb'] is not None]
+        tr = sum(x['rel'] for x in res)
+        ta = sum(x['rel'] for x in grp)
+        out.append(row(g, g * 5 // 60, n, len(agg[g]) - n,
                        '%.3f' % float(_np.median(d)), '%.3f' % d[0], '%.3f' % d[-1],
-                       sum(1 for x in g if x['sb'] is not None),
-                       sum(1 for x in g if x['sb'] is None),
-                       '%+.3f' % float(_np.median([x['mfe'] for x in g])),
-                       '%+.3f' % sum(rl), '%.3f' % (-0.1975 * n),
-                       '%+.3f' % (sum(rl) - 0.1975 * n)))
+                       len(res), n - len(res),
+                       '%+.3f' % tr, '%.3f' % (-0.1975 * len(res)),
+                       '%+.3f' % (tr - 0.1975 * len(res)),
+                       '%+.3f' % ta, '%+.3f' % (ta - 0.1975 * n)))
     return out
 
 
@@ -823,8 +879,20 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
                       (int(B) - int(A) + 1) * 5 / 86400.0)))
     out.append(row('an arm', "every ws1r oob entry on either side"))
     out.append(row('MAE/MFE basis', 'THE OUTGOING trade the firing would open - the opposite '
-                                    'direction, from the firing bar + 2 bars to its FDM_MAE_CAP '
-                                    '%.2f%% stop. MY CHOICE, he did not rule it' % float(K.FDM_MAE_CAP)))
+                                    'direction, from the firing bar + 2 bars to its stop. MY '
+                                    'CHOICE, he did not rule it'))
+    out.append(row('the stop', 'DYNAMIC - his 1108 *"recreate the c3r mae mfe data with dynamic '
+                               'stops"*. The level is `jig.mage_cascade_bar(pxs, the open bar, '
+                               "the arm's side, mode='extrema', gap=%d)` - HIS walk back to look "
+                               'forward, at his own `MC_GAP` %d bars = %d min. No buffer: he has '
+                               'not ruled one' % (int(JIG.MC_GAP), int(JIG.MC_GAP),
+                                                  int(JIG.MC_GAP) * 5 // 60)))
+    out.append(row('the fallback', 'FDM_MAE_CAP %.2f%% - used only where the walk back finds no '
+                                   'adverse extrema, which would otherwise leave the trade with '
+                                   'no stop at all. MY CHOICE, stated' % float(K.FDM_MAE_CAP)))
+    out.append(row('ws3r minimum dwell', '`FDM2_C3R_DWELL` %d bars = %d s - HIS 1108 *"ws3r '
+                                         'minimum dwell should be 3 minutes"*'
+                   % (int(K.FDM2_C3R_DWELL), int(K.FDM2_C3R_DWELL) * 5)))
     out.append(row('the price series', 'pxs - DEMA(close, 2) on the 5 s grid. HIS 1108 ruling: '
                                        'the stop, MAE and MFE all read it. The raw kline high/low '
                                        'MFE is printed in the aggregate for comparison only'))
@@ -849,7 +917,7 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     out += head('the firing bar', 'the side it fired on', 'branch', 'the OUTGOING trade',
                 'it opens at', 'the open price', 'the exit', 'the exit kind', 'held min',
                 'MAE %', 'MFE %', 'realised %', 'MFE over MAE')
-    mae_l, mfe_l, mfer_l, rel_l = [], [], [], []
+    mae_l, mfe_l, mfer_l, rel_l, stop_l, cap_l = [], [], [], [], [], []
     for q, sd, E in sorted(fired):
         sig = int(E['x4'])
         opn = sig + 2
@@ -859,7 +927,15 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
                            'SHORT' if osd < 0 else 'LONG', 'past the span', '-', '-', '-', '-',
                            '-', '-', '-', '-'))
             continue
-        cap = float(K.FDM_MAE_CAP)
+        #   THE DYNAMIC LEVEL FIRST, his 1108 ruling. `cap` here is a DISTANCE in percent, which
+        #   is what F2.stop_bar takes, so his structural level is handed in exactly like the fixed
+        #   one and nothing else about the scoring changes.
+        Mx = JIG.mage_cascade_bar(close, opn, int(sd), mode='extrema', gap=int(JIG.MC_GAP))
+        cap, lvl = float(K.FDM_MAE_CAP), 'the FDM_MAE_CAP fallback'
+        if Mx is not None:
+            dyn = -osd * (float(close[int(Mx[0])]) - float(close[opn])) / float(close[opn]) * 100.0
+            if dyn > 0:
+                cap, lvl = dyn, ln.U(int(Mx[0]))
         sb = F2.stop_bar(LN, opn, int(B), osd, cap)
         ex = int(sb) if sb is not None else int(B)
         op = float(close[opn])
@@ -878,24 +954,36 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
         mfe_l.append(mfe)
         mfer_l.append(mfe_raw)
         rel_l.append(rel)
+        stop_l.append(sb is not None)
+        cap_l.append(cap)
         out.append(row(ln.U(sig), 'HIGH' if sd > 0 else 'LOW', E['branch'],
                        'SHORT' if osd < 0 else 'LONG', ln.U(opn), '%.6f' % op, ln.U(ex),
-                       'STOP at %.2f%%' % cap if sb is not None else 'still open at the span end',
+                       'STOP at %.3f%% off %s' % (cap, lvl) if sb is not None
+                       else 'still open at the span end',
                        '%.1f' % ((ex - opn) * 5 / 60.0), '%.3f' % mae, '%+.3f' % mfe,
                        '%+.3f' % rel, '%.2f' % (mfe / mae) if mae > 0 else 'nan'))
     if not fired:
         out.append(row(*(['none'] + ['-'] * 12)))
     else:
-        out += ['', '| the aggregate, every number carrying the FDM_MAE_CAP %.2f%% stop | value |'
-                % float(K.FDM_MAE_CAP), '|---|---|']
+        out += ['', '| the aggregate, every number carrying HIS DYNAMIC stop - the walk back to '
+                'look forward at gap %d bars = %d min, FDM_MAE_CAP %.2f%% only as the fallback '
+                '| value |' % (int(JIG.MC_GAP), int(JIG.MC_GAP) * 5 // 60,
+                               float(K.FDM_MAE_CAP)), '|---|---|']
         out.append(row('arms evaluated', len(rows_)))
         out.append(row('firings', '%d of %d arms = %.1f%%'
                        % (len(fired), len(rows_), len(fired) / len(rows_) * 100.0)))
         out.append(row('killed at clause 1 / 2 / 3 / 4 / 5',
                        ' / '.join(str(sum(1 for _, _, E in rows_ if E['kill'] == c))
                                   for c in '12345')))
+        out.append(row("killed at his ws3r minimum dwell, %d bars = %d s"
+                       % (int(K.FDM2_C3R_DWELL), int(K.FDM2_C3R_DWELL) * 5),
+                       sum(1 for _, _, E in rows_ if E['kill'] == 'dwell')))
+        out.append(row("ws3r's oob dwell on the arms that fired, bars - median",
+                       '%.0f = %.0f s' % (float(_np.median([E['dwell'] for _, _, E in fired])),
+                                          float(_np.median([E['dwell'] for _, _, E in fired])) * 5)
+                       if fired else '-'))
         out.append(row('outgoing trades scored', len(mae_l)))
-        out.append(row('that stopped', sum(1 for r in rel_l if r <= -float(K.FDM_MAE_CAP))))
+        out.append(row('that stopped', sum(1 for r in stop_l if r)))
         out.append(row('MAE %, median', '%.3f' % float(_np.median(mae_l))))
         out.append(row('MFE %, median', '%+.3f' % float(_np.median(mfe_l))))
         out.append(row('MFE %, total', '%+.3f' % sum(mfe_l)))
@@ -905,6 +993,11 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
                        '%+.3f' % sum(mfer_l)))
         out.append(row('realised %, median', '%+.3f' % float(_np.median(rel_l))))
         out.append(row('realised %, total', '%+.3f' % sum(rel_l)))
+        out.append(row('the dynamic stop distance %, median', '%.3f' % float(_np.median(cap_l))))
+        out.append(row('the dynamic stop distance %, min .. max',
+                       '%.3f .. %.3f' % (min(cap_l), max(cap_l))))
+        out.append(row('rows that fell back to FDM_MAE_CAP %.2f%%' % float(K.FDM_MAE_CAP),
+                       sum(1 for c in cap_l if abs(c - float(K.FDM_MAE_CAP)) < 1e-12)))
         out.append(row('MFE over MAE, median',
                        '%.2f' % float(_np.median([f / m for f, m in zip(mfe_l, mae_l) if m > 0]))))
         out.append(row('drag %', '-%.3f (0.1975%% round trip x %d)'

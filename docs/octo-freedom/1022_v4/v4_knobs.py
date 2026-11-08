@@ -1490,6 +1490,11 @@ FDM2_MOMO_FLOOR_RPRED = _knob('FDM2_MOMO_FLOOR_RPRED', 1, int)   # r-pred's floo
 #   predicted to breach. On the 50,457 cad-walk bars it fires on 9,470 = 18.8%.
 FDM2_MOMO_MED_MX = _knob('FDM2_MOMO_MED_MX', 7, int)         # the fast-versus-slow median
 FDM2_MOMO_MED_PIN = _knob('FDM2_MOMO_MED_PIN', 9, int)       # the pinned median
+FDM2_C3R_DWELL = _knob('FDM2_C3R_DWELL', 36, int)   # ws3r's minimum oob dwell, 36 bars = 3 min
+#   HIS 1108: *"ws3r minimum dwell should be 3 minutes"*, after reading 2026-08-25 14:57,
+#   2026-08-25 19:01 and 2026-08-26 03:02 and saying *"these have a small ws3r exursion window"*.
+#   36 bars x 5 s = 180 s. THE NUMBER IS HIS; the span it is measured over is stated in
+#   momo_render.cad3r_eval and is MINE.
 FDM2_MOMO_XWIN = _knob('FDM2_MOMO_XWIN', 12, int)   # the x-crosses-Mage window, 12 bars = 60 s
 #   HIS 1106 *"if x has crossed Mage in the last minute, then Mage will follow x **because of
 #   matryoshka**"*. One minute at the 5 s grid, ending at the bar being read. REPORT-ONLY: his
@@ -1882,6 +1887,7 @@ RULED = {
     'FDM2_MOMO_FLOOR_RPRED': (1, "r-pred's FLOOR, not a median: at least one carrier predicted to breach. HIS option A, because r-pred's median is 0 on every carrier set and a median makes its vote a constant. Fires on 9,470 of 50,457 cad-walk bars = 18.8%"),
     'FDM2_MOMO_MED_MX': (7, 'the fast-versus-slow median, re-measured over all 50,457 cad-walk bars on ws4..ws10 emerging. UNCHANGED from the 27-line value. Fires on 49.3%'),
     'FDM2_MOMO_MED_PIN': (9, 'the pinned median over the same 50,457 bars, ws4..ws30 emerging. UNCHANGED. Fires on 51.0%'),
+    'FDM2_C3R_DWELL': (36, "ws3r's minimum oob dwell for fdm2-3r-cadence. HIS 1108 *\"ws3r minimum dwell should be 3 minutes\"* = 36 bars x 5 s = 180 s"),
     'FDM2_MOMO_XWIN': (12, 'the x-crosses-Mage window, HIS 1106 *"in the last minute"* = 12 bars = 60 s ending at the bar read. REPORT-ONLY, his rulings 3 to 5'),
     'FDM2_BLAST_SCAN_HI': (12, 'HIS 1105 VALUE "ws12" for the away run\'s top rung. The knob NAME is mine; 12 is wsf\'s ceiling, the same number FDM_RE_SCAN_HI carries'),
     'FDM2_MATR_LFTOF_CONF': (10, 'HIS OWN KNOB NAME AND VALUE, 1105 - "the samples should only be captured for ws{{<={knob:10,`FDM2_MATR_LFTOF_CONF`}}r". It caps the flattening SAMPLE CAPTURE, not the away run'),
@@ -2317,7 +2323,8 @@ def table():
              'FDM2_MOMO_ON': 'on/off', 'FDM2_MOMO_VOTES': 'votes',
              'FDM2_MOMO_READ': 'mode', 'FDM2_MOMO_FLOOR_RPRED': 'lines',
              'FDM2_MOMO_MED_MX': 'lines', 'FDM2_MOMO_MED_PIN': 'lines',
-             'FDM2_MOMO_MAX_TF': 'timeframe', 'FDM2_MOMO_XWIN': 'bars'}
+             'FDM2_MOMO_MAX_TF': 'timeframe', 'FDM2_MOMO_XWIN': 'bars',
+             'FDM2_C3R_DWELL': 'bars'}
     for k, (v, why) in RULED.items():
         rows.append('| `%s` | %s | %s | %s | %s |'
                     % (k, here[k], units.get(k, '?'),
