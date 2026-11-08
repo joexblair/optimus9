@@ -339,8 +339,13 @@ def x_of(LN, tf):
     return X[t]
 
 
-def x_race(LN, tf, side, frm, B):
+def x_race(LN, tf, side, frm, B, collect=False):
     """The first ws{tf}x race cross strictly after `frm` on `side`. -> (confirm, which, cross)|None.
+
+    `collect=True` returns EVERY cross in the span instead of the winner, confirm-bar ascending,
+    as a list of the same triples. HIS 1108: *"to make this table useful, I need you to find the
+    nearest cross, looking back or forward"* - a nearest-either-side read needs the whole list, and
+    duplicating these three arms somewhere else to get it is how two call sites drift apart.
 
     x10_cadence WAS THIS FUNCTION WITH tf PINNED TO 10. His 1104 update 1 made the timeframe
     dynamic - *"instead of using a static TF10 to create the ws10x-cadence, we will set the TF
@@ -371,7 +376,8 @@ def x_race(LN, tf, side, frm, B):
             continue
         if (int(cf) if cf_only else int(c)) > int(frm):
             hits.append((int(cf), 'ib', int(c)))
-            break
+            if not collect:
+                break
     for nm, other in (('ws%dr' % int(tf), R), ('ws%dMage' % int(tf), M)):
         for i in range(lo, int(B) + 1):
             a, b = X[i - 1], X[i]
@@ -393,7 +399,10 @@ def x_race(LN, tf, side, frm, B):
             seg = [(X[j] < other[j]) if side > 0 else (X[j] > other[j]) for j in range(i, end)]
             if all(seg) and i + w - 1 > int(frm):
                 hits.append((i + w - 1, nm, int(i)))
-                break
+                if not collect:
+                    break
+    if collect:
+        return sorted(hits)
     if not hits:
         return None
     bar, which, cross = min(hits, key=lambda x: x[0])

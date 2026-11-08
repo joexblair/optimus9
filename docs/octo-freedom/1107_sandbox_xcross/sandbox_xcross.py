@@ -204,6 +204,50 @@ def report(LN, side, ev, n_of):
     return out + (table(g) if len(g) > 1 else []) + notes
 
 
+_XC = {}
+
+
+def all_x_crosses(LN, xtf, side):
+    """Every ws{xtf}x race cross on `side`, over the WHOLE tape. -> [(confirm, which, cross)].
+
+    HIS 1108: *"find the nearest cross, looking back or forward"*. Unbounded on purpose - a
+    nearest read that stopped at the race bound would only restate the bound that already failed.
+    One F2.x_race call with collect=True, so the three race arms live in one place; cached per
+    (xtf, side) because it is a full-tape scan.
+    """
+    key = (int(xtf), int(side))
+    if key not in _XC:
+        _XC[key] = F2.x_race(LN, xtf, side, -1, len(LN['close']) - 1, collect=True)
+    return _XC[key]
+
+
+def nearest_cross(LN, xtf, side, ev):
+    """The nearest ws{xtf}x cross before and after `ev`, by CROSS bar. -> (back, fwd), each
+    (confirm, which, cross) or None."""
+    xs = all_x_crosses(LN, xtf, side)
+    back = fwd = None
+    for cf, nm, c in xs:
+        if int(c) <= int(ev):
+            back = (int(cf), nm, int(c))
+        elif fwd is None:
+            fwd = (int(cf), nm, int(c))
+            break
+    return back, fwd
+
+
+def nearest_cross_note(LN, xtf, side, ev):
+    """One sentence naming the nearest cross each way, with its distance. -> str."""
+    back, fwd = nearest_cross(LN, xtf, side, ev)
+    def one(t, lab):
+        if t is None:
+            return 'no %s cross anywhere on the tape' % lab
+        cf, nm, c = t
+        d = (int(c) - int(ev)) * 5 / 60.0
+        return ('the nearest %s cross is %s on %s, %+.1f min, confirming %s'
+                % (lab, ln.U(c), nm, d, ln.U(cf)))
+    return '%s. %s' % (one(back, 'BACK'), one(fwd, 'FORWARD'))
+
+
 _ALLCAD = None
 
 
@@ -245,13 +289,18 @@ def r_block(LN, side, ev, xtf):
     bnd = race_bound(LN, ev)
     r = F2.x_race(LN, xtf, side, ev, bnd)
     if r is None:
-        #   HIS 1108 race bound is the next cadence event, so the message must name THAT bar. It
-        #   read "before the tape ends" after the bound moved, which is a label describing a rule
-        #   the code no longer runs.
+        #   HIS 1108 race bound is the next cadence event, so the message names THAT bar. It read
+        #   "before the tape ends" after the bound moved, which is a label describing a rule the
+        #   code no longer runs.
+        #   HIS 1108: *"to make this table useful, I need you to find the nearest cross, looking
+        #   back or forward. with that data, I can make decisions"*. So the note also carries the
+        #   NEAREST cross either side of the cadence event, found with NO bound at all - the whole
+        #   tape - because a bounded nearest read would just restate the bound that failed.
         end = len(LN['close']) - 1
-        return None, ('ws%dx has no cross before the next cadence event %s'
-                      % (xtf, ln.U(int(bnd))) if int(bnd) != int(end)
-                      else 'ws%dx has no cross before the tape ends' % xtf)
+        bnd_txt = ('the next cadence event %s' % ln.U(int(bnd)) if int(bnd) != int(end)
+                   else 'the tape ends')
+        return None, ('ws%dx has no cross before %s. %s'
+                      % (xtf, bnd_txt, nearest_cross_note(LN, xtf, side, ev)))
     cf, which, c = r
     X = F2.x_of(LN, xtf)
     wb = JIG.mage_cascade_bar(X, c, side, mode='extrema', gap=JIG.MC_GAP)

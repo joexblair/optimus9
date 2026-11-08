@@ -44,7 +44,7 @@ xcross validator report · LOW cadence event 2026-08-25 07:54:00  (2 of 13)
 | r · 2026-08-25 07:59:00 (ws4x cross)        | 45.11 | 32.45 | 23.72 | 31.72 | 20.81 | 20.61  | 18.64 | 19.03 | 25.98 | 13.10 | 19.67 | 13.74 | 10.60 | 7.37  | 16.50 | 26.54 | 30.54 | 12.57 | 41.90 | 45.51 | 40.69 |
 | r · ws4x diff (cross - extremum)            | +0.98 | +0.00 | -7.39 | +0.00 | +0.00 | -13.14 | +0.00 | +0.00 | +0.76 | +0.79 | +0.46 | -5.15 | +0.00 | -2.45 | +0.00 | +2.32 | +6.09 | +0.00 | +3.08 | +6.55 | +5.65 |
 | r · ws4x direction of the diff              | up    | flat  | down  | flat  | flat  | down   | flat  | flat  | up    | up    | up    | down  | flat  | down  | flat  | up    | up    | flat  | up    | up    | up    |
-ws5x has no cross before the next cadence event 2026-08-25 08:08:00
+ws5x has no cross before the next cadence event 2026-08-25 08:08:00. the nearest BACK cross is 2026-08-25 07:41:10 on ws5r, -12.8 min, confirming 2026-08-25 07:43:05. the nearest FORWARD cross is 2026-08-25 08:14:20 on ws5Mage, +20.3 min, confirming 2026-08-25 08:16:15
 
 ====================================================================================================
 xcross validator report · LOW cadence event 2026-08-25 08:08:00  (3 of 13)
@@ -86,7 +86,7 @@ xcross validator report · LOW cadence event 2026-08-25 13:26:00  (5 of 13)
 | r · 2026-08-25 13:28:00 (ws4x cross)        | 35.54 | 49.74 | 28.77 | 62.38 | 53.59 | 58.55 | 42.69 | 57.61 | 58.91 | 57.67 | 50.68 | 47.99 | 46.49 | 38.03 | 66.18 | 62.72 | 43.40 | 32.64 | 32.51 | 48.51 | 49.89 |
 | r · ws4x diff (cross - extremum)            | +0.60 | +0.69 | +0.00 | +0.08 | +0.00 | +0.56 | +0.00 | +0.00 | +0.74 | +0.00 | +0.71 | +0.67 | +0.00 | +0.72 | +0.53 | +0.36 | +0.00 | +0.00 | +0.00 | +0.56 | +0.58 |
 | r · ws4x direction of the diff              | up    | up    | flat  | up    | flat  | up    | flat  | flat  | up    | flat  | up    | up    | flat  | up    | up    | up    | flat  | flat  | flat  | up    | up    |
-ws5x has no cross before the next cadence event 2026-08-25 13:31:00
+ws5x has no cross before the next cadence event 2026-08-25 13:31:00. the nearest BACK cross is 2026-08-25 13:02:55 on ws5Mage, -23.1 min, confirming 2026-08-25 13:04:50. the nearest FORWARD cross is 2026-08-25 13:30:00 on ws5Mage, +4.0 min, confirming 2026-08-25 13:31:55
 
 ====================================================================================================
 xcross validator report · LOW cadence event 2026-08-25 13:31:00  (6 of 13)
@@ -107,8 +107,8 @@ xcross validator report · LOW cadence event 2026-08-25 13:31:00  (6 of 13)
 xcross validator report · LOW cadence event 2026-08-25 17:10:00  (7 of 13)
 ====================================================================================================
 
-ws4x has no cross before the next cadence event 2026-08-25 17:13:00
-ws5x has no cross before the next cadence event 2026-08-25 17:13:00
+ws4x has no cross before the next cadence event 2026-08-25 17:13:00. the nearest BACK cross is 2026-08-25 16:28:35 on ws4r, -41.4 min, confirming 2026-08-25 16:30:30. the nearest FORWARD cross is 2026-08-25 17:12:35 on ws4Mage, +2.6 min, confirming 2026-08-25 17:14:30
+ws5x has no cross before the next cadence event 2026-08-25 17:13:00. the nearest BACK cross is 2026-08-25 16:56:15 on ib, -13.8 min, confirming 2026-08-25 16:58:10. the nearest FORWARD cross is 2026-08-25 17:15:00 on ib, +5.0 min, confirming 2026-08-25 17:16:55
 
 ====================================================================================================
 xcross validator report · LOW cadence event 2026-08-25 17:13:00  (8 of 13)
@@ -129,8 +129,8 @@ xcross validator report · LOW cadence event 2026-08-25 17:13:00  (8 of 13)
 xcross validator report · LOW cadence event 2026-08-25 19:35:00  (9 of 13)
 ====================================================================================================
 
-ws4x has no cross before the next cadence event 2026-08-25 19:39:00
-ws5x has no cross before the next cadence event 2026-08-25 19:39:00
+ws4x has no cross before the next cadence event 2026-08-25 19:39:00. the nearest BACK cross is 2026-08-25 19:14:05 on ws4r, -20.9 min, confirming 2026-08-25 19:16:00. the nearest FORWARD cross is 2026-08-25 19:48:40 on ws4r, +13.7 min, confirming 2026-08-25 19:50:35
+ws5x has no cross before the next cadence event 2026-08-25 19:39:00. the nearest BACK cross is 2026-08-25 19:14:05 on ws5r, -20.9 min, confirming 2026-08-25 19:16:00. the nearest FORWARD cross is 2026-08-25 19:48:35 on ws5r, +13.6 min, confirming 2026-08-25 19:50:30
 
 ====================================================================================================
 xcross validator report · LOW cadence event 2026-08-25 19:39:00  (10 of 13)
@@ -151,8 +151,8 @@ xcross validator report · LOW cadence event 2026-08-25 19:39:00  (10 of 13)
 xcross validator report · LOW cadence event 2026-08-25 20:52:00  (11 of 13)
 ====================================================================================================
 
-ws4x has no cross before the next cadence event 2026-08-25 21:01:00
-ws5x has no cross before the next cadence event 2026-08-25 21:01:00
+ws4x has no cross before the next cadence event 2026-08-25 21:01:00. the nearest BACK cross is 2026-08-25 20:50:25 on ws4Mage, -1.6 min, confirming 2026-08-25 20:52:20. the nearest FORWARD cross is 2026-08-25 21:00:00 on ws4Mage, +8.0 min, confirming 2026-08-25 21:01:55
+ws5x has no cross before the next cadence event 2026-08-25 21:01:00. the nearest BACK cross is 2026-08-25 20:50:25 on ws5Mage, -1.6 min, confirming 2026-08-25 20:52:20. the nearest FORWARD cross is 2026-08-25 21:00:00 on ws5Mage, +8.0 min, confirming 2026-08-25 21:01:55
 
 ====================================================================================================
 xcross validator report · LOW cadence event 2026-08-25 21:01:00  (12 of 13)
