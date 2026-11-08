@@ -1931,3 +1931,166 @@ def vals_table(LN, names, side, A, B):
                 cells += ['%.2f' % v, 'OOB' if hit_o else '.', 'EXF' if hit_e else '.']
         out.append(row(*cells))
     return out
+
+def _sd(side):
+    """The side as the mech reads it, from the caller's own label. -> +1 or -1."""
+    return +1 if str(side).upper() == 'HIGH' else -1
+
+
+def stages_table(LG, day):
+    """Every verdict row of one day by label, and any that missed its own cadence bar. -> [str]."""
+    out = []
+    #   HIS 1106: *"cadence event can only produce cad_walk or cad_rev-trade - there is no
+    #   third option... where is the gap?"*. This counts every verdict row the day produced,
+    #   by label, and names the bar each one landed on relative to its own cadence event - so a
+    #   verdict that did not land ON the cadence event is visible as such.
+    day = str(day)
+    cnt, late = {}, []
+    for L in LG:
+        for r in L['rows']:
+            st = str(r['stage'])
+            cnt[st] = cnt.get(st, 0) + 1
+            if st.startswith('cad_') and int(r.get('ev', r['bar'])) != int(r['bar']):
+                late.append((int(r['ev']), int(r['bar']), st, str(r['why'])))
+    out += ['', '# every verdict row on %s, by label' % day, '']
+    out += head('the label', 'rows', 'whose verdict it is', 'is it one of your two')
+    OWN = {'cad_walk': ('the cadence event', 'yes - walk'),
+           'cad_rev_trade': ('the cadence event', 'yes - rev-trade'),
+           'cad_no_action': ('the cadence event', 'NO - a THIRD verdict'),
+           'cwlk_seam': ('the cad walk', 'neither - a setup row'),
+           'cwlk_start': ('the cad walk', 'neither - a setup row'),
+           'cwlk_momo_vote': ('the cad walk', 'neither - a vote row'),
+           'cwlk_rev_trade': ('the cad walk', 'yes - rev-trade')}
+    for st in sorted(cnt):
+        w, y = OWN.get(st, ('?', '?'))
+        out.append(row(st, cnt[st], w, y))
+    out += ['', '# every cadence-event verdict that did NOT land on its own cadence event bar',
+            '']
+    out += head('the cadence event', 'the bar the verdict landed on', 'seconds late',
+                  'the label', 'why')
+    for ev, b, st, why in sorted(late):
+        out.append(row(ln.U(ev), ln.U(b), (b - ev) * 5, st, why.replace('|', '\\|')[:160]))
+    if not late:
+        out.append(row('none', '-', '-', '-', '-'))
+    return out
+
+def board_table(LN, at_s, since_s=None, side='HIGH'):
+    """The board at one bar, read through v4_fdm2.xcad_probe. -> [str]."""
+    out = []
+    #   THE BOARD AT ONE BAR, from v4_fdm2.xcad_probe - the producer the director's own seam
+    #   read uses. Not a second implementation: the report and the verdict read the same call.
+    bar = ln.K(str(at_s))
+    sd = _sd(side)
+    s0 = ln.K(str(since_s)) if since_s else bar
+    hi = int(LN['HI'])
+    pr = F2.xcad_probe(LN, sd, s0, bar, list(range(1, hi + 1)), bar)
+    out += ['', '# the board at %s, %s side' % (str(at_s), side), '']
+    out += ['| the read | value |', '|---|---|']
+    out.append(row('the bar', ln.U(bar)))
+    out.append(row('the target side', 'HIGH' if sd > 0 else 'LOW'))
+    out.append(row('the extremum anchor', '%s - the cadence window open, '
+                     'FDM_XCAD_REV_FROM %s' % (ln.U(s0), K.FDM_XCAD_REV_FROM)))
+    out.append(row('ex-fence', 'at or past %g/%g, FDM_EXF_READ %s'
+                     % (*K.fnc_pair(K.FDM_FNC_2080), K.FDM_EXF_READ)))
+    aw = [z for z in pr if z['state'] == 'away']
+    tw = [z for z in pr if z['state'] == 'towards']
+    ot = [z for z in pr if z['state'] not in ('away', 'towards')]
+    out.append(row('away', '%d lines - ws%s' % (len(aw), ', ws'.join(str(z['tf'])
+                                                                      for z in aw)) if aw
+                     else '0 lines'))
+    out.append(row('towards', '%d lines - ws%s' % (len(tw), ', ws'.join(str(z['tf'])
+                                                                         for z in tw)) if tw
+                     else '0 lines'))
+    if ot:
+        out.append(row('neither', '%d lines - ws%s'
+                         % (len(ot), ', ws'.join(str(z['tf']) for z in ot))))
+    out.append(row('ex-fence AND towards', '%d lines - ws%s'
+                     % (len([z for z in tw if z['exf']]),
+                        ', ws'.join(str(z['tf']) for z in tw if z['exf']))
+                     if [z for z in tw if z['exf']] else '0 lines'))
+    out += ['', '| the line | its value | its state | ex-fence | the extremum | at | the gap | '
+            'its reversal stamp |', '|---|---|---|---|---|---|---|---|']
+    for z in pr:
+        out.append(row('ws%d' % z['tf'], '%.2f' % z['value'], z['state'],
+                         'yes' if z['exf'] else 'NO',
+                         '%.2f' % z['extremum'] if z['extremum'] is not None else '-',
+                         ln.U(int(z['at'])) if z['at'] is not None else '-',
+                         '%.2f' % z['gap'] if z['gap'] is not None else '-',
+                         ln.U(int(z['rev'])) if z['rev'] is not None else 'none'))
+    return out
+
+def legfrom_table(LN, open_s, to_s=None, dr='LONG'):
+    """A leg opened at a named bar with a named side, walked by v4_fdm2.walk. -> [str]."""
+    out = []
+    #   HIS 1107: a leg opened at a bar HE names, with a side HE names, walked by the chain's
+    #   own v4_fdm2.walk. It is how a hypothetical open - *"an incoming SHORT which would have
+    #   opened at high 0730-0733 on fdm-3r-cadence"* - gets tested without inventing a leg.
+    opn = ln.K(str(open_s))
+    sd = (+1 if str(dr).upper() == 'LONG' else -1)
+    B = ln.K(str(to_s)) if to_s else len(LN['close']) - 1
+    sig, rws = F2.walk(LN, sd, opn, int(B))
+    out += ['', '# a %s opened at %s, target side %s, walked to %s'
+            % ('LONG' if sd > 0 else 'SHORT', ln.U(opn), 'HIGH' if sd > 0 else 'LOW',
+               ln.U(int(B))), '']
+    out += ['| the walk | value |', '|---|---|']
+    out.append(row('the open', ln.U(opn)))
+    out.append(row('the target side', 'HIGH' if sd > 0 else 'LOW'))
+    out.append(row('walked to', ln.U(int(B))))
+    out.append(row('the rev-trade signal', ln.U(int(sig)) if sig is not None
+                     else 'none before the walk ended'))
+    out.append(row('the decision rows', len(rws)))
+    out += ['', '| the bar | min from the open | the event | what it says |',
+            '|---|---|---|---|']
+    for r in sorted(rws, key=lambda z: (int(z['bar']), str(z['stage']))):
+        out.append('| %s | %.1f | %s | %s |'
+                   % (ln.U(int(r['bar'])), (int(r['bar']) - opn) * 5 / 60.0,
+                      str(r['stage']), str(r['why']).replace('|', '\\|')))
+    return out
+
+def pct50_for(LN, LG, day, at=''):
+    """The 50% test table for the chain row whose bar matches `at`. -> [str]."""
+    out = []
+    #   HIS 1107: *"show me the 50% test table for 0232"*. The cadence event and the
+    #   ws{TF}x-cadence are taken from the leg's OWN rows, so the table describes the decision
+    #   the chain actually made rather than a pair of bars I chose.
+    day = str(day)
+    want = str(at)
+    hit = None
+    for L in LG:
+        for r in L['rows']:
+            if str(r['stage']) == 'cwsx_pct' and (not want or ln.U(int(r['bar'])) == want
+                                                  or ln.U(int(r['bar'])).endswith(want)
+                                                  or want in ln.U(int(r['bar']))):
+                hit = (L, r)
+                break
+        if hit:
+            break
+    assert hit, 'no 50%% test row matching %r on %s' % (want, day)
+    L, r = hit
+    ev = int(r['ev'])
+    s0 = next(int(z['bar']) for z in L['rows']
+              if str(z['stage']) == 'cad_window_open' and int(z['ev']) == ev)
+    out += ['', '# the 50%% test at %s' % ln.U(int(r['bar'])), '']
+    out += pct50_table(LN, int(L['side']), int(L['opn']), ev, s0, int(r['bar']),
+                         'ws%dx to %s' % (int(r.get('xtf') or 0), r.get('which', '?')))
+    return out
+
+def leg_report(LN, LG, TR, SIGS, day, opens, resig=True):
+    """One leg's every timestamped event, with each cad walk inside it. -> [str]."""
+    out = []
+    day = str(day)
+    want = [str(x) for x in (opens if isinstance(opens, list) else [opens])]
+    hit = [L for L in LG if ln.U(int(L['opn'])) in want]
+    assert hit, 'no leg opens at %s on %s' % (', '.join(want), day)
+    for L in hit:
+        sd = int(L['side'])
+        out += ['', '# the incoming trade %s | %s | target side %s'
+                % (ln.U(int(L['opn'])), 'LONG' if sd > 0 else 'SHORT',
+                   'HIGH' if sd > 0 else 'LOW'), '']
+        out += leg_table(LN, L, SIGS if resig else None)
+        bs = sorted({t['b0'] for t in TR
+                     if int(L['opn']) <= t['b0'] <= int(L['exit'])})
+        for b0 in bs:
+            out += ['', '## its cad walk from %s' % ln.U(b0)]
+            out += cadwalk_table(TR, b0)
+    return out

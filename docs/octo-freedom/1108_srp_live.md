@@ -82,8 +82,24 @@ of the answer.
 | before-capture, all 23 kinds, on the bank | DONE - 1440 lines, `RULED_OK True`, no kind errors |
 | stage 1 moved | DONE - `out/xcv_report.py`, 7 builders, 380 lines |
 | after-capture, stage 1, byte-identical on all 23 | DONE - 23 of 23 identical by sha1, 0 differing |
-| stage 2 moved | pending |
-| after-capture, stage 2, byte-identical on all 23 | pending |
+| stage 2 moved | DONE - 5 builders into `out/momo_render.py`, which goes 1933 to 2097 lines |
+| after-capture, stage 2, byte-identical on all 23 | DONE - 23 of 23 identical by sha1, 0 differing |
+
+## 6. WHAT IT MEASURES AT, AFTER
+
+| the measure | before | after |
+|---|---|---|
+| `out/momo_live.py`, total lines | 746 | 331 |
+| its one routing function | 577 | 159 |
+| request kinds | 23 | 23 |
+| the longest kind inside the routing function | 84 lines | 11 lines |
+| `out/momo_render.py` | 1933 | 2097 |
+| `out/xcv_report.py` | did not exist | 380 |
+
+THE CHAIN STAYED PUT. The five stage-2 readings consume the live process's memoised day chain, so
+`chain(day)` is still called in the routing function and `LG`, `TR` and `SIGS` are handed to the
+builder as plain values. Memoisation belongs to the process that holds the arrays; rendering does
+not.
 
 ## 4. SEQUENCING, AND WHY IT IS TWO STAGES
 
