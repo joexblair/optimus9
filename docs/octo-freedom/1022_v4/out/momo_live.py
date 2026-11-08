@@ -154,6 +154,16 @@ def answer(q):
         if not late:
             out.append(R.row('none', '-', '-', '-', '-'))
         return out
+    if kind == 'c3rmage':
+        #   HIS 1108 item 10: *"I want to see what improvements we get from opening a c3r trade at
+        #   the ws1Mage reversal. I'm not sure if ws1Mage needs to be oob or ib or ex fence or in
+        #   fence. it will be good to find out"*.
+        A, B = ln.K(str(q['from'])), ln.K(str(q['to']))
+        lab = str(q.get('read', 'ws3r emerging, rest closed-prev'))
+        out += ['', '# c3r opened at the ws1Mage reversal, %s to %s'
+                % (str(q['from']), str(q['to'])), '']
+        out += R.c3rmage_table(LN, A, B, lab)
+        return out
     if kind == 'cadlist':
         #   HIS 1108 CHECK on three c3r rows: *"the low cadence at 0853"*, *"high side cadence at
         #   1226"*, *"the leg ultimately lands on low side 1634 cadence"*. His eyes are a

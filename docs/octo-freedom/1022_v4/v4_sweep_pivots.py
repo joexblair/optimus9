@@ -75,9 +75,10 @@ BAND = K.SP_BAND          # 0.0 pct points - 53.6% of 37,178 pct gaps are EXACTL
 CONTAIN = bool(K.SP_CONTAIN)   # 0 - ON drops 2,198 of 5,323 events and triples the pivot distance
 XWOB = K.SP_XWOB          # 18 bars = 90 s - his *"introduce a wob 18"*
 ALIGN_S = K.SP_ALIGN_S    # 300 s - his *"agreed on 300s"*. UNREAD under PICK 'lowest_pct'
-WIDE = K.SP_TFS == 'wide'  # the TF set. 'wide' = his six PLUS my ws1Mage and ws2Mage - the set
-#                            every banking measurement was run on, and the one item awaiting his
-#                            word. His 1024 list was the six
+WIDE = K.SP_TFS == 'wide'  # the TF set. 'wide' = his six PLUS ws1Mage and ws2Mage - the set
+#                            every banking measurement was run on. HIS 1024 list was the six and
+#                            the extra two were mine; HIS 1108 ruling *"bank the current config and
+#                            make it the machine"* makes all eight his
 
 
 def _tfs(wide=None):
@@ -96,7 +97,8 @@ def knobs():
             ('SP_CONTAIN', int(CONTAIN), 'off - ON drops 2198 of 5323 events'),
             ('SP_XWOB', XWOB, 'bars IB must hold for a Mage cross - his wob 18'),
             ('SP_ALIGN_S', ALIGN_S, 'seconds, read ONLY by the window arm'),
-            ('SP_TFS', K.SP_TFS, 'wide = his six plus ws1Mage and ws2Mage - AWAITING HIS WORD')]     # how a pivot is chosen from the index.
+            ('SP_TFS', K.SP_TFS, 'wide = his six plus ws1Mage and ws2Mage - RULED 1108, *"bank '
+                                 'the current config and make it the machine"*')]     # how a pivot is chosen from the index.
 #   'lowest_pct' Joe 1024: *"start at the lowest TF and scan upwards. you should find a series of
 #              TFs printing the near-same distance from their own pivot to the event. the TF
 #              swing/pivot to pick should be the highest TF printing the lowest pct (between pivot

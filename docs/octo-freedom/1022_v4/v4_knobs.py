@@ -1713,12 +1713,13 @@ RULED = {
     'LIN_W4_GRACE_S': (180, '"I propose we give 3 minutes grace to overcome the scenario" - 1024.'
                             ' UNANCHORED: the jump-back distribution has no knee, p75 is 0.3705'),
     'LIN_W4_G1_XWOB': (4,   'Joe 0911 "reversal:2, boundary:4. both are knobs" - the boundary one'),
-    'SP_TFS':       ('wide', 'THE ONE ITEM AWAITING HIS WORD. His 1024 list was SIX - ws3Mage,'
-                             ' ws5Mage, ws10Mage, ws15Mage, ws20Mage, ws30Mage. ws1Mage and'
-                             ' ws2Mage are MINE, and every measurement that justified banking used'
-                             ' all eight, so the banked value is the one that was RUN. On his six'
-                             ' alone the 18-row check scores 8 of 18 against 17 of 18. At'
-                             ' ALIGN_S 300 ws1Mage and ws2Mage are the scale TF on 41.0% of events'),
+    'SP_TFS':       ('wide', 'RULED 1108: *"we\'ve been using the sweep pivots mech for 2 weeks now'
+                             ' and it has always been true. bank the current config and make it the'
+                             ' machine"*. His 1024 list was SIX - ws3Mage, ws5Mage, ws10Mage,'
+                             ' ws15Mage, ws20Mage, ws30Mage. ws1Mage and ws2Mage were MINE and are'
+                             ' now HIS. On his six alone the 18-row check scores 8 of 18 against'
+                             ' 17 of 18. At ALIGN_S 300 ws1Mage and ws2Mage are the scale TF on'
+                             ' 41.0% of events'),
     'L2_MOM_MAXTF': (30,    '"v4mom_maxTF = 12" - 1025, the lineage2 fork'),
     'L2_LIN_HOP':   (2,     '"lin_hop = 2" - 1025. Applies BETWEEN cadences only, his ruling'),
     'L2_T1_GRACE_S': (120,  '"the 2 minutes (CAUSALLY) following" - 1025, confirmed a knob'),

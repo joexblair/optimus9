@@ -10,6 +10,7 @@ never sits in prose, and a per-row MAE/MFE table always carries its aggregate un
 import hashlib
 import sys
 
+import bisect as _bisect
 import numpy as np
 
 sys.path.insert(0, '/home/joe/thecodes')
@@ -827,6 +828,180 @@ def pivstop_table(LN, A, B, lab='ws3r emerging, rest closed-prev', gaps=(24, 48,
     return out
 
 
+def c3rmage_table(LN, A, B, lab='ws3r emerging, rest closed-prev'):
+    """Open the c3r trade at the ws1Mage reversal instead of at the clause-4 bar. -> the markdown.
+
+    HIS 1108: *"yes, I want to see what improvements we get from opening a c3r trade at the
+    ws1Mage reversal. I'm not sure if ws1Mage needs to be oob or ib or ex fence or in fence. it
+    will be good to find out"*.
+
+    THE REVERSAL PRODUCER IS HIS 1108 PICK: `jig.lift_off(ws1Mage EMERGING, the c3r arm's side,
+    LIFT_PTS, gap_for(1), LIFT_TOL, LIFT_WOB)`, acted on at `K.lift_stamp(b)` = b + LIFT_WOB - 1,
+    because a lift-off is not knowable until its hold completes.
+
+    THE FIVE GATES, all read at the stamp bar on the c3r arm's own side:
+
+      none       no level requirement at all - his 1108 *"where ever it is on the board"*
+      oob        ws1Mage at or beyond OOB, 85 high / 15 low
+      ib         ws1Mage inside OOB
+      ex-fence   ws1Mage at or beyond the 20/80 fence
+      in-fence   ws1Mage inside the 20/80 fence
+
+    WHAT ENDS THE WAIT IS NOT MEASURED HERE, AND THAT IS STATED. His 1108 race was *"race mae stop
+    and next cadence event (first of)"*, and the stop in that race belongs to the INCOMING trade,
+    which this scan does not model. So the walk here runs forward with no ender and reports how far
+    it travelled; a wait-ender can only remove rows, never add them.
+
+    EVERY OTHER PART IS UNCHANGED from cad3r_scan: his dynamic stop off the walk back to look
+    forward, and his target-side cadence close.
+    """
+    import numpy as _np
+    close = _np.asarray(LN['close'], float)
+    lo_f, hi_f = K.fnc_pair(K.FDM_FNC_2080)
+    m1e = _np.asarray(LN['MGE'][1], float)
+    CE = {sd2: sorted(int(e[0]) for e in F2.cadence_events(LN, sd2, int(A), int(B)))
+          for sd2 in (+1, -1)}
+    LF = {}
+    for sd2 in (+1, -1):
+        LF[sd2] = sorted(K.lift_stamp(int(x)) for x in
+                         JIG.lift_off(m1e, sd2, K.LIFT_PTS, K.gap_for(1), K.LIFT_TOL, K.LIFT_WOB))
+    _, fired = cad3r_arms(LN, A, B, lab)
+    sigs = {}
+    for q, sd, E in fired:
+        sigs.setdefault((int(E['x4']), int(sd)), E)
+    keys = sorted(sigs)
+
+    GATES = ('none', 'oob', 'ib', 'ex-fence', 'in-fence')
+
+    def passes(gate, v, sd2):
+        if gate == 'none':
+            return True
+        if gate == 'oob':
+            return v >= float(K.OOB_HI) if sd2 > 0 else v <= float(K.OOB_LO)
+        if gate == 'ib':
+            return v < float(K.OOB_HI) if sd2 > 0 else v > float(K.OOB_LO)
+        if gate == 'ex-fence':
+            return v >= float(hi_f) if sd2 > 0 else v <= float(lo_f)
+        return v < float(hi_f) if sd2 > 0 else v > float(lo_f)
+
+    out = ['| the read | value |', '|---|---|']
+    out.append(row('the firings read', '%d distinct firing bars, from %d ws1r oob entries that '
+                                       'fired' % (len(keys), len(fired))))
+    out.append(row('the reversal producer', "`jig.lift_off(ws1Mage emerging, the c3r arm's side, "
+                                            'LIFT_PTS %d, gap_for(1) %d, LIFT_TOL %g, LIFT_WOB %d)`'
+                   % (int(K.LIFT_PTS), int(K.gap_for(1)), float(K.LIFT_TOL), int(K.LIFT_WOB))))
+    out.append(row('the bar acted on', '`K.lift_stamp(b)` = b + %d bars = b + %d s'
+                   % (int(K.LIFT_WOB) - 1, (int(K.LIFT_WOB) - 1) * 5)))
+    out.append(row('the oob fence', '%g high / %g low' % (float(K.OOB_HI), float(K.OOB_LO))))
+    out.append(row('the 20/80 fence', '%g high / %g low' % (float(hi_f), float(lo_f))))
+    out.append(row('what ends the wait', 'NOTHING, in this read. His race needs the incoming '
+                                         'trade, which this scan does not model. A wait-ender can '
+                                         'only remove rows'))
+    out.append(row('the stop', 'his dynamic level off the walk back to look forward, gap %d bars'
+                   % int(JIG.MC_GAP)))
+    out.append(row('the exit', 'his target-side cadence event, or the stop, first of'))
+
+    def score(opn, osd, cap):
+        sb = F2.stop_bar(LN, opn, int(B), osd, cap)
+        ce = _bisect.bisect_right(CE[osd], opn)
+        cb = CE[osd][ce] if ce < len(CE[osd]) else None
+        if cb is not None and (sb is None or int(cb) < int(sb)):
+            ex, how = int(cb), 'CLOSED at the target-side cadence'
+        elif sb is not None:
+            ex, how = int(sb), 'STOP'
+        else:
+            ex, how = int(B), 'still open at the span end'
+        op = float(close[opn])
+        pp = osd * (_np.asarray(close[opn:ex + 1], float) - op) / op * 100.0
+        return dict(ex=ex, how=how, mae=abs(float(_np.nanmin(pp))), mfe=float(_np.nanmax(pp)),
+                    rel=-cap if how == 'STOP' else osd * (float(close[ex]) - op) / op * 100.0)
+
+    def level(opn, sd2, osd):
+        Mx = JIG.mage_cascade_bar(close, opn, int(sd2), mode='extrema', gap=int(JIG.MC_GAP))
+        if Mx is None:
+            return float(K.FDM_MAE_CAP)
+        d = -osd * (float(close[int(Mx[0])]) - float(close[opn])) / float(close[opn]) * 100.0
+        return d if d > 0 else float(K.FDM_MAE_CAP)
+
+    rowsg = {}
+    for gate in GATES:
+        acc = []
+        for (x4, sd) in keys:
+            osd = -int(sd)
+            land = None
+            for st in LF[int(sd)]:
+                if st < int(x4) or st > int(B):
+                    continue
+                if passes(gate, float(m1e[st]), int(sd)):
+                    land = int(st)
+                    break
+            if land is None:
+                acc.append(dict(x4=x4, sd=sd, land=None))
+                continue
+            opn = land + 2
+            if opn > int(B):
+                acc.append(dict(x4=x4, sd=sd, land=land, opn=None))
+                continue
+            cap = level(opn, int(sd), osd)
+            S = score(opn, osd, cap)
+            acc.append(dict(x4=x4, sd=sd, land=land, opn=opn, cap=cap,
+                            m1=float(m1e[land]), **S))
+        rowsg[gate] = acc
+
+    out += ['', '## the gate curve - every gate on the same %d signals' % len(keys), '']
+    out += head('the ws1Mage gate', 'signals that found a reversal', 'signals that found none',
+                'the wait, min - median', 'the wait, min - max', 'trades scored', 'that stopped',
+                'that closed at a target-side cadence', 'MAE %, median', 'MFE %, median',
+                'realised %, total', 'drag %', 'net %', 'net % per trade')
+    for gate in GATES:
+        g = [x for x in rowsg[gate] if x.get('opn') is not None]
+        miss = sum(1 for x in rowsg[gate] if x.get('land') is None)
+        if not g:
+            out.append(row(gate, 0, miss, *['-'] * 11))
+            continue
+        w = sorted((x['opn'] - 2 - x['x4']) * 5 / 60.0 for x in g)
+        rl = [x['rel'] for x in g]
+        n = len(g)
+        out.append(row(gate, n, miss, '%.1f' % w[len(w) // 2], '%.1f' % w[-1], n,
+                       sum(1 for x in g if x['how'] == 'STOP'),
+                       sum(1 for x in g if x['how'].startswith('CLOSED')),
+                       '%.3f' % float(_np.median([x['mae'] for x in g])),
+                       '%+.3f' % float(_np.median([x['mfe'] for x in g])),
+                       '%+.3f' % sum(rl), '%.3f' % (-0.1975 * n),
+                       '%+.3f' % (sum(rl) - 0.1975 * n),
+                       '%+.4f' % ((sum(rl) - 0.1975 * n) / n)))
+
+    for gate in GATES:
+        out += ['', '## every signal under the `%s` gate' % gate, '']
+        out += head('the firing bar', 'the side it fired on', 'the OUTGOING trade',
+                    'the ws1Mage reversal stamp', 'ws1Mage there', 'the wait, min', 'it opens at',
+                    'the open price', 'the stop distance %', 'the exit', 'the exit kind',
+                    'held min', 'MAE %', 'MFE %', 'realised %')
+        for x in rowsg[gate]:
+            sd, osd = int(x['sd']), -int(x['sd'])
+            if x.get('land') is None:
+                out.append(row(ln.U(x['x4']), 'HIGH' if sd > 0 else 'LOW',
+                               'SHORT' if osd < 0 else 'LONG',
+                               'no ws1Mage reversal passes this gate before the span ends',
+                               *['-'] * 11))
+                continue
+            if x.get('opn') is None:
+                out.append(row(ln.U(x['x4']), 'HIGH' if sd > 0 else 'LOW',
+                               'SHORT' if osd < 0 else 'LONG', ln.U(x['land']),
+                               '%.2f' % float(m1e[x['land']]),
+                               '%.1f' % ((x['land'] - x['x4']) * 5 / 60.0),
+                               'past the span end', *['-'] * 8))
+                continue
+            out.append(row(ln.U(x['x4']), 'HIGH' if sd > 0 else 'LOW',
+                           'SHORT' if osd < 0 else 'LONG', ln.U(x['land']), '%.2f' % x['m1'],
+                           '%.1f' % ((x['land'] - x['x4']) * 5 / 60.0), ln.U(x['opn']),
+                           '%.6f' % float(close[x['opn']]), '%.3f' % x['cap'], ln.U(x['ex']),
+                           x['how'] if x['how'] != 'STOP' else 'STOP at %.3f%%' % x['cap'],
+                           '%.1f' % ((x['ex'] - x['opn']) * 5 / 60.0), '%.3f' % x['mae'],
+                           '%+.3f' % x['mfe'], '%+.3f' % x['rel']))
+    return out
+
+
 def cad3r_arms(LN, A, B, lab):
     """Every ws1r oob entry in the span, evaluated. -> (every arm, the ones that fired).
 
@@ -890,12 +1065,26 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     out.append(row('the fallback', 'FDM_MAE_CAP %.2f%% - used only where the walk back finds no '
                                    'adverse extrema, which would otherwise leave the trade with '
                                    'no stop at all. MY CHOICE, stated' % float(K.FDM_MAE_CAP)))
+    out.append(row('the exit', 'HIS 1108 ruling: the first TARGET-SIDE cadence event after the '
+                               'open, or the stop, whichever comes first. His words - *"the next '
+                               'opposite-side cadence event. it\'s the best option we have because '
+                               'the c3r trade events are not continuous"* and *"the cadence must be '
+                               'target-side (example c3r opens a high SHORT, the only thing that '
+                               'can close it is a target (low) side cadence or a stop)"*'))
+    out.append(row('the target side', 'a SHORT hunts the LOW cadence, a LONG the HIGH one - so a '
+                                      "HIGH-side c3r arm's SHORT is closed by a LOW cadence"))
     out.append(row('ws3r minimum dwell', '`FDM2_C3R_DWELL` %d bars = %d s - HIS 1108 *"ws3r '
                                          'minimum dwell should be 3 minutes"*'
                    % (int(K.FDM2_C3R_DWELL), int(K.FDM2_C3R_DWELL) * 5)))
     out.append(row('the price series', 'pxs - DEMA(close, 2) on the 5 s grid. HIS 1108 ruling: '
                                        'the stop, MAE and MFE all read it. The raw kline high/low '
                                        'MFE is printed in the aggregate for comparison only'))
+    #   HIS 1108 EXIT. The target-side cadence bars are built ONCE per side for the whole span,
+    #   not per firing: F2.cadence_events walks the span and a 30-row scan must not walk it 30
+    #   times. `CE[+1]` are the HIGH events, which close a LONG; `CE[-1]` the LOW, which close a
+    #   SHORT.
+    CE = {sd2: sorted(int(e[0]) for e in F2.cadence_events(LN, sd2, int(A), int(B)))
+          for sd2 in (+1, -1)}
     rows_, fired = cad3r_arms(LN, A, B, lab)
     out += ['', '| the arm - ws1r oob entry | side | the verdict | the clause that killed it | '
             'the firing bar | branch | ws3r oob at | clause 3 ws3Mage | clause 3 ws3b | '
@@ -917,7 +1106,7 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     out += head('the firing bar', 'the side it fired on', 'branch', 'the OUTGOING trade',
                 'it opens at', 'the open price', 'the exit', 'the exit kind', 'held min',
                 'MAE %', 'MFE %', 'realised %', 'MFE over MAE')
-    mae_l, mfe_l, mfer_l, rel_l, stop_l, cap_l = [], [], [], [], [], []
+    mae_l, mfe_l, mfer_l, rel_l, stop_l, cap_l, how_l = [], [], [], [], [], [], []
     for q, sd, E in sorted(fired):
         sig = int(E['x4'])
         opn = sig + 2
@@ -937,7 +1126,16 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
             if dyn > 0:
                 cap, lvl = dyn, ln.U(int(Mx[0]))
         sb = F2.stop_bar(LN, opn, int(B), osd, cap)
-        ex = int(sb) if sb is not None else int(B)
+        #   THE TARGET-SIDE CADENCE, STRICTLY AFTER THE OPEN. A cadence event ON the open bar
+        #   belongs to the bar the trade opened on and cannot also close it.
+        ce = _bisect.bisect_right(CE[osd], opn)
+        cb = CE[osd][ce] if ce < len(CE[osd]) else None
+        if cb is not None and (sb is None or int(cb) < int(sb)):
+            ex, how = int(cb), 'CLOSED at the target-side cadence'
+        elif sb is not None:
+            ex, how = int(sb), 'STOP at %.3f%% off %s' % (cap, lvl)
+        else:
+            ex, how = int(B), 'still open at the span end'
         op = float(close[opn])
         #   HIS 1108: *"the mae1.1 stops need to be on pxs"*. MAE and MFE read pxs, the same
         #   series the stop now fires on, so the three columns describe one price series. The raw
@@ -949,17 +1147,19 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
         mfe = float(_np.nanmax(pp))           #            the stop, which is the number he needs
         fav = (phi if osd > 0 else plo)[opn:ex + 1]
         mfe_raw = float(_np.nanmax(osd * (fav - op) / op * 100.0))
-        rel = -cap if sb is not None else osd * (float(close[ex]) - op) / op * 100.0
+        #   A CADENCE CLOSE REALISES THE PRICE AT ITS BAR; a stop realises the level it fired on.
+        rel = (-cap if how.startswith('STOP')
+               else osd * (float(close[ex]) - op) / op * 100.0)
         mae_l.append(mae)
         mfe_l.append(mfe)
         mfer_l.append(mfe_raw)
         rel_l.append(rel)
-        stop_l.append(sb is not None)
+        stop_l.append(how.startswith('STOP'))
+        how_l.append(how)
         cap_l.append(cap)
         out.append(row(ln.U(sig), 'HIGH' if sd > 0 else 'LOW', E['branch'],
                        'SHORT' if osd < 0 else 'LONG', ln.U(opn), '%.6f' % op, ln.U(ex),
-                       'STOP at %.3f%% off %s' % (cap, lvl) if sb is not None
-                       else 'still open at the span end',
+                       how,
                        '%.1f' % ((ex - opn) * 5 / 60.0), '%.3f' % mae, '%+.3f' % mfe,
                        '%+.3f' % rel, '%.2f' % (mfe / mae) if mae > 0 else 'nan'))
     if not fired:
@@ -984,6 +1184,24 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
                        if fired else '-'))
         out.append(row('outgoing trades scored', len(mae_l)))
         out.append(row('that stopped', sum(1 for r in stop_l if r)))
+        out.append(row('that closed at a target-side cadence event',
+                       sum(1 for h in how_l if h.startswith('CLOSED'))))
+        out.append(row('still open at the span end',
+                       sum(1 for h in how_l if h.startswith('still'))))
+        out.append(row('realised %, the cadence closes only',
+                       '%+.3f total, %+.3f median over %d rows'
+                       % (sum(r for r, h in zip(rel_l, how_l) if h.startswith('CLOSED')),
+                          float(_np.median([r for r, h in zip(rel_l, how_l)
+                                            if h.startswith('CLOSED')])),
+                          sum(1 for h in how_l if h.startswith('CLOSED')))
+                       if any(h.startswith('CLOSED') for h in how_l) else 'none'))
+        out.append(row('realised %, the stops only',
+                       '%+.3f total, %+.3f median over %d rows'
+                       % (sum(r for r, h in zip(rel_l, how_l) if h.startswith('STOP')),
+                          float(_np.median([r for r, h in zip(rel_l, how_l)
+                                            if h.startswith('STOP')])),
+                          sum(1 for h in how_l if h.startswith('STOP')))
+                       if any(h.startswith('STOP') for h in how_l) else 'none'))
         out.append(row('MAE %, median', '%.3f' % float(_np.median(mae_l))))
         out.append(row('MFE %, median', '%+.3f' % float(_np.median(mfe_l))))
         out.append(row('MFE %, total', '%+.3f' % sum(mfe_l)))
