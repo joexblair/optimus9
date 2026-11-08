@@ -47,18 +47,31 @@ IF a cadence event fires
 |---|---|
 | one x line or two | ONE. *"this is on me - the top rows (the dynamic xcross and the ws4 xcross) were' just for my ref. ws5x is the one all of my timestamps were based on"*. `WS5X_TF` 5 is the `ws{knob:5}x` knob; my `XCV_TFS '4,5'` is removed |
 | the verdict when it reads `none` | *"we haven't got that far yet"*. PARKED |
-| the hold | *"there is no hold - the cross is read raw"*, and his reason: *"if the diff pattern doesn't give a usable result, then the cad walk will automatically consume the wob. if the diff pattern has a verdict, we've saved 2 minutes and gained profit"*. So `F2.x_cross_raw`, not `F2.x_race` |
+| the hold | **`FDM_X10_WOB` 24 bars = 120 s, counting the cross bar. `F2.x_race` owns the cross.** He ruled it out first - *"there is no hold - the cross is read raw"*, with his reason *"if the diff pattern doesn't give a usable result, then the cad walk will automatically consume the wob. if the diff pattern has a verdict, we've saved 2 minutes and gained profit"* - then reversed on the evidence below: *"ok - that makes the wob necessary"* |
 | the ws10-ws30 read | *"emerging"* |
 | which line ws10-ws30 is | *"ws10r to ws30r, on banked config"* - StochRSI 7\|5\|8\|close |
 | what a skipped cadence prints | *"no note. if there's a fault to diagnose, I'll be looking at the charts and it will be obvious to me if the 'skipped' cadence has any impact on the debugging"*. NOTHING is printed |
 | the no-duplicate-at-one-bar rule | *"stands"* |
 | the rev-trade | *"not yet. I want to see the fundamentals aligned with me before we do anything more"* |
 
-### `F2.x_cross_raw` is a SECOND reader, not a change to `F2.x_race`
+### WHY THE WOB IS NECESSARY - the measurement that reversed his own ruling
 
-`x_race`'s `FDM_X10_WOB` 24-bar = 120 s hold is its contract, and the fdm2 leg walk, the ws10x
-race and v4saviour all depend on it. `x_cross_raw` exists for `fdm2-xcv` alone, so neither can
-move the other. With no hold there is nothing to confirm, so the cross bar IS the knowable bar.
+He asked why the report showed 2026-08-25 02:31:55 for the 02:22:00 HIGH event while the
+no-hold build printed 02:22:40. The bars:
+
+| the bar | ws5x emerging | oob at 85? |
+|---|---|---|
+| 2026-08-25 02:22:35 | 85.38 | OOB |
+| **2026-08-25 02:22:40** | **83.76** | **crossed inside - the raw cross** |
+| 2026-08-25 02:22:45 | 91.62 | OOB again, ONE BAR later |
+
+ws5x crossed the 85 boundary downward and bounced straight back on the next bar. The held race
+discarded that cross and six more between 02:30:15 and 02:31:30, all of which broke inside their
+own 120 s, and took the seventh at 02:31:55 on ws5r.
+
+His reading: *"ok - that makes the wob necessary"*. So the hold stands, `F2.x_race` owns the cross,
+and `F2.x_cross_raw` - the no-hold reader I had added - is REMOVED. Two cross readers for one mech
+is a drift trap, and nothing reads it now.
 
 ## 1. `fdm2-xcv` - HIS FOUR ITEMS
 

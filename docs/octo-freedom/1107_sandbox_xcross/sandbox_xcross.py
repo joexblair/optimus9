@@ -292,13 +292,14 @@ def r_block(LN, side, ev, xtf, s0=None):
     #   own oob excursion, from `s0` to the cadence event bar, and F2.cadence_events hands `s0`
     #   back. The race therefore starts at the EXCURSION OPEN, not at the event bar + 1, so a
     #   cross that fired while ws1b was still oob is this event's cross.
-    #   HIS 1108 ON THE HOLD: *"there is no hold - the cross is read raw"*, and his reason - *"if
-    #   the diff pattern doesn't give a usable result, then the cad walk will automatically consume
-    #   the wob. if the diff pattern has a verdict, we've saved 2 minutes and gained profit"*. So
-    #   F2.x_cross_raw, not F2.x_race: the first cross of {boundary, r, Mage} with nothing to
-    #   confirm. The cross bar IS the knowable bar.
+    #   HIS 1108 ON THE HOLD, IN TWO STEPS. First *"there is no hold - the cross is read raw"*,
+    #   which I built and measured. On the 2026-08-25 02:22:00 HIGH event the raw cross was
+    #   02:22:40 - ws5x crossing the 85 boundary downward at 83.76 and bouncing back to 91.62 ONE
+    #   BAR later - against 02:31:55 for the held race. He read that and reversed himself: *"ok -
+    #   that makes the wob necessary"*. So the hold is back and F2.x_race owns the cross.
+    #   `FDM_X10_WOB` 24 bars = 120 s, counting the cross bar.
     frm = (int(s0) - 1) if s0 is not None else int(ev)
-    r = F2.x_cross_raw(LN, xtf, side, frm, bnd)
+    r = F2.x_race(LN, xtf, side, frm, bnd)
     if r is None:
         #   HIS 1108 race bound is the next cadence event, so the message names THAT bar. It read
         #   "before the tape ends" after the bound moved, which is a label describing a rule the
@@ -312,8 +313,7 @@ def r_block(LN, side, ev, xtf, s0=None):
         #   debugging"*. So a cadence event the next cadence event beat prints NOTHING - his spec's
         #   `goto START`, and the next event's own report is the record.
         return None, None
-    c, which = r
-    cf = c                                  # no hold, so nothing to confirm - his 1108
+    cf, which, c = r
     X = F2.x_of(LN, xtf)
     wb = JIG.mage_cascade_bar(X, c, side, mode='extrema', gap=JIG.MC_GAP)
     if wb is None:
@@ -358,6 +358,10 @@ def legend(LN, day, side, n):
             ('the scan range - HIS 1108', 'no longer read. The report takes its x lines from XCV_TFS'),
             ('duplicates - HIS 1108 RULING', 'the existing no-duplicate-at-one-bar rule applies. Two cadence '
              'events whose x cross lands on one bar are one event'),
+            ('the hold - HIS 1108 RULING', 'FDM_X10_WOB %d bars = %d s, counting the cross bar. He tried it '
+             'without - *"there is no hold - the cross is read raw"* - then reversed on the 02:22:00 evidence: '
+             '*"ok - that makes the wob necessary"*'
+             % (int(K.FDM_X10_WOB), int(K.FDM_X10_WOB) * 5)),
             ('the race start - HIS 1108 RULING', 'the CADENCE WINDOW OPEN, which is ws1b\'s own oob '
              'excursion start - his *"accept an x-cross that fires inside a cadence window"*. Not the cadence '
              'event bar, so a cross that fired while ws1b was still oob belongs to this event'),
