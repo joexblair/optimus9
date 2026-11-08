@@ -856,6 +856,20 @@ def c3r_mage_gate(v, sd, gate, lo_f, hi_f):
     raise ValueError('the ws1Mage gate is none, oob, ib, ex-fence or in-fence')
 
 
+def c3r_mage_level(LN):
+    """The ws1Mage series the GATE reads. -> array.
+
+    HIS 1108: *"change the 'ws1MAge oob requirement' from emerging to close-prev"*. The reversal
+    bar still comes from jig.lift_off on EMERGING ws1Mage - that producer's own contract and his
+    standing *"lift-off reads emerging"* - and only the LEVEL test moves to closed-prev. An
+    emerging line goes oob before its closed-prev value does, so the gate now passes later.
+    """
+    import numpy as _np
+    r = str(K.FDM2_C3R_MAGE_READ)
+    assert r in ('closed-prev', 'emerging'), 'FDM2_C3R_MAGE_READ is %r' % r
+    return _np.asarray(LN['CPM'][1] if r == 'closed-prev' else LN['MGE'][1], float)
+
+
 def c3r_mage_stamps(LN, sd):
     """Every ws1Mage same-side lift-off STAMP on `sd`, ascending. -> int list.
 
@@ -898,7 +912,7 @@ def c3rmage_table(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     import numpy as _np
     close = _np.asarray(LN['close'], float)
     lo_f, hi_f = K.fnc_pair(K.FDM_FNC_2080)
-    m1e = _np.asarray(LN['MGE'][1], float)
+    m1e = c3r_mage_level(LN)
     RAW = {+1: _np.asarray(LN['phi'], float), -1: _np.asarray(LN['plo'], float)}
     CE = {sd2: sorted(int(e[0]) for e in F2.cadence_events(LN, sd2, int(A), int(B)))
           for sd2 in (+1, -1)}
@@ -1109,6 +1123,9 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     out.append(row('the row unit', 'HIS 1108: *"consolidate and count the trade as a single '
                                    'evemt"*. ONE row per firing bar and side, however many ws1r '
                                    'oob entries walked into it'))
+    out.append(row('the ws1Mage reads', 'the REVERSAL on emerging ws1Mage via `jig.lift_off`; '
+                                        'the LEVEL on %s ws1Mage - HIS 1108 ruling'
+                   % str(K.FDM2_C3R_MAGE_READ)))
     out.append(row('the ws1Mage wait', ('ON, gate `%s` - HIS 1108 *"apply the ws1Mage oob to the '
                                         'mech so that we are net positive"*. The rev-trade is '
                                         'placed at the first ws1Mage same-side lift-off STAMP at '
@@ -1148,7 +1165,7 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     MW = int(K.FDM2_C3R_MAGE_ON)
     MG = str(K.FDM2_C3R_MAGE_GATE)
     LF = {sd2: c3r_mage_stamps(LN, sd2) for sd2 in (+1, -1)} if MW else None
-    m1e = _np.asarray(LN['MGE'][1], float)
+    m1g = c3r_mage_level(LN)
     rows_, fired = cad3r_arms(LN, A, B, lab)
     out += ['', '| the arm - ws1r oob entry | side | the verdict | the clause that killed it | '
             'the firing bar | branch | ws3r oob at | clause 3 ws3Mage | clause 3 ws3b | '
@@ -1196,7 +1213,7 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
             for st in LF[int(sd)]:
                 if st < sig or st > int(B):
                     continue
-                if c3r_mage_gate(float(m1e[st]), int(sd), MG, lo_f, hi_f):
+                if c3r_mage_gate(float(m1g[st]), int(sd), MG, lo_f, hi_f):
                     land = int(st)
                     break
             if land is None:
