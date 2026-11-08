@@ -46,7 +46,14 @@ import traceback
 sys.path.insert(0, '/home/joe/thecodes')
 sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1022_v4')
 os.environ.setdefault('LG_TAPE_END', '2026-10-05')
-os.environ.setdefault('W_V4_EXPERIMENT', '1')
+#   NO EXPERIMENT FLAG IS GRANTED HERE. HIS 1108 GO: *"yes thanks"*, on making the live process
+#   refuse unless the request asks for an experiment. It used to run
+#   `os.environ.setdefault('W_V4_EXPERIMENT', '1')`, which declared EVERY live run an experiment,
+#   so v4_knobs.check() never refused a knob off the bank and the provenance block was the only
+#   guard. On 1108 that guard failed in the one way it can: a paste that started at the table's
+#   first row cut the block out, and he held an off-ruled xcv table for a turn without any way to
+#   see it. Now an off-bank launch refuses at import, and a caller who WANTS an experiment passes
+#   W_V4_EXPERIMENT=1 itself.
 
 DIR = os.environ.get('W_LIVE_DIR', '/home/joe/.claude/jobs/7c82535c/tmp/live')
 for d in ('req', 'out'):

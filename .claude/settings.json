@@ -35,6 +35,16 @@
       "statusMessage": "jargon check"
      }
     ]
+   },
+   {
+    "hooks": [
+     {
+      "type": "command",
+      "command": "/home/joe/thecodes/.claude/hooks/rows-not-shown.py",
+      "timeout": 15,
+      "statusMessage": "rows not shown"
+     }
+    ]
    }
   ],
   "PostToolUse": [

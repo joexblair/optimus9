@@ -65,6 +65,11 @@ def stamp(LN):
                                                    % (n, getattr(K, n), K.RULED[n][0])
                                                    for n in off) if off else 'none'))
     out.append(row('the bank check', 'RULED_OK %s' % K.RULED_OK))
+    #   THE FLAG GETS ITS OWN ROW. `RULED_OK` says whether the knobs match the bank; it does NOT
+    #   say whether an off-bank run would have been allowed. The live process used to grant
+    #   W_V4_EXPERIMENT itself, so RULED_OK False could appear on a run that nothing refused.
+    out.append(row('W_V4_EXPERIMENT', 'SET - this run may carry knobs off the bank'
+                   if K.EXPERIMENT else 'not set - an off-bank knob refuses at import'))
     out.append(row('fdm2-momo', 'ON' if int(K.FDM2_MOMO_ON) else 'OFF'))
     #   THE STOP ROW NAMES THE CAP, NOT THE RULE IN USE. Every report that scores against a
     #   different stop says so in its own block; this row said *"carried by every number below"*
