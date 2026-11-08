@@ -89,6 +89,32 @@ continues. Against the extremum they read 3 of 4 `up`.
 | `up` | 9 | 7 |
 | `down` | 4 | 6 |
 
+### THE CAD WALK RE-WALKED ON THE CROSS - 2026-08-25, RULED_OK True
+
+The 13 rows whose 3-of-4 read at their own cross is `none`, with the bar where 3 ups or 3 downs
+first print against the CROSS. No bound is applied - he has not ruled one here.
+
+| xcv row | the cadence event | side | the ws5x cross | the 3-of-4 at the cross | the cad-walk fires | the delay from the cross | bars | the verdict |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 2026-08-25 00:52:00 | HIGH | 2026-08-25 00:50:00 | none (flat flat flat flat) | 2026-08-25 00:58:00 | 8 min 00 s | 96 | up |
+| 5 | 2026-08-25 05:28:00 | HIGH | 2026-08-25 05:35:00 | none (up flat flat flat) | 2026-08-25 05:59:00 | 24 min 00 s | 288 | down |
+| 6 | 2026-08-25 05:41:00 | HIGH | 2026-08-25 05:35:00 | none (up flat flat flat) | 2026-08-25 05:59:00 | 24 min 00 s | 288 | down |
+| 7 | 2026-08-25 07:02:00 | LOW | 2026-08-25 07:02:15 | none (down flat down flat) | 2026-08-25 07:12:00 | 9 min 45 s | 117 | down |
+| 9 | 2026-08-25 08:08:00 | LOW | 2026-08-25 08:14:20 | none (up down flat up) | 2026-08-25 08:14:25 | 0 min 05 s | 1 | up |
+| 10 | 2026-08-25 10:04:00 | LOW | 2026-08-25 09:59:15 | none (flat flat flat up) | 2026-08-25 10:09:10 | 9 min 55 s | 119 | up |
+| 11 | 2026-08-25 11:40:00 | HIGH | 2026-08-25 11:40:00 | none (down down up flat) | 2026-08-25 11:40:05 | 0 min 05 s | 1 | down |
+| 19 | 2026-08-25 17:40:00 | HIGH | 2026-08-25 17:35:00 | none (flat flat flat flat) | 2026-08-25 18:00:00 | 25 min 00 s | 300 | up |
+| 20 | 2026-08-25 17:51:00 | HIGH | 2026-08-25 17:50:00 | none (flat flat up flat) | 2026-08-25 18:00:00 | 10 min 00 s | 120 | up |
+| 21 | 2026-08-25 17:53:00 | HIGH | 2026-08-25 18:00:00 | none (up flat flat up) | 2026-08-25 18:30:00 | 30 min 00 s | 360 | up |
+| 22 | 2026-08-25 18:04:00 | HIGH | 2026-08-25 18:00:00 | none (up flat flat up) | 2026-08-25 18:30:00 | 30 min 00 s | 360 | up |
+| 25 | 2026-08-25 20:52:00 | LOW | 2026-08-25 20:50:25 | none (flat flat flat flat) | 2026-08-25 21:09:00 | 18 min 35 s | 223 | down |
+| 26 | 2026-08-25 21:01:00 | LOW | 2026-08-25 21:00:00 | none (down flat down flat) | 2026-08-25 21:09:00 | 9 min 00 s | 108 | down |
+
+10 of the 13 land on the same bar the extremum anchor landed on, and at that bar both anchors
+read the same 3-of-4. The per-bar evidence is in
+`/home/joe/.claude/jobs/7c82535c/tmp/xcv_proof.txt` - 33 blocks, each one the anchor's own values,
+the read bar's values, the diff and the 3-of-4, at the firing bar and at the bar before it.
+
 ### WHY THE WOB IS NECESSARY - the measurement that reversed his own ruling
 
 He asked why the report showed 2026-08-25 02:31:55 for the 02:22:00 HIGH event while the

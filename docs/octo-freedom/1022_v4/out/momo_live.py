@@ -246,8 +246,11 @@ def answer(q):
         alab = str(q.get('anchor', 'ws%dx high extremum' % tf))
         TFS = list(range(30, 9, -1))
         EM = LN['EMR']
-        out += ['', '# ws%dx, the extremum %s against %s (%s)'
-                % (tf, ln.U(ext), ln.U(at), lab), '']
+        #   The heading names the ANCHOR it was handed, not the word `extremum`: the cad walk
+        #   anchors on the x-cross under his 1108 ruling, so a heading that says `extremum`
+        #   while holding the cross's values is the same stale label as the diff row's was.
+        out += ['', '# ws%dx, %s %s against %s (%s)'
+                % (tf, alab, ln.U(ext), ln.U(at), lab), '']
         hdr = ['line · timestamp'] + ['ws%d' % t for t in TFS]
         out += ['| ' + ' | '.join(hdr) + ' |', '|' + '---|' * len(hdr)]
         e = ['%.2f' % float(EM[t][ext]) for t in TFS]
