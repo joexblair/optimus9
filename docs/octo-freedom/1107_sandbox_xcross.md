@@ -63,9 +63,31 @@ read` is not none for a row, the fields in the new columns will read '-'"*.
 | what | the detail |
 |---|---|
 | when the walk runs | ONLY on a row whose 3-of-4 read is `none`. Every other row prints `-` in both columns |
-| what is re-read | the extremum is FIXED - it is the pre-cross extremum. The SECOND row of the diff moves to the bar being read. That is the only reading under which the diff changes at all, and it is MINE |
+| what is re-read | HIS 1108 ANCHOR RULING: *"for the cad walk only: instead of anchoring on the pre-x-cross extremum, anchor on the x-cross values. ie `r · ws5x diff (the cad-walked bar - extremum)` becomes `r · ws5x diff (the cad-walked bar - x-cross)`"*. So the report's own block still reads cross - extremum, and the cad walk reads the bar being read - THE CROSS. The extremum is not in the cad walk at all |
 | the bound | NONE APPLIED. He has not ruled one here, so the walk runs to the tape end and the delay is reported beside it. A bound can only cut rows, never add them |
 | where it lives | the `xcv` request kind on the live process, so the table is repeatable on any day and any x line |
+
+### WHAT THE ANCHOR RULING MOVED - 2026-08-25, 13 cad-walked rows
+
+The 15 rows that reach a verdict at their own cross are untouched - the ruling is cad-walk-only.
+Of the 13 rows that cad-walk, 3 distinct bars moved and 1 verdict flipped:
+
+| the cadence event | the cross | the extremum anchor | the cross anchor |
+|---|---|---|---|
+| 2026-08-25 05:28:00 HIGH | 2026-08-25 05:35:00 | 2026-08-25 05:51:00, `up` | 2026-08-25 05:59:00, `down` |
+| 2026-08-25 05:41:00 HIGH | 2026-08-25 05:35:00 | 2026-08-25 05:51:00, `up` | 2026-08-25 05:59:00, `down` |
+| 2026-08-25 11:40:00 HIGH | 2026-08-25 11:40:00 | 2026-08-25 11:41:25, `down` | 2026-08-25 11:40:05, `down` |
+| 2026-08-25 17:53:00 HIGH | 2026-08-25 18:00:00 | 2026-08-25 18:12:00, `up` | 2026-08-25 18:30:00, `up` |
+| 2026-08-25 18:04:00 HIGH | 2026-08-25 18:00:00 | 2026-08-25 18:12:00, `up` | 2026-08-25 18:30:00, `up` |
+
+The 05:51:00 bar he asked about: against the 05:35:00 cross the 4 lefthand TFs read
+`flat up down up` - 2 up, 1 down, 1 flat - so the 3-of-4 read is `none` there and the walk
+continues. Against the extremum they read 3 of 4 `up`.
+
+| the census of the 13 cad-walked rows | extremum anchor | cross anchor |
+|---|---|---|
+| `up` | 9 | 7 |
+| `down` | 4 | 6 |
 
 ### WHY THE WOB IS NECESSARY - the measurement that reversed his own ruling
 
@@ -324,7 +346,7 @@ All four fail on BOTH direction rows, so his examples do not say WHICH row drive
 | the gap | the question |
 |---|---|
 | which direction row | the ws4x row, the ws5x row, both agreeing, or either. His four examples fail on every reading so they do not settle it |
-| what the cad walk carries forward | re-run the race from each later bar, or hold the cross bar and re-read the direction at the current bar, or wait for the NEXT ws{TF}x cross inside the 10 min |
+| ~~what the cad walk carries forward~~ | RULED 1108 - the cross bar is held and the direction is re-read at the current bar, anchored on the CROSS. See *WHAT THE ANCHOR RULING MOVED* above |
 | where the 10 min starts | the cadence event bar, or the ws{TF}x cross bar |
 | the 4 events with no cross at all | 17:10:00 LOW, 17:51:00 HIGH, 19:35:00 LOW, 20:52:00 LOW print no rows under his new race bound. Does the cad walk carry those too |
 | the rev-trade's side | an `up` verdict and a `down` verdict map to which trade direction |

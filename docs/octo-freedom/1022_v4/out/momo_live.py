@@ -238,6 +238,12 @@ def answer(q):
         ext = ln.K(str(q['ext']))
         at = ln.K(str(q['at']))
         lab = str(q.get('label', 'cross'))
+        #   HIS 1108: *"for the cad walk only: instead of anchoring on the pre-x-cross extremum,
+        #   anchor on the x-cross values"*. So the first row's label is the CALLER'S - it is the
+        #   extremum for the report's own block and the x-cross for a cad-walked bar - and the diff
+        #   row names whichever one was handed in. A row labelled `extremum` while holding the
+        #   cross's values is the kind of label that outlives the rule it described.
+        alab = str(q.get('anchor', 'ws%dx high extremum' % tf))
         TFS = list(range(30, 9, -1))
         EM = LN['EMR']
         out += ['', '# ws%dx, the extremum %s against %s (%s)'
@@ -247,10 +253,11 @@ def answer(q):
         e = ['%.2f' % float(EM[t][ext]) for t in TFS]
         a = ['%.2f' % float(EM[t][at]) for t in TFS]
         d = [float(EM[t][at]) - float(EM[t][ext]) for t in TFS]
-        out.append('| r · %s (ws%dx high extremum) | %s |' % (ln.U(ext), tf, ' | '.join(e)))
+        out.append('| r · %s (%s) | %s |' % (ln.U(ext), alab, ' | '.join(e)))
         out.append('| r · %s (%s) | %s |' % (ln.U(at), lab, ' | '.join(a)))
-        out.append('| r · ws%dx diff (%s - extremum) | %s |'
-                   % (tf, lab, ' | '.join('%+.2f' % x for x in d)))
+        out.append('| r · ws%dx diff (%s - %s) | %s |'
+                   % (tf, lab, alab.replace('ws%dx high ' % tf, '').replace('ws%dx low ' % tf, ''),
+                      ' | '.join('%+.2f' % x for x in d)))
         out.append('| r · ws%dx direction of the diff | %s |'
                    % (tf, ' | '.join('up' if x > 0 else 'down' if x < 0 else 'flat' for x in d)))
         L4 = d[:4]
@@ -328,15 +335,16 @@ def answer(q):
             d4 = dirs(ext, int(c))
             v = read34(d4)
             br = ('1 - inside the window' if int(c) <= int(b) else '2 - the x-cross won')
-            #   HIS CAD WALK. Only for a `none` row. The extremum is FIXED - it is the pre-cross
-            #   extremum - and the SECOND row of the diff moves to the bar being read, which is the
-            #   only reading under which the diff changes at all. NO BOUND IS APPLIED: he has not
-            #   ruled one here, so the walk runs to the tape end and the delay is reported beside
-            #   it. A bound can only cut rows, never add them.
+            #   HIS CAD WALK, and HIS 1108 ANCHOR RULING: *"for the cad walk only: instead of
+            #   anchoring on the pre-x-cross extremum, anchor on the x-cross values"*. So the
+            #   report's own block still reads cross - extremum, and the cad walk reads
+            #   the current bar - THE CROSS. The anchor is `c`, not `ext`.
+            #   NO BOUND IS APPLIED: he has not ruled one here, so the cad walk runs to the tape
+            #   end and the delay is reported beside it. A bound can only cut rows, never add them.
             cw, cv = '-', '-'
             if v == 'none':
                 for t2 in range(int(c) + 1, NB + 1):
-                    vv = read34(dirs(ext, t2))
+                    vv = read34(dirs(int(c), t2))
                     if vv != 'none':
                         cw, cv = ln.U(t2), vv
                         break
