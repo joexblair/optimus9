@@ -164,6 +164,35 @@ def answer(q):
                 % (str(q['from']), str(q['to'])), '']
         out += R.c3rmage_table(LN, A, B, lab)
         return out
+    if kind == 'xcross':
+        #   HIS 1108: *"using the known cadences (not the fake cadences), apply the xcross
+        #   validator mech to 08-25 and confirm you can recreate the same ws5x cross timestamps as
+        #   seen in the xcross-validator report"*.
+        #   INDEPENDENT REBUILD. This calls F2.cadence_events and F2.x_race directly off the live
+        #   tape - it does not import the sandbox script or read its output files. If the two
+        #   agree, two separate call sites produced the same bars.
+        day = str(q['day'])
+        A, B = ln.K(day + ' 00:00:00'), ln.K(day + ' 23:59:55')
+        tf = int(q.get('tf', 5))
+        out += ['', '# the ws%dx race from every KNOWN cadence event, %s' % (tf, day), '']
+        out += ['| the cadence event | side | the ws%dx cross | which racer | the confirm bar | '
+                'the race bound |' % tf, '|---|---|---|---|---|---|']
+        ev = []
+        for sd in (+1, -1):
+            for e in F2.cadence_events(LN, sd, A, B):
+                ev.append((int(e[0]), sd))
+        NB = len(LN['close']) - 1
+        for b, sd in sorted(ev):
+            r = F2.x_race(LN, tf, sd, int(b), NB)
+            if r is None:
+                out.append('| %s | %s | none to the tape end | - | - | %s |'
+                           % (ln.U(b), 'HIGH' if sd > 0 else 'LOW', ln.U(NB)))
+                continue
+            cf, which, cx = r
+            out.append('| %s | %s | %s | %s | %s | %s |'
+                       % (ln.U(b), 'HIGH' if sd > 0 else 'LOW', ln.U(int(cx)), which,
+                          ln.U(int(cf)), ln.U(NB)))
+        return out
     if kind == 'legmfe':
         #   HIS 1108: *"can you derive that from sweep-pivots? using a rolling 8 hour window, and
         #   measuring on TF1,2,3 and gcws30 timeframes, what MFE differences can you detect inside
