@@ -2,7 +2,8 @@
 
 GOAL: turn each cadence event into an `up` or `down` verdict, as early as the lines allow. The
 verdict's TIMESTAMP is the thing being improved - HIS 1108: *"the goal of this work is to improve
-the verdict timestamps in fdm2-xcv"*. `fdm2-rline-enhance` exists only to serve this goal.
+the verdict timestamps in fdm2-xcv"*. `fdm2-rline-enhance` exists only to serve this goal, and its own spec is
+`docs/octo-freedom/1108_rline_enhance.md`.
 
 HIS 1108 NAME AND GO: *"take ownership of the files. bank them as the fdm2-xcv mech. commit and
 push all files, yours or not"*. The mech was built in another session and handed over at log entry

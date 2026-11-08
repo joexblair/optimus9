@@ -1,0 +1,168 @@
+# `fdm2-rline-enhance`, 2026-11-08
+
+GOAL: spawn an `fdm2-xcv` verdict at a bar where all four left r lines are blind, so the verdict
+TIMESTAMP lands earlier. HIS 1108: *"the goal of this work is to improve the verdict timestamps in
+fdm2-xcv"*. It exists for no other reason, and `fdm2-xcv`'s own goal is in
+`1107_sandbox_xcross.md`.
+
+PLAINLY: inside a forming candle only one piece of an r line can move. When the RSI under that line
+runs past the edge of its own recent range, that piece sticks at its limit and the line freezes -
+at any level, not only at an extreme - while the RSI keeps moving. At a bar where all four of
+ws30r, ws29r, ws28r and ws27r read `flat` against the anchor, the four lines say nothing and the
+RSI under them is the only thing left. This reads that RSI and spawns a verdict there.
+
+NOTHING IS BUILT. Every rule below is settled; the code is not written.
+
+---
+
+## 0. HIS RULINGS, 1108
+
+| his ruling | his words |
+|---|---|
+| it is worth trying | *"if it works, good, if not: at least we tried"* - on the reading being ours and not a documented practice |
+| which RSI | *"developing"* - `rsi_d` at the 5 s grid, the series the r line itself uses |
+| whose read | *"new reader, on the jig"*. `RSIDIV_LINES` stays at its banked `ws1r, gcws30r` and `bullish-rsi` / `bearish-rsi` is untouched |
+| the cost | *"the cost is accepted"* |
+| the name | `fdm2-rline-enhance`, replacing his placeholder `fdm2-name-me-joe` the same day |
+| three substituted tokens alone | *"yes"*, with his reasoning *"my view is that if the answer was no, the timestamps would never have a chance to improve"* |
+| the wiring | *"the earliest 4-flat bar be in a race with the cad-walks fires"* |
+| where the verdict spawns | *"whatever mech created the earliest 4-flat bar timestamps is where the verdict will be spawned from"* |
+
+## 1. THE SPAWN POINT - HIS RULE, AND IT REPLACED MINE
+
+HIS RULE: the verdict spawns at the EARLIEST BAR WHERE ALL FOUR left tokens read `flat` against the
+anchor - the 4-flat bar. Nothing spawns at a 3-flat or 2-flat bar.
+
+MINE, REPLACED: substitute a `flat` token wherever one appears, at any bar. His rule is tighter and
+it is the one that makes his race real. Under mine the two readings could never race: substitution
+only turns `flat` into `up` or `down`, so the up and down counts can only rise, and the enhanced
+reading would fire at or before the raw one every single time. Under HIS rule the two triggers are
+DISJOINT - the raw reading needs 3 raw tokens agreeing, so it can only fire at a bar with at most 1
+flat; this one fires only at a bar with 4 flat. Neither can pre-empt the other by construction.
+
+| the racer | its trigger | what it reads |
+|---|---|---|
+| the cad walk, banked | 3 of the 4 raw tokens agree | the r lines' own directions against the anchor |
+| `fdm2-rline-enhance` | all 4 raw tokens read `flat` | the RSI's direction against the same anchor, on each of the 4 lines |
+| the winner | the earlier bar | a tie is not possible - the triggers cannot both hold at one bar |
+
+## 2. THE SEVEN RULES
+
+Five fell out of his goal statement, one out of his standing no-cap rule, one he ruled directly.
+
+| the rule | the ruling | where it came from |
+|---|---|---|
+| what counts as blind | THE PIN CONDITION - `rsi_d` at or outside the window of the 7 closed RSI values. NOT "the value is unchanged from the previous bar" | derived from his goal: only the pin carries a direction, and a repeated value happens on 29.6% to 38.9% of all bars |
+| what the reader returns | a direction token - `up` or `down` - in the vocabulary the 3-of-4 read already consumes, with the pinned state and the pin side beside it as evidence | derived: only a token can move a verdict timestamp |
+| where the direction is measured from | THE CALLER'S ANCHOR, the same bar the raw tokens use - the x-cross for the cad walk, under his 1108 anchor ruling | derived: a substituted token sits beside three measured anchor-to-bar |
+| which lines | ws30r, ws29r, ws28r, ws27r. The producer takes ANY tf; the caller picks the set, so no knob is needed | derived: his goal names `fdm2-xcv`, whose read is those four |
+| what it says when not blind | a distinct not-pinned state, and the caller uses the r line's own token unchanged | derived: an unpinned line is tracking the RSI, so its own token is already the truth |
+| a minimum freeze length | NONE | his standing no-cap rule. His goal argues against one anyway - a minimum could only delay a spawn |
+| when to spawn | only at a 4-flat bar | HIS RULING, section 1 |
+
+## 3. THE ARITHMETIC THIS RESTS ON
+
+`optimus9/compute/indicator_computer.py:593-643`, the emerging r value at a 5 s bar inside a
+forming candle:
+
+| the term | what it is |
+|---|---|
+| `R_RSI` 5 | the RSI length |
+| `R_STC` 8 | the stoch length, so the window is the previous `8 - 1` = 7 CLOSED RSI values |
+| `R_KLEN` 7 | the %K average length, so 6 CLOSED stoch terms + 1 DEVELOPING term |
+| `rsi_d` | the developing RSI - a Wilder one-step update from the last closed RSI state onto the developing bar's close |
+| `lb_rsi_min`, `lb_rsi_max` | min and max of those 7 closed RSI values |
+| `stoch_d` | `100 * (rsi_d - min(lb_rsi_min, rsi_d)) / (max(lb_rsi_max, rsi_d) - min(...))`, or `50.0` when that range is 0 |
+| the r value | `(the 6 closed stoch terms + stoch_d) / 7` |
+
+ONLY `stoch_d` CAN MOVE INSIDE THE CANDLE:
+
+| the state | `stoch_d` | the r line | the RSI |
+|---|---|---|---|
+| `rsi_d` at or above `lb_rsi_max` | 100 exactly | FROZEN for the rest of the candle | keeps rising, invisible to the line |
+| `rsi_d` at or below `lb_rsi_min` | 0 exactly | FROZEN for the rest of the candle | keeps falling, invisible to the line |
+| `lb_rsi_max` equals `lb_rsi_min` | 50.0, the else branch | FROZEN | the line says nothing at all |
+| `lb_rsi_min` < `rsi_d` < `lb_rsi_max` | tracks `rsi_d` | moves with the RSI | the line carries it |
+
+THE FROZEN LEVEL IS NOT AN EXTREME. The 6 closed terms set the level, so a frozen line sits at
+77.39 or 37.94. That is why these flats do not look like a pinned indicator.
+
+`R_KLEN` 7 ALSO EXPLAINS THE 14.2857 STEP: one closed stoch term flipping 0 to 100 at a candle roll
+moves the average by exactly 100 / 7.
+
+## 4. MY STRUCTURAL CALLS - STATED, NOT ASKED
+
+| the call | why |
+|---|---|
+| the substituted token is the SIGN OF `rsi_d[bar] - rsi_d[anchor]`, not the pin side | the pin side only says the line is blind. The direction must span anchor-to-bar like the tokens it replaces, and a pin that began after the anchor would otherwise describe a shorter span than its neighbours |
+| a third line type in `optimus9/compute/line_config.py`, behind its own one-door entry beside `jig.kline` / `jig.bbline` | precedent: every other line goes through that door, and the module warns that hand-building a spec tuple is silent when transposed |
+| `f_k_lookahead` calls the shared developing-RSI function rather than keeping its own copy | the Wilder one-step arithmetic in two places is the drift trap the second cross reader was removed for |
+| the reader returns a dict with a `state` key | precedent: `jig.fdm2_cad_mom_detector` |
+| this doc, not a section of `1107_sandbox_xcross.md` | it is its own mech with its own goal, and his 1108 idea puts a goal at the top of a spec |
+
+## 5. THE BOUND THAT IS INHERENT, NOT APPLIED
+
+A pin cannot survive its own candle roll: at the roll, `lb_rsi_min` and `lb_rsi_max` are recomputed
+over a window that now includes the bar that was pinning, and `stoch_d` is free again. So the
+blindness is bounded by the forming candle - 30 min on ws30r, 27 min on ws27r. NO CAP IS APPLIED;
+this is the producer's own shape.
+
+## 6. CAUSALITY - AN ASSERT, NOT A COMMENT
+
+`rsi_d` at bar b is a one-step update from the last CLOSED bar before b's forming candle, onto b's
+own close. `lb_rsi_min` and `lb_rsi_max` are over closed RSI values ending before that candle.
+Every input is at or before b. The assert belongs at the reader's return site.
+
+## 7. THE PRIZE, MEASURED ON 2026-08-25
+
+The 4-flat spawn bar against today's cad-walk fire, over the 11 distinct cad walks. The spawn bar
+is a SPAWN POINT, not a verdict - a verdict there needs 3 of the 4 RSI directions to agree, which
+needs this reader built:
+
+| xcv rows | the cross | the 4-flat spawn bar | the cad-walk fires | how much earlier | bars earlier |
+|---|---|---|---|---|---|
+| 1 | 2026-08-25 00:50:00 | 2026-08-25 00:50:05 | 2026-08-25 00:58:00 | 7 min 55 s | 95 |
+| 5, 6 | 2026-08-25 05:35:00 | 2026-08-25 05:35:05 | 2026-08-25 05:59:00 | 23 min 55 s | 287 |
+| 7 | 2026-08-25 07:02:15 | 2026-08-25 07:11:10 | 2026-08-25 07:12:00 | 0 min 50 s | 10 |
+| 9 | 2026-08-25 08:14:20 | none | 2026-08-25 08:14:25 | - | - |
+| 10 | 2026-08-25 09:59:15 | 2026-08-25 09:59:55 | 2026-08-25 10:09:10 | 9 min 15 s | 111 |
+| 11 | 2026-08-25 11:40:00 | none | 2026-08-25 11:40:05 | - | - |
+| 19 | 2026-08-25 17:35:00 | 2026-08-25 17:35:05 | 2026-08-25 18:00:00 | 24 min 55 s | 299 |
+| 20 | 2026-08-25 17:50:00 | 2026-08-25 17:50:05 | 2026-08-25 18:00:00 | 9 min 55 s | 119 |
+| 21, 22 | 2026-08-25 18:00:00 | 2026-08-25 18:00:05 | 2026-08-25 18:30:00 | 29 min 55 s | 359 |
+| 25 | 2026-08-25 20:50:25 | 2026-08-25 20:50:30 | 2026-08-25 21:09:00 | 18 min 30 s | 222 |
+| 26 | 2026-08-25 21:00:00 | none | 2026-08-25 21:09:00 | - | - |
+
+| the 11 distinct cad walks | value |
+|---|---|
+| walks with a 4-flat spawn bar before the fire | 8 of 11 |
+| walks with none | 3 of 11 - xcv 9, 11 and 26, all of which fire within 1 bar to 9 min anyway |
+| the spawn bar is earlier by, median | 14 min 12 s |
+| the spawn bar is earlier by, min | 0 min 50 s |
+| the spawn bar is earlier by, max | 29 min 55 s |
+
+THE VERDICT AT THE SPAWN BAR IS UNKNOWN. Today's verdicts at the LATER fire are `up` on xcv 19, 20,
+21 and 22. Whether the spawn bar agrees is set by the RSI directions there, and this reader has to
+exist to read them.
+
+## 8. THE FLAT-TOKEN CENSUS BEHIND HIS RULE
+
+1733 walked bars over the 13 cad walks of 2026-08-25, by how many of the 4 left tokens read `flat`
+against the cross:
+
+| flat tokens at a walked bar | bars | which racer can fire there |
+|---|---|---|
+| 4 of 4 | 285 | `fdm2-rline-enhance` only |
+| 3 of 4 | 573 | neither |
+| 2 of 4 | 693 | neither |
+| 1 of 4 | 170 | the cad walk only |
+| 0 of 4 | 12 | the cad walk only |
+
+A `flat` token is not proof of a pin, so these counts BOUND the spawn opportunity rather than
+measure it. The pin counts need this reader built.
+
+## 9. OPEN - HIS CALL, ONE ITEM
+
+| the gap | the question |
+|---|---|
+| the ON knob's banked default | every reading added since 1022 banked OFF - `RSIDIV_ON` 0, `FDM2_MOMO_ON` 0, `FDM_SAV_ON` 0. Does this one bank ON so `fdm2-xcv` runs with it, or OFF behind a flag until a day's numbers are in |
