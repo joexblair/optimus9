@@ -115,6 +115,85 @@ read the same 3-of-4. The per-bar evidence is in
 `/home/joe/.claude/jobs/7c82535c/tmp/xcv_proof.txt` - 33 blocks, each one the anchor's own values,
 the read bar's values, the diff and the 3-of-4, at the firing bar and at the bar before it.
 
+### ARE THE 4 LEFT LINES ON EMERGING - HIS 1108 QUESTION, MEASURED
+
+His question: *"if they're the same, maybe it's a closed-prev issue. are the lines not on
+emerging?"*. They are on emerging. `v4_fdm2.load` builds two ladders off the same cache
+`RS.load((RS.K0 5, RS.R0 8, RS.S0 7))`:
+
+| the array | how it is built | what the xcv table reads |
+|---|---|---|
+| `LN['CPR'][t]` - closed-prev | `CP.series(E[t], t * 60)` - stepped to the TF close | not read here |
+| `LN['EMR'][t]` - emerging | `np.asarray(E[t], float)` - the cache as-is, no stepping | `EM = LN['EMR']`, every read in the xcv kind |
+
+The emerging ladder does move on the 5 s grid, and it also holds long flats:
+
+| the line | distinct values on 2026-08-25 | bars that change | of bars | the step, median | the step, max |
+|---|---|---|---|---|---|
+| ws30r emerging | 6022 | 11404 | 17280 | 5 s | 1690 s |
+| ws29r emerging | 6226 | 11292 | 17280 | 5 s | 1740 s |
+| ws28r emerging | 6699 | 12171 | 17280 | 5 s | 1650 s |
+| ws27r emerging | 6151 | 11101 | 17280 | 5 s | 1595 s |
+| ws10r emerging | 7266 | 10556 | 17280 | 5 s | 600 s |
+| ws5r emerging | 8259 | 10681 | 17280 | 5 s | 520 s |
+| ws3r emerging | 8597 | 10599 | 17280 | 5 s | 270 s |
+| ws1r emerging | 9870 | 11115 | 17280 | 5 s | 120 s |
+
+THE FLAT IS WHY 10 OF 13 ROWS DID NOT MOVE. On 3 rows all four left lines hold the SAME value at
+the extremum and at the cross, so the anchor change is a no-op there and the walk cannot differ:
+
+| xcv rows | the 4 left lines holding the SAME value at both anchors |
+|---|---|
+| 1 | 4 of 4 |
+| 5, 6 | 3 of 4 |
+| 7 | 2 of 4 |
+| 9 | 1 of 4 |
+| 10 | 3 of 4 |
+| 11 | 1 of 4 |
+| 19 | 4 of 4 |
+| 20 | 3 of 4 |
+| 21, 22 | 2 of 4 |
+| 25 | 4 of 4 |
+| 26 | 2 of 4 |
+
+AND THE FLAT ALSO SETS THE FIRING BAR. 6 of the 11 distinct firing bars are the bar a 790 s to
+1690 s flat ends on one of the four left lines:
+
+| xcv rows | the cad-walk fires | the line that came off a long flat at that bar | the flat |
+|---|---|---|---|
+| 1 | 2026-08-25 00:58:00 | ws29r 86.10 → 89.24 | 2026-08-25 00:39:20 .. 2026-08-25 00:57:55 = 1120 s |
+| 5, 6 | 2026-08-25 05:59:00 | ws30r 66.17 → 64.93 | 2026-08-25 05:32:20 .. 2026-08-25 05:58:55 = 1600 s |
+| 7 | 2026-08-25 07:12:00 | ws27r 31.98 → 30.94 | 2026-08-25 06:46:20 .. 2026-08-25 07:11:55 = 1540 s |
+| 19 | 2026-08-25 18:00:00 | ws30r 77.39 → 80.36 | 2026-08-25 17:31:50 .. 2026-08-25 17:59:55 = 1690 s |
+| 20 | 2026-08-25 18:00:00 | ws30r 77.39 → 80.36 | 2026-08-25 17:31:50 .. 2026-08-25 17:59:55 = 1690 s |
+| 25 | 2026-08-25 21:09:00 | ws27r 37.94 → 23.65 | 2026-08-25 20:42:25 .. 2026-08-25 21:08:55 = 1595 s |
+| 26 | 2026-08-25 21:09:00 | ws27r 37.94 → 23.65 | 2026-08-25 20:42:25 .. 2026-08-25 21:08:55 = 1595 s |
+
+### THE DIFF READER HAS NO MINIMUM MAGNITUDE - OPEN, NOT RULED
+
+`up if d > 0 else down if d < 0 else flat`. A diff of +0.0035 on a 0-100 line counts as `up`
+exactly as a diff of +17.50 does. The diffs at each firing bar:
+
+| xcv rows | the cad-walk fires | ws30 diff | ws29 diff | ws28 diff | ws27 diff | directions | the smallest diff that counted |
+|---|---|---|---|---|---|---|---|
+| 1 | 2026-08-25 00:58:00 | +0.0000 | +3.1345 | +2.4236 | +1.9815 | flat up up up | 1.9815 on up |
+| 5, 6 | 2026-08-25 05:59:00 | -1.2457 | -4.1939 | -6.9845 | -1.0705 | down down down down | 1.0705 on down |
+| 7 | 2026-08-25 07:12:00 | -0.1250 | +0.0000 | -0.0888 | -1.0361 | down flat down down | 0.0888 on down |
+| 9 | 2026-08-25 08:14:25 | +0.0109 | +0.0000 | +0.0035 | +0.0220 | up flat up up | 0.0035 on up |
+| 10 | 2026-08-25 10:09:10 | +0.2060 | +0.6460 | +0.0000 | +0.1935 | up up flat up | 0.1935 on up |
+| 11 | 2026-08-25 11:40:05 | -0.4235 | -0.2228 | -0.5187 | +0.0000 | down down down flat | 0.2228 on down |
+| 19 | 2026-08-25 18:00:00 | +2.9722 | +4.4153 | +2.9188 | +3.1988 | up up up up | 2.9188 on up |
+| 20 | 2026-08-25 18:00:00 | +2.9722 | +4.4153 | +0.0000 | +3.1988 | up up flat up | 2.9722 on up |
+| 21, 22 | 2026-08-25 18:30:00 | +0.9348 | +5.9948 | +3.9093 | -5.2040 | up up up down | 0.9348 on up |
+| 25 | 2026-08-25 21:09:00 | -14.2857 | +0.0000 | -14.2857 | -14.2857 | down flat down down | 14.2857 on down |
+| 26 | 2026-08-25 21:09:00 | -0.7697 | +0.0000 | -0.5952 | -14.2857 | down flat down down | 0.5952 on down |
+
+NO MINIMUM IS APPLIED. He has not ruled one, and a threshold would cut rows. Two rows fire 1 bar
+after the cross: xcv 9 on a smallest counted diff of 0.0035, xcv 11 on 0.2228.
+
+The exact value -14.2857 prints on 3 of the 4 lines at 21:09:00. 100 / 7 = 14.2857 and the cache's
+`S0` is 7. WHETHER THE TWO ARE RELATED IS UNMEASURED.
+
 ### WHY THE WOB IS NECESSARY - the measurement that reversed his own ruling
 
 He asked why the report showed 2026-08-25 02:31:55 for the 02:22:00 HIGH event while the
