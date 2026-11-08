@@ -553,30 +553,22 @@ class IndicatorComputer:
         return (rsi_ob - rsi_os) * pct + rsi_os
 
     @staticmethod
-    def f_k_lookahead(base_df: pd.DataFrame, target_seconds: int,
+    def _k_developing(base_df: pd.DataFrame, target_seconds: int,
                       k_len: int, rsi_len: int, stc_len: int, src: str,
-                      anchor: str = 'epoch', memo: dict = None) -> np.ndarray:
-        """
-        K chain (RSI → Stoch → SMA) at each 5s bar against the developing
-        higher-TF bar.
+                      anchor: str = 'epoch', memo: dict = None) -> dict:
+        """Every intermediate of the developing K chain, at each 5s bar. -> dict of arrays.
 
-        Pine equivalent:
-            k_value = request.security(..., "<target>S",
-                                       sma(stoch(rsi(src, rsi_len), stc_len), k_len),
-                                       barmerge.gaps_off, barmerge.lookahead_on)
+        EXTRACTED 1108, VERBATIM, from f_k_lookahead - which now calls it - so the Wilder one-step
+        update exists in ONE place. `f_k_pin` reads the same dict, because the pin is a property of
+        THIS computation and not a line of its own: it needs stc_len for the window and k_len for
+        the average, so it cannot be expressed as an RSI line config.
 
-        Not exercised by the 5s gate round (b6M is BB, all six 5s vote
-        contributors are 5s-native). Provided as forward-looking infrastructure
-        for when a K-line target is calibrated on a higher TF — pre-built so
-        we don't have to think about it under pressure later.
+        Keys: `rsi_d` the developing RSI, `stoch_d` its stochastic against the closed window,
+        `lb_stoch_sum` the k_len-1 closed stoch readings, `lb_rsi_min` / `lb_rsi_max` the window of
+        stc_len-1 closed RSI values, `valid` where a closed window exists.
 
-        Implementation parallels f_bb_lookahead: rolling state on the closed
-        series, single-step update at each 5s using developing values. RSI uses
-        the same _ema as IndicatorComputer._rsi (alpha = 2/(n+1)) for consistency
-        with the non-lookahead path — known to deviate slightly from Pine's
-        Wilder smoothing, same way the non-lookahead version does.
-
-        Returns a 1D float array parallel to base_df.
+        CAUSAL: every input is at or before the bar being read - the closed chain ends before the
+        forming bar, and the developing source is that bar's own value.
         """
         # ── closed higher-TF chain ────────────────────────────────────────
         closed     = IndicatorComputer._memo_resample(memo, 'closed', base_df, target_seconds, anchor)
@@ -640,4 +632,71 @@ class IndicatorComputer:
 
         # ── developing SMA of Stoch ───────────────────────────────────────
         lb_stoch_sum = np.where(valid, roll_stoch_sum[lb_idx], np.nan)
-        return (lb_stoch_sum + stoch_d) / k_len
+        return dict(rsi_d=rsi_d, stoch_d=stoch_d, lb_stoch_sum=lb_stoch_sum,
+                    lb_rsi_min=lb_rsi_min, lb_rsi_max=lb_rsi_max, valid=valid)
+
+    @staticmethod
+    def f_k_lookahead(base_df: pd.DataFrame, target_seconds: int,
+                      k_len: int, rsi_len: int, stc_len: int, src: str,
+                      anchor: str = 'epoch', memo: dict = None) -> np.ndarray:
+        """
+        K chain (RSI → Stoch → SMA) at each 5s bar against the developing
+        higher-TF bar.
+
+        Pine equivalent:
+            k_value = request.security(..., "<target>S",
+                                       sma(stoch(rsi(src, rsi_len), stc_len), k_len),
+                                       barmerge.gaps_off, barmerge.lookahead_on)
+
+        Not exercised by the 5s gate round (b6M is BB, all six 5s vote
+        contributors are 5s-native). Provided as forward-looking infrastructure
+        for when a K-line target is calibrated on a higher TF — pre-built so
+        we don't have to think about it under pressure later.
+
+        Implementation parallels f_bb_lookahead: rolling state on the closed
+        series, single-step update at each 5s using developing values. RSI uses
+        the same _ema as IndicatorComputer._rsi (alpha = 2/(n+1)) for consistency
+        with the non-lookahead path — known to deviate slightly from Pine's
+        Wilder smoothing, same way the non-lookahead version does.
+
+        Returns a 1D float array parallel to base_df.
+        """
+        d = IndicatorComputer._k_developing(base_df, target_seconds, k_len, rsi_len, stc_len,
+                                           src, anchor=anchor, memo=memo)
+        return (d['lb_stoch_sum'] + d['stoch_d']) / k_len
+
+    @staticmethod
+    def f_k_pin(base_df: pd.DataFrame, target_seconds: int,
+                k_len: int, rsi_len: int, stc_len: int, src: str,
+                anchor: str = 'epoch', memo: dict = None):
+        """Where the developing K line is BLIND, and the RSI that is still moving under it.
+
+        -> (pin, rsi_d), both 1D float arrays parallel to base_df.
+
+            pin  +1  the developing RSI is at or above the closed window's max, so `stoch_d` is
+                     pinned at 100 exactly and the K line cannot move again this bar's candle -
+                     while the RSI keeps rising
+                 -1  at or below the window's min, `stoch_d` pinned at 0 exactly - the mirror
+                  0  the K line is tracking the RSI, OR the window is degenerate
+                     (`lb_rsi_max` equals `lb_rsi_min`, which sends `stoch_d` to 50.0 and leaves
+                     no direction to read). Both mean: do not substitute.
+
+        THE FROZEN LEVEL IS NOT AN EXTREME. The k_len-1 closed stoch readings set the level, so a
+        pinned line sits at any value - 77.39 and 37.94 were both measured frozen for over 25
+        minutes on 2026-08-25 while price covered 2.4% to 3.9%.
+
+        `fdm2-rline-enhance` reads this. The mech is `docs/octo-freedom/1108_rline_enhance.md`.
+
+        CAUSAL: `_k_developing` is, and this adds only comparisons between its own arrays.
+        """
+        d = IndicatorComputer._k_developing(base_df, target_seconds, k_len, rsi_len, stc_len,
+                                           src, anchor=anchor, memo=memo)
+        rsi_d, lo, hi = d['rsi_d'], d['lb_rsi_min'], d['lb_rsi_max']
+        pin = np.zeros(len(rsi_d), dtype=float)
+        with np.errstate(invalid='ignore'):
+            live = np.isfinite(rsi_d) & np.isfinite(lo) & np.isfinite(hi) & (hi > lo)
+            pin[live & (rsi_d >= hi)] = +1.0
+            pin[live & (rsi_d <= lo)] = -1.0
+        pin[~np.isfinite(rsi_d)] = np.nan
+        return pin, rsi_d
+

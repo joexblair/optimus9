@@ -90,6 +90,62 @@ THE FROZEN LEVEL IS NOT AN EXTREME. The 6 closed terms set the level, so a froze
 `R_KLEN` 7 ALSO EXPLAINS THE 14.2857 STEP: one closed stoch term flipping 0 to 100 at a candle roll
 moves the average by exactly 100 / 7.
 
+## 3a. THE PRODUCER IS BUILT - 1108, AND ONE STRUCTURAL CALL CHANGED
+
+HIS CORRECTION: *"I said to wire it as a race"*. His 1108 wiring instruction was an instruction to
+BUILD, and I treated it as a spec instruction. The producer is now in.
+
+| what | where | state |
+|---|---|---|
+| `IndicatorComputer._k_developing` | `optimus9/compute/indicator_computer.py` | NEW. Every intermediate of the developing K chain, extracted VERBATIM out of `f_k_lookahead`, which now calls it. The Wilder one-step update exists in one place |
+| `IndicatorComputer.f_k_lookahead` | same file | unchanged in behaviour, proved bit-identical on 6 TFs |
+| `IndicatorComputer.f_k_pin` | same file | NEW. `(pin, rsi_d)` - `+1` the RSI is at or above the closed window's max, `-1` at or below the min, `0` free or degenerate |
+| the identity proof | `1108_rline_enhance/check_fk_identity.py` | runnable in seconds on a fixed-seed synthetic frame, no DB and no tape. 6 of 6 TFs bit-identical |
+
+MY EARLIER CALL WAS WRONG. I said this needed *a third line type in `line_config.py`*. It does not:
+the pin needs `stc_len` for the window and `k_len` for the average, so it is a property of the
+K-line's own computation, not a line of its own. It is a sibling of `f_k_lookahead` sharing one
+helper, which is also why no new cache key and no `line_config` change are needed for the producer
+itself.
+
+### THE PIN COUNTS ON A SYNTHETIC 3-DAY FRAME, ws30
+
+| the state | bars |
+|---|---|
+| a pin value exists | 50160 of 51840 |
+| pinned HIGH, +1 | 8004 |
+| pinned LOW, -1 | 8875 |
+| free or degenerate, 0 | 33281 |
+
+## 3b. A DEFECT IN THE EXISTING xcv FLAT TEST, FOUND BY BUILDING THIS
+
+`stoch_d` is computed `100.0 * (rsi_d - stoch_min) / rng`, which is `(100 * numerator) / denominator`
+rather than `100 * (numerator / denominator)`. On a HIGH pin the numerator and denominator are the
+same quantity, so the result should be exactly 100 and instead lands on `100.00000000000001` or
+`99.999999999999986`. The K line therefore JITTERS by up to 1.42e-14 while it is mathematically
+frozen. On a LOW pin the numerator is exactly zero, so `stoch_d` is exactly 0 and the line is
+bit-exact.
+
+MEASURED ON THE REAL CACHED ARRAYS, 2026-08-25 - moves that are not zero but are under 1e-9:
+
+| the line | bars that change | moves under 1e-9 but not 0 | the smallest non-zero move |
+|---|---|---|---|
+| ws30r | 11404 | 78 | 3.55e-15 |
+| ws29r | 11292 | 7 | 7.11e-15 |
+| ws28r | 12171 | 30 | 7.11e-15 |
+| ws27r | 11101 | 38 | 7.11e-15 |
+| ws10r | 10556 | 32 | 3.55e-15 |
+| ws5r | 10681 | 55 | 3.55e-15 |
+| ws3r | 10599 | 34 | 3.55e-15 |
+| ws1r | 11115 | 71 | 1.78e-15 |
+
+WHY IT MATTERS TO `fdm2-xcv` AS IT STANDS: its diff reader is
+`up if d > 0 else down if d < 0 else flat` on exact floats, so a 3.55e-15 difference reads as a
+DIRECTION. A line that is frozen can therefore contribute `up` or `down` to the 3-of-4 count, and
+a 4-flat spawn bar can be missed because one line jittered. HIS PARKED FLOOR IS THE DECISION THIS
+NEEDS - he ruled no minimum diff size on 1108 and parked it as the first troubleshooting target.
+NOTHING IS APPLIED.
+
 ## 4. MY STRUCTURAL CALLS - STATED, NOT ASKED
 
 | the call | why |
