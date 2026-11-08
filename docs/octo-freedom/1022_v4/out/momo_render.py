@@ -633,6 +633,167 @@ def cad3r_eval(LN, side, mark, lab):
     return R
 
 
+def pivstop_table(LN, A, B, lab='ws3r emerging, rest closed-prev', pcts=(0.3, 0.5, 0.9, 1.5, 2.0)):
+    """A stop distance read off the last confirmed price pivot, per c3r firing. -> the markdown.
+
+    HIS 1108: *"if we follow the last pivot idea, the 0724 HIGH would need a 1.9% stop. lets see
+    if you can use your research to find a dynamic stop for each signal"*.
+
+    THE RESEARCH'S RULE, AS THE SIXTEEN SOURCES STATE IT: a SHORT's stop sits above the most
+    recent confirmed swing HIGH, a LONG's below the most recent confirmed swing LOW, plus a
+    buffer. The buffer has no agreed size across those sources and HE HAS NOT RULED ONE, so the
+    buffer here is 0.00% and the raw structural distance is what prints. He picks the buffer from
+    this distribution.
+
+    CAUSALITY. The pivot is read through find_pivots_confirmed, which returns each pivot's
+    CONFIRM BAR - the bar the retrace made it knowable. Only pivots with confirm_bar <= the open
+    bar are eligible, so the level was on the board before the trade opened. find_pivots alone
+    returns the pivot's own index, which is always earlier than its confirm bar, and selecting on
+    that index would be lookahead.
+
+    THE OUTCOME COLUMNS GO THROUGH F2.stop_bar, his own stop walk, with the structural distance
+    handed in as the cap. Nothing else about the scoring changes, so these rows sit beside the
+    FDM_MAE_CAP rows in cad3r_scan and the only difference is the cap that was handed in.
+    """
+    import numpy as _np
+    import sys as _sys
+    if '/home/joe/thecodes' not in _sys.path:
+        _sys.path.insert(0, '/home/joe/thecodes')
+    from optimus9.compute.swing_detect import find_pivots_confirmed
+    close = _np.asarray(LN['close'], float)
+    _, fired = cad3r_arms(LN, A, B, lab)
+    #   ONE ROW PER DISTINCT FIRING BAR AND SIDE. Several ws1r oob entry arms converge on one
+    #   firing bar and produce byte-identical rows; a per-signal stop read has one record per
+    #   signal. The 64-row-per-arm count is still in cad3r_scan, unchanged.
+    sigs = {}
+    for q, sd, E in fired:
+        sigs.setdefault((int(E['x4']), int(sd)), E)
+    keys = sorted(sigs)
+    out = ['| the read | value |', '|---|---|']
+    out.append(row('the firings read', '%d distinct firing bars, from %d arms that fired'
+                   % (len(keys), len(fired))))
+    out.append(row('the rule', "a SHORT's stop above the last confirmed swing HIGH, a LONG's "
+                               'below the last confirmed swing LOW - the one rule all sixteen '
+                               'sources agree on'))
+    out.append(row('the buffer', '0.00% - the sixteen sources give 0.5%..1.0%, $0.10..$0.50 or '
+                                 '0.5x..3.5x ATR and agree on nothing. HE HAS NOT RULED ONE'))
+    out.append(row('the pivot producer', '`find_pivots_confirmed(pxs, pct)` - eligible only when '
+                                         'its confirm bar is at or before the open bar'))
+    out.append(row('the price series', 'pxs = DEMA(close, 2) on the 5 s grid, his 1108 ruling'))
+    out.append(row('the stop walk', 'F2.stop_bar, unchanged, with the structural distance handed '
+                                    'in as the cap'))
+    out.append(row('the swing scales swept', ', '.join('%.1f%%' % x for x in pcts)
+                   + ' - THE SPREAD IS MINE. 0.9% is the repo default `cfg.swing_pct`'))
+
+    PV = {}
+    for pc in pcts:
+        PV[pc] = find_pivots_confirmed(close, float(pc))
+
+    def level(pc, opn, want):
+        """The last confirmed pivot of kind `want` knowable at `opn`. -> (bar, confirm, price)."""
+        best = None
+        for i, k, c in PV[pc]:
+            if int(c) > int(opn):
+                break
+            if k == want and int(i) <= int(opn):
+                best = (int(i), int(c), float(close[int(i)]))
+        return best
+
+    def score(opn, osd, capd):
+        sb = F2.stop_bar(LN, opn, int(B), osd, capd)
+        ex = int(sb) if sb is not None else int(B)
+        op = float(close[opn])
+        pp = osd * (_np.asarray(close[opn:ex + 1], float) - op) / op * 100.0
+        return dict(ex=ex, sb=sb, mae=abs(float(_np.nanmin(pp))), mfe=float(_np.nanmax(pp)),
+                    rel=-capd if sb is not None else osd * (float(close[ex]) - op) / op * 100.0)
+
+    DEF = 0.9 if 0.9 in pcts else pcts[0]
+    out += ['', '## the structural stop per signal, swing scale %.1f%%' % DEF, '']
+    out += head('the firing bar', 'the side it fired on', 'the OUTGOING trade', 'it opens at',
+                'the open price', 'the pivot bar', 'the pivot became knowable at', 'the pivot price',
+                'the stop distance %', 'the exit', 'the exit kind', 'held min', 'MAE %', 'MFE %',
+                'realised %')
+    agg = {pc: [] for pc in pcts}
+    for (x4, sd) in keys:
+        opn = int(x4) + 2
+        osd = -int(sd)
+        want = 'H' if osd < 0 else 'L'
+        if opn > int(B):
+            continue
+        op = float(close[opn])
+        for pc in pcts:
+            L = level(pc, opn, want)
+            if L is None:
+                agg[pc].append(None)
+                continue
+            d = osd * (L[2] - op) / op * -100.0      # the level sits adverse to the trade
+            if d <= 0:
+                agg[pc].append(None)
+                if pc == DEF:
+                    out.append(row(ln.U(x4), 'HIGH' if sd > 0 else 'LOW',
+                                   'SHORT' if osd < 0 else 'LONG', ln.U(opn), '%.6f' % op,
+                                   ln.U(L[0]), ln.U(L[1]), '%.6f' % L[2],
+                                   'the pivot is already favourable', '-', '-', '-', '-', '-', '-'))
+                continue
+            S = score(opn, osd, d)
+            agg[pc].append(dict(d=d, **S))
+            if pc == DEF:
+                out.append(row(ln.U(x4), 'HIGH' if sd > 0 else 'LOW',
+                               'SHORT' if osd < 0 else 'LONG', ln.U(opn), '%.6f' % op,
+                               ln.U(L[0]), ln.U(L[1]), '%.6f' % L[2], '%.3f' % d,
+                               ln.U(S['ex']),
+                               'STOP at %.3f%%' % d if S['sb'] is not None
+                               else 'still open at the span end',
+                               '%.1f' % ((S['ex'] - opn) * 5 / 60.0), '%.3f' % S['mae'],
+                               '%+.3f' % S['mfe'], '%+.3f' % S['rel']))
+
+    out += ['', '## the swing scale curve, every scale on the same signals', '']
+    out += head('the swing scale %', 'signals with a usable adverse pivot',
+                'signals whose last pivot is already FAVOURABLE, so there is no stop level',
+                'the stop distance %, median', 'the stop distance %, min', 'the stop distance %, max',
+                'that stopped', 'still open at the span end', 'MFE %, median', 'realised %, total',
+                'drag %', 'net %')
+    for pc in pcts:
+        g = [x for x in agg[pc] if x]
+        n = len(g)
+        if not n:
+            out.append(row('%.1f' % pc, 0, len(agg[pc]), *['-'] * 9))
+            continue
+        d = sorted(x['d'] for x in g)
+        rl = [x['rel'] for x in g]
+        out.append(row('%.1f' % pc, n, len(agg[pc]) - n,
+                       '%.3f' % float(_np.median(d)), '%.3f' % d[0], '%.3f' % d[-1],
+                       sum(1 for x in g if x['sb'] is not None),
+                       sum(1 for x in g if x['sb'] is None),
+                       '%+.3f' % float(_np.median([x['mfe'] for x in g])),
+                       '%+.3f' % sum(rl), '%.3f' % (-0.1975 * n),
+                       '%+.3f' % (sum(rl) - 0.1975 * n)))
+    return out
+
+
+def cad3r_arms(LN, A, B, lab):
+    """Every ws1r oob entry in the span, evaluated. -> (every arm, the ones that fired).
+
+    ONE PLACE FINDS THE FIRINGS. cad3r_scan scores them against his FDM_MAE_CAP stop and
+    pivstop_table scores the same list against a pivot-derived stop, so the two reports can never
+    disagree about which bars fired.
+    """
+    import numpy as _np
+    rows_, fired = [], []
+    for sd in (+1, -1):
+        r1 = _np.asarray(LN['CPR'][1] if lab != 'emerging' else LN['EMR'][1], float)
+        o1 = (r1 >= float(K.OOB_HI)) if sd > 0 else (r1 <= float(K.OOB_LO))
+        arms = [q for q in range(max(1, int(A)), int(B) + 1) if o1[q] and not o1[q - 1]]
+        for q in arms:
+            E = cad3r_eval(LN, sd, q, lab)
+            if E['oob1'] != q:
+                continue
+            rows_.append((q, sd, E))
+            if E['fires'] and int(A) <= int(E['x4']) <= int(B):
+                fired.append((q, sd, E))
+    return rows_, fired
+
+
 def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     """Every `fdm2-3r-cadence` arm in a span, both sides, with the outgoing trade scored. -> [str].
 
@@ -667,18 +828,7 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     out.append(row('the price series', 'pxs - DEMA(close, 2) on the 5 s grid. HIS 1108 ruling: '
                                        'the stop, MAE and MFE all read it. The raw kline high/low '
                                        'MFE is printed in the aggregate for comparison only'))
-    rows_, fired = [], []
-    for sd in (+1, -1):
-        r1 = _np.asarray(LN['CPR'][1] if lab != 'emerging' else LN['EMR'][1], float)
-        o1 = (r1 >= float(K.OOB_HI)) if sd > 0 else (r1 <= float(K.OOB_LO))
-        arms = [q for q in range(max(1, int(A)), int(B) + 1) if o1[q] and not o1[q - 1]]
-        for q in arms:
-            E = cad3r_eval(LN, sd, q, lab)
-            if E['oob1'] != q:
-                continue
-            rows_.append((q, sd, E))
-            if E['fires'] and int(A) <= int(E['x4']) <= int(B):
-                fired.append((q, sd, E))
+    rows_, fired = cad3r_arms(LN, A, B, lab)
     out += ['', '| the arm - ws1r oob entry | side | the verdict | the clause that killed it | '
             'the firing bar | branch | ws3r oob at | clause 3 ws3Mage | clause 3 ws3b | '
             "clause 5 ws1b's extreme |", '|---|---|---|---|---|---|---|---|---|---|']

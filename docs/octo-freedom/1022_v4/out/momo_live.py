@@ -154,6 +154,16 @@ def answer(q):
         if not late:
             out.append(R.row('none', '-', '-', '-', '-'))
         return out
+    if kind == 'pivstop':
+        #   HIS 1108: *"lets see if you can use your research to find a dynamic stop for each
+        #   signal"*. The structural stop off the last CONFIRMED price pivot, per c3r firing.
+        A, B = ln.K(str(q['from'])), ln.K(str(q['to']))
+        lab = str(q.get('read', 'ws3r emerging, rest closed-prev'))
+        pcs = tuple(float(x) for x in q.get('pcts', (0.3, 0.5, 0.9, 1.5, 2.0)))
+        out += ['', '# the structural stop per c3r signal, %s to %s'
+                % (str(q['from']), str(q['to'])), '']
+        out += R.pivstop_table(LN, A, B, lab, pcs)
+        return out
     if kind == 'c3rscan':
         #   HIS 1108: *"we'll need a list of the firings across 08-25 to 08-31 (with maemfe) to
         #   validate the change"* / *"run the 7 day anyway"*.

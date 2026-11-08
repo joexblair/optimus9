@@ -22,6 +22,26 @@ def find_pivots(price: np.ndarray, pct: float = 0.9) -> list:
     last pivot; a Low when it rises >= pct% above the running low. Index 0 is
     prepended (opposite kind to the first confirmed pivot) so the initial leg is
     represented; the final running extreme is appended as provisional.
+
+    THIS IS A WRAPPER over find_pivots_confirmed, which also returns each pivot's
+    confirmation bar. The walk lives in one place; this drops the third field so every
+    existing caller keeps the (index, kind) shape it was written against.
+    """
+    return [(i, k) for i, k, _ in find_pivots_confirmed(price, pct)]
+
+
+def find_pivots_confirmed(price: np.ndarray, pct: float = 0.9) -> list:
+    """
+    Return alternating pivots as a list of (index, kind, confirm_bar), kind in {'H','L'}.
+
+    `confirm_bar` is THE BAR THE PIVOT BECAME KNOWABLE: the first bar at which price has
+    retraced pct% from the running extreme. It is always later than `index` for a confirmed
+    pivot. Reading a pivot at any bar before its confirm_bar is lookahead.
+
+    For the prepended anchor and the trailing provisional extreme there is no retrace, so
+    confirm_bar == index. The provisional one is the running extreme, not a confirmed pivot;
+    a caller that needs confirmed structure only must drop the last entry when the walk did
+    not confirm it.
     """
     price = np.asarray(price, dtype=float)
     n = len(price)
@@ -48,24 +68,24 @@ def find_pivots(price: np.ndarray, pct: float = 0.9) -> list:
             if p < price[lo_i]:
                 lo_i = i
             if (price[hi_i] - p) / price[hi_i] >= thr:
-                pivots.append((int(hi_i), 'H')); trend = -1; ext_i = i
+                pivots.append((int(hi_i), 'H', int(i))); trend = -1; ext_i = i
             elif (p - price[lo_i]) / price[lo_i] >= thr:
-                pivots.append((int(lo_i), 'L')); trend = 1; ext_i = i
+                pivots.append((int(lo_i), 'L', int(i))); trend = 1; ext_i = i
         elif trend == 1:
             if p >= price[ext_i]:
                 ext_i = i
             elif (price[ext_i] - p) / price[ext_i] >= thr:
-                pivots.append((int(ext_i), 'H')); trend = -1; ext_i = i
+                pivots.append((int(ext_i), 'H', int(i))); trend = -1; ext_i = i
         else:
             if p <= price[ext_i]:
                 ext_i = i
             elif (p - price[ext_i]) / price[ext_i] >= thr:
-                pivots.append((int(ext_i), 'L')); trend = 1; ext_i = i
+                pivots.append((int(ext_i), 'L', int(i))); trend = 1; ext_i = i
 
     if trend != 0:
-        pivots.append((int(ext_i), 'H' if trend == 1 else 'L'))
+        pivots.append((int(ext_i), 'H' if trend == 1 else 'L', int(ext_i)))
     if pivots and pivots[0][0] != start:
-        pivots.insert(0, (start, 'L' if pivots[0][1] == 'H' else 'H'))   # anchor at the first FINITE bar, not 0
+        pivots.insert(0, (start, 'L' if pivots[0][1] == 'H' else 'H', start))   # anchor at the first FINITE bar, not 0
     return pivots
 
 
