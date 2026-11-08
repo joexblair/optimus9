@@ -1490,6 +1490,18 @@ FDM2_MOMO_FLOOR_RPRED = _knob('FDM2_MOMO_FLOOR_RPRED', 1, int)   # r-pred's floo
 #   predicted to breach. On the 50,457 cad-walk bars it fires on 9,470 = 18.8%.
 FDM2_MOMO_MED_MX = _knob('FDM2_MOMO_MED_MX', 7, int)         # the fast-versus-slow median
 FDM2_MOMO_MED_PIN = _knob('FDM2_MOMO_MED_PIN', 9, int)       # the pinned median
+FDM2_C3R_MAGE_ON = _knob('FDM2_C3R_MAGE_ON', 1, int)   # the ws1Mage wait before the rev-trade
+FDM2_C3R_MAGE_GATE = _knob('FDM2_C3R_MAGE_GATE', 'oob', str)   # the level ws1Mage must hold
+#   HIS 1108: *"apply the ws1Mage oob to the mech so that we are net positive"*, after the five-gate
+#   sweep over the same 25 trades on 2026-08-25 .. 2026-08-31:
+#       none      net -9.507%   wait 0.8 min median
+#       oob       net +2.673%   wait 24.0 min median   <- BANKED
+#       ib        net -7.319%   wait 2.0 min median
+#       ex-fence  net +2.771%   wait 23.2 min median
+#       in-fence  net -8.368%   wait 2.4 min median
+#   ex-fence nets 0.098 points higher and HE PICKED oob. 25 trades cannot separate them, and the
+#   choice is his, not the curve's.
+#   The rev-trade is placed at the lift-off STAMP, K.lift_stamp(b) = b + LIFT_WOB - 1.
 FDM2_C3R_DWELL = _knob('FDM2_C3R_DWELL', 36, int)   # ws3r's minimum oob dwell, 36 bars = 3 min
 #   HIS 1108: *"ws3r minimum dwell should be 3 minutes"*, after reading 2026-08-25 14:57,
 #   2026-08-25 19:01 and 2026-08-26 03:02 and saying *"these have a small ws3r exursion window"*.
@@ -1888,6 +1900,8 @@ RULED = {
     'FDM2_MOMO_FLOOR_RPRED': (1, "r-pred's FLOOR, not a median: at least one carrier predicted to breach. HIS option A, because r-pred's median is 0 on every carrier set and a median makes its vote a constant. Fires on 9,470 of 50,457 cad-walk bars = 18.8%"),
     'FDM2_MOMO_MED_MX': (7, 'the fast-versus-slow median, re-measured over all 50,457 cad-walk bars on ws4..ws10 emerging. UNCHANGED from the 27-line value. Fires on 49.3%'),
     'FDM2_MOMO_MED_PIN': (9, 'the pinned median over the same 50,457 bars, ws4..ws30 emerging. UNCHANGED. Fires on 51.0%'),
+    'FDM2_C3R_MAGE_ON': (1, 'the ws1Mage wait before c3r places its rev-trade. HIS 1108 *"apply the ws1Mage oob to the mech so that we are net positive"*'),
+    'FDM2_C3R_MAGE_GATE': ('oob', 'the level ws1Mage must hold at its reversal. HIS 1108 pick from the five-gate sweep: none -9.507%, oob +2.673%, ib -7.319%, ex-fence +2.771%, in-fence -8.368% net over the same 25 trades'),
     'FDM2_C3R_DWELL': (36, "ws3r's minimum oob dwell for fdm2-3r-cadence. HIS 1108 *\"ws3r minimum dwell should be 3 minutes\"* = 36 bars x 5 s = 180 s"),
     'FDM2_MOMO_XWIN': (12, 'the x-crosses-Mage window, HIS 1106 *"in the last minute"* = 12 bars = 60 s ending at the bar read. REPORT-ONLY, his rulings 3 to 5'),
     'FDM2_BLAST_SCAN_HI': (12, 'HIS 1105 VALUE "ws12" for the away run\'s top rung. The knob NAME is mine; 12 is wsf\'s ceiling, the same number FDM_RE_SCAN_HI carries'),
@@ -2325,7 +2339,8 @@ def table():
              'FDM2_MOMO_READ': 'mode', 'FDM2_MOMO_FLOOR_RPRED': 'lines',
              'FDM2_MOMO_MED_MX': 'lines', 'FDM2_MOMO_MED_PIN': 'lines',
              'FDM2_MOMO_MAX_TF': 'timeframe', 'FDM2_MOMO_XWIN': 'bars',
-             'FDM2_C3R_DWELL': 'bars'}
+             'FDM2_C3R_DWELL': 'bars', 'FDM2_C3R_MAGE_ON': 'flag',
+             'FDM2_C3R_MAGE_GATE': 'level'}
     for k, (v, why) in RULED.items():
         rows.append('| `%s` | %s | %s | %s | %s |'
                     % (k, here[k], units.get(k, '?'),

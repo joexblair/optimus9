@@ -828,6 +828,43 @@ def pivstop_table(LN, A, B, lab='ws3r emerging, rest closed-prev', gaps=(24, 48,
     return out
 
 
+def c3r_mage_gate(v, sd, gate, lo_f, hi_f):
+    """Does ws1Mage at `v` satisfy `gate` on side `sd`? -> bool.
+
+    HIS 1108 five gates. ONE reader, called by both the banked c3r scan and the gate sweep, so the
+    sweep's `oob` column and the banked default can never diverge.
+
+      none       no level requirement - his 1108 *"where ever it is on the board"*
+      oob        at or beyond OOB, %g high / %g low
+      ib         inside OOB
+      ex-fence   at or beyond the 20/80 fence
+      in-fence   inside the 20/80 fence
+    """ % (float(K.OOB_HI), float(K.OOB_LO))
+    if gate == 'none':
+        return True
+    if gate == 'oob':
+        return v >= float(K.OOB_HI) if sd > 0 else v <= float(K.OOB_LO)
+    if gate == 'ib':
+        return v < float(K.OOB_HI) if sd > 0 else v > float(K.OOB_LO)
+    if gate == 'ex-fence':
+        return v >= float(hi_f) if sd > 0 else v <= float(lo_f)
+    if gate == 'in-fence':
+        return v < float(hi_f) if sd > 0 else v > float(lo_f)
+    raise ValueError('the ws1Mage gate is none, oob, ib, ex-fence or in-fence')
+
+
+def c3r_mage_stamps(LN, sd):
+    """Every ws1Mage same-side lift-off STAMP on `sd`, ascending. -> int list.
+
+    HIS 1108 pick of producer: jig.lift_off on ws1Mage EMERGING, acted on at K.lift_stamp(b) =
+    b + LIFT_WOB - 1, because a lift-off is not knowable until its hold completes.
+    """
+    import numpy as _np
+    m1e = _np.asarray(LN['MGE'][1], float)
+    return sorted(K.lift_stamp(int(x)) for x in
+                  JIG.lift_off(m1e, int(sd), K.LIFT_PTS, K.gap_for(1), K.LIFT_TOL, K.LIFT_WOB))
+
+
 def c3rmage_table(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     """Open the c3r trade at the ws1Mage reversal instead of at the clause-4 bar. -> the markdown.
 
@@ -862,10 +899,7 @@ def c3rmage_table(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     RAW = {+1: _np.asarray(LN['phi'], float), -1: _np.asarray(LN['plo'], float)}
     CE = {sd2: sorted(int(e[0]) for e in F2.cadence_events(LN, sd2, int(A), int(B)))
           for sd2 in (+1, -1)}
-    LF = {}
-    for sd2 in (+1, -1):
-        LF[sd2] = sorted(K.lift_stamp(int(x)) for x in
-                         JIG.lift_off(m1e, sd2, K.LIFT_PTS, K.gap_for(1), K.LIFT_TOL, K.LIFT_WOB))
+    LF = {sd2: c3r_mage_stamps(LN, sd2) for sd2 in (+1, -1)}
     _, fired = cad3r_arms(LN, A, B, lab)
     sigs = {}
     for q, sd, E in fired:
@@ -875,15 +909,7 @@ def c3rmage_table(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     GATES = ('none', 'oob', 'ib', 'ex-fence', 'in-fence')
 
     def passes(gate, v, sd2):
-        if gate == 'none':
-            return True
-        if gate == 'oob':
-            return v >= float(K.OOB_HI) if sd2 > 0 else v <= float(K.OOB_LO)
-        if gate == 'ib':
-            return v < float(K.OOB_HI) if sd2 > 0 else v > float(K.OOB_LO)
-        if gate == 'ex-fence':
-            return v >= float(hi_f) if sd2 > 0 else v <= float(lo_f)
-        return v < float(hi_f) if sd2 > 0 else v > float(lo_f)
+        return c3r_mage_gate(v, int(sd2), gate, lo_f, hi_f)
 
     out = ['| the read | value |', '|---|---|']
     out.append(row('the firings read', '%d distinct firing bars, from %d ws1r oob entries that '
@@ -1080,6 +1106,14 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     out.append(row('the row unit', 'HIS 1108: *"consolidate and count the trade as a single '
                                    'evemt"*. ONE row per firing bar and side, however many ws1r '
                                    'oob entries walked into it'))
+    out.append(row('the ws1Mage wait', ('ON, gate `%s` - HIS 1108 *"apply the ws1Mage oob to the '
+                                        'mech so that we are net positive"*. The rev-trade is '
+                                        'placed at the first ws1Mage same-side lift-off STAMP at '
+                                        'or after the clause-4 bar where ws1Mage holds that level, '
+                                        'and the trade opens 2 bars later'
+                                        % str(K.FDM2_C3R_MAGE_GATE))
+                   if int(K.FDM2_C3R_MAGE_ON) else
+                   'OFF - the rev-trade is placed at the clause-4 bar'))
     out.append(row('the fallback', 'FDM_MAE_CAP %.2f%% - used only where the walk back finds no '
                                    'adverse extrema, which would otherwise leave the trade with '
                                    'no stop at all. MY CHOICE, stated' % float(K.FDM_MAE_CAP)))
@@ -1106,6 +1140,11 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     #   THE LEVEL SERIES PER SIDE. A HIGH-side c3r arm opens a SHORT whose stop sits above, so its
     #   level is a RAW kline HIGH; a LOW arm's LONG takes a raw LOW.
     RAW = {+1: phi, -1: plo}
+    #   HIS 1108 ws1Mage WAIT, BANKED AT GATE `oob`. The stamps are built once per side.
+    MW = int(K.FDM2_C3R_MAGE_ON)
+    MG = str(K.FDM2_C3R_MAGE_GATE)
+    LF = {sd2: c3r_mage_stamps(LN, sd2) for sd2 in (+1, -1)} if MW else None
+    m1e = _np.asarray(LN['MGE'][1], float)
     rows_, fired = cad3r_arms(LN, A, B, lab)
     out += ['', '| the arm - ws1r oob entry | side | the verdict | the clause that killed it | '
             'the firing bar | branch | ws3r oob at | clause 3 ws3Mage | clause 3 ws3b | '
@@ -1124,21 +1163,44 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
         out.append(row('none', '-', '-', '-', '-', '-', '-', '-', '-', '-'))
 
     out += ['', '## the firings, with the outgoing trade scored', '']
-    out += head('the firing bar', 'the side it fired on', 'branch', 'the OUTGOING trade',
-                'it opens at', 'the open price', 'the exit', 'the exit kind', 'held min',
-                'MAE %', 'MFE %', 'realised %', 'MFE over MAE')
+    out += head('the c3r firing bar', 'the side it fired on', 'branch',
+                'the ws1Mage %s reversal' % (str(K.FDM2_C3R_MAGE_GATE)
+                                             if int(K.FDM2_C3R_MAGE_ON) else 'wait is OFF'),
+                'the wait, min', 'the OUTGOING trade', 'it opens at', 'the open price', 'the exit',
+                'the exit kind', 'held min', 'MAE %', 'MFE %', 'realised %', 'MFE over MAE')
     mae_l, mfe_l, mfer_l, rel_l, stop_l, cap_l, how_l = [], [], [], [], [], [], []
+    out_rows_skipped = []
     #   HIS 1108 *"consolidate and count the trade as a single evemt"*. Several ws1r oob entries
     #   converge on one firing bar and used to print byte-identical rows; the trade is one trade.
     _seen = {}
     for q, sd, E in sorted(fired):
         _seen.setdefault((int(E['x4']), int(sd)), (q, sd, E))
+    waited, nomage = [], 0
     for q, sd, E in [v for _, v in sorted(_seen.items())]:
         sig = int(E['x4'])
+        #   THE ws1Mage WAIT. His 1108 ruling moves the rev-trade off the clause-4 bar and onto the
+        #   first same-side lift-off stamp at or after it where ws1Mage holds the gate. Reading the
+        #   stamp means every bar the decision rests on is at or before that stamp.
+        if MW:
+            land = None
+            for st in LF[int(sd)]:
+                if st < sig or st > int(B):
+                    continue
+                if c3r_mage_gate(float(m1e[st]), int(sd), MG, lo_f, hi_f):
+                    land = int(st)
+                    break
+            if land is None:
+                nomage += 1
+                out_rows_skipped.append((sig, sd))
+                continue
+            waited.append((land - sig) * 5 / 60.0)
+            sig = land
         opn = sig + 2
         osd = -sd                     # the outgoing trade hunts the opposite side
         if opn > int(B):
-            out.append(row(ln.U(sig), 'HIGH' if sd > 0 else 'LOW', E['branch'],
+            out.append(row(ln.U(int(E['x4'])), 'HIGH' if sd > 0 else 'LOW', E['branch'],
+                           ln.U(sig) if MW else '-',
+                           '%.1f' % ((sig - int(E['x4'])) * 5 / 60.0) if MW else '-',
                            'SHORT' if osd < 0 else 'LONG', 'past the span', '-', '-', '-', '-',
                            '-', '-', '-', '-'))
             continue
@@ -1188,13 +1250,19 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
         stop_l.append(how.startswith('STOP'))
         how_l.append(how)
         cap_l.append(cap)
-        out.append(row(ln.U(sig), 'HIGH' if sd > 0 else 'LOW', E['branch'],
+        out.append(row(ln.U(int(E['x4'])), 'HIGH' if sd > 0 else 'LOW', E['branch'],
+                       ln.U(sig) if MW else '-',
+                       '%.1f' % ((sig - int(E['x4'])) * 5 / 60.0) if MW else '-',
                        'SHORT' if osd < 0 else 'LONG', ln.U(opn), '%.6f' % op, ln.U(ex),
                        how,
                        '%.1f' % ((ex - opn) * 5 / 60.0), '%.3f' % mae, '%+.3f' % mfe,
                        '%+.3f' % rel, '%.2f' % (mfe / mae) if mae > 0 else 'nan'))
+    for sig0, sd0 in out_rows_skipped:
+        out.append(row(ln.U(int(sig0)), 'HIGH' if sd0 > 0 else 'LOW', '-',
+                       'no ws1Mage %s reversal before the span ends'
+                       % str(K.FDM2_C3R_MAGE_GATE), *['-'] * 11))
     if not fired:
-        out.append(row(*(['none'] + ['-'] * 12)))
+        out.append(row(*(['none'] + ['-'] * 14)))
     else:
         out += ['', '| the aggregate, every number carrying HIS DYNAMIC stop - the walk back to '
                 'look forward at gap %d bars = %d min, FDM_MAE_CAP %.2f%% only as the fallback '
@@ -1213,6 +1281,13 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
                        '%.0f = %.0f s' % (float(_np.median([E['dwell'] for _, _, E in fired])),
                                           float(_np.median([E['dwell'] for _, _, E in fired])) * 5)
                        if fired else '-'))
+        if MW:
+            out.append(row('the ws1Mage %s wait, min - median' % MG,
+                           '%.1f' % float(_np.median(waited)) if waited else '-'))
+            out.append(row('the ws1Mage %s wait, min - max' % MG,
+                           '%.1f' % max(waited) if waited else '-'))
+            out.append(row('signals with no ws1Mage %s reversal before the span ends' % MG,
+                           nomage))
         out.append(row('outgoing trades scored', len(mae_l)))
         out.append(row('that stopped', sum(1 for r in stop_l if r)))
         out.append(row('that closed at a target-side cadence event',

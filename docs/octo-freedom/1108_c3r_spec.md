@@ -53,6 +53,8 @@ So clause 6 is no longer the placement bar. Clause 6 arms a walk; the walk place
 | any level requirement on it | NONE — *"where ever it is on the board"*. "board" is the full range, never a region | his words, and his 1016 ruling on the word board |
 | which producer reads it | `jig.lift_off(ws1Mage emerging, side, LIFT_PTS, gap_for(1), LIFT_TOL, LIFT_WOB)` | his 1108 pick between two candidates. It takes the side as an input, so same-side is direct, and c3r branch B already reads this exact stamp |
 | what ends the wait with no rev-trade | **a race: the MAE 1.1 stop, or the next cadence event — first of** | his 1108 words: *"race mae stop and next cadence event (first of)"* |
+| the LEVEL ws1Mage must hold at its reversal | **oob**, 85 high / 15 low | his 1108 *"apply the ws1Mage oob to the mech so that we are net positive"*, after the five-gate sweep |
+| the knobs | `FDM2_C3R_MAGE_ON` 1, `FDM2_C3R_MAGE_GATE` 'oob' | banked 1108 |
 
 ### decided and stated, not his
 
@@ -69,3 +71,37 @@ So clause 6 is no longer the placement bar. Clause 6 arms a walk; the walk place
 |---|---|
 | a tie | the lift-off stamp and a cadence event land on the SAME bar. Which wins? His banked tie convention is *"A TIE GOES TO THE STOP"*, but that was the price stop against a signal, not two signals |
 | the cadence event's side | does ANY cadence event end the wait, or only one on the same side as the c3r arm? |
+
+## HIS 1108 LATER RULINGS — the stop, the exit, the row unit
+
+| what | the ruling | his words |
+|---|---|---|
+| ws3r minimum dwell | 36 bars = 180 s, as `FDM2_C3R_DWELL` | *"ws3r minimum dwell should be 3 minutes"* |
+| the exit | the first TARGET-SIDE cadence event after the open, or the stop, first of | *"the next opposite-side cadence event. it's the best option we have because the c3r trade events are not continuous - they exist to fill the main chain when the walk has no other way to reverse a trade"* |
+| which cadence side closes it | the target side only | *"the cadence must be target-side (example c3r opens a high SHORT, the only thing that can close it is a target (low) side cadence or a stop)"* |
+| the stop LEVEL | a RAW kline high or low, found by `jig.mage_cascade_bar` walking back to look forward | *"we set the stop level using raw high/low"* |
+| the stop TRIGGER | pxs reaching that absolute price, via `F2.stop_bar_at` | *"we use pxs to match the stop level ... pxs smoothes out the bumps, so small spikes near the stop won't appear to pxs, therefore the stop is avoided - only a real price push can trigger the stop"* |
+| the row unit | one row per trade event | *"consolidate and count the trade as a single evemt"* |
+| the 94-day baseline | not run | *"no 94 day baselines yet - there's a lot of things to make right before we spend cost on it"* |
+| the firing population | his, by eyeball | *"the firing population is harder to gauge, for the reasons I called out - I'll have to do it by eyeball"* |
+
+### the five-gate sweep that set `FDM2_C3R_MAGE_GATE`
+
+Same 25 trades, 2026-08-25 .. 2026-08-31, raw-level stop and the target-side cadence exit.
+
+| the ws1Mage gate | the wait, median | MAE %, median | realised %, total | net % | net % per trade |
+|---|---|---|---|---|---|
+| none | 0.8 min | 0.221 | -4.569 | -9.507 | -0.3803 |
+| oob | 24.0 min | 0.140 | +7.610 | **+2.673** | +0.1069 |
+| ib | 2.0 min | 0.321 | -2.382 | -7.319 | -0.2928 |
+| ex-fence | 23.2 min | 0.131 | +7.708 | +2.771 | +0.1108 |
+| in-fence | 2.4 min | 0.375 | -3.430 | -8.368 | -0.3347 |
+
+`ex-fence` nets 0.098 points higher. HE PICKED `oob`. 25 trades cannot separate them.
+
+### OPEN after the ws1Mage wait landed
+
+| the gap | the detail |
+|---|---|
+| two c3r firings can land on ONE ws1Mage reversal | 2026-08-30 20:27:05 and 2026-08-30 21:39:05 both wait into 2026-08-30 22:02:35 and open the same trade. His consolidation was on the c3r firing bar; the collision is now at the landing bar. Counting it once: 24 trades, net +0.831%, +0.0346% per trade |
+| the walk back can place the level AT the open bar | 3 of 20 stopped trades, and 12 of 20 within 12 bars = 60 s. The tightest stop is 0.005%. His buffer ruling is still open and this is where it bites |
