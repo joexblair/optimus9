@@ -177,7 +177,7 @@ def table(rows):
     return [fmt(rows[0]), '|' + '|'.join('-' * (x + 2) for x in w) + '|'] + [fmt(r) for r in rows[1:]]
 
 
-def report(LN, side, ev, n_of):
+def report(LN, side, ev, n_of, s0=None):
     """THE xcross validator report for one cadence event: its banner and its r table. -> [str].
 
     HIS 1108: *"bank the latest version, the one that has ws5x as a static line for each table"* - every
@@ -196,7 +196,7 @@ def report(LN, side, ev, n_of):
     #   dynamic TF selection anywhere: 4 rows for each x line in XCV_TFS, banked '4,5'. The highest
     #   ex-20/80 towards line is no longer read, so his item 2 and item 3 are off the report path.
     for xtf in XCV_TFS:
-        rows, why = r_block(LN, side, ev, int(xtf))
+        rows, why = r_block(LN, side, ev, int(xtf), s0)
         if rows is None:
             notes.append(why)
             continue
@@ -280,14 +280,22 @@ def race_bound(LN, ev):
     return cads[i] if i < len(cads) else len(LN['close']) - 1
 
 
-def r_block(LN, side, ev, xtf):
+def r_block(LN, side, ev, xtf, s0=None):
     """ws30r..ws10r at ws{xtf}x's extremum and cross after the cadence event. -> (rows, None) | (None, why).
 
     3 THE x-CROSS: x_race on ws{xtf} from the cadence event. 4 THE REPORT ROWS: the walk back to look forward
     from that cross, on the cadence side, then the r values, EMERGING, at both bars.
     """
     bnd = race_bound(LN, ev)
-    r = F2.x_race(LN, xtf, side, ev, bnd)
+    #   HIS 1108: *"accept an x-cross that fires inside a cadence window"*. The window is ws1b's
+    #   own oob excursion, from `s0` to the cadence event bar, and F2.cadence_events hands `s0`
+    #   back. The race therefore starts at the EXCURSION OPEN, not at the event bar + 1, so a
+    #   cross that fired while ws1b was still oob is this event's cross.
+    #   CAUSAL: the report is produced at the cadence event, and every bar from s0 to the event is
+    #   at or before it. A cross inside the window whose CONFIRM lands after the event is still
+    #   only knowable at that confirm bar, which x_race already enforces with its own hold.
+    frm = (int(s0) - 1) if s0 is not None else int(ev)
+    r = F2.x_race(LN, xtf, side, frm, bnd)
     if r is None:
         #   HIS 1108 race bound is the next cadence event, so the message names THAT bar. It read
         #   "before the tape ends" after the bound moved, which is a label describing a rule the
@@ -299,8 +307,9 @@ def r_block(LN, side, ev, xtf):
         end = len(LN['close']) - 1
         bnd_txt = ('the next cadence event %s' % ln.U(int(bnd)) if int(bnd) != int(end)
                    else 'the tape ends')
-        return None, ('ws%dx has no cross before %s. %s'
-                      % (xtf, bnd_txt, nearest_cross_note(LN, xtf, side, ev)))
+        return None, ('ws%dx has no cross from the cadence window open %s to %s. %s'
+                      % (xtf, ln.U(int(s0)) if s0 is not None else ln.U(int(ev)), bnd_txt,
+                         nearest_cross_note(LN, xtf, side, ev)))
     cf, which, c = r
     X = F2.x_of(LN, xtf)
     wb = JIG.mage_cascade_bar(X, c, side, mode='extrema', gap=JIG.MC_GAP)
@@ -346,6 +355,9 @@ def legend(LN, day, side, n):
             ('the scan range - HIS 1108', 'no longer read. The report takes its x lines from XCV_TFS'),
             ('duplicates - HIS 1108 RULING', 'the existing no-duplicate-at-one-bar rule applies. Two cadence '
              'events whose x cross lands on one bar are one event'),
+            ('the race start - HIS 1108 RULING', 'the CADENCE WINDOW OPEN, which is ws1b\'s own oob '
+             'excursion start - his *"accept an x-cross that fires inside a cadence window"*. Not the cadence '
+             'event bar, so a cross that fired while ws1b was still oob belongs to this event'),
             ('the race bound - HIS 1108 RULING', 'the next cadence event on EITHER side, strictly after this '
              'one. His *"the next {any_}cadence"*. The tape end only when no cadence event follows'),
             ('the walk back - HIS 1108 RULING', 'UNBOUNDED. The extremum may sit BEFORE the cadence event and '
@@ -360,8 +372,8 @@ def main(day):
     for side in (+1, -1):
         evs = F2.cadence_events(LN, side, A, B)
         out = legend(LN, day, side, len(evs))
-        for i, (ev, _, _) in enumerate(evs):
-            out += report(LN, side, int(ev), '%d of %d' % (i + 1, len(evs)))
+        for i, (ev, s0, _) in enumerate(evs):
+            out += report(LN, side, int(ev), '%d of %d' % (i + 1, len(evs)), int(s0))
         p = os.path.join(OUT, 'sandbox_xcross_%s_%s.txt' % (day, SIDE_NAME[side]))
         with open(p, 'w') as fh:
             fh.write('\n'.join(out) + '\n')
