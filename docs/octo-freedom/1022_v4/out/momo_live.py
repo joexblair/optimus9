@@ -165,6 +165,41 @@ def answer(q):
                 % (str(q['from']), str(q['to'])), '']
         out += R.c3rmage_table(LN, A, B, lab)
         return out
+    if kind == 'xcvdiff':
+        #   HIS 1108: *"show the 'xcross validator report · HIGH' report that created the up
+        #   verdict at 0551. show also the report at 0535"*. The 0535 block is in the report FILE;
+        #   the 0551 block is a cad-walked bar and the file has no report for it, so this prints
+        #   the same four rows for any (extremum, read bar) pair.
+        import numpy as _np
+        tf = int(q.get('tf', 5))
+        ext = ln.K(str(q['ext']))
+        at = ln.K(str(q['at']))
+        lab = str(q.get('label', 'cross'))
+        TFS = list(range(30, 9, -1))
+        EM = LN['EMR']
+        out += ['', '# ws%dx, the extremum %s against %s (%s)'
+                % (tf, ln.U(ext), ln.U(at), lab), '']
+        hdr = ['line · timestamp'] + ['ws%d' % t for t in TFS]
+        out += ['| ' + ' | '.join(hdr) + ' |', '|' + '---|' * len(hdr)]
+        e = ['%.2f' % float(EM[t][ext]) for t in TFS]
+        a = ['%.2f' % float(EM[t][at]) for t in TFS]
+        d = [float(EM[t][at]) - float(EM[t][ext]) for t in TFS]
+        out.append('| r · %s (ws%dx high extremum) | %s |' % (ln.U(ext), tf, ' | '.join(e)))
+        out.append('| r · %s (%s) | %s |' % (ln.U(at), lab, ' | '.join(a)))
+        out.append('| r · ws%dx diff (%s - extremum) | %s |'
+                   % (tf, lab, ' | '.join('%+.2f' % x for x in d)))
+        out.append('| r · ws%dx direction of the diff | %s |'
+                   % (tf, ' | '.join('up' if x > 0 else 'down' if x < 0 else 'flat' for x in d)))
+        L4 = d[:4]
+        u = sum(1 for x in L4 if x > 0)
+        dn = sum(1 for x in L4 if x < 0)
+        out += ['']
+        out.append(R.row('the 4 lefthand TFs, ws30 ws29 ws28 ws27',
+                         ' '.join('up' if x > 0 else 'down' if x < 0 else 'flat' for x in L4)))
+        out.append(R.row('ups / downs / flats of those 4', '%d / %d / %d' % (u, dn, 4 - u - dn)))
+        out.append(R.row('the 3-of-4 read',
+                         'up' if u >= 3 else 'down' if dn >= 3 else 'none'))
+        return out
     if kind == 'xcv':
         #   HIS 1108 `fdm2-xcv` TABLE, with his two new columns. His spec: one x line
         #   `ws{knob:5}x`, the race started at the cadence WINDOW OPEN, bounded by the next cadence
