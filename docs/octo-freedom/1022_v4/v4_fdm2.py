@@ -1301,15 +1301,17 @@ def saviour(LN, side, opn):
 def stop_bar(LN, opn, ex, side, cap):
     """The first bar the adverse excursion reaches `cap`. -> bar or None. Walked, not inferred.
 
-    INTRA-BAR TIES GO TO THE ADVERSE SIDE. Inside one 5 s bar the high and the low are both there
-    and their order is unknown, so a bar that breaches the cap is the stop even if it also moved
-    favourably. That convention is MINE, carried unchanged from v4_chain.stop_bar, and it is the
-    conservative one.
+    HIS 1108: *"the mae1.1 stops need to be on pxs"*. Both sides of the comparison are now
+    `LN['close']` - pxs, the DEMA(close, 2) series the tape is built on. Before this ruling the
+    open price came off pxs and the adverse excursion came off the raw kline high/low, so a 1.10%
+    breach was measured between two different price series.
+
+    THERE IS NO INTRA-BAR TIE TO SETTLE ANY MORE. pxs holds one value per 5 s bar, so the first
+    bar whose pxs value breaches the cap is the stop, with no high/low ordering to assume.
     """
     o = float(LN['close'][int(opn)])
-    adv = np.asarray(LN['plo'][int(opn):int(ex) + 1], float) if side > 0 \
-        else np.asarray(LN['phi'][int(opn):int(ex) + 1], float)
-    pct = int(side) * (adv - o) / o * 100.0
+    px = np.asarray(LN['close'][int(opn):int(ex) + 1], float)
+    pct = int(side) * (px - o) / o * 100.0
     hit = np.flatnonzero(pct <= -float(cap))
     return int(opn) + int(hit[0]) if len(hit) else None
 

@@ -664,6 +664,9 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     out.append(row('MAE/MFE basis', 'THE OUTGOING trade the firing would open - the opposite '
                                     'direction, from the firing bar + 2 bars to its FDM_MAE_CAP '
                                     '%.2f%% stop. MY CHOICE, he did not rule it' % float(K.FDM_MAE_CAP)))
+    out.append(row('the price series', 'pxs - DEMA(close, 2) on the 5 s grid. HIS 1108 ruling: '
+                                       'the stop, MAE and MFE all read it. The raw kline high/low '
+                                       'MFE is printed in the aggregate for comparison only'))
     rows_, fired = [], []
     for sd in (+1, -1):
         r1 = _np.asarray(LN['CPR'][1] if lab != 'emerging' else LN['EMR'][1], float)
@@ -696,7 +699,7 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     out += head('the firing bar', 'the side it fired on', 'branch', 'the OUTGOING trade',
                 'it opens at', 'the open price', 'the exit', 'the exit kind', 'held min',
                 'MAE %', 'MFE %', 'realised %', 'MFE over MAE')
-    mae_l, mfe_l, rel_l = [], [], []
+    mae_l, mfe_l, mfer_l, rel_l = [], [], [], []
     for q, sd, E in sorted(fired):
         sig = int(E['x4'])
         opn = sig + 2
@@ -710,15 +713,20 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
         sb = F2.stop_bar(LN, opn, int(B), osd, cap)
         ex = int(sb) if sb is not None else int(B)
         op = float(close[opn])
-        adv = (plo if osd > 0 else phi)[opn:ex + 1]
+        #   HIS 1108: *"the mae1.1 stops need to be on pxs"*. MAE and MFE read pxs, the same
+        #   series the stop now fires on, so the three columns describe one price series. The raw
+        #   kline high/low MFE is carried alongside for the aggregate only - he has not ruled which
+        #   series MFE belongs on, and printing both leaves that ruling his.
+        pxw = _np.asarray(close[opn:ex + 1], float)
+        pp = osd * (pxw - op) / op * 100.0
+        mae = abs(float(_np.nanmin(pp)))      # UNCLAMPED: the old min(.., cap) hid a gap through
+        mfe = float(_np.nanmax(pp))           #            the stop, which is the number he needs
         fav = (phi if osd > 0 else plo)[opn:ex + 1]
-        ap = osd * (adv - op) / op * 100.0
-        fp = osd * (fav - op) / op * 100.0
-        mae = min(abs(float(_np.nanmin(ap))), cap)
-        mfe = float(_np.nanmax(fp))
+        mfe_raw = float(_np.nanmax(osd * (fav - op) / op * 100.0))
         rel = -cap if sb is not None else osd * (float(close[ex]) - op) / op * 100.0
         mae_l.append(mae)
         mfe_l.append(mfe)
+        mfer_l.append(mfe_raw)
         rel_l.append(rel)
         out.append(row(ln.U(sig), 'HIGH' if sd > 0 else 'LOW', E['branch'],
                        'SHORT' if osd < 0 else 'LONG', ln.U(opn), '%.6f' % op, ln.U(ex),
@@ -741,6 +749,10 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
         out.append(row('MAE %, median', '%.3f' % float(_np.median(mae_l))))
         out.append(row('MFE %, median', '%+.3f' % float(_np.median(mfe_l))))
         out.append(row('MFE %, total', '%+.3f' % sum(mfe_l)))
+        out.append(row('MFE %, median - on the RAW kline high/low instead of pxs',
+                       '%+.3f' % float(_np.median(mfer_l))))
+        out.append(row('MFE %, total - on the RAW kline high/low instead of pxs',
+                       '%+.3f' % sum(mfer_l)))
         out.append(row('realised %, median', '%+.3f' % float(_np.median(rel_l))))
         out.append(row('realised %, total', '%+.3f' % sum(rel_l)))
         out.append(row('MFE over MAE, median',
