@@ -242,7 +242,36 @@ roll moves the r line by exactly 100 / 7 = 14.2857. That is the step seen on 3 l
 | the build cost | *"the cost is accepted"* |
 | the name | `fdm2-rline-enhance`, HIS NAME 1108. It replaced his placeholder `fdm2-name-me-joe` the same day |
 
-NOTHING IS BUILT. The gate below is open.
+HIS GOAL, 1108: *"the goal of this work is to improve the verdict timestamps in fdm2-xcv"*. Five
+of the six open rules fall out of it, the sixth falls out of his standing no-cap rule, and the goal
+exposes one rule that was not on the list at all.
+
+| the rule | what his goal settles | the reasoning |
+|---|---|---|
+| what counts as frozen | THE PIN CONDITION - `rsi_d` at or outside the window of the 7 closed RSI values. NOT "the r value is unchanged from the previous bar" | the goal needs a DIRECTION to put in place of a `flat` token. Only the pin condition carries one: at the window max the RSI is still rising, at the min still falling. A repeated value carries nothing. A repeat also happens on 29.6% to 38.9% of all bars, which would substitute far more often than the goal asks |
+| what the reader returns | A DIRECTION TOKEN per line per bar - `up` or `down` - in the same vocabulary the `3of4` read consumes, with the pinned state and the pin side beside it as the evidence | the `3of4` read counts one token per line. Only a token can move a verdict timestamp. An event at the pin's start bar cannot be read at an arbitrary later bar |
+| where the direction is measured from | THE CALLER'S ANCHOR - the same bar the diff uses, which for the cad walk is the x-cross under his 1108 anchor ruling | a substituted token sits beside three tokens measured anchor-to-bar. Measuring it from the pin's start or the candle open would make it mean something different from its neighbours |
+| which lines | ws30, ws29, ws28, ws27 - the 4 left TFs, because that is the read his goal names. The producer takes ANY tf; the caller picks the set, so no knob is needed yet | the goal names `fdm2-xcv`, whose read is those four |
+| what it says when not frozen | A DISTINCT NOT-PINNED STATE, and the caller then uses the r line's own direction unchanged | an unpinned r line is tracking the RSI, so its own token is already the truth. Substituting there would change verdicts his goal did not ask to change |
+| a minimum freeze length | NONE. Not derived from the goal - it follows his standing no-cap rule, and a minimum could only DELAY a substitution, which is the opposite of the goal | the measured flats ran 790 s to 1740 s; no length is applied |
+
+THE RULE THE GOAL EXPOSED, not on the earlier list:
+
+| the rule | what his goal settles |
+|---|---|
+| WHEN to substitute | ONLY when the r line's own token is `flat`. Pinned and `flat` are NOT the same thing - a line that moved away from the anchor and then pinned already reads `up` or `down`, and there is nothing in it to improve. The substitution is gated on the token, not on the pin alone |
+
+CAUSAL BY CONSTRUCTION. `rsi_d` is a Wilder one-step update from the last CLOSED bar's state onto
+the current developing bar's close, and `lb_rsi_min` / `lb_rsi_max` are the min and max of closed
+RSI values ending before the forming candle. Every input is at or before the bar being read.
+
+STILL OPEN - NOT DERIVABLE FROM THE GOAL:
+
+| the gap | the question |
+|---|---|
+| a verdict built only from substituted tokens | may 3 substituted tokens carry a verdict on their own, or must at least one come from an unpinned r line |
+
+NOTHING IS BUILT.
 
 NOT A DOCUMENTED PRACTICE. The external reading confirms StochRSI pins at the extremes and that an
 extreme is a condition rather than a trigger, but no source recommends reading the plain RSI while
