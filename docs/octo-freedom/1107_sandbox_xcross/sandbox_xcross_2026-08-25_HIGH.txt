@@ -1,23 +1,23 @@
 # xcross validator report, 2026-08-25, HIGH side
 
-| the read                           | value                                                                                                                                                                          |
-|------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| the day                            | 2026-08-25                                                                                                                                                                     |
-| the cadence side                   | HIGH                                                                                                                                                                           |
-| cadence events on the day          | 15                                                                                                                                                                             |
-| the tape                           | 1632960 bars, 2026-07-02 12:00:00 .. 2026-10-04 23:59:55                                                                                                                       |
-| the knob hash                      | 5213aa4a6628, off the bank: none                                                                                                                                               |
-| the cadence                        | the BUILT version: ws1b oob excursion, nestle, ws3Mage ex-25/75 (rescue on)                                                                                                    |
-| the x lines                        | HIS 1108: ws4x, ws5x, both FIXED. No dynamic TF selection - the highest ex-20/80 towards line is no longer read, so his items 2 and 3 are off the report path                  |
-| the x-cross                        | the first of ws{TF}x to ib, to ws{TF}r, to ws{TF}Mage that holds 24 bars = 120 s, counting the cross bar. ws{TF}x is emerging, its r and Mage racers are closed-prev, as built |
-| the extremum                       | jig.mage_cascade_bar, walk back to look forward in 48-bar = 240 s steps from the cross                                                                                         |
-| the report table                   | 8 rows per cadence event: 4 for each of ws4x, ws5x. ws30..ws10 r, EMERGING, at that x line's extremum and at its cross. diff = cross - extremum, flat = exactly 0              |
-| the r line                         | ws{TF}r, the stored r: StochRSI 7|5|8|close (Joe notation k_len|rsi|stc|src)                                                                                                   |
-| towards - HIS 1108 RULING          | step 1's trajectory reader with no anchor                                                                                                                                      |
-| the scan range - HIS 1108          | no longer read. The report takes its x lines from XCV_TFS                                                                                                                      |
-| duplicates - HIS 1108 RULING       | the existing no-duplicate-at-one-bar rule applies. Two cadence events whose x cross lands on one bar are one event                                                             |
-| MINE: the race bound               | the tape end. The built fdm2 leg walk would stop at the next cadence event                                                                                                     |
-| MINE: the walk back is not bounded | the extremum may sit BEFORE the cadence event, and on 2026-08-25 it does on 11 of 28 events. Bounding it at the event is the alternative                                       |
+| the read                         | value                                                                                                                                                                           |
+|----------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| the day                          | 2026-08-25                                                                                                                                                                      |
+| the cadence side                 | HIGH                                                                                                                                                                            |
+| cadence events on the day        | 15                                                                                                                                                                              |
+| the tape                         | 1632960 bars, 2026-07-02 12:00:00 .. 2026-10-04 23:59:55                                                                                                                        |
+| the knob hash                    | 5213aa4a6628, off the bank: none                                                                                                                                                |
+| the cadence                      | the BUILT version: ws1b oob excursion, nestle, ws3Mage ex-25/75 (rescue on)                                                                                                     |
+| the x lines                      | HIS 1108: ws4x, ws5x, both FIXED. No dynamic TF selection - the highest ex-20/80 towards line is no longer read, so his items 2 and 3 are off the report path                   |
+| the x-cross                      | the first of ws{TF}x to ib, to ws{TF}r, to ws{TF}Mage that holds 24 bars = 120 s, counting the cross bar. ws{TF}x is emerging, its r and Mage racers are closed-prev, as built  |
+| the extremum                     | jig.mage_cascade_bar, walk back to look forward in 48-bar = 240 s steps from the cross                                                                                          |
+| the report table                 | 8 rows per cadence event: 4 for each of ws4x, ws5x. ws30..ws10 r, EMERGING, at that x line's extremum and at its cross. diff = cross - extremum, flat = exactly 0               |
+| the r line                       | ws{TF}r, the stored r: StochRSI 7|5|8|close (Joe notation k_len|rsi|stc|src)                                                                                                    |
+| towards - HIS 1108 RULING        | step 1's trajectory reader with no anchor                                                                                                                                       |
+| the scan range - HIS 1108        | no longer read. The report takes its x lines from XCV_TFS                                                                                                                       |
+| duplicates - HIS 1108 RULING     | the existing no-duplicate-at-one-bar rule applies. Two cadence events whose x cross lands on one bar are one event                                                              |
+| the race bound - HIS 1108 RULING | the next cadence event on EITHER side, strictly after this one. His *"the next {any_}cadence"*. The tape end only when no cadence event follows                                 |
+| the walk back - HIS 1108 RULING  | UNBOUNDED. The extremum may sit BEFORE the cadence event and on 2026-08-25 it does on 29 of the 56 extremum rows - his *"finding an extremum before the cadence event is fine"* |
 
 ====================================================================================================
 xcross validator report · HIGH cadence event 2026-08-25 00:52:00  (1 of 15)
@@ -70,14 +70,11 @@ xcross validator report · HIGH cadence event 2026-08-25 05:16:00  (4 of 15)
 
 | line · timestamp                             | ws30  | ws29  | ws28  | ws27  | ws26  | ws25  | ws24  | ws23  | ws22  | ws21  | ws20  | ws19  | ws18  | ws17  | ws16  | ws15  | ws14  | ws13   | ws12   | ws11   | ws10   |
 |----------------------------------------------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|--------|--------|--------|--------|
-| r · 2026-08-25 05:31:15 (ws4x high extremum) | 66.17 | 64.70 | 58.52 | 55.03 | 65.93 | 61.82 | 48.17 | 73.04 | 45.88 | 47.41 | 43.01 | 52.86 | 50.12 | 50.01 | 41.33 | 48.14 | 44.68 | 53.89  | 49.19  | 59.22  | 72.77  |
-| r · 2026-08-25 05:36:00 (ws4x cross)         | 66.17 | 64.70 | 61.32 | 55.03 | 65.93 | 61.82 | 55.30 | 73.04 | 48.53 | 50.30 | 43.63 | 52.86 | 50.12 | 50.01 | 50.40 | 48.14 | 53.81 | 53.89  | 62.76  | 59.22  | 72.77  |
-| r · ws4x diff (cross - extremum)             | +0.00 | +0.00 | +2.80 | +0.00 | +0.00 | +0.00 | +7.13 | +0.00 | +2.66 | +2.89 | +0.62 | +0.00 | +0.00 | +0.00 | +9.06 | +0.00 | +9.13 | +0.00  | +13.57 | +0.00  | +0.00  |
-| r · ws4x direction of the diff               | flat  | flat  | up    | flat  | flat  | flat  | up    | flat  | up    | up    | up    | flat  | flat  | flat  | up    | flat  | up    | flat   | up     | flat   | flat   |
 | r · 2026-08-25 05:09:50 (ws5x high extremum) | 62.41 | 58.76 | 53.95 | 50.66 | 61.33 | 57.37 | 44.18 | 71.08 | 41.00 | 42.43 | 41.78 | 52.58 | 45.59 | 47.77 | 41.55 | 38.06 | 30.29 | 26.45  | 20.60  | 32.37  | 31.26  |
 | r · 2026-08-25 05:20:55 (ws5x cross)         | 62.70 | 64.70 | 54.23 | 50.91 | 63.64 | 57.70 | 44.64 | 71.46 | 41.20 | 45.68 | 38.42 | 52.79 | 45.90 | 47.99 | 37.85 | 40.92 | 30.55 | 40.25  | 35.08  | 44.94  | 59.22  |
 | r · ws5x diff (cross - extremum)             | +0.30 | +5.94 | +0.28 | +0.25 | +2.31 | +0.33 | +0.46 | +0.38 | +0.20 | +3.25 | -3.36 | +0.21 | +0.31 | +0.22 | -3.70 | +2.86 | +0.27 | +13.81 | +14.48 | +12.56 | +27.96 |
 | r · ws5x direction of the diff               | up    | up    | up    | up    | up    | up    | up    | up    | up    | up    | down  | up    | up    | up    | down  | up    | up    | up     | up     | up     | up     |
+ws4x has no cross before the tape ends
 
 ====================================================================================================
 xcross validator report · HIGH cadence event 2026-08-25 05:28:00  (5 of 15)
@@ -173,31 +170,20 @@ xcross validator report · HIGH cadence event 2026-08-25 16:03:00  (10 of 15)
 xcross validator report · HIGH cadence event 2026-08-25 17:40:00  (11 of 15)
 ====================================================================================================
 
-| line · timestamp                             | ws30  | ws29  | ws28  | ws27  | ws26  | ws25  | ws24  | ws23  | ws22  | ws21  | ws20  | ws19  | ws18  | ws17  | ws16   | ws15  | ws14   | ws13  | ws12   | ws11   | ws10  |
-|----------------------------------------------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|--------|-------|--------|-------|--------|--------|-------|
-| r · 2026-08-25 17:49:45 (ws4x high extremum) | 77.39 | 66.92 | 73.78 | 87.70 | 81.41 | 53.93 | 66.66 | 65.13 | 67.64 | 60.11 | 64.74 | 59.90 | 46.58 | 68.50 | 47.80  | 56.07 | 50.76  | 71.50 | 71.40  | 60.28  | 70.63 |
-| r · 2026-08-25 17:52:35 (ws4x cross)         | 77.39 | 66.92 | 73.78 | 87.70 | 81.41 | 53.93 | 66.66 | 65.13 | 67.64 | 60.11 | 64.74 | 59.90 | 46.58 | 69.82 | 61.34  | 56.07 | 50.76  | 71.50 | 71.40  | 60.28  | 71.24 |
-| r · ws4x diff (cross - extremum)             | +0.00 | +0.00 | +0.00 | +0.00 | +0.00 | +0.00 | +0.00 | +0.00 | +0.00 | -0.00 | +0.00 | +0.00 | +0.00 | +1.31 | +13.54 | +0.00 | +0.00  | +0.00 | +0.00  | +0.00  | +0.61 |
-| r · ws4x direction of the diff               | flat  | flat  | flat  | flat  | flat  | flat  | flat  | flat  | flat  | down  | flat  | flat  | flat  | up    | up     | flat  | flat   | flat  | flat   | flat   | up    |
-| r · 2026-08-25 17:34:05 (ws5x high extremum) | 77.39 | 66.92 | 70.87 | 87.70 | 81.41 | 53.93 | 60.05 | 60.13 | 63.20 | 60.11 | 64.74 | 52.71 | 39.03 | 68.50 | 47.80  | 46.37 | 36.47  | 57.90 | 48.45  | 36.23  | 61.79 |
-| r · 2026-08-25 17:44:40 (ws5x cross)         | 77.39 | 66.92 | 73.78 | 87.70 | 81.41 | 53.93 | 66.66 | 65.13 | 67.64 | 60.11 | 64.74 | 59.90 | 46.58 | 65.69 | 47.80  | 46.37 | 50.76  | 57.90 | 62.73  | 50.51  | 70.63 |
-| r · ws5x diff (cross - extremum)             | +0.00 | +0.00 | +2.92 | +0.00 | +0.00 | +0.00 | +6.61 | +5.00 | +4.44 | +0.00 | +0.00 | +7.19 | +7.55 | -2.82 | +0.00  | +0.00 | +14.29 | +0.00 | +14.29 | +14.29 | +8.84 |
-| r · ws5x direction of the diff               | flat  | flat  | up    | flat  | flat  | flat  | up    | up    | up    | flat  | flat  | up    | up    | down  | flat   | flat  | up     | flat  | up     | up     | up    |
+| line · timestamp                             | ws30  | ws29  | ws28  | ws27  | ws26  | ws25  | ws24  | ws23  | ws22  | ws21  | ws20  | ws19  | ws18  | ws17  | ws16  | ws15  | ws14   | ws13  | ws12   | ws11   | ws10  |
+|----------------------------------------------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|--------|-------|--------|--------|-------|
+| r · 2026-08-25 17:34:05 (ws5x high extremum) | 77.39 | 66.92 | 70.87 | 87.70 | 81.41 | 53.93 | 60.05 | 60.13 | 63.20 | 60.11 | 64.74 | 52.71 | 39.03 | 68.50 | 47.80 | 46.37 | 36.47  | 57.90 | 48.45  | 36.23  | 61.79 |
+| r · 2026-08-25 17:44:40 (ws5x cross)         | 77.39 | 66.92 | 73.78 | 87.70 | 81.41 | 53.93 | 66.66 | 65.13 | 67.64 | 60.11 | 64.74 | 59.90 | 46.58 | 65.69 | 47.80 | 46.37 | 50.76  | 57.90 | 62.73  | 50.51  | 70.63 |
+| r · ws5x diff (cross - extremum)             | +0.00 | +0.00 | +2.92 | +0.00 | +0.00 | +0.00 | +6.61 | +5.00 | +4.44 | +0.00 | +0.00 | +7.19 | +7.55 | -2.82 | +0.00 | +0.00 | +14.29 | +0.00 | +14.29 | +14.29 | +8.84 |
+| r · ws5x direction of the diff               | flat  | flat  | up    | flat  | flat  | flat  | up    | up    | up    | flat  | flat  | up    | up    | down  | flat  | flat  | up     | flat  | up     | up     | up    |
+ws4x has no cross before the tape ends
 
 ====================================================================================================
 xcross validator report · HIGH cadence event 2026-08-25 17:51:00  (12 of 15)
 ====================================================================================================
 
-| line · timestamp                             | ws30  | ws29  | ws28  | ws27  | ws26  | ws25  | ws24  | ws23  | ws22  | ws21  | ws20  | ws19  | ws18  | ws17  | ws16   | ws15   | ws14  | ws13  | ws12  | ws11  | ws10  |
-|----------------------------------------------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|--------|--------|-------|-------|-------|-------|-------|
-| r · 2026-08-25 17:49:45 (ws4x high extremum) | 77.39 | 66.92 | 73.78 | 87.70 | 81.41 | 53.93 | 66.66 | 65.13 | 67.64 | 60.11 | 64.74 | 59.90 | 46.58 | 68.50 | 47.80  | 56.07  | 50.76 | 71.50 | 71.40 | 60.28 | 70.63 |
-| r · 2026-08-25 17:52:35 (ws4x cross)         | 77.39 | 66.92 | 73.78 | 87.70 | 81.41 | 53.93 | 66.66 | 65.13 | 67.64 | 60.11 | 64.74 | 59.90 | 46.58 | 69.82 | 61.34  | 56.07  | 50.76 | 71.50 | 71.40 | 60.28 | 71.24 |
-| r · ws4x diff (cross - extremum)             | +0.00 | +0.00 | +0.00 | +0.00 | +0.00 | +0.00 | +0.00 | +0.00 | +0.00 | -0.00 | +0.00 | +0.00 | +0.00 | +1.31 | +13.54 | +0.00  | +0.00 | +0.00 | +0.00 | +0.00 | +0.61 |
-| r · ws4x direction of the diff               | flat  | flat  | flat  | flat  | flat  | flat  | flat  | flat  | flat  | down  | flat  | flat  | flat  | up    | up     | flat   | flat  | flat  | flat  | flat  | up    |
-| r · 2026-08-25 17:59:55 (ws5x high extremum) | 77.39 | 71.33 | 73.78 | 87.70 | 81.41 | 60.32 | 66.66 | 65.13 | 67.64 | 60.11 | 64.74 | 59.90 | 46.58 | 69.82 | 62.08  | 56.07  | 64.45 | 79.64 | 71.40 | 65.50 | 73.18 |
-| r · 2026-08-25 18:00:00 (ws5x cross)         | 80.36 | 71.33 | 73.78 | 90.89 | 81.41 | 60.32 | 66.66 | 65.13 | 67.64 | 60.11 | 64.74 | 59.90 | 55.59 | 69.82 | 62.08  | 68.57  | 64.45 | 79.64 | 75.36 | 65.50 | 78.66 |
-| r · ws5x diff (cross - extremum)             | +2.97 | +0.00 | +0.00 | +3.20 | +0.00 | +0.00 | +0.00 | +0.00 | +0.00 | +0.00 | +0.00 | +0.00 | +9.01 | +0.00 | +0.00  | +12.51 | +0.00 | +0.00 | +3.96 | +0.00 | +5.48 |
-| r · ws5x direction of the diff               | up    | flat  | flat  | up    | flat  | flat  | flat  | flat  | flat  | flat  | flat  | flat  | up    | flat  | flat   | up     | flat  | flat  | up    | flat  | up    |
+ws4x has no cross before the tape ends
+ws5x has no cross before the tape ends
 
 ====================================================================================================
 xcross validator report · HIGH cadence event 2026-08-25 17:53:00  (13 of 15)

@@ -50,6 +50,7 @@ Usage:  python3 sandbox_xcross.py 2026-08-25        (run from 1022_v4, or anywhe
         python3 sandbox_xcross.py --fake            the fake cadence reports, on screen
 """
 import io
+import bisect as _bisect
 import os
 import sys
 
@@ -203,13 +204,45 @@ def report(LN, side, ev, n_of):
     return out + (table(g) if len(g) > 1 else []) + notes
 
 
+_ALLCAD = None
+
+
+def all_cadence_bars(LN):
+    """Every cadence event bar on the tape, BOTH sides, ascending. -> int list.
+
+    HIS 1108 RULING on the race bound: *"the next {any_}cadence"*. Not the tape end, and not only
+    the same side - any cadence event on either side ends the race. Built once per process because
+    it is a full-tape scan; a per-event scan would repeat it 28 times on one day.
+    """
+    global _ALLCAD
+    if _ALLCAD is None:
+        n = len(LN['close']) - 1
+        b = []
+        for sd in (+1, -1):
+            b += [int(e[0]) for e in F2.cadence_events(LN, sd, 0, n)]
+        _ALLCAD = sorted(set(b))
+    return _ALLCAD
+
+
+def race_bound(LN, ev):
+    """The bar the ws{TF}x race may not pass. -> int.
+
+    HIS 1108: *"the next {any_}cadence"*. The first cadence event STRICTLY after `ev`, on either
+    side; the tape end when none follows. Strictly after, because the event the race started from
+    cannot also end it.
+    """
+    cads = all_cadence_bars(LN)
+    i = _bisect.bisect_right(cads, int(ev))
+    return cads[i] if i < len(cads) else len(LN['close']) - 1
+
+
 def r_block(LN, side, ev, xtf):
     """ws30r..ws10r at ws{xtf}x's extremum and cross after the cadence event. -> (rows, None) | (None, why).
 
     3 THE x-CROSS: x_race on ws{xtf} from the cadence event. 4 THE REPORT ROWS: the walk back to look forward
     from that cross, on the cadence side, then the r values, EMERGING, at both bars.
     """
-    r = F2.x_race(LN, xtf, side, ev, len(LN['close']) - 1)
+    r = F2.x_race(LN, xtf, side, ev, race_bound(LN, ev))
     if r is None:
         return None, 'ws%dx has no cross before the tape ends' % xtf
     cf, which, c = r
@@ -257,9 +290,11 @@ def legend(LN, day, side, n):
             ('the scan range - HIS 1108', 'no longer read. The report takes its x lines from XCV_TFS'),
             ('duplicates - HIS 1108 RULING', 'the existing no-duplicate-at-one-bar rule applies. Two cadence '
              'events whose x cross lands on one bar are one event'),
-            ('MINE: the race bound', 'the tape end. The built fdm2 leg walk would stop at the next cadence event'),
-            ('MINE: the walk back is not bounded', 'the extremum may sit BEFORE the cadence event, and on '
-             '2026-08-25 it does on 11 of 28 events. Bounding it at the event is the alternative')]
+            ('the race bound - HIS 1108 RULING', 'the next cadence event on EITHER side, strictly after this '
+             'one. His *"the next {any_}cadence"*. The tape end only when no cadence event follows'),
+            ('the walk back - HIS 1108 RULING', 'UNBOUNDED. The extremum may sit BEFORE the cadence event and '
+             'on 2026-08-25 it does on 29 of the 56 extremum rows - his *"finding an extremum before the '
+             'cadence event is fine"*')]
     return ['# %s, %s, %s side' % (REPORT_NAME, day, SIDE_NAME[side]), ''] + table(rows)
 
 

@@ -45,6 +45,13 @@ gone, so his items 2 and 3 are off the report path and the scan range *"will bec
 - HIS 1108 RULINGS, settled: `towards` is step 1's trajectory reader with no anchor; the scan range
   is no longer read; the existing no-duplicate-at-one-bar rule applies, and he noted *"there will
   be a time in the future when this changes"*; `FAKE_DAY` needs no action.
+- HIS 1108 RULING, the race bound: *"the next {any_}cadence"*. The ws{TF}x race may not pass the
+  first cadence event on EITHER side strictly after the one it started from; the tape end only when
+  none follows. Measured on 2026-08-25: of the 56 x-line rows, **12 lose their cross entirely**
+  because the next cadence event arrives first, and 44 are unchanged. Four cadence events lose BOTH
+  x lines and so print no rows at all - 2026-08-25 17:10:00 LOW, 17:51:00 HIGH, 19:35:00 LOW and
+  20:52:00 LOW.
+- HIS 1108 RULING, the walk back: *"unbounded"*.
 - HIS 1108 CHALLENGE, ANSWERED: he asked me to prove the extremum can sit BEFORE the cadence event,
   saying his view was that it cannot. It can, and it is the common case: on 2026-08-25, **29 of the
   56 extremum rows** sit before their own cadence event bar, the furthest being 2026-08-25 10:04:00
@@ -251,3 +258,50 @@ director range are v4_fdm2's, in `1022_v4/v4_knobs.py`; the walk back's 48-bar s
 | `rsi_divergence` called with its defaults | no events |
 | `W_SBX_WS5X_TF=6` | REFUSED |
 | `W_RSIDIV_LINES=ws1r` | REFUSED |
+
+---
+
+## 10. THE xcv VERDICT - HIS 1108 VIEW, NOT YET BUILT
+
+HIS WORDS: *"the next task: reading the xcv report's 'direction of the diff' line / we will learn
+this in small batches / my current view is that a xcv verdict can be build only when 3 'down's or
+3 'up's are printing in the 4 lefthand side TFs (ws30 to ws27) / examples where a xcv verdict
+cannot be created: 0702, 0754, 0808, 1004 / because they are not printing 3 ups or downs, the cad
+walk (10 min) will carry the report forward until a xcv verdict prints"*, and *"when a verdict of
+`up` or `down` is created, a rev-trade is created"*.
+
+NOTHING IS BUILT. The measurement below is what his rule gives on the report as it stands.
+
+### his four examples, under his own rule
+
+| the cadence event | side | the direction row | ws30 | ws29 | ws28 | ws27 | ups | downs | flats | his verdict |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-08-25 07:02:00 | LOW | ws4x | down | flat | down | flat | 0 | 2 | 2 | none |
+| 2026-08-25 07:02:00 | LOW | ws5x | down | flat | down | flat | 0 | 2 | 2 | none |
+| 2026-08-25 07:54:00 | LOW | ws4x | up | flat | down | flat | 1 | 1 | 2 | none |
+| 2026-08-25 07:54:00 | LOW | ws5x | - | - | - | - | - | - | - | no cross |
+| 2026-08-25 08:08:00 | LOW | ws4x | flat | flat | flat | flat | 0 | 0 | 4 | none |
+| 2026-08-25 08:08:00 | LOW | ws5x | up | down | flat | up | 2 | 1 | 1 | none |
+| 2026-08-25 10:04:00 | LOW | ws4x | flat | flat | flat | up | 1 | 0 | 3 | none |
+| 2026-08-25 10:04:00 | LOW | ws5x | up | flat | flat | up | 2 | 0 | 2 | none |
+
+All four fail on BOTH direction rows, so his examples do not say WHICH row drives the verdict.
+
+### the census over 2026-08-25, 28 cadence events
+
+| the reading | verdicts |
+|---|---|
+| the ws4x direction row alone | 10 of 28 |
+| the ws5x direction row alone | 12 of 28 |
+| BOTH rows, agreeing on the same verdict | 9 of 28 |
+| EITHER row | 13 of 28 |
+
+### OPEN - needed before it can be built
+
+| the gap | the question |
+|---|---|
+| which direction row | the ws4x row, the ws5x row, both agreeing, or either. His four examples fail on every reading so they do not settle it |
+| what the cad walk carries forward | re-run the race from each later bar, or hold the cross bar and re-read the direction at the current bar, or wait for the NEXT ws{TF}x cross inside the 10 min |
+| where the 10 min starts | the cadence event bar, or the ws{TF}x cross bar |
+| the 4 events with no cross at all | 17:10:00 LOW, 17:51:00 HIGH, 19:35:00 LOW, 20:52:00 LOW print no rows under his new race bound. Does the cad walk carry those too |
+| the rev-trade's side | an `up` verdict and a `down` verdict map to which trade direction |
