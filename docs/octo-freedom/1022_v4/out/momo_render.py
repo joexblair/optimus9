@@ -859,6 +859,7 @@ def c3rmage_table(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     close = _np.asarray(LN['close'], float)
     lo_f, hi_f = K.fnc_pair(K.FDM_FNC_2080)
     m1e = _np.asarray(LN['MGE'][1], float)
+    RAW = {+1: _np.asarray(LN['phi'], float), -1: _np.asarray(LN['plo'], float)}
     CE = {sd2: sorted(int(e[0]) for e in F2.cadence_events(LN, sd2, int(A), int(B)))
           for sd2 in (+1, -1)}
     LF = {}
@@ -897,12 +898,16 @@ def c3rmage_table(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     out.append(row('what ends the wait', 'NOTHING, in this read. His race needs the incoming '
                                          'trade, which this scan does not model. A wait-ender can '
                                          'only remove rows'))
-    out.append(row('the stop', 'his dynamic level off the walk back to look forward, gap %d bars'
-                   % int(JIG.MC_GAP)))
+    out.append(row('the stop LEVEL', 'a RAW kline extreme from his walk back to look forward, '
+                                     'gap %d bars = %d min' % (int(JIG.MC_GAP),
+                                                               int(JIG.MC_GAP) * 5 // 60)))
+    out.append(row('the stop TRIGGER', 'pxs reaching that absolute price - his 1108 reason: only '
+                                       'a real price push fires it'))
     out.append(row('the exit', 'his target-side cadence event, or the stop, first of'))
 
-    def score(opn, osd, cap):
-        sb = F2.stop_bar(LN, opn, int(B), osd, cap)
+    def score(opn, osd, cap, price=None):
+        sb = (F2.stop_bar_at(LN, opn, int(B), osd, price) if price is not None
+              else F2.stop_bar(LN, opn, int(B), osd, cap))
         ce = _bisect.bisect_right(CE[osd], opn)
         cb = CE[osd][ce] if ce < len(CE[osd]) else None
         if cb is not None and (sb is None or int(cb) < int(sb)):
@@ -917,11 +922,15 @@ def c3rmage_table(LN, A, B, lab='ws3r emerging, rest closed-prev'):
                     rel=-cap if how == 'STOP' else osd * (float(close[ex]) - op) / op * 100.0)
 
     def level(opn, sd2, osd):
-        Mx = JIG.mage_cascade_bar(close, opn, int(sd2), mode='extrema', gap=int(JIG.MC_GAP))
+        """HIS 1108 two-series stop. -> (the distance in percent, the raw price or None)."""
+        Mx = JIG.mage_cascade_bar(RAW[int(sd2)], opn, int(sd2), mode='extrema',
+                                  gap=int(JIG.MC_GAP))
         if Mx is None:
-            return float(K.FDM_MAE_CAP)
-        d = -osd * (float(close[int(Mx[0])]) - float(close[opn])) / float(close[opn]) * 100.0
-        return d if d > 0 else float(K.FDM_MAE_CAP)
+            return float(K.FDM_MAE_CAP), None
+        pv = float(RAW[int(sd2)][int(Mx[0])])
+        o_px = float(close[opn])
+        d = -osd * (pv - o_px) / o_px * 100.0
+        return (d, pv) if d > 0 else (float(K.FDM_MAE_CAP), None)
 
     rowsg = {}
     for gate in GATES:
@@ -942,8 +951,8 @@ def c3rmage_table(LN, A, B, lab='ws3r emerging, rest closed-prev'):
             if opn > int(B):
                 acc.append(dict(x4=x4, sd=sd, land=land, opn=None))
                 continue
-            cap = level(opn, int(sd), osd)
-            S = score(opn, osd, cap)
+            cap, price = level(opn, int(sd), osd)
+            S = score(opn, osd, cap, price)
             acc.append(dict(x4=x4, sd=sd, land=land, opn=opn, cap=cap,
                             m1=float(m1e[land]), **S))
         rowsg[gate] = acc
@@ -1056,12 +1065,21 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     out.append(row('MAE/MFE basis', 'THE OUTGOING trade the firing would open - the opposite '
                                     'direction, from the firing bar + 2 bars to its stop. MY '
                                     'CHOICE, he did not rule it'))
-    out.append(row('the stop', 'DYNAMIC - his 1108 *"recreate the c3r mae mfe data with dynamic '
-                               'stops"*. The level is `jig.mage_cascade_bar(pxs, the open bar, '
-                               "the arm's side, mode='extrema', gap=%d)` - HIS walk back to look "
-                               'forward, at his own `MC_GAP` %d bars = %d min. No buffer: he has '
-                               'not ruled one' % (int(JIG.MC_GAP), int(JIG.MC_GAP),
-                                                  int(JIG.MC_GAP) * 5 // 60)))
+    out.append(row('the stop LEVEL', 'HIS 1108: *"we set the stop level using raw high/low"*. '
+                                     '`jig.mage_cascade_bar(the RAW kline high for a HIGH arm or '
+                                     "the raw low for a LOW one, the open bar, the c3r arm's side, "
+                                     "mode='extrema', gap=%d)` - HIS walk back to look forward at "
+                                     'his own `MC_GAP` %d bars = %d min. No buffer: he has not '
+                                     'ruled one' % (int(JIG.MC_GAP), int(JIG.MC_GAP),
+                                                    int(JIG.MC_GAP) * 5 // 60)))
+    out.append(row('the stop TRIGGER', 'HIS 1108: *"we use pxs to match the stop level ... pxs '
+                                       "smoothes out the bumps, so small spikes near the stop won't "
+                                       'appear to pxs, therefore the stop is avoided - only a real '
+                                       'price push can trigger the stop"*. `F2.stop_bar_at` walks '
+                                       'pxs to that absolute price'))
+    out.append(row('the row unit', 'HIS 1108: *"consolidate and count the trade as a single '
+                                   'evemt"*. ONE row per firing bar and side, however many ws1r '
+                                   'oob entries walked into it'))
     out.append(row('the fallback', 'FDM_MAE_CAP %.2f%% - used only where the walk back finds no '
                                    'adverse extrema, which would otherwise leave the trade with '
                                    'no stop at all. MY CHOICE, stated' % float(K.FDM_MAE_CAP)))
@@ -1085,6 +1103,9 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     #   SHORT.
     CE = {sd2: sorted(int(e[0]) for e in F2.cadence_events(LN, sd2, int(A), int(B)))
           for sd2 in (+1, -1)}
+    #   THE LEVEL SERIES PER SIDE. A HIGH-side c3r arm opens a SHORT whose stop sits above, so its
+    #   level is a RAW kline HIGH; a LOW arm's LONG takes a raw LOW.
+    RAW = {+1: phi, -1: plo}
     rows_, fired = cad3r_arms(LN, A, B, lab)
     out += ['', '| the arm - ws1r oob entry | side | the verdict | the clause that killed it | '
             'the firing bar | branch | ws3r oob at | clause 3 ws3Mage | clause 3 ws3b | '
@@ -1107,7 +1128,12 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
                 'it opens at', 'the open price', 'the exit', 'the exit kind', 'held min',
                 'MAE %', 'MFE %', 'realised %', 'MFE over MAE')
     mae_l, mfe_l, mfer_l, rel_l, stop_l, cap_l, how_l = [], [], [], [], [], [], []
+    #   HIS 1108 *"consolidate and count the trade as a single evemt"*. Several ws1r oob entries
+    #   converge on one firing bar and used to print byte-identical rows; the trade is one trade.
+    _seen = {}
     for q, sd, E in sorted(fired):
+        _seen.setdefault((int(E['x4']), int(sd)), (q, sd, E))
+    for q, sd, E in [v for _, v in sorted(_seen.items())]:
         sig = int(E['x4'])
         opn = sig + 2
         osd = -sd                     # the outgoing trade hunts the opposite side
@@ -1116,16 +1142,19 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
                            'SHORT' if osd < 0 else 'LONG', 'past the span', '-', '-', '-', '-',
                            '-', '-', '-', '-'))
             continue
-        #   THE DYNAMIC LEVEL FIRST, his 1108 ruling. `cap` here is a DISTANCE in percent, which
-        #   is what F2.stop_bar takes, so his structural level is handed in exactly like the fixed
-        #   one and nothing else about the scoring changes.
-        Mx = JIG.mage_cascade_bar(close, opn, int(sd), mode='extrema', gap=int(JIG.MC_GAP))
-        cap, lvl = float(K.FDM_MAE_CAP), 'the FDM_MAE_CAP fallback'
+        #   HIS 1108 TWO-SERIES STOP. The LEVEL is a raw kline extreme found by his walk back;
+        #   the TRIGGER is pxs reaching that absolute price. `cap` is kept as the level's distance
+        #   from the open purely so the realised column and the aggregate read in percent.
+        Mx = JIG.mage_cascade_bar(RAW[int(sd)], opn, int(sd), mode='extrema', gap=int(JIG.MC_GAP))
+        o_px = float(close[opn])
+        cap, lvl, price = float(K.FDM_MAE_CAP), 'the FDM_MAE_CAP fallback', None
         if Mx is not None:
-            dyn = -osd * (float(close[int(Mx[0])]) - float(close[opn])) / float(close[opn]) * 100.0
+            pv = float(RAW[int(sd)][int(Mx[0])])
+            dyn = -osd * (pv - o_px) / o_px * 100.0
             if dyn > 0:
-                cap, lvl = dyn, ln.U(int(Mx[0]))
-        sb = F2.stop_bar(LN, opn, int(B), osd, cap)
+                cap, lvl, price = dyn, ln.U(int(Mx[0])), pv
+        sb = (F2.stop_bar_at(LN, opn, int(B), osd, price) if price is not None
+              else F2.stop_bar(LN, opn, int(B), osd, cap))
         #   THE TARGET-SIDE CADENCE, STRICTLY AFTER THE OPEN. A cadence event ON the open bar
         #   belongs to the bar the trade opened on and cannot also close it.
         ce = _bisect.bisect_right(CE[osd], opn)
@@ -1133,7 +1162,9 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
         if cb is not None and (sb is None or int(cb) < int(sb)):
             ex, how = int(cb), 'CLOSED at the target-side cadence'
         elif sb is not None:
-            ex, how = int(sb), 'STOP at %.3f%% off %s' % (cap, lvl)
+            ex, how = int(sb), ('STOP at %.3f%% - the raw extreme %.6f at %s, pxs reached it'
+                                % (cap, price, lvl) if price is not None
+                                else 'STOP at %.3f%% off %s' % (cap, lvl))
         else:
             ex, how = int(B), 'still open at the span end'
         op = float(close[opn])

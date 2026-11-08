@@ -1316,6 +1316,28 @@ def stop_bar(LN, opn, ex, side, cap):
     return int(opn) + int(hit[0]) if len(hit) else None
 
 
+def stop_bar_at(LN, opn, ex, side, level):
+    """The first bar pxs reaches an absolute price `level` on the adverse side. -> bar or None.
+
+    HIS 1108, and his reason verbatim: *"we use pxs to match the stop level, and we set the stop
+    level using raw high/low. the reason: pxs smoothes out the bumps, so small spikes near the stop
+    won't appear to pxs, therefore the stop is avoided - only a real price push can trigger the
+    stop"*.
+
+    So the two series have different jobs and that is deliberate, not the mixed-series fault he
+    corrected earlier today. `level` is a RAW kline high or low - the price his candles show, found
+    by his walk back to look forward. The comparison is against `LN['close']`, pxs, because a
+    5 s wick through the level is not a push and must not fire the stop.
+
+    `side` is the TRADE's direction, +1 long / -1 short, so a long's level sits BELOW its open and
+    a short's ABOVE. Walked, not inferred, and every bar read is at or before the one returned.
+    """
+    px = np.asarray(LN['close'][int(opn):int(ex) + 1], float)
+    hit = np.flatnonzero(px <= float(level)) if int(side) > 0 \
+        else np.flatnonzero(px >= float(level))
+    return int(opn) + int(hit[0]) if len(hit) else None
+
+
 #   ── the chain ─────────────────────────────────────────────────────────────────────────────────
 def legs(LN, open_at, B, resig=None, cap=None):
     """Every leg from `open_at` to `B`. -> list of leg dicts, chronological.
