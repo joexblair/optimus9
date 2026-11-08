@@ -1237,7 +1237,22 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     close = _np.asarray(LN['close'], float)
     phi = _np.asarray(LN['phi'], float)
     plo = _np.asarray(LN['plo'], float)
+    #   HIS 1108 PER-DAY RULINGS, read ONCE for the whole scan and BEFORE the provenance block
+    #   that prints how many days he has ruled. A per-row database call would turn a 25-row report
+    #   into 25 round trips.
+    SSRC = str(K.FDM2_C3R_STOP_SRC)
+    SDAY, SDAY_ERR = {}, None
+    if SSRC == 'day':
+        try:
+            import c3r_stop_db as SDB
+            SDAY = {d: (pc, 'HIS ruling: %s' % nt if nt else 'HIS ruling')
+                    for d, (pc, nt) in SDB.rulings().items()}
+        except Exception as _ex:            # a missing table must not silence the whole report
+            SDAY_ERR = str(_ex)
     out = ['| the scan | value |', '|---|---|']
+    if SDAY_ERR:
+        out.append(row('the per-day rulings', 'UNREADABLE - %s. Every day falls back to '
+                                              'FDM2_C3R_STOP_BASE' % SDAY_ERR))
     out.append(row('the mech', '`fdm2-3r-cadence`, HIS NAME. Prefix `c3r_`'))
     out.append(row('the read', lab))
     out.append(row('the span', '%s .. %s - %d bars = %.1f days'
@@ -1247,6 +1262,11 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     out.append(row('MAE/MFE basis', 'THE OUTGOING trade the firing would open - the opposite '
                                     'direction, from the firing bar + 2 bars to its stop. MY '
                                     'CHOICE, he did not rule it'))
+    out.append(row('the stop SOURCE', ('HIS per-day ruling in `c3r_stop_day`, for the UTC day the '
+                                       'trade OPENS on, with `FDM2_C3R_STOP_BASE` %.2f%% on a day '
+                                       'he has not ruled. %d day(s) ruled so far'
+                                       % (float(K.FDM2_C3R_STOP_BASE), len(SDAY)))
+                   if SSRC == 'day' else 'the raw-extreme walk back'))
     out.append(row('the stop LEVEL', 'HIS 1108: *"we set the stop level using raw high/low"*. '
                                      '`jig.mage_cascade_bar(the RAW kline high for a HIGH arm or '
                                      "the raw low for a LOW one, the open bar, the c3r arm's side, "
@@ -1389,17 +1409,27 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
                            '%.1f' % ((sig - int(E['x4'])) * 5 / 60.0) if MW else '-',
                            'SHORT' if osd < 0 else 'LONG', 'past the span', *['-'] * 10))
             continue
-        #   HIS 1108 TWO-SERIES STOP. The LEVEL is a raw kline extreme found by his walk back;
-        #   the TRIGGER is pxs reaching that absolute price. `cap` is kept as the level's distance
-        #   from the open purely so the realised column and the aggregate read in percent.
-        Mx = JIG.mage_cascade_bar(RAW[int(sd)], opn, int(sd), mode='extrema', gap=int(JIG.MC_GAP))
         o_px = float(close[opn])
-        cap, lvl, price = float(K.FDM_MAE_CAP), 'the FDM_MAE_CAP fallback', None
-        if Mx is not None:
-            pv = float(RAW[int(sd)][int(Mx[0])])
-            dyn = -osd * (pv - o_px) / o_px * 100.0
-            if dyn > 0:
-                cap, lvl, price = dyn, ln.U(int(Mx[0])), pv
+        if SSRC == 'day':
+            #   HIS 1108 PER-DAY STOP. The percent is HIS ruling for the UTC day the trade OPENS
+            #   on, from c3r_stop_day, and `FDM2_C3R_STOP_BASE` on a day he has not ruled. THE DAY
+            #   IS THE OPEN BAR'S and that choice is MINE. The level is that percent from the open,
+            #   and the trigger stays pxs, so his *"only a real price push can trigger the stop"*
+            #   still holds.
+            dayk = ln.U(opn)[:10]
+            cap, why_s = SDAY.get(dayk, (float(K.FDM2_C3R_STOP_BASE), 'the baseline'))
+            price, lvl = o_px * (1.0 - osd * cap / 100.0), '%s - %s' % (dayk, why_s)
+        else:
+            #   HIS 1108 TWO-SERIES STOP, kept and measured. The LEVEL is a raw kline extreme found
+            #   by his walk back; the TRIGGER is pxs reaching that absolute price.
+            Mx = JIG.mage_cascade_bar(RAW[int(sd)], opn, int(sd), mode='extrema',
+                                      gap=int(JIG.MC_GAP))
+            cap, lvl, price = float(K.FDM_MAE_CAP), 'the FDM_MAE_CAP fallback', None
+            if Mx is not None:
+                pv = float(RAW[int(sd)][int(Mx[0])])
+                dyn = -osd * (pv - o_px) / o_px * 100.0
+                if dyn > 0:
+                    cap, lvl, price = dyn, ln.U(int(Mx[0])), pv
         sb = (F2.stop_bar_at(LN, opn, int(B), osd, price) if price is not None
               else F2.stop_bar(LN, opn, int(B), osd, cap))
         #   THE TARGET-SIDE CADENCE, STRICTLY AFTER THE OPEN. A cadence event ON the open bar

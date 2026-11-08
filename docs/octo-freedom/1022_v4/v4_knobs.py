@@ -1502,6 +1502,16 @@ FDM2_C3R_MAGE_GATE = _knob('FDM2_C3R_MAGE_GATE', 'oob', str)   # the level ws1Ma
 #   ex-fence nets 0.098 points higher and HE PICKED oob. 25 trades cannot separate them, and the
 #   choice is his, not the curve's.
 #   The rev-trade is placed at the lift-off STAMP, K.lift_stamp(b) = b + LIFT_WOB - 1.
+FDM2_C3R_STOP_SRC = _knob('FDM2_C3R_STOP_SRC', 'day', str)   # 'day' = his per-day ruling
+FDM2_C3R_STOP_BASE = _knob('FDM2_C3R_STOP_BASE', 1.10)   # the stop on a day he has not ruled, pct
+#   HIS 1108: *"I'd like to tell you which days I see that need a larger or smaller stop. for
+#   example, 0825 (and possibly the days befor and after) needs a 2% stop / I think our baseline is
+#   1.1, but that could be wrong"*.
+#   'day'      the stop is HIS ruling for the UTC day the trade OPENS on, from c3r_stop_day, and
+#              `FDM2_C3R_STOP_BASE` on a day he has not ruled. THE DAY IS THE OPEN BAR'S - MINE.
+#   'walkback' the raw-extreme level from jig.mage_cascade_bar, which is what 1108 ran before this.
+#              Kept because it is measured, not because anything reads it.
+#   THE BASELINE IS A KNOB, not a literal, because he said it *"could be wrong"*.
 FDM2_C3R_MAGE_READ = _knob('FDM2_C3R_MAGE_READ', 'emerging', str)   # the ws1Mage LEVEL read
 FDM2_C3R_MAGE_WOB = _knob('FDM2_C3R_MAGE_WOB', 8, int)   # bars the oob state must HOLD, 8 = 40 s
 #   HIS 1108, in two steps. First *"change the 'ws1MAge oob requirement' from emerging to
@@ -1911,6 +1921,8 @@ RULED = {
     'FDM2_MOMO_FLOOR_RPRED': (1, "r-pred's FLOOR, not a median: at least one carrier predicted to breach. HIS option A, because r-pred's median is 0 on every carrier set and a median makes its vote a constant. Fires on 9,470 of 50,457 cad-walk bars = 18.8%"),
     'FDM2_MOMO_MED_MX': (7, 'the fast-versus-slow median, re-measured over all 50,457 cad-walk bars on ws4..ws10 emerging. UNCHANGED from the 27-line value. Fires on 49.3%'),
     'FDM2_MOMO_MED_PIN': (9, 'the pinned median over the same 50,457 bars, ws4..ws30 emerging. UNCHANGED. Fires on 51.0%'),
+    'FDM2_C3R_STOP_SRC': ('day', "where the c3r stop percent comes from. 'day' = HIS per-day ruling in c3r_stop_day with FDM2_C3R_STOP_BASE as the fallback; 'walkback' = the raw extreme from jig.mage_cascade_bar. HIS 1108 ask for a per-day table"),
+    'FDM2_C3R_STOP_BASE': (1.10, 'the c3r stop percent on a day he has not ruled. HIS 1108 *"I think our baseline is 1.1, but that could be wrong"* - a knob, not a literal'),
     'FDM2_C3R_MAGE_READ': ('emerging', "the ws1Mage LEVEL read for the gate. HIS 1108 measured closed-prev - it moved 11 of 25 landings, net +2.673 -> -0.598 - then picked the EMERGING row back"),
     'FDM2_C3R_MAGE_WOB': (8, 'bars the ws1Mage oob state must HOLD from the lift-off stamp, 8 x 5 s = 40 s. HIS 1108 *"add a wob 8 to it"*. jig.lift_off\'s own convention: the event is knowable at bar + n - 1, so the rev-trade lands on stamp + 7'),
     'FDM2_C3R_MAGE_ON': (1, 'the ws1Mage wait before c3r places its rev-trade. HIS 1108 *"apply the ws1Mage oob to the mech so that we are net positive"*'),
@@ -2355,7 +2367,8 @@ def table():
              'FDM2_C3R_DWELL': 'bars', 'FDM2_C3R_MAGE_ON': 'flag',
              'FDM2_C3R_MAGE_GATE': 'level',
              'FDM2_C3R_MAGE_READ': 'read',
-             'FDM2_C3R_MAGE_WOB': 'bars'}
+             'FDM2_C3R_MAGE_WOB': 'bars', 'FDM2_C3R_STOP_SRC': 'source',
+             'FDM2_C3R_STOP_BASE': 'percent'}
     for k, (v, why) in RULED.items():
         rows.append('| `%s` | %s | %s | %s | %s |'
                     % (k, here[k], units.get(k, '?'),
