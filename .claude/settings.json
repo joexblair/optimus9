@@ -48,6 +48,17 @@
       "statusMessage": "his words"
      }
     ]
+   },
+   {
+    "matcher": "Write|Edit",
+    "hooks": [
+     {
+      "type": "command",
+      "command": "/home/joe/thecodes/.claude/hooks/mech-goal.py",
+      "timeout": 15,
+      "statusMessage": "mech goal"
+     }
+    ]
    }
   ]
  }

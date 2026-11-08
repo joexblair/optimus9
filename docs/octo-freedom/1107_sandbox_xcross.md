@@ -1,5 +1,9 @@
 # `fdm2-xcv`, and the reads built beside it, 2026-11-07
 
+GOAL: turn each cadence event into an `up` or `down` verdict, as early as the lines allow. The
+verdict's TIMESTAMP is the thing being improved - HIS 1108: *"the goal of this work is to improve
+the verdict timestamps in fdm2-xcv"*. `fdm2-rline-enhance` exists only to serve this goal.
+
 HIS 1108 NAME AND GO: *"take ownership of the files. bank them as the fdm2-xcv mech. commit and
 push all files, yours or not"*. The mech was built in another session and handed over at log entry
 #46; it is mine from 1108 and `fdm2-xcv` is its name. Earlier text in this file saying "the sandbox
@@ -265,11 +269,41 @@ CAUSAL BY CONSTRUCTION. `rsi_d` is a Wilder one-step update from the last CLOSED
 the current developing bar's close, and `lb_rsi_min` / `lb_rsi_max` are the min and max of closed
 RSI values ending before the forming candle. Every input is at or before the bar being read.
 
-STILL OPEN - NOT DERIVABLE FROM THE GOAL:
+HIS RULING ON THE LAST GAP, 1108: *"yes"* - 3 substituted tokens may carry a verdict on their own.
+His reasoning: *"my view is that if the answer was no, the timestamps would never have a chance to
+improve"*.
 
-| the gap | the question |
-|---|---|
-| a verdict built only from substituted tokens | may 3 substituted tokens carry a verdict on their own, or must at least one come from an unpinned r line |
+HIS RULING STANDS. His reasoning is right in direction and too strong in the word `never`. Measured
+over the 13 cad walks of 2026-08-25, 1733 walked bars, counting how many of the 4 left tokens read
+`flat` against the cross:
+
+| flat tokens at a walked bar | bars | what a verdict would need |
+|---|---|---|
+| 4 of 4 | 285 | at least 3 substitutions. The restriction would block every verdict here |
+| 3 of 4 | 573 | 2 substitutions, with the 1 unpinned token among the three that agree. Possible under the restriction |
+| 2 of 4 | 693 | 1 substitution |
+| 1 of 4 | 170 | none - the r lines carry it |
+| 0 of 4 | 12 | none |
+
+WHERE IT BITES: the FIRST walked bar is already a 4-flat bar on 6 of the 11 distinct walks, so the
+restriction would push the earliest possible improvement later on more than half of them:
+
+| xcv rows | the cross | the earliest 4-flat bar | the cad-walk fires |
+|---|---|---|---|
+| 1 | 2026-08-25 00:50:00 | 2026-08-25 00:50:05 | 2026-08-25 00:58:00 |
+| 5, 6 | 2026-08-25 05:35:00 | 2026-08-25 05:35:05 | 2026-08-25 05:59:00 |
+| 7 | 2026-08-25 07:02:15 | 2026-08-25 07:11:10 | 2026-08-25 07:12:00 |
+| 9 | 2026-08-25 08:14:20 | none | 2026-08-25 08:14:25 |
+| 10 | 2026-08-25 09:59:15 | 2026-08-25 09:59:55 | 2026-08-25 10:09:10 |
+| 11 | 2026-08-25 11:40:00 | none | 2026-08-25 11:40:05 |
+| 19 | 2026-08-25 17:35:00 | 2026-08-25 17:35:05 | 2026-08-25 18:00:00 |
+| 20 | 2026-08-25 17:50:00 | 2026-08-25 17:50:05 | 2026-08-25 18:00:00 |
+| 21, 22 | 2026-08-25 18:00:00 | 2026-08-25 18:00:05 | 2026-08-25 18:30:00 |
+| 25 | 2026-08-25 20:50:25 | 2026-08-25 20:50:30 | 2026-08-25 21:09:00 |
+| 26 | 2026-08-25 21:00:00 | none | 2026-08-25 21:09:00 |
+
+THE CAVEAT ON THOSE COUNTS: a `flat` token is not proof of a pin. These are flat-token counts, so
+they BOUND the opportunity rather than measure it. The pin counts need `fdm2-rline-enhance` built.
 
 NOTHING IS BUILT.
 
