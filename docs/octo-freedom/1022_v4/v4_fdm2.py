@@ -1325,6 +1325,41 @@ def stop_bar(LN, opn, ex, side, cap):
     return int(opn) + int(hit[0]) if len(hit) else None
 
 
+def x_cross_raw(LN, tf, side, frm, B):
+    """The first ws{tf}x cross of {boundary, r, Mage} strictly after `frm`, WITH NO HOLD. -> bar|None.
+
+    HIS 1108: *"there is no hold - the cross is read raw. context: if the diff pattern doesn't give
+    a usable result, then the cad walk will automatically consume the wob. if the diff pattern has
+    a verdict, we've saved 2 minutes and gained profit"*.
+
+    SEPARATE FROM x_race ON PURPOSE. x_race's FDM_X10_WOB 24-bar = 120 s hold is its contract and
+    the fdm2 leg walk, the ws10x race and v4saviour all depend on it. This is a second reader for
+    `fdm2-xcv` only, so neither can change the other.
+
+    HIS THREE RACERS, his word for the first one: *"race:{Mage,boundary,r}"*. `boundary` is the oob
+    fence - ws{tf}x crossing from beyond it to inside. The r and Mage racers are the line's own
+    closed-prev values, as x_race reads them. Cross UNDER on the high side, OVER on the low side.
+
+    CAUSAL: one forward pass, and the bar returned is the bar the cross is visible on. With no hold
+    there is nothing to confirm, so the cross bar IS the knowable bar.
+    """
+    X, R, M = x_of(LN, tf), LN['CPR'][int(tf)], LN['CPM'][int(tf)]
+    fnc = float(K.OOB_HI) if int(side) > 0 else float(K.OOB_LO)
+    for i in range(max(1, int(frm) + 1), int(B) + 1):
+        a, b = X[i - 1], X[i]
+        if not np.isfinite([a, b]).all():
+            continue
+        if (a >= fnc and b < fnc) if side > 0 else (a <= fnc and b > fnc):
+            return int(i), 'boundary'
+        for nm, other in (('ws%dr' % int(tf), R), ('ws%dMage' % int(tf), M)):
+            oa, ob = other[i - 1], other[i]
+            if not np.isfinite([oa, ob]).all():
+                continue
+            if (a >= oa and b < ob) if side > 0 else (a <= oa and b > ob):
+                return int(i), nm
+    return None
+
+
 def stop_bar_at(LN, opn, ex, side, level):
     """The first bar pxs reaches an absolute price `level` on the adverse side. -> bar or None.
 

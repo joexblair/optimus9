@@ -17,51 +17,48 @@ The code is `1107_sandbox_xcross/`. The knobs are `1107_sandbox_xcross/sandbox_k
 
 ---
 
-## 0. `fdm2-xcv` - THE INDENTED SPEC
+## 0. `fdm2-xcv` - HIS SPEC, 1108, VERBATIM
 
-His indentation rule: a deeper level nests INSIDE the one above, so `--` under `-` reads as AND.
-
-HIS 1108: *"the first job is to drop the 4 dynamic rows from the report, and replace them with
-ws4x. the end result is 8 rows per cadence, covering ws4 and ws5 x crosses"*. The dynamic TF is
-gone, so his items 2 and 3 are off the report path and the scan range *"will become irrelevant"*.
+HIS 1108, after reading what I had built: *"it feels like you're over-complicating a simple mech /
+this is all you need for now"*. His spec, as he wrote it:
 
 ```
-1) IF a cadence event prints on `side` - the BUILT cadence: ws1b's oob excursion, its cross back to
-   ib, the nestle, and ws3Mage ex-25/75 with its rescue
-2) -THEN the cadence event's own side is the x side, for every x line in XCV_TFS: ws4x and ws5x
-3) --FOR EACH of those x lines
-4) ---IF that ws{TF}x emerging crosses, strictly after the cadence event bar, to the first of
-       in-bounds, OR its own closed-prev ws{TF}r, OR its own closed-prev ws{TF}Mage
-5) ----IF that cross holds for FDM_X10_WOB 24 bars = 120 s, counting the cross bar
-6) -----THEN walk back to look forward from the cross bar, in MC_GAP 48-bar = 240 s steps, to that
-         ws{TF}x extremum on the cadence event's side
-7) ------THEN print 4 rows: ws30r..ws10r EMERGING at that extremum, the same 21 columns at the
-          cross bar, their difference, and its direction
-8) -------SO one xcross validator report is 8 rows per cadence event, 4 for ws4x and 4 for ws5x
+diff-function()
+    --use "walkback to look forward' to find the pre-cross extremum of ws{knob:5}x, and collect the line values for ws10-ws30
+    --collect the line values for ws10-ws30 at the x-cross
+    --report the diff(extremum,xcross) for each line
+
+:START
+IF a cadence event fires
+-IF a ws{knob:5}x cross race:{Mage,boundary,r} event printed inside that cadence's window  #standard cross under for lowside / cross over for highside
+--call diff-function
+--make a verdict based on the ws30-ws10 diff pattern  (to be built)
+-ELSE IF NOT ws{knob:5}x cross race:{Mage,boundary,r} event printed inside that cadence's window
+--walk to race:{next cadence, x-cross}
+--IF x-cross wins the race
+---call diff-function
+--ELSE IF next cadence wins the race
+---goto START
 ```
 
-- the trade is never read. His *"the trade won't be considered. this means you can use the side of
-  the cadence to dictate the side of the ws{}x cross"*.
-- HIS 1108 RULINGS, settled: `towards` is step 1's trajectory reader with no anchor; the scan range
-  is no longer read; the existing no-duplicate-at-one-bar rule applies, and he noted *"there will
-  be a time in the future when this changes"*; `FAKE_DAY` needs no action.
-- HIS 1108 RULING, the race bound: *"the next {any_}cadence"*. The ws{TF}x race may not pass the
-  first cadence event on EITHER side strictly after the one it started from; the tape end only when
-  none follows. Measured on 2026-08-25: of the 56 x-line rows, **12 lose their cross entirely**
-  because the next cadence event arrives first, and 44 are unchanged. Four cadence events lose BOTH
-  x lines and so print no rows at all - 2026-08-25 17:10:00 LOW, 17:51:00 HIGH, 19:35:00 LOW and
-  20:52:00 LOW.
-- HIS 1108 RULING, the walk back: *"unbounded"*.
-- HIS 1108 CHALLENGE, ANSWERED: he asked me to prove the extremum can sit BEFORE the cadence event,
-  saying his view was that it cannot. It can, and it is the common case: on 2026-08-25, **29 of the
-  56 extremum rows** sit before their own cadence event bar, the furthest being 2026-08-25 10:04:00
-  LOW whose ws4x and ws5x extremum is 09:53:55, 121 bars = 10.1 min earlier. The walk back starts
-  at the CROSS bar and steps back in 240 s jumps with no bound, so it can reach past the event.
-- every read is same-side. oob is 15/85, ex-fence is 20/80.
-- HIGH and LOW cadence events go to separate files.
-- nothing in clauses 1 to 8 opens, closes or scores a trade. `fdm2-xcv` is a report.
+### his 1108 rulings that fill the gaps in it
 
----
+| the gap I raised | his ruling |
+|---|---|
+| one x line or two | ONE. *"this is on me - the top rows (the dynamic xcross and the ws4 xcross) were' just for my ref. ws5x is the one all of my timestamps were based on"*. `WS5X_TF` 5 is the `ws{knob:5}x` knob; my `XCV_TFS '4,5'` is removed |
+| the verdict when it reads `none` | *"we haven't got that far yet"*. PARKED |
+| the hold | *"there is no hold - the cross is read raw"*, and his reason: *"if the diff pattern doesn't give a usable result, then the cad walk will automatically consume the wob. if the diff pattern has a verdict, we've saved 2 minutes and gained profit"*. So `F2.x_cross_raw`, not `F2.x_race` |
+| the ws10-ws30 read | *"emerging"* |
+| which line ws10-ws30 is | *"ws10r to ws30r, on banked config"* - StochRSI 7\|5\|8\|close |
+| what a skipped cadence prints | *"no note. if there's a fault to diagnose, I'll be looking at the charts and it will be obvious to me if the 'skipped' cadence has any impact on the debugging"*. NOTHING is printed |
+| the no-duplicate-at-one-bar rule | *"stands"* |
+| the rev-trade | *"not yet. I want to see the fundamentals aligned with me before we do anything more"* |
+
+### `F2.x_cross_raw` is a SECOND reader, not a change to `F2.x_race`
+
+`x_race`'s `FDM_X10_WOB` 24-bar = 120 s hold is its contract, and the fdm2 leg walk, the ws10x
+race and v4saviour all depend on it. `x_cross_raw` exists for `fdm2-xcv` alone, so neither can
+move the other. With no hold there is nothing to confirm, so the cross bar IS the knowable bar.
 
 ## 1. `fdm2-xcv` - HIS FOUR ITEMS
 

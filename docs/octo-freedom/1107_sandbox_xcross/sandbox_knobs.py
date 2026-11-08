@@ -29,14 +29,12 @@ REPORT_TF_LO = _knob('REPORT_TF_LO', 10, int)       # the report's last r column
 #   THE SECOND r BLOCK, HIS 1107: *"drop the r2 rows, and replace them with r rows that were calculated on
 #   ws5x"* - the same race and walk back on ws5x, whatever TF the cadence selected. BANKED 1108: *"bank the latest
 #   version, the one that has ws5x as a static line for each table"*
-XCV_TFS = _knob('XCV_TFS', '4,5', str)    # HIS 1108: the report's x lines, ws4x and ws5x
-#   HIS 1108: *"the first job is to drop the 4 dynamic rows from the report, and replace them with
-#   ws4x. the end result is 8 rows per cadence, covering ws4 and ws5 x crosses"*.
-#   THE DYNAMIC TF IS NO LONGER READ BY THE REPORT. His four-item spec's items 2 and 3 - the highest
-#   ex-20/80 towards line, and that line setting the ws{TF}x - are off the report path, which is why
-#   he said the scan range *"will become irrelevant"*. The cadence event's SIDE still sets the x
-#   side; nothing else about item 1 or items 4 to 8 moves.
-WS5X_TF = _knob('WS5X_TF', 5, int)
+WS5X_TF = _knob('WS5X_TF', 5, int)    # HIS 1108: the ONE x line - his `ws{knob:5}x`
+#   HIS 1108, withdrawing his own earlier words: *"this is on me - the top rows (the dynamic xcross
+#   and the ws4 xcross) were' just for my ref. ws5x is the one all of my timestamps were based
+#   on"*. So the report carries ONE x line and `WS5X_TF` is the knob his spec writes as
+#   `ws{knob:5}x`. My XCV_TFS '4,5' knob, added hours earlier for the two-line ruling he has now
+#   withdrawn, is REMOVED - two knobs holding one x line is a drift trap.
 
 # ── ws{TF}r2, HIS 1107: *"create a new `ws{TF}r2` stochrsi line: klen:6, rsilen:6, stochrange:10, src close"*
 #   built in memory by sandbox_xcross.r2_lines(); not read by the report since he dropped its rows
@@ -62,7 +60,6 @@ FAKE_TO = _knob('FAKE_TO', '19:20:00', str)
 RULED = {
     'REPORT_TF_HI': (30, 'TF', '"report the ws30r to ws10r emerging values in a 22 column table"'),
     'REPORT_TF_LO': (10, 'TF', '"report the ws30r to ws10r emerging values in a 22 column table"'),
-    'XCV_TFS': ('4,5', 'TFs', '1108 "drop the 4 dynamic rows from the report, and replace them with ws4x. the end result is 8 rows per cadence, covering ws4 and ws5 x crosses"'),
     'WS5X_TF': (5, 'TF', '"replace them with r rows that were calculated on ws5x", then 1108 "bank the latest '
                          'version, the one that has ws5x as a static line for each table"'),
     'R2_KLEN': (6, 'bars', '"klen:6"'),

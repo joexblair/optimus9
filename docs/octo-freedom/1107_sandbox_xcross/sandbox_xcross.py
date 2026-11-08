@@ -87,8 +87,8 @@ R2 = {}                                  # tf -> the ws{tf}r2 array, built once 
 #   r2_lines() IS NOT READ BY THE REPORT. Joe 1107 dropped the r2 rows for the ws5x ones; the producer stays so
 #   ws{TF}r2 - his named line - can be read again without re-deriving it.
 WS5X_TF = SK.WS5X_TF                     # HIS 1107 second block: r rows calculated on ws5x
-XCV_TFS = tuple(int(x) for x in str(SK.XCV_TFS).split(',') if x.strip())
-#   HIS 1108 report lines: ws4x and ws5x, both fixed. 4 rows each = 8 rows per cadence event.
+XCV_TFS = (int(SK.WS5X_TF),)
+#   HIS 1108: ONE x line, `WS5X_TF` 5 - his `ws{knob:5}x`. 4 rows per cadence event.
 E_CFG = BBLine(length=SK.E_LEN, mult=SK.E_MULT, src=SK.E_SRC)  # HIS 1107 ws{TF}e, BB%B 4|0.5|close
 
 
@@ -198,7 +198,8 @@ def report(LN, side, ev, n_of, s0=None):
     for xtf in XCV_TFS:
         rows, why = r_block(LN, side, ev, int(xtf), s0)
         if rows is None:
-            notes.append(why)
+            if why:
+                notes.append(why)
             continue
         g += rows
     return out + (table(g) if len(g) > 1 else []) + notes
@@ -291,11 +292,13 @@ def r_block(LN, side, ev, xtf, s0=None):
     #   own oob excursion, from `s0` to the cadence event bar, and F2.cadence_events hands `s0`
     #   back. The race therefore starts at the EXCURSION OPEN, not at the event bar + 1, so a
     #   cross that fired while ws1b was still oob is this event's cross.
-    #   CAUSAL: the report is produced at the cadence event, and every bar from s0 to the event is
-    #   at or before it. A cross inside the window whose CONFIRM lands after the event is still
-    #   only knowable at that confirm bar, which x_race already enforces with its own hold.
+    #   HIS 1108 ON THE HOLD: *"there is no hold - the cross is read raw"*, and his reason - *"if
+    #   the diff pattern doesn't give a usable result, then the cad walk will automatically consume
+    #   the wob. if the diff pattern has a verdict, we've saved 2 minutes and gained profit"*. So
+    #   F2.x_cross_raw, not F2.x_race: the first cross of {boundary, r, Mage} with nothing to
+    #   confirm. The cross bar IS the knowable bar.
     frm = (int(s0) - 1) if s0 is not None else int(ev)
-    r = F2.x_race(LN, xtf, side, frm, bnd)
+    r = F2.x_cross_raw(LN, xtf, side, frm, bnd)
     if r is None:
         #   HIS 1108 race bound is the next cadence event, so the message names THAT bar. It read
         #   "before the tape ends" after the bound moved, which is a label describing a rule the
@@ -304,13 +307,13 @@ def r_block(LN, side, ev, xtf, s0=None):
         #   back or forward. with that data, I can make decisions"*. So the note also carries the
         #   NEAREST cross either side of the cadence event, found with NO bound at all - the whole
         #   tape - because a bounded nearest read would just restate the bound that failed.
-        end = len(LN['close']) - 1
-        bnd_txt = ('the next cadence event %s' % ln.U(int(bnd)) if int(bnd) != int(end)
-                   else 'the tape ends')
-        return None, ('ws%dx has no cross from the cadence window open %s to %s. %s'
-                      % (xtf, ln.U(int(s0)) if s0 is not None else ln.U(int(ev)), bnd_txt,
-                         nearest_cross_note(LN, xtf, side, ev)))
-    cf, which, c = r
+        #   HIS 1108: *"no note. if there's a fault to diagnose, I'll be looking at the charts
+        #   and it will be obvious to me if the 'skipped' cadence has any impact on the
+        #   debugging"*. So a cadence event the next cadence event beat prints NOTHING - his spec's
+        #   `goto START`, and the next event's own report is the record.
+        return None, None
+    c, which = r
+    cf = c                                  # no hold, so nothing to confirm - his 1108
     X = F2.x_of(LN, xtf)
     wb = JIG.mage_cascade_bar(X, c, side, mode='extrema', gap=JIG.MC_GAP)
     if wb is None:
