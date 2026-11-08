@@ -80,8 +80,8 @@ of the answer.
 | the gate | state |
 |---|---|
 | before-capture, all 23 kinds, on the bank | DONE - 1440 lines, `RULED_OK True`, no kind errors |
-| stage 1 moved | pending |
-| after-capture, stage 1, byte-identical on all 23 | pending |
+| stage 1 moved | DONE - `out/xcv_report.py`, 7 builders, 380 lines |
+| after-capture, stage 1, byte-identical on all 23 | DONE - 23 of 23 identical by sha1, 0 differing |
 | stage 2 moved | pending |
 | after-capture, stage 2, byte-identical on all 23 | pending |
 

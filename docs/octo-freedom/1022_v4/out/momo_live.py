@@ -64,6 +64,7 @@ try:
     import ln
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__))))
     import momo_render as R
+    import xcv_report as XR
     import re_sigcache as SC
 finally:
     sys.stderr = _e
@@ -166,295 +167,25 @@ def answer(q):
         out += R.c3rmage_table(LN, A, B, lab)
         return out
     if kind == 'tawaway':
-        #   HIS 1108: *"show the towards/away data at 0551, for ws10 to ws30. add a column that
-        #   tells how long an away line has been printing away"*.
-        #   THE SAME READ THE CAD WALK USES. exf_passed calls JIG.fdm2_cad_mom_detector on
-        #   LN['EMR'][t] with the cadence window's own s0, the LIFT_* knobs, the lift-off stamp
-        #   gate and rev_since - FDM_XCAD_REV_FROM 'window' puts rev_since at s0. Reproduced here
-        #   bar for bar so the two cannot disagree.
-        import numpy as _np
-        from optimus9.analysis import jig as _JIG
-        at = ln.K(str(q['at']))
-        sd = +1 if str(q.get('side', 'HIGH')).upper() == 'HIGH' else -1
-        ev = ln.K(str(q['ev']))
-        s0 = ln.K(str(q['s0']))
-        TFS = list(range(int(q.get('hi', 30)), int(q.get('lo', 10)) - 1, -1))
-        rs = int(s0) if str(K.FDM_XCAD_REV_FROM) == 'window' else None
-        to_read = str(K.FDM_XCAD_REV_TO) == 'read'
-        gate = {t: (_np.asarray(LN['LIFT'][(t, int(sd))], int) if to_read
-                    else _np.asarray([b for b in LN['LIFT'][(t, int(sd))]
-                                      if (rs if rs is not None else 0) <= b <= int(ev)], int))
-                for t in TFS}
-
-        def state(t, b):
-            return _JIG.fdm2_cad_mom_detector(LN['EMR'][t], LN['EMR'][t], int(b), int(sd),
-                                              int(s0), K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL,
-                                              K.LIFT_WOB, stamps=gate[t], rev_since=rs)['state']
-        out += ['', '# towards / away at %s, %s side. The cadence event %s, its window opens %s'
-                % (ln.U(at), q.get('side', 'HIGH'), ln.U(ev), ln.U(s0)), '']
-        out += ['| the line | the state at %s | ex-20/80 there | its r value | how long it has held '
-                'that state | since |' % ln.U(at), '|---|---|---|---|---|---|']
-        for t in TFS:
-            st = state(t, at)
-            #   HOW LONG: walk BACK bar by bar while the state is unchanged. NO CAP - it runs to
-            #   the cadence window's open and reports that it reached it, rather than inventing a
-            #   lookback. Every bar it reads is at or before `at`.
-            b = int(at)
-            while b - 1 >= int(s0) and state(t, b - 1) == st:
-                b -= 1
-            n = int(at) - b + 1
-            hit = (b > int(s0))
-            out.append('| ws%dr | %s | %s | %.2f | %d bars = %.1f min | %s |'
-                       % (t, st,
-                          'EXF' if F2.ex2080_line(LN, t, int(at), int(sd)) else '.',
-                          float(LN['EMR'][t][int(at)]), n, n * 5 / 60.0,
-                          ln.U(b) if hit else 'the window open %s or earlier' % ln.U(int(s0))))
-        out += ['']
-        sts = [state(t, at) for t in TFS]
-        out.append(R.row('towards', '%d of %d' % (sts.count('towards'), len(TFS))))
-        out.append(R.row('away', '%d of %d' % (sts.count('away'), len(TFS))))
-        out.append(R.row('neither', '%d of %d' % (len(TFS) - sts.count('towards')
-                                                  - sts.count('away'), len(TFS))))
-        hits = [t for t in TFS if state(t, at) == 'towards'
-                and F2.ex2080_line(LN, t, int(at), int(sd))]
-        out.append(R.row('towards AND ex-20/80 - the 4-pronged test over this range',
-                         ', '.join('ws%d' % t for t in hits) if hits else 'none'))
-        out.append(R.row('the knobs', 'FDM_XCAD_REV_FROM %s, FDM_XCAD_REV_TO %s, LIFT_PTS %d, '
-                                      'LIFT_TOL %g, LIFT_WOB %d'
-                         % (K.FDM_XCAD_REV_FROM, K.FDM_XCAD_REV_TO, int(K.LIFT_PTS),
-                            float(K.LIFT_TOL), int(K.LIFT_WOB))))
-        out.append(R.row('the range read', 'ws%d..ws%d - HIS ASK. The cad walk\'s own test reads '
-                                           'ws%d..ws%d' % (TFS[-1], TFS[0],
-                                                           int(K.FDM_STEP1_ABOVE_TF) + 1,
-                                                           int(LN['HI']))))
+        out += XR.tawaway_table(LN, str(q['at']), str(q['ev']), str(q['s0']),
+                                side=str(q.get('side', 'HIGH')),
+                                hi=int(q.get('hi', 30)), lo=int(q.get('lo', 10)))
         return out
     if kind == 'xcvdiff':
-        #   HIS 1108: *"show the 'xcross validator report · HIGH' report that created the up
-        #   verdict at 0551. show also the report at 0535"*. The 0535 block is in the report FILE;
-        #   the 0551 block is a cad-walked bar and the file has no report for it, so this prints
-        #   the same four rows for any (extremum, read bar) pair.
-        import numpy as _np
-        tf = int(q.get('tf', 5))
-        ext = ln.K(str(q['ext']))
-        at = ln.K(str(q['at']))
-        lab = str(q.get('label', 'cross'))
-        #   HIS 1108: *"for the cad walk only: instead of anchoring on the pre-x-cross extremum,
-        #   anchor on the x-cross values"*. So the first row's label is the CALLER'S - it is the
-        #   extremum for the report's own block and the x-cross for a cad-walked bar - and the diff
-        #   row names whichever one was handed in. A row labelled `extremum` while holding the
-        #   cross's values is the kind of label that outlives the rule it described.
-        alab = str(q.get('anchor', 'ws%dx high extremum' % tf))
-        TFS = list(range(30, 9, -1))
-        EM = LN['EMR']
-        #   The heading names the ANCHOR it was handed, not the word `extremum`: the cad walk
-        #   anchors on the x-cross under his 1108 ruling, so a heading that says `extremum`
-        #   while holding the cross's values is the same stale label as the diff row's was.
-        out += ['', '# ws%dx, %s %s against %s (%s)'
-                % (tf, alab, ln.U(ext), ln.U(at), lab), '']
-        hdr = ['line · timestamp'] + ['ws%d' % t for t in TFS]
-        out += ['| ' + ' | '.join(hdr) + ' |', '|' + '---|' * len(hdr)]
-        e = ['%.2f' % float(EM[t][ext]) for t in TFS]
-        a = ['%.2f' % float(EM[t][at]) for t in TFS]
-        d = [float(EM[t][at]) - float(EM[t][ext]) for t in TFS]
-        out.append('| r · %s (%s) | %s |' % (ln.U(ext), alab, ' | '.join(e)))
-        out.append('| r · %s (%s) | %s |' % (ln.U(at), lab, ' | '.join(a)))
-        out.append('| r · ws%dx diff (%s - %s) | %s |'
-                   % (tf, lab, alab.replace('ws%dx high ' % tf, '').replace('ws%dx low ' % tf, ''),
-                      ' | '.join('%+.2f' % x for x in d)))
-        out.append('| r · ws%dx direction of the diff | %s |'
-                   % (tf, ' | '.join('up' if x > 0 else 'down' if x < 0 else 'flat' for x in d)))
-        L4 = d[:4]
-        u = sum(1 for x in L4 if x > 0)
-        dn = sum(1 for x in L4 if x < 0)
-        out += ['']
-        out.append(R.row('the 4 lefthand TFs, ws30 ws29 ws28 ws27',
-                         ' '.join('up' if x > 0 else 'down' if x < 0 else 'flat' for x in L4)))
-        out.append(R.row('ups / downs / flats of those 4', '%d / %d / %d' % (u, dn, 4 - u - dn)))
-        out.append(R.row('the 3-of-4 read',
-                         'up' if u >= 3 else 'down' if dn >= 3 else 'none'))
+        out += XR.xcvdiff_table(LN, str(q['ext']), str(q['at']),
+                                tf=int(q.get('tf', 5)),
+                                label=str(q.get('label', 'cross')),
+                                anchor=q.get('anchor'))
         return out
     if kind == 'xcv':
-        #   HIS 1108 `fdm2-xcv` TABLE, with his two new columns. His spec: one x line
-        #   `ws{knob:5}x`, the race started at the cadence WINDOW OPEN, bounded by the next cadence
-        #   event on either side, the FDM_X10_WOB hold restored - *"ok - that makes the wob
-        #   necessary"* - and the pre-cross extremum from jig.mage_cascade_bar.
-        #   THE TWO NEW COLUMNS, his words: *"1) the cad-walked timestamp when 3 ups or 3 downs
-        #   print after a 'none' 3of4 read, 2) the up/down verdict"*, and *"if the 3-of-4 read is
-        #   not none for a row, the fields in the new columns will read '-'"*.
-        import numpy as _np
-        from optimus9.analysis import jig as _JIG
-        tf = int(q.get('tf', 5))
-        day = str(q['day'])
-        A, B = ln.K(day + ' 00:00:00'), ln.K(day + ' 23:59:55')
-        NB = len(LN['close']) - 1
-        TFS = list(range(30, 9, -1))
-        LEFT = (30, 29, 28, 27)
-        X = F2.x_of(LN, tf)
-        EM = LN['EMR']
-        #   EVERY cadence event bar on the tape, both sides - the race bound is the next one on
-        #   either side, his *"the next {any_}cadence"*.
-        allcad = sorted(set(int(e[0]) for sd2 in (+1, -1)
-                            for e in F2.cadence_events(LN, sd2, 0, NB)))
-
-        def bound(ev):
-            i = _bisect.bisect_right(allcad, int(ev))
-            return allcad[i] if i < len(allcad) else NB
-
-        def dirs(ext, bar):
-            out2 = []
-            for t in LEFT:
-                d = float(EM[t][int(bar)]) - float(EM[t][int(ext)])
-                out2.append('up' if d > 0 else 'down' if d < 0 else 'flat')
-            return out2
-
-        def read34(c):
-            u, d = c.count('up'), c.count('down')
-            return 'up' if u >= 3 else 'down' if d >= 3 else 'none'
-
-        ev = []
-        for sd2 in (+1, -1):
-            for e in F2.cadence_events(LN, sd2, A, B):
-                ev.append((int(e[0]), sd2, int(e[1])))
-        out += ['', '# fdm2-xcv, ws%dx, %s' % (tf, day), '']
-        out += ['| # | the cadence event | side | the ws%dx extremum | the ws%dx cross | his branch '
-                '| ws30 ws29 ws28 ws27 | the 3-of-4 read | the cad-walked timestamp | the verdict |'
-                % (tf, tf), '|---|---|---|---|---|---|---|---|---|---|']
-        n = 0
-        for b, sd2, s0 in sorted(ev):
-            n += 1
-            r = F2.x_race(LN, tf, sd2, int(s0) - 1, bound(b))
-            if r is None:
-                out.append('| %d | %s | %s | - | NONE | goto START | - | NO ROWS | - | - |'
-                           % (n, ln.U(b), 'HIGH' if sd2 > 0 else 'LOW'))
-                continue
-            cf, which, c = r
-            Mx = _JIG.mage_cascade_bar(X, int(c), int(sd2), mode='extrema',
-                                       gap=int(_JIG.MC_GAP))
-            if Mx is None:
-                out.append('| %d | %s | %s | none | %s | - | - | NO EXTREMUM | - | - |'
-                           % (n, ln.U(b), 'HIGH' if sd2 > 0 else 'LOW', ln.U(int(c))))
-                continue
-            ext = int(Mx[0])
-            d4 = dirs(ext, int(c))
-            v = read34(d4)
-            br = ('1 - inside the window' if int(c) <= int(b) else '2 - the x-cross won')
-            #   HIS CAD WALK, and HIS 1108 ANCHOR RULING: *"for the cad walk only: instead of
-            #   anchoring on the pre-x-cross extremum, anchor on the x-cross values"*. So the
-            #   report's own block still reads cross - extremum, and the cad walk reads
-            #   the current bar - THE CROSS. The anchor is `c`, not `ext`.
-            #   NO BOUND IS APPLIED: he has not ruled one here, so the cad walk runs to the tape
-            #   end and the delay is reported beside it. A bound can only cut rows, never add them.
-            cw, cv = '-', '-'
-            if v == 'none':
-                for t2 in range(int(c) + 1, NB + 1):
-                    vv = read34(dirs(int(c), t2))
-                    if vv != 'none':
-                        cw, cv = ln.U(t2), vv
-                        break
-                else:
-                    cw, cv = 'never to the tape end', 'none'
-            out.append('| %d | %s | %s | %s | %s | %s | %s | %s | %s | %s |'
-                       % (n, ln.U(b), 'HIGH' if sd2 > 0 else 'LOW', ln.U(ext), ln.U(int(c)), br,
-                          ' '.join(d4), v, cw, cv))
+        out += XR.xcv_table(LN, str(q['day']), tf=int(q.get('tf', 5)))
         return out
     if kind == 'xdiag':
-        #   HIS 1108: *"what exactly happens at the timestamps in 'the x line with no cross'?"*.
-        #   Every CROSS CANDIDATE in the span and why it did not become the race's cross - the
-        #   three arms of F2.x_race, reported rather than decided.
-        import numpy as _np
-        tf = int(q['tf'])
-        sd = +1 if str(q.get('side', 'HIGH')).upper() == 'HIGH' else -1
-        A, B = ln.K(str(q['from'])), ln.K(str(q['to']))
-        w = max(1, int(K.FDM_X10_WOB))
-        X = F2.x_of(LN, tf)
-        #   NOT `R` and `M`: `R` is the module-level momo_render import, and assigning it here
-        #   makes it a local for the WHOLE answer() body, so every other kind's `R.stamp(LN)`
-        #   raises UnboundLocalError. Python decides that at compile time, not at the assignment.
-        Rr, Mm = LN['CPR'][tf], LN['CPM'][tf]
-        out += ['', '# ws%dx race candidates, %s side, %s .. %s'
-                % (tf, q.get('side', 'HIGH'), str(q['from']), str(q['to'])), '']
-        out += ['| the arm | the candidate bar | ws%dx there | the racer there | what happened |' % tf,
-                '|---|---|---|---|---|']
-        n = 0
-        for c, cf, s2 in F2.oob_ib_cross(X, K.OOB_HI, K.OOB_LO, w):
-            if int(s2) != sd or int(c) < int(A) or int(c) > int(B):
-                continue
-            n += 1
-            out.append('| ib | %s | %.2f | the %g/%g oob fence | crosses oob to ib, confirms %s - %s |'
-                       % (ln.U(int(c)), float(X[int(c)]), float(K.OOB_HI), float(K.OOB_LO),
-                          ln.U(int(cf)),
-                          'INSIDE the span' if int(cf) <= int(B) else 'PAST the span end'))
-        for nm, other in (('ws%dr' % tf, Rr), ('ws%dMage' % tf, Mm)):
-            for i in range(max(1, int(A)), int(B) + 1):
-                a, b = X[i - 1], X[i]
-                oa, ob = other[i - 1], other[i]
-                if not _np.isfinite([a, b, oa, ob]).all():
-                    continue
-                crossed = (a >= oa and b < ob) if sd > 0 else (a <= oa and b > ob)
-                if not crossed:
-                    continue
-                n += 1
-                end = i + w
-                if end > len(X) or i + w - 1 > int(B):
-                    out.append('| %s | %s | %.2f | %.2f | crosses, but its %d-bar = %d s hold ends '
-                               '%s - PAST the span end |'
-                               % (nm, ln.U(i), float(X[i]), float(other[i]), w, w * 5,
-                                  ln.U(min(i + w - 1, len(X) - 1))))
-                    continue
-                broke = None
-                for j in range(i, end):
-                    held = (X[j] < other[j]) if sd > 0 else (X[j] > other[j])
-                    if not held:
-                        broke = j
-                        break
-                out.append('| %s | %s | %.2f | %.2f | %s |'
-                           % (nm, ln.U(i), float(X[i]), float(other[i]),
-                              'crosses and HOLDS all %d bars, confirming %s' % (w, ln.U(i + w - 1))
-                              if broke is None else
-                              'crosses, but the hold BREAKS at %s - ws%dx %.2f against %.2f'
-                              % (ln.U(broke), tf, float(X[broke]), float(other[broke]))))
-        if not n:
-            out.append('| none | - | - | - | no bar in the span crosses any of the three racers |')
-        out.append('')
-        out.append('| the span read | value |')
-        out.append('|---|---|')
-        out.append(R.row('ws%dx over the span' % tf, 'min %.2f, max %.2f'
-                         % (float(_np.nanmin(X[int(A):int(B) + 1])),
-                            float(_np.nanmax(X[int(A):int(B) + 1])))))
-        oobm = (X[int(A):int(B) + 1] >= float(K.OOB_HI)) if sd > 0 \
-            else (X[int(A):int(B) + 1] <= float(K.OOB_LO))
-        out.append(R.row('bars where ws%dx is same-side oob' % tf,
-                         '%d of %d' % (int(oobm.sum()), int(B) - int(A) + 1)))
-        out.append(R.row('the hold', '%d bars = %d s, counting the cross bar' % (w, w * 5)))
+        out += XR.xdiag_table(LN, str(q['from']), str(q['to']), int(q['tf']),
+                              side=str(q.get('side', 'HIGH')))
         return out
     if kind == 'xcross':
-        #   HIS 1108: *"using the known cadences (not the fake cadences), apply the xcross
-        #   validator mech to 08-25 and confirm you can recreate the same ws5x cross timestamps as
-        #   seen in the xcross-validator report"*.
-        #   INDEPENDENT REBUILD. This calls F2.cadence_events and F2.x_race directly off the live
-        #   tape - it does not import the sandbox script or read its output files. If the two
-        #   agree, two separate call sites produced the same bars.
-        day = str(q['day'])
-        A, B = ln.K(day + ' 00:00:00'), ln.K(day + ' 23:59:55')
-        tf = int(q.get('tf', 5))
-        out += ['', '# the ws%dx race from every KNOWN cadence event, %s' % (tf, day), '']
-        out += ['| the cadence event | side | the ws%dx cross | which racer | the confirm bar | '
-                'the race bound |' % tf, '|---|---|---|---|---|---|']
-        ev = []
-        for sd in (+1, -1):
-            for e in F2.cadence_events(LN, sd, A, B):
-                ev.append((int(e[0]), sd))
-        NB = len(LN['close']) - 1
-        for b, sd in sorted(ev):
-            r = F2.x_race(LN, tf, sd, int(b), NB)
-            if r is None:
-                out.append('| %s | %s | none to the tape end | - | - | %s |'
-                           % (ln.U(b), 'HIGH' if sd > 0 else 'LOW', ln.U(NB)))
-                continue
-            cf, which, cx = r
-            out.append('| %s | %s | %s | %s | %s | %s |'
-                       % (ln.U(b), 'HIGH' if sd > 0 else 'LOW', ln.U(int(cx)), which,
-                          ln.U(int(cf)), ln.U(NB)))
+        out += XR.xcross_table(LN, str(q['day']), tf=int(q.get('tf', 5)))
         return out
     if kind == 'legmfe':
         #   HIS 1108: *"can you derive that from sweep-pivots? using a rolling 8 hour window, and
@@ -468,30 +199,7 @@ def answer(q):
                               float(q.get('step_h', 1.0)))
         return out
     if kind == 'cadlist':
-        #   HIS 1108 CHECK on three c3r rows: *"the low cadence at 0853"*, *"high side cadence at
-        #   1226"*, *"the leg ultimately lands on low side 1634 cadence"*. His eyes are a
-        #   measurement, so the cadence events are read off F2.cadence_events and listed beside
-        #   his quoted times rather than taken on trust either way.
-        A, B = ln.K(str(q['from'])), ln.K(str(q['to']))
-        out += ['', '# every cadence event, both sides, %s to %s'
-                % (str(q['from']), str(q['to'])), '']
-        #   THE pxs PRICE AT THE EVENT BAR rides along: his 1108 three rows ask what the outgoing
-        #   trade would realise if an opposite-side cadence event closed it, and that needs the
-        #   price on the event bar, not just its timestamp.
-        import numpy as _np
-        _px = _np.asarray(LN['close'], float)
-        out += ['| the cadence event | side | the ws1b excursion opened at | pxs at the event bar '
-                '| why |', '|---|---|---|---|---|']
-        ev = []
-        for sd in (+1, -1):
-            for e in F2.cadence_events(LN, sd, A, B):
-                ev.append((int(e[0]), sd, int(e[1]), str(e[2])))
-        for b, sd, s0, why in sorted(ev):
-            out.append('| %s | %s | %s | %.6f | %s |'
-                       % (ln.U(b), 'HIGH' if sd > 0 else 'LOW', ln.U(s0), float(_px[b]),
-                          why.replace('|', '\\|')))
-        if not ev:
-            out.append('| none | - | - | - | - |')
+        out += XR.cadlist_table(LN, str(q['from']), str(q['to']))
         return out
     if kind == 'pivstop':
         #   HIS 1108: *"lets see if you can use your research to find a dynamic stop for each
@@ -722,6 +430,7 @@ def serve():
                 globals()['K'] = importlib.reload(K)
                 globals()['F2'] = importlib.reload(F2)
                 globals()['R'] = importlib.reload(R)
+                globals()['XR'] = importlib.reload(XR)
                 assert set(LN) >= {'close', 'CPR', 'EMR', 'MGE', 'CPM', 'HI'}, \
                     'load() contract changed - the held arrays are no longer valid'
                 globals()['M'] = F2._momo_lines(LN)
