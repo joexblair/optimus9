@@ -164,6 +164,76 @@ def answer(q):
                 % (str(q['from']), str(q['to'])), '']
         out += R.c3rmage_table(LN, A, B, lab)
         return out
+    if kind == 'xdiag':
+        #   HIS 1108: *"what exactly happens at the timestamps in 'the x line with no cross'?"*.
+        #   Every CROSS CANDIDATE in the span and why it did not become the race's cross - the
+        #   three arms of F2.x_race, reported rather than decided.
+        import numpy as _np
+        tf = int(q['tf'])
+        sd = +1 if str(q.get('side', 'HIGH')).upper() == 'HIGH' else -1
+        A, B = ln.K(str(q['from'])), ln.K(str(q['to']))
+        w = max(1, int(K.FDM_X10_WOB))
+        X = F2.x_of(LN, tf)
+        #   NOT `R` and `M`: `R` is the module-level momo_render import, and assigning it here
+        #   makes it a local for the WHOLE answer() body, so every other kind's `R.stamp(LN)`
+        #   raises UnboundLocalError. Python decides that at compile time, not at the assignment.
+        Rr, Mm = LN['CPR'][tf], LN['CPM'][tf]
+        out += ['', '# ws%dx race candidates, %s side, %s .. %s'
+                % (tf, q.get('side', 'HIGH'), str(q['from']), str(q['to'])), '']
+        out += ['| the arm | the candidate bar | ws%dx there | the racer there | what happened |' % tf,
+                '|---|---|---|---|---|']
+        n = 0
+        for c, cf, s2 in F2.oob_ib_cross(X, K.OOB_HI, K.OOB_LO, w):
+            if int(s2) != sd or int(c) < int(A) or int(c) > int(B):
+                continue
+            n += 1
+            out.append('| ib | %s | %.2f | the %g/%g oob fence | crosses oob to ib, confirms %s - %s |'
+                       % (ln.U(int(c)), float(X[int(c)]), float(K.OOB_HI), float(K.OOB_LO),
+                          ln.U(int(cf)),
+                          'INSIDE the span' if int(cf) <= int(B) else 'PAST the span end'))
+        for nm, other in (('ws%dr' % tf, Rr), ('ws%dMage' % tf, Mm)):
+            for i in range(max(1, int(A)), int(B) + 1):
+                a, b = X[i - 1], X[i]
+                oa, ob = other[i - 1], other[i]
+                if not _np.isfinite([a, b, oa, ob]).all():
+                    continue
+                crossed = (a >= oa and b < ob) if sd > 0 else (a <= oa and b > ob)
+                if not crossed:
+                    continue
+                n += 1
+                end = i + w
+                if end > len(X) or i + w - 1 > int(B):
+                    out.append('| %s | %s | %.2f | %.2f | crosses, but its %d-bar = %d s hold ends '
+                               '%s - PAST the span end |'
+                               % (nm, ln.U(i), float(X[i]), float(other[i]), w, w * 5,
+                                  ln.U(min(i + w - 1, len(X) - 1))))
+                    continue
+                broke = None
+                for j in range(i, end):
+                    held = (X[j] < other[j]) if sd > 0 else (X[j] > other[j])
+                    if not held:
+                        broke = j
+                        break
+                out.append('| %s | %s | %.2f | %.2f | %s |'
+                           % (nm, ln.U(i), float(X[i]), float(other[i]),
+                              'crosses and HOLDS all %d bars, confirming %s' % (w, ln.U(i + w - 1))
+                              if broke is None else
+                              'crosses, but the hold BREAKS at %s - ws%dx %.2f against %.2f'
+                              % (ln.U(broke), tf, float(X[broke]), float(other[broke]))))
+        if not n:
+            out.append('| none | - | - | - | no bar in the span crosses any of the three racers |')
+        out.append('')
+        out.append('| the span read | value |')
+        out.append('|---|---|')
+        out.append(R.row('ws%dx over the span' % tf, 'min %.2f, max %.2f'
+                         % (float(_np.nanmin(X[int(A):int(B) + 1])),
+                            float(_np.nanmax(X[int(A):int(B) + 1])))))
+        oobm = (X[int(A):int(B) + 1] >= float(K.OOB_HI)) if sd > 0 \
+            else (X[int(A):int(B) + 1] <= float(K.OOB_LO))
+        out.append(R.row('bars where ws%dx is same-side oob' % tf,
+                         '%d of %d' % (int(oobm.sum()), int(B) - int(A) + 1)))
+        out.append(R.row('the hold', '%d bars = %d s, counting the cross bar' % (w, w * 5)))
+        return out
     if kind == 'xcross':
         #   HIS 1108: *"using the known cadences (not the fake cadences), apply the xcross
         #   validator mech to 08-25 and confirm you can recreate the same ws5x cross timestamps as
