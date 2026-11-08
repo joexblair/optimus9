@@ -59,6 +59,25 @@ DIR = os.environ.get('W_LIVE_DIR', '/home/joe/.claude/jobs/7c82535c/tmp/live')
 for d in ('req', 'out'):
     os.makedirs(os.path.join(DIR, d), exist_ok=True)
 
+#   ONE PROCESS PER REQUEST DIRECTORY. On 1108 two of them served one directory for 23 minutes:
+#   a `stop` or a `reload` is consumed by whichever polls first, so one process reloaded and the
+#   other kept answering with the old code and a stale ruling posture. The pid file is written
+#   AFTER the check and removed on a clean exit; a stale one whose pid is gone does not block.
+_LOCK = os.path.join(DIR, 'SERVING.pid')
+if os.path.exists(_LOCK):
+    try:
+        _old = int(open(_LOCK).read().strip())
+        os.kill(_old, 0)
+    except (ValueError, ProcessLookupError, PermissionError, OSError):
+        _old = None
+    if _old:
+        sys.stderr.write('REFUSED: pid %d is already serving %s. Stop it first.\n' % (_old, DIR))
+        raise SystemExit(2)
+with open(_LOCK, 'w') as _fh:
+    _fh.write('%d\n' % os.getpid())
+import atexit as _atexit
+_atexit.register(lambda: os.path.exists(_LOCK) and os.remove(_LOCK))
+
 T = {}
 t0 = time.time()
 _e = sys.stderr
@@ -302,6 +321,15 @@ def serve():
             os.remove(rp)
             t1 = time.time()
             if str(q.get('kind')) == 'stop':
+                #   IT ANSWERS BEFORE IT EXITS. It used to return without writing one, so `ask.py`
+                #   always timed out on a stop and I could not tell a stop that worked from one
+                #   that was never read. On 1108 that hid TWO live processes serving one request
+                #   directory: each restart posted a stop, one process took it, the other kept
+                #   answering, and a `reload` then landed on only one of them.
+                with open(os.path.join(DIR, 'out', i + '.md'), 'w') as fh:
+                    fh.write('\nSTOPPING - pid %d\n' % os.getpid())
+                with open(os.path.join(DIR, 'out', i + '.done'), 'w') as fh:
+                    fh.write('0.00\n')
                 print('STOP', flush=True)
                 return
             if str(q.get('kind')) == 'reload':

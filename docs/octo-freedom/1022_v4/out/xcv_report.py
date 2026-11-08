@@ -37,6 +37,37 @@ def _sd(side):
     return +1 if str(side).upper() == 'HIGH' else -1
 
 
+def tenths(v):
+    """A line value as an INTEGER number of tenths. -> int.
+
+    HIS 1108 RULING: *"can you int test it or reduce the dp? I only need 1dp for line values -
+    there must be a way to handle it so that the float variance doesn't bite us"*.
+
+    WHY IT IS NEEDED, measured the same day: `stoch_d` inside the developing K line is computed
+    `(100 * numerator) / denominator` rather than `100 * (numerator / denominator)`, so on a HIGH
+    pin - where those two are the same quantity - it lands on 100.00000000000001 instead of 100.
+    The r line therefore JITTERS by up to 1.42e-14 while it is mathematically frozen. On the real
+    cached arrays for 2026-08-25 that is 78 sub-1e-9 moves on ws30r alone, smallest 3.55e-15, and
+    the direction reader below treated every one of them as a DIRECTION.
+
+    THE INTEGER IS THE POINT, not the rounding: two ints are either equal or they are not, so no
+    comparison downstream can be decided by a last bit. NaN has no integer, so it returns None and
+    the caller reads no direction.
+    """
+    return None if v != v else int(round(float(v) * 10.0))
+
+
+def direction(anchor_v, bar_v):
+    """The direction of a line's move from one bar to another, at 1 dp. -> 'up' | 'down' | 'flat'.
+
+    HIS 1 dp RULING, in one place so the xcv diff block and the table cannot disagree.
+    """
+    a, b = tenths(anchor_v), tenths(bar_v)
+    if a is None or b is None:
+        return 'flat'
+    return 'up' if b > a else 'down' if b < a else 'flat'
+
+
 def tawaway_table(LN, at_s, ev_s, s0_s, side='HIGH', hi=30, lo=10):
     """towards / away per line at one bar, with how long each state has held. -> [str]."""
     out = []
@@ -135,19 +166,20 @@ def xcvdiff_table(LN, ext_s, at_s, tf=5, label='cross', anchor=None):
     e = ['%.2f' % float(EM[t][ext]) for t in TFS]
     a = ['%.2f' % float(EM[t][at]) for t in TFS]
     d = [float(EM[t][at]) - float(EM[t][ext]) for t in TFS]
+    #   HIS 1 dp RULING: the printed diff stays at 2 dp so the size is visible, and the DIRECTION
+    #   is read on the integer tenths - the two can disagree, and when they do the diff is noise.
+    dr = [direction(EM[t][ext], EM[t][at]) for t in TFS]
     out.append('| r · %s (%s) | %s |' % (ln.U(ext), alab, ' | '.join(e)))
     out.append('| r · %s (%s) | %s |' % (ln.U(at), lab, ' | '.join(a)))
     out.append('| r · ws%dx diff (%s - %s) | %s |'
                % (tf, lab, alab.replace('ws%dx high ' % tf, '').replace('ws%dx low ' % tf, ''),
                   ' | '.join('%+.2f' % x for x in d)))
-    out.append('| r · ws%dx direction of the diff | %s |'
-               % (tf, ' | '.join('up' if x > 0 else 'down' if x < 0 else 'flat' for x in d)))
-    L4 = d[:4]
-    u = sum(1 for x in L4 if x > 0)
-    dn = sum(1 for x in L4 if x < 0)
+    out.append('| r · ws%dx direction of the diff, at 1 dp | %s |' % (tf, ' | '.join(dr)))
+    L4 = dr[:4]
+    u = L4.count('up')
+    dn = L4.count('down')
     out += ['']
-    out.append(R.row('the 4 lefthand TFs, ws30 ws29 ws28 ws27',
-                     ' '.join('up' if x > 0 else 'down' if x < 0 else 'flat' for x in L4)))
+    out.append(R.row('the 4 lefthand TFs, ws30 ws29 ws28 ws27', ' '.join(L4)))
     out.append(R.row('ups / downs / flats of those 4', '%d / %d / %d' % (u, dn, 4 - u - dn)))
     out.append(R.row('the 3-of-4 read',
                      'up' if u >= 3 else 'down' if dn >= 3 else 'none'))
@@ -184,11 +216,9 @@ def xcv_table(LN, day, tf=5):
         return allcad[i] if i < len(allcad) else NB
 
     def dirs(ext, bar):
-        out2 = []
-        for t in LEFT:
-            d = float(EM[t][int(bar)]) - float(EM[t][int(ext)])
-            out2.append('up' if d > 0 else 'down' if d < 0 else 'flat')
-        return out2
+        #   HIS 1 dp RULING: the direction is read on the INTEGER tenths of each line value, so a
+        #   1.42e-14 jitter in a mathematically frozen line can no longer read as a direction.
+        return [direction(EM[t][int(ext)], EM[t][int(bar)]) for t in LEFT]
 
     def read34(c):
         u, d = c.count('up'), c.count('down')

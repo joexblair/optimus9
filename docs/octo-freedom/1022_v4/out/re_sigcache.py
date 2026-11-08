@@ -33,7 +33,11 @@ import numpy as np
 sys.path.insert(0, '/home/joe/thecodes')
 sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1022_v4')
 os.environ.setdefault('LG_TAPE_END', '2026-10-05')
-os.environ.setdefault('W_V4_EXPERIMENT', '1')
+#   THE EXPERIMENT FLAG IS NOT SET ON IMPORT. It used to be, and on 1108 that leaked: the live
+#   process imports this module, so a `reload` re-read W_V4_EXPERIMENT as SET and reported an
+#   experiment on a run nobody asked to be one - and an off-bank reload would have stopped
+#   refusing. An import must not change the process's ruling posture. A standalone run of THIS
+#   module still declares itself, under __main__ below.
 
 CACHE_DIR = os.environ.get('W_SIGCACHE_DIR', '/home/joe/.claude/jobs/7c82535c/tmp/sigcache')
 
@@ -124,6 +128,9 @@ def load_or_build(K, RE, B1, R, G, EMR, CPM, verbose=True):
 
 
 if __name__ == '__main__':
+    #   A standalone build of the signal cache reads the arm's knobs off the bank on purpose, so it
+    #   declares itself here rather than at import - see the note at the top.
+    os.environ.setdefault('W_V4_EXPERIMENT', '1')
     _e = sys.stderr
     sys.stderr = io.StringIO()
     try:

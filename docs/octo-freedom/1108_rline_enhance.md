@@ -139,7 +139,28 @@ MEASURED ON THE REAL CACHED ARRAYS, 2026-08-25 - moves that are not zero but are
 | ws3r | 10599 | 34 | 3.55e-15 |
 | ws1r | 11115 | 71 | 1.78e-15 |
 
-WHY IT MATTERS TO `fdm2-xcv` AS IT STANDS: its diff reader is
+HIS 1 dp RULING, AND IT IS APPLIED: *"can you int test it or reduce the dp? I only need 1dp for
+line values - there must be a way to handle it so that the float variance doesn't bite us"*.
+`xcv_report.tenths` turns a line value into an INTEGER number of tenths and
+`xcv_report.direction` compares two of them. Two ints are either equal or they are not, so no
+comparison downstream can be decided by a last bit. NaN has no integer and reads `flat`.
+
+WHAT IT MOVED on 2026-08-25, RULED_OK True, `W_V4_EXPERIMENT` not set - 1 row of 28:
+
+| xcv row | the cadence event | the ws5x cross | the float direction read | the 1 dp direction read |
+|---|---|---|---|---|
+| 9 | 2026-08-25 08:08:00 | 2026-08-25 08:14:20 | cad-walks to 2026-08-25 08:14:25, `up` | cad-walks to 2026-08-25 08:14:35, `up` |
+
+That is the row whose smallest counted diff was 0.0035 on a 0-100 line. At 1 dp those diffs are
+`flat`, so the walk carries 2 bars further and reaches a verdict that is not noise. The verdict
+direction did not change, and the other 27 rows did not move.
+
+SCOPE, STATED: the integer read is applied to the DIRECTION reads - `fdm2-xcv`'s 3-of-4 and the
+diff block's direction row. It is NOT applied to a threshold test like `v >= 85`, because that
+would change firing behaviour across the whole machine and he ruled the float variance, not the
+fences.
+
+WHY IT MATTERED TO `fdm2-xcv` AS IT STOOD: its diff reader is
 `up if d > 0 else down if d < 0 else flat` on exact floats, so a 3.55e-15 difference reads as a
 DIRECTION. A line that is frozen can therefore contribute `up` or `down` to the 3-of-4 count, and
 a 4-flat spawn bar can be missed because one line jittered. HIS PARKED FLOOR IS THE DECISION THIS
