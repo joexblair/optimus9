@@ -1502,13 +1502,17 @@ FDM2_C3R_MAGE_GATE = _knob('FDM2_C3R_MAGE_GATE', 'oob', str)   # the level ws1Ma
 #   ex-fence nets 0.098 points higher and HE PICKED oob. 25 trades cannot separate them, and the
 #   choice is his, not the curve's.
 #   The rev-trade is placed at the lift-off STAMP, K.lift_stamp(b) = b + LIFT_WOB - 1.
-FDM2_C3R_MAGE_READ = _knob('FDM2_C3R_MAGE_READ', 'closed-prev', str)   # the ws1Mage LEVEL read
-#   HIS 1108: *"change the 'ws1MAge oob requirement' from emerging to close-prev. ie the c3r 0715
-#   signal walks to the 0729 oob Mage reversing, not 07:17:30"*.
-#   TWO READS, ONE MECH, and they are not in conflict: the REVERSAL is jig.lift_off on EMERGING
-#   ws1Mage - his standing *"lift-off reads emerging"* - while the LEVEL the reversal must hold is
-#   read on CLOSED-PREV. An emerging line is oob before its closed-prev value is, which is exactly
-#   the 07:17 against 07:29 difference he is pointing at.
+FDM2_C3R_MAGE_READ = _knob('FDM2_C3R_MAGE_READ', 'emerging', str)   # the ws1Mage LEVEL read
+FDM2_C3R_MAGE_WOB = _knob('FDM2_C3R_MAGE_WOB', 8, int)   # bars the oob state must HOLD, 8 = 40 s
+#   HIS 1108, in two steps. First *"change the 'ws1MAge oob requirement' from emerging to
+#   close-prev"*, which was measured: it moved 11 of 25 landings, 9 of them EARLIER rather than
+#   later, because closed-prev holds one value across a whole minute. Gross fell +7.610 -> +4.340
+#   and net +2.673 -> -0.598. He then picked the EMERGING row back and said *"add a wob 8 to it"*.
+#   THE WOB IS jig.lift_off's OWN CONVENTION, not a new one: `n` bars the state must STAY
+#   satisfied counting the first bar, and the event is not KNOWABLE until bar + n - 1. So the gate
+#   is tested forward over 8 bars from the lift-off stamp and the rev-trade is placed on the LAST
+#   bar of that hold, stamp + 7 = 35 s later. Every bar it reads is at or before the bar it acts on.
+#   The REVERSAL still reads emerging ws1Mage - his standing *"lift-off reads emerging"*.
 FDM2_C3R_DWELL = _knob('FDM2_C3R_DWELL', 36, int)   # ws3r's minimum oob dwell, 36 bars = 3 min
 #   HIS 1108: *"ws3r minimum dwell should be 3 minutes"*, after reading 2026-08-25 14:57,
 #   2026-08-25 19:01 and 2026-08-26 03:02 and saying *"these have a small ws3r exursion window"*.
@@ -1907,7 +1911,8 @@ RULED = {
     'FDM2_MOMO_FLOOR_RPRED': (1, "r-pred's FLOOR, not a median: at least one carrier predicted to breach. HIS option A, because r-pred's median is 0 on every carrier set and a median makes its vote a constant. Fires on 9,470 of 50,457 cad-walk bars = 18.8%"),
     'FDM2_MOMO_MED_MX': (7, 'the fast-versus-slow median, re-measured over all 50,457 cad-walk bars on ws4..ws10 emerging. UNCHANGED from the 27-line value. Fires on 49.3%'),
     'FDM2_MOMO_MED_PIN': (9, 'the pinned median over the same 50,457 bars, ws4..ws30 emerging. UNCHANGED. Fires on 51.0%'),
-    'FDM2_C3R_MAGE_READ': ('closed-prev', "the ws1Mage LEVEL read for the gate. HIS 1108 *\"change the 'ws1MAge oob requirement' from emerging to close-prev\"*. The REVERSAL still reads emerging - jig.lift_off's own contract"),
+    'FDM2_C3R_MAGE_READ': ('emerging', "the ws1Mage LEVEL read for the gate. HIS 1108 measured closed-prev - it moved 11 of 25 landings, net +2.673 -> -0.598 - then picked the EMERGING row back"),
+    'FDM2_C3R_MAGE_WOB': (8, 'bars the ws1Mage oob state must HOLD from the lift-off stamp, 8 x 5 s = 40 s. HIS 1108 *"add a wob 8 to it"*. jig.lift_off\'s own convention: the event is knowable at bar + n - 1, so the rev-trade lands on stamp + 7'),
     'FDM2_C3R_MAGE_ON': (1, 'the ws1Mage wait before c3r places its rev-trade. HIS 1108 *"apply the ws1Mage oob to the mech so that we are net positive"*'),
     'FDM2_C3R_MAGE_GATE': ('oob', 'the level ws1Mage must hold at its reversal. HIS 1108 pick from the five-gate sweep: none -9.507%, oob +2.673%, ib -7.319%, ex-fence +2.771%, in-fence -8.368% net over the same 25 trades'),
     'FDM2_C3R_DWELL': (36, "ws3r's minimum oob dwell for fdm2-3r-cadence. HIS 1108 *\"ws3r minimum dwell should be 3 minutes\"* = 36 bars x 5 s = 180 s"),
@@ -2349,7 +2354,8 @@ def table():
              'FDM2_MOMO_MAX_TF': 'timeframe', 'FDM2_MOMO_XWIN': 'bars',
              'FDM2_C3R_DWELL': 'bars', 'FDM2_C3R_MAGE_ON': 'flag',
              'FDM2_C3R_MAGE_GATE': 'level',
-             'FDM2_C3R_MAGE_READ': 'read'}
+             'FDM2_C3R_MAGE_READ': 'read',
+             'FDM2_C3R_MAGE_WOB': 'bars'}
     for k, (v, why) in RULED.items():
         rows.append('| `%s` | %s | %s | %s | %s |'
                     % (k, here[k], units.get(k, '?'),

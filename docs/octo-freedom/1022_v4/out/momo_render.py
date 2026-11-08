@@ -870,6 +870,25 @@ def c3r_mage_level(LN):
     return _np.asarray(LN['CPM'][1] if r == 'closed-prev' else LN['MGE'][1], float)
 
 
+def c3r_mage_hold(m1g, st, sd, gate, lo_f, hi_f, wob, n):
+    """Does the gate HOLD for `wob` bars from `st`? -> the bar it is knowable at, or None.
+
+    HIS 1108: *"add a wob 8 to it"*, `FDM2_C3R_MAGE_WOB` 8 bars = 40 s.
+
+    jig.lift_off's OWN CONVENTION, not a new one: `wob` bars the state must STAY satisfied counting
+    the first bar, and the event is not KNOWABLE until bar + wob - 1. So this tests `st` through
+    `st + wob - 1` and returns that last bar, which is the one a consumer may act on. Every bar it
+    reads is at or before the bar it returns - there is no forward look past the hold.
+    """
+    w = max(1, int(wob))
+    if int(st) + w > int(n):
+        return None
+    for t in range(int(st), int(st) + w):
+        if not c3r_mage_gate(float(m1g[t]), int(sd), gate, lo_f, hi_f):
+            return None
+    return int(st) + w - 1
+
+
 def c3r_mage_stamps(LN, sd):
     """Every ws1Mage same-side lift-off STAMP on `sd`, ascending. -> int list.
 
@@ -984,8 +1003,10 @@ def c3rmage_table(LN, A, B, lab='ws3r emerging, rest closed-prev'):
             for st in LF[int(sd)]:
                 if st < int(x4) or st > int(B):
                     continue
-                if passes(gate, float(m1e[st]), int(sd)):
-                    land = int(st)
+                k = c3r_mage_hold(m1e, st, int(sd), gate, lo_f, hi_f,
+                                  int(K.FDM2_C3R_MAGE_WOB), int(B) + 1)
+                if k is not None:
+                    land = int(k)
                     break
             if land is None:
                 acc.append(dict(x4=x4, sd=sd, land=None))
@@ -1126,6 +1147,12 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     out.append(row('the ws1Mage reads', 'the REVERSAL on emerging ws1Mage via `jig.lift_off`; '
                                         'the LEVEL on %s ws1Mage - HIS 1108 ruling'
                    % str(K.FDM2_C3R_MAGE_READ)))
+    out.append(row('the ws1Mage oob hold', 'HIS 1108 *"add a wob 8 to it"*. `FDM2_C3R_MAGE_WOB` %d '
+                                           'bars = %d s. The gate must hold across all %d bars '
+                                           'from the lift-off stamp, and the rev-trade lands on '
+                                           'the LAST of them, stamp + %d'
+                   % (int(K.FDM2_C3R_MAGE_WOB), int(K.FDM2_C3R_MAGE_WOB) * 5,
+                      int(K.FDM2_C3R_MAGE_WOB), int(K.FDM2_C3R_MAGE_WOB) - 1)))
     out.append(row('the ws1Mage wait', ('ON, gate `%s` - HIS 1108 *"apply the ws1Mage oob to the '
                                         'mech so that we are net positive"*. The rev-trade is '
                                         'placed at the first ws1Mage same-side lift-off STAMP at '
@@ -1164,6 +1191,7 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
     DRAG = DRAG_PCT
     MW = int(K.FDM2_C3R_MAGE_ON)
     MG = str(K.FDM2_C3R_MAGE_GATE)
+    MWOB = int(K.FDM2_C3R_MAGE_WOB)
     LF = {sd2: c3r_mage_stamps(LN, sd2) for sd2 in (+1, -1)} if MW else None
     m1g = c3r_mage_level(LN)
     rows_, fired = cad3r_arms(LN, A, B, lab)
@@ -1213,8 +1241,9 @@ def cad3r_scan(LN, A, B, lab='ws3r emerging, rest closed-prev'):
             for st in LF[int(sd)]:
                 if st < sig or st > int(B):
                     continue
-                if c3r_mage_gate(float(m1g[st]), int(sd), MG, lo_f, hi_f):
-                    land = int(st)
+                k = c3r_mage_hold(m1g, st, int(sd), MG, lo_f, hi_f, MWOB, int(B) + 1)
+                if k is not None:
+                    land = int(k)
                     break
             if land is None:
                 nomage += 1
