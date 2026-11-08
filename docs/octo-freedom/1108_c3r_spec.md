@@ -65,6 +65,53 @@ So clause 6 is no longer the placement bar. Clause 6 arms a walk; the walk place
 | the ws1Mage read for the lift-off | emerging | his standing rule: lift-off reads emerging, every other line read is chart-matched. Branch B already reads `LN['MGE'][1]` |
 | the cadence-event producer for the race | `v4_fdm2.cadence_events(LN, side, A, B)` | it is the one that enumerates them |
 
+## HIS 1108 QUESTION — why no LOW c3r near 0259 on 2026-08-25
+
+His words: *"what would prevent a low c3r from firing near the ws3x-cross over
+race{boundary,r,MAge} wob 12 at 0259?"*.
+
+NOTHING IN CLAUSES 2 TO 6. c3r never got a LOW arm there, so clause 1 never started. An arm is a
+ws1r same-side **oob** entry, his *"ws1r's oob entry... this makes the test a one-time-only test"*.
+
+| ws1r LOW oob runs on 2026-08-25, closed-prev | opens | closes | the LOW extreme in it |
+|---|---|---|---|
+| 1 | 2026-08-25 00:07:00 | 2026-08-25 00:07:55 | 10.38 |
+| 2 | 2026-08-25 00:20:00 | 2026-08-25 00:22:55 | 9.16 |
+| 3 | 2026-08-25 00:33:00 | 2026-08-25 00:33:55 | 14.78 |
+| 4 | 2026-08-25 01:36:00 | 2026-08-25 01:37:55 | 8.61 |
+| 5 | 2026-08-25 04:22:00 | 2026-08-25 04:22:55 | 8.53 |
+| 6 | 2026-08-25 05:43:00 | 2026-08-25 05:46:55 | 2.48 |
+
+The gap from 2026-08-25 01:37:55 to 2026-08-25 04:22:00 is 2 h 44 min with NO LOW oob entry, and
+0259 sits inside it.
+
+WHAT ws1r DID DO THERE: a LOW ex-20/80 run from 2026-08-25 02:57:00 to 2026-08-25 03:01:55, 60
+bars = 5.0 min, whose lowest value is **18.10** at 2026-08-25 03:01:00. The oob line is 15, so it
+came 3.10 short and never crossed.
+
+| the window read | value |
+|---|---|
+| ws1r LOW ex-20/80 run | 2026-08-25 02:57:00 .. 2026-08-25 03:01:55 |
+| its lowest value | 18.10 at 2026-08-25 03:01:00 |
+| the oob threshold | 15 |
+| how far short | 3.10 |
+| c3r arms in 2026-08-25 02:00:00 .. 04:00:00 | 2, BOTH HIGH - 02:00:00 killed by the dwell, 03:29:00 killed by clause 2 |
+| c3r firings in that window | none |
+
+HIS ws3x LANDMARK, located. The `xdiag` reader runs the banked `FDM_X10_WOB` 24, so the wob-12
+outcome is read off each candidate's own break bar rather than by running a knob off the bank:
+
+| the arm | the cross | ws3x there | the racer there | bars before the hold broke | does it survive a 12-bar hold | its confirm bar at wob 12 |
+|---|---|---|---|---|---|---|
+| ws3r | 2026-08-25 02:46:30 | 68.48 | 61.18 | never broke in 24 | YES | 2026-08-25 02:47:25 |
+| ws3r | 2026-08-25 02:53:25 | 44.71 | 43.43 | 17 | YES | 2026-08-25 02:54:20 |
+| ws3r | 2026-08-25 03:00:15 | 33.19 | 26.22 | 4 | no | - |
+| ws3r | 2026-08-25 03:00:40 | 27.99 | 26.22 | 1 | no | - |
+| ws3r | 2026-08-25 03:01:45 | 33.19 | 26.22 | never broke in 24 | YES | 2026-08-25 03:02:40 |
+
+So his landmark is real - two LOW ws3x crosses survive a 12-bar hold within 6 minutes of 0259 - and
+c3r does not read ws3x at all. ITS TRIGGER IS ws1r REACHING oob, and ws1r stopped at 18.10.
+
 ### OPEN — needs his ruling before the race is wired
 
 | the gap | the question |
