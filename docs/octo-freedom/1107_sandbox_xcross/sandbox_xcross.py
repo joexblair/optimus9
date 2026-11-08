@@ -86,6 +86,8 @@ R2 = {}                                  # tf -> the ws{tf}r2 array, built once 
 #   r2_lines() IS NOT READ BY THE REPORT. Joe 1107 dropped the r2 rows for the ws5x ones; the producer stays so
 #   ws{TF}r2 - his named line - can be read again without re-deriving it.
 WS5X_TF = SK.WS5X_TF                     # HIS 1107 second block: r rows calculated on ws5x
+XCV_TFS = tuple(int(x) for x in str(SK.XCV_TFS).split(',') if x.strip())
+#   HIS 1108 report lines: ws4x and ws5x, both fixed. 4 rows each = 8 rows per cadence event.
 E_CFG = BBLine(length=SK.E_LEN, mult=SK.E_MULT, src=SK.E_SRC)  # HIS 1107 ws{TF}e, BB%B 4|0.5|close
 
 
@@ -184,24 +186,18 @@ def report(LN, side, ev, n_of):
     files - his *"delete these sections from both files"*. The cadence event stays in the banner, the
     extremum and the cross bars stay in the report table's own row labels.
     """
-    hi = int(LN['HI'])
-    #   2 THE TF: the highest line ex-20/80 AND towards AT the cadence event
-    tw = [t for t in range(1, hi + 1)
-          if F2.ex2080_line(LN, t, ev, side) and F2.towards(LN['CPR'][t], t, ev, side)]
-    tf = max(tw) if tw else None
     out = ['', '=' * 100, '%s · %s cadence event %s  (%s)' % (REPORT_NAME, SIDE_NAME[side], ln.U(ev), n_of),
            '=' * 100, '']
     g = [('line · timestamp',) + tuple('ws%d' % t for t in TFS)]
     notes = []
-    #   HIS 1107: *"drop the r2 rows, and replace them with r rows that were calculated on ws5x"* - the
-    #   second block is the SAME r rows, read at ws5x's own cross and extremum: no dynamic TF selection
-    for xtf, tag in ((tf, ''), (WS5X_TF, ' - fixed ws%d, no dynamic selection' % WS5X_TF)):
-        if xtf is None:
-            notes.append('no line is ex-20/80 and towards at the cadence event - no TF, no cross')
-            continue
+    #   HIS 1108: *"drop the 4 dynamic rows from the report, and replace them with ws4x. the end
+    #   result is 8 rows per cadence, covering ws4 and ws5 x crosses"*. TWO FIXED BLOCKS, no
+    #   dynamic TF selection anywhere: 4 rows for each x line in XCV_TFS, banked '4,5'. The highest
+    #   ex-20/80 towards line is no longer read, so his item 2 and item 3 are off the report path.
+    for xtf in XCV_TFS:
         rows, why = r_block(LN, side, ev, int(xtf))
         if rows is None:
-            notes.append(why + tag)
+            notes.append(why)
             continue
         g += rows
     return out + (table(g) if len(g) > 1 else []) + notes
@@ -244,27 +240,26 @@ def legend(LN, day, side, n):
             ('the knob hash', '%s, off the bank: %s' % (h, ', '.join(off) or 'none')),
             ('the cadence', 'the BUILT version: ws1b oob excursion, nestle, ws3Mage ex-%g/%g (rescue %s)'
              % (*K.fnc_pair(K.FDM_M3_FNC), 'on' if int(K.FDM_M3_RESCUE_ON) else 'off')),
-            ('the TF', 'the highest line ex-%g/%g AND towards at the cadence event. ex-fence reads %s: closed-prev, '
-             'or the emerging extreme over %d bars = %d s' % (*K.fnc_pair(K.FDM_FNC_2080), K.FDM_EXF_READ,
-                                                               int(K.FDM_EXF_EM_BARS), int(K.FDM_EXF_EM_BARS) * 5)),
+            ('the x lines', 'HIS 1108: %s, both FIXED. No dynamic TF selection - the highest ex-%g/%g towards '
+             'line is no longer read, so his items 2 and 3 are off the report path'
+             % (', '.join('ws%dx' % t for t in XCV_TFS), *K.fnc_pair(K.FDM_FNC_2080))),
             ('the x-cross', 'the first of ws{TF}x to ib, to ws{TF}r, to ws{TF}Mage that holds %d bars = %d s, counting '
              'the cross bar. ws{TF}x is emerging, its r and Mage racers are closed-prev, as built'
              % (int(K.FDM_X10_WOB), int(K.FDM_X10_WOB) * 5)),
             ('the extremum', 'jig.mage_cascade_bar, walk back to look forward in %d-bar = %d s steps from the cross'
              % (JIG.MC_GAP, JIG.MC_GAP * 5)),
-            ('the report table', 'ws30..ws10 r, EMERGING, at the extremum and the cross - first for the selected '
-             'ws{TF}x, then again for ws%dx with no dynamic selection. diff = cross - extremum, flat = exactly 0'
-             % WS5X_TF),
-            ('the ws%dx block' % WS5X_TF, 'the same race and the same walk back, on ws%dx whatever TF the cadence '
-             'selected. When the selected TF is ws%d the two blocks are the same rows' % (WS5X_TF, WS5X_TF)),
+            ('the report table', '%d rows per cadence event: 4 for each of %s. ws30..ws10 r, EMERGING, at that x '
+             'line\'s extremum and at its cross. diff = cross - extremum, flat = exactly 0'
+             % (4 * len(XCV_TFS), ', '.join('ws%dx' % t for t in XCV_TFS))),
             ('the r line', 'ws{TF}r, the stored r: StochRSI %s (Joe notation k_len|rsi|stc|src)'
              % '|'.join(str(x) for x in (ln.SPEC['r'][0][3], ln.SPEC['r'][0][1], ln.SPEC['r'][0][2], ln.SPEC['r'][0][4]))),
-            ('MINE: towards', "step 1's trajectory reader. The director's reader needs the trade open as its anchor"),
-            ('MINE: the scan', 'ws1..ws%d, the director range. Step 1 scans ws4..ws30' % int(LN['HI'])),
+            ('towards - HIS 1108 RULING', "step 1's trajectory reader with no anchor"),
+            ('the scan range - HIS 1108', 'no longer read. The report takes its x lines from XCV_TFS'),
+            ('duplicates - HIS 1108 RULING', 'the existing no-duplicate-at-one-bar rule applies. Two cadence '
+             'events whose x cross lands on one bar are one event'),
             ('MINE: the race bound', 'the tape end. The built fdm2 leg walk would stop at the next cadence event'),
-            ('MINE: the first report row', 'the ws{TF}x extremum. The other candidate is the cadence event bar'),
-            ('MINE: the walk back is not bounded', 'the extremum may sit before the cadence event. '
-             'Bounding it at the event is the alternative')]
+            ('MINE: the walk back is not bounded', 'the extremum may sit BEFORE the cadence event, and on '
+             '2026-08-25 it does on 11 of 28 events. Bounding it at the event is the alternative')]
     return ['# %s, %s, %s side' % (REPORT_NAME, day, SIDE_NAME[side]), ''] + table(rows)
 
 

@@ -21,23 +21,35 @@ The code is `1107_sandbox_xcross/`. The knobs are `1107_sandbox_xcross/sandbox_k
 
 His indentation rule: a deeper level nests INSIDE the one above, so `--` under `-` reads as AND.
 
+HIS 1108: *"the first job is to drop the 4 dynamic rows from the report, and replace them with
+ws4x. the end result is 8 rows per cadence, covering ws4 and ws5 x crosses"*. The dynamic TF is
+gone, so his items 2 and 3 are off the report path and the scan range *"will become irrelevant"*.
+
 ```
 1) IF a cadence event prints on `side` - the BUILT cadence: ws1b's oob excursion, its cross back to
    ib, the nestle, and ws3Mage ex-25/75 with its rescue
-2) -IF any line ws1..ws30 is ex-20/80 AND towards at that cadence event bar
-3) --THEN the TF is the HIGHEST such line, and the cadence event's own side is the ws{TF}x side
-4) ---IF ws{TF}x emerging then crosses, strictly after the cadence event bar, to the first of
+2) -THEN the cadence event's own side is the x side, for every x line in XCV_TFS: ws4x and ws5x
+3) --FOR EACH of those x lines
+4) ---IF that ws{TF}x emerging crosses, strictly after the cadence event bar, to the first of
        in-bounds, OR its own closed-prev ws{TF}r, OR its own closed-prev ws{TF}Mage
 5) ----IF that cross holds for FDM_X10_WOB 24 bars = 120 s, counting the cross bar
-6) -----THEN walk back to look forward from the cross bar, in MC_GAP 48-bar = 240 s steps, to the
+6) -----THEN walk back to look forward from the cross bar, in MC_GAP 48-bar = 240 s steps, to that
          ws{TF}x extremum on the cadence event's side
-7) ------THEN print one xcross validator report: ws30r..ws10r EMERGING at that extremum, the same
-          21 columns at the cross bar, their difference, and its direction
-8) -------AND print the same four rows again on ws5x, with no TF selection
+7) ------THEN print 4 rows: ws30r..ws10r EMERGING at that extremum, the same 21 columns at the
+          cross bar, their difference, and its direction
+8) -------SO one xcross validator report is 8 rows per cadence event, 4 for ws4x and 4 for ws5x
 ```
 
 - the trade is never read. His *"the trade won't be considered. this means you can use the side of
   the cadence to dictate the side of the ws{}x cross"*.
+- HIS 1108 RULINGS, settled: `towards` is step 1's trajectory reader with no anchor; the scan range
+  is no longer read; the existing no-duplicate-at-one-bar rule applies, and he noted *"there will
+  be a time in the future when this changes"*; `FAKE_DAY` needs no action.
+- HIS 1108 CHALLENGE, ANSWERED: he asked me to prove the extremum can sit BEFORE the cadence event,
+  saying his view was that it cannot. It can, and it is the common case: on 2026-08-25, **29 of the
+  56 extremum rows** sit before their own cadence event bar, the furthest being 2026-08-25 10:04:00
+  LOW whose ws4x and ws5x extremum is 09:53:55, 121 bars = 10.1 min earlier. The walk back starts
+  at the CROSS bar and steps back in 240 s jumps with no bound, so it can reach past the event.
 - every read is same-side. oob is 15/85, ex-fence is 20/80.
 - HIGH and LOW cadence events go to separate files.
 - nothing in clauses 1 to 8 opens, closes or scores a trade. `fdm2-xcv` is a report.
