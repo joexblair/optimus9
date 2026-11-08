@@ -141,9 +141,52 @@ needs this reader built:
 | the spawn bar is earlier by, min | 0 min 50 s |
 | the spawn bar is earlier by, max | 29 min 55 s |
 
-THE VERDICT AT THE SPAWN BAR IS UNKNOWN. Today's verdicts at the LATER fire are `up` on xcv 19, 20,
-21 and 22. Whether the spawn bar agrees is set by the RSI directions there, and this reader has to
-exist to read them.
+THE VERDICT AT THE SPAWN BAR IS UNKNOWN until this reader exists. Today's verdicts at the LATER
+fire are `up` on xcv 19, 20, 21 and 22.
+
+AGREEMENT WITH THE LATER VERDICT IS NEVER A GATE. HIS 1108 CATCH: *"wouldn't that make the
+rline-enhancer ineffective? it can't lookahead"*. He is right that the comparison is lookahead and
+wrong that it disables the reader - the two are different things:
+
+| the question | when it is answerable | is it causal |
+|---|---|---|
+| what does `fdm2-rline-enhance` emit at the spawn bar | AT the spawn bar. Every input - the 4 flat tokens, `rsi_d[bar] - rsi_d[anchor]`, the pin test - is at or before that bar | YES |
+| does that verdict match what the cad walk says later | only OFFLINE, after the day is walked | NO - and it may never appear in the code |
+| was the earlier verdict the better one | only OFFLINE, by what price did after each. The cad walk's own verdict is not ground truth either | NO |
+
+So the reader runs live and emits at the spawn bar. His *"I need to be sure that their verdicts on
+19, 20, 21 and 22 are all UP"* is an OFFLINE check over built days, and a rule of the form "spawn
+only when it agrees with the later verdict" would be lookahead and must never be written. The
+two-stage rule: bank the causal timestamps first, score them second.
+
+## 7a. THE REAL EXPOSURE - THE SPAN, NOT THE LOOKAHEAD
+
+The spawn bar is the FIRST bar where all four read `flat`, so the direction is read over whatever
+span has elapsed since the anchor. On 6 of the 8 walks that have a spawn bar, that span is ONE BAR:
+
+| xcv rows | the cross = the anchor | the 4-flat spawn bar | the span the direction is read over | bars |
+|---|---|---|---|---|
+| 1 | 2026-08-25 00:50:00 | 2026-08-25 00:50:05 | 0 min 05 s | 1 |
+| 5, 6 | 2026-08-25 05:35:00 | 2026-08-25 05:35:05 | 0 min 05 s | 1 |
+| 7 | 2026-08-25 07:02:15 | 2026-08-25 07:11:10 | 8 min 55 s | 107 |
+| 9 | 2026-08-25 08:14:20 | none | - | - |
+| 10 | 2026-08-25 09:59:15 | 2026-08-25 09:59:55 | 0 min 40 s | 8 |
+| 11 | 2026-08-25 11:40:00 | none | - | - |
+| 19 | 2026-08-25 17:35:00 | 2026-08-25 17:35:05 | 0 min 05 s | 1 |
+| 20 | 2026-08-25 17:50:00 | 2026-08-25 17:50:05 | 0 min 05 s | 1 |
+| 21, 22 | 2026-08-25 18:00:00 | 2026-08-25 18:00:05 | 0 min 05 s | 1 |
+| 25 | 2026-08-25 20:50:25 | 2026-08-25 20:50:30 | 0 min 05 s | 1 |
+| 26 | 2026-08-25 21:00:00 | none | - | - |
+
+| the span at the spawn bar | walks |
+|---|---|
+| 1 bar = 5 s | 6 |
+| 8 bars = 40 s | 1 |
+| 107 bars = 535 s | 1 |
+
+WHETHER A 5 s RSI MOVE CARRIES A DIRECTION IS UNMEASURED. It is the same shape as the raw cad
+walk's own weakest firing: xcv 9 takes an `up` verdict on a smallest counted diff of 0.0035 on a
+0-100 line, 1 bar after its cross. NO MINIMUM IS APPLIED to either - he has ruled none.
 
 ## 8. THE FLAT-TOKEN CENSUS BEHIND HIS RULE
 
