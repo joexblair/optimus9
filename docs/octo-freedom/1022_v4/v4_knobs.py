@@ -1502,6 +1502,11 @@ FDM2_C3R_MAGE_GATE = _knob('FDM2_C3R_MAGE_GATE', 'oob', str)   # the level ws1Ma
 #   ex-fence nets 0.098 points higher and HE PICKED oob. 25 trades cannot separate them, and the
 #   choice is his, not the curve's.
 #   The rev-trade is placed at the lift-off STAMP, K.lift_stamp(b) = b + LIFT_WOB - 1.
+#   ── `fdm2-dynastop` - HIS NAME, 1108, and HIS GO: *"bank this `fdm2-dynastop` mech as-is"* ────
+#   The mech is these two knobs plus the c3r_stop_day / c3r_leg_mfe tables. It is banked with the
+#   numbers it produced, not with a claim about them: over 2026-08-25 .. 2026-08-31, 22 trades,
+#   net -1.385% at the flat 1.10 baseline and -2.285% with his 08-25 ruling at 2.00, against
+#   +1.122% for the raw-extreme walk back it replaced. He banked it knowing that - his *"noted"*.
 FDM2_C3R_STOP_SRC = _knob('FDM2_C3R_STOP_SRC', 'day', str)   # 'day' = his per-day ruling
 FDM2_C3R_STOP_BASE = _knob('FDM2_C3R_STOP_BASE', 1.10)   # the stop on a day he has not ruled, pct
 #   HIS 1108: *"I'd like to tell you which days I see that need a larger or smaller stop. for

@@ -105,3 +105,29 @@ Same 25 trades, 2026-08-25 .. 2026-08-31, raw-level stop and the target-side cad
 |---|---|
 | two c3r firings can land on ONE ws1Mage reversal | 2026-08-30 20:27:05 and 2026-08-30 21:39:05 both wait into 2026-08-30 22:02:35 and open the same trade. His consolidation was on the c3r firing bar; the collision is now at the landing bar. Counting it once: 24 trades, net +0.831%, +0.0346% per trade |
 | the walk back can place the level AT the open bar | 3 of 20 stopped trades, and 12 of 20 within 12 bars = 60 s. The tightest stop is 0.005%. His buffer ruling is still open and this is where it bites |
+
+## `fdm2-dynastop` — HIS NAME, 1108, HIS GO
+
+His words: *"noted. bank this `fdm2-dynastop` mech as-is."*
+
+| what | the detail |
+|---|---|
+| what the mech is | a per-day stop percent that HE rules, with the measured leg travel beside it |
+| `FDM2_C3R_STOP_SRC` | `day` — the stop is his ruling for the UTC day the trade OPENS on |
+| `FDM2_C3R_STOP_BASE` | 1.10 — the percent on a day he has not ruled. His *"I think our baseline is 1.1, but that could be wrong"* |
+| the day a trade belongs to | the day its trade OPENS on, UTC. MINE, stated |
+| the trigger | pxs reaching that absolute price — his 1108 two-series rule still holds |
+| `c3r_stop_day` | HIS rulings. One row per UTC day: percent, his words, when set. Only he writes it |
+| `c3r_leg_mfe` | the measurement. One row per (day, timeframe): legs and the leg travel's min / p25 / median / p75 / max, plus the median leg length. Carries a knob hash |
+| the ruling banked so far | 2026-08-25 at 2.000%, his *"0825 needs a 2% stop"* |
+| `FDM2_C3R_STOP_SRC` = `walkback` | the raw-extreme level from `jig.mage_cascade_bar`. Kept because it is measured |
+
+### what it measured, 2026-08-25 .. 2026-08-31, 22 trades
+
+| the stop rule | trades | stopped | closed at a target-side cadence | gross % | net % |
+|---|---|---|---|---|---|
+| the raw-extreme walk back | 22 | 18 | 4 | +5.467 | +1.122 |
+| `fdm2-dynastop`, every day at 1.10 | 22 | 10 | 11 | +2.960 | -1.385 |
+| `fdm2-dynastop`, 08-25 ruled at 2.00 | 22 | 10 | 11 | +2.060 | -2.285 |
+
+Banked with those numbers on the record. It is the instrument for his rulings, not yet a better stop.

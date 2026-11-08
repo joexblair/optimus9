@@ -29,7 +29,7 @@ NO DAY IS INVENTED. `bank` writes only the days it is given.
     python3 out/c3r_stop_db.py set <day> <pct> [note]     HIS ruling for that day
     python3 out/c3r_stop_db.py drop <day>                 remove his ruling for that day
     python3 out/c3r_stop_db.py rulings                    every ruling he has given, by day
-    python3 out/c3r_stop_day.py measure <day> [<day>...]  bank the leg travel for those days
+    python3 out/c3r_stop_db.py measure <day> [<day>...]  bank the leg travel for those days
     python3 out/c3r_stop_db.py show <from> <to>           his rulings beside the measurement
 """
 import datetime as dt
