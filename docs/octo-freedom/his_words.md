@@ -2181,3 +2181,40 @@ e66a76e50bea  is this data produced with the latch enabled?
 a2ce401dccfa  why doesn't the walk see any baton-pass candidates at 07:14?
 bc57590fafbd  deploy #1 and #4 from the self help tools
 c6355e8d5ed1  I need to test ideas around the handling of DTF baton-passing
+8a9fc446f9cc  the next data collection will be built by these 4 items: the cadence, the highest TF selected, the ws{TF}x cross after the cadence, and the report
+346d842fd073  we'll be using the built version
+e03e351afd5a  at the cadence event, find the highest es-20/80-fence towards line and make that the TF for the ws{TF}x cross
+54fd1ff6c901  the trade won't be considered. this means you can use the side of the cadence to dictate the side of the ws{}x cross
+aba69a0bb5f2  delete these sections from both files
+09ba937566da  create a new `ws{TF}r2` stochrsi line: klen:6, rsilen:6, stochrange:10, src close
+0890a82e66c6  drop the mages from the reports, and replace their rows with the ws{TF}r2 data
+86bfa235f614  drop the r2 rows, and replace them with r rows that were calculated on ws5x
+28d44b89d59b  can you code it?  it would have its own label for any events that it claims: `{bearish,bullish}-rsi`
+276ab0be1570  I'm planning to use divergence to enhance lift-offs timing, so that we get reversal events sooner
+a67a2861fe80  ws1r and gcws30r
+f7eed9dad810  while gcws30b is same-side oob
+a8e89fc7d1ea  the mech needs to allow for both sides
+d3cc43b69352  your preference.  these 2 options should be chosen by a knob
+27a315096b40  there's a red/green blue/yellow pine emit module in the jig - please create the pine script. red and blue are bearish, green and yellow are bearish. red/green is ws1r, blue/yellow is gcws30r
+802fd6801ae6  double print the bgcolors - one at the ws1 event bar, and one on the following ws1 bar
+bd79e6ffe263  align the timestamps with ws1
+db0b9162e22e  don't add anything I havem't asked for
+a7d75f13e058  that's better.  bank it and update the jig producer
+d8ea69f80f71  make this mode's default: off
+5d638b07c7d1  it's two noisy - lets try it with ws2b
+c69813f83c80  bank, update specs and make knobs durable
+185b1267bc22  bank, update specs and make knobs durable. commit and push all files, yours or not
+7fa2a9092818  report the ws30r to ws10r emerging values in a 22 column table
+d08d3ba1d631  a BB%B line with len 4 and multi 0.5, src: close
+2f2900d2021e  going forward I'll refer to this line as ws{TF}e
+395d6f8b8123  fake a cadence event whenever ws1b crosses to ib, while ws1Mage was oob during ws1b's oob excursion, from 1745 to 1920. these will all be high side events
+213e84017d4b  replace them with r rows that were calculated on ws5x
+a72b6911cf6d  these will all be high side events
+43f4211f6657  the reports will be printed consecutively, in a text file
+8f9fdfb70c75  repeat the mech's run for the lowside cadence events, and dump their consecutive reports into a separate text file
+9f12302b781d  experimental: I need you to fake a cadence event whenever ws1b crosses to ib, while ws1Mage was oob during ws1b's oob excursion, from 1745 to 1920. these will all be high side events
+a587447f6286  show the list of reports onscreen - no summaries
+472c79798f0e  what did we name this report
+ace41953576a  can you code it? it would have its own label for any events that it claims: `{bearish,bullish}-rsi`
+25a664d616ec  that's better. bank it and update the jig producer
+ba387a12a2ca  your preference. these 2 options should be chosen by a knob

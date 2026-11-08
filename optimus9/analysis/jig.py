@@ -1373,6 +1373,125 @@ def anchor_floater(r, px, dr, k, block=AF_BLOCK, mid=50.0,
             'state': int(state), 'pm': bool(abs(state) == 2)}
 
 
+# ── the RSI divergence, `bullish-rsi` / `bearish-rsi` (Joe 1107) ──────────────────────────────────
+# HIS ASK, after the 2026-08-25 07:49 -> 07:51 read: price made a lower low while the RSI under ws1r
+# made a higher low, and ws1r's rescaling (stoch of RSI) plus its 7-bar average hid it - *"can you
+# code it?  it would have its own label for any events that it claims: `{bearish,bullish}-rsi`"*.
+# His context: *"I'm planning to use divergence to enhance lift-offs timing, so that we get reversal
+# events sooner"*.
+# HIS RULINGS, 1107: the lines are *"ws1r and gcws30r"* (their own RSI, each on its own bars); the
+# anchor is the bar *"while gcws30b is same-side oob"*, and *"the mech needs to allow for both
+# sides"*; the gate is read at the ANCHOR ONLY (he chose that option over "same excursion"); one
+# event per earlier point (he chose the first-bar-only option); and an RSI-level gate is a knob,
+# *"your preference.  these 2 options should be chosen by a knob"*.
+# RSIDIV_GATE - THE GATE LINE, BANKED ws2b, Joe 1107. His first ruling was gcws30b; on its pine he
+#   found it *"two noisy - lets try it with ws2b"*, then on the ws2b pine *"that's better.  bank it
+#   and update the jig producer"*. 2026-08-25: 130 events on gcws30b, 55 on ws2b. The gate line is
+#   read closed-prev at its own timeframe, RSIDIV_GATE_TF.
+# RSIDIV_LVL_GATE - 0 = the oob gate alone, 1 = ALSO the earlier point's RSI at or past RSIDIV_LVL.
+#   0 IS MY PREFERENCE and the default: the oob gate already restricts the read to a stretched move,
+#   which is the job an RSI level would do. THE KNOB NAMES ARE MINE.
+# RSIDIV_LVL - the RSI level for that gate, his smaller-number convention: 30 -> 30 low / 70 high.
+# RSIDIV_ON - THE WHOLE READ'S SWITCH, BANKED OFF, Joe 1107: *"make this mode's default: off"*, and he
+#   chose the whole-divergence switch over the RSI-level gate. At 0 rsi_divergence claims no events, so
+#   nothing that calls it with the default sees one. A report that wants the events passes on=True.
+# RSIDIV_LINES - THE r LINES WHOSE RSI IS READ, his *"ws1r and gcws30r"*, banked 1108 with the rest (*"bank,
+#   update specs and make knobs durable"*). Env W_RSIDIV_LINES is a comma list.
+RSIDIV_ON = int(os.environ.get('W_RSIDIV_ON', 0))
+RSIDIV_LINES = tuple(x.strip() for x in os.environ.get('W_RSIDIV_LINES', 'ws1r,gcws30r').split(','))
+RSIDIV_GATE = os.environ.get('W_RSIDIV_GATE', 'ws2b')
+RSIDIV_GATE_TF = {'ws2b': 120, 'gcws30b': 30}       # seconds, the gate line's own timeframe
+RSIDIV_LVL_GATE = int(os.environ.get('W_RSIDIV_LVL_GATE', 0))
+RSIDIV_LVL = float(os.environ.get('W_RSIDIV_LVL', 30.0))
+RSIDIV_LABEL = {-1: 'bullish-rsi', +1: 'bearish-rsi'}
+# THE RULED SET, his "bank" rule: the default moves AND an off-ruled run refuses. knob -> (ruled, his words).
+RSIDIV_RULED = {
+    'RSIDIV_ON': (0, '"make this mode\'s default: off" - the whole read, his choice'),
+    'RSIDIV_LINES': (('ws1r', 'gcws30r'), '"ws1r and gcws30r"'),
+    'RSIDIV_GATE': ('ws2b', '"that\'s better.  bank it and update the jig producer" - on the ws2b pine'),
+    'RSIDIV_LVL_GATE': (0, '"your preference.  these 2 options should be chosen by a knob" - mine is 0'),
+    'RSIDIV_LVL': (30.0, 'MINE - only read when RSIDIV_LVL_GATE is 1'),
+}
+
+
+def rsidiv_check():
+    """THE RULED CHECK for the RSI divergence. Refuses an off-ruled run unless W_RSIDIV_EXPERIMENT=1.
+
+    -> [(knob, live, ruled, ok)], printed by the caller first. Every knob in RSIDIV_RULED is checked.
+    """
+    live = {'RSIDIV_ON': RSIDIV_ON, 'RSIDIV_LINES': RSIDIV_LINES, 'RSIDIV_GATE': RSIDIV_GATE, 'RSIDIV_LVL_GATE': RSIDIV_LVL_GATE, 'RSIDIV_LVL': RSIDIV_LVL}
+    assert set(live) == set(RSIDIV_RULED), 'a RSIDIV knob is not in the ruled set'
+    rows = [(k, live[k], RSIDIV_RULED[k][0], str(live[k]) == str(RSIDIV_RULED[k][0])) for k in RSIDIV_RULED]
+    off = [r for r in rows if not r[3]]
+    if off and os.environ.get('W_RSIDIV_EXPERIMENT', '0') != '1':
+        raise SystemExit('REFUSED - RSIDIV knobs off the bank: %s. Set W_RSIDIV_EXPERIMENT=1 to run them.'
+                         % ', '.join('%s=%s (ruled %s)' % r[:3] for r in off))
+    assert RSIDIV_GATE in RSIDIV_GATE_TF, 'RSIDIV_GATE %r has no timeframe' % RSIDIV_GATE
+    return rows
+
+
+def rsi_divergence(close, rsi, gate, oob, on=RSIDIV_ON, lvl_gate=RSIDIV_LVL_GATE, lvl=RSIDIV_LVL):
+    """[PRODUCER - Joe 1107] `bullish-rsi` / `bearish-rsi` on ONE line's own closed bars. -> [dict].
+
+        close  the line's bar closes, one value per COMPLETED bar of its timeframe (1 min for ws1r,
+               30 s for gcws30r) - the raw close, not px_smooth
+        rsi    the RSI under the r line on the same bars (IndicatorComputer._rsi, the builder's own)
+        gate   the RSIDIV_GATE line (BANKED ws2b) as seen when each bar has closed - the caller reads
+               it closed-prev at the first 5 s bar after the close, which is where that bar prints
+        oob    (lo, hi), his oob 15/85
+        on     RSIDIV_ON, BANKED 0: off returns [] - no event is claimed
+
+    PER BAR i, the ANCHOR, and both sides independently:
+        low side   the earlier point is the MOST RECENT LOW: a bar j with a strictly higher close on
+                   both sides, confirmed by bar j+1, so j+1 <= i. `bullish-rsi` when gate[i] <= lo,
+                   close[i] < close[j] and rsi[i] > rsi[j]
+        high side  the mirror: the most recent HIGH (strictly lower close both sides), gate[i] >= hi,
+                   close[i] > close[j] and rsi[i] < rsi[j] -> `bearish-rsi`
+    ONE EVENT PER EARLIER POINT, his "first bar only": once j has been claimed on a side, later
+    anchors against the same j are not events. No distance limit between j and i - the earlier
+    point is simply the most recent one, his standing no-cap rule. Strict inequalities are MINE.
+
+    `side` follows the board, +1 high / -1 low, so `bullish-rsi` is -1 and `bearish-rsi` is +1.
+    -> [{'i', 'side', 'label', 'j', 'close_i', 'close_j', 'rsi_i', 'rsi_j', 'gate_i'}], i ascending.
+    """
+    if not int(on):
+        return []
+    c = np.asarray(close, float); r = np.asarray(rsi, float); g = np.asarray(gate, float)
+    assert len(c) == len(r) == len(g), 'close, rsi and gate must sit on the same bars'
+    lo, hi = float(oob[0]), float(oob[1])
+    lv_lo, lv_hi = float(lvl), 100.0 - float(lvl)
+    out, last, claimed = [], {-1: None, +1: None}, {-1: set(), +1: set()}
+    for i in range(2, len(c)):
+        #   bar i-1 is confirmed as a low/high by bar i's close - it becomes the earlier point for
+        #   anchors from bar i on. Reading c[i] here is reading the anchor's OWN closed bar.
+        j = i - 1
+        if np.isfinite(c[j - 1:i + 1]).all():
+            if c[j] < c[j - 1] and c[j] < c[i]:
+                last[-1] = j
+            if c[j] > c[j - 1] and c[j] > c[i]:
+                last[+1] = j
+        if not (np.isfinite(c[i]) and np.isfinite(r[i]) and np.isfinite(g[i])):
+            continue
+        for sd in (-1, +1):
+            j = last[sd]
+            if j is None or j in claimed[sd] or not np.isfinite(r[j]):
+                continue
+            if not ((g[i] <= lo) if sd < 0 else (g[i] >= hi)):
+                continue
+            if int(lvl_gate) and not ((r[j] <= lv_lo) if sd < 0 else (r[j] >= lv_hi)):
+                continue
+            if sd < 0 and not (c[i] < c[j] and r[i] > r[j]):
+                continue
+            if sd > 0 and not (c[i] > c[j] and r[i] < r[j]):
+                continue
+            assert j < i, 'an rsi divergence read its earlier point at or after its anchor'
+            claimed[sd].add(j)
+            out.append(dict(i=int(i), side=int(sd), label=RSIDIV_LABEL[sd], j=int(j),
+                            close_i=float(c[i]), close_j=float(c[j]),
+                            rsi_i=float(r[i]), rsi_j=float(r[j]), gate_i=float(g[i])))
+    return out
+
+
 # ── sideways / reversal from a flat sample run + divergence (Joe 0912 hypothesis) ───────────────
 SR_SAMPLES = 3      # Joe 0912: ">= 3 samples printing the same values". A sample is ONE 5 s bar -
 #                     the per-sample table he read the hypothesis off was 61 rows over 5 minutes.
