@@ -54,6 +54,19 @@ IF a cadence event fires
 | the no-duplicate-at-one-bar rule | *"stands"* |
 | the rev-trade | *"not yet. I want to see the fundamentals aligned with me before we do anything more"* |
 
+### HIS 1108 CAD WALK COLUMNS
+
+His words: *"add 2 columns to this report, on the far righthand side: 1) the cad-walked timestamp
+when 3 ups or 3 downs print after a 'none' `3of4 read`, 2) the up/down verdict / if `the 3-of-4
+read` is not none for a row, the fields in the new columns will read '-'"*.
+
+| what | the detail |
+|---|---|
+| when the walk runs | ONLY on a row whose 3-of-4 read is `none`. Every other row prints `-` in both columns |
+| what is re-read | the extremum is FIXED - it is the pre-cross extremum. The SECOND row of the diff moves to the bar being read. That is the only reading under which the diff changes at all, and it is MINE |
+| the bound | NONE APPLIED. He has not ruled one here, so the walk runs to the tape end and the delay is reported beside it. A bound can only cut rows, never add them |
+| where it lives | the `xcv` request kind on the live process, so the table is repeatable on any day and any x line |
+
 ### WHY THE WOB IS NECESSARY - the measurement that reversed his own ruling
 
 He asked why the report showed 2026-08-25 02:31:55 for the 02:22:00 HIGH event while the

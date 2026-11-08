@@ -34,6 +34,7 @@ THE DAY'S CHAIN IS MEMOISED per (day, knob hash). A knob change changes the hash
 query recomputes instead of serving a stale chain - the staleness is designed out rather than
 remembered.
 """
+import bisect as _bisect
 import importlib
 import io
 import json
@@ -163,6 +164,89 @@ def answer(q):
         out += ['', '# c3r opened at the ws1Mage reversal, %s to %s'
                 % (str(q['from']), str(q['to'])), '']
         out += R.c3rmage_table(LN, A, B, lab)
+        return out
+    if kind == 'xcv':
+        #   HIS 1108 `fdm2-xcv` TABLE, with his two new columns. His spec: one x line
+        #   `ws{knob:5}x`, the race started at the cadence WINDOW OPEN, bounded by the next cadence
+        #   event on either side, the FDM_X10_WOB hold restored - *"ok - that makes the wob
+        #   necessary"* - and the pre-cross extremum from jig.mage_cascade_bar.
+        #   THE TWO NEW COLUMNS, his words: *"1) the cad-walked timestamp when 3 ups or 3 downs
+        #   print after a 'none' 3of4 read, 2) the up/down verdict"*, and *"if the 3-of-4 read is
+        #   not none for a row, the fields in the new columns will read '-'"*.
+        import numpy as _np
+        from optimus9.analysis import jig as _JIG
+        tf = int(q.get('tf', 5))
+        day = str(q['day'])
+        A, B = ln.K(day + ' 00:00:00'), ln.K(day + ' 23:59:55')
+        NB = len(LN['close']) - 1
+        TFS = list(range(30, 9, -1))
+        LEFT = (30, 29, 28, 27)
+        X = F2.x_of(LN, tf)
+        EM = LN['EMR']
+        #   EVERY cadence event bar on the tape, both sides - the race bound is the next one on
+        #   either side, his *"the next {any_}cadence"*.
+        allcad = sorted(set(int(e[0]) for sd2 in (+1, -1)
+                            for e in F2.cadence_events(LN, sd2, 0, NB)))
+
+        def bound(ev):
+            i = _bisect.bisect_right(allcad, int(ev))
+            return allcad[i] if i < len(allcad) else NB
+
+        def dirs(ext, bar):
+            out2 = []
+            for t in LEFT:
+                d = float(EM[t][int(bar)]) - float(EM[t][int(ext)])
+                out2.append('up' if d > 0 else 'down' if d < 0 else 'flat')
+            return out2
+
+        def read34(c):
+            u, d = c.count('up'), c.count('down')
+            return 'up' if u >= 3 else 'down' if d >= 3 else 'none'
+
+        ev = []
+        for sd2 in (+1, -1):
+            for e in F2.cadence_events(LN, sd2, A, B):
+                ev.append((int(e[0]), sd2, int(e[1])))
+        out += ['', '# fdm2-xcv, ws%dx, %s' % (tf, day), '']
+        out += ['| # | the cadence event | side | the ws%dx extremum | the ws%dx cross | his branch '
+                '| ws30 ws29 ws28 ws27 | the 3-of-4 read | the cad-walked timestamp | the verdict |'
+                % (tf, tf), '|---|---|---|---|---|---|---|---|---|---|']
+        n = 0
+        for b, sd2, s0 in sorted(ev):
+            n += 1
+            r = F2.x_race(LN, tf, sd2, int(s0) - 1, bound(b))
+            if r is None:
+                out.append('| %d | %s | %s | - | NONE | goto START | - | NO ROWS | - | - |'
+                           % (n, ln.U(b), 'HIGH' if sd2 > 0 else 'LOW'))
+                continue
+            cf, which, c = r
+            Mx = _JIG.mage_cascade_bar(X, int(c), int(sd2), mode='extrema',
+                                       gap=int(_JIG.MC_GAP))
+            if Mx is None:
+                out.append('| %d | %s | %s | none | %s | - | - | NO EXTREMUM | - | - |'
+                           % (n, ln.U(b), 'HIGH' if sd2 > 0 else 'LOW', ln.U(int(c))))
+                continue
+            ext = int(Mx[0])
+            d4 = dirs(ext, int(c))
+            v = read34(d4)
+            br = ('1 - inside the window' if int(c) <= int(b) else '2 - the x-cross won')
+            #   HIS CAD WALK. Only for a `none` row. The extremum is FIXED - it is the pre-cross
+            #   extremum - and the SECOND row of the diff moves to the bar being read, which is the
+            #   only reading under which the diff changes at all. NO BOUND IS APPLIED: he has not
+            #   ruled one here, so the walk runs to the tape end and the delay is reported beside
+            #   it. A bound can only cut rows, never add them.
+            cw, cv = '-', '-'
+            if v == 'none':
+                for t2 in range(int(c) + 1, NB + 1):
+                    vv = read34(dirs(ext, t2))
+                    if vv != 'none':
+                        cw, cv = ln.U(t2), vv
+                        break
+                else:
+                    cw, cv = 'never to the tape end', 'none'
+            out.append('| %d | %s | %s | %s | %s | %s | %s | %s | %s | %s |'
+                       % (n, ln.U(b), 'HIGH' if sd2 > 0 else 'LOW', ln.U(ext), ln.U(int(c)), br,
+                          ' '.join(d4), v, cw, cv))
         return out
     if kind == 'xdiag':
         #   HIS 1108: *"what exactly happens at the timestamps in 'the x line with no cross'?"*.
