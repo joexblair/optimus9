@@ -182,6 +182,46 @@ A MEDIAN LEAD OF 10 s IS THE WEAKNESS. The hypothesis is that the Mage prints EA
 used, and on half the passing rows it buys 2 bars. The 0659 case he started from is not typical:
 ws5Mage led ws3r by 70 s there, which is at the 90th percentile of this population.
 
+### HIS 0808 LOW EXAMPLE — a counter-example, and he found it by eye
+
+He said *"there's another example near 0808 low"*. It is NOT one of the 94 episodes, because the
+setup never holds there: **ws2r is never ex-fence**, sitting at 43.65 to 48.13 against the LOW 20
+line, and ws1r only crosses it for 4 bars.
+
+| the bar | ws1r emerging | ex-fence | ws2r emerging | ex-fence | ws3r emerging | ex-fence |
+|---|---|---|---|---|---|---|
+| 2026-08-25 08:08:00 | 30.71 | . | 43.65 | . | 12.69 | EXF |
+| 2026-08-25 08:09:00 | 16.42 | EXF | 43.65 | . | 14.55 | EXF |
+| 2026-08-25 08:09:15 | 19.36 | EXF | 43.65 | . | 18.82 | EXF |
+| 2026-08-25 08:09:20 | 20.61 | . | 43.88 | . | 20.77 | . |
+
+WHAT THE LINES DID THERE — the Mage cluster lands ON the ws3r reversal bar, not before it:
+
+| the line | its LOW stamps, 2026-08-25 08:05:00 .. 08:25:00 |
+|---|---|
+| ws3r | 2026-08-25 08:09:35, 2026-08-25 08:12:35 |
+| ws1Mage | 2026-08-25 08:09:35, 08:12:35, 08:15:10, 08:19:35, 08:21:25, 08:22:15, 08:24:55 |
+| ws2Mage | 2026-08-25 08:09:35, 08:11:00, 08:12:35, 08:22:35, 08:24:50 |
+| ws3Mage | 2026-08-25 08:09:35, 08:12:15, 08:22:25, 08:24:50 |
+| ws4Mage | 2026-08-25 08:12:35, 08:22:45, 08:23:35, 08:24:50 |
+| ws5Mage | 2026-08-25 08:12:35, 08:24:50 |
+| ws6Mage | 2026-08-25 08:12:35 |
+| ws7Mage | 2026-08-25 08:12:20 |
+
+| the read at 0808 LOW | value |
+|---|---|
+| ws1Mage, ws2Mage, ws3Mage | all three stamp 2026-08-25 08:09:35 - a spread of 0 s, the tightest in the data |
+| ws3r's first reversal | 2026-08-25 08:09:35 - THE SAME BAR |
+| ws4Mage, ws5Mage, ws6Mage | all three stamp 2026-08-25 08:12:35, with ws7Mage 15 s earlier |
+| ws3r's second reversal | 2026-08-25 08:12:35 - again THE SAME BAR |
+| the ws5Mage +2 lead on ws3r's first | -3 min 00 s - ws3r led by three minutes |
+| the ws5Mage +2 lead on ws3r's second | 0 min 00 s |
+
+THE TIGHTEST CLUSTER BUYS NO TIME. It matches the ws3r reversal bar exactly, twice, and leads it
+by nothing. That sharpens the weakness already measured over the 94: a tight ladder predicts the
+BAR well and gives no warning before it. HIS GATE WOULD SELECT THIS SETUP AND IT WOULD BE USELESS
+AS A PREDICTOR - it is a coincidence detector at a 0 s spread.
+
 ### OPEN — needs his ruling before the race is wired
 
 | the gap | the question |
