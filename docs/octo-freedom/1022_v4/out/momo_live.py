@@ -172,6 +172,10 @@ def answer(q):
                                 label=str(q.get('label', 'cross')),
                                 anchor=q.get('anchor'))
         return out
+    if kind == 'lift':
+        out += XR.lift_table(LN, str(q['from']), str(q['to']), side=str(q.get('side', 'LOW')),
+                             tfs=str(q.get('tfs', '1,2,3')), also=str(q.get('also', '4,5')))
+        return out
     if kind == 'xcvopp':
         out += XR.xcvopp_table(LN, str(q['day']), tf=int(q.get('tf', 5)),
                                cap_min=q.get('cap_min'))

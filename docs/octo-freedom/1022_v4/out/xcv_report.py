@@ -535,3 +535,95 @@ def xcvopp_table(LN, day, tf=5, cap_min=None):
                       ('YES' if d is not None and d <= cap_bars * 5 else 'NO') if d is not None
                       else 'NO'))
     return out
+
+def lift_table(LN, frm_s, to_s, side='LOW', tfs='1,2,3', also='4,5'):
+    """Each ws{tf}r's lift-off reversal stamps in a span, and what other lines read at each. -> [str].
+
+    HIS 1109 ASK: *"using 6 samples per TF, what time does ws1r,ws2r,ws3r anti-race reverse? low
+    side after 0659. does ws4r and ws5r print infence at that anti-race reversal time?"*.
+
+    `6 samples per TF` is `LIFT_PTS`, banked 6 - the knob's own gloss is *"samples in the window"*.
+    The stamps come from `LN['LIFT'][(tf, side)]`, which `v4_fdm2.load` precomputes from
+    `jig.lift_off` at the banked LIFT_* knobs and which already carries the LIFT_WOB offset, so a
+    stamp is the bar the reversal becomes KNOWABLE rather than the bar it turned on.
+
+    `anti-race` IS NOT A TERM IN THE TREE, so no selection rule is applied: every stamp is printed
+    and the `also` lines are read at EACH of them. The first and the last are both in front of him.
+
+    in-fence means NOT ex-20/80 - his standing rule that ex-any-fence includes oob, so a fence is
+    an edge and never a band.
+    """
+    out = []
+    import numpy as _np
+    sd = _sd(side)
+    A, B = ln.K(str(frm_s)), ln.K(str(to_s))
+    TF = [int(x) for x in str(tfs).split(',') if str(x).strip()]
+    AL = [int(x) for x in str(also).split(',') if str(x).strip()]
+    lo_f, hi_f = K.fnc_pair(K.FDM_FNC_2080)
+    out += ['', '# ws%sr lift-off reversal stamps, %s side, %s .. %s'
+            % ('r, ws'.join(str(t) for t in TF), side, str(frm_s), str(to_s)), '']
+    out += [R.row('the samples per TF', 'LIFT_PTS %d - the knob\'s own gloss is "samples in the '
+                  'window"' % int(K.LIFT_PTS)),
+            R.row('the tolerance', 'LIFT_TOL %g r-points' % float(K.LIFT_TOL)),
+            R.row('the hold', 'LIFT_WOB %d bars = %d s, already carried by every stamp below'
+                  % (int(K.LIFT_WOB), int(K.LIFT_WOB) * 5)),
+            R.row('in-fence', 'strictly inside %g..%g - NOT ex-20/80' % (lo_f, hi_f)),
+            R.row('oob', 'at or past %g' % (float(K.OOB_HI) if sd > 0 else float(K.OOB_LO))),
+            '']
+    st = {}
+    out += ['| the line | its lift-off reversal stamps in the span | the first | the last | how many |',
+            '|---|---|---|---|---|']
+    for t in TF:
+        arr = _np.asarray(LN['LIFT'][(t, int(sd))], int)
+        got = [int(b) for b in arr if A <= int(b) <= B]
+        st[t] = got
+        out.append('| ws%dr | %s | %s | %s | %d |'
+                   % (t, ', '.join(ln.U(b) for b in got) if got else 'none in the span',
+                      ln.U(got[0]) if got else '-', ln.U(got[-1]) if got else '-', len(got)))
+    firsts = {t: (st[t][0] if st[t] else None) for t in TF}
+    have = [b for b in firsts.values() if b is not None]
+    out += ['']
+    out += ['| the selection | the bar | which line stamped it |', '|---|---|---|']
+    if have:
+        fb, lb = min(have), max(have)
+        out.append('| the FIRST of the three to reverse | %s | %s |'
+                   % (ln.U(fb), ', '.join('ws%dr' % t for t in TF if firsts[t] == fb)))
+        out.append('| the LAST of the three to reverse | %s | %s |'
+                   % (ln.U(lb), ', '.join('ws%dr' % t for t in TF if firsts[t] == lb)))
+        out.append('| the span between them | %d min %02d s | - |'
+                   % (((lb - fb) * 5) // 60, ((lb - fb) * 5) % 60))
+    else:
+        out.append('| none | - | - |')
+    out += ['']
+    #   EVERY COLUMN THE FLAG READS, so the flag cannot disagree with what is shown. HIS 1105
+    #   RULE lives in F2.ex2080_line at FDM_EXF_READ 'either': the closed-prev value OR the
+    #   emerging EXTREME over FDM_EXF_EM_BARS bars ENDING at the bar. A single emerging value in
+    #   this table said `22.53, EXF` on 1109, which is a label describing a read it did not make.
+    nb = int(K.FDM_EXF_EM_BARS)
+    out += [R.row('the ex-20/80 read', 'FDM_EXF_READ %r - HIS 1105 *"if either closed-prev or '
+                  'emerging values qualify"*. The emerging side is the EXTREME over '
+                  'FDM_EXF_EM_BARS %d bars = %d s ending at the bar'
+                  % (str(K.FDM_EXF_READ), nb, nb * 5)), '']
+    out += ['| the bar read | which selection it is | the line | emerging, this bar | closed-prev, '
+            'this bar | the emerging %d-bar extreme | ex-20/80 | in-fence | oob |' % nb,
+            '|' + '---|' * 9]
+    for t in TF:
+        b = firsts[t]
+        if b is None:
+            continue
+        lab = 'ws%dr\'s own first reversal' % t
+        if have and b == min(have):
+            lab += ' - THE FIRST of the three'
+        if have and b == max(have):
+            lab += ' - THE LAST of the three'
+        for a in AL:
+            v = float(LN['EMR'][a][int(b)])
+            cp = float(LN['CPR'][a][int(b)])
+            seg = _np.asarray(LN['EMR'][a], float)[max(0, int(b) - nb + 1):int(b) + 1]
+            xt = float(_np.nanmax(seg)) if sd > 0 else float(_np.nanmin(seg))
+            ex = bool(F2.ex2080_line(LN, a, int(b), int(sd)))
+            ob = (v >= float(K.OOB_HI)) if sd > 0 else (v <= float(K.OOB_LO))
+            out.append('| %s | %s | ws%dr | %.2f | %.2f | %.2f | %s | %s | %s |'
+                       % (ln.U(b), lab, a, v, cp, xt, 'EXF' if ex else '.',
+                          'IN-FENCE' if not ex else 'no', 'OOB' if ob else '.'))
+    return out
