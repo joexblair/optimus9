@@ -1072,6 +1072,16 @@ def jump_table(LN, day, offs='2', path_at=None):
                 return u
         return None
 
+    def board_candidates(t, bar, sd, s0):
+        """EVERY candidate above the rider at `bar`, not only the one taken. -> [tf].
+
+        HIS 1109: *"for each handoff on #1 and #2, for each type of handoiff, print the candidate
+        TFs and the timestamps at each handoff"*. The handoff takes `[0]` of this list, so the
+        list IS the decision's input and a hop of +9 can be read as the eight rungs that did not
+        qualify rather than as a jump out of nowhere.
+        """
+        return [u for u in range(int(t) + 1, HI + 1) if qualifies(u, bar, sd, s0)]
+
     def timer(rule, t, sd, frm):
         """The next bar `rule` fires on, for rider ws{t} at or after `frm`. -> bar or None."""
         if rule == 'mage':
@@ -1157,25 +1167,31 @@ def jump_table(LN, day, offs='2', path_at=None):
         out += ['', '## the handoff chain at %s, %s side, nestle ws%dr - every rule, rung by rung'
                 % (ln.U(b), 'HIGH' if sd > 0 else 'LOW', rt), '']
         for rk, lab in RULES:
-            out += ['', '| the rule | the hop | the rung that received it | its timestamp '
-                    '| the hop size | why |', '|' + '---|' * 6]
+            out += ['', '| the rule | the hop | its timestamp | the candidate TFs at that '
+                    'bar | the rung that received it | the hop size | why |',
+                    '|' + '---|' * 7]
             t, bar, k, skipped = int(rt), int(b), 0, 0
-            out.append('| %s | the start | ws%d | %s | - | the cadence |' % (lab, rt, ln.U(b)))
+            out.append('| %s | the start | %s | - | ws%d | - | the cadence |'
+                       % (lab, ln.U(b), rt))
             while True:
                 m2 = timer(rk, t, sd, bar)
                 if m2 is None or int(m2) > NB:
-                    out.append('| %s | ENDS | - | %s | - | no timer event ahead |'
-                               % (lab, 'no timer event ahead' if m2 is None
-                                  else 'past the tape end'))
+                    out.append('| %s | ENDS | %s | - | - | - | no timer event ahead |'
+                               % (lab, 'none ahead' if m2 is None else 'past the tape end'))
                     break
-                u = board_lowest(t, int(m2), sd, s0)
+                cnd = board_candidates(t, int(m2), sd, s0)
+                u = cnd[0] if cnd else None
+                assert u == board_lowest(t, int(m2), sd, s0), \
+                    'the candidate list and the handoff disagree'
                 if u is None:
-                    out.append('| %s | EXHAUST | - | %s | - | no ws%dr..ws%dr is ex-20/80 '
-                               'and towards |' % (lab, ln.U(int(m2)), t + 1, HI))
+                    out.append('| %s | EXHAUST | %s | none | - | - | no ws%dr..ws%dr is '
+                               'ex-20/80 and towards |'
+                               % (lab, ln.U(int(m2)), t + 1, HI))
                     break
                 k += 1
-                out.append('| %s | %d | ws%d | %s | +%d | a handoff |'
-                           % (lab, k, u, ln.U(int(m2)), u - t))
+                out.append('| %s | %d | %s | %s | ws%d | +%d | a handoff |'
+                           % (lab, k, ln.U(int(m2)),
+                              ' '.join('ws%d' % z for z in cnd), u, u - t))
                 t, bar, skipped = int(u), int(m2), 0
     return out
 
