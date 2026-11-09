@@ -103,8 +103,15 @@ def load():
     PINS = PC.load(range(1, hi + 1))
     PIN = {t: PINS[t][0] for t in PINS}
     RSID = {t: PINS[t][1] for t in PINS}
-    MGE = LL.mage()          # EMERGING Mage. v4saviour reads the live lines, not chart-matched
-    CPM = {t: np.asarray(CP.series(MGE[t], int(t) * 60), float) for t in MGE}
+    #   THE MAGE LADDER GOES THREE RUNGS HIGHER THAN THE r LADDER, his 1109 *"add ws31-33Mage"*.
+    #   L2_MOM_MAGE_TOP 33 against L2_MOM_MAXTF 30: the handoff walk's ws{TF+2}Mage timer needs a
+    #   line two above the rider, and a rider on ws29 or ws30 had none.
+    MGE = LL.mage(int(K.L2_MOM_MAGE_TOP))   # EMERGING Mage. v4saviour reads the live lines
+    #   THE CLOSED-PREV MAGE STOPS AT THE r LADDER'S TOP, not at the Mage ladder's. Extending it
+    #   to 33 fed three more arrays into re_sigcache's input hash, which invalidated the re-entry
+    #   signal cache and sent the load into a full rebuild - for arrays no re-entry rule reads.
+    #   The handoff walk's Mage timer reads EMERGING Mage, LN['MGE'], which does carry 31..33.
+    CPM = {t: np.asarray(CP.series(MGE[t], int(t) * 60), float) for t in range(1, hi + 1)}
     close, phi, plo = BT.prices()
     #   THE LIFT-OFF STAMPS, PRECOMPUTED PER (TF, SIDE). One lift_off call per pair instead of one
     #   per measuring bar: the grace walk re-counts every 5 s bar, 60 bars per window, and the

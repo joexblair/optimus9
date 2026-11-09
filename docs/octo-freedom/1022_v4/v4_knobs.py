@@ -334,6 +334,12 @@ SP_TFS = _knob('SP_TFS', 'wide', str)       # 'his' = his six, 'wide' = plus ws1
 #   play with a new idea"*. Nothing in the machine calls it; the knobs live here because v4_knobs is
 #   the one knob home and a knob outside it cannot be checked.
 L2_MOM_MAXTF = _knob('L2_MOM_MAXTF', 30, int)   # *"v4mom_maxTF = 12"*. The ladder's top rung.
+#   THE MAGE LADDER REACHES HIGHER THAN THE r LADDER, HIS 1109: *"add ws31-33Mage"*. The handoff
+#   walk's Mage timer reads ws{TF+2}Mage, so at a rider on ws29 or ws30 it was asking for a line
+#   that did not exist and the chain ENDED there - the Mage rule could never carry a rider past
+#   ws28. These three lines are the timer's own headroom; the rungs a rider may occupy are still
+#   L2_MOM_MAXTF 30, his *"ws30 is by design"*.
+L2_MOM_MAGE_TOP = _knob('L2_MOM_MAGE_TOP', 33, int)   # the Mage ladder's top rung, HIS value.
 L2_LIN_HOP = _knob('L2_LIN_HOP', 2, int)        # *"lin_hop = 2"*. Max hops rider -> candidate, and
 #   it applies ONLY between cadence events. Joe 1025: *"when baton is being passed between cadence
 #   markers, linhop applies. at a cadence event, linhop doesn't apply"*.
@@ -1772,6 +1778,7 @@ RULED = {
                              ' 17 of 18. At ALIGN_S 300 ws1Mage and ws2Mage are the scale TF on'
                              ' 41.0% of events'),
     'L2_MOM_MAXTF': (30,    '"v4mom_maxTF = 12" - 1025, the lineage2 fork'),
+    'L2_MOM_MAGE_TOP': (33, 'HIS 1109 "add ws31-33Mage" - the Mage timer reads ws{TF+2}Mage, so a rider on ws29/ws30 had no timer line at all'),
     'L2_LIN_HOP':   (2,     '"lin_hop = 2" - 1025. Applies BETWEEN cadences only, his ruling'),
     'L2_T1_GRACE_S': (120,  '"the 2 minutes (CAUSALLY) following" - 1025, confirmed a knob'),
     'L2_T3_FRAC':   (0.75,  '"L2_T3_FRAC 0.75 survives" - 1026. Of the rider\'s matryoshka lines'

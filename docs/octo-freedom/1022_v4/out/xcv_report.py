@@ -1005,6 +1005,11 @@ def jump_table(LN, day, offs='2', path_at=None):
     OFF = int(str(offs).split(',')[0])
     A, B = ln.K(day + ' 00:00:00'), ln.K(day + ' 23:59:55')
     HI = int(LN['HI'])
+    #   THE TWO LADDER TOPS ARE NOT THE SAME, his 1109 *"add ws31-33Mage"*. HI 30 is the highest
+    #   rung a rider may occupy; MGHI 33 is the highest Mage line the ws{TF+2} timer may read, so
+    #   a rider on ws29 or ws30 still has a timer. Before this the Mage rule ended at ws28.
+    MGHI = int(K.L2_MOM_MAGE_TOP)
+    assert MGHI >= HI, 'the Mage ladder stops below the rungs a rider can reach'
     NB = len(LN['close']) - 1
     MST, RST, IBX = {}, {}, {}
 
@@ -1042,29 +1047,35 @@ def jump_table(LN, day, offs='2', path_at=None):
                                          rev_since=int(s0))['state'] == 'towards'
 
     def board_lowest(t, bar, sd, s0):
-        """HIS 1109 RUNG RULE. -> tf or None.
+        """HIS 1109 UNBOUNDED UPWARD HANDOFF - the LOWEST candidate above the rider. -> tf|None.
 
         HIS WORDS, verbatim:
-            -if there is a 1 rung jump available
-            --take take the 1 rung jump
-            -else if there is no 1 rung jump avaialble, but there is a 2 rung jump
-            --take the 2 rung jump
+            at every handoff, you can jump UPWARDS to the lowest candidate TF
+            examples:
+            you're on TF14 and handoff has fired
+            TF15, TF17, TF22 are all candidates (exfence + towards)
+            handoff to TF15
+            now you're on TF15 and the handoff has fired
+            TF18, TF22, TF23, TF24 are candidates
+            handoff to TF18
+            the final handoff prints when there are no candidates to handoff to. that is the end
+            of the walk
 
-        SO THE HOP IS AT MOST +2. It replaces my own *"hand off to the lowest qualifying line"*,
-        which he read as the next rung and which I had built as the nearest qualifying line at ANY
-        distance - it took hops of up to +29 on 2026-08-26. ws{t+3} and above are not candidates:
-        when neither ws{t+1} nor ws{t+2} qualifies the fire is BARREN.
+        THE +2 CEILING IS GONE. His earlier rung rule took ws{t+1} else ws{t+2} else barren, so a
+        gap of three rungs ended the walk while candidates sat above it. A candidate is any
+        ws{u}r, u > t, that is ex-20/80 AND printing towards at the timer bar - the same test -
+        and the walk takes the LOWEST of them however far away it is. No candidate at all is the
+        end of the walk, and the last handoff that did happen is the final one.
         """
-        if qualifies(int(t) + 1, bar, sd, s0):
-            return int(t) + 1
-        if qualifies(int(t) + 2, bar, sd, s0):
-            return int(t) + 2
+        for u in range(int(t) + 1, HI + 1):
+            if qualifies(u, bar, sd, s0):
+                return u
         return None
 
     def timer(rule, t, sd, frm):
         """The next bar `rule` fires on, for rider ws{t} at or after `frm`. -> bar or None."""
         if rule == 'mage':
-            return None if t + OFF > HI else nxt(mstamps(t + OFF, sd), frm)
+            return None if t + OFF > MGHI else nxt(mstamps(t + OFF, sd), frm)
         if rule == 'ib':
             return nxt(ibcross(t, sd), frm)
         if rule == 'rev':
@@ -1084,16 +1095,17 @@ def jump_table(LN, day, offs='2', path_at=None):
             ev.append((int(e[0]), sd, int(mm.group(1)), int(e[1])))
     out += ['', '# the LOWEST-qualifying TF handoff chain, four timing rules, ' + day, '']
     out += [R.row('WHERE it jumps to', 'HIS 1109 RUNG RULE - ws{TF+1}r if it is ex-20/80 AND '
-                  'towards at the timer bar, ELSE ws{TF+2}r on the same test, ELSE the fire is '
-                  'barren. The hop is at most +2'),
+                  'towards at the timer bar - the LOWEST candidate above the rider, at ANY '
+                  'distance. HIS 1109 rule, replacing the +2 ceiling'),
             R.row('the chain start', "the ws{TF}r that qualified the cadence's nestle"),
-            R.row('the ladder top', 'ws%d - HIS *"ws30 is by design"*' % HI),
+            R.row('the rungs a rider may occupy', 'ws1..ws%d - HIS *"ws30 is by design"*' % HI),
+            R.row('the Mage timer ladder', 'ws1..ws%d - HIS 1109 *"add ws31-33Mage"*' % MGHI),
             R.row('the Mage offset', '+%d' % OFF),
             R.row('the ib cross hold', 'FDM_RE_IB_XWOB %d bars, through jig.oob_ib_cross'
                   % int(K.FDM_RE_IB_XWOB)),
             R.row('one TF width', 'tf x 12 bars at the 5 s grid - ws22 adds 264 bars = 1320 s'),
-            R.row('a barren timer fire', 'HIS 1109 EXHAUST - it ENDS the walk. Neither ws{TF+1}r '
-                  'nor ws{TF+2}r being ex-20/80 and towards at the timer bar IS the exhaust'),
+            R.row('a barren timer fire', 'HIS 1109 EXHAUST - it ENDS the walk. NO ws{u}r above '
+                  'the rider being ex-20/80 and towards at the timer bar IS the exhaust'),
             R.row('bounds', 'none needed - the exhaust is what ends it'), '']
     out += ['| # | the cadence event | side | the nestle r line | %s |'
             % ' | '.join('%s: the final handoff | its max TF | its hops | how it ended' % lab
@@ -1122,8 +1134,8 @@ def jump_table(LN, day, offs='2', path_at=None):
                     #   `last` IS THE LAST HANDOFF, never the exhaust bar. Setting it to the
                     #   exhaust bar on a 0-hop walk made the column read a handoff that never
                     #   happened - the same stale-label fault as `extremum` holding a cross.
-                    why = 'EXHAUST at %s - neither ws%dr nor ws%dr is ex-20/80 and towards' \
-                          % (ln.U(int(m)), t + 1, t + 2)
+                    why = ('EXHAUST at %s - no ws%dr..ws%dr is ex-20/80 and towards'
+                           % (ln.U(int(m)), t + 1, HI))
                     break
                 t, bar, last, hops = int(u), int(m), int(m), hops + 1
                 top = max(top, int(u))
@@ -1137,8 +1149,8 @@ def jump_table(LN, day, offs='2', path_at=None):
     #   timestamp) all 4 handoff variants"*. `path_at` is ONE cadence event bar; every rule's path
     #   prints rung by rung so a handover fault is readable at the hop it happens on rather than
     #   only at the endpoint. ONE RECORD PER ROW: a hop is a row, never a cell in a long string.
-    if path_at:
-        pb = ln.K(str(path_at))
+    for _pa in [x.strip() for x in str(path_at or '').split(',') if x.strip()]:
+        pb = ln.K(_pa)
         hit = [z for z in ev if int(z[0]) == int(pb)]
         assert hit, 'no cadence event at that bar on this day'
         b, sd, rt, s0 = hit[0]
@@ -1158,9 +1170,8 @@ def jump_table(LN, day, offs='2', path_at=None):
                     break
                 u = board_lowest(t, int(m2), sd, s0)
                 if u is None:
-                    out.append('| %s | EXHAUST | - | %s | - | neither ws%dr nor ws%dr is '
-                               'ex-20/80 and towards |'
-                               % (lab, ln.U(int(m2)), t + 1, t + 2))
+                    out.append('| %s | EXHAUST | - | %s | - | no ws%dr..ws%dr is ex-20/80 '
+                               'and towards |' % (lab, ln.U(int(m2)), t + 1, HI))
                     break
                 k += 1
                 out.append('| %s | %d | ws%d | %s | +%d | a handoff |'
