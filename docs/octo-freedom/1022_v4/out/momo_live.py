@@ -174,7 +174,8 @@ def answer(q):
         return out
     if kind == 'lift':
         out += XR.lift_table(LN, str(q['from']), str(q['to']), side=str(q.get('side', 'LOW')),
-                             tfs=str(q.get('tfs', '1,2,3')), also=str(q.get('also', '4,5')))
+                             tfs=str(q.get('tfs', '1,2,3')), also=str(q.get('also', '4,5')),
+                             base=str(q.get('base', 'r')))
         return out
     if kind == 'xcvopp':
         out += XR.xcvopp_table(LN, str(q['day']), tf=int(q.get('tf', 5)),

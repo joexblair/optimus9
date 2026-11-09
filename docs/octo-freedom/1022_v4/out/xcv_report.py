@@ -536,7 +536,7 @@ def xcvopp_table(LN, day, tf=5, cap_min=None):
                       else 'NO'))
     return out
 
-def lift_table(LN, frm_s, to_s, side='LOW', tfs='1,2,3', also='4,5'):
+def lift_table(LN, frm_s, to_s, side='LOW', tfs='1,2,3', also='4,5', base='r'):
     """Each ws{tf}r's lift-off reversal stamps in a span, and what other lines read at each. -> [str].
 
     HIS 1109 ASK: *"using 6 samples per TF, what time does ws1r,ws2r,ws3r anti-race reverse? low
@@ -560,8 +560,9 @@ def lift_table(LN, frm_s, to_s, side='LOW', tfs='1,2,3', also='4,5'):
     TF = [int(x) for x in str(tfs).split(',') if str(x).strip()]
     AL = [int(x) for x in str(also).split(',') if str(x).strip()]
     lo_f, hi_f = K.fnc_pair(K.FDM_FNC_2080)
-    out += ['', '# ws%sr lift-off reversal stamps, %s side, %s .. %s'
-            % ('r, ws'.join(str(t) for t in TF), side, str(frm_s), str(to_s)), '']
+    out += ['', '# ws%s%s lift-off reversal stamps, %s side, %s .. %s'
+            % (('%s, ws' % str(base)).join(str(t) for t in TF), str(base), side, str(frm_s),
+               str(to_s)), '']
     out += [R.row('the samples per TF', 'LIFT_PTS %d - the knob\'s own gloss is "samples in the '
                   'window"' % int(K.LIFT_PTS)),
             R.row('the tolerance', 'LIFT_TOL %g r-points' % float(K.LIFT_TOL)),
@@ -571,14 +572,24 @@ def lift_table(LN, frm_s, to_s, side='LOW', tfs='1,2,3', also='4,5'):
             R.row('oob', 'at or past %g' % (float(K.OOB_HI) if sd > 0 else float(K.OOB_LO))),
             '']
     st = {}
+    #   `base` PICKS THE LINE THE REVERSAL IS READ ON. 'r' uses LN['LIFT'], the per-(tf, side)
+    #   stamps v4_fdm2.load precomputes. 'Mage' runs the same producer on LN['MGE'] here, because
+    #   no Mage stamp table is precomputed - the c3r mech calls jig.lift_off on it the same way.
+    from optimus9.analysis import jig as _J2
+    bs = str(base)
     out += ['| the line | its lift-off reversal stamps in the span | the first | the last | how many |',
             '|---|---|---|---|---|']
     for t in TF:
-        arr = _np.asarray(LN['LIFT'][(t, int(sd))], int)
+        if bs == 'r':
+            arr = _np.asarray(LN['LIFT'][(t, int(sd))], int)
+        else:
+            raw = _J2.lift_off(LN['MGE'][t], int(sd), K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL,
+                               K.LIFT_WOB)
+            arr = _np.asarray([K.lift_stamp(int(x)) for x in raw], int)
         got = [int(b) for b in arr if A <= int(b) <= B]
         st[t] = got
-        out.append('| ws%dr | %s | %s | %s | %d |'
-                   % (t, ', '.join(ln.U(b) for b in got) if got else 'none in the span',
+        out.append('| ws%d%s | %s | %s | %s | %d |'
+                   % (t, bs, ', '.join(ln.U(b) for b in got) if got else 'none in the span',
                       ln.U(got[0]) if got else '-', ln.U(got[-1]) if got else '-', len(got)))
     firsts = {t: (st[t][0] if st[t] else None) for t in TF}
     have = [b for b in firsts.values() if b is not None]
@@ -586,10 +597,12 @@ def lift_table(LN, frm_s, to_s, side='LOW', tfs='1,2,3', also='4,5'):
     out += ['| the selection | the bar | which line stamped it |', '|---|---|---|']
     if have:
         fb, lb = min(have), max(have)
-        out.append('| the FIRST of the three to reverse | %s | %s |'
-                   % (ln.U(fb), ', '.join('ws%dr' % t for t in TF if firsts[t] == fb)))
-        out.append('| the LAST of the three to reverse | %s | %s |'
-                   % (ln.U(lb), ', '.join('ws%dr' % t for t in TF if firsts[t] == lb)))
+        out.append('| the FIRST to reverse | %s | %s |'
+                   % (ln.U(fb), ', '.join('ws%d%s' % (t, bs) for t in TF if firsts[t] == fb)))
+        #   HIS 1109 WORD FOR IT: *"the anti-race is my shorthand - I couldn't think how else to
+        #   label 'the last of the three'"*. So `anti-race` means the LAST, and it is his term.
+        out.append('| the anti-race - the LAST to reverse, HIS 1109 term | %s | %s |'
+                   % (ln.U(lb), ', '.join('ws%d%s' % (t, bs) for t in TF if firsts[t] == lb)))
         out.append('| the span between them | %d min %02d s | - |'
                    % (((lb - fb) * 5) // 60, ((lb - fb) * 5) % 60))
     else:
@@ -611,7 +624,7 @@ def lift_table(LN, frm_s, to_s, side='LOW', tfs='1,2,3', also='4,5'):
         b = firsts[t]
         if b is None:
             continue
-        lab = 'ws%dr\'s own first reversal' % t
+        lab = 'ws%d%s\'s own first reversal' % (t, bs)
         if have and b == min(have):
             lab += ' - THE FIRST of the three'
         if have and b == max(have):
