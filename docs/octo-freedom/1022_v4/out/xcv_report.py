@@ -1113,9 +1113,11 @@ def jump_table(LN, day, offs='2', path_at=None):
                     #   the search moved to the next fire with no bound, which is what carried
                     #   these chains into late September. It now ENDS the walk, which is what
                     #   lineage2's baton walk does: it holds at the cadence and exhausts.
+                    #   `last` IS THE LAST HANDOFF, never the exhaust bar. Setting it to the
+                    #   exhaust bar on a 0-hop walk made the column read a handoff that never
+                    #   happened - the same stale-label fault as `extremum` holding a cross.
                     why = 'EXHAUST at %s - neither ws%dr nor ws%dr is ex-20/80 and towards' \
                           % (ln.U(int(m)), t + 1, t + 2)
-                    last = int(m) if last is None else last
                     break
                 t, bar, last, hops = int(u), int(m), int(m), hops + 1
                 top = max(top, int(u))
