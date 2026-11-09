@@ -172,6 +172,12 @@ def answer(q):
                                 label=str(q.get('label', 'cross')),
                                 anchor=q.get('anchor'))
         return out
+    if kind == 'magelead':
+        out += XR.mage_lead_table(LN, str(q['from']), str(q['to']), tf=int(q.get('tf', 3)),
+                                  offs=str(q.get('offs', '2,3,4')),
+                                  win_min=float(q.get('win_min', 2.0)),
+                                  ladder=q.get('ladder'))
+        return out
     if kind == 'lift':
         out += XR.lift_table(LN, str(q['from']), str(q['to']), side=str(q.get('side', 'LOW')),
                              tfs=str(q.get('tfs', '1,2,3')), also=str(q.get('also', '4,5')),

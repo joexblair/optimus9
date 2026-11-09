@@ -112,6 +112,76 @@ outcome is read off each candidate's own break bar rather than by running a knob
 So his landmark is real - two LOW ws3x crosses survive a 12-bar hold within 6 minutes of 0259 - and
 c3r does not read ws3x at all. ITS TRIGGER IS ws1r REACHING oob, and ws1r stopped at 18.10.
 
+## HIS 1109 HYPOTHESIS — a higher Mage reversal leading ws3r's
+
+HIS WORDS: *"we can predict a reversal of ws{TF}r if ws{TF+2}Mage and the lower TF Mages are
+printing a semi-cascade pattern that printings timestamps in a close range (I don't know what
+close range is yet, let the data guide you). IF the conditions are true, then the reversal of
+ws{TF}r can be printed when ws{TF+2 (or +3,+4 - sweep)}Mage reverses"*, and his test: *"test it on
+every 08-25 to 08- setup when ws1r,ws2r,ws3r are exfence on the same side. the test passes if
+ws3r does actually reverse within 2 minutes of the higher Mages signal"*.
+
+| what | the detail |
+|---|---|
+| the span run | 2026-08-25 00:00:00 .. 2026-08-31 23:59:55 — HIS END DATE IS TRUNCATED in his message, *"08-25 to 08- "*. 08-31 is MY reading of it and it is stated, not ruled |
+| the setup | ws1r, ws2r AND ws3r all ex-20/80 on the same side, through `F2.ex2080_line` |
+| the row unit | one row per EPISODE at the run's open. MINE and stated — counting every bar of a run would manufacture the population |
+| the pass | the Mage stamp FIRST, then ws3r within 2.0 min = 24 bars. A negative gap FAILS: a ws3r reversal that printed first is not a prediction |
+| `semi-cascade` | NOT a term in the tree. NO pattern rule is applied — the ladder stamps and their spread are printed so he names the rule |
+| the reader | the `magelead` request kind |
+
+### THE UNGATED RESULT — 94 episodes, 41 HIGH and 53 LOW
+
+| the offset | setups | PASS | FAIL, ws3r led | FAIL, too late | the pass rate |
+|---|---|---|---|---|---|
+| ws5Mage, +2 | 94 | 52 | 19 | 23 | 55% |
+| ws6Mage, +3 | 94 | 51 | 22 | 21 | 54% |
+| ws7Mage, +4 | 94 | 46 | 34 | 14 | 49% |
+
+61 of the 94 pass on at least one offset, 33 on none. UNGATED THIS IS NEAR A COIN FLIP, and his
+hypothesis is not the ungated claim — the gate is his undefined *"close range"*.
+
+### THE DATA NAMES HIS CLOSE RANGE
+
+The spread between the first and the last of the ws1Mage..ws7Mage stamps, bucketed:
+
+| the ladder spread, ws1Mage to ws7Mage | setups | ws5Mage +2 PASS | its rate | ws6Mage +3 PASS | its rate | ws7Mage +4 PASS | its rate |
+|---|---|---|---|---|---|---|---|
+| 0 to 30 s | 12 | 10 | 83% | 9 | 75% | 10 | 83% |
+| 31 to 60 s | 15 | 10 | 67% | 11 | 73% | 8 | 53% |
+| 61 to 120 s | 11 | 5 | 45% | 4 | 36% | 3 | 27% |
+| 121 to 300 s | 27 | 15 | 56% | 15 | 56% | 13 | 48% |
+| 301 to 600 s | 18 | 9 | 50% | 8 | 44% | 8 | 44% |
+| over 600 s | 11 | 3 | 27% | 4 | 36% | 4 | 36% |
+
+| the spread across all 94 | value |
+|---|---|
+| the smallest | 0 min 05 s |
+| the median | 2 min 32 s |
+| the largest | 26 min 50 s |
+
+HIS READ HOLDS WHERE THE SPREAD IS TIGHT. At 60 s or under the ladder gives 20 of 27 on the +2
+offset = 74%, against 55% ungated. Past 60 s the rate collapses to 45% and never recovers. The
+monotone part is only the first two buckets, so a THRESHOLD AT 60 s is what the data supports; it
+is HIS to rule, and nothing is applied.
+
+| the gate | setups | ws5Mage +2 PASS | its rate |
+|---|---|---|---|
+| spread 60 s or under | 27 | 20 | 74% |
+| spread over 60 s | 67 | 32 | 48% |
+
+### THE LEAD IS SMALL WHERE IT PASSES
+
+| the ws5Mage +2 lead on ws3r, over the 52 passing rows | value |
+|---|---|
+| the smallest | 0 min 00 s — the same bar |
+| the median | 0 min 10 s |
+| the largest | 1 min 50 s |
+
+A MEDIAN LEAD OF 10 s IS THE WEAKNESS. The hypothesis is that the Mage prints EARLY enough to be
+used, and on half the passing rows it buys 2 bars. The 0659 case he started from is not typical:
+ws5Mage led ws3r by 70 s there, which is at the 90th percentile of this population.
+
 ### OPEN — needs his ruling before the race is wired
 
 | the gap | the question |

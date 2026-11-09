@@ -653,3 +653,125 @@ def lift_table(LN, frm_s, to_s, side='LOW', tfs='1,2,3', also='4,5', base='r'):
                        % (ln.U(b), lab, a, v, cp, xt, 'EXF' if ex else '.',
                           'IN-FENCE' if not ex else 'no', 'OOB' if ob else '.'))
     return out
+
+def mage_lead_table(LN, frm_s, to_s, tf=3, offs='2,3,4', win_min=2.0, ladder=None):
+    """HIS 1109 HYPOTHESIS, tested: does a higher Mage's reversal lead ws{tf}r's? -> [str].
+
+    HIS WORDS: *"we can predict a reversal of ws{TF}r if ws{TF+2}Mage and the lower TF Mages are
+    printing a semi-cascade pattern that printings timestamps in a close range (I don't know what
+    close range is yet, let the data guide you). IF the conditions are true, then the reversal of
+    ws{TF}r can be printed when ws{TF+2 (or +3,+4 - sweep)}Mage reverses"*, and the test:
+    *"test it on every 08-25 to 08- setup when ws1r,ws2r,ws3r are exfence on the same side. the
+    test passes if ws3r does actually reverse within 2 minutes of the higher Mages signal"*.
+
+    A SETUP is one EPISODE, not one bar: a maximal run of bars where ws1r, ws2r AND ws3r are all
+    ex-20/80 on the SAME side, read through `F2.ex2080_line` so the fence test is the mech's own.
+    The row is the run's OPEN. One row per episode follows his standing no-duplicate-at-one-bar
+    rule; counting every bar of a 60-bar run as a setup would manufacture the population. MINE,
+    and stated.
+
+    THE PASS, his: the higher Mage's stamp comes FIRST and ws{tf}r's stamp lands within `win_min`
+    minutes of it. A ws{tf}r reversal that printed BEFORE the Mage is not a prediction, so a
+    negative gap fails.
+
+    `semi-cascade` IS NOT A TERM IN THE TREE, so NO pattern rule is applied. Every Mage stamp on
+    the ladder is printed with the spread between the first and the last, which is the quantity
+    his *"close range"* would be a threshold on. He names the rule from the data.
+
+    CAUSAL: every stamp already carries its LIFT_WOB hold, so each is read at the bar it becomes
+    knowable. The gap between two stamps is a gap between two knowable bars.
+    """
+    out = []
+    import numpy as _np
+    from optimus9.analysis import jig as _J3
+    tf = int(tf)
+    OFF = [int(x) for x in str(offs).split(',') if str(x).strip()]
+    LAD = [int(x) for x in str(ladder).split(',')] if ladder else list(range(1, tf + max(OFF) + 1))
+    A, B = ln.K(str(frm_s)), ln.K(str(to_s))
+    win = int(round(float(win_min) * 60 / 5))
+    off = max(1, int(K.LIFT_WOB)) - 1
+    NB = len(LN['close']) - 1
+
+    def mstamps(t, sd):
+        raw = _J3.lift_off(LN['MGE'][t], int(sd), K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL, K.LIFT_WOB)
+        return sorted(int(K.lift_stamp(int(x))) for x in raw)
+
+    def rstamps(t, sd):
+        return sorted(int(b) for b in _np.asarray(LN['LIFT'][(t, int(sd))], int))
+
+    def first_at_or_after(arr, b):
+        i = _bisect.bisect_left(arr, int(b))
+        return arr[i] if i < len(arr) else None
+
+    out += ['', '# does a higher Mage reversal lead ws%dr\'s, %s .. %s' % (tf, str(frm_s),
+                                                                           str(to_s)), '']
+    out += [R.row('the setup', 'ws1r, ws2r AND ws3r all ex-20/80 on the same side - one row per '
+                  'EPISODE, at the run\'s open'),
+            R.row('the fence test', 'F2.ex2080_line, FDM_EXF_READ %r over FDM_EXF_EM_BARS %d bars'
+                  % (str(K.FDM_EXF_READ), int(K.FDM_EXF_EM_BARS))),
+            R.row('the pass', 'the Mage stamp FIRST, then ws%dr within %.1f min = %d bars. A '
+                  'negative gap FAILS - it is not a prediction' % (tf, float(win_min), win)),
+            R.row('the reversal producer', 'jig.lift_off at LIFT_PTS %d, LIFT_TOL %g, LIFT_WOB %d '
+                  '- every stamp carries the hold' % (int(K.LIFT_PTS), float(K.LIFT_TOL),
+                                                      int(K.LIFT_WOB))),
+            R.row('the offsets swept', ', '.join('ws%dMage' % (tf + o) for o in OFF)),
+            R.row('`semi-cascade`', 'NOT a term in the tree - no pattern rule is applied. The '
+                  'ladder stamps and their spread are printed instead'),
+            '']
+    #   THE EPISODES. A run closes on the first bar any of the three is no longer ex-fence.
+    eps = []
+    for sd in (+1, -1):
+        on = False
+        for b in range(int(A), int(B) + 1):
+            ok = all(bool(F2.ex2080_line(LN, t, b, sd)) for t in (1, 2, 3))
+            if ok and not on:
+                eps.append((b, sd))
+                on = True
+            elif not ok:
+                on = False
+    MS = {(t, sd): mstamps(t, sd) for sd in (+1, -1) for t in LAD}
+    RS3 = {sd: rstamps(tf, sd) for sd in (+1, -1)}
+    out += ['| # | the setup opens | side | ws%dr reverses | %s | the ladder spread, first to last | '
+            'the verdict |'
+            % (tf, ' | '.join('ws%dMage +%d | its lead on ws%dr | pass' % (tf + o, o, tf)
+                              for o in OFF)), '|' + '---|' * (6 + 3 * len(OFF))]
+    rows = []
+    for n, (b, sd) in enumerate(sorted(eps), 1):
+        r3 = first_at_or_after(RS3[sd], b)
+        lad = [first_at_or_after(MS[(t, sd)], b) for t in LAD]
+        have = [x for x in lad if x is not None]
+        spread = ('%d min %02d s' % (((max(have) - min(have)) * 5) // 60,
+                                     ((max(have) - min(have)) * 5) % 60)) if len(have) > 1 else '-'
+        cells = []
+        res = {}
+        for o in OFF:
+            m = first_at_or_after(MS[(tf + o, sd)], b)
+            if m is None or r3 is None:
+                cells += ['-', '-', 'no data']
+                res[o] = None
+                continue
+            d = int(r3) - int(m)
+            ok = 0 <= d <= win
+            res[o] = ok
+            cells += [ln.U(m), '%s%d min %02d s' % ('' if d >= 0 else '-', abs(d * 5) // 60,
+                                                    abs(d * 5) % 60),
+                      'PASS' if ok else ('FAIL - ws%dr led' % tf if d < 0 else 'FAIL - too late')]
+        out.append('| %d | %s | %s | %s | %s | %s | %s |'
+                   % (n, ln.U(b), 'HIGH' if sd > 0 else 'LOW',
+                      ln.U(r3) if r3 is not None else 'none to the tape end',
+                      ' | '.join(cells), spread,
+                      'yes' if any(v for v in res.values() if v) else 'no'))
+        rows.append((b, sd, r3, res, lad))
+    out += ['']
+    out += ['| the offset | setups with data | PASS | FAIL, ws%dr led | FAIL, too late | the pass rate |'
+            % tf, '|---|---|---|---|---|---|']
+    for o in OFF:
+        tot = sum(1 for _b, _s, r3, res, _l in rows if res.get(o) is not None)
+        ps = sum(1 for _b, _s, r3, res, _l in rows if res.get(o) is True)
+        out.append('| ws%dMage, +%d | %d | %d | - | - | %s |'
+                   % (tf + o, o, tot, ps,
+                      ('%.0f%% of %d' % (ps / tot * 100.0, tot)) if tot else 'no episodes'))
+    out += ['']
+    out.append(R.row('episodes found', len(eps)))
+    out.append(R.row('the ladder read', 'ws%s' % 'Mage, ws'.join(str(t) for t in LAD) + 'Mage'))
+    return out
