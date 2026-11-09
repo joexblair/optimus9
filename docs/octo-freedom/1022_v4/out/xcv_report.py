@@ -577,19 +577,32 @@ def lift_table(LN, frm_s, to_s, side='LOW', tfs='1,2,3', also='4,5', base='r'):
     #   no Mage stamp table is precomputed - the c3r mech calls jig.lift_off on it the same way.
     from optimus9.analysis import jig as _J2
     bs = str(base)
-    out += ['| the line | its lift-off reversal stamps in the span | the first | the last | how many |',
-            '|---|---|---|---|---|']
+    out += ['| the line | its lift-off reversal stamps in the span | the RAW turn behind the '
+            'first | the first stamp | the last stamp | how many |', '|' + '---|' * 6]
+    #   THE RAW TURN AND THE STAMP, BOTH. HIS 1109: *"are the reversal times immediately
+    #   visible?"*. No - `K.lift_stamp` is the raw bar + LIFT_WOB - 1, so at LIFT_WOB 8 the turn
+    #   becomes knowable 35 s after the line left its extreme. The raw bar is printed so the delay
+    #   is a column rather than a claim, and it is NOT usable on its own: reading it at itself is
+    #   lookahead, which is what the hold exists to prevent.
+    off = max(1, int(K.LIFT_WOB)) - 1
     for t in TF:
         if bs == 'r':
             arr = _np.asarray(LN['LIFT'][(t, int(sd))], int)
+            rawb = {int(b): int(b) - off for b in arr}
         else:
             raw = _J2.lift_off(LN['MGE'][t], int(sd), K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL,
                                K.LIFT_WOB)
             arr = _np.asarray([K.lift_stamp(int(x)) for x in raw], int)
+            rawb = {int(K.lift_stamp(int(x))): int(x) for x in raw}
+            #   THE ARITHMETIC IS ONE PLACE. If the native raw bar and stamp - LIFT_WOB + 1 ever
+            #   disagree, lift_stamp has changed under this reader and the column would lie.
+            assert all(rawb[int(b)] == int(b) - off for b in arr), \
+                'lift_stamp no longer equals the raw bar + LIFT_WOB - 1'
         got = [int(b) for b in arr if A <= int(b) <= B]
         st[t] = got
-        out.append('| ws%d%s | %s | %s | %s | %d |'
+        out.append('| ws%d%s | %s | %s | %s | %s | %d |'
                    % (t, bs, ', '.join(ln.U(b) for b in got) if got else 'none in the span',
+                      ln.U(rawb[got[0]]) if got else '-',
                       ln.U(got[0]) if got else '-', ln.U(got[-1]) if got else '-', len(got)))
     firsts = {t: (st[t][0] if st[t] else None) for t in TF}
     have = [b for b in firsts.values() if b is not None]
