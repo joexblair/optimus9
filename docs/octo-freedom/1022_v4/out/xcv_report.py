@@ -965,7 +965,7 @@ def handoff_table(LN, day, offs='2,3,4', anchor_lo=1):
     out.append(R.row('cadence events on the day', n))
     return out
 
-def jump_table(LN, day, offs='2', path_at=None):
+def jump_table(LN, day, offs='2', path_at=None, seed=None):
     """HIS 1109 LOWEST-QUALIFYING HANDOFF, under four timing rules. -> [str].
 
     HIS WORDS: *"'hand off to the lowest qualifying line' -- let's try that. give it a set of
@@ -1202,6 +1202,66 @@ def jump_table(LN, day, offs='2', path_at=None):
                            % (lab, k, ln.U(int(m2)),
                               ' '.join('ws%d' % z for z in cnd), u, u - t))
                 t, bar, skipped, lastb = int(u), int(m2), 0, int(m2)
+    #   HIS 1109 SEED: *"at 0413, ws1r has just highside oob and reversed, which gaurantees that
+    #   ws2r and ws3r will need to reverse also. walk forward on ws1r's promise of more reversals
+    #   and see where you actually exhaust"*. The seed is a BAR, a rider rung and a side instead
+    #   of a cadence event, and every timer, candidate test and exhaust is the same code the
+    #   cadence-seeded walk runs - the only thing that changes is where the baton starts.
+    #
+    #   THE REVERSAL-GATE SPAN START IS THE SEED BAR ITSELF, and that is MINE: a cadence event
+    #   hands `s0` its window-open bar, and a seed has no window. `towards` reads `rev_since=s0`,
+    #   so the seed bar makes the detector count reversals from the promise forward.
+    for _sd3 in [x.strip() for x in str(seed or '').split(';') if x.strip()]:
+        parts = [y.strip() for y in _sd3.split(',')]
+        assert len(parts) == 3, 'a seed is "<timestamp>,<rider tf>,<HIGH|LOW>"'
+        sb, srt = ln.K(parts[0]), int(parts[1])
+        ssd = +1 if parts[2].upper() == 'HIGH' else -1
+        out += ['', '## the seeded handoff run from %s, rider ws%dr, %s side - every rule, rung '
+                'by rung' % (ln.U(sb), srt, 'HIGH' if ssd > 0 else 'LOW'),
+                '', R.row('the seed', 'HIS 1109 - a bar, a rider and a side, not a cadence event'),
+                R.row('the reversal-gate span start', 'the seed bar itself. MINE - a seed has no '
+                      'cadence window to take it from'), '']
+        #   HIS PROMISE, MEASURED BEFORE THE RUN: *"ws1r has just highside oob and reversed, which
+        #   gaurantees that ws2r and ws3r will need to reverse also"*. The reversal stamps are the
+        #   same `LN['LIFT']` array the walk's own `rev` timer reads, so the promise and the walk
+        #   cannot be reading two different things.
+        out += ['', '| the line | its last reversal stamp AT or BEFORE the seed | its next '
+                'reversal stamp AFTER the seed | seconds from the seed | its r at the seed '
+                '| ex-20/80 at the seed |', '|' + '---|' * 6]
+        for t4 in range(1, 7):
+            st = rstamps(t4, ssd)
+            bef = [z for z in st if z <= int(sb)]
+            aft = [z for z in st if z > int(sb)]
+            out.append('| ws%dr | %s | %s | %s | %.2f | %s |'
+                       % (t4, ln.U(bef[-1]) if bef else 'none',
+                          ln.U(aft[0]) if aft else 'none to the tape end',
+                          '%+d' % ((aft[0] - int(sb)) * 5) if aft else '-',
+                          float(_np.asarray(LN['EMR'][t4], float)[int(sb)]),
+                          'yes' if bool(F2.ex2080_line(LN, t4, int(sb), int(ssd))) else 'no'))
+        out += ['']
+        for rk, lab in RULES:
+            out += ['', '| the rule | the hop | its timestamp | the candidate TFs at that bar '
+                    '| the rung that received it | the hop size | why |', '|' + '---|' * 7]
+            t, bar, k, lastb = int(srt), int(sb), 0, None
+            out.append('| %s | the seed | %s | - | ws%d | - | ws%dr reversed |'
+                       % (lab, ln.U(sb), srt, srt))
+            while True:
+                m3 = timer(rk, t, ssd, bar if lastb is None else bar + 1)
+                if m3 is None or int(m3) > NB:
+                    out.append('| %s | ENDS | %s | - | - | - | no timer event ahead |'
+                               % (lab, 'none ahead' if m3 is None else 'past the tape end'))
+                    break
+                cnd = board_candidates(t, int(m3), ssd, sb)
+                u = cnd[0] if cnd else None
+                if u is None:
+                    out.append('| %s | EXHAUST | %s | none | - | - | no ws1r..ws%dr other than '
+                               'ws%dr is ex-20/80 and towards |' % (lab, ln.U(int(m3)), HI, t))
+                    break
+                k += 1
+                out.append('| %s | %d | %s | %s | ws%d | %+d | a handoff |'
+                           % (lab, k, ln.U(int(m3)),
+                              ' '.join('ws%d' % z for z in cnd), u, u - t))
+                t, bar, lastb = int(u), int(m3), int(m3)
     return out
 
 def xcvmomo_table(LN, day):
