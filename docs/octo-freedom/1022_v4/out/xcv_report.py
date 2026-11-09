@@ -204,7 +204,13 @@ def xcv_table(LN, day, tf=5):
     NB = len(LN['close']) - 1
     TFS = list(range(30, 9, -1))
     LEFT = (30, 29, 28, 27)
-    X = F2.x_of(LN, tf)
+    #   HIS 1109 RULING: *"introduce ws4x to xcv. race it against ws5x"*. THIS REVERSES HIS 1108
+    #   ONE-LINE RULING - *"ws5x is the one all of my timestamps were based on"* - which dropped
+    #   ws4x from the report. Both lines run now and the EARLIER CROSS WINS, which is what a race
+    #   is. The second line is FDM2_XCV_TF2, so a caller cannot race a line off the knob bank.
+    tf2 = int(K.FDM2_XCV_TF2)
+    RTF = [tf, tf2] if tf2 and tf2 != tf else [tf]
+    X = {t: F2.x_of(LN, t) for t in RTF}
     EM = LN['EMR']
     #   EVERY cadence event bar on the tape, both sides - the race bound is the next one on
     #   either side, his *"the next {any_}cadence"*.
@@ -228,7 +234,7 @@ def xcv_table(LN, day, tf=5):
     for sd2 in (+1, -1):
         for e in F2.cadence_events(LN, sd2, A, B):
             ev.append((int(e[0]), sd2, int(e[1])))
-    out += ['', '# fdm2-xcv, ws%dx, %s' % (tf, day), '']
+    out += ['', '# fdm2-xcv, ws%sx raced, %s' % ('x and ws'.join(str(t) for t in RTF), day), '']
     #   HIS 1108 RACE: *"the earliest 4-flat bar be in a race with the cad-walks fires"*, and
     #   *"whatever mech created the earliest 4-flat bar timestamps is where the verdict will be
     #   spawned from"*. `fdm2-rline-enhance` spawns only at a bar where ALL FOUR left lines read
@@ -236,24 +242,39 @@ def xcv_table(LN, day, tf=5):
     #   The two triggers are disjoint, so the earlier bar wins and a tie cannot happen.
     on = int(K.FDM2_RLINE_ON)
     dp = int(K.FDM2_RLINE_DP)
-    out += ['| # | the cadence event | side | the ws%dx extremum | the ws%dx cross | his branch '
-            '| ws30 ws29 ws28 ws27 | the 3-of-4 read | the cad-walked timestamp | the verdict '
-            '| the rline-enhance spawn | its verdict | which racer won |'
-            % (tf, tf), '|' + '---|' * 13]
+    out += ['| # | the cadence event | side | which x line won | the x extremum | the x cross '
+            '| the other x line | his branch | ws30 ws29 ws28 ws27 | the 3-of-4 read '
+            '| the cad-walked timestamp | the verdict | the rline-enhance spawn | its verdict '
+            '| which racer won |', '|' + '---|' * 15]
     n = 0
     for b, sd2, s0 in sorted(ev):
         n += 1
-        r = F2.x_race(LN, tf, sd2, int(s0) - 1, bound(b))
+        #   THE RACE BETWEEN THE TWO X LINES: each runs its own three-armed race from the same
+        #   window open to the same bound, and the EARLIER CROSS wins. A tie goes to the lower TF,
+        #   which is MINE and stated - it is the faster line and nothing in his words picks one.
+        cand = []
+        for t in RTF:
+            rr = F2.x_race(LN, t, sd2, int(s0) - 1, bound(b))
+            if rr is not None:
+                cand.append((int(rr[2]), t, rr))
+        best = min(cand, key=lambda z: (z[0], z[1])) if cand else None
+        r = best[2] if best else None
+        xwin = best[1] if best else None
+        xlost = ['ws%dx %s' % (t, ln.U(int(rr[2]))) for _c, t, rr in sorted(cand)
+                 if xwin is not None and t != xwin]
         if r is None:
-            out.append('| %d | %s | %s | - | NONE | goto START | - | NO ROWS | - | - | - | - | - |'
+            out.append('| %d | %s | %s | none | - | NONE | no cross | goto START | - | NO ROWS '
+                       '| - | - | - | - | - |'
                        % (n, ln.U(b), 'HIGH' if sd2 > 0 else 'LOW'))
             continue
         cf, which, c = r
-        Mx = _JIG.mage_cascade_bar(X, int(c), int(sd2), mode='extrema',
+        Mx = _JIG.mage_cascade_bar(X[xwin], int(c), int(sd2), mode='extrema',
                                    gap=int(_JIG.MC_GAP))
         if Mx is None:
-            out.append('| %d | %s | %s | none | %s | - | - | NO EXTREMUM | - | - | - | - | - |'
-                       % (n, ln.U(b), 'HIGH' if sd2 > 0 else 'LOW', ln.U(int(c))))
+            out.append('| %d | %s | %s | ws%dx | none | %s | %s | - | - | NO EXTREMUM '
+                       '| - | - | - | - |'
+                       % (n, ln.U(b), 'HIGH' if sd2 > 0 else 'LOW', xwin, ln.U(int(c)),
+                          ', '.join(xlost) or 'no cross'))
             continue
         ext = int(Mx[0])
         d4 = dirs(ext, int(c))
@@ -296,9 +317,10 @@ def xcv_table(LN, day, tf=5):
             won = 'fdm2-rline-enhance'
         elif cw != 'never to the tape end':
             won = 'the cad walk'
-        out.append('| %d | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |'
-                   % (n, ln.U(b), 'HIGH' if sd2 > 0 else 'LOW', ln.U(ext), ln.U(int(c)), br,
-                      ' '.join(d4), v, cw, cv, rw, rv, won))
+        out.append('| %d | %s | %s | ws%dx | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s '
+                   '| %s |'
+                   % (n, ln.U(b), 'HIGH' if sd2 > 0 else 'LOW', xwin, ln.U(ext), ln.U(int(c)),
+                      ', '.join(xlost) or 'no cross', br, ' '.join(d4), v, cw, cv, rw, rv, won))
     return out
 
 

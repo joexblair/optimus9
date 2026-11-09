@@ -1472,6 +1472,10 @@ FDM_XCAD_FALLBACK = os.environ.get('W_V4_FDM_XCAD_FALLBACK', 'exfnc')  # 'exfnc'
 #   HIS RULING: *"knob ON by default"*. It is the first reading added since 1022 to bank ON, and he
 #   ruled it ON because his own instruction was *"review the 08-25 xcv table with rline-enhancer
 #   baked (it should be already)"* - the xcv table is meant to carry the race, not sit beside it.
+#   HIS 1109 RULING: *"introduce ws4x to xcv. race it against ws5x"*. It REVERSES his 1108
+#   one-line ruling *"ws5x is the one all of my timestamps were based on"*, which dropped ws4x.
+#   Both lines race from the cadence window open to the same bound and the EARLIER cross wins.
+FDM2_XCV_TF2 = _knob('FDM2_XCV_TF2', 4, int)        # the second x line xcv races. 0 = one line.
 FDM2_RLINE_ON = _knob('FDM2_RLINE_ON', 1, int)      # ON. 0 takes the race out of fdm2-xcv.
 #   THE 1 dp READ, HIS 1108: *"I only need 1dp for line values"*. A direction is compared on the
 #   INTEGER tenths of a line value, so the 1.42e-14 jitter in a frozen line cannot read as a
@@ -1928,6 +1932,7 @@ RULED = {
     'FDM_XCAD_WALK_MIN': (10.0, 'HIS VALUE "walk forward 10 minutes". The shape is the grace walk he called "the established walk" - re-test every 5 s bar, break on the first pass'),
     'FDM_XCAD_FALLBACK': ('exfnc', 'HIS 1105 "scan the entire range for ex-20/80-fence lines instead. if any are found, the cadence verdict is keep on walking". "off" is the arm it replaced, where no candidate went straight to FDM_XCAD_NONE'),
     'FDM_XCAD_NONE': ('rev-trade', 'HIS 1104 "no candidates = rev-trade", validated against v4_fdm2.walk which already rev-trades when step 1 counts 0'),
+    'FDM2_XCV_TF2': (4, 'HIS 1109 *"introduce ws4x to xcv. race it against ws5x"* - it reverses his 1108 one-x-line ruling. The earlier cross of the two wins; a tie goes to the lower TF, which is MINE and stated. 0 runs one line'),
     'FDM2_RLINE_ON': (1, 'ON - HIS 1108 *"knob ON by default"*. Runs `fdm2-rline-enhance`: at a bar where all 4 left r lines read flat, the RSI under them spawns the xcv verdict, racing the cad walk. 0 takes it out'),
     'FDM2_RLINE_DP': (1, 'HIS 1108 *"I only need 1dp for line values"*. A direction is read on the integer tenths of a line value, so a 1.42e-14 jitter in a frozen line cannot read as a direction'),
     'FDM2_MOMO_ON': (0, 'OFF. The banked machine is unchanged until he banks the arm. 1 runs fdm2-momo, HIS 1106 name'),
@@ -2376,6 +2381,7 @@ def table():
              'BSTOP_SYNC_MIN': 'minutes', 'BSTOP_POOL_HI': 'TF',
              'FDM2_BLAST_SCAN_HI': 'TF', 'FDM2_MATR_LFTOF_CONF': 'TF',
              'FDM2_CAD_FLATIN_WIDTH': 'TF', 'FDM2_CAD_FLATIN_TOL': 'bars',
+             'FDM2_XCV_TF2': 'timeframe',
              'FDM2_RLINE_ON': 'on/off', 'FDM2_RLINE_DP': 'decimal places',
              'FDM2_MOMO_ON': 'on/off', 'FDM2_MOMO_VOTES': 'votes',
              'FDM2_MOMO_READ': 'mode', 'FDM2_MOMO_FLOOR_RPRED': 'lines',

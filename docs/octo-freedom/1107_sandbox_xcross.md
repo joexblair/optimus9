@@ -406,6 +406,32 @@ NOT BUILT INTO THE xcv TABLE. This is the measurement he asked for, in its own r
 table still reports the FIRST verdict either racer prints, matching or not, because his rule was
 *"test and report"*.
 
+### HIS 1109 RULING — ws4x RACES ws5x, REVERSING HIS 1108 ONE-LINE RULING
+
+HIS WORDS: *"introduce ws4x to xcv. race it against ws5x"*. This REVERSES his 1108 ruling
+*"ws5x is the one all of my timestamps were based on"*, which had dropped ws4x from the report.
+Both lines now run their own three-armed race from the same cadence window open to the same
+bound, and the EARLIER cross wins. `FDM2_XCV_TF2` 4 is banked; 0 goes back to one line.
+
+| the concretion | the ruling |
+|---|---|
+| which cross wins | the EARLIER of the two - that is what a race is |
+| a tie | the LOWER TF. MINE and stated: ws4x is the faster line and nothing in his words picks one. It happens on 7 of the 28 rows |
+| what the extremum reads | the WINNING line's own values, through `jig.mage_cascade_bar` |
+| what the losing line prints | its own cross bar, in its own column, so the race is visible rather than asserted |
+
+### THE RACE OVER 2026-08-25
+
+| which x line won | rows |
+|---|---|
+| ws4x | 18 |
+| ws5x | 8 |
+| neither - no cross on either line | 2 |
+
+ws4x TAKES 18 OF THE 26 RACES. Two rows that had NO ROWS under the ws5x-only build now get a
+cross from ws4x: xcv 8 at 2026-08-25 07:59:00 and xcv 13 at 2026-08-25 13:28:00. The rows with no
+cross on either line fall from 4 to 2 - xcv 17 and xcv 23.
+
 ### WHY THE WOB IS NECESSARY - the measurement that reversed his own ruling
 
 He asked why the report showed 2026-08-25 02:31:55 for the 02:22:00 HIGH event while the
