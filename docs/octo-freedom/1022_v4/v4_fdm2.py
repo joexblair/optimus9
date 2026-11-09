@@ -334,20 +334,25 @@ def cadence_events(LN, side, A, B, trace=False):
 
 #   ── the ws10x-cadence ─────────────────────────────────────────────────────────────────────────
 #   ── fdm2-wsxcad-director, HIS NAME 1104 ───────────────────────────────────────────────────────
-def x_of(LN, tf):
-    """The ws{tf}x line, loaded once and kept. -> array, EMERGING.
+def x_of(LN, tf, base='x'):
+    """The ws{tf}{base} line, loaded once and kept. -> array, EMERGING.
 
     LAZY ON PURPOSE. All 30 ws{TF}x lines exist on the tape, but loading every one at startup
     costs the whole run when only the director's chosen line is read. That choice is MINE.
+
+    `base` IS 'x' ON EVERY BANKED CALL, so nothing in fdm2 moves. HIS 1109: *"the r-pred fast
+    line is `m`, not `x`. now that x is baked in the mech, show both x-based and m-based
+    outcomes"*. The two lines are both BB %B at the timeframe, differing only in their
+    parameters - x is length 5 mult 0.37, m is length 6 mult 0.45, both on close.
     """
     X = LN.setdefault('X', {})
-    t = int(tf)
-    if t not in X:
-        X[t] = np.asarray(ln.line('ws%dx' % t), float)
-    return X[t]
+    t, bs = int(tf), str(base)
+    if (t, bs) not in X:
+        X[(t, bs)] = np.asarray(ln.line('ws%d%s' % (t, bs)), float)
+    return X[(t, bs)]
 
 
-def x_race(LN, tf, side, frm, B, collect=False):
+def x_race(LN, tf, side, frm, B, collect=False, base='x'):
     """The first ws{tf}x race cross strictly after `frm` on `side`. -> (confirm, which, cross)|None.
 
     `collect=True` returns EVERY cross in the span instead of the winner, confirm-bar ascending,
@@ -370,7 +375,9 @@ def x_race(LN, tf, side, frm, B, collect=False):
     timeframe and nothing else.
     """
     w = max(1, int(K.FDM_X10_WOB))
-    X, R, M = x_of(LN, tf), LN['CPR'][int(tf)], LN['CPM'][int(tf)]
+    #   `base` SWAPS ONLY THE CROSSING LINE. The three candidates it races to - ib, ws{tf}r,
+    #   ws{tf}Mage - are the same either way, and 'x' is the default on every banked call.
+    X, R, M = x_of(LN, tf, base), LN['CPR'][int(tf)], LN['CPM'][int(tf)]
     #   WHICH BAR MUST FOLLOW THE CADENCE EVENT: the race's CROSS, or only its CONFIRM. At 'cross'
     #   a race that began before the cadence event is not this walk's race even when it confirms
     #   after it. THAT IS THE ARM HIS OWN 1841 NUMBER CAME FROM - 1103_fdm's census used it - so it
@@ -414,7 +421,8 @@ def x_race(LN, tf, side, frm, B, collect=False):
     if not hits:
         return None
     bar, which, cross = min(hits, key=lambda x: x[0])
-    assert bar > int(frm), 'a ws%dx-cadence is at or before the cadence event it follows' % int(tf)
+    assert bar > int(frm), ('a ws%d%s-cadence is at or before the cadence event it follows'
+                            % (int(tf), str(base)))
     assert cross <= bar, 'a race confirms before its own cross'
     return bar, which, cross
 
