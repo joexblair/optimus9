@@ -172,6 +172,9 @@ def answer(q):
                                 label=str(q.get('label', 'cross')),
                                 anchor=q.get('anchor'))
         return out
+    if kind == 'jump':
+        out += XR.jump_table(LN, str(q['day']), offs=str(q.get('offs', '2,3,4')))
+        return out
     if kind == 'handoff':
         out += XR.handoff_table(LN, str(q['day']), offs=str(q.get('offs', '2,3,4')),
                                 anchor_lo=int(q.get('anchor_lo', 1)))

@@ -483,6 +483,73 @@ SO THE HANDOFF NEEDS SOMETHING THE Mage REVERSAL ALONE DOES NOT GIVE. Nothing is
 gate is invented; the candidates his words leave open are a condition on the receiver, a bound on
 the forward search for each Mage stamp, or a verdict that ends the chain before the top.
 
+### HIS 1109 UNBOUNDED JUMP — BUILT, AND MY FIXED-STRIDE CHAIN WAS THE WRONG MECH
+
+HIS CATCH: *"which column reports the unbounded jump? my 'we'll be jumping TFs without bound'"*.
+NONE DID. `handoff_table`'s chain moves exactly `+off` on every hop - ws2 > ws4 > ws6 > ws8 and so
+on to ws30 - which is the OPPOSITE of unbounded. I had conflated the two things his message
+separates:
+
+| his words | what they are | what I built first |
+|---|---|---|
+| *"we'll be jumping TFs **without bound**"* | WHERE the baton goes - any TF, no stride limit | a stride locked at exactly `+off` |
+| *"the ws{TF+2 ... }Mage reversal is a strong candidate for **handoff timing**"* | WHEN the handoff happens | used as the timer AND the destination |
+
+HIS *"build it thanks"*. The `jump` request kind is the mech as he described it:
+
+| the piece | the rule |
+|---|---|
+| WHEN | ws{t+off}Mage's lift-off reversal STAMPS, `t` the CURRENT rider. The timer line moves with the rider; the offset stays swept because he called it a candidate |
+| WHERE | UNBOUNDED - the HIGHEST ws{TF}r above the rider that is ex-20/80 AND towards at that bar |
+| the destination rule is MINE | and it is HIS OWN 1109 anchor - *"the highest ws{TF}r that's printing ex-fence + towards"* - applied at every handoff instead of only at the start |
+| the chain start | the ws{TF}r that qualified the cadence's nestle |
+| a barren handoff | a Mage stamp with no qualifying line above the rider. The chain takes the NEXT stamp; stopping there is the other reading of his *"runs out of candidates"*, so the bar it would have stopped on is printed |
+| the towards anchor | the cadence event's own excursion start |
+
+### WHAT THE UNBOUNDED JUMP DOES, +2 TIMER, 2026-08-26
+
+| the +2 run | value |
+|---|---|
+| cadence events | 32 |
+| hops, min to max | 1 to 8 |
+| chains that never got a hop | 0 |
+| barren handoffs per chain, min to max | 0 to 129 |
+| chains with no barren handoff | 12 of 32 |
+| the largest single jump | **+29** - ws1r straight to ws30r |
+| how every chain ended | the timer line passed ws30. 23 on ws32, 9 on ws31 |
+
+| the jump size | hops that took it |
+|---|---|
+| +1 | 17 |
+| +2 | 6 |
+| +3 | 6 |
+| +4 | 5 |
+| +5 | 17 |
+| +6 | 7 |
+| +8 | 7 |
+| +9 | 4 |
+| +10 | 4 |
+| +12 | 1 |
+| +13 | 6 |
+| +15 | 1 |
+| +16 | 2 |
+| +17 | 1 |
+| +19 | 2 |
+| +22 | 2 |
+| +26 | 2 |
+| +27 | 4 |
+| +28 | 3 |
+| +29 | 3 |
+
+THE JUMP IS GENUINELY UNBOUNDED NOW. 11 of the 32 chains reach the top in ONE hop of +26 to +29 -
+the board already had a high ex-fence towards line when the first Mage timer fired. The fixed +2
+stride took 13 to 14 hops on every row and could never show that.
+
+THE BARREN COUNT IS THE NEW NUMBER TO RULE ON. 12 chains have none; the worst has 129, which means
+129 Mage stamps fired with no qualifying line above the rider before one did. Under the
+stop-at-the-first-barren reading those 20 chains end at their first barren bar instead. NOTHING IS
+APPLIED - the row carries both.
+
 ### WHY THE WOB IS NECESSARY - the measurement that reversed his own ruling
 
 He asked why the report showed 2026-08-25 02:31:55 for the 02:22:00 HIGH event while the

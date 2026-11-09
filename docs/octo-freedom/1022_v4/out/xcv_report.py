@@ -958,3 +958,129 @@ def handoff_table(LN, day, offs='2,3,4', anchor_lo=1):
     out += ['']
     out.append(R.row('cadence events on the day', n))
     return out
+
+def jump_table(LN, day, offs='2,3,4'):
+    """HIS 1109 UNBOUNDED JUMP: the handoff is Mage-TIMED, the destination is unbounded. -> [str].
+
+    HIS WORDS: *"we'll be jumping TFs without bound, but at the moment I'm not clear on the handoff
+    timing"* and *"using the ws{TF+2 or TF+2 (sweep)}Mage reversal is a strong candidate for
+    handoff timing"*, then *"which column reports the unbounded jump?"* against my fixed-stride
+    chain, and *"build it thanks"*.
+
+    THE TWO THINGS HIS MESSAGE SEPARATES, which `handoff_table` conflated into one:
+
+      WHEN   ws{t+off}Mage's lift-off reversal stamps, with `t` the CURRENT rider. The offset is
+             swept because he called it a candidate, not a ruling. The timer line moves with the
+             rider.
+      WHERE  UNBOUNDED. Any TF above the rider may receive - ws3 to ws22 in one hop is allowed.
+
+    THE DESTINATION RULE IS MINE, and it is HIS OWN 1109 ANCHOR rather than something invented: at
+    the handoff bar the new rider is the HIGHEST ws{TF}r above the current rider that is ex-20/80
+    AND printing towards. That is the rule he gave for the 0658 question - *"the highest ws{TF}r
+    that's printing ex-fence + towards"* - applied at each handoff instead of only at the start.
+
+    A BARREN HANDOFF is a Mage stamp where no line above the rider qualifies. The chain does NOT
+    stop there: it takes the next stamp and tries again, and every barren bar is counted. Stopping
+    at the first one is the other reading of his *"runs out of candidates"* and the row carries the
+    bar it would have stopped on, so both readings are in front of him. NOTHING IS APPLIED.
+
+    IT ENDS two ways: `no ws{t+off}Mage stamp ahead` with `t+off` still on the ladder, or the rider
+    reaches ws{HI} and `t+off` passes the ladder top.
+
+    THE towards ANCHOR is the cadence event's own excursion start, the same window `F2.cadence_events`
+    returns, so every read in the chain is anchored where the cadence is.
+
+    CAUSAL: each hop reads a Mage stamp at or after the previous hop's bar, and reads the board AT
+    that stamp. A stamp already carries its LIFT_WOB hold.
+    """
+    out = []
+    import re
+    import numpy as _np
+    from optimus9.analysis import jig as _J5
+    OFF = [int(x) for x in str(offs).split(',') if str(x).strip()]
+    A, B = ln.K(day + ' 00:00:00'), ln.K(day + ' 23:59:55')
+    HI = int(LN['HI'])
+    MST = {}
+
+    def mstamps(t, sd):
+        if (t, sd) not in MST:
+            raw = _J5.lift_off(LN['MGE'][t], int(sd), K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL,
+                               K.LIFT_WOB)
+            MST[(t, sd)] = sorted(int(K.lift_stamp(int(x))) for x in raw)
+        return MST[(t, sd)]
+
+    def nxt(t, sd, frm):
+        a = mstamps(t, sd)
+        i = _bisect.bisect_left(a, int(frm))
+        return a[i] if i < len(a) else None
+
+    def board_above(t, bar, sd, s0):
+        """The highest ws{TF}r above ws{t} that is ex-20/80 AND towards at `bar`. -> tf or None."""
+        best = None
+        for u in range(int(t) + 1, HI + 1):
+            if not bool(F2.ex2080_line(LN, u, int(bar), int(sd))):
+                continue
+            st = _J5.fdm2_cad_mom_detector(LN['EMR'][u], LN['EMR'][u], int(bar), int(sd), int(s0),
+                                           K.LIFT_PTS, K.gap_for(u), K.LIFT_TOL, K.LIFT_WOB,
+                                           stamps=_np.asarray(LN['LIFT'][(u, int(sd))], int),
+                                           rev_since=int(s0))['state']
+            if st == 'towards':
+                best = u
+        return best
+
+    NEST = re.compile(r'deeper than ws(\d+)r')
+    ev = []
+    for sd in (+1, -1):
+        for e in F2.cadence_events(LN, sd, A, B):
+            mm = NEST.search(str(e[2]))
+            assert mm, 'the nestle clause is not in the why string: %r' % (str(e[2])[:120],)
+            ev.append((int(e[0]), sd, int(mm.group(1)), int(e[1])))
+    out += ['', '# the UNBOUNDED TF jump chain, Mage-timed, from every cadence event, %s' % day, '']
+    out += [R.row('WHEN a handoff happens', 'ws{t+off}Mage\'s lift-off reversal STAMPS, with t the '
+                  'CURRENT rider - his timing candidate, offset swept'),
+            R.row('WHERE it jumps to', 'UNBOUNDED - the HIGHEST ws{TF}r above the rider that is '
+                  'ex-20/80 AND towards at that bar. MINE, and it is HIS OWN 1109 anchor rule '
+                  'applied at every handoff instead of only at the start'),
+            R.row('the chain start', 'the ws{TF}r that qualified the cadence\'s nestle'),
+            R.row('a barren handoff', 'a Mage stamp with no qualifying line above the rider. The '
+                  'chain takes the NEXT stamp and the barren bar is counted - stopping there is '
+                  'the other reading of his *"runs out of candidates"* and both are printed'),
+            R.row('the towards anchor', 'the cadence event\'s own excursion start'),
+            R.row('the ladder top', 'ws%d - L2_MOM_MAXTF' % HI), '']
+    out += ['| # | the cadence event | side | the nestle r line | %s |'
+            % ' | '.join('+%d: the jump chain | hops | the jump sizes | barren handoffs | its first '
+                         'barren bar | how it ended' % o for o in OFF),
+            '|' + '---|' * (4 + 6 * len(OFF))]
+    n = 0
+    for b, sd, rt, s0 in sorted(ev):
+        n += 1
+        cells = []
+        for o in OFF:
+            t, bar = int(rt), int(b)
+            chain, jumps, barren, first_barren, why = ['ws%d' % rt], [], 0, None, ''
+            while True:
+                if t + o > HI:
+                    why = 'ws%d, the timer line, is past ws%d' % (t + o, HI)
+                    break
+                m = nxt(t + o, sd, bar)
+                if m is None:
+                    why = 'no ws%dMage stamp ahead to the tape end' % (t + o)
+                    break
+                u = board_above(t, m, sd, s0)
+                if u is None:
+                    barren += 1
+                    if first_barren is None:
+                        first_barren = m
+                    bar = int(m) + 1
+                    continue
+                chain.append('ws%d @ %s' % (u, ln.U(m)))
+                jumps.append(u - t)
+                t, bar = int(u), int(m)
+            cells += [' > '.join(chain), str(len(jumps)),
+                      ', '.join('+%d' % j for j in jumps) if jumps else '-',
+                      str(barren), ln.U(first_barren) if first_barren is not None else 'none', why]
+        out.append('| %d | %s | %s | ws%dr | %s |'
+                   % (n, ln.U(b), 'HIGH' if sd > 0 else 'LOW', rt, ' | '.join(cells)))
+    out += ['']
+    out.append(R.row('cadence events on the day', n))
+    return out
