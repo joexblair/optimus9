@@ -1048,9 +1048,10 @@ def jump_table(LN, day, offs='2,3,4'):
             R.row('the towards anchor', 'the cadence event\'s own excursion start'),
             R.row('the ladder top', 'ws%d - L2_MOM_MAXTF' % HI), '']
     out += ['| # | the cadence event | side | the nestle r line | %s |'
-            % ' | '.join('+%d: the jump chain | hops | the jump sizes | barren handoffs | its first '
-                         'barren bar | how it ended' % o for o in OFF),
-            '|' + '---|' * (4 + 6 * len(OFF))]
+            % ' | '.join('+%d hops | +%d last handoff | +%d min from the cadence | +%d the jump '
+                         'sizes | +%d barren handoffs | +%d its first barren bar | +%d how it ended'
+                         % (o, o, o, o, o, o, o) for o in OFF),
+            '|' + '---|' * (4 + 7 * len(OFF))]
     n = 0
     for b, sd, rt, s0 in sorted(ev):
         n += 1
@@ -1058,6 +1059,10 @@ def jump_table(LN, day, offs='2,3,4'):
         for o in OFF:
             t, bar = int(rt), int(b)
             chain, jumps, barren, first_barren, why = ['ws%d' % rt], [], 0, None, ''
+            #   THE LAST SUCCESSFUL HANDOFF, tracked apart from `bar`, which a barren stamp moves
+            #   forward without a handoff. HIS 1109: *"that table doesn't tell me the time when it
+            #   ended. I'm blind without that data"*.
+            last = None
             while True:
                 if t + o > HI:
                     why = 'ws%d, the timer line, is past ws%d' % (t + o, HI)
@@ -1075,8 +1080,9 @@ def jump_table(LN, day, offs='2,3,4'):
                     continue
                 chain.append('ws%d @ %s' % (u, ln.U(m)))
                 jumps.append(u - t)
-                t, bar = int(u), int(m)
-            cells += [' > '.join(chain), str(len(jumps)),
+                t, bar, last = int(u), int(m), int(m)
+            dmin = ('%d' % (((last - int(b)) * 5) // 60)) if last is not None else '-'
+            cells += [str(len(jumps)), ln.U(last) if last is not None else 'no handoff', dmin,
                       ', '.join('+%d' % j for j in jumps) if jumps else '-',
                       str(barren), ln.U(first_barren) if first_barren is not None else 'none', why]
         out.append('| %d | %s | %s | ws%dr | %s |'
