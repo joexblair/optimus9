@@ -1161,3 +1161,112 @@ def jump_table(LN, day, offs='2', path_at=None):
                            % (lab, k, u, ln.U(int(m2)), u - t))
                 t, bar, skipped = int(u), int(m2), 0
     return out
+
+def xcvmomo_table(LN, day):
+    """HIS 1109: the xcv verdict and fdm2-momo's verdict, per cadence event. -> [str].
+
+    HIS WORDS: *"add a column for the xcv verdict (cad walk if you don't see the x-cross in the
+    cadence window), and a column for the fdm2-momo verdict. momo's verdict needs to be taken at
+    the xcv extremum"*.
+
+    THE xcv VERDICT comes from the same race `xcv_table` runs - ws{tf}x against ws{FDM2_XCV_TF2}x,
+    the earlier cross winning - and it is reported WITH ITS SOURCE, because his parenthetical names
+    the two cases: the 3-of-4 read at the cross when the cross is INSIDE the cadence window, and
+    the cad walk's verdict when it is not.
+
+    fdm2-momo IS READ AT THE xcv EXTREMUM, his instruction, through `F2.momo_vote` - the producer
+    the cad walk itself calls. Its `walk` verdict is a vote reaching FDM2_MOMO_VOTES; the vote is
+    printed beside it so a 2-of-3 is not hidden behind a no.
+
+    FDM2_MOMO_ON IS 0 ON THE BANK. That knob gates whether fdm2 USES momo, not whether it can be
+    read - this is a report, so nothing is off the bank.
+
+    CAUSAL: the extremum is at or before its own cross, and momo reads only that bar and earlier.
+    """
+    out = []
+    import re
+    import numpy as _np
+    from optimus9.analysis import jig as _J6
+    tf = 5
+    tf2 = int(K.FDM2_XCV_TF2)
+    RTF = [tf, tf2] if tf2 and tf2 != tf else [tf]
+    A, B = ln.K(day + ' 00:00:00'), ln.K(day + ' 23:59:55')
+    NB = len(LN['close']) - 1
+    LEFT = (30, 29, 28, 27)
+    X = {t: F2.x_of(LN, t) for t in RTF}
+    EM = LN['EMR']
+    allcad = sorted(set(int(e[0]) for sd2 in (+1, -1)
+                        for e in F2.cadence_events(LN, sd2, 0, NB)))
+
+    def bound(ev):
+        i = _bisect.bisect_right(allcad, int(ev))
+        return allcad[i] if i < len(allcad) else NB
+
+    def read34(anchor, bar):
+        #   `direction` reads FDM2_RLINE_DP itself through `tenths`, so the dp is not passed -
+        #   one place owns the 1 dp rule and a second copy of it is how the two would drift.
+        c = [direction(EM[t][int(anchor)], EM[t][int(bar)]) for t in LEFT]
+        u, d = c.count('up'), c.count('down')
+        return ('up' if u >= 3 else 'down' if d >= 3 else 'none'), c
+
+    NEST = re.compile(r'deeper than ws(\d+)r')
+    ev = []
+    for sd in (+1, -1):
+        for e in F2.cadence_events(LN, sd, A, B):
+            mm = NEST.search(str(e[2]))
+            assert mm, 'the nestle clause is not in the why string'
+            ev.append((int(e[0]), sd, int(mm.group(1)), int(e[1])))
+    out += ['', '# the xcv verdict and fdm2-momo at the xcv extremum, per cadence event, ' + day,
+            '']
+    out += [R.row('the xcv verdict', 'the 3-of-4 read at the x-cross when the cross is INSIDE the '
+                  'cadence window, ELSE the cad walk\'s verdict - HIS 1109 parenthetical'),
+            R.row('the x race', 'ws%sx, the earlier cross winning'
+                  % 'x and ws'.join(str(t) for t in RTF)),
+            R.row('fdm2-momo', 'F2.momo_vote at the xcv EXTREMUM, his instruction. `walk` is a '
+                  'vote reaching FDM2_MOMO_VOTES %d of 3' % int(K.FDM2_MOMO_VOTES)),
+            R.row('FDM2_MOMO_ON', '%d on the bank - it gates whether fdm2 USES momo, not whether '
+                  'this report may read it' % int(K.FDM2_MOMO_ON)), '']
+    out += ['| # | the cadence event | side | the xcv extremum | the xcv verdict | where the '
+            'verdict came from | fdm2-momo at the extremum | its vote |', '|' + '---|' * 8]
+    n = 0
+    for b, sd, rt, s0 in sorted(ev):
+        n += 1
+        cand = []
+        for t in RTF:
+            rr = F2.x_race(LN, t, sd, int(s0) - 1, bound(b))
+            if rr is not None:
+                cand.append((int(rr[2]), t, rr))
+        if not cand:
+            out.append('| %d | %s | %s | none | NO ROWS | no x-cross on either line | - | - |'
+                       % (n, ln.U(b), 'HIGH' if sd > 0 else 'LOW'))
+            continue
+        best = min(cand, key=lambda z: (z[0], z[1]))
+        c, xwin = best[0], best[1]
+        Mx = _J6.mage_cascade_bar(X[xwin], int(c), int(sd), mode='extrema', gap=int(_J6.MC_GAP))
+        if Mx is None:
+            out.append('| %d | %s | %s | NO EXTREMUM | - | ws%dx crossed %s | - | - |'
+                       % (n, ln.U(b), 'HIGH' if sd > 0 else 'LOW', xwin, ln.U(int(c))))
+            continue
+        ext = int(Mx[0])
+        v, _d4 = read34(ext, int(c))
+        if v != 'none':
+            src = 'the 3-of-4 at the ws%dx cross %s, inside the window' % (xwin, ln.U(int(c)))
+            vd = v
+        else:
+            #   HIS PARENTHETICAL: no verdict at the cross, so the cad walk carries it. The anchor
+            #   is the CROSS, his 1108 ruling, and no bound is applied.
+            vd, src = 'none', 'the cad walk from the ws%dx cross %s' % (xwin, ln.U(int(c)))
+            for t3 in range(int(c) + 1, NB + 1):
+                vv, _ = read34(int(c), t3)
+                if vv != 'none':
+                    vd = '%s at %s' % (vv, ln.U(t3))
+                    break
+            else:
+                vd = 'none to the tape end'
+        mv = F2.momo_vote(LN, int(ext), int(sd))
+        out.append('| %d | %s | %s | %s | %s | %s | %s | %d of 3 |'
+                   % (n, ln.U(b), 'HIGH' if sd > 0 else 'LOW', ln.U(ext), vd, src,
+                      'walk' if mv['fires'] else 'no walk', int(mv['votes'])))
+    out += ['']
+    out.append(R.row('cadence events on the day', n))
+    return out

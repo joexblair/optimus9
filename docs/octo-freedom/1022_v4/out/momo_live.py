@@ -172,6 +172,9 @@ def answer(q):
                                 label=str(q.get('label', 'cross')),
                                 anchor=q.get('anchor'))
         return out
+    if kind == 'xcvmomo':
+        out += XR.xcvmomo_table(LN, str(q['day']))
+        return out
     if kind == 'jump':
         out += XR.jump_table(LN, str(q['day']), offs=str(q.get('offs', '2,3,4')),
                              path_at=q.get('path_at'))
