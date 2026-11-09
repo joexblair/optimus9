@@ -1047,43 +1047,47 @@ def jump_table(LN, day, offs='2', path_at=None):
                                          rev_since=int(s0))['state'] == 'towards'
 
     def board_lowest(t, bar, sd, s0):
-        """HIS 1109 UNBOUNDED UPWARD HANDOFF - the LOWEST candidate above the rider. -> tf|None.
+        """HIS 1109 UNRESTRICTED HANDOFF - the LOWEST candidate on the board. -> tf|None.
 
-        HIS WORDS, verbatim:
-            at every handoff, you can jump UPWARDS to the lowest candidate TF
-            examples:
-            you're on TF14 and handoff has fired
-            TF15, TF17, TF22 are all candidates (exfence + towards)
-            handoff to TF15
-            now you're on TF15 and the handoff has fired
-            TF18, TF22, TF23, TF24 are candidates
-            handoff to TF18
-            the final handoff prints when there are no candidates to handoff to. that is the end
-            of the walk
+        HIS WORDS, in two steps. First *"at every handoff, you can jump UPWARDS to the lowest
+        candidate TF"*, with his worked examples (on ws14 with ws15/ws17/ws22 candidates, take
+        ws15; then on ws15 with ws18/ws22/ws23/ws24, take ws18). Then *"remove the 'upward'
+        restriction. you can now choose TFs below the current TF if they qualify"*.
 
-        THE +2 CEILING IS GONE. His earlier rung rule took ws{t+1} else ws{t+2} else barren, so a
-        gap of three rungs ended the walk while candidates sat above it. A candidate is any
-        ws{u}r, u > t, that is ex-20/80 AND printing towards at the timer bar - the same test -
-        and the walk takes the LOWEST of them however far away it is. No candidate at all is the
-        end of the walk, and the last handoff that did happen is the final one.
+        SO THE CANDIDATE SET IS THE WHOLE BOARD: every ws{u}r, ws1..ws{HI}, that is ex-20/80 AND
+        printing towards at the timer bar - the same test throughout - and the handoff takes the
+        LOWEST of them wherever it sits. The rider's OWN rung is not a candidate: a handoff to
+        itself is not a handoff, and it would keep the baton on one line with no way to exhaust.
+
+        THE DIRECTION WAS THE TERMINATION PROOF, and removing it removes the proof. While the hop
+        was upward-only the rung strictly increased, so the walk could not cycle. It now can -
+        two lines whose timers both fire on one bar would pass the baton back and forth there
+        forever - so `timer` is handed the bar AFTER the one the baton was received on, which
+        makes the handoff bars strictly increase instead. See `timer`'s own note.
         """
-        for u in range(int(t) + 1, HI + 1):
-            if qualifies(u, bar, sd, s0):
-                return u
-        return None
+        c = board_candidates(t, bar, sd, s0)
+        return c[0] if c else None
 
     def board_candidates(t, bar, sd, s0):
-        """EVERY candidate above the rider at `bar`, not only the one taken. -> [tf].
+        """EVERY candidate on the board at `bar`, not only the one taken. -> [tf], ascending.
 
         HIS 1109: *"for each handoff on #1 and #2, for each type of handoiff, print the candidate
         TFs and the timestamps at each handoff"*. The handoff takes `[0]` of this list, so the
-        list IS the decision's input and a hop of +9 can be read as the eight rungs that did not
+        list IS the decision's input and a hop of +9 can be read as the rungs that did not
         qualify rather than as a jump out of nowhere.
         """
-        return [u for u in range(int(t) + 1, HI + 1) if qualifies(u, bar, sd, s0)]
+        return [u for u in range(1, HI + 1)
+                if u != int(t) and qualifies(u, bar, sd, s0)]
 
     def timer(rule, t, sd, frm):
-        """The next bar `rule` fires on, for rider ws{t} at or after `frm`. -> bar or None."""
+        """The next bar `rule` fires on, for rider ws{t} at or after `frm`. -> bar or None.
+
+        THE CALLER PASSES THE BAR AFTER A HANDOFF, not the handoff bar. With the upward-only hop
+        gone the rung no longer has to increase, so a fire on the bar the baton just landed on
+        could hand it straight back and the two lines would trade it on that one bar forever.
+        The handoff bars strictly increase instead, which is the termination the direction used
+        to provide. The FIRST fire of a walk is still searched from the cadence event bar itself.
+        """
         if rule == 'mage':
             return None if t + OFF > MGHI else nxt(mstamps(t + OFF, sd), frm)
         if rule == 'ib':
@@ -1104,9 +1108,12 @@ def jump_table(LN, day, offs='2', path_at=None):
             assert mm, 'the nestle clause is not in the why string'
             ev.append((int(e[0]), sd, int(mm.group(1)), int(e[1])))
     out += ['', '# the LOWEST-qualifying TF handoff chain, four timing rules, ' + day, '']
-    out += [R.row('WHERE it jumps to', 'HIS 1109 RUNG RULE - ws{TF+1}r if it is ex-20/80 AND '
-                  'towards at the timer bar - the LOWEST candidate above the rider, at ANY '
-                  'distance. HIS 1109 rule, replacing the +2 ceiling'),
+    out += [R.row('WHERE it jumps to', 'the LOWEST ws{u}r on the WHOLE board that is ex-20/80 '
+                  'AND towards at the timer bar - above or below the rider, his 1109 *"remove '
+                  'the upward restriction"*. The rider\'s own rung is not a candidate'),
+            R.row('the hop direction', 'either. ws1..ws%d are all candidates' % HI),
+            R.row('what stops a cycle', 'a handoff bar must be strictly LATER than the one '
+                  'before it - the upward-only hop used to guarantee that and no longer does'),
             R.row('the chain start', "the ws{TF}r that qualified the cadence's nestle"),
             R.row('the rungs a rider may occupy', 'ws1..ws%d - HIS *"ws30 is by design"*' % HI),
             R.row('the Mage timer ladder', 'ws1..ws%d - HIS 1109 *"add ws31-33Mage"*' % MGHI),
@@ -1114,8 +1121,8 @@ def jump_table(LN, day, offs='2', path_at=None):
             R.row('the ib cross hold', 'FDM_RE_IB_XWOB %d bars, through jig.oob_ib_cross'
                   % int(K.FDM_RE_IB_XWOB)),
             R.row('one TF width', 'tf x 12 bars at the 5 s grid - ws22 adds 264 bars = 1320 s'),
-            R.row('a barren timer fire', 'HIS 1109 EXHAUST - it ENDS the walk. NO ws{u}r above '
-                  'the rider being ex-20/80 and towards at the timer bar IS the exhaust'),
+            R.row('a barren timer fire', 'HIS 1109 EXHAUST - it ENDS the walk. NO ws{u}r on '
+                  'the board being ex-20/80 and towards at the timer bar IS the exhaust'),
             R.row('bounds', 'none needed - the exhaust is what ends it'), '']
     out += ['| # | the cadence event | side | the nestle r line | %s |'
             % ' | '.join('%s: the final handoff | its max TF | its hops | how it ended' % lab
@@ -1129,7 +1136,7 @@ def jump_table(LN, day, offs='2', path_at=None):
             t, bar, last, hops, top = int(rt), int(b), None, 0, int(rt)
             why = ''
             while True:
-                m = timer(rk, t, sd, bar)
+                m = timer(rk, t, sd, bar if last is None else bar + 1)
                 if m is None or int(m) > NB:
                     why = 'no timer event ahead'
                     break
@@ -1144,9 +1151,11 @@ def jump_table(LN, day, offs='2', path_at=None):
                     #   `last` IS THE LAST HANDOFF, never the exhaust bar. Setting it to the
                     #   exhaust bar on a 0-hop walk made the column read a handoff that never
                     #   happened - the same stale-label fault as `extremum` holding a cross.
-                    why = ('EXHAUST at %s - no ws%dr..ws%dr is ex-20/80 and towards'
-                           % (ln.U(int(m)), t + 1, HI))
+                    why = ('EXHAUST at %s - no ws1r..ws%dr other than ws%dr is ex-20/80 and '
+                           'towards' % (ln.U(int(m)), HI, t))
                     break
+                assert last is None or int(m) > int(last), \
+                    'a handoff landed on a bar the walk had already used'
                 t, bar, last, hops = int(u), int(m), int(m), hops + 1
                 top = max(top, int(u))
             cells += [ln.U(last) if last is not None else 'no handoff', 'ws%d' % top, str(hops),
@@ -1170,11 +1179,11 @@ def jump_table(LN, day, offs='2', path_at=None):
             out += ['', '| the rule | the hop | its timestamp | the candidate TFs at that '
                     'bar | the rung that received it | the hop size | why |',
                     '|' + '---|' * 7]
-            t, bar, k, skipped = int(rt), int(b), 0, 0
+            t, bar, k, skipped, lastb = int(rt), int(b), 0, 0, None
             out.append('| %s | the start | %s | - | ws%d | - | the cadence |'
                        % (lab, ln.U(b), rt))
             while True:
-                m2 = timer(rk, t, sd, bar)
+                m2 = timer(rk, t, sd, bar if lastb is None else bar + 1)
                 if m2 is None or int(m2) > NB:
                     out.append('| %s | ENDS | %s | - | - | - | no timer event ahead |'
                                % (lab, 'none ahead' if m2 is None else 'past the tape end'))
@@ -1184,15 +1193,15 @@ def jump_table(LN, day, offs='2', path_at=None):
                 assert u == board_lowest(t, int(m2), sd, s0), \
                     'the candidate list and the handoff disagree'
                 if u is None:
-                    out.append('| %s | EXHAUST | %s | none | - | - | no ws%dr..ws%dr is '
-                               'ex-20/80 and towards |'
-                               % (lab, ln.U(int(m2)), t + 1, HI))
+                    out.append('| %s | EXHAUST | %s | none | - | - | no ws1r..ws%dr other '
+                               'than ws%dr is ex-20/80 and towards |'
+                               % (lab, ln.U(int(m2)), HI, t))
                     break
                 k += 1
-                out.append('| %s | %d | %s | %s | ws%d | +%d | a handoff |'
+                out.append('| %s | %d | %s | %s | ws%d | %+d | a handoff |'
                            % (lab, k, ln.U(int(m2)),
                               ' '.join('ws%d' % z for z in cnd), u, u - t))
-                t, bar, skipped = int(u), int(m2), 0
+                t, bar, skipped, lastb = int(u), int(m2), 0, int(m2)
     return out
 
 def xcvmomo_table(LN, day):
