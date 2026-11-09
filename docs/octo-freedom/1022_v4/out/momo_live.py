@@ -173,7 +173,8 @@ def answer(q):
                                 anchor=q.get('anchor'))
         return out
     if kind == 'jump':
-        out += XR.jump_table(LN, str(q['day']), offs=str(q.get('offs', '2,3,4')))
+        out += XR.jump_table(LN, str(q['day']), offs=str(q.get('offs', '2,3,4')),
+                             path_at=q.get('path_at'))
         return out
     if kind == 'handoff':
         out += XR.handoff_table(LN, str(q['day']), offs=str(q.get('offs', '2,3,4')),

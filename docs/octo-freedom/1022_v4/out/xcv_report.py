@@ -959,7 +959,7 @@ def handoff_table(LN, day, offs='2,3,4', anchor_lo=1):
     out.append(R.row('cadence events on the day', n))
     return out
 
-def jump_table(LN, day, offs='2'):
+def jump_table(LN, day, offs='2', path_at=None):
     """HIS 1109 LOWEST-QUALIFYING HANDOFF, under four timing rules. -> [str].
 
     HIS WORDS: *"'hand off to the lowest qualifying line' -- let's try that. give it a set of
@@ -1086,31 +1086,76 @@ def jump_table(LN, day, offs='2'):
             R.row('the ib cross hold', 'FDM_RE_IB_XWOB %d bars, through jig.oob_ib_cross'
                   % int(K.FDM_RE_IB_XWOB)),
             R.row('one TF width', 'tf x 12 bars at the 5 s grid - ws22 adds 264 bars = 1320 s'),
-            R.row('a barren timer fire', 'skipped, the chain takes the next one'),
-            R.row('bounds', 'NONE - no forward limit and no hop cap'), '']
+            R.row('a barren timer fire', 'HIS 1109 EXHAUST - it ENDS the walk. Neither ws{TF+1}r '
+                  'nor ws{TF+2}r being ex-20/80 and towards at the timer bar IS the exhaust'),
+            R.row('bounds', 'none needed - the exhaust is what ends it'), '']
     out += ['| # | the cadence event | side | the nestle r line | %s |'
-            % ' | '.join('%s: the final handoff | its max TF | its hops' % lab
+            % ' | '.join('%s: the final handoff | its max TF | its hops | how it ended' % lab
                          for _k, lab in RULES),
-            '|' + '---|' * (4 + 3 * len(RULES))]
+            '|' + '---|' * (4 + 4 * len(RULES))]
     n = 0
     for b, sd, rt, s0 in sorted(ev):
         n += 1
         cells = []
         for rk, _lab in RULES:
             t, bar, last, hops, top = int(rt), int(b), None, 0, int(rt)
+            why = ''
             while True:
                 m = timer(rk, t, sd, bar)
                 if m is None or int(m) > NB:
+                    why = 'no timer event ahead'
                     break
                 u = board_lowest(t, int(m), sd, s0)
                 if u is None:
-                    bar = int(m) + 1
-                    continue
+                    #   HIS 1109 EXHAUST, and it is the RCA he named: *"add exhaust detection (ie
+                    #   no there is no ex-20/80-fence and towards r line in rung+1 or rung+2), and
+                    #   stop the walk when it prints exhaust"*. A barren fire USED TO BE SKIPPED -
+                    #   the search moved to the next fire with no bound, which is what carried
+                    #   these chains into late September. It now ENDS the walk, which is what
+                    #   lineage2's baton walk does: it holds at the cadence and exhausts.
+                    why = 'EXHAUST at %s - neither ws%dr nor ws%dr is ex-20/80 and towards' \
+                          % (ln.U(int(m)), t + 1, t + 2)
+                    last = int(m) if last is None else last
+                    break
                 t, bar, last, hops = int(u), int(m), int(m), hops + 1
                 top = max(top, int(u))
-            cells += [ln.U(last) if last is not None else 'no handoff', 'ws%d' % top, str(hops)]
+            cells += [ln.U(last) if last is not None else 'no handoff', 'ws%d' % top, str(hops),
+                      why]
         out.append('| %d | %s | %s | ws%dr | %s |'
                    % (n, ln.U(b), 'HIGH' if sd > 0 else 'LOW', rt, ' | '.join(cells)))
     out += ['']
     out.append(R.row('cadence events on the day', n))
+    #   HIS 1109: *"for #1, show me the handoff chain (the TF that received the handoff, and its
+    #   timestamp) all 4 handoff variants"*. `path_at` is ONE cadence event bar; every rule's path
+    #   prints rung by rung so a handover fault is readable at the hop it happens on rather than
+    #   only at the endpoint. ONE RECORD PER ROW: a hop is a row, never a cell in a long string.
+    if path_at:
+        pb = ln.K(str(path_at))
+        hit = [z for z in ev if int(z[0]) == int(pb)]
+        assert hit, 'no cadence event at that bar on this day'
+        b, sd, rt, s0 = hit[0]
+        out += ['', '## the handoff chain at %s, %s side, nestle ws%dr - every rule, rung by rung'
+                % (ln.U(b), 'HIGH' if sd > 0 else 'LOW', rt), '']
+        for rk, lab in RULES:
+            out += ['', '| the rule | the hop | the rung that received it | its timestamp '
+                    '| the hop size | why |', '|' + '---|' * 6]
+            t, bar, k, skipped = int(rt), int(b), 0, 0
+            out.append('| %s | the start | ws%d | %s | - | the cadence |' % (lab, rt, ln.U(b)))
+            while True:
+                m2 = timer(rk, t, sd, bar)
+                if m2 is None or int(m2) > NB:
+                    out.append('| %s | ENDS | - | %s | - | no timer event ahead |'
+                               % (lab, 'no timer event ahead' if m2 is None
+                                  else 'past the tape end'))
+                    break
+                u = board_lowest(t, int(m2), sd, s0)
+                if u is None:
+                    out.append('| %s | EXHAUST | - | %s | - | neither ws%dr nor ws%dr is '
+                               'ex-20/80 and towards |'
+                               % (lab, ln.U(int(m2)), t + 1, t + 2))
+                    break
+                k += 1
+                out.append('| %s | %d | ws%d | %s | +%d | a handoff |'
+                           % (lab, k, u, ln.U(int(m2)), u - t))
+                t, bar, skipped = int(u), int(m2), 0
     return out

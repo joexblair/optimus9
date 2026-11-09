@@ -550,6 +550,48 @@ THE BARREN COUNT IS THE NEW NUMBER TO RULE ON. 12 chains have none; the worst ha
 stop-at-the-first-barren reading those 20 chains end at their first barren bar instead. NOTHING IS
 APPLIED - the row carries both.
 
+### HIS 1109 EXHAUST — THE RCA HE NAMED, AND IT CLOSES THE DAY
+
+HIS DIAGNOSIS: *"that will be the RCA. add exhaust detection (ie no there is no ex-20/80-fence and
+towards r line in rung+1 or rung+2), and stop the walk when it prints exhaust"*, after I compared
+my `jump_table` against lineage2's baton walk and found lineage2 ends with an EXHAUST verdict at a
+cadence while mine had no stop at all.
+
+WHAT CHANGED: a barren timer fire USED TO BE SKIPPED - the forward search moved to the next fire
+with no bound, which is what carried these chains into late September and October. A barren fire is
+now the EXHAUST and it ENDS the walk.
+
+| the rule | before | after |
+|---|---|---|
+| a timer fire with no qualifying line at ws{TF+1}r or ws{TF+2}r | skipped, the search moved on | EXHAUST, the walk ends on that bar |
+
+### IT FIXES THE DAY, AND IT EXPOSES THE NEXT THING
+
+| the timing rule | chains ending ON 2026-08-26 | ending later | hops 0 - never handed off | hops, min to max | max TF, min to max | min from the cadence, min to max |
+|---|---|---|---|---|---|---|
+| ws{TF+2}Mage reversal | 32 | 0 | 21 | 0 to 10 | ws1 to ws15 | 0 to 28 |
+| ws{TF}r to ib | 32 | 0 | 23 | 0 to 5 | ws1 to ws9 | 0 to 130 |
+| ws{TF}r liftoff reversing | 32 | 0 | 28 | 0 to 5 | ws1 to ws10 | 0 to 30 |
+| ws{TF}r liftoff reversing + 1 x TF width | 31 | 1 | 29 | 0 to 2 | ws1 to ws5 | 1 to 33 |
+
+EVERY CHAIN NOW ENDS THE SAME DAY on three of the four rules, and 31 of 32 on the fourth. Before
+the exhaust, every final handoff sat between 2026-08-27 and 2026-10-04.
+
+| the hops the Mage timer made | cadence events |
+|---|---|
+| 0 | 21 |
+| 1 | 6 |
+| 5 | 1 |
+| 6 | 1 |
+| 9 | 2 |
+| 10 | 1 |
+
+21 OF 32 EXHAUST AT ZERO HOPS on the Mage timer, and 23, 28 and 29 of 32 on the other three. The
+first timer fire already finds neither ws{TF+1}r nor ws{TF+2}r ex-20/80 and towards, so the baton
+never moves off the nestle line. THAT IS THE NEXT THING TO LOOK AT, not a fault in the exhaust:
+the exhaust is doing what he asked, and it is telling him the two-rung candidate set is empty at
+the first fire on two thirds of the day's cadences.
+
 ### WHY THE WOB IS NECESSARY - the measurement that reversed his own ruling
 
 He asked why the report showed 2026-08-25 02:31:55 for the 02:22:00 HIGH event while the
