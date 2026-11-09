@@ -1026,17 +1026,33 @@ def jump_table(LN, day, offs='2'):
         i = _bisect.bisect_left(arr, int(frm))
         return arr[i] if i < len(arr) else None
 
+    def qualifies(u, bar, sd, s0):
+        """Is ws{u}r ex-20/80 AND printing towards at `bar`? -> bool."""
+        if u > HI or not bool(F2.ex2080_line(LN, u, int(bar), int(sd))):
+            return False
+        return _J5.fdm2_cad_mom_detector(LN['EMR'][u], LN['EMR'][u], int(bar), int(sd), int(s0),
+                                         K.LIFT_PTS, K.gap_for(u), K.LIFT_TOL, K.LIFT_WOB,
+                                         stamps=_np.asarray(LN['LIFT'][(u, int(sd))], int),
+                                         rev_since=int(s0))['state'] == 'towards'
+
     def board_lowest(t, bar, sd, s0):
-        """The LOWEST ws{TF}r above ws{t} that is ex-20/80 AND towards at `bar`. -> tf or None."""
-        for u in range(int(t) + 1, HI + 1):
-            if not bool(F2.ex2080_line(LN, u, int(bar), int(sd))):
-                continue
-            st = _J5.fdm2_cad_mom_detector(LN['EMR'][u], LN['EMR'][u], int(bar), int(sd), int(s0),
-                                           K.LIFT_PTS, K.gap_for(u), K.LIFT_TOL, K.LIFT_WOB,
-                                           stamps=_np.asarray(LN['LIFT'][(u, int(sd))], int),
-                                           rev_since=int(s0))['state']
-            if st == 'towards':
-                return u
+        """HIS 1109 RUNG RULE. -> tf or None.
+
+        HIS WORDS, verbatim:
+            -if there is a 1 rung jump available
+            --take take the 1 rung jump
+            -else if there is no 1 rung jump avaialble, but there is a 2 rung jump
+            --take the 2 rung jump
+
+        SO THE HOP IS AT MOST +2. It replaces my own *"hand off to the lowest qualifying line"*,
+        which he read as the next rung and which I had built as the nearest qualifying line at ANY
+        distance - it took hops of up to +29 on 2026-08-26. ws{t+3} and above are not candidates:
+        when neither ws{t+1} nor ws{t+2} qualifies the fire is BARREN.
+        """
+        if qualifies(int(t) + 1, bar, sd, s0):
+            return int(t) + 1
+        if qualifies(int(t) + 2, bar, sd, s0):
+            return int(t) + 2
         return None
 
     def timer(rule, t, sd, frm):
@@ -1061,8 +1077,9 @@ def jump_table(LN, day, offs='2'):
             assert mm, 'the nestle clause is not in the why string'
             ev.append((int(e[0]), sd, int(mm.group(1)), int(e[1])))
     out += ['', '# the LOWEST-qualifying TF handoff chain, four timing rules, ' + day, '']
-    out += [R.row('WHERE it jumps to', 'the LOWEST ws{TF}r above the rider that is ex-20/80 AND '
-                  'towards at the timer bar - HIS 1109 change from the highest'),
+    out += [R.row('WHERE it jumps to', 'HIS 1109 RUNG RULE - ws{TF+1}r if it is ex-20/80 AND '
+                  'towards at the timer bar, ELSE ws{TF+2}r on the same test, ELSE the fire is '
+                  'barren. The hop is at most +2'),
             R.row('the chain start', "the ws{TF}r that qualified the cadence's nestle"),
             R.row('the ladder top', 'ws%d - HIS *"ws30 is by design"*' % HI),
             R.row('the Mage offset', '+%d' % OFF),
