@@ -825,3 +825,136 @@ def mage_lead_table(LN, frm_s, to_s, tf=3, offs='2,3,4', win_min=2.0, ladder=Non
     out.append(R.row('episodes found', len(eps)))
     out.append(R.row('the ladder read', 'ws%s' % 'Mage, ws'.join(str(t) for t in LAD) + 'Mage'))
     return out
+
+def handoff_table(LN, day, offs='2,3,4', anchor_lo=1):
+    """HIS 1109 HANDOFF: the Mage-timed TF jump chain from each cadence event. -> [str].
+
+    HIS WORDS: *"the work we're dialing presently tells me that using the ws{TF+2 or TF+2
+    (sweep)}Mage reversal is a strong candidate for handoff timing"*, *"we'll be jumping TFs
+    without bound"*, and *"for each of the cadences in 08-26, print a table that shows the
+    ws{TF}r which formed the cadence, and when the Mage-based handoff runs out of candidates.
+    print the TF jump chain as well"*.
+
+    THE THREE GAPS I FILLED, each stated and none of them his:
+
+      the cadence's own ws{TF}r   HIS 1109 CORRECTION: *"cadence windows open on ws1r, ws2r,ws3r
+                                  + the other gates"*. I had written that the producer was always
+                                  ws1-based, which was WRONG - `F2.cadence_events`'s nestle test
+                                  loops `for rt in (1, 2, 3)` and records which one qualified. The
+                                  chain starts on THAT line. It is read out of the event's own
+                                  `why` string, whose nestle clause has one format and one writer;
+                                  the regex asserts rather than falling back, so a format change
+                                  fails loudly instead of silently picking ws1.
+                                  The highest ex-fence towards line is printed BESIDE it, because
+                                  that was his 1109 anchor for the 0658 question and the two can
+                                  disagree.
+      the handoff                 from rider ws{t}, the next rider is ws{t+off} at the bar
+                                  ws{t+off}Mage's lift-off reversal STAMPS on the cadence side.
+                                  The stamp, not the raw turn, because the raw turn is not
+                                  knowable at itself.
+      no gate on the receiver     he said *"without bound"* and named no condition, so the chain
+                                  takes every hop its Mage offers. Whether the receiver was
+                                  ex-fence at the handoff is PRINTED as data, never applied.
+
+    IT RUNS OUT two ways and the table says which: `ws{t+off} is past ws30` - the ladder top - or
+    `no ws{t+off}Mage reversal ahead` to the tape end. No forward bound is applied.
+
+    CAUSAL: each hop reads a stamp at or after the previous hop's bar, and a stamp already carries
+    its own LIFT_WOB hold.
+    """
+    out = []
+    import re
+    import numpy as _np
+    from optimus9.analysis import jig as _J4
+    OFF = [int(x) for x in str(offs).split(',') if str(x).strip()]
+    A, B = ln.K(day + ' 00:00:00'), ln.K(day + ' 23:59:55')
+    NB = len(LN['close']) - 1
+    HI = int(LN['HI'])
+    MST = {}
+
+    def mstamps(t, sd):
+        if (t, sd) not in MST:
+            raw = _J4.lift_off(LN['MGE'][t], int(sd), K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL,
+                               K.LIFT_WOB)
+            MST[(t, sd)] = sorted(int(K.lift_stamp(int(x))) for x in raw)
+        return MST[(t, sd)]
+
+    def nxt(t, sd, frm):
+        a = mstamps(t, sd)
+        i = _bisect.bisect_left(a, int(frm))
+        return a[i] if i < len(a) else None
+
+    def anchor_at(bar, sd):
+        """The highest ws{TF}r that is ex-20/80 AND towards at `bar`. -> tf or None."""
+        rs = int(bar)
+        best = None
+        for t in range(int(anchor_lo), HI + 1):
+            if not bool(F2.ex2080_line(LN, t, int(bar), int(sd))):
+                continue
+            st = _J4.fdm2_cad_mom_detector(LN['EMR'][t], LN['EMR'][t], int(bar), int(sd), rs,
+                                           K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL, K.LIFT_WOB,
+                                           stamps=_np.asarray(LN['LIFT'][(t, int(sd))], int),
+                                           rev_since=rs)['state']
+            if st == 'towards':
+                best = t
+        return best
+
+    #   THE NESTLE'S OWN r LINE, out of the event's `why`. One format, one writer - and the
+    #   assert below means a format change fails loudly instead of silently picking ws1.
+    NEST = re.compile(r'deeper than ws(\d+)r')
+    ev = []
+    for sd in (+1, -1):
+        for e in F2.cadence_events(LN, sd, A, B):
+            mm = NEST.search(str(e[2]))
+            assert mm, 'the nestle clause is not in the why string: %r' % (str(e[2])[:120],)
+            ev.append((int(e[0]), sd, int(mm.group(1))))
+    out += ['', '# the Mage-timed TF handoff chain from every cadence event, %s' % day, '']
+    out += [R.row('the handoff', 'from rider ws{t}, the next rider is ws{t+off} at the bar '
+                  'ws{t+off}Mage\'s lift-off reversal STAMPS on the cadence side'),
+            R.row('the chain start', 'the ws{TF}r that qualified the cadence\'s NESTLE, one of '
+                  'ws1r, ws2r, ws3r - HIS 1109 correction *"cadence windows open on ws1r, '
+                  'ws2r,ws3r + the other gates"*'),
+            R.row('the column beside it', 'the highest ex-fence towards line at the cadence bar - '
+                  'his 1109 anchor for the 0658 question, printed because the two can disagree'),
+            R.row('the gate on a receiver', 'NONE - his *"without bound"*. Its ex-fence state at '
+                  'the handoff is printed as data'),
+            R.row('the ladder top', 'ws%d - L2_MOM_MAXTF' % HI),
+            R.row('the reversal producer', 'jig.lift_off on LN[\'MGE\'] at LIFT_PTS %d, LIFT_TOL '
+                  '%g, LIFT_WOB %d' % (int(K.LIFT_PTS), float(K.LIFT_TOL), int(K.LIFT_WOB))),
+            '']
+    out += ['| # | the cadence event | side | the nestle\'s r line - the chain start | the highest '
+            'ex-fence towards line there | %s |'
+            % ' | '.join('+%d: the TF jump chain | its last handoff | hops | how it ran out' % o
+                         for o in OFF),
+            '|' + '---|' * (5 + 4 * len(OFF))]
+    n = 0
+    for b, sd, rt in sorted(ev):
+        n += 1
+        a0 = int(rt)
+        hiex = anchor_at(b, sd)
+        cells = []
+        for o in OFF:
+            if a0 is None:
+                cells += ['-', '-', '-', 'no ex-fence towards line at the cadence bar']
+                continue
+            t, bar, chain, hops = a0, int(b), ['ws%d' % a0], 0
+            why = ''
+            while True:
+                t2 = t + o
+                if t2 > HI:
+                    why = 'ws%d is past ws%d, the ladder top' % (t2, HI)
+                    break
+                m = nxt(t2, sd, bar)
+                if m is None:
+                    why = 'no ws%dMage reversal ahead to the tape end' % t2
+                    break
+                exf = 'EXF' if bool(F2.ex2080_line(LN, t2, int(m), int(sd))) else 'in-fence'
+                chain.append('ws%d @ %s %s' % (t2, ln.U(m), exf))
+                t, bar, hops = t2, int(m), hops + 1
+            cells += [' > '.join(chain), ln.U(bar) if hops else '-', str(hops), why]
+        out.append('| %d | %s | %s | ws%dr | %s | %s |'
+                   % (n, ln.U(b), 'HIGH' if sd > 0 else 'LOW', a0,
+                      ('ws%dr' % hiex) if hiex is not None else 'none', ' | '.join(cells)))
+    out += ['']
+    out.append(R.row('cadence events on the day', n))
+    return out

@@ -432,6 +432,57 @@ ws4x TAKES 18 OF THE 26 RACES. Two rows that had NO ROWS under the ws5x-only bui
 cross from ws4x: xcv 8 at 2026-08-25 07:59:00 and xcv 13 at 2026-08-25 13:28:00. The rows with no
 cross on either line fall from 4 to 2 - xcv 17 and xcv 23.
 
+### HIS 1109 MAGE-TIMED HANDOFF — THE CHAIN NEVER RUNS OUT OF CANDIDATES
+
+HIS WORDS: *"the tables your build for us now are forming the heart of the incoming cadence
+update. we'll be jumping TFs without bound"*, *"using the ws{TF+2 or TF+2 (sweep)}Mage reversal is
+a strong candidate for handoff timing"*, and *"for each of the cadences in 08-26, print a table
+that shows the ws{TF}r which formed the cadence, and when the Mage-based handoff runs out of
+candidates. print the TF jump chain as well"*. The reader is the `handoff` request kind.
+
+| the rule | what it is |
+|---|---|
+| the handoff | from rider ws{t}, the next rider is ws{t+off} at the bar ws{t+off}Mage's lift-off reversal STAMPS on the cadence side |
+| the chain start | the ws{TF}r that qualified the cadence's NESTLE - one of ws1r, ws2r, ws3r |
+| the gate on a receiver | NONE, his *"without bound"*. Its ex-fence state at the handoff is printed as data |
+| the ladder top | ws30, `L2_MOM_MAXTF` |
+
+HIS 1109 CORRECTION, AND I HAD IT WRONG: I wrote that the cadence producer *"is always ws1-based -
+a ws1b excursion with a ws1r reversal inside it"* and used the highest ex-fence towards line as a
+stand-in. His reply: *"cadence windows open on ws1r, ws2r,ws3r + the other gates"*. He is right -
+`F2.cadence_events`'s nestle test loops `for rt in (1, 2, 3)` and records which one qualified. The
+chain now starts on that line, read out of the event's own `why` string behind an assert.
+
+THE TWO READS DISAGREE ON EVERY ROW. The nestle's r line is ws1r, ws2r or ws3r by construction;
+the highest ex-fence towards line at the same bar ranges ws2r to ws30r. They match on 0 of 32.
+
+| the nestle's r line, 2026-08-26 | cadence events |
+|---|---|
+| ws1r | 14 |
+| ws2r | 10 |
+| ws3r | 8 |
+
+### THE ANSWER TO HIS QUESTION: IT NEVER RUNS OUT
+
+| the run over 2026-08-26 | value |
+|---|---|
+| cadence events | 32 |
+| chains that ran out of Mage candidates | **0 of 32, on all three offsets** |
+| chains that stopped at the ladder top | 32 of 32 |
+| +2 hops | 13 to 14 |
+| +3 hops | 9 |
+| +4 hops | 6 to 7 |
+| the +2 chain's time from the cadence to the top, min to max | 34 min to 228 min |
+
+EVERY TF's Mage REVERSES EVENTUALLY, so an ungated chain always climbs to ws30. The question
+*"when does it run out of candidates"* has no answer on this day - it runs out of LADDER, never of
+candidates. The quantity that varies is the TIME, from 34 minutes to 228 minutes to reach the top
+on the +2 offset.
+
+SO THE HANDOFF NEEDS SOMETHING THE Mage REVERSAL ALONE DOES NOT GIVE. Nothing is applied and no
+gate is invented; the candidates his words leave open are a condition on the receiver, a bound on
+the forward search for each Mage stamp, or a verdict that ends the chain before the top.
+
 ### WHY THE WOB IS NECESSARY - the measurement that reversed his own ruling
 
 He asked why the report showed 2026-08-25 02:31:55 for the 02:22:00 HIGH event while the
