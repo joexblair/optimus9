@@ -753,10 +753,18 @@ def mage_lead_table(LN, frm_s, to_s, tf=3, offs='2,3,4', win_min=2.0, ladder=Non
                 on = False
     MS = {(t, sd): mstamps(t, sd) for sd in (+1, -1) for t in LAD}
     RS3 = {sd: rstamps(tf, sd) for sd in (+1, -1)}
-    out += ['| # | the setup opens | side | ws%dr reverses | %s | the ladder spread, first to last | '
-            'the verdict |'
+    #   HIS 1109 READ ON THE FAILURES: *"I think the 'failures' are caused by each of them having
+    #   a higher r line that is ex-fence at the time of ws{TF+2}Mage reversing, so the walk follows
+    #   the higher r line"*. So at the +2 Mage's own stamp bar, every ws{TF}r ABOVE ws{tf} is read
+    #   for ex-fence on the same side, and the highest one is named. If his read holds, the FAIL
+    #   rows carry a higher ex-fence line and the PASS rows do not.
+    HI = int(LN['HI'])
+    ABOVE = list(range(tf + 1, HI + 1))
+    out += ['| # | the setup opens | side | ws%dr reverses | %s | the ladder spread, first to last '
+            '| at the +2 Mage bar: the highest ex-fence r above ws%d | how many above are ex-fence '
+            '| the verdict |'
             % (tf, ' | '.join('ws%dMage +%d | its lead on ws%dr | pass' % (tf + o, o, tf)
-                              for o in OFF)), '|' + '---|' * (6 + 3 * len(OFF))]
+                              for o in OFF), tf), '|' + '---|' * (8 + 3 * len(OFF))]
     rows = []
     for n, (b, sd) in enumerate(sorted(eps), 1):
         r3 = first_at_or_after(RS3[sd], b)
@@ -778,21 +786,41 @@ def mage_lead_table(LN, frm_s, to_s, tf=3, offs='2,3,4', win_min=2.0, ladder=Non
             cells += [ln.U(m), '%s%d min %02d s' % ('' if d >= 0 else '-', abs(d * 5) // 60,
                                                     abs(d * 5) % 60),
                       'PASS' if ok else ('FAIL - ws%dr led' % tf if d < 0 else 'FAIL - too late')]
-        out.append('| %d | %s | %s | %s | %s | %s | %s |'
+        #   THE HIGHER-LINE READ, at the +2 Mage's stamp bar - the bar HIS read names.
+        m2 = first_at_or_after(MS[(tf + OFF[0], sd)], b) if OFF else None
+        if m2 is None:
+            hi_ex, n_ex = '-', '-'
+        else:
+            ex = [t for t in ABOVE if bool(F2.ex2080_line(LN, t, int(m2), int(sd)))]
+            hi_ex = ('ws%dr %.2f' % (ex[-1], float(LN['EMR'][ex[-1]][int(m2)]))) if ex else 'none'
+            n_ex = '%d of %d' % (len(ex), len(ABOVE))
+        out.append('| %d | %s | %s | %s | %s | %s | %s | %s | %s |'
                    % (n, ln.U(b), 'HIGH' if sd > 0 else 'LOW',
                       ln.U(r3) if r3 is not None else 'none to the tape end',
-                      ' | '.join(cells), spread,
+                      ' | '.join(cells), spread, hi_ex, n_ex,
                       'yes' if any(v for v in res.values() if v) else 'no'))
-        rows.append((b, sd, r3, res, lad))
+        rows.append((b, sd, r3, res, lad, hi_ex, n_ex))
     out += ['']
     out += ['| the offset | setups with data | PASS | FAIL, ws%dr led | FAIL, too late | the pass rate |'
             % tf, '|---|---|---|---|---|---|']
     for o in OFF:
-        tot = sum(1 for _b, _s, r3, res, _l in rows if res.get(o) is not None)
-        ps = sum(1 for _b, _s, r3, res, _l in rows if res.get(o) is True)
+        tot = sum(1 for r in rows if r[3].get(o) is not None)
+        ps = sum(1 for r in rows if r[3].get(o) is True)
         out.append('| ws%dMage, +%d | %d | %d | - | - | %s |'
                    % (tf + o, o, tot, ps,
                       ('%.0f%% of %d' % (ps / tot * 100.0, tot)) if tot else 'no episodes'))
+    #   HIS READ, SCORED: does a higher ex-fence r line separate the passes from the failures?
+    out += ['']
+    out += ['| at the +2 Mage bar | setups | a higher ex-fence r line above ws%d | none above | '
+            'the share with one |' % tf, '|---|---|---|---|---|']
+    for lab, sel in (('PASS on +2', [r for r in rows if r[3].get(OFF[0]) is True]),
+                     ('FAIL on +2', [r for r in rows if r[3].get(OFF[0]) is False]),
+                     ('every setup', rows)):
+        got = [r for r in sel if r[5] not in ('-', 'none')]
+        non = [r for r in sel if r[5] == 'none']
+        out.append('| %s | %d | %d | %d | %s |'
+                   % (lab, len(sel), len(got), len(non),
+                      ('%.0f%%' % (len(got) / len(sel) * 100.0)) if sel else '-'))
     out += ['']
     out.append(R.row('episodes found', len(eps)))
     out.append(R.row('the ladder read', 'ws%s' % 'Mage, ws'.join(str(t) for t in LAD) + 'Mage'))

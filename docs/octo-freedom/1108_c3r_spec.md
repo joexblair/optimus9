@@ -222,6 +222,59 @@ by nothing. That sharpens the weakness already measured over the 94: a tight lad
 BAR well and gives no warning before it. HIS GATE WOULD SELECT THIS SETUP AND IT WOULD BE USELESS
 AS A PREDICTOR - it is a coincidence detector at a 0 s spread.
 
+### HIS 1109 READ ON THE FAILURES — TESTED, AND IT DOES NOT SEPARATE THEM
+
+HIS WORDS: *"I think the 'failures' are caused by each of them having a higher r line that is
+ex-fence at the time of ws{TF+2}Mage reversing, so the walk follows the higher r line"*.
+
+The read is at the +2 Mage's own stamp bar: every ws{TF}r above ws3 tested for ex-20/80 on the
+same side, through `F2.ex2080_line`.
+
+| at the +2 Mage bar | setups | a higher ex-fence r line above ws3 | none above | the share with one |
+|---|---|---|---|---|
+| PASS on +2 | 52 | 42 | 10 | 81% |
+| FAIL on +2 | 42 | 30 | 12 | 71% |
+| every setup | 94 | 72 | 22 | 77% |
+
+PRESENCE DOES NOT DISCRIMINATE. A higher ex-fence line is present on 81% of the PASSES and 71% of
+the failures - slightly MORE common where ws3r did follow. HIS READ IS NOT SUPPORTED AS A PRESENCE
+TEST.
+
+NOR DOES ITS HEIGHT:
+
+| the group | setups | the highest ex-fence r above ws3, median | its min | its max | lines above ws3 ex-fence, median |
+|---|---|---|---|---|---|
+| PASS on +2 | 52 | ws12 | ws4 | ws30 | 2 |
+| FAIL on +2 | 42 | ws10 | ws4 | ws30 | 2 |
+
+THE COUNT IS WHERE A SIGNAL SITS, and it points the OTHER WAY from his read:
+
+| lines above ws3 ex-fence at the +2 Mage bar | PASS | FAIL | the pass rate |
+|---|---|---|---|
+| none | 10 | 12 | 45% of 22 |
+| 1 to 3 | 19 | 16 | 54% of 35 |
+| 4 to 8 | 19 | 7 | 73% of 26 |
+| 9 to 15 | 4 | 6 | 40% of 10 |
+| 16 to 27 | 0 | 1 | 0% of 1 |
+
+4 TO 8 LINES ABOVE ws3 BEING EX-FENCE IS THE BEST BAND IN THE DATA, 73% of 26 - and it is MORE
+higher ex-fence lines, not fewer. Past 8 the rate collapses to 40%. The band is not monotone
+either side, so it is a shape to look at rather than a rule to bank. NOTHING IS APPLIED.
+
+HIS 4 REVIEW CASES, under his own read:
+
+| the case | side | the gap | the highest ex-fence r above ws3 at the +2 Mage bar | lines above ex-fence |
+|---|---|---|---|---|
+| 2026-08-29 11:45:00 | LOW | 6 min 05 s | none | 0 of 27 |
+| 2026-08-28 15:45:00 | LOW | 8 min 00 s | ws6r 16.75 | 1 of 27 |
+| 2026-08-26 21:10:00 | HIGH | 9 min 05 s | ws30r 92.88 | 9 of 27 |
+| 2026-08-29 14:48:00 | HIGH | 11 min 05 s | ws28r 87.29 | 11 of 27 |
+
+TWO OF HIS FOUR HAVE NO HIGHER LINE TO FOLLOW. 2026-08-29 11:45:00 has ZERO ex-fence lines above
+ws3 at the Mage bar and still took 6 min 05 s, and 2026-08-28 15:45:00 has one. The two HIGH cases
+do carry 9 and 11, which is the pattern he describes - so his read fits the two long-gap HIGH
+cases and not the two LOW ones.
+
 ### OPEN — needs his ruling before the race is wired
 
 | the gap | the question |
