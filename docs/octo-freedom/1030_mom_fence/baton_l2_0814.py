@@ -17,6 +17,19 @@ instead of building a new script for every update"* is met by annotating here. A
     2026-09-03 22:01:15  low   the SHORT whose cadence at 23:24 he asked about on 1101: does the
                                walk print EXHAUST there on its own, with the divergence OFF?
                                22:01:15 is the arm race's own bar, not his 2201 estimate.
+    2026-08-25 06:58:00  low   his 1109 ask: the highest ws{TF}r that is ex-fence AND towards at
+                               that bar is ws13r 19.13, and he asked how far up the ladder the
+                               baton goes from it on ib - emerging and closed_prev - and on
+                               lift-off reversal. THE WALK DOES NOT TAKE A HANDED-IN RIDER: the
+                               arm bar is handed in and `rider_at` picks the rider itself, which
+                               is ws12 r 10.97 at the first t1 cadence 07:01:25, one rung under
+                               his ws13 read at 06:58 and 3 min 25 s later. Results:
+                                 emerging + ib        EXHAUST 11:06:25, 6 passes, top rung ws30
+                                 emerging + reversal  EXHAUST 11:06:25, 8 passes, top rung ws30
+                                 closed_prev + ib     EXHAUST 11:48:25, 5 passes, top rung ws28
+                                 closed_prev + rev    identical to emerging + reversal, as it must
+                                                      be - `_pass_bars` does not read the ib cross
+                                                      in reversal mode, so LIN2_CP_IB cannot move it
 
 THE SIDE IS AN INPUT, not derived: SHORT hunts the low oob, so side -1.
 
