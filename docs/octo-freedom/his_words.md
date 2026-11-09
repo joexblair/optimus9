@@ -2222,3 +2222,80 @@ ba387a12a2ca  your preference. these 2 options should be chosen by a knob
 a02d287ea716  bank the latest version, the one that has ws5x as a static line for each table
 8a83668429ac  share the sandbox mech and the associated report with your workmate.  I'll guide them through the wiring
 53408e5cbdd3  share the sandbox mech and the associated report with your workmate. I'll guide them through the wiring
+930820d54336  using r-pred, what are the wsf line states for a low side target at 08-24 0013?
+961bd173c60e  wsf = gcws15 to ws12
+e941781b8c6d  I want to access this -1/+1 r-pred data in a dhtml webUI
+3eb0e6d5b829  the data will be anchored on closed-prev ws1 bars
+a49677c8203d  the r-pred data will be emerging based
+155ca6082bce  an ever-evolving cache of the rpred data, so that a) we don't bog the ui down with too much data at once, and 2) so that the data is available immediately
+662d99ddb60a  click on any day, and scroll from the beginning of the day that I click on
+6b3498789c1d  if the side is required
+daa531319859  col1: the sum of the r-pred decisions from ws13 to ws20
+b217959f46d2  col2: the same for ws21 to ws30
+ea097085596e  for these 2 columns only, the coloring is red for <0, green for >0 and orange for 0
+e5e90dad05fc  add 2 more columns on the right side
+f8f62a072173  it's highly reponsive - well done!
+62c99ad4555e  noted - it's not a realtime tool
+0703f566f5a4  your next task is to help me build a better towards/away mech, and we'll use the ws2Mage pivots to simulate a trade's `target-side`
+129bc998dcdf  target-side is the anchor for all towards/away decisions
+c3a9c6843694  build a new BB%B line named `e`, eg ws30e, with len 3, mult 0.5, src close. apply to ws4-ws30
+019a295df567  use the dynamic indicator config table: it saves you from creating 27 single lines
+30532e2d181a  emerging line values will now be captured when ws{TF}e crosses race:{boundary,Mage,r} (standard under or over cross rules)
+e91ab4cba790  these ws{TF}e samples augment the lift-off samples
+5f5cacbddf5f  every `e-sample` is derived at (almost) the pxs pivot
+4d40d8e82268  lift-off is partially building a pre-fire six-sample reversal setup (ie lines are flattened or printing away from target-side)
+f0ee7104495c  lift-off can print its reversal signal
+2f1aad61d54d  sweep ws{TF}e's len 3 with len 2 to see which is most reliable and profitable
+38479042e772  the r line's latest extremum is stored, regardless of being in or ex fence
+898b17bb9507  at the start of a trade, an r line is automatically tagged as towards
+76dff9c1b910  it will stay automatically tagged as towards until it reaches ex-20/80-fence on the target-side (or fails to reach ex-fence, more info below)
+9b81c22b7f7f  after reaching ex-fence, towards is now affected by the mech's calculations
+e40500bea599  extremum can be stored while an r line is infence, but it has no vote for the `away` line verdict in scenario 1
+d4a67505bc19  do/don't use `fdm2-rline-enhance` mech to improve the results? I think no, but I'm pinning this here for possible testing. Joe to decide if/when to test
+67d6d49eb36e  the r line's extrema will be stored in the same manner as the existing mech, and used to calculate away
+f4046df16f2d  if a ws{TF}r line prints two infence samples (built by the e-cross sampling) which are within 2% of each other
+f64ca4511c05  two infence samples (built by the e-cross sampling) which are within 2% of each other
+c9a2a3d35ad7  IF there are >1 r lines within {knob:5} TFs **under** this TF, that are printing away while in ex-fence, or printing away after having left ex-fence (during this trade)
+0493e0991918  store the extrema
+345e112a53cf  declare this r line away
+d62b9240c01d  if the line turns back towards ex-fence, then it remains away until it supersedes the extrema (the same logic as the existing build)
+34adf8af3550  lowside 08-24 ~1400: ws11r is infence, ws6 to ws9/ws10 are all printing away after being ex-fence, or are still in ex-fence
+dfa6287d7a96  highside 08-25 0328: ws13r is infence, so is ws12r. ws8 to ws11 are in various states of away
+450d064fa35e  we will backtest without a derived trade
+2136f8bc3e43  there are multiple ws2Mage pivots per side (eg 08-24 1353 and 1404 on the low side, 1252 and 1314 on the highside). use the last/later pivot time to create the psuedo rev-trade signal
+d1e72650b6f2  use the last/later pivot time to create the psuedo rev-trade signal
+32df2bb96be6  after a line has reached ex-20/80-fence
+def954c2ee17  my update has accidentally pulled the lift-off mech in, and makes it look like a part of the towards/away mech. this is not SRP
+07a538ca31a3  here's the poorly placed note - it is a separate update for lift-off mech, and does not apply to towards/away mech. the common/shared artifact is the newly built ws{TF}e
+57e1406009cf  no action. leave it on len3. after towards/away is updated, banked, and made live, remind me that we need to separately update lift-off
+a036ce420449  the scoring is (would lift-off still complete the same six-sample run and turn it into a reversal, without the early e-cross)
+723142c83374  this one is stashed for the lift-off update. the answer is A
+e6ccd273cf99  the extremum is set by lift-offs reversal, which uses emerging
+ef80bce9c8df  the output of towards/away will be baked into the r-pred webUI. for each row, for each field, print TO or AW below the number, in a bold font.
+b23f99d9ab30  use a slighty lower font (eg the same size as the weekdays above the calenders) for the summary ws13 and ws21 fields, print this "TO:x AW:x"
+a36c0ee875ca  for each row, for each field, print TO or AW below the number, in a bold font
+d86ede516298  leave it on len3
+0b096abdf11f  apply to ws4-ws30
+79282ee3d081  no action. leave it on len3
+d84eb5c61a83  use ws2Mage pivots
+1a0e35815400  after having left ex-fence (during this trade)
+9ebc7ed4da0a  the same logic as the existing build
+547a9e2e7646  I think no, but I'm pinning this here for possible testing. Joe to decide if/when to test
+19787b4e049f  there are multiple ws2Mage pivots per side
+ba403c57ef24  use a slighty lower font (eg the same size as the weekdays above the calenders) for the summary ws13 and ws21 fields, print this "TO:x AW:x
+6931c03a0881  update the cache
+44427713f732  the AW and TO in the individual line fields is too large. the font in the ws13/ws21 summaries is the correct font size for AW/TO
+45a964680840  20% opaque the background color of "ws1 time UTC", to show the trade direction (red for LOW target-side, green for HIGH target-side)
+5cad9066a380  at the trade opening, I should see at least one row where all fields print TO
+d42b28f1bbaf  I don't see that "start of trade init" happening
+7647f7ab0def  append `(inf)` or `(exf)`
+ceeb26e0f89f  this is a very helpful tool, and it's accurate
+3a9d45fce869  append `(inf)` or `(exf)` to the `TO` and `AW` labels (example "TO(exf)") to denote if a line is infence or exfence
+f5d6db77317c  bank the towards/away update
+3f2ad5430d0c  collect all knobs, including any that aren't specifically called out as knobs
+ae894419a9bb  bank the towards/away update. commit push all files. update the spec, make notes about the webUI build, and make the machine live.
+1c41a9989492  collect all knobs, including any that aren't specifically called out as knobs, and write them to the spec doc. show me the list of knobs
+7ff48bd2795f  let your workmate know about the towards/away update
+a0ba9a8ed657  we'll apply the lift-off updates next
+b9f42d87d7c2  I apologise - I thought 08 was september...
+bb058d5d879c  make the machine live

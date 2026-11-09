@@ -156,6 +156,26 @@ pattern in the table would force one convention on both, and neither is wrong.
 
 ---
 
+## 2026-11-09 — the `towards-away` row, ws{TF}e
+
+Joe 1109: *"build a new BB%B line named `e`, eg ws30e, with len 3, mult 0.5, src close. apply to ws4-ws30"* and
+*"use the dynamic indicator config table: it saves you from creating 27 single lines"*. One row, 27 lines.
+
+| mechanic | role | band | step | line type | config | value mode | fences | offset | version | live after |
+|---|---|---|---|---|---|---|---|---|---|---|
+| towards-away | e | 4-30 min (240-1800 s) | 60 s | bb | 3\|0.5\|close | emerging | 85/15 | 0 | 1 | 2026-11-09 00:00:00 |
+
+- the mechanic name `towards-away` is mine, from his words for the mech. Nothing else reads that mechanic.
+- *"leave it on len3"*: no version 2. The len-2 sweep he first asked for is dropped.
+- the 27 lines are in the line cache since 1109 (his *"update the cache"*), keyed by spec like every cached line:
+  27 new files, 0 existing files touched, every one equal to a fresh in-memory build.
+- the reader is `docs/octo-freedom/1109_towards_away/towards_away.py` (`e_cached()`), which builds a missing line
+  through `rpl_cache.cache_jig_perline` and checks two known-good numbers on every load. The mech's spec is
+  `docs/octo-freedom/1109_towards_away.md`.
+- `ln.line('ws4e')` does NOT resolve: `ln.py` reads its specs from the `wsf` rows only.
+
+---
+
 ## what is NOT in here
 
 - **the ws4-8 and ws1-3 momentum bands** the ws-finisher walk uses. D12 — whether they live in this
