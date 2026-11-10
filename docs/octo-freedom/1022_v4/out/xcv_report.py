@@ -965,7 +965,7 @@ def handoff_table(LN, day, offs='2,3,4', anchor_lo=1):
     out.append(R.row('cadence events on the day', n))
     return out
 
-def jump_table(LN, day, offs='2', path_at=None, seed=None):
+def jump_table(LN, day, offs='2', path_at=None, seed=None, prong=None):
     """HIS 1109 LOWEST-QUALIFYING HANDOFF, under four timing rules. -> [str].
 
     HIS WORDS: *"'hand off to the lowest qualifying line' -- let's try that. give it a set of
@@ -1039,7 +1039,11 @@ def jump_table(LN, day, offs='2', path_at=None, seed=None):
 
     def qualifies(u, bar, sd, s0):
         """Is ws{u}r ex-20/80 AND printing towards at `bar`? -> bool."""
-        if u > HI or not bool(F2.ex2080_line(LN, u, int(bar), int(sd))):
+        #   `prong` IS A DIAGNOSTIC, HIS 1110 'A': *"a test of both emerging and close-prev
+        #   values to decide if a line is ex-fence"* is what ex2080_line already runs at the
+        #   banked FDM_EXF_READ 'either'. None keeps that; 'closed_prev' or 'emerging' prices ONE
+        #   prong. The knob does not move, so the run is still the machine's.
+        if u > HI or not bool(F2.ex2080_line(LN, u, int(bar), int(sd), read=prong)):
             return False
         return _J5.fdm2_cad_mom_detector(LN['EMR'][u], LN['EMR'][u], int(bar), int(sd), int(s0),
                                          K.LIFT_PTS, K.gap_for(u), K.LIFT_TOL, K.LIFT_WOB,
@@ -1112,6 +1116,10 @@ def jump_table(LN, day, offs='2', path_at=None, seed=None):
                   'AND towards at the timer bar - above or below the rider, his 1109 *"remove '
                   'the upward restriction"*. The rider\'s own rung is not a candidate'),
             R.row('the hop direction', 'either. ws1..ws%d are all candidates' % HI),
+            R.row('the ex-20/80 prong', '%s - FDM_EXF_READ %s is the bank. A single prong here '
+                  'is a DIAGNOSTIC and the knob has not moved'
+                  % (str(prong) if prong else 'both, the banked either',
+                     str(K.FDM_EXF_READ))),
             R.row('what stops a cycle', 'a handoff bar must be strictly LATER than the one '
                   'before it - the upward-only hop used to guarantee that and no longer does'),
             R.row('the chain start', "the ws{TF}r that qualified the cadence's nestle"),

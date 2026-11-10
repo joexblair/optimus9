@@ -74,6 +74,7 @@ try:
     import v4_backstop_trades as BT
     import ln
     from optimus9.analysis.jig import oob_ib_cross, lift_off
+    import v4_lift_e as LE   # HIS 1110 e-cross reversal: every lift-off reader gets it (6B)
     from optimus9.analysis import jig as JIG
     from optimus9.compute.rule2_trajectory import opposed_extrema
     from optimus9.compute.breaching_line import predict_breach
@@ -119,7 +120,8 @@ def load():
     LIFT = {}
     for sd in (-1, +1):
         for t in range(1, hi + 1):
-            b = lift_off(EMR[t], sd, K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL, K.LIFT_WOB)
+            b = lift_off(EMR[t], sd, K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL, K.LIFT_WOB,
+                         e_path=LE.get(t, len(EMR[t]), sd))
             LIFT[(t, sd)] = np.asarray([K.lift_stamp(int(x)) for x in b], int)
     return dict(
         HI=hi, CPR=CPR, EMR=EMR, CPM=CPM, LIFT=LIFT, PIN=PIN, RSID=RSID,
@@ -154,7 +156,7 @@ def ex2080(v, side):
     return (v >= e) if int(side) > 0 else (v <= e)
 
 
-def ex2080_line(LN, tf, bar, side):
+def ex2080_line(LN, tf, bar, side, read=None):
     """Is ws{tf}r ex-20/80 on `side` at `bar`, by FDM_EXF_READ. -> bool.
 
     HIS 1105: *"when testing for lines that are ex-20/80-fence, collect the closed-prev and the
@@ -177,8 +179,11 @@ def ex2080_line(LN, tf, bar, side):
     CAUSAL: both reads are at `bar`. The emerging value at a bar is knowable at that bar - it is
     the forming value, not a later one - so reading it adds no lookahead.
     """
-    m = str(K.FDM_EXF_READ)
-    assert m in ('either', 'closed_prev', 'emerging'), 'FDM_EXF_READ is %r' % m
+    #   `read` IS FOR A REPORT ASKING FOR ONE PRONG, and None is the knob - so a diagnostic can
+    #   price a single prong without moving FDM_EXF_READ off 'either'. The rule itself stays in
+    #   this one function; a caller that re-derived a prong would be the second copy that drifts.
+    m = str(K.FDM_EXF_READ if read is None else read)
+    assert m in ('either', 'closed_prev', 'emerging'), 'the ex-20/80 read is %r' % m
     t, b = int(tf), int(bar)
     if m != 'emerging' and ex2080(float(LN['CPR'][t][b]), side):
         return True
