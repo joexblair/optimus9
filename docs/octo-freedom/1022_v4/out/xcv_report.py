@@ -1391,9 +1391,12 @@ def pseudo_table(LN, day, offs='2', start='1', prong=None):
                   'pivot signal has none. Both arms are reported'),
             R.row('the span start for the towards read', 'the seed bar itself. MINE'),
             R.row('flips on the day', len(day_flips)), '']
+    #   HIS 1111: *"add a column to show the TF handoff chain. that removes the `its rung` and
+    #   `hops` columns"*. The chain carries both - its last rung IS `its rung` and its length
+    #   less one IS `hops` - so keeping them would be the same fact in three places.
     out += ['| the rule | # | the flip | its side | the rung it started on | the final handoff '
-            '| its rung | hops | the EXHAUST | flips skipped inside it |',
-            '|' + '---|' * 10]
+            '| the TF handoff chain | the EXHAUST | flips skipped inside it |',
+            '|' + '---|' * 9]
     tally = {}
     for rk, lab in RULES:
         done = -1
@@ -1409,11 +1412,12 @@ def pseudo_table(LN, day, offs='2', start='1', prong=None):
                 c0 = candidates(0, int(fb), int(fsd), int(fb))
                 t0 = c0[0] if c0 else None
             if t0 is None:
-                out.append('| %s | %d | %s | %s | NO CANDIDATE at the flip | - | - | 0 | - | 0 |'
+                out.append('| %s | %d | %s | %s | NO CANDIDATE at the flip | - | - | - | 0 |'
                            % (lab, n, ln.U(fb), 'HIGH' if fsd > 0 else 'LOW'))
                 done = int(fb)
                 continue
-            t, bar, last, lastrung, hops, why = int(t0), int(fb), None, None, 0, ''
+            t, bar, last, hops, why = int(t0), int(fb), None, 0, ''
+            chain = [int(t0)]
             while True:
                 mb = timer(rk, t, fsd, bar if last is None else bar + 1)
                 if mb is None or int(mb) > NB:
@@ -1425,17 +1429,19 @@ def pseudo_table(LN, day, offs='2', start='1', prong=None):
                     why = ln.U(int(mb))
                     break
                 assert last is None or int(mb) > int(last), 'a handoff reused a bar'
-                t, bar, last, lastrung, hops = int(u), int(mb), int(mb), int(u), hops + 1
+                t, bar, last, hops = int(u), int(mb), int(mb), hops + 1
+                chain.append(int(u))
+                assert chain[-1] > chain[-2], 'the chain went down under FDM_HANDOFF_DIR up'
             done = int(bar)
             sk = sum(1 for z, _ in day_flips[i + 1:] if z <= done)
             tally[lab] = tally.get(lab, [0, 0, 0])
             tally[lab][0] += 1
             tally[lab][1] += sk
             tally[lab][2] += hops
-            out.append('| %s | %d | %s | %s | ws%d | %s | %s | %d | %s | %d |'
+            out.append('| %s | %d | %s | %s | ws%d | %s | %s | %s | %d |'
                        % (lab, n, ln.U(fb), 'HIGH' if fsd > 0 else 'LOW', t0,
                           ln.U(last) if last is not None else 'no handoff',
-                          'ws%d' % lastrung if lastrung is not None else '-', hops, why, sk))
+                          ' > '.join('ws%d' % z for z in chain), why, sk))
     out += ['']
     out += ['| the rule | trades opened | flips skipped | total hops |', '|' + '---|' * 4]
     for rk, lab in RULES:
