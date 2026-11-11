@@ -1425,9 +1425,12 @@ def pseudo_table(LN, day, offs='2', start='1', prong=None):
     #   HIS 1111, in two steps: *"add a column to show the TF handoff chain. that removes the
     #   `its rung` and `hops` columns"*, then *"delete also the 'the rung it started' column"*.
     #   The chain's FIRST rung is the one it started on, so that column was the same fact twice.
-    out += ['| the rule | # | the flip | its side | the first nestled cadence | its nestle '
+    #   HIS 1111: *"I called out the 02:38:45 trade (0238)"*. A trade is named by its OWN
+    #   timestamp, his 1003 standing rule - the row id means nothing to him and moves between
+    #   runs - so the `#` column is gone and the flip bar is the trade's name.
+    out += ['| the rule | the trade | its side | the first nestled cadence | its nestle '
             '| the final handoff | the TF handoff chain | the EXHAUST | flips skipped inside it |',
-            '|' + '---|' * 10]
+            '|' + '---|' * 9]
     tally = {}
     for rk, lab in RULES:
         done = -1
@@ -1439,9 +1442,9 @@ def pseudo_table(LN, day, offs='2', start='1', prong=None):
             n += 1
             cad = first_cadence(int(fb), int(fsd))
             if cad is None:
-                out.append('| %s | %d | %s | %s | NO CADENCE EVENT ahead on this side | - | - '
+                out.append('| %s | %s | %s | NO CADENCE EVENT ahead on this side | - | - '
                            '| - | - | 0 |'
-                           % (lab, n, ln.U(fb), 'HIGH' if fsd > 0 else 'LOW'))
+                           % (lab, ln.U(fb), 'HIGH' if fsd > 0 else 'LOW'))
                 done = int(fb)
                 continue
             cb, cs0, t0 = cad
@@ -1468,8 +1471,8 @@ def pseudo_table(LN, day, offs='2', start='1', prong=None):
             tally[lab][0] += 1
             tally[lab][1] += sk
             tally[lab][2] += hops
-            out.append('| %s | %d | %s | %s | %s | ws%dr | %s | %s | %s | %d |'
-                       % (lab, n, ln.U(fb), 'HIGH' if fsd > 0 else 'LOW', ln.U(cb), t0,
+            out.append('| %s | %s | %s | %s | ws%dr | %s | %s | %s | %d |'
+                       % (lab, ln.U(fb), 'HIGH' if fsd > 0 else 'LOW', ln.U(cb), t0,
                           ln.U(last) if last is not None else 'no handoff',
                           ' > '.join('ws%d' % z for z in chain), why, sk))
     out += ['']
