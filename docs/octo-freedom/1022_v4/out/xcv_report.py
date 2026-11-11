@@ -1080,7 +1080,8 @@ def jump_table(LN, day, offs='2', path_at=None, seed=None, prong=None):
         list IS the decision's input and a hop of +9 can be read as the rungs that did not
         qualify rather than as a jump out of nowhere.
         """
-        return [u for u in range(1, HI + 1)
+        lo = int(t) + 1 if str(K.FDM_HANDOFF_DIR) == 'up' else 1
+        return [u for u in range(lo, HI + 1)
                 if u != int(t) and qualifies(u, bar, sd, s0)]
 
     def timer(rule, t, sd, frm):
@@ -1115,7 +1116,10 @@ def jump_table(LN, day, offs='2', path_at=None, seed=None, prong=None):
     out += [R.row('WHERE it jumps to', 'the LOWEST ws{u}r on the WHOLE board that is ex-20/80 '
                   'AND towards at the timer bar - above or below the rider, his 1109 *"remove '
                   'the upward restriction"*. The rider\'s own rung is not a candidate'),
-            R.row('the hop direction', 'either. ws1..ws%d are all candidates' % HI),
+            R.row('the hop direction', ('UPWARDS only - the candidates are ws{TF+1}..ws%d, '
+                  'FDM_HANDOFF_DIR up, HIS 1111 ruling' % HI)
+                  if str(K.FDM_HANDOFF_DIR) == 'up' else
+                  'either. ws1..ws%d are all candidates' % HI),
             R.row('the ex-20/80 prong', '%s - FDM_EXF_READ %s is the bank. A single prong here '
                   'is a DIAGNOSTIC and the knob has not moved'
                   % (str(prong) if prong else 'both, the banked either',
@@ -1349,7 +1353,8 @@ def pseudo_table(LN, day, offs='2', start='1', prong=None):
                                          rev_since=int(s0))['state'] == 'towards'
 
     def candidates(t, bar, sd, s0):
-        return [u for u in range(1, HI + 1) if u != int(t) and qualifies(u, bar, sd, s0)]
+        lo = int(t) + 1 if str(K.FDM_HANDOFF_DIR) == 'up' else 1
+        return [u for u in range(lo, HI + 1) if u != int(t) and qualifies(u, bar, sd, s0)]
 
     def timer(rule, t, sd, frm):
         if rule == 'mage':
@@ -1378,6 +1383,8 @@ def pseudo_table(LN, day, offs='2', start='1', prong=None):
                   'read - HIS 1111 *"does not use the sweep pivot flip bars as a target"*'),
             R.row('a flip inside a running walk', 'SKIPPED - HIS 1111 *"not an automatic cut '
                   'off"*. The next flip at or after an exhaust opens the next trade'),
+            R.row('the hop direction', 'UPWARDS only - FDM_HANDOFF_DIR %s, HIS 1111 ruling'
+                  % str(K.FDM_HANDOFF_DIR)),
             R.row('the rung the baton starts on', 'ws1' if str(start) == '1' else
                   'the lowest candidate at the seed bar'),
             R.row('that rung is UNRULED', 'a cadence event hands the walk its nestle line; a '

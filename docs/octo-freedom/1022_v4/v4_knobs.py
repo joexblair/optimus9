@@ -340,6 +340,15 @@ L2_MOM_MAXTF = _knob('L2_MOM_MAXTF', 30, int)   # *"v4mom_maxTF = 12"*. The ladd
 #   ws28. These three lines are the timer's own headroom; the rungs a rider may occupy are still
 #   L2_MOM_MAXTF 30, his *"ws30 is by design"*.
 L2_MOM_MAGE_TOP = _knob('L2_MOM_MAGE_TOP', 33, int)   # the Mage ladder's top rung, HIS value.
+#   WHICH WAY THE HANDOFF MAY JUMP. BANKED 'up' AT HIS 1111 *"bank and make this the machine"*,
+#   with his worked example: on ws14 with ws15/ws17/ws22 candidates take ws15; then on ws15 with
+#   ws16/ws18/ws22/ws23 take ws16. So the candidate set is the rungs ABOVE the rider only, and
+#   the handoff takes the lowest of them.
+#     'up'     ws{t+1}..ws{HI}. THE BANK
+#     'board'  ws1..ws{HI} either side of the rider - his 1110 *"remove the upward restriction"*,
+#              which this ruling replaces. Kept as an arm because the day is measured on both
+#   THE KNOB'S NAME IS MINE. The rule and the value are his.
+FDM_HANDOFF_DIR = _knob('FDM_HANDOFF_DIR', 'up', str)   # 'up' | 'board'. HIS 1111 ruling.
 L2_LIN_HOP = _knob('L2_LIN_HOP', 2, int)        # *"lin_hop = 2"*. Max hops rider -> candidate, and
 #   it applies ONLY between cadence events. Joe 1025: *"when baton is being passed between cadence
 #   markers, linhop applies. at a cadence event, linhop doesn't apply"*.
@@ -1779,6 +1788,7 @@ RULED = {
                              ' 41.0% of events'),
     'L2_MOM_MAXTF': (30,    '"v4mom_maxTF = 12" - 1025, the lineage2 fork'),
     'L2_MOM_MAGE_TOP': (33, 'HIS 1109 "add ws31-33Mage" - the Mage timer reads ws{TF+2}Mage, so a rider on ws29/ws30 had no timer line at all'),
+    'FDM_HANDOFF_DIR': ('up', 'HIS 1111 "bank and make this the machine" - the handoff jumps UPWARDS to the lowest candidate, his ws14->ws15->ws16 example. \'board\' is the 1110 either-direction arm it replaces'),
     'L2_LIN_HOP':   (2,     '"lin_hop = 2" - 1025. Applies BETWEEN cadences only, his ruling'),
     'L2_T1_GRACE_S': (120,  '"the 2 minutes (CAUSALLY) following" - 1025, confirmed a knob'),
     'L2_T3_FRAC':   (0.75,  '"L2_T3_FRAC 0.75 survives" - 1026. Of the rider\'s matryoshka lines'
