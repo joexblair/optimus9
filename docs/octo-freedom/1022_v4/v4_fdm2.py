@@ -300,14 +300,19 @@ def cadence_events(LN, side, A, B, trace=False):
                     break
             if nestle:
                 break
+        #   THE GATE IS OFF ON THE BANK, FDM_M3_GATE_ON 0, HIS 1111 *"remove the ws3Mage gate
+        #   and recreate"*. At 0 neither the ex-fence test nor its rescue runs and the cross
+        #   passes on the NESTLE alone; `gate_off` carries that into the why string so a report
+        #   cannot show a cadence without showing which tests produced it.
+        gate_off = not int(K.FDM_M3_GATE_ON)
         m3seg = CPM[3][s0:s1 + 1]
-        m3 = bool(((m3seg >= e3) if side > 0 else (m3seg <= e3)).any())
+        m3 = True if gate_off else bool(((m3seg >= e3) if side > 0 else (m3seg <= e3)).any())
         #   HIS 1103 WS3MAGE GATE UPDATE. A cross gated because ws3Mage stayed infence is rescued
         #   when, inside the gcws30b-ex-fence-to-ws1b-ib window, ws3r went oob AND ws3Mage reached
         #   ex-FDM_M3_RESCUE_FNC 40/60. HIS WINDOW, NOT THE EXCURSION: it starts at gcws30b's cross
         #   beyond FDM_RE_B_FNC, which can sit well before ws1b goes oob.
         rsc = None
-        if not m3 and int(K.FDM_M3_RESCUE_ON):
+        if not m3 and not gate_off and int(K.FDM_M3_RESCUE_ON):
             #   THE RESCUE WINDOW'S OPENER IS THE ARM'S OWN, his 1103 *"follow whichever opener the
             #   arm uses"*. His spec wrote it as gcws30b ex-5/95 because that was the opener at the
             #   time; with FDM_RE_WIN_OPEN now a knob, the rescue reads the same opener the
@@ -328,9 +333,11 @@ def cadence_events(LN, side, A, B, trace=False):
                     rsc = (w0, float(np.nanmax(r3) if side > 0 else np.nanmin(r3)),
                            float(np.nanmax(m3b) if side > 0 else np.nanmin(m3b)))
                     m3 = True
-        why = ('ws1b excursion %s..%s, the nestle is ws%dMage %.2f deeper than ws%dr %.2f at %s%s'
+        why = ('ws1b excursion %s..%s, the nestle is ws%dMage %.2f deeper than ws%dr %.2f at %s'
+               '%s%s'
                % (ln.U(s0), ln.U(s1), nestle[1], nestle[2], nestle[3], nestle[4],
                   ln.U(nestle[0]),
+                  ', the ws3Mage gate is OFF - FDM_M3_GATE_ON 0' if gate_off else '',
                   '' if rsc is None else
                   ', ws3Mage RESCUED - the %s window opened %s, ws3r reached %.2f and'
                   ' ws3Mage reached %.2f'

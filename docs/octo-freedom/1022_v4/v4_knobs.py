@@ -1213,6 +1213,13 @@ FDM_RE_FIRE_IB = _knob('FDM_RE_FIRE_IB', 1, int)
 #   sandbox entirely - his *"theses fdm_spec notes have no place"*.
 FDM_FNC_2080 = _knob('FDM_FNC_2080', 20.0)      # HIS NAME 'fdm-20-80-fnc'. 20 -> (20.0, 80.0).
 #   "ex" INCLUDES oob, his standing rule, so the test is r <= 20 low / r >= 80 high.
+#   THE ws3Mage GATE IS OFF, BANKED AT HIS 1111 *"remove the ws3Mage gate and recreate"*. He found
+#   it holding back a LOW-side cadence near 2026-08-26 03:53 and called the gate his own mistake:
+#   *"now I see that it is gated by ws3Mage - that's on me"*. At 0 the ws3Mage ex-fence test and its
+#   rescue arm are both skipped and a cross passes on the NESTLE alone.
+#   FDM_M3_FNC and the two FDM_M3_RESCUE_* knobs are left at his values and simply go unread; the
+#   gate can come back without re-deciding them. THE KNOB'S NAME IS MINE.
+FDM_M3_GATE_ON = _knob('FDM_M3_GATE_ON', 0, int)   # 0 = no ws3Mage gate. HIS 1111 ruling.
 FDM_M3_FNC = _knob('FDM_M3_FNC', 25.0)          # ws3Mage's own fence in the preamble, 25 -> 25/75.
 FDM_M3_RESCUE_ON = _knob('FDM_M3_RESCUE_ON', 1, int)   # 1 runs his 1103 ws3Mage gate update.
 FDM_M3_RESCUE_FNC = _knob('FDM_M3_RESCUE_FNC', 40.0)   # the rescue's ws3Mage fence, 40 -> 40/60.
@@ -1911,6 +1918,7 @@ RULED = {
     'FDM_RE_FIRE_IB': (1, 'BANKED 1104 - ws1b\'s ib close is in the last-to-fire set, his "out of ws5r reversing or ws6r reversal or ws1b crossing to ib". 0 drops it'),
     'FDM_FNC_2080': (20.0, 'HIS OWN KNOB NAME, "fdm-20-80-fnc", at his own value. Both the step-1 test and the reversal population read it; "ex" includes oob'),
     'FDM_M3_FNC': (25.0, 'HIS 1103 "ws3Mage is settled on 25/75". The knob name is mine; the value is his'),
+    'FDM_M3_GATE_ON': (0, 'HIS 1111 "remove the ws3Mage gate and recreate" - he found it holding back a LOW-side cadence near 2026-08-26 03:53 and called the gate his own mistake. A cross now passes on the nestle alone'),
     'FDM_M3_RESCUE_ON': (1, 'HIS 1103 MECH UPDATE - a cadence gated on ws3Mage staying infence is rescued when ws3r went oob and ws3Mage reached ex-40/60 in the gcws30b-to-ws1b window'),
     'FDM_M3_RESCUE_FNC': (40.0, 'HIS 1103 "IF ws3Mage was ex-40/60-fence during the window". Wider than the 25/75 it rescues'),
     'FDM_POP_LO': (3, 'HIS 1103 "ws3 to ws30 for both the cadence and the ws10x-cadence". The top comes from L2_MOM_MAXTF 30, not from a second knob'),
