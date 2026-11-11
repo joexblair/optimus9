@@ -1370,6 +1370,32 @@ def pseudo_table(LN, day, offs='2', start='1', prong=None):
              ('rev', 'ws{TF}r liftoff reversing')]
     #   THE FLIPS. Only the open bar and the side are unpacked; `_c` is the next flip's bar and
     #   reading it would be the lookahead he ruled out.
+    #   HIS 1111 UPDATE: *"the walk starts at trade open, and walks directly to the first
+    #   'nestled cadence' event before building the TF handoff chain"*. So the baton's first rung
+    #   is that event's NESTLE line, not a rung I pick, and his earlier open question about where
+    #   the chain starts is answered by the mech instead of by me. `start` is left in the
+    #   signature and ignored for the chain's first rung; it is reported as superseded.
+    #
+    #   THE SEARCH FOR THAT EVENT HAS NO BOUND. He has not given one and the standing rule is that
+    #   I do not invent a horizon; a trade with no cadence ahead of it simply has no chain.
+    #   THE EVENT'S OWN WINDOW OPEN becomes the span start for the towards read, exactly as the
+    #   cadence-seeded walk uses it - a pivot has no window, a cadence event does.
+    NEST = _re.compile(r'deeper than ws(\d+)r')
+    CAD = {}
+
+    def first_cadence(frm, sd):
+        """The first nestled cadence event on `sd` at or after `frm`. -> (bar, s0, tf)|None."""
+        if sd not in CAD:
+            ev = []
+            for e in F2.cadence_events(LN, int(sd), 0, NB):
+                mm = NEST.search(str(e[2]))
+                assert mm, 'the nestle clause is not in the why string'
+                ev.append((int(e[0]), int(e[1]), int(mm.group(1))))
+            CAD[sd] = sorted(ev)
+        arr = CAD[sd]
+        i = _bisect.bisect_left([z[0] for z in arr], int(frm))
+        return arr[i] if i < len(arr) else None
+
     _piv, _tr = TA.pseudo_trades()
     flips = []
     for _o, _c, _s in _tr:
@@ -1385,18 +1411,23 @@ def pseudo_table(LN, day, offs='2', start='1', prong=None):
                   'off"*. The next flip at or after an exhaust opens the next trade'),
             R.row('the hop direction', 'UPWARDS only - FDM_HANDOFF_DIR %s, HIS 1111 ruling'
                   % str(K.FDM_HANDOFF_DIR)),
-            R.row('the rung the baton starts on', 'ws1' if str(start) == '1' else
-                  'the lowest candidate at the seed bar'),
-            R.row('that rung is UNRULED', 'a cadence event hands the walk its nestle line; a '
-                  'pivot signal has none. Both arms are reported'),
-            R.row('the span start for the towards read', 'the seed bar itself. MINE'),
+            R.row('from the flip to the chain', 'HIS 1111 - the walk goes from the trade open '
+                  'to the FIRST nestled cadence event on the trade\'s side, and the chain starts '
+                  'on THAT event\'s nestle line. No bound on that search'),
+            R.row('the rung the baton starts on', 'the nestle line of that cadence event. His '
+                  'update supersedes the `start` arm, which is ignored'),
+            R.row('the span start for the towards read', 'the cadence event\'s own window open, '
+                  'the same bar the cadence-seeded walk uses'),
             R.row('flips on the day', len(day_flips)), '']
     #   HIS 1111: *"add a column to show the TF handoff chain. that removes the `its rung` and
     #   `hops` columns"*. The chain carries both - its last rung IS `its rung` and its length
     #   less one IS `hops` - so keeping them would be the same fact in three places.
-    out += ['| the rule | # | the flip | its side | the rung it started on | the final handoff '
-            '| the TF handoff chain | the EXHAUST | flips skipped inside it |',
-            '|' + '---|' * 9]
+    #   HIS 1111, in two steps: *"add a column to show the TF handoff chain. that removes the
+    #   `its rung` and `hops` columns"*, then *"delete also the 'the rung it started' column"*.
+    #   The chain's FIRST rung is the one it started on, so that column was the same fact twice.
+    out += ['| the rule | # | the flip | its side | the first nestled cadence | its nestle '
+            '| the final handoff | the TF handoff chain | the EXHAUST | flips skipped inside it |',
+            '|' + '---|' * 10]
     tally = {}
     for rk, lab in RULES:
         done = -1
@@ -1406,24 +1437,23 @@ def pseudo_table(LN, day, offs='2', start='1', prong=None):
                 continue
             skipped = sum(1 for z, _ in day_flips[i + 1:] if z <= done)
             n += 1
-            if str(start) == '1':
-                t0 = 1
-            else:
-                c0 = candidates(0, int(fb), int(fsd), int(fb))
-                t0 = c0[0] if c0 else None
-            if t0 is None:
-                out.append('| %s | %d | %s | %s | NO CANDIDATE at the flip | - | - | - | 0 |'
+            cad = first_cadence(int(fb), int(fsd))
+            if cad is None:
+                out.append('| %s | %d | %s | %s | NO CADENCE EVENT ahead on this side | - | - '
+                           '| - | - | 0 |'
                            % (lab, n, ln.U(fb), 'HIGH' if fsd > 0 else 'LOW'))
                 done = int(fb)
                 continue
-            t, bar, last, hops, why = int(t0), int(fb), None, 0, ''
+            cb, cs0, t0 = cad
+            assert cb >= int(fb), 'the cadence event is before the trade open'
+            t, bar, last, hops, why = int(t0), int(cb), None, 0, ''
             chain = [int(t0)]
             while True:
                 mb = timer(rk, t, fsd, bar if last is None else bar + 1)
                 if mb is None or int(mb) > NB:
                     why = 'no timer event ahead'
                     break
-                cnd = candidates(t, int(mb), fsd, int(fb))
+                cnd = candidates(t, int(mb), fsd, int(cs0))
                 u = cnd[0] if cnd else None
                 if u is None:
                     why = ln.U(int(mb))
@@ -1438,8 +1468,8 @@ def pseudo_table(LN, day, offs='2', start='1', prong=None):
             tally[lab][0] += 1
             tally[lab][1] += sk
             tally[lab][2] += hops
-            out.append('| %s | %d | %s | %s | ws%d | %s | %s | %s | %d |'
-                       % (lab, n, ln.U(fb), 'HIGH' if fsd > 0 else 'LOW', t0,
+            out.append('| %s | %d | %s | %s | %s | ws%dr | %s | %s | %s | %d |'
+                       % (lab, n, ln.U(fb), 'HIGH' if fsd > 0 else 'LOW', ln.U(cb), t0,
                           ln.U(last) if last is not None else 'no handoff',
                           ' > '.join('ws%d' % z for z in chain), why, sk))
     out += ['']
