@@ -89,6 +89,7 @@ try:
     import v4_fdm_reentry as RE
     import ln
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__))))
+    sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1109_towards_away')
     import momo_render as R
     import xcv_report as XR
     import re_sigcache as SC
@@ -179,6 +180,10 @@ def answer(q):
         out += XR.jump_table(LN, str(q['day']), offs=str(q.get('offs', '2,3,4')),
                              path_at=q.get('path_at'), seed=q.get('seed'),
                              prong=q.get('prong'))
+        return out
+    if kind == 'pseudo':
+        out += XR.pseudo_table(LN, str(q['day']), offs=str(q.get('offs', '2')),
+                               start=str(q.get('start', '1')), prong=q.get('prong'))
         return out
     if kind == 'handoff':
         out += XR.handoff_table(LN, str(q['day']), offs=str(q.get('offs', '2,3,4')),

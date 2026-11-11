@@ -1272,6 +1272,170 @@ def jump_table(LN, day, offs='2', path_at=None, seed=None, prong=None):
                 t, bar, lastb = int(u), int(m3), int(m3)
     return out
 
+def pseudo_table(LN, day, offs='2', start='1', prong=None):
+    """HIS 1111: the handoff walk seeded on a pseudo rev-trade signal. -> [str].
+
+    GOAL: model a trade without a derived trade, so the walk's gaps show up against something
+    that opens and closes. HIS WORDS: *"do it: right now, it's our best chance of modelling a
+    trade to find where the mech's gaps are"*.
+
+    THE SIGNAL IS NOT MINE AND NOT REBUILT. `towards_away.pseudo_trades()` is the banked producer
+    - his 1109 *"use ws2Mage pivots... use the last/later pivot time to create the psuedo
+    rev-trade signal"* - already checked 19 of 19 against his own 2026-08-24 table. I read its
+    OPEN BAR and its SIDE and nothing else.
+
+    THE CLOSE BAR IS DELIBERATELY NOT READ. `pseudo_trades` returns one, and it is the NEXT
+    signal's bar: HIS 1111 *"it's also important that the code does not use the sweep pivot flip
+    bars as a target to meet"*. A walk bounded by it would be reading the future.
+
+    HIS TWO RULES ON WHAT A FLIP DOES, together:
+      *"when sweep pivot's direction flips, it is not an automatic cut off: the walk must
+      continue until an exhaust bar"*
+      *"if you have no open trade at the flip, open a trade at the flip and walk"*
+    So a flip that lands while a walk is still running is SKIPPED, and the next flip at or after
+    an exhaust opens the next one. Each rule exhausts on its own bar, so each rule gets its own
+    sequence of trades from the same list of flips - that is a consequence of his rules, not a
+    choice, and the skipped count is printed per rule.
+
+    `start` IS THE RUNG THE BATON STARTS ON AND IT IS UNRULED. A cadence event hands the walk the
+    ws{TF}r that qualified its nestle; a pivot signal has no nestle. '1' starts on ws1, 'board'
+    starts on the lowest candidate at the seed bar. Both are reported so he can rule on it.
+
+    CAUSAL: the seed bar and the side come from the pivot, which is at or before the seed; every
+    timer, candidate test and exhaust reads that bar or later and no bar beyond the one being
+    read. The close bar is never touched - an assert carries it.
+    """
+    out = []
+    import re as _re
+    import numpy as _np
+    import towards_away as TA
+    from optimus9.analysis import jig as _J7
+    OFF = int(str(offs).split(',')[0])
+    A, B = ln.K(day + ' 00:00:00'), ln.K(day + ' 23:59:55')
+    HI = int(LN['HI'])
+    MGHI = int(K.L2_MOM_MAGE_TOP)
+    NB = len(LN['close']) - 1
+    MST, RST, IBX = {}, {}, {}
+
+    def mstamps(t, sd):
+        if (t, sd) not in MST:
+            raw = _J7.lift_off(LN['MGE'][t], int(sd), K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL,
+                               K.LIFT_WOB)
+            MST[(t, sd)] = sorted(int(K.lift_stamp(int(x))) for x in raw)
+        return MST[(t, sd)]
+
+    def rstamps(t, sd):
+        if (t, sd) not in RST:
+            RST[(t, sd)] = sorted(int(x) for x in _np.asarray(LN['LIFT'][(t, int(sd))], int))
+        return RST[(t, sd)]
+
+    def ibcross(t, sd):
+        if (t, sd) not in IBX:
+            xs = _J7.oob_ib_cross(_np.asarray(LN['EMR'][t], float), K.OOB_HI, K.OOB_LO,
+                                  max(1, int(K.FDM_RE_IB_XWOB)))
+            IBX[(t, sd)] = sorted(int(cf) for _c, cf, sg in xs if int(sg) == int(sd))
+        return IBX[(t, sd)]
+
+    def nxt(arr, frm):
+        i = _bisect.bisect_left(arr, int(frm))
+        return arr[i] if i < len(arr) else None
+
+    def qualifies(u, bar, sd, s0):
+        if u > HI or not bool(F2.ex2080_line(LN, u, int(bar), int(sd), read=prong)):
+            return False
+        return _J7.fdm2_cad_mom_detector(LN['EMR'][u], LN['EMR'][u], int(bar), int(sd), int(s0),
+                                         K.LIFT_PTS, K.gap_for(u), K.LIFT_TOL, K.LIFT_WOB,
+                                         stamps=_np.asarray(LN['LIFT'][(u, int(sd))], int),
+                                         rev_since=int(s0))['state'] == 'towards'
+
+    def candidates(t, bar, sd, s0):
+        return [u for u in range(1, HI + 1) if u != int(t) and qualifies(u, bar, sd, s0)]
+
+    def timer(rule, t, sd, frm):
+        if rule == 'mage':
+            return None if t + OFF > MGHI else nxt(mstamps(t + OFF, sd), frm)
+        if rule == 'ib':
+            return nxt(ibcross(t, sd), frm)
+        if rule == 'rev':
+            return nxt(rstamps(t, sd), frm)
+        b = nxt(rstamps(t, sd), frm)
+        return None if b is None else int(b) + int(t) * 12
+
+    RULES = [('mage', 'ws{TF+%d}Mage reversal' % OFF), ('ib', 'ws{TF}r to ib'),
+             ('rev', 'ws{TF}r liftoff reversing')]
+    #   THE FLIPS. Only the open bar and the side are unpacked; `_c` is the next flip's bar and
+    #   reading it would be the lookahead he ruled out.
+    _piv, _tr = TA.pseudo_trades()
+    flips = []
+    for _o, _c, _s in _tr:
+        assert int(_c) > int(_o), 'a pseudo trade closes at or before it opens'
+        flips.append((int(_o), int(_s)))
+    day_flips = [(b, sd) for b, sd in flips if A <= b <= B]
+    out += ['', '# the handoff walk seeded on the pseudo rev-trade signal, ' + day, '']
+    out += [R.row('the signal', 'towards_away.pseudo_trades() - the LAST ws2Mage sweep-pivot of '
+                  'each same-side run. HIS 1109 mech, not rebuilt here'),
+            R.row('what I read from it', 'the OPEN bar and the SIDE. The close bar is never '
+                  'read - HIS 1111 *"does not use the sweep pivot flip bars as a target"*'),
+            R.row('a flip inside a running walk', 'SKIPPED - HIS 1111 *"not an automatic cut '
+                  'off"*. The next flip at or after an exhaust opens the next trade'),
+            R.row('the rung the baton starts on', 'ws1' if str(start) == '1' else
+                  'the lowest candidate at the seed bar'),
+            R.row('that rung is UNRULED', 'a cadence event hands the walk its nestle line; a '
+                  'pivot signal has none. Both arms are reported'),
+            R.row('the span start for the towards read', 'the seed bar itself. MINE'),
+            R.row('flips on the day', len(day_flips)), '']
+    out += ['| the rule | # | the flip | its side | the rung it started on | the final handoff '
+            '| its rung | hops | the EXHAUST | flips skipped inside it |',
+            '|' + '---|' * 10]
+    tally = {}
+    for rk, lab in RULES:
+        done = -1
+        n = 0
+        for i, (fb, fsd) in enumerate(day_flips):
+            if fb <= done:
+                continue
+            skipped = sum(1 for z, _ in day_flips[i + 1:] if z <= done)
+            n += 1
+            if str(start) == '1':
+                t0 = 1
+            else:
+                c0 = candidates(0, int(fb), int(fsd), int(fb))
+                t0 = c0[0] if c0 else None
+            if t0 is None:
+                out.append('| %s | %d | %s | %s | NO CANDIDATE at the flip | - | - | 0 | - | 0 |'
+                           % (lab, n, ln.U(fb), 'HIGH' if fsd > 0 else 'LOW'))
+                done = int(fb)
+                continue
+            t, bar, last, lastrung, hops, why = int(t0), int(fb), None, None, 0, ''
+            while True:
+                mb = timer(rk, t, fsd, bar if last is None else bar + 1)
+                if mb is None or int(mb) > NB:
+                    why = 'no timer event ahead'
+                    break
+                cnd = candidates(t, int(mb), fsd, int(fb))
+                u = cnd[0] if cnd else None
+                if u is None:
+                    why = ln.U(int(mb))
+                    break
+                assert last is None or int(mb) > int(last), 'a handoff reused a bar'
+                t, bar, last, lastrung, hops = int(u), int(mb), int(mb), int(u), hops + 1
+            done = int(bar)
+            sk = sum(1 for z, _ in day_flips[i + 1:] if z <= done)
+            tally[lab] = tally.get(lab, [0, 0, 0])
+            tally[lab][0] += 1
+            tally[lab][1] += sk
+            tally[lab][2] += hops
+            out.append('| %s | %d | %s | %s | ws%d | %s | %s | %d | %s | %d |'
+                       % (lab, n, ln.U(fb), 'HIGH' if fsd > 0 else 'LOW', t0,
+                          ln.U(last) if last is not None else 'no handoff',
+                          'ws%d' % lastrung if lastrung is not None else '-', hops, why, sk))
+    out += ['']
+    out += ['| the rule | trades opened | flips skipped | total hops |', '|' + '---|' * 4]
+    for rk, lab in RULES:
+        z = tally.get(lab, [0, 0, 0])
+        out.append('| %s | %d | %d | %d |' % (lab, z[0], z[1], z[2]))
+    return out
+
 def xcvmomo_table(LN, day):
     """HIS 1109: the xcv verdict and r-pred's verdict, per cadence event, on x AND on m. -> [str].
 
