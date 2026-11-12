@@ -114,6 +114,21 @@ HIS 1111 *"in the summary columns (16-22 and 22-30)"*: *"if any of the individua
 target-side at the print bar); the sum cell's third line, blank when none of its lines does. MINE: the TO:x AW:x
 line's style (10 px, weight 700, the cell's white text), not the cross row's yellow.
 
+HIS 1112 PIVOT BUTTON: *"I want a button at the top (on the right of the calenders), to toggle an offset in the UI.
+clikcing the button will move the pivots forward 15 minutes - eg 09-21 1616 becomes 09-21 1631, and return to the
+current state when I click the button again"*. The pivots are the ws2Mage pivots that make the pseudo trades (his
+example is the 2026-09-21 16:17:15 HIGH pivot). With the button on, every pivot is PIV_SHIFT (15 min) later, so every
+pseudo trade opens and closes 15 min later on the same side and towards/away runs again on those trades: the time
+cell's colour, TO/AW and (inf)/(exf), the sums' TO:x AW:x and TO(exf), the cross row's side, the TO -> AW flip and
+M-no-rev all follow. The r-pred numbers do not read the pseudo trade and stay as they are (asserted). The server
+builds both states at start-up; the page keeps each state's blocks apart and the button changes no scroll position -
+*"if you can make it that the toggle doesn't change the visible timestamp rows positioning inside the frame"*.
+MINE: the label "pivots +15 min", blue when on like the selected day; the last trade still closes at the tape's end.
+
+HIS 1112 TOWARDS/AWAY UPDATE: *"I want to see the flip from TO to AW based on the x and e cross."* No page change: the
+TO/AW codes come from towards_away.run, which now carries the 50 reset, the excursion sample on e and x, the void
+values, the row rule and the x/e path (spec section 12). Both pivot states read it.
+
 usage: rpred_ui.py [port]   then open http://127.0.0.1:<port>
 """
 import io
@@ -172,10 +187,15 @@ STRIDE = len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(
 #   its line's closed-prev value x 10 as an int16 in two bytes (low byte first), then the pseudo trade's target-side at the row's read bar: -1 LOW, +1 HIGH, 0 no trade
 
 
-def m_no_rev(sp, prt):
-    """HIS 1111 M-no-rev. -> (int8 [rows], int16 [rows]): the highest TF whose Mage qualifies at the row's print bar,
-    0 = none, and that line's CLOSED-PREV value there x 10 (HIS 1111 *"add the line's value to the text"*, his
-    example 1 dp), 0 where no TF prints.
+PIV_SHIFT = 15                  # minutes - HIS 1112 button: *"move the pivots forward 15 minutes"*
+OFFS = (0, PIV_SHIFT)           # the page's two states: the pivots as found, and every pivot PIV_SHIFT later
+
+
+def m_no_rev(sps, prt):
+    """HIS 1111 M-no-rev. -> [(int8 [rows], int16 [rows])], one per target-side array in sps: the highest TF whose
+    Mage qualifies at the row's print bar, 0 = none, and that line's CLOSED-PREV value there x 10 (HIS 1111 *"add
+    the line's value to the text"*, his example 1 dp), 0 where no TF prints. The lift-off reads do not depend on
+    the target-side, so both of the page's states share them.
 
     A ws{TF}Mage, ws1..ws30, qualifies on a row when, at the row's print bar:
       oob       its CLOSED-PREV value is at or beyond 85 high / 15 low on the row's target-side (the time cell's
@@ -189,8 +209,7 @@ def m_no_rev(sp, prt):
                 table's output"*, the 1111 table of every change from 2026-09-21 15:44:00, which read it that way
     """
     idx = np.arange(ln.N)
-    out = np.zeros(len(prt), np.int8)
-    val = np.zeros(len(prt), np.int16)
+    res = [[np.zeros(len(prt), np.int8), np.zeros(len(prt), np.int16)] for _ in sps]
     for t in range(1, MNR_TOP + 1):               # ascending, so the highest qualifying TF is the one left
         em = np.asarray(ln.line('ws%dMage' % t), float)
         cp = CP.series(em, t * 60)
@@ -205,17 +224,19 @@ def m_no_rev(sp, prt):
             last = np.where(k >= 0, st[np.clip(k, 0, None)], -1)
             assert (last <= idx).all(), 'a reversal is read before it is knowable'
             un = (oob & (last < cross))[prt]
-            q = (sp == sd) & un
-            out = np.where(q, t, out).astype(np.int8)
-            v10 = np.round(np.where(q, cp[prt], 0.0) * 10.0)
-            assert (np.abs(v10) < 32767).all(), 'a Mage value x 10 does not fit an int16'
-            val = np.where(q, v10, val).astype(np.int16)
-    return out, val
+            for r, sp in zip(res, sps):
+                q = (sp == sd) & un
+                r[0] = np.where(q, t, r[0]).astype(np.int8)
+                v10 = np.round(np.where(q, cp[prt], 0.0) * 10.0)
+                assert (np.abs(v10) < 32767).all(), 'a Mage value x 10 does not fit an int16'
+                r[1] = np.where(q, v10, r[1]).astype(np.int16)
+    return [tuple(r) for r in res]
 
 
 def build():
-    """-> (row open ms [n], [n, STRIDE] int8: r-pred per line, then the two sums, then the rest). Row i is the ws1
-    bar opening at t0 + 60 s * i."""
+    """-> (row open ms [n], {offset minutes: [n, STRIDE] int8 - r-pred per line, then the two sums, then the rest}).
+    Row i is the ws1 bar opening at t0 + 60 s * i. The r-pred bytes are the same in both; every byte that reads the
+    pseudo trade (its target-side, towards/away, the cross row's side, M-no-rev) is built per offset."""
     ts = np.asarray(ln.ts, np.int64)
     assert (np.diff(ts) == 5000).all(), 'the 5 s grid has a gap - a row would not be one ws1 bar'
     E = RS.load((RS.K0, RS.R0, RS.S0))           # fdm2's emerging r lines, ws1..ws30
@@ -235,44 +256,21 @@ def build():
     assert (np.diff(ts[first]) == 60000).all(), 'a ws1 bar is missing - row i would not be t0 + 60 s * i'
     prt = first + 12                             # HIS ANSWER: the cell is the value where closed-prev shows it
     assert (ts[prt] - ts[first] == 60000).all()
-    cols = [rpred(name)[prt] for name in LINES]
+    base = [rpred(name)[prt] for name in LINES]
     for _, tfs in SUMS:                          # the same read, summed: -7..+7 and -8..+8, fits int8
-        cols.append(np.sum([rpred('ws%d' % t)[prt].astype(int) for t in tfs], 0))
-    #   TOWARDS/AWAY at the same print bar: 0 no state, 1 TO, 2 AW, and +2 when the line is ex-20/80 on the
-    #   target-side there - 3 TO(exf), 4 AW(exf). Then per sum column the TO count and the AW count over its
-    #   lines, both -1 where no pseudo trade is open (no target-side, so nothing to count)
+        base.append(np.sum([rpred('ws%d' % t)[prt].astype(int) for t in tfs], 0))
     LN, piv, trades, ST, det = TA.build()
     print('towards/away: %d ws2Mage pivots, %d pseudo trades, first opens %s'
           % (len(piv), len(trades), ln.U(trades[0][0])))
-    side = np.zeros(ln.N, np.int8)
-    for o, c, s in trades:
-        side[o:c] = s
-    live = side != 0
-    sp = side[prt]
-
-    def exf_at(t):
-        #   HIS 1109 *"append `(inf)` or `(exf)`"*: ex-20/80 on the target-side by the banked reader - the
-        #   one the towards/away mech's own ex-fence test uses (closed-prev, or the emerging 60 s extreme)
-        return np.where(sp > 0, TA.exf_mask(LN, t, +1)[prt], TA.exf_mask(LN, t, -1)[prt]) & (sp != 0)
-    for name in LINES:
-        t = int(name[2:]) if name.startswith('ws') else 0
-        if t not in ST:
-            cols.append(np.zeros(len(prt), np.int8))
-            continue
-        st = ST[t][prt].astype(np.int8)
-        cols.append(np.where((st != TA.NONE) & exf_at(t), st + 2, st))
-    for _, tfs in SUMS:
-        for code in (TA.TO, TA.AW):
-            n = np.sum([(ST[t][prt] == code).astype(int) for t in tfs], 0)
-            cols.append(np.where(live[prt], n, -1))
     #   HIS 1110 CROSS ROW: the e and x race wins per side over the whole tape, each put on the row of the ws1 bar it
-    #   lands in; the row's target-side picks which side prints - crossovers LOW, crossunders HIGH
+    #   lands in. They do not read the pseudo trade, so both states share them; the row's target-side picks
+    #   which side prints - crossovers LOW, crossunders HIGH
+    XC = {}
     for name in LINES:
         t = int(name[2:]) if name.startswith('ws') else 0
         if t not in ST:
-            cols.append(np.zeros(len(prt), np.int8))
             continue
-        code = {}
+        XC[name] = {}
         for sd in (-1, +1):
             race = LE.race(t, sd)
             c = np.zeros(len(prt), np.int8)
@@ -281,28 +279,76 @@ def build():
                 row = (wins - first[0]) // 12
                 row = row[(wins >= first[0]) & (row < len(prt))]
                 c[row] |= bit
-            code[sd] = c
-        xc = np.where(sp < 0, code[-1], np.where(sp > 0, code[+1], 0)).astype(np.int8)
-        #   HIS 1110 *"when a TF flips from TO to AW"*: +4 on the row that reads AW where the row before read TO;
-        #   that row only - *"the 'AW's in the following rows are treated normally"*
-        st = ST[t][prt]
-        xc[1:] |= 4 * ((st[:-1] == TA.TO) & (st[1:] == TA.AW)).astype(np.int8)
-        cols.append(xc)
-    #   HIS 1111 *"if any of the individual lines are printing TO(exf), print "TO(exf)" under the TO:x AW:x row"*:
-    #   per sum column, how many of its lines read TO(exf) - the code a ws1..ws15 cell prints as TO(exf)
-    for _, tfs in SUMS:
-        cols.append(np.sum([((ST[t][prt] == TA.TO) & exf_at(t)).astype(int) for t in tfs], 0))
-    mn, mv = m_no_rev(sp, prt)                   # HIS 1111 M-no-rev: the highest qualifying TF, 0 none, and its value
-    cols.append(mn)
-    cols.append((mv & 0xFF).astype(np.uint8).view(np.int8))
-    cols.append((mv >> 8).astype(np.int8))
-    cols.append(side[prt])                       # HIS 1109: the time cell's 20% colour, red LOW, green HIGH
-    return ts[first], np.ascontiguousarray(np.stack(cols, 1).astype(np.int8)), ln.U(trades[0][0])
+            XC[name][sd] = c
+    #   HIS 1112 *"move the pivots forward 15 minutes"*: every ws2Mage pivot PIV_SHIFT later, so every pseudo trade
+    #   opens and closes PIV_SHIFT later on the same side, and towards/away runs again on those trades. The last
+    #   trade still closes at the tape's end
+    STATES = []
+    for off in OFFS:
+        k = off * 12                             # 5 s bars
+        tr = [(o + k, min(c + k, ln.N), s) for o, c, s in trades if o + k < ln.N]
+        STATES.append((tr, ST if not off else TA.run(LN, tr)[0]))
+        if off:
+            print('pivots +%d min: %d pseudo trades, first opens %s' % (off, len(tr), ln.U(tr[0][0])))
+    SIDES = []
+    for tr, _ in STATES:
+        side = np.zeros(ln.N, np.int8)
+        for o, c, s in tr:
+            side[o:c] = s
+        SIDES.append(side)
+    MNR = m_no_rev([side[prt] for side in SIDES], prt)
+    mats = {}
+    for off, (tr, ST), side, (mn, mv) in zip(OFFS, STATES, SIDES, MNR):
+        cols = list(base)
+        live = side != 0
+        sp = side[prt]
+
+        def exf_at(t):
+            #   HIS 1109 *"append `(inf)` or `(exf)`"*: ex-20/80 on the target-side by the banked reader - the
+            #   one the towards/away mech's own ex-fence test uses (closed-prev, or the emerging 60 s extreme)
+            return np.where(sp > 0, TA.exf_mask(LN, t, +1)[prt], TA.exf_mask(LN, t, -1)[prt]) & (sp != 0)
+        #   TOWARDS/AWAY at the same print bar: 0 no state, 1 TO, 2 AW, and +2 when the line is ex-20/80 on the
+        #   target-side there - 3 TO(exf), 4 AW(exf). Then per sum column the TO count and the AW count over its
+        #   lines, both -1 where no pseudo trade is open (no target-side, so nothing to count)
+        for name in LINES:
+            t = int(name[2:]) if name.startswith('ws') else 0
+            if t not in ST:
+                cols.append(np.zeros(len(prt), np.int8))
+                continue
+            st = ST[t][prt].astype(np.int8)
+            cols.append(np.where((st != TA.NONE) & exf_at(t), st + 2, st))
+        for _, tfs in SUMS:
+            for code in (TA.TO, TA.AW):
+                n = np.sum([(ST[t][prt] == code).astype(int) for t in tfs], 0)
+                cols.append(np.where(live[prt], n, -1))
+        for name in LINES:
+            if name not in XC:
+                cols.append(np.zeros(len(prt), np.int8))
+                continue
+            xc = np.where(sp < 0, XC[name][-1], np.where(sp > 0, XC[name][+1], 0)).astype(np.int8)
+            #   HIS 1110 *"when a TF flips from TO to AW"*: +4 on the row that reads AW where the row before read TO;
+            #   that row only - *"the 'AW's in the following rows are treated normally"*
+            st = ST[int(name[2:])][prt]
+            xc[1:] |= 4 * ((st[:-1] == TA.TO) & (st[1:] == TA.AW)).astype(np.int8)
+            cols.append(xc)
+        #   HIS 1111 *"if any of the individual lines are printing TO(exf), print "TO(exf)" under the TO:x AW:x row"*:
+        #   per sum column, how many of its lines read TO(exf) - the code a ws1..ws15 cell prints as TO(exf)
+        for _, tfs in SUMS:
+            cols.append(np.sum([((ST[t][prt] == TA.TO) & exf_at(t)).astype(int) for t in tfs], 0))
+        cols.append(mn)                          # HIS 1111 M-no-rev: the highest qualifying TF, 0 none, and its value
+        cols.append((mv & 0xFF).astype(np.uint8).view(np.int8))
+        cols.append((mv >> 8).astype(np.int8))
+        cols.append(side[prt])                   # HIS 1109: the time cell's 20% colour, red LOW, green HIGH
+        mats[off] = np.ascontiguousarray(np.stack(cols, 1).astype(np.int8))
+    return ts[first], mats
 
 
 T0 = time.time()
-OPEN, RP, _ = build()
-assert RP.shape[1] == STRIDE
+OPEN, MATS = build()
+RP = MATS[0]                                    # the pivots as found - every check below reads it
+assert all(m.shape == RP.shape for m in MATS.values()) and RP.shape[1] == STRIDE
+assert all(np.array_equal(m[:, :len(LINES) + len(SUMS)], RP[:, :len(LINES) + len(SUMS)]) for m in MATS.values()), \
+    'the r-pred bytes differ between the two pivot states'
 DAYS = []
 for i, ms in enumerate(OPEN):
     d = time.strftime('%Y-%m-%d', time.gmtime(int(ms) // 1000))
@@ -313,7 +359,7 @@ TAC = RP[:, len(LINES) + len(SUMS):2 * len(LINES) + len(SUMS)]
 U = lambda ms: time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(int(ms) // 1000))
 META = json.dumps({
     'lines': LINES, 'mnr': MNR_LABEL, 'sums': [s for s, _ in SUMS], 'stride': STRIDE, 'rows': int(len(OPEN)), 't0': int(OPEN[0]), 'step': 60000,
-    'days': DAYS})
+    'days': DAYS, 'shift': PIV_SHIFT})
 
 
 class H(BaseHTTPRequestHandler):
@@ -333,8 +379,12 @@ class H(BaseHTTPRequestHandler):
             return self._send(META.encode(), 'application/json')
         if self.path.startswith('/rows'):
             q = dict(kv.split('=') for kv in self.path.split('?', 1)[1].split('&'))
-            a = max(0, int(q['start'])); b = min(len(RP), a + max(0, int(q['count'])))
-            return self._send(RP[a:b].tobytes(), 'application/octet-stream')    # STRIDE bytes per row
+            m = MATS.get(int(q.get('off', 0)))  # HIS 1112: 0 the pivots as found, PIV_SHIFT every pivot moved
+            if m is None:
+                self.send_error(400, 'off must be one of %s' % (OFFS,))
+                return
+            a = max(0, int(q['start'])); b = min(len(m), a + max(0, int(q['count'])))
+            return self._send(m[a:b].tobytes(), 'application/octet-stream')    # STRIDE bytes per row
         return self._send(PAGE.encode(), 'text/html; charset=utf-8')
 
 
@@ -363,6 +413,10 @@ h1{font-size:15px;margin:0 0 8px;font-weight:600}
 .grid button:hover{border-color:var(--sel)}
 .grid button:disabled{color:var(--dis);border-color:transparent;cursor:default}
 .grid button.on{background:var(--sel);border-color:var(--sel);color:var(--bg);font-weight:600}
+.tog{align-self:flex-start;height:26px;padding:0 12px;border:1px solid var(--line);background:var(--bg);color:var(--fg);
+  border-radius:4px;font:12px system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+.tog:hover{border-color:var(--sel)}
+.tog.on{background:var(--sel);border-color:var(--sel);color:var(--bg);font-weight:600}
 .status{display:flex;gap:18px;color:var(--mut);font-size:12px;margin:4px 0 6px;font-variant-numeric:tabular-nums}
 .box{flex:1 1 0;min-height:320px;border:1px solid var(--line);border-radius:6px;overflow-y:auto;overflow-x:hidden;position:relative;overflow-anchor:none}
 .inner{min-width:0}
@@ -415,20 +469,22 @@ const pool = [];
 let lastTop = 0, dir = 1, raf = 0, dayOn = '';
 const NB = '\u00a0';   // HIS 1110: the place holder line - a blank line keeps a cell's 3 lines aligned
 let sel = -1;           // HIS 1110: the clicked row, highlighted; a click on another row moves it, on the same row clears it
+let OFF = 0;            // HIS 1112: minutes the pivots are moved forward - 0 as found, meta.shift with the button on
 
 const fmt = ms => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
 
 function fetchBlock(b) {
-  if (b < 0 || b * BLOCK >= meta.rows || cache.has(b) || pending.has(b)) return;
-  pending.add(b);
-  fetch('rows?start=' + (b * BLOCK) + '&count=' + BLOCK)
+  const off = OFF, key = off + ':' + b;          // HIS 1112: each pivot state keeps its own blocks
+  if (b < 0 || b * BLOCK >= meta.rows || cache.has(key) || pending.has(key)) return;
+  pending.add(key);
+  fetch('rows?start=' + (b * BLOCK) + '&count=' + BLOCK + '&off=' + off)
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
-    .then(buf => { pending.delete(b); cache.set(b, new Int8Array(buf)); evict(); schedule(); })
-    .catch(e => { pending.delete(b); document.getElementById('err').textContent = 'fetch failed: ' + e.message; });
+    .then(buf => { pending.delete(key); cache.set(key, new Int8Array(buf)); evict(); schedule(); })
+    .catch(e => { pending.delete(key); document.getElementById('err').textContent = 'fetch failed: ' + e.message; });
 }
 function getBlock(b) {
-  const a = cache.get(b);
-  if (a) { cache.delete(b); cache.set(b, a); }   // most recently used goes to the back
+  const key = OFF + ':' + b, a = cache.get(key);
+  if (a) { cache.delete(key); cache.set(key, a); }   // most recently used goes to the back
   return a;
 }
 function evict() {
@@ -570,6 +626,18 @@ async function init() {
   //   after the body's height, so the vertical scrollbar is in the box's width
   document.querySelector('.wrap').style.maxWidth = (tw + box.offsetWidth - box.clientWidth + 32) + 'px';
   buildCal();
+  //   HIS 1112 *"I want a button at the top (on the right of the calenders), to toggle an offset in the UI"*. The
+  //   scroll position is not touched, so the rows on screen stay where they are and only their cells change
+  const tg = document.createElement('button'); tg.className = 'tog'; tg.textContent = 'pivots +' + meta.shift + ' min';
+  tg.title = 'move every ws2Mage pivot ' + meta.shift + ' minutes forward; click again for the pivots as found';
+  tg.setAttribute('aria-pressed', 'false');
+  tg.onclick = () => {
+    OFF = OFF ? 0 : meta.shift;
+    tg.classList.toggle('on', OFF > 0); tg.setAttribute('aria-pressed', String(OFF > 0));
+    for (const p of pool) p.ok = false;
+    schedule();
+  };
+  document.getElementById('cal').appendChild(tg);
   box.addEventListener('scroll', schedule, {passive: true});
   body.addEventListener('click', e => {           // HIS 1110: *"make a row highlighted if I click on that row"*
     const el = e.target.closest('.row'), p = el && pool.find(q => q.el === el);
@@ -613,6 +681,10 @@ if __name__ == '__main__':
               % (label, int((_ex > 0).sum()), len(_ex), int(_ex.max())))
     print('M-no-rev (ws1..ws%dMage): rows printing a TF %d of %d, highest TF printed %d, value %.1f .. %.1f'
           % (MNR_TOP, int((_mn > 0).sum()), len(_mn), int(_mn.max()), _mv[_mn > 0].min() / 10, _mv[_mn > 0].max() / 10))
+    for _off in OFFS[1:]:
+        _m = MATS[_off]
+        print('pivots +%d min: rows whose target-side differs from the pivots as found %d of %d, cells that differ %d of %d'
+              % (_off, int((_m[:, STRIDE - 1] != RP[:, STRIDE - 1]).sum()), len(RP), int((_m != RP).sum()), RP.size))
     print('towards/away knobs (banked): ' + ' '.join('%s=%s' % (k, v) for k, v, _, _ in TA.KNOBS))
     print('open http://127.0.0.1:%d' % PORT)
     sys.stdout.flush()

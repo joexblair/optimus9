@@ -67,6 +67,28 @@ THE PIECES, in firing order:
                   (the same as going past it). Strictly past 50 both ways - no bar on the tape sits at exactly 50.00
                   on ws1r..ws30r, emerging or closed-prev, so the choice moves nothing.
 
+THE 1112 UPDATE, HIS *"I want to see the flip from TO to AW based on the x and e cross."* Each piece has its own knob in
+ta_knobs; all of them off is the bank before it, exactly (spec section 12).
+  the 50 reset    HIS *"when ws3r passed under 50 (the counter-side of 50), that 2124 extremum should be nulled until a
+                  new one is built."* A pass to the counter side of 50 (emerging r, FLIP50_READ) ends the hunt and
+                  nulls its ex-20/80 reach; the first bar back on the target side starts a fresh hunt - scenario 2
+                  samples again, and only samples at or after that bar pair. A new reach shuts the hunt again. The
+                  trade's open always starts the first hunt (his *"the mech says that all lines are reset to TO when a
+                  trade opens"*). Scenario 1 stores a voting extremum only inside a reached hunt, pivot inside it.
+  the sample      HIS *"e or x creates a timestamp when it crosses the first racer.  that timestamp is when you sample
+                  ws3r"* / *"the missing piece that you need: the ws{any TF}e or x extremum is contained to the latest
+                  target-side oob excursion"*: ws{TF}r at the crossing line's most extreme bar of its latest run at or
+                  beyond 85 (HIGH) / 15 (LOW), clipped at the hunt's start (SAMPLE_AT 'excursion'). ws{TF}x race wins
+                  sample too, one sequence with e's (SAMPLE_X). Lift-off's own e path keeps its walk back.
+  void            HIS *"values from the counter side of 50 are void"*: such a sample is skipped; the next pairs with the
+                  last valid one (VOID50).
+  the row rule    HIS *"if there >=3 TFs printing a x or e cross in the same row, the under-lines test is automatically
+                  qualified"* / *"ws1 to ws6, and >=2 TFs must print x and e in the same row"* (ROWX).
+  the x/e path    HIS *"the pre x/e cross sample is the extremum and the test for AW(inf) follows the existing flow"*:
+                  an X and an E race win of the line in one ws1 bar, where no pair fired on the later one; the
+                  extremum is the latest natural lift-off pivot stamped inside the hunt before the earlier one;
+                  in-fence, not void, the under-lines test or the row rule; AW from the later cross (XE_PATH).
+
 MINE, each one flagged here and in the report:
     - an extremum is superseded by going STRICTLY past it (knob SUPERSEDE 'strict'). Equal is not past: under
       9B the second sample can be the stored extremum itself, and 'inclusive' would end the AW on the bar it starts.
@@ -126,6 +148,7 @@ NONE, TO, AW = 0, 1, 2                          # the state codes. NONE = no tra
 R50 = {'emerging': 'EMR', 'closed_prev': 'CPR'}[TK.FLIP50_READ]   # the r read his flip at 50 uses
 SIDE = {+1: 'HIGH', -1: 'LOW'}
 assert TK.SUPERSEDE in ('strict', 'inclusive')
+assert TK.SAMPLE_AT in ('walkback', 'excursion'), TK.SAMPLE_AT
 
 
 #   THE e LINES live in v4_ws_e (the line cache, with its 1109 known-good control numbers), and the e-sample
@@ -240,40 +263,150 @@ def first_back50(r50, a, z, side):
     return a + int(f[0]) + 1 + int(g[0]) if g.size else z
 
 
+def hunts(r50, o, c, s):
+    """HIS 1112 THE 50 RESET: the trade's hunts. -> [(start, end)], bar order.
+
+    A pass is a bar strictly on the counter side of FLIP50_LEVEL (under it on a HIGH target-side) whose bar before is
+    not. It ends the hunt it falls in and nulls that hunt's ex-20/80 reach. The first bar strictly back on the target
+    side after it starts a fresh hunt - his *"so it starts hunting for an infence extremum while its trying to reach
+    exfence"*. The bars between are no hunt. The trade's open always starts the first hunt, wherever r is - his
+    *"the mech says that all lines are reset to TO when a trade opens"*. One hunt, [o, c), when RESET50 is 0.
+    """
+    if not TK.RESET50:
+        return [(o, c)]
+    lv = TK.FLIP50_LEVEL
+    seg = r50[o:c]
+    with np.errstate(invalid='ignore'):
+        far = (seg > lv) if s < 0 else (seg < lv)
+        near = (seg < lv) if s < 0 else (seg > lv)
+    P = np.flatnonzero(far[1:] & ~far[:-1]) + 1                   # the passes, as offsets from o
+    Q = np.flatnonzero(near)                                       # the target-side bars
+    out, a = [], 0
+    while True:
+        k = int(np.searchsorted(P, a, side='right'))
+        if k == len(P):
+            out.append((o + a, c))
+            return out
+        p = int(P[k])
+        out.append((o + a, o + p))
+        m = int(np.searchsorted(Q, p, side='right'))
+        if m == len(Q):
+            return out
+        a = int(Q[m])
+
+
+def oob_runs(line, side):
+    """The crossing line's target-side oob runs, for excursion_peak. -> (last oob bar at or before each bar, or -1;
+    the first bar of the run each oob bar sits in). At or beyond OOB_HI on a HIGH side, OOB_LO on a LOW one."""
+    with np.errstate(invalid='ignore'):
+        oob = (line >= K.OOB_HI) if side > 0 else (line <= K.OOB_LO)
+    idx = np.arange(len(line))
+    last = np.maximum.accumulate(np.where(oob, idx, -1))
+    start = oob & ~np.concatenate([[False], oob[:-1]])
+    return last, np.maximum.accumulate(np.where(start, idx, -1))
+
+
+def excursion_peak(line, runs, a, b, side):
+    """HIS 1112 *"the missing piece that you need: the ws{any TF}e or x extremum is contained to the latest target-side
+    oob excursion"*. -> the bar of the line's most extreme value in its latest oob run that has a bar in [a, b], clipped
+    at a (his answer: an excursion before the hunt's start gives nothing), or None. The first bar on a tie."""
+    last, first = runs
+    z = int(last[b])
+    if z < a:
+        return None
+    st = max(int(first[z]), a)
+    seg = line[st:z + 1]
+    return st + int(np.nanargmax(seg) if side > 0 else np.nanargmin(seg))
+
+
+def void50(v, side):
+    """HIS 1112 *"values from the counter side of 50 are void"*: strictly on the counter side of FLIP50_LEVEL. -> bool.
+    Never void when VOID50 is 0."""
+    if not TK.VOID50 or not np.isfinite(v):
+        return False
+    return v < TK.FLIP50_LEVEL if side > 0 else v > TK.FLIP50_LEVEL
+
+
+def row_rule(LN):
+    """HIS 1112 THE ROW RULE, ready to ask. -> f(b, side) -> (qualifies, TFs crossing, TFs with X and E), or None
+    when ROWX is 0.
+
+    *"if there >=3 TFs printing a x or e cross in the same row, the under-lines test is automatically qualified"* /
+    *"ws1 to ws6, and >=2 TFs must print x and e in the same row"*. PRINTING is the web UI's cross row: ws{TF}e and
+    ws{TF}x race wins over the whole tape, on the row's target-side. The row is the ws1 bar holding b, and only its
+    crosses at or before b count - a later cross in the row has not printed on bar b.
+    """
+    if not TK.ROWX:
+        return None
+    TS = np.asarray(ln.ts, np.int64)
+    first = np.flatnonzero((TS % 60000) == 0)
+    cum = {}
+    for t in range(TK.ROWX_TF_LO, TK.ROWX_TF_HI + 1):
+        for s in (-1, +1):
+            race = LE.race(t, s)
+            for lab, line in (('X', np.asarray(ln.line('ws%dx' % t), float)), ('E', LN['E'][t])):
+                hit = np.zeros(ln.N, np.int32)
+                hit[[b for b, _ in JIG.e_race_wins(line, race, s)]] = 1
+                cum[(t, s, lab)] = np.concatenate([[0], np.cumsum(hit)])
+
+    def ask(b, s):
+        k = int(np.searchsorted(first, b, side='right')) - 1
+        a = int(first[k]) if k >= 0 else 0
+        n_any = n_both = 0
+        for t in range(TK.ROWX_TF_LO, TK.ROWX_TF_HI + 1):
+            hx = cum[(t, s, 'X')][b + 1] > cum[(t, s, 'X')][a]
+            he = cum[(t, s, 'E')][b + 1] > cum[(t, s, 'E')][a]
+            n_any += hx or he
+            n_both += hx and he
+        return n_any >= TK.ROWX_MIN and n_both >= TK.ROWX_BOTH, n_any, n_both
+    return ask
+
+
 def run(LN, trades):
     """The mech over the whole tape. -> (STATE {tf: int8 array}, detail).
 
-    detail['reach'][t][k]   the bar ws{t}r reached ex-20/80 in trade k, or the trade's close if it never did
+    detail['reach'][t][k]   the bar ws{t}r first reached ex-20/80 in trade k, or the trade's close if it never did
+    detail['hunts'][t][k]   HIS 1112 the trade's hunts: [(start, end, reach)] - reach is None when the hunt ended
+                            without one (a pass to the counter side of 50, or the close)
     detail['s1'][t][k]      scenario 1's voting extrema: [(stamp, pivot, value, 'lift'|'e', stored?)]
-    detail['samples'][t][k] the e-samples: [(cross bar, ws{t}r at the walk-back bar, race line(s), walk-back bar)]
-    detail['s2'][t][k]      scenario 2's triggers: [(bar, extremum, the AW lines under, AW to)]
+    detail['samples'][t][k] the samples: [(cross bar, ws{t}r sample, race line(s), sample bar, 'E'|'X', hunt, void?)]
+    detail['s2'][t][k]      scenario 2's triggers: [(bar, extremum, the AW lines under, AW to, 'pair'|'xe', row rule)]
     """
     N = ln.N
     AW1 = {t: np.zeros(N, bool) for t in TFS}
-    det = {k: {t: {} for t in TFS} for k in ('reach', 's1', 'samples', 's2')}
+    det = {k: {t: {} for t in TFS} for k in ('reach', 'hunts', 's1', 'samples', 's2')}
     det['ties'] = 0
     EXF = {(t, s): exf_mask(LN, t, s) for t in TFS for s in (-1, +1)}
     LIFT = {(t, s): lift_extrema(LN, t, s) for t in TFS for s in (-1, +1)}
     LIFTE = {(t, s): lift_extrema_e(LN, t, s) for t in TFS for s in (-1, +1)}
+    ROW = row_rule(LN)
     more = lambda v, x, s: (v > x) if s > 0 else (v < x)          # v more extreme than x on side s
     #   scenario 1, every line first - scenario 2 reads the lines under it
     for t in TFS:
         r, r50 = LN['EMR'][t], LN[R50][t]
         end = lambda a, z, x, s: min(first_past(r, a, z, x, s), first_back50(r50, a, z, s))
         for k, (o, c, s) in enumerate(trades):
-            f = np.flatnonzero(EXF[(t, s)][o:c])
-            reach = o + int(f[0]) if f.size else c
-            det['reach'][t][k] = reach
+            #   HIS 1112 THE 50 RESET: each hunt has its own ex-20/80 reach; a pass to the counter side nulls it
+            H = []
+            for a, z in hunts(r50, o, c, s):
+                f = np.flatnonzero(EXF[(t, s)][a:z])
+                H.append((a, z, a + int(f[0]) if f.size else None))
+            det['hunts'][t][k] = H
+            det['reach'][t][k] = next((h[2] for h in H if h[2] is not None), c)
             ev = []
             for kind, (st, pv, val) in (('lift', LIFT[(t, s)]), ('e', LIFTE[(t, s)])):
                 for i in range(np.searchsorted(st, o), np.searchsorted(st, c)):
-                    #   HIS "no vote" (and 1110 5A for the e path): only an ex-20/80 extremum votes
-                    if pv[i] >= o and bool(vote(val[i], s)):
-                        ev.append((int(st[i]), 0 if kind == 'lift' else 1, int(pv[i]), float(val[i]), kind))
+                    #   HIS "no vote" (and 1110 5A for the e path): only an ex-20/80 extremum votes. It is stored only
+                    #   while its hunt has reached ex-20/80, and its pivot is inside that hunt - HIS 1112, a value from
+                    #   before the return over 50 is wiped
+                    h = next((h for h in H if h[0] <= st[i] < h[1]), None)
+                    if h is None or pv[i] < h[0] or not bool(vote(val[i], s)):
+                        continue
+                    assert h[2] is not None and st[i] >= h[2], 'a voting extremum stamped before its line reached ex-20/80'
+                    ev.append((int(st[i]), 0 if kind == 'lift' else 1, int(pv[i]), float(val[i]), kind))
             ev.sort()
             out, cur, seg = [], None, None
             for a, _, p, x, kind in ev:
-                assert a >= reach, 'a voting extremum stamped before its line reached ex-20/80'
                 if cur is not None:
                     z = end(seg, a, cur, s)
                     AW1[t][seg:z] = True
@@ -291,43 +424,98 @@ def run(LN, trades):
                 z = end(seg, c, cur, s)
                 AW1[t][seg:z] = True
             det['s1'][t][k] = out
+    TS = np.asarray(ln.ts, np.int64)
+    first = np.flatnonzero((TS % 60000) == 0)                      # the ws1 bars - the web UI's rows
     STATE = {}
     for t in TFS:
-        r, e, r50 = LN['EMR'][t], LN['E'][t], LN[R50][t]
+        r, r50 = LN['EMR'][t], LN[R50][t]
         under = [u for u in range(max(TK.TF_LO, t - TK.UNDER), t)]
+        lines = {'E': LN['E'][t]}
+        if TK.SAMPLE_X:
+            lines['X'] = np.asarray(ln.line('ws%dx' % t), float)
         AW2 = np.zeros(N, bool)
         for s in (-1, +1):
             race = LE.race(t, s)
-            prep = JIG.e_race_prep(e, race, s)
+            prep = {lab: JIG.e_race_prep(line, race, s) for lab, line in lines.items()}
+            runs = {lab: oob_runs(line, s) for lab, line in lines.items()} if TK.SAMPLE_AT == 'excursion' else None
+            lst, lpv, lval = LIFT[(t, s)]
+
+            def under_test(b):
+                """The existing >1 of the 5 lines under reading AW, or HIS 1112 row rule. -> (passes, AW lines, row)."""
+                aw = [u for u in under if AW1[u][b]]
+                rw = ROW(b, s) if ROW is not None else (False, 0, 0)
+                return len(aw) > TK.UNDER_GT or rw[0], aw, rw[0]
+
             for k, (o, c, ts) in enumerate(trades):
                 if ts != s:
                     continue
-                reach = det['reach'][t][k]
-                #   HIS 1110 4A: the e-sample is ws{TF}r at his walk-back bar - the bar ws{TF}e was most extreme
-                #   before the cross - knowable on the cross bar. The race starts open at the trade's open
-                smp = []
-                for b, hit in JIG.e_race_wins(e, race, s, a=o, z=reach, prep=prep):
-                    det['ties'] += len(hit) > 1
-                    w = JIG.e_walk_back(e, b, s, TK.E_STEP)
-                    v = float(r[w]) if w is not None else float('nan')
-                    smp.append((int(b), v, '+'.join(race[n][0] for n in hit), w))
+                smp, trig = [], []
+                for hi, (ha, hz, hr) in enumerate(det['hunts'][t][k]):
+                    zz = hr if hr is not None else hz                  # the hunt samples until its reach
+                    #   HIS 1110 4A / 1112: each race win of the hunt's own race - it starts open at the hunt's start -
+                    #   is a sample. X before E on one bar, the cross row's order
+                    hs = []
+                    for lab, line in lines.items():
+                        for b, hit in JIG.e_race_wins(line, race, s, a=ha, z=zz, prep=prep[lab]):
+                            det['ties'] += len(hit) > 1
+                            if TK.SAMPLE_AT == 'excursion':
+                                w = excursion_peak(line, runs[lab], ha, b, s)
+                            else:
+                                w = JIG.e_walk_back(line, b, s, TK.E_STEP)
+                            v = float(r[w]) if w is not None else float('nan')
+                            hs.append((int(b), v, '+'.join(race[n][0] for n in hit), w, lab, hi, void50(v, s)))
+                    hs.sort(key=lambda x: (x[0], x[4] != 'X'))
+                    smp += hs
+                    #   the pairs: each valid sample with the last valid one before it in this hunt (void skipped)
+                    ok = [x for x in hs if not x[6]]
+                    tb = set()
+                    for i in range(1, len(ok)):
+                        (b, v, _, _, _, _, _), (_, vp, _, _, _, _, _) = ok[i], ok[i - 1]
+                        if not (np.isfinite(v) and np.isfinite(vp)) or vote(v, s) or vote(vp, s):
+                            continue
+                        if abs(v - vp) > TK.PAIR_PTS:
+                            continue
+                        good, aw, rw = under_test(b)
+                        if good:
+                            trig.append([b, min(v, vp) if s < 0 else max(v, vp), aw, 'pair', rw, hi])
+                            tb.add(b)
+                    #   HIS 1112 THE x AND e PATH: an X and an E in one ws1 bar, at the later of the two; the extremum is
+                    #   the latest natural lift-off pivot stamped inside this hunt before the earlier one. Only where no
+                    #   pair fired on that bar - his "if this occurs"
+                    if TK.XE_PATH and TK.SAMPLE_X:
+                        rows = {}
+                        for x in hs:
+                            rk = int(np.searchsorted(first, x[0], side='right')) - 1
+                            rows.setdefault(rk, {}).setdefault(x[4], x[0])
+                        for rk in sorted(rows):
+                            if len(rows[rk]) < 2:
+                                continue
+                            b1, b2 = min(rows[rk].values()), max(rows[rk].values())
+                            if b2 in tb:
+                                continue
+                            i = int(np.searchsorted(lst, b1)) - 1           # the latest stamp before b1
+                            while i >= 0 and lpv[i] < ha:
+                                i -= 1
+                            if i < 0 or lst[i] < ha:
+                                continue
+                            v = float(lval[i])
+                            if not np.isfinite(v) or vote(v, s) or void50(v, s):
+                                continue
+                            good, aw, rw = under_test(b2)
+                            if good:
+                                trig.append([b2, v, aw, 'xe', rw, hi])
                 det['samples'][t][k] = smp
-                trig = []
-                for i in range(1, len(smp)):
-                    (b, v, _, _), (_, vp, _, _) = smp[i], smp[i - 1]
-                    if not (np.isfinite(v) and np.isfinite(vp)) or vote(v, s) or vote(vp, s):
-                        continue
-                    if abs(v - vp) > TK.PAIR_PTS:
-                        continue
-                    aw = [u for u in under if AW1[u][b]]
-                    if len(aw) > TK.UNDER_GT:               # his ">1"
-                        trig.append([b, min(v, vp) if s < 0 else max(v, vp), aw])
+                #   each trigger's AW runs to the next trigger, its hunt's reach, or the close - and ends sooner on
+                #   going past its extremum or the flip at 50
+                trig.sort(key=lambda g: g[0])
+                lim = {hi: (hr if hr is not None else c) for hi, (_, _, hr) in enumerate(det['hunts'][t][k])}
+                rows = []
                 for i, g in enumerate(trig):
-                    nxt = trig[i + 1][0] if i + 1 < len(trig) else reach
+                    nxt = min(trig[i + 1][0] if i + 1 < len(trig) else c, lim[g[5]])
                     z = min(first_past(r, g[0], nxt, g[1], s), first_back50(r50, g[0], nxt, s))
                     AW2[g[0]:z] = True
-                    g.append(z)
-                det['s2'][t][k] = [tuple(g) for g in trig]
+                    rows.append((g[0], g[1], g[2], z, g[3], g[4]))
+                det['s2'][t][k] = rows
         st = np.zeros(N, np.int8)
         for k, (o, c, s) in enumerate(trades):
             st[o:c] = TO
@@ -338,7 +526,6 @@ def run(LN, trades):
         assert not any(st[o] == AW for o, c, s in trades), ('a line reads AW on a trade\'s open bar', t)
         STATE[t] = st
     return STATE, det
-
 
 def build():
     """-> (LN, pivots, trades, STATE, detail), with the controls run."""

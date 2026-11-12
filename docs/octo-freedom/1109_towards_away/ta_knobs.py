@@ -64,6 +64,35 @@ FLIP50 = _knob('FLIP50', 1, int)
 FLIP50_LEVEL = _knob('FLIP50_LEVEL', 50.0)
 FLIP50_READ = _knob('FLIP50_READ', 'emerging', str)
 
+#   THE 1112 UPDATE, HIS *"I want to see the flip from TO to AW based on the x and e cross."* Each knob's 0 / 'walkback'
+#   is the bank before it, so all of them off reproduces it exactly (the control md5 in the spec, section 12).
+#   THE 50 RESET. HIS *"when ws3r passed under 50 (the counter-side of 50), that 2124 extremum should be nulled until a
+#   new one is built."* His answers: the ex-20/80 reach is what is nulled; the passes read emerging r (FLIP50_READ);
+#   the fresh hunt starts back on the target side, and only samples taken at or after that bar pair up
+RESET50 = _knob('RESET50', 1, int)
+#   THE SAMPLE. HIS *"e or x creates a timestamp when it crosses the first racer.  that timestamp is when you sample
+#   ws3r"* and *"the missing piece that you need: the ws{any TF}e or x extremum is contained to the latest target-side
+#   oob excursion"*: 'excursion' = ws{TF}r at the crossing line's most extreme bar of its latest run at or beyond
+#   OOB_LO / OOB_HI, clipped at the hunt's start (his answer). 'walkback' is the 1110 4A sample. Towards/away only -
+#   lift-off's e path keeps its walk back (his answer)
+SAMPLE_AT = _knob('SAMPLE_AT', 'excursion', str)
+#   HIS *"each e or x cross creates a sampled value"*: ws{TF}x race wins sample too, in one sequence with e's (his answer)
+SAMPLE_X = _knob('SAMPLE_X', 1, int)
+#   HIS *"values from the counter side of 50 are void"*: a sample or extremum value strictly on the counter side of
+#   FLIP50_LEVEL is void and skipped - the next sample pairs with the last valid one (his answer)
+VOID50 = _knob('VOID50', 1, int)
+#   THE ROW RULE. HIS *"if there >=3 TFs printing a x or e cross in the same row, the under-lines test is automatically
+#   qualified"* and *"ws1 to ws6, and >=2 TFs must print x and e in the same row"*; the line itself counts (his answer)
+ROWX = _knob('ROWX', 1, int)
+ROWX_TF_LO = _knob('ROWX_TF_LO', 1, int)
+ROWX_TF_HI = _knob('ROWX_TF_HI', 6, int)
+ROWX_MIN = _knob('ROWX_MIN', 3, int)
+ROWX_BOTH = _knob('ROWX_BOTH', 2, int)
+#   THE x AND e PATH. HIS *"the pre x/e cross sample is the extremum and the test for AW(inf) follows the existing flow"*.
+#   His answers: any race win; X and E in the same ws1 bar; the extremum is the latest natural lift-off pivot whose
+#   reversal stamped inside the current hunt, before the first of the two crosses; the full tests
+XE_PATH = _knob('XE_PATH', 1, int)
+
 #   THE RULED REGISTRY: knob -> (ruled value, units, provenance). check() compares the live value to it.
 RULED = {
     'TF_LO': (1, 'TF', 'his 1110 *"add ws1-3 to towards/away and liftoff, and update webUI"* (was 4, his 1109 10A)'),
@@ -81,6 +110,16 @@ RULED = {
     'FLIP50': (1, 'on/off', 'his 1110 *"the AW/TO logic needs refining"*'),
     'FLIP50_LEVEL': (50.0, 'r-points', 'his "past 50"'),
     'FLIP50_READ': ('emerging', 'read', 'his 1110 answer: emerging (closed-prev was the other choice)'),
+    'RESET50': (1, 'on/off', 'his 1112 50 reset: the reach is nulled at the pass, a fresh hunt at the return'),
+    'SAMPLE_AT': ('excursion', 'read', 'his 1112 *"the missing piece that you need: the ws{any TF}e or x extremum is contained to the latest target-side oob excursion"*'),
+    'SAMPLE_X': (1, 'on/off', 'his 1112 *"each e or x cross creates a sampled value"*'),
+    'VOID50': (1, 'on/off', 'his 1112 *"values from the counter side of 50 are void"*; answer: skipped'),
+    'ROWX': (1, 'on/off', 'his 1112 *"if there >=3 TFs printing a x or e cross in the same row, the under-lines test is automatically qualified"*'),
+    'ROWX_TF_LO': (1, 'TF', 'his 1112 *"ws1 to ws6, and >=2 TFs must print x and e in the same row"*'),
+    'ROWX_TF_HI': (6, 'TF', 'his 1112 ws1 to ws6'),
+    'ROWX_MIN': (3, 'TFs', 'his 1112 >=3 TFs'),
+    'ROWX_BOTH': (2, 'TFs', 'his 1112 >=2 TFs must print x and e'),
+    'XE_PATH': (1, 'on/off', 'his 1112 *"the pre x/e cross sample is the extremum and the test for AW(inf) follows the existing flow"*'),
 }
 
 

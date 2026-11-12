@@ -7,7 +7,7 @@ printing earlier and closer to the pivot"*.
 | item | state |
 |---|---|
 | banked | 1110, *"after that's validated, bank both mechs and make their configs the live machine"*. Knobs in `1022_v4/v4_lift_e.py`; an off-bank run refuses on import unless `W_LIFTE_EXPERIMENT=1` |
-| live | the lift-off we develop on: every v4 lift-off reader gets it (his 6B, *"SRP rules"*; 2A, *"if they move, they move"*) |
+| live | the lift-off we develop on: every v4 lift-off reader gets it (his 6B, *"SRP rules"*; 2A, *"if they move, they move"*). 1112: live on its current config, his *"make the machines (lift-off, webui, towards/away) live on their current configs"*. The towards/away 1112 update does not change it - towards/away takes its own excursion sample (his answer "Towards/away only") |
 | producer | `optimus9/analysis/jig.py`: `lift_off_e`, with `e_race_prep`, `e_race_wins`, `e_walk_back`. `lift_off` and `lift_off_pivot` take it as `e_path` |
 | the e line | `1022_v4/v4_ws_e.py`, shared with the towards/away mech (`1109_towards_away.md`) |
 

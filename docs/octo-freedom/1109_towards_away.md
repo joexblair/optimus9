@@ -13,6 +13,7 @@ stated yet; it goes on this line when he gives it.
 | output | the r-pred web UI, `docs/octo-freedom/1022_v4/out/rpred_ui.py`, port 8788 - section 7 |
 | 1110 | the lift-off update and ws1-3 are BANKED and LIVE - section 10, his *"after that's validated, bank both mechs and make their configs the live machine"*. The lift-off spec is `1110_lift_off_e.md` |
 | 1110 later | the flip at 50 - section 11, his *"the AW/TO logic needs refining"*. In the banked knobs as on (FLIP50 1) |
+| 1112 | the 50 reset, the excursion sample on e and x, void values, the row rule and the x/e path - section 12, his *"I want to see the flip from TO to AW based on the x and e cross."*. BANKED on, his answer "Bank it, UI shows it". LIVE 1112 on its current config, his *"make the machines (lift-off, webui, towards/away) live on their current configs"* |
 
 ---
 
@@ -97,6 +98,15 @@ is section 8. What stays:
 | FLIP50 | 1 | on/off | the flip at 50; 0 is the 1110 bank before it | his 1110 *"the AW/TO logic needs refining"* |
 | FLIP50_LEVEL | 50.0 | r-points | the level r crosses | his "past 50" |
 | FLIP50_READ | emerging | read | the r read for the 50 crosses | his 1110 answer (closed-prev was the other choice) |
+| RESET50 | 1 | on/off | 1112: a pass to the counter side of 50 nulls the hunt's ex-20/80 reach; the return starts a fresh hunt. 0 is the bank before | his 1112 *"when ws3r passed under 50 (the counter-side of 50), that 2124 extremum should be nulled until a new one is built."* |
+| SAMPLE_AT | excursion | read | 1112: the sample is ws{TF}r at the crossing line's most extreme bar of its latest oob run, clipped at the hunt's start. 'walkback' is the 1110 4A sample | his 1112 *"the missing piece that you need: the ws{any TF}e or x extremum is contained to the latest target-side oob excursion"* |
+| SAMPLE_X | 1 | on/off | 1112: ws{TF}x race wins make samples too, one sequence with e's | his 1112 *"each e or x cross creates a sampled value"*; answer "One sequence" |
+| VOID50 | 1 | on/off | 1112: a value strictly on the counter side of 50 is void and skipped | his 1112 *"values from the counter side of 50 are void"*; answer "Skipped" |
+| ROWX | 1 | on/off | 1112: the row rule passes the under-lines test | his 1112 *"if there >=3 TFs printing a x or e cross in the same row, the under-lines test is automatically qualified"* |
+| ROWX_TF_LO / ROWX_TF_HI | 1 / 6 | TF | the TFs the row rule counts | his 1112 *"ws1 to ws6, and >=2 TFs must print x and e in the same row"* |
+| ROWX_MIN | 3 | TFs | TFs printing an x or e cross in the row, the line itself included | his ">=3"; answer "Yes, it counts" |
+| ROWX_BOTH | 2 | TFs | of them, TFs printing both x and e in the row | his ">=2" |
+| XE_PATH | 1 | on/off | 1112: the x and e path | his 1112 *"the pre x/e cross sample is the extremum and the test for AW(inf) follows the existing flow"* |
 
 ### 4b. Read from their own homes (banked there, not re-declared)
 
@@ -129,14 +139,14 @@ is section 8. What stays:
 | rule | from |
 |---|---|
 | every line TO at the trade's open | his "automatically tagged as towards" |
-| ex-20/80 reached once stays reached for the trade | his "after having left ex-fence (during this trade)" |
+| ex-20/80 reached once stays reached for the trade - 1112: for the hunt; a pass to the counter side of 50 nulls it (RESET50) | his "after having left ex-fence (during this trade)"; his 1112 50 reset |
 | scenario 1's extremum = the lift-off reversal's pivot value, on emerging r, stored at its stamp | his answer 6 |
 | only an ex-20/80 extremum votes in scenario 1 | his "no vote" |
 | the LATEST voting extremum governs | his "latest extremum" |
 | e-cross: HIGH crosses UNDER, LOW crosses OVER | his "standard under or over cross rules" |
 | e-cross has no hold | his 3A |
 | first race line wins; re-opens on crossing back over it | his 4B |
-| pair = the latest two samples this trade | his 7A |
+| pair = the latest two samples this trade - 1112: this hunt, void ones skipped, e and x in one sequence | his 7A; his 1112 answers |
 | scenario 2 tested on the second sample's bar only | his 8A |
 | scenario 2 stores the more target-side sample | his 9B |
 | the pseudo signal = the last pivot of each same-side run | his "use the last/later pivot time" |
@@ -148,7 +158,7 @@ is section 8. What stays:
 | two race lines crossed on one bar = one sample; re-opens on crossing back over either (84,990 such samples) | MINE |
 | a sample is in-fence by its own value, same side | MINE |
 | a scenario-2 line that reaches ex-20/80 moves to scenario 1 | MINE, accepted 1109 |
-| each trade's race starts open | MINE |
+| each trade's race starts open - 1112: each hunt's race | MINE; his 1112 answer "Re-opens" |
 | a line with no emerging r value at the bar has no read | MINE |
 | fdm2-rline-enhance is not used | his pin |
 | the flip at 50 covers scenario 1 and scenario 2 | his 1110 answer |
@@ -204,6 +214,7 @@ read: *"this is a very helpful tool, and it's accurate"*.
 
 | item | value |
 |---|---|
+| live | HIS 1112 *"make the machines (lift-off, webui, towards/away) live on their current configs"*: fdm2-diag1 runs on its current config, with the 1112 towards/away and the pivot button, as the o9-rpred-ui service on port 8788 |
 | name | HIS 1111: *"name the webUI report: fdm2-diag1"* - BANKED 2026-11-12. The page title and heading carry it; the file (rpred_ui.py) and the o9-rpred-ui service keep their names |
 | server | `docs/octo-freedom/1022_v4/out/rpred_ui.py [port]`, stdlib ThreadingHTTPServer on 127.0.0.1, default port 8788. The page is inline (the seam_stream.py pattern) |
 | start-up | ~50 s: the r-pred matrix (~2 s) plus `towards_away.build()` with the e lines from the cache. Everything is held in memory; nothing is cached to disk by the UI, so a line change can never be served stale |
@@ -233,6 +244,7 @@ read: *"this is a very helpful tool, and it's accurate"*.
 | M-no-rev | HIS 1111: *"add a column between ws15 and ws16-22 that shows when a target-side oob line has not reversed"*, *"and the field will print the **highest** TF"*, *"if there is no Mage qualifying, don't print anything in the field"*. His answers: ws1..ws30Mage; the rule his 1111 table of every change from 2026-09-21 15:44:00 used (*"I asked for the ui update based on that table's output"*) - closed-prev at or beyond 85/15 on the row's target-side, no lift-off reversal (emerging Mage, banked knobs, no e path) knowable at or after the cross INTO oob; a line back inside 85/15 drops out. Read at the row's print bar. MINE: the TF on the number line, weight 600. HIS 1111 *"if the field is populated, add the line's value to the text"*: the line's closed-prev value at the row's print bar (the value the oob test reads), 1 dp as his example - ws23:100.0. MINE: the widest text is 65.0 px, so the column gives way to 68 px at least and the table's least width is 1,504 px (was 1,436 before M-no-rev) |
 | bold, brighter cross row | HIS 1111: *"update the x and e cross row:  make the text bold (and brighter if possible)"*. It was weight 700; now 900. Dark mode #c9a83a -> #ecc94b (MINE); light mode keeps #a68a00 |
 | TO(exf) under the sums | HIS 1111 *"in the summary columns (16-22 and 22-30)"*: *"if any of the individual lines are printing TO(exf), print "TO(exf)" under the TO:x AW:x row"*. A line reads TO(exf) as a ws1..ws15 cell prints it - TO, and ex-20/80 on the row's target-side by the banked reader - at the row's print bar; ws16..ws22 for ws16-22, ws23..ws30 for ws23-30. It prints on the cell's third line, blank when none. MINE: the TO:x AW:x line's style (10 px, weight 700, the cell's white text), not the cross row's yellow |
+| pivot button | HIS 1112: *"I want a button at the top (on the right of the calenders), to toggle an offset in the UI. clikcing the button will move the pivots forward 15 minutes - eg 09-21 1616 becomes 09-21 1631, and return to the current state when I click the button again"*. On: every ws2Mage pivot 15 min later, so every pseudo trade opens and closes 15 min later on the same side and towards/away runs again on those trades; the time cell colour, TO/AW, (inf)/(exf), the sums' counts and TO(exf), the cross row's side, the TO -> AW flip and M-no-rev follow. r-pred is unchanged (asserted). Both states are built at start-up (253.2 s, was 214.5 s); the button changes no scroll position (*"if you can make it that the toggle doesn't change the visible timestamp rows positioning inside the frame"*). MINE: the label "pivots +15 min", blue when on; the last trade still closes at the tape's end |
 | testing | headless Chrome on Windows reaches WSL localhost. `--virtual-time-budget` delays scroll events, so a probe page calls draw() itself |
 
 ## 8. NEXT: the lift-off update, kept separate (SRP)
@@ -310,6 +322,56 @@ target-side of 50, the tag flips from away to toward"*, with his ws3 2026-08-25 
 | AW bars | 13,930,599 | 9,418,188 |
 | bars AW -> TO | - | 4,532,595 |
 | bars TO -> AW | - | 20,184 |
+
+## 12. The 1112 update - the 50 reset, the excursion sample, the row rule and the x/e path - BANKED and LIVE
+
+His spec, 1112, from his ws3 2026-09-23 ~22:18 example: *"I want to see the flip from TO to AW based on the x and e
+cross."* / *"when ws3r passed under 50 (the counter-side of 50), that 2124 extremum should be nulled until a new one is
+built."* / *"so it starts hunting for an infence extremum while its trying to reach exfence"* / *"the pre x/e cross
+sample is the extremum and the test for AW(inf) follows the existing flow"* / *"if there >=3 TFs printing a x or e
+cross in the same row, the under-lines test is automatically qualified"* / *"ws1 to ws6, and >=2 TFs must print x and e
+in the same row"* / *"values from the counter side of 50 are void"* / *"e or x creates a timestamp when it crosses the
+first racer.  that timestamp is when you sample ws3r"* / *"the missing piece that you need: the ws{any TF}e or x
+extremum is contained to the latest target-side oob excursion"*. Banked on his answer "Bank it, UI shows it".
+
+| piece | the rule | his answers |
+|---|---|---|
+| the 50 reset (RESET50) | a pass of emerging ws{TF}r to the counter side of 50 (under it on a HIGH target-side) ends the hunt and nulls its ex-20/80 reach. The first bar back on the target side starts a fresh hunt: scenario 2 samples again, its race starts open, and only samples at or after that bar pair. A new reach shuts the hunt again. Scenario 1 stores a voting extremum only inside a reached hunt, with its pivot inside that hunt. An AW line keeps the 1110 flip at 50 | what is nulled: the ex-20/80 reach; read: emerging; start: back on the target side; the race re-opens; the trade's open: *"the mech says that all lines are reset to TO when a trade opens"* - no fresh hunt without a pass inside the trade |
+| the sample (SAMPLE_AT excursion) | each race win of ws{TF}e or ws{TF}x (the first racer crossed) is a sample. Its value is emerging ws{TF}r on the crossing line's most extreme bar of its latest run at or beyond 85 (HIGH) / 15 (LOW), clipped at the hunt's start. No oob bar in the hunt up to the cross: no value | towards/away only - lift-off's e path keeps its walk back; clipped at the hunt's start |
+| x samples (SAMPLE_X) | ws{TF}x race wins sample too, in one sequence with e's; X before E on one bar (the cross row's order, MINE) | "One sequence" |
+| void (VOID50) | a value strictly on the counter side of 50 is void; the next sample pairs with the last valid one | "Skipped" |
+| the row rule (ROWX) | the under-lines test also passes when, in the ws1 bar holding the test bar and up to it, 3 or more of ws1..ws6 print an x or e cross and 2 or more of them print both. Printed = the web UI's cross row (whole-tape races, the row's target-side). The line counts itself when it is ws1..ws6 | "Yes, it counts"; ws1..ws6 for every line tested is my reading of his two answers |
+| the x/e path (XE_PATH) | an X and an E race win of the line in one ws1 bar, in the hunt, where no pair fired on the later of the two. The extremum is the latest natural lift-off pivot stamped inside the hunt before the earlier cross (pivot inside the hunt too, MINE), in-fence and not void, and the under-lines test or the row rule passes. AW(inf) from the later cross; ended as any scenario-2 AW. Once per row, at the first X and first E (MINE) | "Any race win"; "Both, same ws1 bar"; "Latest lift-off pivot"; "Inside the current hunt"; "Before the first"; "Both hunts, full tests" |
+
+| check, 1112 | result |
+|---|---|
+| every 1112 knob off (RESET50 0, SAMPLE_AT walkback, SAMPLE_X 0, VOID50 0, ROWX 0, XE_PATH 0), in a fresh process | md5 5686002290c62c1c328612c049baedee, equal to the bank before; pivots +15 min 6345021736727492ecb3ee88d8eea152, equal too |
+| banked (all on) | md5 8b2b74609ac8156fdedae6762617018e; pivots +15 min 3af412c96564ed4d8e983e6b8269a2c4 |
+| trade-open bars reading AW, ws1..ws30 | 0 (the assert in run() holds) |
+| a separate scalar recompute (its own hunts walk, excursion walk, pair, row rule, x/e path and AW-end walk) | 643 line-trades (400 random draws, up to 8 per line with a fresh hunt and a trigger, ws1..ws6 on the 09-23 trade): 3,130 hunts, 18,569 samples, 3,050 triggers (63 x/e path, 2,268 by the row rule), every AW end - 0 mismatches |
+| web UI after the restart, ws1..ws15 TO/AW against the run | 0 of 2,041,185 cells differ, both pivot states; sums' TO and AW counts 0 differ; CONTROL 257,295 MATCH; start-up 398.0 s (was 253.2 s) |
+
+| his ws3 2026-09-23 example (HIGH target-side, trade 20:29:00 to 23:30:40) | read |
+|---|---|
+| hunt from the 22:15:00 return over 50 | to the 22:27:00 pass under 50, no reach |
+| samples | E 22:15:05 54.34; E 22:16:05 54.56; E 22:16:15 54.64; E 22:18:00 57.21; X 22:18:15 57.21; X and E 22:19:05 68.67; X 22:19:15 68.67; E 22:19:55 68.79; X 22:20:00 68.79 |
+| 22:18:15 pair (57.21, row rule) | AW ends on its first bar: ws3r 67.57 is past 57.21 |
+| 22:19:05 pair (68.67, row rule) | AW(inf); web UI row 22:19 prints the TO -> AW flip |
+| 22:19:55 pair (68.79, row rule) | AW(inf) to 2026-09-23 22:54:00, the flip at 50 (ws3r back over 50) |
+
+| ws1..ws30, whole tape | bank before | 1112 |
+|---|---|---|
+| AW bars | 9,418,188 | 13,342,081 |
+| bars AW -> TO | - | 260,724 |
+| bars TO -> AW | - | 4,184,617 |
+| line-rows (web UI print bars) that change | - | 362,007 |
+| hunts (fresh) | 46,920 (0) | 152,390 (105,470) |
+| samples (e / x) | - | 1,107,831 (619,703 / 488,128) |
+| void samples / no oob bar in the hunt | - | 334,188 / 198,326 |
+| scenario-2 triggers: pair / x/e path | - | 165,331 / 3,921 |
+| triggers passed by the row rule / AW ending on its first bar | - | 126,065 / 31,614 |
+| web UI TO -> AW flip cells | 38,166 | 67,005 |
+| web UI -1/+1 cells on an AW line | 86,518 | 103,731 |
 
 ## 9. Not changed
 

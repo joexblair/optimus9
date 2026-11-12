@@ -2375,3 +2375,45 @@ b6a3c1b78303  add the line's value to the text
 d0865a09cf8e  if any of the individual lines are printing TO(exf), print "TO(exf)" under the TO:x AW:x row
 ab4069221b10  in the summary columns (16-22 and 22-30)
 aa228e2ce316  name the webUI report: fdm2-diag1
+e0d35f4ffeef  I want a button at the top (on the right of the calenders), to toggle an offset in the UI. clikcing the button will move the pivots forward 15 minutes - eg 09-21 1616 becomes 09-21 1631, and return to the current state when I click the button again
+633b94628fd2  I want a button at the top (on the right of the calenders), to toggle an offset in the UI
+0650a77e8c78  move the pivots forward 15 minutes
+7e3764d75040  if you can make it that the toggle doesn't change the visible timestamp rows positioning inside the frame
+52b612f8f1a8  my view of 09-23 ~2218 says that ws3 should flip to AW. what prevented it?
+5e52bac415e5  regardless of voting, why doesn't the line follow the spec's update that requires a line to tag `TO` on a line that has travelled past 50 (towards the counter side) and then crossing back to the target-side of 50? find my verbatim notes about this update
+f825840ba17b  I want to see the flip from TO to AW based on the x and e cross. ws3r should have a "fresh" TO tag because of the mech that detected it below 50 at ~2208, and then crossed to target side, so it starts hunting for an infence extremum while its trying to reach exfence
+8311d97dc395  I want to see the flip from TO to AW based on the x and e cross.
+4f58298b7bff  the scenario2: "reached at 2026-09-23 21:24:00, so scenario 2 is shut" highlights a gap. when ws3r passed under 50 (the counter-side of 50), that 2124 extremum should be nulled until a new one is built.
+78e9d4881086  when ws3r passed under 50 (the counter-side of 50), that 2124 extremum should be nulled until a new one is built.
+0c2a2fde3f06  --if that's nuilled, then the line starts detecting its infence extremum based on the "2 ~same samples" mech, and the flip ftom TO(inf) can produce a AW(inf) flip
+33b3abd66ae7  --if the x and e crosses have crossed r, then the samples might not be the "~same". if this occurs, the pre x/e cross sample is the extremum and the test for AW(inf) follows the existing flow
+082ca3e31d61  if the x and e crosses have crossed r, then the samples might not be the "~same". if this occurs, the pre x/e cross sample is the extremum and the test for AW(inf) follows the existing flow
+687285db99a6  --if there >=3 TFs printing a x or e cross in the same row, the under-lines test is automatically qualified
+a314615e3480  if there >=3 TFs printing a x or e cross in the same row, the under-lines test is automatically qualified
+47189eccbc21  lift-off is sampling at it's usual rhythm. there will be a "lift-off built" sample that was stored before the x and e crosses. thats my "pre x/e cross sample"
+d76b9af7b8c0  the mech says that all lines are reset to TO when a trade opens
+836d678f7985  I'm not sure. print the simple worded indented spec to help me decide
+491f57ff2d97  ws1 to ws6, and >=2 TFs must print x and e in the same row
+243509dfe700  values from the counter side of 50 are void
+d2db964fef20  why? you told me it failed to flip because the lower TF AWs we're present, so I gave you a mech to override the need for lower AW prints. what is preventing 2219
+d4b826e08174  you know that I eyeball every value and time a I give you. is my 2218 your 22:21:20, or is there still an issue to overcome?
+c5cd3e74f5bf  I thought I answered about `r`? you asked if it was a race, and I said yes. is this "neither cross on r" statement refering to something other than my race answer?
+c2403ff2380d  -confirm that liftoff is using its default emerging. I'm struggling to understand how there is no movement, which is implied by "no lift-off pivot"
+05874041000d  is this the reversal? quick answer
+5edcf33d01cb  --why is that important? each e or x cross creates a sampled value. if it's the extremum then ok. if it's not the extremum, then its also ok. ie, the sample is simply a value that lift-off refers to make its decsision
+48d56915f05d  -add a column to show the emerging ws3r value that was sampled when ws3e or ws3x crossed the racers
+3d86ecc4cc1e  --this infer that ws3e was not crossing the racers. why is it tagged as "doesn't print"? are you thinking that the only time you can sample ws3r is if ws3r wins the race? if so, that's not the case:
+c82a8451e5b7  ---e or x creates a timestamp when it crosses the first racer. that timestamp is when you sample ws3r
+2c378cd34921  e or x creates a timestamp when it crosses the first racer. that timestamp is when you sample ws3r
+ef56cb01b1df  that banked 2208,32.08 sample is from the counter side of 50. the rule I passed (less than 60 minutes ago), says that the line's extremum is wiped if the line drops below counter-side 50 and returns to target-side of 50
+ece11471fa98  --confirm that the 22:08:35 value was taken from a target-side (high-side in this example) extremum?
+5d24242010ab  if so, how long did ws3e dwell on the high oob ?
+70b2dafcbe06  --this is what I needed to see 🙏🏻
+9a1e0fe0e426  the missing piece that you need: the ws{any TF}e or x extremum is contained to the latest target-side oob excursion
+826f292b1da0  the pre x/e cross sample is the extremum and the test for AW(inf) follows the existing flow
+0f274398fc2a  ws3r should have a "fresh" TO tag
+5253c7786f7d  so it starts hunting for an infence extremum while its trying to reach exfence
+9b5860c790b4  each e or x cross creates a sampled value
+9af30e92609a  the line's extremum is wiped if the line drops below counter-side 50 and returns to target-side of 50
+6751142aa2bf  bank and commit push ALL files. make the machines (lift-off, webui, towards/away) live on their current configs. advise your workmate of the changes
+38bc3208a831  make the machines (lift-off, webui, towards/away) live on their current configs
