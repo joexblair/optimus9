@@ -65,6 +65,7 @@ try:
     import v4_closed_prev as CP
     import ln
     from optimus9.analysis.jig import oob_ib_cross, lift_off
+    import v4_lift_e as LE   # HIS 1110 e-cross reversal: every lift-off reader gets it (6B)
 finally:
     sys.stderr = _e
 
@@ -200,7 +201,8 @@ def census(side, a, b, t0, t1):
             if L2.towards(BD, tf, int(a), int(side)):
                 tw += 1
             r = next((int(x) for x in lift_off(EMR[tf], int(side), K.LIFT_PTS, K.gap_for(tf),
-                                               K.LIFT_TOL, K.LIFT_WOB)
+                                               K.LIFT_TOL, K.LIFT_WOB,
+                                               e_path=LE.get(tf, len(EMR[tf]), int(side)))
                       if int(a) < int(x) <= int(b)), None)
             if r is not None:
                 rv += 1

@@ -73,6 +73,7 @@ import numpy as np
 sys.path.insert(0, '/home/joe/thecodes')
 import v4_knobs as K
 from optimus9.analysis.jig import mage_cascade, mage_cascade_bar, lift_off
+import v4_lift_e as LE   # HIS 1110 e-cross reversal: every lift-off reader gets it (6B)
 
 
 def past_mid_toward(mage, bar, target_side):
@@ -131,7 +132,8 @@ def _cascade_at(line, tf, side, at_or_before, MG, tf_hi=None, anchor=None, sampl
         s, b = int(cb[0]), int(cb[0])
     else:
         gap = K.gap_for(tf)
-        L = [int(x) for x in lift_off(line, side, K.LIFT_PTS, gap, K.LIFT_TOL, K.LIFT_WOB)]
+        L = [int(x) for x in lift_off(line, side, K.LIFT_PTS, gap, K.LIFT_TOL, K.LIFT_WOB,
+                                      e_path=LE.get(tf, len(line), side))]
         st = [x + K.LIFT_WOB - 1 for x in L]
         ok = [(a, x) for a, x in zip(st, L) if a <= int(at_or_before)]
         if not ok:

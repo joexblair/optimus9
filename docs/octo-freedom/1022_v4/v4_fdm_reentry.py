@@ -25,6 +25,7 @@ try:
     import ln
     from optimus9.analysis.jig import (oob_ib_cross, lift_off, lift_off_pivot,
                                        cp_reversal, cp_reversal_pivot)
+    import v4_lift_e as LE   # HIS 1110 e-cross reversal: every lift-off reader gets it (6B)
 finally:
     sys.stderr = _e
 
@@ -142,7 +143,7 @@ def _lift_table(a, tf, side):
     if m == 'cp':
         return np.asarray(cp_reversal(v, int(side)), int)
     b = lift_off(v, int(side), int(K.LIFT_PTS), K.gap_for(int(tf)),
-                 float(K.LIFT_TOL), int(K.LIFT_WOB))
+                 float(K.LIFT_TOL), int(K.LIFT_WOB), e_path=LE.get(int(tf), len(v), int(side)))
     return np.asarray([K.lift_stamp(int(x)) for x in b], int)
 
 
@@ -163,7 +164,7 @@ def _pivot_table(a, tf, side):
         #   NO STAMP TO ADD: a closed-prev reversal is knowable on its own bar.
         return {int(b): int(p) for b, p in cp_reversal_pivot(v, int(side)).items()}
     pv = lift_off_pivot(v, int(side), int(K.LIFT_PTS), K.gap_for(int(tf)),
-                        float(K.LIFT_TOL), int(K.LIFT_WOB))
+                        float(K.LIFT_TOL), int(K.LIFT_WOB), e_path=LE.get(int(tf), len(v), int(side)))
     return {int(K.lift_stamp(int(b))): int(p) for b, p in pv.items()}
 
 

@@ -89,6 +89,15 @@ def key(K, B1, R, G, EMR, CPM):
     assert not missing, ('v4_fdm_reentry now reads %s, which is not in the cache key - add it to '
                          'RE_KNOBS or the cache will serve a stale signal list' % ', '.join(missing))
     kv = ['%s=%s' % (n, getattr(K, n, None)) for n in RE_KNOBS]
+    #   HIS 1110 LIFT-OFF e PATH: v4_fdm_reentry's lift-off now takes the ws{TF}e e-cross reversals (6B). Its
+    #   knobs and the e lines themselves are in the key, or a scan built before it would keep being served.
+    import v4_lift_e as LE
+    kv += ['%s=%s' % kv2 for kv2 in LE.knobs()]
+    if LE.LIFT_E_ON:
+        import v4_ws_e as WSE
+        kv.append('WSE=%s|%s' % (WSE.E_MECH, WSE.E_VERSION))
+        ah0 = _hash_arrays(WSE.lines())
+        kv.append('E_LINES=%s' % ah0[:16])
     ah = _hash_arrays(B1, R, G, EMR, CPM)
     h = hashlib.sha256(('|'.join(kv) + '|' + ah).encode()).hexdigest()[:16]
     return h, kv

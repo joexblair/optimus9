@@ -31,6 +31,7 @@ import ln, v4_knobs as K, v4_rcfg_sweep as RS, v4_closed_prev as CP
 import v4_l2_proxy as PX, v4_lineage2 as L2
 import pseudo_closed as PC
 from optimus9.analysis.jig import lift_off
+import v4_lift_e as LE   # HIS 1110 e-cross reversal: every lift-off reader gets it (6B)
 from v4_backstop_trades import prices
 sys.stderr = _e
 
@@ -59,11 +60,13 @@ for t in range(1, TOP + 1):
     for sd in (-1, +1):
         REV[('lift', t, sd)] = sorted(int(K.lift_stamp(int(b))) for b in
                                       lift_off(np.asarray(E[t], float), sd, K.LIFT_PTS,
-                                               K.gap_for(t), K.LIFT_TOL, int(K.LIFT_WOB)))
+                                               K.gap_for(t), K.LIFT_TOL, int(K.LIFT_WOB),
+                                               e_path=LE.get(int(t), len(E[t]), int(sd))))
         src = PS[t] if t in PS else np.asarray(C[t], float)
         REV[('pseudo', t, sd)] = sorted(int(K.lift_stamp(int(b))) for b in
                                         lift_off(src, sd, K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL,
-                                                 int(K.LIFT_WOB)))
+                                                 int(K.LIFT_WOB),
+                                                 e_path=LE.get(int(t), len(src), int(sd))))
 
 
 def last_rev(kind, tf, sd, bar):

@@ -1,0 +1,17 @@
+[Unit]
+Description=o9 r-pred web UI on 127.0.0.1:8788 (docs/octo-freedom/1022_v4/out/rpred_ui.py) - r-pred + towards/away
+After=network-online.target mysql.service
+Wants=network-online.target mysql.service
+
+[Service]
+Type=simple
+User=joe
+WorkingDirectory=/home/joe/thecodes/docs/octo-freedom/1022_v4/out
+ExecStart=/usr/bin/python3 -u /home/joe/thecodes/docs/octo-freedom/1022_v4/out/rpred_ui.py 8788
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/joe/thecodes/rpred_ui.log
+StandardError=append:/home/joe/thecodes/rpred_ui.log
+
+[Install]
+WantedBy=multi-user.target

@@ -61,6 +61,7 @@ _e = sys.stderr; sys.stderr = io.StringIO()
 try:
     import ln
     from optimus9.analysis.jig import lift_off, oob_ib_cross
+    import v4_lift_e as LE   # HIS 1110 e-cross reversal: every lift-off reader gets it (6B)
 finally:
     sys.stderr = _e
 
@@ -74,10 +75,11 @@ def ws1r_revs(line, side):
     `v4_fast.revs` keys its cache on K.LIFT_WOB 8, so it cannot serve `L2_CWS1R_WOB` 1 - this is a
     separate cache on the same producer, not a second detector.
     """
-    key = (id(line), int(side), int(K.L2_CWS1R_WOB))
+    key = (id(line), int(side), int(K.L2_CWS1R_WOB), tuple(LE.knobs()))
     if key not in _LO:
         _LO[key] = np.array(sorted(int(x) for x in lift_off(
-            line, side, K.LIFT_PTS, K.gap_for(1), K.LIFT_TOL, K.L2_CWS1R_WOB)), dtype=int)
+            line, side, K.LIFT_PTS, K.gap_for(1), K.LIFT_TOL, K.L2_CWS1R_WOB,
+            e_path=LE.get(1, len(line), side))), dtype=int)
     return _LO[key]
 
 
@@ -807,7 +809,8 @@ class Latch:
         for t in sorted(BD.tfs):
             out = []
             for raw in lift_off(BD.E[t], self.side, K.LIFT_PTS, K.gap_for(t),
-                                K.LIFT_TOL, int(K.LIN2_REV_WOB)):
+                                K.LIFT_TOL, int(K.LIN2_REV_WOB),
+                                e_path=LE.get(t, len(BD.E[t]), self.side)):
                 raw = int(raw)
                 if raw >= self.arm:
                     out.append((int(raw) + max(1, int(K.LIN2_REV_WOB)) - 1, raw))

@@ -174,6 +174,19 @@ Joe 1109: *"build a new BB%B line named `e`, eg ws30e, with len 3, mult 0.5, src
   `docs/octo-freedom/1109_towards_away.md`.
 - `ln.line('ws4e')` does NOT resolve: `ln.py` reads its specs from the `wsf` rows only.
 
+### 2026-11-10 — version 2, ws1-ws30
+
+Joe 1110: *"add ws1-3 to towards/away and liftoff, and update webUI"*.
+
+| mechanic | role | band | step | line type | config | value mode | fences | offset | version | live after |
+|---|---|---|---|---|---|---|---|---|---|---|
+| towards-away | e | 1-30 min (60-1800 s) | 60 s | bb | 3\|0.5\|close | emerging | 85/15 | 0 | 2 | 2026-11-10 00:00:00 |
+
+- version 1's live date moved to 2099-01-01, the table's sweep-only convention, so the live view shows version 2
+  only. Nothing deleted.
+- ws1e..ws3e cached 1110: 3 new files, 0 existing touched, each equal to a fresh in-memory build. The line's one
+  home is `docs/octo-freedom/1022_v4/v4_ws_e.py`, which asserts the 1109 and 1110 known-good numbers on every load.
+
 ---
 
 ## what is NOT in here

@@ -13,6 +13,11 @@ docs/octo-freedom/1109_towards_away.md, section KNOBS. Read from their own homes
     mech_line_config  the ws{TF}e line itself: BB%B len 3, mult 0.5, src close, emerging, every 60 s, ws4..ws30
 """
 import os
+import sys
+
+sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1022_v4')
+import v4_ws_e as _WSE                          # the ws{TF}e line's one home
+import v4_lift_e as _LE                         # the e-sample method's one home (his 1110 4A)
 
 EXPERIMENT = os.environ.get('W_TA_EXPERIMENT', '0') == '1'
 
@@ -21,18 +26,21 @@ def _knob(name, default, cast=float):
     return cast(os.environ.get('W_TA_' + name, str(default)))
 
 
-#   THE LINES. HIS 1109 answer 10A: ws4r to ws30r, the lines that have an e line
-TF_LO = _knob('TF_LO', 4, int)
+#   THE LINES. HIS 1109 answer 10A was ws4r to ws30r; HIS 1110: *"add ws1-3 to towards/away and liftoff, and update
+#   webUI"* - ws1r to ws30r, every line that has an e line
+TF_LO = _knob('TF_LO', 1, int)
 TF_HI = _knob('TF_HI', 30, int)
 
-#   ws{TF}e's row in mech_line_config, the dynamic config table: mechanic 'towards-away', role 'e', version 1
-E_MECH = _knob('E_MECH', 'towards-away', str)
-E_VERSION = _knob('E_VERSION', 1, int)
+#   ws{TF}e's row in mech_line_config - READ FROM ITS ONE HOME, v4_ws_e (env W_WSE_*), pinned here by the bank
+E_MECH = _WSE.E_MECH
+E_VERSION = _WSE.E_VERSION
 
-#   THE e RACE. His race:{boundary,Mage,r}, in the order a tie is reported. RACE_READ is the read of the r and
-#   Mage it races to - 'closed_prev', the standard race (v4_fdm2.x_race), or 'emerging'
-RACE = tuple(_knob('RACE', 'boundary,Mage,r', str).split(','))
-RACE_READ = _knob('RACE_READ', 'closed_prev', str)
+#   THE e-SAMPLE METHOD, HIS 1110 4A *"one e-sample **method** everywhere"* - READ FROM ITS ONE HOME, v4_lift_e
+#   (env W_LIFTE_*), pinned here by the bank: the race:{boundary,Mage,r}, its read, and his walk back to look
+#   forward's step (1A, 48 bars = 240 s). A scenario-2 sample is ws{TF}r at the walk-back bar
+RACE = _LE.LIFT_E_RACE
+RACE_READ = _LE.LIFT_E_RACE_READ
+E_STEP = _LE.LIFT_E_STEP
 
 #   SCENARIO 2. His `{knob:5}` - the TFs under this TF that are read; his ">1" - more than this many must be AW;
 #   his "within 2% of each other", answer 7A - 2.0 r-points between the latest two samples
@@ -48,19 +56,31 @@ SUPERSEDE = _knob('SUPERSEDE', 'strict', str)
 #   THE PSEUDO TRADES. HIS 1109: *"use ws2Mage pivots"*, the last pivot of each same-side run
 PIVOT_LINE = _knob('PIVOT_LINE', 'ws2Mage', str)
 
+#   THE AW -> TO FLIP AT 50, HIS 1110: *"if a line has printed an extremum and is tagged as away"* /
+#   *"if the line has returned past 50 (ie crossed to the counter target-side)"* / *"if the line returns to the
+#   target-side of 50, the tag flips from away to toward"*. FLIP50 1 = on, 0 = the 1110 bank before it.
+#   His answers: the r read is emerging; scenario 1 AND 2; an AW that starts on the far side of 50 already counts
+FLIP50 = _knob('FLIP50', 1, int)
+FLIP50_LEVEL = _knob('FLIP50_LEVEL', 50.0)
+FLIP50_READ = _knob('FLIP50_READ', 'emerging', str)
+
 #   THE RULED REGISTRY: knob -> (ruled value, units, provenance). check() compares the live value to it.
 RULED = {
-    'TF_LO': (4, 'TF', 'his 10A "ws4r to ws30r"; *"apply to ws4-ws30"*'),
+    'TF_LO': (1, 'TF', 'his 1110 *"add ws1-3 to towards/away and liftoff, and update webUI"* (was 4, his 1109 10A)'),
     'TF_HI': (30, 'TF', 'his 10A'),
     'E_MECH': ('towards-away', 'config row', 'MINE - the mechanic name of the row; his words for the mech'),
-    'E_VERSION': (1, 'config version', '*"no action.  leave it on len3"* - version 1 is len 3'),
+    'E_VERSION': (2, 'config version', 'len 3 (*"no action.  leave it on len3"*), ws1..ws30 - version 2, his 1110 add ws1-3'),
     'RACE': (('boundary', 'Mage', 'r'), 'race lines', 'his race:{boundary,Mage,r}'),
     'RACE_READ': ('closed_prev', 'read', 'the standard race, v4_fdm2.x_race - my read (e), not corrected'),
+    'E_STEP': (48, 'bars', 'his 1110 1A - the walk-back step, 240 s, every TF'),
     'UNDER': (5, 'TFs', 'his {knob:5}'),
     'UNDER_GT': (1, 'lines', 'his ">1"'),
     'PAIR_PTS': (2.0, 'r-points', 'his "within 2%", answer 7A'),
     'SUPERSEDE': ('strict', 'rule', 'MINE'),
     'PIVOT_LINE': ('ws2Mage', 'line', '*"use ws2Mage pivots"*'),
+    'FLIP50': (1, 'on/off', 'his 1110 *"the AW/TO logic needs refining"*'),
+    'FLIP50_LEVEL': (50.0, 'r-points', 'his "past 50"'),
+    'FLIP50_READ': ('emerging', 'read', 'his 1110 answer: emerging (closed-prev was the other choice)'),
 }
 
 

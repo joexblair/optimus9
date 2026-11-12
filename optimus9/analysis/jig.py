@@ -17,6 +17,7 @@ LINE CONFIGS — build them BY NAME (kline/bbline below). Joe's notation is k_le
 DIFFERENT line: TV-verified MAE 0.03 right, 9.33 transposed). optimus9.compute.line_config is the only module
 that knows the layout. If you are typing ('k', ...) you are doing it wrong.
 """
+import bisect
 import copy
 import os
 import numpy as np
@@ -3338,8 +3339,13 @@ def cp_reversal_pivot(cp, side):
     return out
 
 
-def lift_off(r, side, pts, gap, tol, wob):
+def lift_off(r, side, pts, gap, tol, wob, e_path=None):
     """[PRODUCER - Joe 1022] THE LIFT-OFF BARS: where at_extreme stops holding. -> int array.
+
+    `e_path`  OPTIONAL, HIS 1110 e-cross reversals (lift_off_e). None is the 1022 producer exactly.
+              Given, an e reversal joins the natural ones as the RAW bar stamp - (wob - 1), so every
+              caller's own `raw + wob - 1` lands on the e reversal's stamp - his *"A reversal from an
+              e-cross prints on that sample's bar, with no lift-off hold of 8 bars"* answered *"yes"*.
 
         wob   bars the state must STAY failed, counting the lift-off bar itself. Joe 1022 set 8
               = 40 s: *"add a wob 8 to reduce the early reversals"*. A lift-off whose state
@@ -3365,11 +3371,18 @@ def lift_off(r, side, pts, gap, tol, wob):
         'a lift-off bar is one where the state still holds'
     keep = [int(b) for b in off if b + wob <= len(m) and not m[b:b + wob].any()]
     assert all(b + wob - 1 < len(m) for b in keep), 'a lift-off hold ran past the tape'
+    if e_path is not None:
+        ev = lift_off_e(r, side, pts, gap, tol, wob, e_path)
+        keep = sorted(set(keep) | {int(st) - (wob - 1) for st, _, _ in ev})
     return np.asarray(keep, int)
 
 
-def lift_off_pivot(r, side, pts, gap, tol, wob):
+def lift_off_pivot(r, side, pts, gap, tol, wob, e_path=None):
     """[PRODUCER - Joe 1105] THE PIVOT THAT CREATED EACH LIFT-OFF REVERSAL. -> {lift bar: pivot}.
+
+    `e_path`  OPTIONAL, as lift_off's. An e reversal's key is its raw bar stamp - (wob - 1) and its
+              pivot is HIS walk-back bar - the bar ws{TF}e was most extreme before the cross. A natural
+              lift-off on the same raw bar keeps its own pivot.
 
     HIS 1105, asked where his ws4Mage support gate reads: *"the pivot that created the reversal
     that the walk has stopped on"*. The pivot belongs to the LIFT-OFF, not to any span a caller
@@ -3403,7 +3416,175 @@ def lift_off_pivot(r, side, pts, gap, tol, wob):
         pv = a0 + k
         assert pv <= b, 'a lift-off pivot is after its own lift-off bar'
         out[b] = pv
+    if e_path is not None:
+        for st, w, _ in lift_off_e(r, side, pts, gap, tol, wob, e_path):
+            out.setdefault(int(st) - (int(wob) - 1), int(w))
     return out
+
+
+#   ── THE e-CROSS REVERSAL - HIS 1110 LIFT-OFF UPDATE ─────────────────────────────────────────────
+#   HIS SPEC, 1110: *"when ws{TF}e crosses a racer, "walk back to look forward" for the time when ws{TF}e
+#   was most extreme, before the cross. capture the ws{TF}r value at that time / -make that bar's value
+#   the new r extremum / -if the following lift-off sample is less extreme (ie is closer to 50), then
+#   print the reversal / --this might need a "minimum less extreme" knob"*. And the gate he kept from
+#   1109 (5A), on *"lift-off is partially building a pre-fire six-sample reversal setup (ie lines are
+#   flattened or printing away from target-side)"*: *"I see these as different things.  the "folowing
+#   sample"  is produced by lift-offs natural sampling"*.
+#
+#   HIS ANSWERS 1110: the walk-back step is 48 bars = 240 s for every TF (1A, MC_GAP); every following
+#   lift-off sample, one lift-off gap apart, until one is closer to 50 or r goes past the stored value
+#   (2B); the gate's "stopped printing new extremes" is r NOT printing a new extreme on the cross bar
+#   (1B); the reversal prints on that sample's bar with no hold (*"yes"*); ALL lift-off readers get it
+#   (6B, *"SRP rules"*, and *"if they move, they move"*).
+
+
+def e_race_crosses(e, X, side):
+    """ws{TF}e against one race line. -> (forward, back) bool arrays.
+
+    forward  the target-side cross: UNDER on a HIGH side, OVER on a LOW side - the banked x-cross rule.
+    back     the cross the other way, which re-opens a race the line won.
+    Index b is the cross from bar b-1 to bar b. A NaN on either bar is no cross.
+    """
+    e, X = np.asarray(e, float), np.asarray(X, float)
+    a, b, oa, ob = e[:-1], e[1:], X[:-1], X[1:]
+    fin = np.isfinite(a) & np.isfinite(b) & np.isfinite(oa) & np.isfinite(ob)
+    with np.errstate(invalid='ignore'):
+        if int(side) > 0:
+            fw, bk = (a >= oa) & (b < ob), (a <= oa) & (b > ob)
+        else:
+            fw, bk = (a <= oa) & (b > ob), (a >= oa) & (b < ob)
+    pad = np.zeros(1, bool)
+    return np.concatenate([pad, fw & fin]), np.concatenate([pad, bk & fin])
+
+
+def e_race_prep(e, race, side):
+    """The cross arrays e_race_wins walks, built once per (line, side). -> (event bars, forward, back)."""
+    FB = [e_race_crosses(e, X, side) for _, X in race]
+    FW, BK = [f for f, _ in FB], [b for _, b in FB]
+    return np.flatnonzero(np.any(FW, 0) | np.any(BK, 0)), FW, BK
+
+
+def e_race_wins(e, race, side, a=0, z=None, prep=None):
+    """HIS race:{boundary,Mage,r} for ws{TF}e, run over [a, z). -> [(cross bar, (race indexes won))].
+
+      race   [(name, array)] - the lines e races to, in tie-report order
+      prep   OPTIONAL e_race_prep(e, race, side), for a caller running many spans on one line
+    HIS 1109 4B: only the first race line crossed counts; the race re-opens once e crosses back over
+    that same line the other way. No hold (his 3A). Two lines crossed on one bar are one win, and the
+    race re-opens on crossing back over either - MINE. The race starts open at `a`.
+    """
+    evb, FW, BK = e_race_prep(e, race, side) if prep is None else prep
+    z = len(e) if z is None else int(z)
+    out, is_open, win = [], True, ()
+    for b in evb[np.searchsorted(evb, int(a)):np.searchsorted(evb, z)]:
+        if is_open:
+            hit = tuple(n for n in range(len(race)) if FW[n][b])
+            if hit:
+                out.append((int(b), hit))
+                win, is_open = hit, False
+        elif any(BK[n][b] for n in win):
+            is_open = True
+    return out
+
+
+def e_walk_back(e, bar, side, step):
+    """HIS "walk back to look forward" on ws{TF}e from a cross. -> the bar e was most extreme, or None.
+
+    mage_cascade_bar's walk, unchanged: back in `step`-bar steps while e keeps getting more extreme on
+    `side`, then the true extreme forward of the last step. The returned bar is at or before `bar`.
+    """
+    res = mage_cascade_bar(e, int(bar), int(side), mode='extrema', gap=int(step))
+    return None if res is None else int(res[0])
+
+
+def lift_off_e(r, side, pts, gap, tol, wob, e_path):
+    """[PRODUCER - Joe 1110] THE e-CROSS REVERSALS on one r line. -> [(stamp, pivot, cross)], stamp-ascending.
+
+      r         the r line lift-off reads (the caller's own read)
+      e_path    {'e': ws{TF}e, 'race': [(name, array)], 'step': walk-back bars, 'min_less': r-points}
+                The arrays are the tape's own length; a shorter `r` is refused, not padded.
+
+    AT EACH RACE WIN c (e_race_wins over the whole tape - lift-off has no trade):
+      gate 1  HIS 1B: r on the cross bar is NOT a new extreme - not beyond every r value in lift-off's
+              window before it, [c - (pts-1) x gap, c - 1]. MINE: the window's span, every bar.
+      gate 2  HIS 5A: no lift-off reversal (natural or e) has stamped since the bar of r's most extreme
+              value in that window, up to c. MINE: the latest bar of that extreme.
+      the extremum  E = r at e_walk_back(e, c, step) - HIS "capture the ws{TF}r value at that time".
+      the samples   every lift-off gap after the cross, s = c + n x gap (his 2B). The FIRST s whose r is
+              closer to 50 than E by more than min_less prints the reversal: stamp s, pivot = the
+              walk-back bar. The wait ENDS, printing nothing, at the first of: r goes strictly past E on
+              any bar in [c, s]; a natural lift-off reversal stamps in (c, s]; the next race win
+              (samples stop before it); the tape's end. MINE, all four.
+    A natural reversal of the same turn is untouched and can print after an e reversal - his own
+    scoring asks whether it does: *"would lift-off still complete the same six-sample run and turn it
+    into a reversal, without the early e-cross"*.
+
+    CAUSAL: every read for a reversal stamped at s is at or before s, asserted.
+
+    MEMOISED per process on the BYTES of r and e plus every parameter: lift_off and lift_off_pivot both
+    ask for the same answer, and one line-side costs ~1.8 s on the 1,632,960-bar tape.
+    """
+    import hashlib
+    r = np.asarray(r, float)
+    e = np.asarray(e_path['e'], float)
+    dg = lambda a: hashlib.blake2b(np.ascontiguousarray(a, float).tobytes(), digest_size=12).hexdigest()
+    mk = (dg(r), dg(e), tuple((nm, dg(X)) for nm, X in e_path['race']), int(side), int(pts), int(gap),
+          float(tol), int(wob), int(e_path['step']), float(e_path['min_less']))
+    if mk in _LOE:
+        return list(_LOE[mk])
+    assert len(r) == len(e), 'the e path is not on the r line\'s grid (%d against %d bars)' % (len(r), len(e))
+    side, pts, gap, wob = int(side), max(2, int(pts)), max(1, int(gap)), max(1, int(wob))
+    step, ml = int(e_path['step']), float(e_path['min_less'])
+    nat = np.asarray(sorted(int(b) + wob - 1 for b in lift_off(r, side, pts, gap, tol, wob)), int)
+    wins = [c for c, _ in e_race_wins(e, e_path['race'], side)]
+    span = (pts - 1) * gap
+    out, est = [], []
+    toward = (lambda v, x: v > x) if side > 0 else (lambda v, x: v < x)
+    for i, c in enumerate(wins):
+        lo = c - span
+        if lo < 0 or not np.isfinite(r[c]):
+            continue
+        prior = r[lo:c]
+        if not np.isfinite(prior).any():
+            continue
+        ext = np.nanmax(prior) if side > 0 else np.nanmin(prior)
+        if toward(r[c], ext):
+            continue                                     # gate 1: printing a new extreme on the cross bar
+        seg = r[lo:c + 1]
+        hit = np.flatnonzero(seg == (np.nanmax(seg) if side > 0 else np.nanmin(seg)))
+        x = lo + int(hit[-1])
+        #   est grows in stamp order (each wait ends before the next win), so both tests are a bisect
+        if (np.searchsorted(nat, c, 'right') > np.searchsorted(nat, x, 'right')
+                or bisect.bisect_right(est, c) > bisect.bisect_right(est, x)):
+            continue                                     # gate 2: a reversal already printed since that extreme
+        w = e_walk_back(e, c, side, step)
+        if w is None or not np.isfinite(r[w]):
+            continue
+        E = float(r[w])
+        nxt = wins[i + 1] if i + 1 < len(wins) else len(r)
+        n = 1
+        while True:
+            sb = c + n * gap
+            if sb >= nxt or sb >= len(r):
+                break
+            past = np.flatnonzero(toward(r[c:sb + 1], E) & np.isfinite(r[c:sb + 1]))
+            if past.size:
+                break
+            if np.searchsorted(nat, sb, 'right') > np.searchsorted(nat, c, 'right'):
+                break
+            v = r[sb]
+            if np.isfinite(v) and ((E - v) if side > 0 else (v - E)) > ml:
+                assert w <= c < sb, 'an e reversal reads past its own stamp'
+                assert not est or sb > est[-1], 'e reversals are not in stamp order'
+                out.append((int(sb), int(w), int(c)))
+                est.append(int(sb))
+                break
+            n += 1
+    _LOE[mk] = tuple(out)
+    return out
+
+
+_LOE = {}                                          # lift_off_e's per-process memo
 
 
 def cp_reversal(cp, side):

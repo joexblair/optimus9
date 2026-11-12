@@ -34,6 +34,7 @@ import numpy as np
 sys.path.insert(0, '/home/joe/thecodes')
 import v4_knobs as K
 from optimus9.analysis.jig import mage_cascade, lift_off
+import v4_lift_e as LE       # HIS 1110 e-cross reversal: every lift-off reader gets it (6B)
 
 
 def scan(A, B, R, MG, U, cascade_at=None, oob_when=None):
@@ -49,7 +50,8 @@ def scan(A, B, R, MG, U, cascade_at=None, oob_when=None):
     for side in (+1, -1):
         want = 'down' if side > 0 else 'up'          # opposite ws5r's oob side
         oob = {t: ((R[t] >= K.OOB_HI) if side > 0 else (R[t] <= K.OOB_LO)) for t in pool}
-        for b in lift_off(r5, side, K.LIFT_PTS, K.gap_for(5), K.LIFT_TOL, K.LIFT_WOB):
+        for b in lift_off(r5, side, K.LIFT_PTS, K.gap_for(5), K.LIFT_TOL, K.LIFT_WOB,
+                          e_path=LE.get(5, len(r5), side)):
             b = int(b)
             st = K.lift_stamp(b)                     # the usable event
             if st < A or st > B:

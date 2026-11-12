@@ -47,6 +47,7 @@ import v4_knobs as K
 _e = sys.stderr; sys.stderr = io.StringIO()
 try:
     from optimus9.analysis.jig import lift_off, mage_cascade
+    import v4_lift_e as LE   # HIS 1110 e-cross reversal: every lift-off reader gets it (6B)
 finally:
     sys.stderr = _e
 
@@ -95,9 +96,11 @@ def revs(line, tf, side):
     RAW, on purpose: the raw bar is the anchor and the identity of the reversal. Every caller that
     ACTS on one passes it through K.lift_stamp first.
     """
-    key = (_dig(line), tf, side, K.LIFT_PTS, K.gap_for(tf), K.LIFT_TOL, K.LIFT_WOB, K.OOB_FNC)
+    key = (_dig(line), tf, side, K.LIFT_PTS, K.gap_for(tf), K.LIFT_TOL, K.LIFT_WOB, K.OOB_FNC,
+           tuple(LE.knobs()))                   # HIS 1110 e path - its knobs are in the key
     if key not in _REV:
-        L = lift_off(line, side, K.LIFT_PTS, K.gap_for(tf), K.LIFT_TOL, K.LIFT_WOB)
+        L = lift_off(line, side, K.LIFT_PTS, K.gap_for(tf), K.LIFT_TOL, K.LIFT_WOB,
+                     e_path=LE.get(tf, len(line), side))
         _REV[key] = np.asarray([int(b) for b in L], int)
     return _REV[key]
 

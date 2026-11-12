@@ -284,11 +284,13 @@ if not READONLY:
     #   population - so the only difference between the two pcts is the stamp.
     if os.environ.get('W_FDM2_VERIFY') == 'on':
         from optimus9.analysis.jig import lift_off as _lo
+        import v4_lift_e as LE   # HIS 1110 e-cross reversal: every lift-off reader gets it (6B)
 
         def _raw(sd, pop, a, b):
             n = 0
             for tf in pop:
-                bars = _lo(LN['EMR'][tf], sd, K.LIFT_PTS, K.gap_for(tf), K.LIFT_TOL, K.LIFT_WOB)
+                bars = _lo(LN['EMR'][tf], sd, K.LIFT_PTS, K.gap_for(tf), K.LIFT_TOL, K.LIFT_WOB,
+                           e_path=LE.get(tf, len(LN['EMR'][tf]), sd))
                 if any(int(a) < int(x) <= int(b) for x in bars):
                     n += 1
             return n

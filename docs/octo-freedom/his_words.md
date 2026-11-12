@@ -2299,3 +2299,79 @@ ae894419a9bb  bank the towards/away update. commit push all files. update the sp
 a0ba9a8ed657  we'll apply the lift-off updates next
 b9f42d87d7c2  I apologise - I thought 08 was september...
 bb058d5d879c  make the machine live
+e58327a3fe8e  the common/shared artifact is the newly built ws{TF}e
+70d28ce7113a  when ws{TF}e crosses a racer, "walk back to look forward" for the time when ws{TF}e was most extreme, before the cross. capture the ws{TF}r value at that time
+2621d83e2ec5  -make that bar's value the new r extremum
+977c32b09be4  -if the following lift-off sample is less extreme (ie is closer to 50), then print the reversal
+bea4a4eb3ac6  --this might need a "minimum less extreme" knob - the data will tell us when I review the update
+236ce3a960f1  SRP rules
+fb4dd8434cbf  if they move, they move
+35128d3f41b3  my hope is that the AW fields that fire at 0159, will start printing earlier
+2f74e7ee485c  I see these as different things. the "folowing sample" is produced by lift-offs natural sampling
+4b6191bf5b63  let your workmate know about the liftoff update
+affe102163ef  is away being set by lift-offs reversal, or is lift-off's reversal simply another path that can impact the extrema?
+322e3d310d1f  one e-sample **method** everywhere
+747b87130762  I see these as different things
+dc5448a6e523  add ws1-3 to towards/away and liftoff, and update webUI
+9e6c43dd7080  good, the AWs are printing earlier and closer to the pivot
+9e405a99b1e4  now that I'm looking at the matrix, I can see a reason to add ws1-3: they will likely print AW earlier than the 0156 row (which is the first row where AW appears), so the 0156 row has confluence
+2a4fbce81dce  after that's validated, bank both mechs and make their configs the live machine
+5abfeebb187f  the same six-sample run
+e4d80e49003a  for the webUI - any r-pred signal that prints on an AW signal will need to print the fields background at 55% opaque
+b254960c8d58  I'll need an AB summary for the latest report(s) from any mech that's printed a report in the last 17 days
+b0f82d16b847  the e-crosses and the x-crosses need to be printed on a row under the AW/TO data. if the target is low side, print only the crossovers. inverted for high side. center the text. the format will be "X↑, ↓X, ↓E, ↑E". if ws{TF}e and ws{TF}x fire on the same ws1 bar, print them together in the label with 4 spaces between them
+17b768c53bff  I'm expecting r-pred to be printing -1 on ws3 and ws2, 08-25 between 0747 and 0751 both `Mage` and `m` should be queried in the r-pred decision: the line that is furtherest awat from 50, out of m and Mage, needs to the line that is compared against r share the calculation that fires r-pred for my review
+12ec02a5ad1a  you're right - I forgot about the 30/70 fence for r-pred
+8d7d91c8ef68  the AW/TO logic needs refining: PER TRADE: if a line has printed an extremum and is tagged as away -if the line has returned past 50 (ie crossed to the counter target-side) --if the line returns to the target-side of 50, the tag flips from away to toward -example ws3 08-25 --at 1629, ws3 is tagged as away on low target-side --at 1639, ws3 has crossed over 50 (away from target side) --at 1703, ws3 has crossed under 50 - it is tagged as towards
+a6a55927f6f4  if a line has printed an extremum and is tagged as away
+480c0c95ed07  if the line has returned past 50 (ie crossed to the counter target-side)
+af2efc249263  if the line returns to the target-side of 50, the tag flips from away to toward
+fd15dfdd20f9  at 1639, ws3 has crossed over 50 (away from target side)
+2e0efa258241  at 1703, ws3 has crossed under 50 - it is tagged as towards
+9d2387dd8c33  just a note: make sure the update doesn't impact the "all lines start with TO at the beginning of a trade"
+3ca415f2e033  make sure the update doesn't impact the "all lines start with TO at the beginning of a trade"
+8047e78a5efd  the AW/TO logic needs refining
+acf547fd564c  the ws{TF}r value at that time
+095bfaf78554  the AW/TO logic needs refining:
+a2742c4c0d0a  PER TRADE:
+288bc0801059  webUI updates: 1) change the x/e cross row to a non-bright yellow font. 2) make a row highlighted if I click on that row
+b6ed5e0e750b  change the x/e cross row to a non-bright yellow font
+f4fb3830b68c  make a row highlighted if I click on that row
+dac01615474b  let your workmate know that the updates are complete
+38d9d24eb501  for the webUI, drop the table that starts with
+9b15b27e6625  so that the data frame can be bigger
+1b9633768247  the errors are accepted
+c5f6f87dc3c2  now I need to see when a TF flips from TO to AW
+84b7b5e187c1  for those 2 fields in 1257, brighten the AW row
+f3acca7f3aec  this is a one time application, ie the 'AW's in the following rows are treated normally
+098539c5ba8d  make a place holder line for the x/e cross row, if there is no x/e data available
+af96188060ea  this is so that the row's 3 datasets are horizointally aligned
+f111f9573005  make ws13,ws14,ws15 their own columns, and populate them with the same datasets
+38dca8d2b344  the last 2 columns will now be ws16-22 and ws23-30
+d720a67e0869  to make the columns thinner
+b50597b771c6  the gcws15 to ws15 columns stay the same width as they are now
+88eb5a8a6798  ws1 time can drop the year
+840c3a1da2aa  the frame has a horizontal scroll bar - that can be dropped
+ef8183253c7d  make the r-pred field's AW/TO inf/exf text grey, unless that field is reporting a AW flip
+0988c5ea03ef  I've tested on multiple resolutions and the bar is still there
+a66b29dfab8b  add a column between ws15 and ws16-22 that shows when a target-side oob line has not reversed
+5dcad5548d5b  if there is no Mage qualifying, don't print anything in the field
+82aa27a0299d  and the field will print the **highest** TF
+da282d980fe4  update the x and e cross row: make the text bold (and brighter if possible)
+240eada1da62  the lift-off sampling is an unbroken rolling window
+5f1dd03cdde4  the jig shouldn't allow this, or could it be that you've handrolled? have I misunderstood?
+ebe21858e1e6  logic says that a knowable bar comes in the seconds (35 in this case) after lift-off prints a reversal, but option2 creates a timestamp well before the option1's supposedly raw lift-off reversal signal
+b7f46fb5881a  when a TF flips from TO to AW
+3d64bf8bcc59  the 'AW's in the following rows are treated normally
+4c6d4a98f8ef  stay the same width as they are now
+adbc712a4101  I asked for the ui update based on that table's output
+dd6895bcdc4f  based on that table's output
+e76fa7af085e  lift-off is strictly emerging mode, not closed-prev. this is in the jig's docstring
+119936e08ed8  the reversal needs to happen after the cross to oob, and the cross to ib has no bearing on the reversal or its confirmation timing
+678a35aa05bc  if the field is populated, add the line's value to the text, eg "ws23:95.2"
+ac881c6329c0  if the field is populated, add the line's value to the text
+b6a3c1b78303  add the line's value to the text
+25109a235cd1  if the field is populated, add the line's value to the text, eg "ws23:95.2
+d0865a09cf8e  if any of the individual lines are printing TO(exf), print "TO(exf)" under the TO:x AW:x row
+ab4069221b10  in the summary columns (16-22 and 22-30)
+aa228e2ce316  name the webUI report: fdm2-diag1

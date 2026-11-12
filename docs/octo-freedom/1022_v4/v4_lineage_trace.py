@@ -16,6 +16,7 @@ sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1022_v4')
 import ln
 import v4_knobs as K
 from optimus9.analysis.jig import lift_off
+import v4_lift_e as LE   # HIS 1110 e-cross reversal: every lift-off reader gets it (6B)
 
 
 def first_rev_at_or_after(R, t, side, frm, B):
@@ -42,7 +43,8 @@ def first_rev_at_or_after(R, t, side, frm, B):
     m = (a >= K.OOB_HI) if side > 0 else (a <= K.OOB_LO)
     d = np.diff(np.r_[False, m, False].astype(np.int8))
     runs = [(int(s), int(e)) for s, e in zip(np.flatnonzero(d == 1), np.flatnonzero(d == -1) - 1)]
-    L = [int(b) for b in lift_off(a, side, K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL, K.LIFT_WOB)
+    L = [int(b) for b in lift_off(a, side, K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL, K.LIFT_WOB,
+                                  e_path=LE.get(t, len(a), side))
          if int(frm) <= b <= B]
     if not L:
         return None, None, None

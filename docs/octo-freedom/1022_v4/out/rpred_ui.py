@@ -1,4 +1,4 @@
-"""THE r-pred WEB UI. Joe 1109: *"I want to access this -1/+1 r-pred data in a dhtml webUI"*.
+"""fdm2-diag1, THE r-pred WEB UI - HIS 1111 *"name the webUI report: fdm2-diag1"*, banked 2026-11-12. Joe 1109: *"I want to access this -1/+1 r-pred data in a dhtml webUI"*.
 
 HIS SPEC, 1109:
     the rows      *"the data will be anchored on closed-prev ws1 bars"* - one row per ws1 bar
@@ -30,7 +30,7 @@ THE SIDE RADIO IS NOT BUILT. He asked for it only *"if the side is required"*; p
 
 THE CACHE, two halves:
     the server    computes the whole matrix once at start, ~2 s, and holds it in memory - no disk cache,
-                  so a line rebuild can never be served stale. 136,079 rows x 14 lines, int8.
+                  so a line rebuild can never be served stale. 136,079 rows x 17 lines, int8.
     the browser   fetches BLOCK rows at a time, prefetches AHEAD blocks in the scroll direction (and
                   one behind), and drops the least recently used blocks past KEEP. Only the rows on
                   screen are in the page. A calendar day prefetches its blocks when the pointer is over it.
@@ -41,13 +41,78 @@ HIS 1109 TOWARDS/AWAY, baked in: *"the output of towards/away will be baked into
 for each field, print TO or AW below the number, in a bold font."* and *"use a slighty lower font (eg the same size
 as the weekdays above the calenders) for the summary ws13 and ws21 fields, print this "TO:x  AW:x"*. The states
 come from ../../1109_towards_away/towards_away.py, read at the SAME print bar as the r-pred cell above them. Only
-ws4..ws30 carry a state (his answer 10A), so gcws15, gcws30 and ws1..ws3 print no TO/AW. A row before the first
+ws1..ws30 carry a state (his 1110 add ws1-3; 10A was ws4..ws30), so gcws15 and gcws30 print no TO/AW. A row before the first
 pseudo trade opens has no target-side, so it prints none either.
 
 HIS 1109 ROUNDS 2 AND 3: TO/AW at 10 px like the sum labels; the time cell 20% red for a LOW target-side and 20% green
 for HIGH; *"append `(inf)` or `(exf)` to the `TO` and `AW` labels (example "TO(exf)") to denote if a line is infence
 or exfence"* - ex-20/80 on the target-side by the banked reader the towards/away mech uses. The build notes are
 section 7 of docs/octo-freedom/1109_towards_away.md.
+
+HIS 1110: *"for the webUI - any r-pred signal that prints on an AW signal will need to print the fields background at
+55% opaque"* - a -1 or +1 line cell whose own line reads AW(inf) or AW(exf) at that bar: red or green at 55%, not 100%.
+The sums carry no single TO/AW state, so they are unchanged.
+
+HIS 1110 CROSS ROW: *"the e-crosses and the x-crosses need to be printed on a row under the AW/TO data.  if the target
+is low side, print only the crossovers. inverted for high side.  center the text.  the format will be "X↑, ↓X, ↓E, ↑E".
+if ws{TF}e and ws{TF}x  fire on the same ws1 bar, print them together in the label with 4 spaces between them"*. His
+answer on the x-cross: raw, no hold. Both are jig.e_race_wins over the whole tape, per side - the race lift-off's e path
+uses (v4_lift_e.race: the 15/85 boundary, closed-prev ws{TF}Mage, closed-prev ws{TF}r; first line crossed wins; it
+re-opens on crossing back; no hold) - with ws{TF}e or ws{TF}x (emerging) as the crossing line. A cross prints on the row
+of the ws1 bar it lands in, [open, open + 60 s), in the direction of the row's target-side (the time cell's colour).
+MINE: X before E in the joined label, the race over the whole tape (lift-off's, not re-opened at a trade's open), the
+ws1..ws15 cells only (the cells that carry TO/AW).
+
+HIS 1110: *"change the x/e cross row to a non-bright yellow font"* - dark yellow, #a68a00 light / #c9a83a dark (MINE, the
+shades) - and *"make a row highlighted if I click on that row"*: a 16% blue tint and a 2 px blue outline. MINE: one row
+at a time, a click on another row moves it, a click on the same row clears it; it lives in the page, not across a reload.
+
+HIS 1110: *"for the webUI, drop the table that starts with"* the a-row line, *"so that the data frame can be bigger"*.
+The legend table is gone from the page and from /meta. MINE: the data box takes the rest of the window under the
+calendar and the status line (it was 68% of the window), never under 320 px.
+
+HIS 1110: *"now I need to see when a TF flips from TO to AW"* / *"for those 2 fields in 1257, brighten the AW row"* /
+*"this is a one time application, ie the 'AW's in the following rows are treated normally"*. A ws1..ws15 cell whose line
+reads AW on its row and TO on the row before prints its AW text white (black in light mode) - his answer "White
+text" - on that row only. A -1/+1 cell's text is already white, so a flip there looks the same (4,848 of 34,149 flip
+cells, 1110 count). MINE: the flag is made in the server, +4 on the cross code, so a row at the edge of a 12 h
+block still sees the row before it.
+
+HIS 1110: *"make a place holder line for the x/e cross row,  if there is no x/e data available"* / *"this is so that
+the row's 3 datasets are horizointally aligned"*. Every data cell prints three lines - the number, the TO/AW line,
+the cross line - with a blank line where one has nothing. MINE, from his aligned goal: gcws15 and gcws30 also get a
+blank TO/AW line and the two sums a blank cross line, so every number sits on the same line across a row.
+
+HIS 1111 COLUMNS: *"make ws13,ws14,ws15 their own columns, and populate them with the same datasets"* - r-pred,
+TO/AW with (inf)/(exf), the cross line, the 55% background and the TO -> AW flip, read as for ws1..ws12. *"the last 2
+columns will now be ws16-22 and ws23-30"*, labelled without "sum" *"to make the columns thinner"*: -7..+7 and
+-8..+8. *"the gcws15 to ws15 columns stay the same width as they are now"* - 72.36 px, their width at the 1110
+page's 1420 px cap (measured, headless Chrome). *"ws1 time can drop the year"* - the time cell prints MM-DD HH:MM:SS.
+MINE: the two sum columns take the same 72.36 px (their widest text, "TO:8  AW:8", is 52 px); the time column
+is 116 px, its text plus the 32 px of room it had at 150 px; the page widens to hold the table. The 1109 control
+still checks gcws15..ws12 alone.
+
+HIS 1111: *"the frame has a horizontal scroll bar - that can be dropped"* / *"I've tested on multiple resolutions
+and the bar is still there"*. The box never scrolls sideways. gcws15..ws15 stay 72.36 px; the time column takes
+what is left (94 px at least) and the two sums give way next (56 px at least), so the table always fills the box
+exactly and no pixel rounding can push it over. MINE: below that (a box under 1,436 px) the right edge is cut off.
+*"make the r-pred field's AW/TO inf/exf text grey, unless that field is reporting a AW flip"* - every TO/AW
+line prints grey, the 0 cells' grey, on a -1/+1 cell too; only the flip prints white (black in light mode).
+
+HIS 1111 M-no-rev: *"add a column between ws15 and ws16-22 that shows when a target-side oob line has not reversed"*,
+labelled M-no-rev, *"and the field will print the **highest** TF"* as ws{TF}; *"if there is no Mage qualifying, don't
+print anything in the field"*. His answers: ws1..ws30Mage, and the rule is the one his 1111 table of every change from
+2026-09-21 15:44:00 used - m_no_rev has it. MINE: the TF prints on the number line (blank TO/AW and cross lines keep
+the row aligned), weight 600, a separator line on both sides; the column gives way with the sums, to 68 px at least.
+*"if the field is populated, add the line's value to the text, eg "ws23:95.2"* - the line's CLOSED-PREV value at the
+row's print bar (the value the oob test reads), 1 dp as his example. Its widest text is 65.0 px, so the column's least
+width is 68 px and the table's 1,504 px (1,436 before M-no-rev); a narrower box cuts off the right edge.
+*"update the x and e cross row:  make the text bold (and brighter if possible)"* - it was bold 700 already; now 900,
+and dark mode #c9a83a -> #ecc94b (MINE, the shade). Light mode keeps #a68a00: a lighter yellow on white reads worse.
+HIS 1111 *"in the summary columns (16-22 and 22-30)"*: *"if any of the individual lines are printing TO(exf), print
+"TO(exf)" under the TO:x AW:x row"* - a line reads TO(exf) as a ws1..ws15 cell prints it (TO, and ex-20/80 on the
+target-side at the print bar); the sum cell's third line, blank when none of its lines does. MINE: the TO:x AW:x
+line's style (10 px, weight 700, the cell's white text), not the cross row's yellow.
 
 usage: rpred_ui.py [port]   then open http://127.0.0.1:<port>
 """
@@ -69,23 +134,87 @@ try:
     import v4_rcfg_sweep as RS
     import v4_live_lines as LL
     import ln
-    from optimus9.compute.breaching_line import predict_breach, HI, LO, FENCE_HI, FENCE_LO
+    from optimus9.compute.breaching_line import predict_breach
     sys.path.insert(0, os.path.join(os.path.dirname(V4), '1109_towards_away'))
     import towards_away as TA
+    import v4_lift_e as LE
+    import v4_ws_e as WSE
+    import v4_closed_prev as CP
+    import v4_knobs as K
+    from optimus9.analysis import jig as JIG
 finally:
     sys.stderr = _e
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8788
-LINES = ['gcws15', 'gcws30'] + ['ws%d' % t for t in range(1, 13)]      # HIS 1109 wsf
-SUMS = [('ws13-ws20 sum', range(13, 21)), ('ws21-ws30 sum', range(21, 31))]   # HIS 1109 two right columns
+if __name__ == '__main__':
+    #   A TAKEN PORT FAILS IN A SECOND, NOT AFTER THE ~50 s BUILD. As the o9-rpred-ui service (Restart=always) a
+    #   late failure would rebuild every few seconds while another process holds the port.
+    import socket
+    _sk = socket.socket()
+    _sk.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        _sk.bind(('127.0.0.1', PORT))
+    except OSError as _e:
+        raise SystemExit('port %d is in use (%s) - not building' % (PORT, _e))
+    finally:
+        _sk.close()
+LINES = ['gcws15', 'gcws30'] + ['ws%d' % t for t in range(1, 16)]      # HIS 1109 wsf, + ws13..ws15 HIS 1111
+SUMS = [('ws16-22', range(16, 23)), ('ws23-30', range(23, 31))]   # HIS 1111 two right columns (1109: ws13-20, ws21-30)
 CONTROL_FLAGGED = 257295        # 1109 measurement: the 14 wsf columns' cells at -1 or +1, whole tape
-STRIDE = len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + 1   # bytes per row: r-pred, the TO/AW codes, the
-#   TO/AW counts, then the pseudo trade's target-side at the row's read bar: -1 LOW, +1 HIGH, 0 no trade
+CONTROL_COLS = 14               # the control reads gcws15..ws12, the first 14 columns, alone
+MNR_LABEL = 'M-no-rev'          # HIS 1111 column label, between ws15 and ws16-22
+MNR_TOP = 30                    # HIS 1111 answer: ws1..ws30Mage, not the ladder's 33
+STRIDE = len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS) + 4   # bytes per row: r-pred,
+#   the TO/AW codes, the TO/AW counts, the cross codes (HIS 1110: 1 X, 2 E, 3 both, on the row's target-side; +4 the
+#   line reads AW on this row and TO on the row before, HIS 1110 TO -> AW flip), per sum the count of its lines
+#   reading TO(exf) (HIS 1111), the M-no-rev TF (HIS 1111, 0 none),
+#   its line's closed-prev value x 10 as an int16 in two bytes (low byte first), then the pseudo trade's target-side at the row's read bar: -1 LOW, +1 HIGH, 0 no trade
+
+
+def m_no_rev(sp, prt):
+    """HIS 1111 M-no-rev. -> (int8 [rows], int16 [rows]): the highest TF whose Mage qualifies at the row's print bar,
+    0 = none, and that line's CLOSED-PREV value there x 10 (HIS 1111 *"add the line's value to the text"*, his
+    example 1 dp), 0 where no TF prints.
+
+    A ws{TF}Mage, ws1..ws30, qualifies on a row when, at the row's print bar:
+      oob       its CLOSED-PREV value is at or beyond 85 high / 15 low on the row's target-side (the time cell's
+                colour). No pseudo trade open, no target-side, nothing prints
+      the cross its cross INTO oob is the first bar of its current closed-prev oob run. The cross back to ib has
+                no bearing (HIS 1111)
+      reversal  no lift-off reversal printed between the cross and the print bar. The lift-off is jig.lift_off on
+                the EMERGING Mage line over the whole tape - one unbroken rolling window - at the banked LIFT_*
+                knobs with no e path, the call every Mage reader makes. A reversal counts from its KNOWABLE bar,
+                the end of its 40 s hold (lift_stamp), at or after the cross - HIS 1111: build it *"based on that
+                table's output"*, the 1111 table of every change from 2026-09-21 15:44:00, which read it that way
+    """
+    idx = np.arange(ln.N)
+    out = np.zeros(len(prt), np.int8)
+    val = np.zeros(len(prt), np.int16)
+    for t in range(1, MNR_TOP + 1):               # ascending, so the highest qualifying TF is the one left
+        em = np.asarray(ln.line('ws%dMage' % t), float)
+        cp = CP.series(em, t * 60)
+        for sd in (+1, -1):
+            with np.errstate(invalid='ignore'):
+                oob = cp >= K.OOB_HI if sd > 0 else cp <= K.OOB_LO
+            start = oob & ~np.concatenate([[False], oob[:-1]])
+            cross = np.where(oob, np.maximum.accumulate(np.where(start, idx, -1)), -1)
+            raw = np.asarray(JIG.lift_off(em, sd, K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL, K.LIFT_WOB), int)
+            st = np.asarray([K.lift_stamp(int(b)) for b in raw], int)
+            k = np.searchsorted(st, idx, side='right') - 1     # the last reversal knowable at or before each bar
+            last = np.where(k >= 0, st[np.clip(k, 0, None)], -1)
+            assert (last <= idx).all(), 'a reversal is read before it is knowable'
+            un = (oob & (last < cross))[prt]
+            q = (sp == sd) & un
+            out = np.where(q, t, out).astype(np.int8)
+            v10 = np.round(np.where(q, cp[prt], 0.0) * 10.0)
+            assert (np.abs(v10) < 32767).all(), 'a Mage value x 10 does not fit an int16'
+            val = np.where(q, v10, val).astype(np.int16)
+    return out, val
 
 
 def build():
-    """-> (row open ms [n], [n, 14 + 2] int8: r-pred per wsf line, then the two sums). Row i is the ws1
+    """-> (row open ms [n], [n, STRIDE] int8: r-pred per line, then the two sums, then the rest). Row i is the ws1
     bar opening at t0 + 60 s * i."""
     ts = np.asarray(ln.ts, np.int64)
     assert (np.diff(ts) == 5000).all(), 'the 5 s grid has a gap - a row would not be one ws1 bar'
@@ -107,7 +236,7 @@ def build():
     prt = first + 12                             # HIS ANSWER: the cell is the value where closed-prev shows it
     assert (ts[prt] - ts[first] == 60000).all()
     cols = [rpred(name)[prt] for name in LINES]
-    for _, tfs in SUMS:                          # the same read, summed: -8..+8 and -10..+10, fits int8
+    for _, tfs in SUMS:                          # the same read, summed: -7..+7 and -8..+8, fits int8
         cols.append(np.sum([rpred('ws%d' % t)[prt].astype(int) for t in tfs], 0))
     #   TOWARDS/AWAY at the same print bar: 0 no state, 1 TO, 2 AW, and +2 when the line is ex-20/80 on the
     #   target-side there - 3 TO(exf), 4 AW(exf). Then per sum column the TO count and the AW count over its
@@ -120,66 +249,71 @@ def build():
         side[o:c] = s
     live = side != 0
     sp = side[prt]
+
+    def exf_at(t):
+        #   HIS 1109 *"append `(inf)` or `(exf)`"*: ex-20/80 on the target-side by the banked reader - the
+        #   one the towards/away mech's own ex-fence test uses (closed-prev, or the emerging 60 s extreme)
+        return np.where(sp > 0, TA.exf_mask(LN, t, +1)[prt], TA.exf_mask(LN, t, -1)[prt]) & (sp != 0)
     for name in LINES:
         t = int(name[2:]) if name.startswith('ws') else 0
         if t not in ST:
             cols.append(np.zeros(len(prt), np.int8))
             continue
-        #   HIS 1109 *"append `(inf)` or `(exf)`"*: ex-20/80 on the target-side by the banked reader - the
-        #   one the towards/away mech's own ex-fence test uses (closed-prev, or the emerging 60 s extreme)
-        exf = np.where(sp > 0, TA.exf_mask(LN, t, +1)[prt], TA.exf_mask(LN, t, -1)[prt]) & (sp != 0)
         st = ST[t][prt].astype(np.int8)
-        cols.append(np.where((st != TA.NONE) & exf, st + 2, st))
+        cols.append(np.where((st != TA.NONE) & exf_at(t), st + 2, st))
     for _, tfs in SUMS:
         for code in (TA.TO, TA.AW):
             n = np.sum([(ST[t][prt] == code).astype(int) for t in tfs], 0)
             cols.append(np.where(live[prt], n, -1))
+    #   HIS 1110 CROSS ROW: the e and x race wins per side over the whole tape, each put on the row of the ws1 bar it
+    #   lands in; the row's target-side picks which side prints - crossovers LOW, crossunders HIGH
+    for name in LINES:
+        t = int(name[2:]) if name.startswith('ws') else 0
+        if t not in ST:
+            cols.append(np.zeros(len(prt), np.int8))
+            continue
+        code = {}
+        for sd in (-1, +1):
+            race = LE.race(t, sd)
+            c = np.zeros(len(prt), np.int8)
+            for bit, line in ((1, np.asarray(ln.line('ws%dx' % t), float)), (2, WSE.lines()[t])):
+                wins = np.asarray([b for b, _ in JIG.e_race_wins(line, race, sd)], np.int64)
+                row = (wins - first[0]) // 12
+                row = row[(wins >= first[0]) & (row < len(prt))]
+                c[row] |= bit
+            code[sd] = c
+        xc = np.where(sp < 0, code[-1], np.where(sp > 0, code[+1], 0)).astype(np.int8)
+        #   HIS 1110 *"when a TF flips from TO to AW"*: +4 on the row that reads AW where the row before read TO;
+        #   that row only - *"the 'AW's in the following rows are treated normally"*
+        st = ST[t][prt]
+        xc[1:] |= 4 * ((st[:-1] == TA.TO) & (st[1:] == TA.AW)).astype(np.int8)
+        cols.append(xc)
+    #   HIS 1111 *"if any of the individual lines are printing TO(exf), print "TO(exf)" under the TO:x AW:x row"*:
+    #   per sum column, how many of its lines read TO(exf) - the code a ws1..ws15 cell prints as TO(exf)
+    for _, tfs in SUMS:
+        cols.append(np.sum([((ST[t][prt] == TA.TO) & exf_at(t)).astype(int) for t in tfs], 0))
+    mn, mv = m_no_rev(sp, prt)                   # HIS 1111 M-no-rev: the highest qualifying TF, 0 none, and its value
+    cols.append(mn)
+    cols.append((mv & 0xFF).astype(np.uint8).view(np.int8))
+    cols.append((mv >> 8).astype(np.int8))
     cols.append(side[prt])                       # HIS 1109: the time cell's 20% colour, red LOW, green HIGH
     return ts[first], np.ascontiguousarray(np.stack(cols, 1).astype(np.int8)), ln.U(trades[0][0])
 
 
 T0 = time.time()
-OPEN, RP, TA_FIRST = build()
+OPEN, RP, _ = build()
 assert RP.shape[1] == STRIDE
 DAYS = []
 for i, ms in enumerate(OPEN):
     d = time.strftime('%Y-%m-%d', time.gmtime(int(ms) // 1000))
     if not DAYS or DAYS[-1][0] != d:
         DAYS.append([d, i])
-FLAGGED = int((RP[:, :len(LINES)] != 0).sum())
+FLAGGED = int((RP[:, :CONTROL_COLS] != 0).sum())
 TAC = RP[:, len(LINES) + len(SUMS):2 * len(LINES) + len(SUMS)]
 U = lambda ms: time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(int(ms) // 1000))
 META = json.dumps({
-    'lines': LINES, 'sums': [s for s, _ in SUMS], 'stride': STRIDE, 'rows': int(len(OPEN)), 't0': int(OPEN[0]), 'step': 60000,
-    'days': DAYS,
-    'legend': [
-        ['a row', 'one ws1 bar, timed at its open (UTC)'],
-        ['a cell', 'emerging r-pred at the 5 s bar where closed-prev first shows that ws1 bar: the row time + 60 s'],
-        ['-1 red', 'a low breach predicted: %g < r <= %g, the lower of m and Mage at or below %g, and its '
-                   'overshoot past %g bigger than r\'s distance to %g' % (LO, FENCE_LO, LO, LO, LO)],
-        ['+1 green', 'a high breach predicted: %g <= r < %g, the higher of m and Mage at or above %g, and its '
-                     'overshoot past %g bigger than r\'s distance to %g' % (FENCE_HI, HI, HI, HI, HI)],
-        ['0', 'neither'],
-        ['the 2 sums', 'the same r-pred read added up over ws13..ws20 (-8 to +8) and ws21..ws30 (-10 to +10). '
-                       'Red below 0, green above 0, orange at 0'],
-        ['(inf) / (exf)', 'after TO or AW: the r line is in-fence or ex-20/80 on the target-side at that bar, by '
-                          'the banked ex-20/80 reader the towards/away mech itself uses - closed-prev, or the '
-                          'emerging extreme of the 60 s to that bar'],
-        ['TO / AW', 'under each number: the new towards/away state of that r line, TO towards, AW away, at the '
-                    'same 5 s bar as the r-pred cell. The target-side comes from the pseudo trade open at that bar: '
-                    'the ws2Mage pivots, the last of each same-side run'],
-        ['the time cell colour', 'the pseudo trade\'s target-side at the row\'s read bar, 20% opaque: red LOW, '
-                                 'green HIGH. A trade opens on the first row of a new colour, and every line reads TO '
-                                 'there'],
-        ['TO:x  AW:x', 'under each sum: how many of its lines read TO and how many AW. A line with no r value counts '
-                       'in neither'],
-        ['no TO / AW', 'gcws15, gcws30 and ws1..ws3 are not in the towards/away lines (ws4..ws30). Rows before the '
-                       'first pseudo trade opens, %s, have no target-side' % TA_FIRST],
-        ['a missing input', 'r-pred reads 0 when r, m or Mage has no value: each line\'s warm-up at the tape\'s '
-                            'start, to 2026-07-03 06:28:00 on ws30, and 3 rows where m has none'],
-        ['the rows', '%s .. %s, %d ws1 bars. The tape\'s last ws1 bar has no 5 s bar after it, so no row'
-                     % (U(OPEN[0]), U(OPEN[-1]), len(OPEN))],
-    ]})
+    'lines': LINES, 'mnr': MNR_LABEL, 'sums': [s for s, _ in SUMS], 'stride': STRIDE, 'rows': int(len(OPEN)), 't0': int(OPEN[0]), 'step': 60000,
+    'days': DAYS})
 
 
 class H(BaseHTTPRequestHandler):
@@ -206,16 +340,18 @@ class H(BaseHTTPRequestHandler):
 
 PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>r-pred wsf</title>
+<title>fdm2-diag1</title>
 <style>
 :root{--bg:#ffffff;--fg:#1d1d1f;--mut:#6e6e73;--line:#dcdce0;--hd:#f1f1f4;--zebra:#fafafb;--red:#d93025;--grn:#1e8e3e;
   --on:#ffffff;--sel:#1a73e8;--dis:#c4c4c8;--org:#d9650b;
-  --redA:color-mix(in srgb,var(--red) 20%,transparent);--grnA:color-mix(in srgb,var(--grn) 20%,transparent)}
+  --redA:color-mix(in srgb,var(--red) 20%,transparent);--grnA:color-mix(in srgb,var(--grn) 20%,transparent);
+  --redB:color-mix(in srgb,var(--red) 55%,transparent);--grnB:color-mix(in srgb,var(--grn) 55%,transparent);
+  --xc:#a68a00;--hl:color-mix(in srgb,var(--sel) 16%,transparent);--flip:#000000}
 @media (prefers-color-scheme: dark){:root{--bg:#141416;--fg:#e8e8ea;--mut:#9a9aa0;--line:#2e2e33;--hd:#1e1e22;
-  --zebra:#18181b;--red:#e5483b;--grn:#2ea44f;--on:#ffffff;--sel:#8ab4f8;--dis:#4a4a50;--org:#e8710a}}
+  --zebra:#18181b;--red:#e5483b;--grn:#2ea44f;--on:#ffffff;--sel:#8ab4f8;--dis:#4a4a50;--org:#e8710a;--xc:#ecc94b;--flip:#ffffff}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.4 system-ui,-apple-system,Segoe UI,sans-serif}
-.wrap{max-width:1420px;margin:0 auto;padding:12px 16px 24px}
+.wrap{max-width:1420px;margin:0 auto;padding:12px 16px;height:100vh;display:flex;flex-direction:column}
 h1{font-size:15px;margin:0 0 8px;font-weight:600}
 .cal{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px}
 .mon{min-width:200px}
@@ -228,48 +364,57 @@ h1{font-size:15px;margin:0 0 8px;font-weight:600}
 .grid button:disabled{color:var(--dis);border-color:transparent;cursor:default}
 .grid button.on{background:var(--sel);border-color:var(--sel);color:var(--bg);font-weight:600}
 .status{display:flex;gap:18px;color:var(--mut);font-size:12px;margin:4px 0 6px;font-variant-numeric:tabular-nums}
-.box{height:68vh;min-height:320px;border:1px solid var(--line);border-radius:6px;overflow:auto;position:relative;overflow-anchor:none}
-.inner{min-width:1200px}
-.hd,.row{display:grid;grid-template-columns:150px repeat(14,minmax(54px,1fr)) repeat(2,minmax(104px,1.4fr));height:24px;align-items:center}
-.row{height:38px}
+.box{flex:1 1 0;min-height:320px;border:1px solid var(--line);border-radius:6px;overflow-y:auto;overflow-x:hidden;position:relative;overflow-anchor:none}
+.inner{min-width:0}
+.hd,.row{display:grid;grid-template-columns:var(--gt);height:24px;align-items:center}
+.row{height:50px}
 .hd{position:sticky;top:0;z-index:2;background:var(--hd);border-bottom:1px solid var(--line);font-weight:600}
 .hd div{text-align:center;font-size:12px}
 .hd div:first-child,.row .t{text-align:left;padding-left:8px}
 .body{position:relative}
 .row{position:absolute;left:0;right:0;top:0;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--line)}
 .row.z{background:var(--zebra)}
-.row div{text-align:center;height:37px;display:flex;flex-direction:column;justify-content:center;line-height:16px}
-.row .t{display:block;line-height:37px}
+.row div{text-align:center;height:49px;display:flex;flex-direction:column;justify-content:center;line-height:16px}
+.row .t{display:block;line-height:49px}
 .row div b{font-weight:700;font-size:10px}
-.row div b.s{white-space:pre}
+.row div b.s,.row div b.x{white-space:pre}
+.row div b.x{color:var(--xc);font-weight:900}
+.row .mn{font-weight:600}
+.row div b.g{color:var(--mut)}
+.row div b.f{color:var(--flip)}
+.row.sel{background:var(--hl);outline:2px solid var(--sel);outline-offset:-2px}
 .row .t.lo{background:var(--redA)}
 .row .t.hi{background:var(--grnA)}
 .row .t{color:var(--fg);white-space:nowrap}
 .row .m{background:var(--red);color:var(--on);font-weight:600}
 .row .p{background:var(--grn);color:var(--on);font-weight:600}
+.row .m.a{background:var(--redB)}
+.row .p.a{background:var(--grnB)}
 .row .w{color:var(--dis)}
 .row .zr{color:var(--mut)}
 .row .o{background:var(--org);color:var(--on);font-weight:600}
 .hd .sx,.row .sx{border-left:2px solid var(--mut)}
-table.leg{border-collapse:collapse;margin-top:12px;font-size:12px}
-table.leg td{border:1px solid var(--line);padding:3px 8px;vertical-align:top}
-table.leg td:first-child{white-space:nowrap;font-weight:600}
 </style></head><body><div class="wrap">
-<h1>r-pred, wsf gcws15 to ws12 plus the ws13-ws20 and ws21-ws30 sums, emerging, on closed-prev ws1 bars, with towards/away</h1>
+<h1>fdm2-diag1 - r-pred, gcws15 to ws15, M-no-rev, plus the ws16-22 and ws23-30 sums, emerging, on closed-prev ws1 bars, with towards/away</h1>
 <div class="cal" id="cal"></div>
 <div class="status"><span id="top">top row: -</span><span id="held">cache: -</span><span id="err"></span></div>
 <div class="box" id="box"><div class="inner"><div class="hd" id="hd"></div><div class="body" id="body"></div></div></div>
-<table class="leg" id="leg"></table>
 </div><script>
-const RH = 38;          // row height, px - two lines: the number, then TO / AW
+const RH = 50;          // row height, px - three lines: the number, TO / AW, then the crosses (HIS 1110)
 const BLOCK = 720;      // rows per fetch: 12 h of ws1 bars
 const AHEAD = 3;        // blocks prefetched in the scroll direction
 const KEEP = 60;        // blocks held before the least recently used is dropped
+const TW = 116;         // px, the time column: MM-DD HH:MM:SS (HIS 1111 drops the year) plus the 32 px it had
+const TMIN = 94, SMIN = 56;   // px, the least the time column and a sum column give way to: their text, 84 and 52 px
+const MMIN = 68;      // px, the least M-no-rev gives way to: its widest text, "ws23:100.0", is 65.0 px in the cell (headless Chrome)
+const CW = 72.36;      // px, every line and sum column - HIS 1111 *"stay the same width as they are now"*
 let meta, NL, NC, NS;
 const cache = new Map(), pending = new Set();
 const box = document.getElementById('box'), body = document.getElementById('body');
 const pool = [];
 let lastTop = 0, dir = 1, raf = 0, dayOn = '';
+const NB = '\u00a0';   // HIS 1110: the place holder line - a blank line keeps a cell's 3 lines aligned
+let sel = -1;           // HIS 1110: the clicked row, highlighted; a click on another row moves it, on the same row clears it
 
 const fmt = ms => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
 
@@ -301,12 +446,19 @@ function ensurePool(n) {
   while (pool.length < n) {
     const el = document.createElement('div'); el.className = 'row';
     const cells = [];
+    let mc = null;
     for (let c = 0; c <= NC; c++) {
+      if (c === NL + 1) {              // HIS 1111 M-no-rev, between ws15 and the sums; 3 lines like every data cell
+        mc = document.createElement('div'); mc.n = document.createElement('span');
+        mc.ta = document.createElement('b'); mc.xc = document.createElement('b'); mc.append(mc.n, mc.ta, mc.xc);
+        el.appendChild(mc);
+      }
       const d = document.createElement('div'); d.className = c ? '' : 't'; el.appendChild(d);
       if (c) { d.n = document.createElement('span'); d.ta = document.createElement('b'); d.append(d.n, d.ta); if (c > NL) d.ta.className = 's'; }
+      if (c) { d.xc = document.createElement('b'); d.xc.className = 'x'; d.append(d.xc); }   // HIS 1110 cross row, every cell
       cells.push(d);
     }
-    body.appendChild(el); pool.push({el, cells, i: -1, ok: false});
+    body.appendChild(el); pool.push({el, cells, mc, i: -1, ok: false});
   }
 }
 function draw() {
@@ -323,25 +475,42 @@ function draw() {
     p.el.style.display = '';
     if (p.i === i && p.ok) continue;
     p.el.style.transform = 'translateY(' + (i * RH) + 'px)';
-    p.el.className = 'row' + (i % 2 ? ' z' : '');
-    p.cells[0].textContent = fmt(meta.t0 + i * meta.step);
+    p.el.className = 'row' + (i % 2 ? ' z' : '') + (i === sel ? ' sel' : '');
+    p.cells[0].textContent = fmt(meta.t0 + i * meta.step).slice(5);   // HIS 1111: no year
     const blk = getBlock(Math.floor(i / BLOCK)), o = (i % BLOCK) * NS;
     const sd = blk ? blk[o + NS - 1] : 0;   // HIS 1109: the trade's target-side, 20% red LOW / green HIGH
     p.cells[0].className = 't' + (sd < 0 ? ' lo' : sd > 0 ? ' hi' : '');
+    //   HIS 1111 M-no-rev: the highest target-side oob Mage TF with no lift-off reversal since its cross to oob;
+    //   *"if there is no Mage qualifying, don't print anything in the field"*
+    //   HIS 1111 *"if the field is populated, add the line's value to the text"*: closed-prev, 1 dp, "ws23:95.2"
+    const mv = blk ? blk[o + NS - 4] : 0, mx = blk ? ((blk[o + NS - 2] << 8) | (blk[o + NS - 3] & 255)) : 0;
+    p.mc.n.textContent = !blk ? '·' : mv > 0 ? 'ws' + mv + ':' + (mx / 10).toFixed(1) : NB;
+    p.mc.ta.textContent = NB; p.mc.xc.textContent = NB;
+    p.mc.className = (blk ? 'mn' : 'w') + ' sx';
     for (let c = 0; c < NC; c++) {
       const d = p.cells[c + 1], sx = c === NL ? ' sx' : '';
-      if (!blk) { d.n.textContent = '·'; d.ta.textContent = ''; d.className = 'w' + sx; continue; }
+      if (!blk) { d.n.textContent = '·'; d.ta.textContent = NB; d.xc.textContent = NB; d.className = 'w' + sx; continue; }
       const v = blk[o + c];
       if (c < NL) {                     // a wsf line: -1 red, +1 green, 0 plain
         d.n.textContent = v === -1 ? '-1' : v === 1 ? '+1' : '0';
-        d.className = v === -1 ? 'm' : v === 1 ? 'p' : 'zr';
         const s = blk[o + NC + c];      // HIS 1109: TO or AW below the number, bold
-        d.ta.textContent = ['', 'TO(inf)', 'AW(inf)', 'TO(exf)', 'AW(exf)'][s] || '';   // HIS 1109 (inf) / (exf)
+        //   HIS 1110: a -1 / +1 on an AW line (code 2 AW(inf), 4 AW(exf)) prints its background at 55% opaque
+        d.className = (v === -1 ? 'm' : v === 1 ? 'p' : 'zr') + (v !== 0 && (s === 2 || s === 4) ? ' a' : '');
+        d.ta.textContent = ['', 'TO(inf)', 'AW(inf)', 'TO(exf)', 'AW(exf)'][s] || NB;   // HIS 1109 (inf) / (exf)
+        //   HIS 1110: crossovers on a LOW target-side, crossunders on HIGH; X and E on one ws1 bar join, 4 spaces apart
+        const xc = blk[o + NC + NL + 2 * (NC - NL) + c];
+        d.xc.textContent = [xc & 1 ? (sd < 0 ? 'X↑' : '↓X') : '', xc & 2 ? (sd < 0 ? '↑E' : '↓E') : '']
+          .filter(Boolean).join('    ') || NB;
+        d.ta.className = xc & 4 ? 'f' : 'g';   // HIS 1110: TO on the row before, AW on this one - white, this row only;
+                                               // HIS 1111: every other TO/AW grey, on a -1/+1 cell too
       } else {                          // a sum, HIS 1109: red below 0, green above 0, orange at 0
         d.n.textContent = v > 0 ? '+' + v : String(v);
         d.className = (v < 0 ? 'm' : v > 0 ? 'p' : 'o') + sx;
         const k = o + NC + NL + 2 * (c - NL), to = blk[k], aw = blk[k + 1];
-        d.ta.textContent = to < 0 ? '' : 'TO:' + to + '  AW:' + aw;   // HIS "TO:x  AW:x", the weekday size
+        d.ta.textContent = to < 0 ? NB : 'TO:' + to + '  AW:' + aw;   // HIS "TO:x  AW:x", the weekday size
+        //   HIS 1111: "TO(exf)" under it when any of the column's lines reads TO(exf); the TO:x AW:x line's style
+        d.xc.textContent = blk[o + NC + 2 * NL + 2 * (NC - NL) + (c - NL)] > 0 ? 'TO(exf)' : NB;
+        d.xc.className = 's';
       }
     }
     p.i = i; p.ok = !!blk;
@@ -390,13 +559,24 @@ async function init() {
   meta = await (await fetch('meta')).json();
   NL = meta.lines.length; NC = NL + meta.sums.length; NS = meta.stride;
   const hd = document.getElementById('hd');
-  for (const h of ['ws1 time (UTC)'].concat(meta.lines, meta.sums)) { const d = document.createElement('div'); d.textContent = h; hd.appendChild(d); }
-  hd.children[NL + 1].className = 'sx';
+  for (const h of ['ws1 time (UTC)'].concat(meta.lines, [meta.mnr], meta.sums)) { const d = document.createElement('div'); d.textContent = h; hd.appendChild(d); }
+  hd.children[NL + 1].className = 'sx'; hd.children[NL + 2].className = 'sx';
   body.style.height = (meta.rows * RH) + 'px';
-  const leg = document.getElementById('leg');
-  for (const [k, v] of meta.legend) { const tr = leg.insertRow(); tr.insertCell().textContent = k; tr.insertCell().textContent = v; }
+  //   HIS 1111: no sideways bar. The lines stay CW; the time column takes what is left, then M-no-rev and the
+  //   sums give way together
+  const inner = box.firstElementChild, tw = TW + (NC + 1) * CW;
+  inner.style.setProperty('--gt', 'minmax(' + TMIN + 'px,1fr) repeat(' + NL + ',' + CW + 'px) minmax(' + MMIN + 'px,' +
+                          CW + 'px) repeat(' + (NC - NL) + ',minmax(' + SMIN + 'px,' + CW + 'px))');
+  //   after the body's height, so the vertical scrollbar is in the box's width
+  document.querySelector('.wrap').style.maxWidth = (tw + box.offsetWidth - box.clientWidth + 32) + 'px';
   buildCal();
   box.addEventListener('scroll', schedule, {passive: true});
+  body.addEventListener('click', e => {           // HIS 1110: *"make a row highlighted if I click on that row"*
+    const el = e.target.closest('.row'), p = el && pool.find(q => q.el === el);
+    if (!p || p.i < 0) return;
+    sel = sel === p.i ? -1 : p.i;
+    for (const q of pool) q.el.classList.toggle('sel', q.i === sel);
+  });
   window.addEventListener('resize', schedule);
   evict();
   schedule();
@@ -417,6 +597,22 @@ if __name__ == '__main__':
               % (label, (v < 0).sum(), (v == 0).sum(), (v > 0).sum(), v.min(), v.max()))
     print('towards/away cells: TO(inf) %d, AW(inf) %d, TO(exf) %d, AW(exf) %d, none %d'
           % tuple((TAC == k).sum() for k in (1, 2, 3, 4, 0)))
+    _xc = RP[:, 2 * len(LINES) + 3 * len(SUMS):3 * len(LINES) + 3 * len(SUMS)]
+    print('cross row cells: X only %d, E only %d, both %d'
+          % tuple(int(((_xc & 3) == k).sum()) for k in (1, 2, 3)))
+    print('TO -> AW flip cells (white AW text): %d, %d of them on a -1/+1 cell'
+          % (int((_xc & 4).astype(bool).sum()), int(((_xc & 4).astype(bool) & (RP[:, :len(LINES)] != 0)).sum())))
+    _rp = RP[:, :len(LINES)]
+    print('r-pred -1/+1 cells on an AW line (55%% background): %d of %d flagged, all %d columns'
+          % (int(((_rp != 0) & ((TAC == 2) | (TAC == 4))).sum()), int((_rp != 0).sum()), len(LINES)))
+    _mn = RP[:, STRIDE - 4].astype(int)
+    _mv = (RP[:, STRIDE - 2].astype(int) << 8) | (RP[:, STRIDE - 3].astype(int) & 255)
+    for k, (label, _) in enumerate(SUMS):
+        _ex = RP[:, 3 * len(LINES) + 3 * len(SUMS) + k].astype(int)
+        print('%s: rows printing TO(exf) %d of %d, most lines reading TO(exf) on one row %d'
+              % (label, int((_ex > 0).sum()), len(_ex), int(_ex.max())))
+    print('M-no-rev (ws1..ws%dMage): rows printing a TF %d of %d, highest TF printed %d, value %.1f .. %.1f'
+          % (MNR_TOP, int((_mn > 0).sum()), len(_mn), int(_mn.max()), _mv[_mn > 0].min() / 10, _mv[_mn > 0].max() / 10))
     print('towards/away knobs (banked): ' + ' '.join('%s=%s' % (k, v) for k, v, _, _ in TA.KNOBS))
     print('open http://127.0.0.1:%d' % PORT)
     sys.stdout.flush()

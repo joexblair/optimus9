@@ -317,7 +317,8 @@ class Board:
         """
         mode = str(K.LIN2_EXFNC_LATCH_REL)
         assert mode in ('lift', 'barrage'), 'LIN2_EXFNC_LATCH_REL %r is not an arm' % mode
-        key = (int(tf), int(side), mode, float(K.RMOM_FNC))
+        import v4_lift_e as _LE                    # HIS 1110 e path: its knobs are in the key
+        key = (int(tf), int(side), mode, float(K.RMOM_FNC), tuple(_LE.knobs()))
         if key in self._lat:
             return self._lat[key]
         v = self._state(tf)
@@ -327,10 +328,12 @@ class Board:
         if mode == 'lift':
             #   LOCAL IMPORT, same reason as _releases': no new module-load edge.
             from optimus9.analysis.jig import lift_off
+            import v4_lift_e as LE   # HIS 1110 e-cross reversal: every lift-off reader gets it (6B)
             gap = int(K.gap_for(int(tf)))
             span = (max(2, int(K.LIFT_PTS)) - 1) * max(1, gap)
             raw = np.asarray(sorted(int(b) for b in lift_off(
-                v, int(side), K.LIFT_PTS, gap, K.LIFT_TOL, K.LIFT_WOB)), int)
+                v, int(side), K.LIFT_PTS, gap, K.LIFT_TOL, K.LIFT_WOB,
+                e_path=LE.get(int(tf), len(v), int(side)))), int)
             #   THE SAMPLING RESTARTS AT THE LATCH, Joe 1030: *"lift-off per-line sampling is set
             #   to zero (samples collected) when the ex-fence latch is latched"*. So a lift-off
             #   only counts for an episode once the whole lattice sits at or after the latch-on
@@ -462,6 +465,7 @@ class Board:
         NO EXTRA HOLD. LIN2_EXFNC_LATCH_WOB debounces a CROSS; this is not a cross.
         """
         from optimus9.analysis.jig import lift_off
+        import v4_lift_e as LE   # HIS 1110 e-cross reversal: every lift-off reader gets it (6B, 2A)
         tf, bar, side = int(tf), int(bar), int(side)
         v = self._state(tf)
         w = max(1, int(K.LIN2_EXFNC_LATCH_WOB))
@@ -473,7 +477,8 @@ class Board:
         gap = int(K.gap_for(tf))
         span = (max(2, int(K.LIFT_PTS)) - 1) * max(1, gap)
         raw = np.asarray(sorted(int(b) for b in lift_off(
-            v, side, K.LIFT_PTS, gap, K.LIFT_TOL, K.LIFT_WOB)), int)
+            v, side, K.LIFT_PTS, gap, K.LIFT_TOL, K.LIFT_WOB,
+            e_path=LE.get(tf, len(v), side))), int)
         #   every lift-off whose whole lattice sits at or after the latch-on bar, his 1030 sampling
         #   reset, and whose STAMP has landed by `bar` - a release is not in force before then.
         ok = [int(b) for b in raw[np.searchsorted(raw, on0 + span + 1, 'left'):]

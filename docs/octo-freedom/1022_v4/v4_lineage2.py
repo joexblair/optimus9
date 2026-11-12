@@ -104,6 +104,7 @@ _e = sys.stderr; sys.stderr = io.StringIO()
 try:
     import ln
     from optimus9.analysis.jig import anchor_floater, lift_off, mage_cascade, oob_ib_cross, mage_cascade_bar, MC_GAP
+    import v4_lift_e as LE   # HIS 1110 e-cross reversal: every lift-off reader gets it (6B)
     from optimus9.compute.rule2_trajectory import opposed_extrema
 finally:
     sys.stderr = _e
@@ -375,12 +376,13 @@ def _rev_pairs(BD, tf, side):
     THE WOB IS LIN2_REV_WOB 12, his 1026 static. The stamp is raw + wob - 1, which is the last bar
     of the hold and the first bar a consumer may act on; the raw bar is the anchor and the identity.
     """
-    key = (id(BD), int(tf), int(side), int(K.LIN2_REV_WOB))
+    key = (id(BD), int(tf), int(side), int(K.LIN2_REV_WOB), tuple(LE.knobs()))
     if key not in _RV:
         w = max(1, int(K.LIN2_REV_WOB))
         _RV[key] = [(int(b), int(b) + w - 1)
                     for b in lift_off(BD.E[int(tf)], int(side), K.LIFT_PTS,
-                                      K.gap_for(int(tf)), K.LIFT_TOL, w)]
+                                      K.gap_for(int(tf)), K.LIFT_TOL, w,
+                                      e_path=LE.get(int(tf), len(BD.E[int(tf)]), int(side)))]
     return _RV[key]
 
 
