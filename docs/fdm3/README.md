@@ -26,7 +26,7 @@ caught mid-walk. A second, slower path can also turn it off: a `pxs` retest that
 | the mech | its doc | what it decides | state |
 |---|---|---|---|
 | `fdm3-sideways` | [fdm3-sideways.md](fdm3-sideways.md) | whether a trade opens in sideways mode | the trigger and the retest are specified and matched against Joe's examples. What sideways mode DOES is not yet specified. Only a probe exists |
-| `fdm3-oracle` | not written | unknown — Joe 1114: *"the oracle's underlying data will be central to all walk decisions"*. His workmate has been asked to explain its workings |
+| the oracle | [its own header in `docs/octo-freedom/1022_v4/out/rpred_ui.py`](../octo-freedom/1022_v4/out/rpred_ui.py) | it SHOWS, it does not decide: one row per closed-prev ws1 bar, one cell per wsf line, carrying `breaching_line.predict_breach`'s −1/+1 on the emerging r, m and Mage, with towards/away under each cell | LIVE as the `o9-rpred-ui` service on port 8788. **STILL NAMED `fdm2-oracle`** in the file, in `docs/octo-freedom/1109_towards_away.md` and in the page title. Joe 1114 believes he renamed it to `fdm3-oracle`; the rename has not been made anywhere |
 
 ---
 
