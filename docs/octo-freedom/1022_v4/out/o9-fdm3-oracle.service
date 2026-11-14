@@ -1,0 +1,17 @@
+[Unit]
+Description=fdm3-oracle, the r-pred web UI on 127.0.0.1:8788 (docs/octo-freedom/1022_v4/out/fdm3_oracle.py) - r-pred + towards/away
+After=network-online.target mysql.service
+Wants=network-online.target mysql.service
+
+[Service]
+Type=simple
+User=joe
+WorkingDirectory=/home/joe/thecodes/docs/octo-freedom/1022_v4/out
+ExecStart=/usr/bin/python3 -u /home/joe/thecodes/docs/octo-freedom/1022_v4/out/fdm3_oracle.py 8788
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/joe/thecodes/fdm3_oracle.log
+StandardError=append:/home/joe/thecodes/fdm3_oracle.log
+
+[Install]
+WantedBy=multi-user.target

@@ -10,7 +10,7 @@ stated yet; it goes on this line when he gives it.
 | banked | 1109, *"bank the towards/away update"*. Knobs in `1109_towards_away/ta_knobs.py`; a run with any knob off the bank refuses unless `W_TA_EXPERIMENT=1` |
 | live | 1109, *"make the machine live"*. In his sense: this is the towards/away mech we develop on. It is NOT wired into fdm2 or o9-live; nothing asked for that |
 | code | `docs/octo-freedom/1109_towards_away/towards_away.py` (the mech), `ta_knobs.py` (its knobs) |
-| output | the r-pred web UI, `docs/octo-freedom/1022_v4/out/rpred_ui.py`, port 8788 - section 7 |
+| output | the r-pred web UI, `docs/octo-freedom/1022_v4/out/fdm3_oracle.py`, port 8788 - section 7 |
 | 1110 | the lift-off update and ws1-3 are BANKED and LIVE - section 10, his *"after that's validated, bank both mechs and make their configs the live machine"*. The lift-off spec is `1110_lift_off_e.md` |
 | 1110 later | the flip at 50 - section 11, his *"the AW/TO logic needs refining"*. In the banked knobs as on (FLIP50 1) |
 | 1112 | the 50 reset, the excursion sample on e and x, void values, the row rule and the x/e path - section 12, his *"I want to see the flip from TO to AW based on the x and e cross."*. BANKED on, his answer "Bank it, UI shows it". LIVE 1112 on its current config, his *"make the machines (lift-off, webui, towards/away) live on their current configs"* |
@@ -214,9 +214,9 @@ read: *"this is a very helpful tool, and it's accurate"*.
 
 | item | value |
 |---|---|
-| live | HIS 1112 *"make the machines (lift-off, webui, towards/away) live on their current configs"*: fdm2-oracle (fdm2-diag1 until 1113) runs on its current config, with the 1112 towards/away and the pivot button, as the o9-rpred-ui service on port 8788 |
-| name | HIS 1113: *"rename the webUI report: fdm2-oracle"* (HIS 1111 named it fdm2-diag1, banked 2026-11-12). The page title and heading carry it; the file (rpred_ui.py) and the o9-rpred-ui service keep their names |
-| server | `docs/octo-freedom/1022_v4/out/rpred_ui.py [port]`, stdlib ThreadingHTTPServer on 127.0.0.1, default port 8788. The page is inline (the seam_stream.py pattern) |
+| live | HIS 1112 *"make the machines (lift-off, webui, towards/away) live on their current configs"*: fdm3-oracle (fdm2-diag1 until 1113, fdm2-oracle until 1114) runs on its current config, with the 1112 towards/away and the pivot button, as the o9-fdm3-oracle service on port 8788 |
+| name | HIS 1114: *"rename it to fdm3-oracle in all places, including renaming any references to rpred. you can take ownership of it now"*, which supersedes his 1113 *"rename the webUI report: fdm2-oracle"* (HIS 1111 named it fdm2-diag1, banked 2026-11-12). The page title, the heading, the file (fdm3_oracle.py), the unit (o9-fdm3-oracle.service) and the log (fdm3_oracle.log) all carry it now. OWNED BY 7c82535c from his 1114 |
+| server | `docs/octo-freedom/1022_v4/out/fdm3_oracle.py [port]`, stdlib ThreadingHTTPServer on 127.0.0.1, default port 8788. The page is inline (the seam_stream.py pattern) |
 | start-up | ~50 s: the r-pred matrix (~2 s) plus `towards_away.build()` with the e lines from the cache. Everything is held in memory; nothing is cached to disk by the UI, so a line change can never be served stale |
 | a row | one ws1 bar, timed at its open (UTC) |
 | the read bar | the row time + 60 s (12 bars): where closed-prev first shows that ws1 bar. r-pred, TO/AW and (inf)/(exf) are all read there |
