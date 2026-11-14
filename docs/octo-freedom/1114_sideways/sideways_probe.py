@@ -124,16 +124,20 @@ print('| ws1r\'s read for that cross | closed-prev at 60 s. MINE - he named no r
 print('| the scan window | +/-%.1f min, centred. his fdm3-sideways-retest-scan-window |' % (SCAN_S / 60))
 print('| the diff | abs(floater open - anchor open) / the EARLIER of the two x 100, <= %g%%. his '
       'fdm3-sideways-retest-diff-pct |' % DIFF_PCT)
+print('| the bars fed to the divergence | the two ws%d OHLC "open" extremum bars, HIS 1114 - so '
+      'both land on a %d minute multiple. The ws1b cross bars only CENTRE the windows |'
+      % (TRIG_TF, TRIG_TF))
 print('| the divergence | jig.anchor_floater_given on ws3r, ws4r, ws5r closed-prev against the raw '
-      'close, dr = the excursion side. The r read is MINE |')
+      'close at those two bars, dr = the excursion side. The r read is MINE |')
 print('| a divergence verdict | abs(state) == 1 and state == the excursion side. +/-2 is a price '
       'match and is IGNORED, his 1114 |')
 print()
 print('| the ws1b excursion | side | the pxs pivot | ws%db | oob | ws%dr | oob | the RAW verdict '
-      '| the anchor | the floater | ws%db/r oob at the floater | floater open | anchor open | the '
-      'diff %% | within %g%% | ws3r | ws4r | ws5r | the FINAL verdict |'
+      '| the anchor cross | the floater cross | ws%db/r oob at the floater | the floater extremum '
+      'bar | its open | the anchor extremum bar | its open | the diff %% | within %g%% | ws3r '
+      '| ws4r | ws5r | the FINAL verdict |'
       % (TRIG_TF, TRIG_TF, TRIG_TF, DIFF_PCT))
-print('|' + '---|' * 19)
+print('|' + '---|' * 21)
 for s0, s1, sd in ALLEX:
     if s1 < A:
         continue
@@ -145,11 +149,11 @@ for s0, s1, sd in ALLEX:
     row = ['%s .. %s' % (ln.U(s0), ln.U(s1)), 'HIGH' if sd > 0 else 'LOW', ln.U(p),
            '%.2f' % BT_[p], 'OOB' if bo else 'no', '%.2f' % RT[p], 'OOB' if ro else 'no', raw]
     if raw == 'FALSE':
-        print('| ' + ' | '.join(row + ['-'] * 10 + ['sideways == FALSE on the raw trigger']) + ' |')
+        print('| ' + ' | '.join(row + ['-'] * 12 + ['sideways == FALSE on the raw trigger']) + ' |')
         continue
     ank = s1 + 1
     if ank > ln.N - 1:
-        print('| ' + ' | '.join(row + ['past the tape'] + ['-'] * 9 + ['no retest']) + ' |')
+        print('| ' + ' | '.join(row + ['past the tape'] + ['-'] * 11 + ['no retest']) + ' |')
         continue
     #   the floater: earlier same-side excursions, latest first, each tested for a ws1r under-50
     #   cross strictly between its ib bar and the anchor
@@ -163,34 +167,43 @@ for s0, s1, sd in ALLEX:
             flo = c
             break
     if flo is None:
-        print('| ' + ' | '.join(row + [ln.U(ank), 'none found'] + ['-'] * 8
+        print('| ' + ' | '.join(row + [ln.U(ank), 'none found'] + ['-'] * 10
                                 + ['no retest - no floater']) + ' |')
         continue
     fbo, fro = oob(BT_[flo], sd), oob(RT[flo], sd)
     if not (fbo or fro):
-        print('| ' + ' | '.join(row + [ln.U(ank), ln.U(flo), 'neither'] + ['-'] * 7
+        print('| ' + ' | '.join(row + [ln.U(ank), ln.U(flo), 'neither'] + ['-'] * 9
                                 + ['do nothing - his ELSE IF']) + ' |')
         continue
     ft, fv = opens_in(flo, SCAN_S)
     at, av = opens_in(ank, SCAN_S)
     if not len(fv) or not len(av):
         print('| ' + ' | '.join(row + [ln.U(ank), ln.U(flo), 'yes', 'no ws%d open' % TRIG_TF]
-                                + ['-'] * 6 + ['no retest']) + ' |')
+                                + ['-'] * 8 + ['no retest']) + ' |')
         continue
     fi = int(np.argmax(fv) if sd > 0 else np.argmin(fv))
     ai = int(np.argmax(av) if sd > 0 else np.argmin(av))
     fo, ao = float(fv[fi]), float(av[ai])
+    #   HIS 1114: *"the anchor and floater should be found at the same-side ws5 OHLC open extremum
+    #   inside that 25min window, so the timestamps should be multiples of 5 minutes"*. THESE are
+    #   the two bars the divergence reads; the ws1b crosses only centred the windows.
+    fb = int(np.searchsorted(ln.ts, int(ft[fi])))
+    ab = int(np.searchsorted(ln.ts, int(at[ai])))
+    assert int(ln.ts[fb]) == int(ft[fi]) and int(ln.ts[ab]) == int(at[ai]), \
+        'an extremum open bar is not on the 5 s grid'
+    assert int(ft[fi]) % (TRIG_TF * 60 * 1000) == 0 and int(at[ai]) % (TRIG_TF * 60 * 1000) == 0, \
+        'an extremum open is not on the ws%d lattice' % TRIG_TF
     earlier = fo if ft[fi] <= at[ai] else ao
     pct = abs(fo - ao) / earlier * 100.0
     within = pct <= DIFF_PCT
-    row += [ln.U(ank), ln.U(flo), 'yes', '%.5f' % fo, '%.5f' % ao, '%.4f' % pct,
-            'yes' if within else 'NO']
+    row += [ln.U(ank), ln.U(flo), 'yes', ln.U(fb), '%.5f' % fo, ln.U(ab), '%.5f' % ao,
+            '%.4f' % pct, 'yes' if within else 'NO']
     if not within:
         print('| ' + ' | '.join(row + ['-'] * 3 + ['sideways == true - the diff is too wide']) + ' |')
         continue
     sts = []
     for t in (3, 4, 5):
-        d = J.anchor_floater_given(RD[t], close, sd, ank, flo)
+        d = J.anchor_floater_given(RD[t], close, sd, ab, fb)
         sts.append('none' if d is None else str(d['state']))
     hit = any(s == str(int(sd)) for s in sts)
     print('| ' + ' | '.join(row + sts
