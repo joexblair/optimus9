@@ -1457,6 +1457,57 @@ def anchor_floater(r, px, dr, k, block=AF_BLOCK, mid=50.0,
             'state': int(state), 'pm': bool(abs(state) == 2)}
 
 
+def anchor_floater_given(r, px, dr, k, bi, slope_floor=AF_SLOPE_FLOOR):
+    """[PRODUCER · Joe 1114] The divergence read on an anchor and floater HANDED IN. -> dict.
+
+    HIS 1114 RULING, verbatim: *"jig.anchor_floater is the divergence read, but it DERIVES its own
+    anchor and floater. this mech requires that a mode be built on jig.anchor_floater to receive
+    the anchor and floater timestamp, and derive whatever data it needs from those two
+    timestamps"*. His sideways mech already knows which two bars to compare - the
+    `pxs-retest-anchor` and the `pxs-retest-floater` - so steps 1 to 3 of `anchor_floater` must
+    NOT run.
+
+    IT IS STEP 4 AND NOTHING ELSE, the same arithmetic `anchor_floater` ends on, so the two cannot
+    drift: d_osc = r[k] - r[bi], d_px = px[k] - px[bi], the AF_SLOPE_FLOOR noise band, and the
+    same `state` signs. `k` is the ANCHOR, `bi` the FLOATER, `dr` the anchor's own side
+    (+1 the anchor is a high, -1 a low).
+
+      state  +1  a DIVERGENCE supporting a SHORT
+             -1  a DIVERGENCE supporting a LONG
+             +2  PM - price and osc AGREE, the trend supporting a SHORT
+             -2  PM - the trend supporting a LONG
+              0  inside AF_SLOPE_FLOOR, or either delta exactly 0
+      None       an input is not finite
+
+    HIS 1114: *"Price Match (state +/-2) will be ignored by sideways mode"*, so a caller there
+    tests `abs(state) == 1` and nothing else.
+
+    THE FLOATER HANDED IN IS NOT `anchor_floater`'s FLOATER. His is a ws1b oob->ib cross;
+    `anchor_floater`'s is an r extremum picked by its own step 3. This function derives neither.
+
+    CAUSAL: both bars are handed in and no bar between or beyond them is read.
+    """
+    k, bi = int(k), int(bi)
+    if not (np.isfinite(r[k]) and np.isfinite(r[bi]) and np.isfinite(px[k]) and np.isfinite(px[bi])):
+        return None
+    d_osc = float(r[k]) - float(r[bi])
+    d_px = float(px[k]) - float(px[bi])
+    if int(dr) > 0:
+        fired = 1 if (d_px > 0 and d_osc < 0) else 0
+    else:
+        fired = -1 if (d_px < 0 and d_osc > 0) else 0
+    if d_osc == 0.0 or d_px == 0.0 or abs(d_osc) <= float(slope_floor):
+        state = 0
+    elif fired != 0:
+        state = int(fired)
+    else:
+        state = -2 if d_px > 0 else 2
+    return {'anchor': (k, float(r[k]), float(px[k])),
+            'floater': (bi, float(r[bi]), float(px[bi])),
+            'd_osc': d_osc, 'd_px': d_px, 'fired': int(fired),
+            'state': int(state), 'pm': bool(abs(state) == 2)}
+
+
 # ── the RSI divergence, `bullish-rsi` / `bearish-rsi` (Joe 1107) ──────────────────────────────────
 # HIS ASK, after the 2026-08-25 07:49 -> 07:51 read: price made a lower low while the RSI under ws1r
 # made a higher low, and ws1r's rescaling (stoch of RSI) plus its 7-bar average hid it - *"can you
