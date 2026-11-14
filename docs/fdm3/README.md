@@ -43,6 +43,19 @@ caught mid-walk. A second, slower path can also turn it off: a `pxs` retest that
 
 ---
 
+## operating the oracle
+
+| | |
+|---|---|
+| the unit | `o9-fdm3-oracle.service`, enabled, running as `joe` from `docs/octo-freedom/1022_v4/out` |
+| the page | 127.0.0.1:8788 |
+| the log | `/home/joe/thecodes/fdm3_oracle.log` |
+| **a restart costs ~18 minutes** | Joe 1114: *"it takes ~18 minutes to restart"*. The 7 towards/away runs go one after another at 97.9 s to 109.4 s each, and the matrix is in memory with no disk cache |
+| so | a restart is EXPENSIVE. Batch code changes to that file, and read the running page rather than restarting to check something |
+| the standing idea for cutting it | Joe 1113: build the 8 combinations in parallel. cupy 14.1.1 and one RTX 3060 Ti are available, and every state must stay byte-identical to the serial page |
+
+---
+
 ## the knobs
 
 All fdm3 knobs live in [fdm3_knobs.py](fdm3_knobs.py), not in `v4_knobs`, so a v4 ruling and an
