@@ -1,4 +1,7 @@
-"""fdm3-oracle, THE r-pred WEB UI, OWNED BY 7c82535c FROM HIS 1114 *"you can take ownership of it now"* - HIS 1113 *"rename the webUI report: fdm3-oracle"* (HIS 1111 named it fdm2-diag1, banked 2026-11-12). Joe 1109: *"I want to access this -1/+1 r-pred data in a dhtml webUI"*.
+"""fdm3-oracle, THE r-pred WEB UI. OWNED BY 7c82535c from HIS 1114 *"rename it to fdm3-oracle in all places, including renaming any references to rpred. you can take ownership of it now"*, which supersedes HIS 1113 *"rename the webUI report: fdm2-oracle"* (HIS 1111 named it fdm2-diag1, banked 2026-11-12).
+HIS 1114 ALSO SET THE RENAME'S SCOPE: *"I was refering only to rpred as it sits inside of the fdm3-oracle build"*. Every path, the unit, the log, the page title and the heading now
+carry fdm3-oracle. `r-pred` SURVIVES EVERYWHERE IT NAMES THE SIGNAL - breaching_line.predict_breach's -1/+1 - because that is HIS word for the signal and it
+carries the banked knob FDM2_MOMO_FLOOR_RPRED. His 1114: *"you were right to hold on the rpred rename"*. Joe 1109: *"I want to access this -1/+1 r-pred data in a dhtml webUI"*.
 
 HIS SPEC, 1109:
     the rows      *"the data will be anchored on closed-prev ws1 bars"* - one row per ws1 bar
