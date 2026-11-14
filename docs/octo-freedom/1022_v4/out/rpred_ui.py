@@ -1,4 +1,4 @@
-"""fdm2-diag1, THE r-pred WEB UI - HIS 1111 *"name the webUI report: fdm2-diag1"*, banked 2026-11-12. Joe 1109: *"I want to access this -1/+1 r-pred data in a dhtml webUI"*.
+"""fdm2-oracle, THE r-pred WEB UI - HIS 1113 *"rename the webUI report: fdm2-oracle"* (HIS 1111 named it fdm2-diag1, banked 2026-11-12). Joe 1109: *"I want to access this -1/+1 r-pred data in a dhtml webUI"*.
 
 HIS SPEC, 1109:
     the rows      *"the data will be anchored on closed-prev ws1 bars"* - one row per ws1 bar
@@ -129,6 +129,51 @@ HIS 1112 TOWARDS/AWAY UPDATE: *"I want to see the flip from TO to AW based on th
 TO/AW codes come from towards_away.run, which now carries the 50 reset, the excursion sample on e and x, the void
 values, the row rule and the x/e path (spec section 12). Both pivot states read it.
 
+HIS 1113 FENCE BUTTON: *"the exf/inf TO/AW is built based on a 20/80 fence.  build a button that shows the data based
+on a 23/77 fence.  the +15 pivot will work in both exf/inf TP/AW modes"*. With the button on, towards/away runs again
+with every 20/80 read moved to 23/77 - the reach, the scenario-1 vote, the pair's in-fence samples, the x/e path's
+in-fence extremum - and the (inf)/(exf) tags and the sums' TO(exf) read 23/77 too. Everything that reads TO/AW follows
+(the 55% background, the TO -> AW flip, TO:x AW:x). The r-pred numbers, the cross row's x/e crosses and M-no-rev do not
+read the fence and stay as they are. The banked read beside it is unchanged: closed-prev OR the emerging extreme of
+the last 12 bars. The two buttons combine: the server builds all four states at start-up, the page keeps each state's
+blocks apart, and neither button changes the scroll position (his 1112 positioning rule). MINE: the label
+"23/77 fence", blue when on like the pivot button, on its right.
+
+HIS 1113 FLIP BUTTON: *"add a button that flips the pivots directions, ie the green rows will become the red rows and
+vice versa"*. With the button on, every ws2Mage pivot's side is flipped on its own bar - a HIGH pivot reads LOW and a
+LOW pivot HIGH - so every pseudo trade opens and closes on the same bars with its target-side flipped (asserted), and
+towards/away runs again on those trades. The time cell's red and green swap, and, as with the pivot button, everything
+that reads the pseudo trade follows: TO/AW and (inf)/(exf), the sums' TO:x AW:x and TO(exf), the cross row's side, the
+TO -> AW flip and M-no-rev. The r-pred numbers do not read the pseudo trade and stay as they are (asserted). The three
+buttons combine: the server builds all eight states at start-up, the page keeps each state's blocks apart, and no
+button changes the scroll position. MINE: the label "flip pivots", blue when on, on the right of the fence button.
+
+HIS 1113 ws1 TO(exf) FLIP: *"in ws1 only, in the same format as any flip to AW(*), highlight the field when ws1 flips to
+TO(exf)"*. His answer to which readings on the row before count: *"any except TO(exf)"* - blank, TO(inf), AW(inf) or
+AW(exf). The ws1 cell's TO(exf) prints white (black in light mode) on that row only, like the TO -> AW flip; the server
+marks it +8 in the cross code. MINE, from his "any": the row before counts whichever pseudo trade it is in, as the
+TO -> AW flip already compares (on the pivots as found at 20/80, 100 TO(inf) and 160 AW(inf) rows of the previous
+pseudo trade, 2026-11-14).
+
+HIS 1113 SUM COLUMNS, TO(exf) COUNT: *"in the ws16-22 and ws23-30 columns, add the count of TO(exf) lines, if TO(exf) is
+printing"* - the third line reads "TO(exf):x", x the number of the column's lines reading TO(exf) (the count the page
+already carried), blank when none. MINE: the "TO:x" form of the line above it.
+
+HIS 1113 NEXT ITERATION - BUILD THE STATES IN PARALLEL: *"building the 8 combos in parallel is a great idea.  add that
+as a docstring so that you remember it when we build the next iteration.  note you have cupy available if that helps"*.
+build() makes the eight states one after another: towards_away.run once per state other than the bank, 7 runs of
+97.9 s to 109.4 s each (measured alone, 2026-11-13), and start-up is 1028.2 s on 16 cores. The states do not read each
+other, so each run can go to its own process (forked after the lines load, so the line arrays are shared, not copied),
+returning its 30 int8 state arrays; M-no-rev and the cross row stay in the parent. cupy 14.1.1 is installed with one GPU
+(NVIDIA GeForce RTX 3060 Ti, checked 2026-11-14). Every state must stay byte-identical to the serial build (md5 per state).
+HIS 1114 *"GPU or CPU?"* - MEASURED 2026-11-14, answer CPU processes: one run makes 269,224,773 Python/numpy calls
+(18,885,905 numpy reductions) on short slices of the tape; one "any value above 0.5" check takes 1.4 us on the CPU and
+155.3 us on the GPU for 100 values, 2.3 us vs 177.2 us for 10,000, and 385.3 us vs 232.9 us for the whole tape
+(1,632,960). The natural lift-off reads (32.2 s) and the e-cross lift-off reads (5.9 s, after a first run) take only
+the lines, the TF and the side - the same in all 8 states - so they can be read once and shared. A first run in a fresh
+process took 216.8 s, the runs after it in the page 97.9 s to 109.4 s (cause not traced): fork after the bank run.
+Scratch: scratchpad/gpucpu/.
+
 usage: rpred_ui.py [port]   then open http://127.0.0.1:<port>
 """
 import io
@@ -182,20 +227,26 @@ MNR_LABEL = 'M-no-rev'          # HIS 1111 column label, between ws15 and ws16-2
 MNR_TOP = 30                    # HIS 1111 answer: ws1..ws30Mage, not the ladder's 33
 STRIDE = len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS) + 4   # bytes per row: r-pred,
 #   the TO/AW codes, the TO/AW counts, the cross codes (HIS 1110: 1 X, 2 E, 3 both, on the row's target-side; +4 the
-#   line reads AW on this row and TO on the row before, HIS 1110 TO -> AW flip), per sum the count of its lines
+#   line reads AW on this row and TO on the row before, HIS 1110 TO -> AW flip; +8 ws1 only, TO(exf) on this row and
+#   anything else on the row before, HIS 1113), per sum the count of its lines
 #   reading TO(exf) (HIS 1111), the M-no-rev TF (HIS 1111, 0 none),
 #   its line's closed-prev value x 10 as an int16 in two bytes (low byte first), then the pseudo trade's target-side at the row's read bar: -1 LOW, +1 HIGH, 0 no trade
 
 
 PIV_SHIFT = 15                  # minutes - HIS 1112 button: *"move the pivots forward 15 minutes"*
 OFFS = (0, PIV_SHIFT)           # the page's two states: the pivots as found, and every pivot PIV_SHIFT later
+FNC_ALT = 23.0                  # HIS 1113 button: *"shows the data based on a 23/77 fence"* - the smaller end, his 1103 rule
+FNCS = (int(K.FDM_FNC_2080), int(FNC_ALT))   # the page's two fences: the banked 20/80, and 23/77 with the button on
+FLIP_TOX = 'ws1'                # HIS 1113: the one line whose flip into TO(exf) is highlighted, *"in ws1 only"*
+TO_EXF = 3                      # the TO/AW code a cell prints as TO(exf): TO 1, +2 ex-fence on the target-side
+FLIPS = (0, 1)                  # HIS 1113 button: *"flips the pivots directions"* - 0 as found, 1 every pivot's side flipped
 
 
 def m_no_rev(sps, prt):
     """HIS 1111 M-no-rev. -> [(int8 [rows], int16 [rows])], one per target-side array in sps: the highest TF whose
     Mage qualifies at the row's print bar, 0 = none, and that line's CLOSED-PREV value there x 10 (HIS 1111 *"add
     the line's value to the text"*, his example 1 dp), 0 where no TF prints. The lift-off reads do not depend on
-    the target-side, so both of the page's states share them.
+    the target-side, so every page state shares them.
 
     A ws{TF}Mage, ws1..ws30, qualifies on a row when, at the row's print bar:
       oob       its CLOSED-PREV value is at or beyond 85 high / 15 low on the row's target-side (the time cell's
@@ -234,9 +285,10 @@ def m_no_rev(sps, prt):
 
 
 def build():
-    """-> (row open ms [n], {offset minutes: [n, STRIDE] int8 - r-pred per line, then the two sums, then the rest}).
-    Row i is the ws1 bar opening at t0 + 60 s * i. The r-pred bytes are the same in both; every byte that reads the
-    pseudo trade (its target-side, towards/away, the cross row's side, M-no-rev) is built per offset."""
+    """-> (row open ms [n], {(offset minutes, flip, fence): [n, STRIDE] int8 - r-pred per line, then the two sums,
+    then the rest}). Row i is the ws1 bar opening at t0 + 60 s * i. The r-pred bytes are the same in every state; every
+    byte that reads the pseudo trade (its target-side, towards/away, the cross row's side, M-no-rev) is built per
+    offset and flip, and towards/away per fence too."""
     ts = np.asarray(ln.ts, np.int64)
     assert (np.diff(ts) == 5000).all(), 'the 5 s grid has a gap - a row would not be one ws1 bar'
     E = RS.load((RS.K0, RS.R0, RS.S0))           # fdm2's emerging r lines, ws1..ws30
@@ -283,40 +335,53 @@ def build():
     #   HIS 1112 *"move the pivots forward 15 minutes"*: every ws2Mage pivot PIV_SHIFT later, so every pseudo trade
     #   opens and closes PIV_SHIFT later on the same side, and towards/away runs again on those trades. The last
     #   trade still closes at the tape's end
-    STATES = []
+    #   HIS 1113 *"the +15 pivot will work in both exf/inf TP/AW modes"*: towards/away runs once per pivot state and
+    #   fence - the banked 20/80 passes no fence, so its two states are the runs as before
+    #   HIS 1113 *"flips the pivots directions"*: each pivot's side flips on its own bar, so every pseudo trade keeps
+    #   its bars and its target-side flips; it combines with the offset and the fence
+    STATES, SIDES = [], {}
     for off in OFFS:
         k = off * 12                             # 5 s bars
-        tr = [(o + k, min(c + k, ln.N), s) for o, c, s in trades if o + k < ln.N]
-        STATES.append((tr, ST if not off else TA.run(LN, tr)[0]))
-        if off:
-            print('pivots +%d min: %d pseudo trades, first opens %s' % (off, len(tr), ln.U(tr[0][0])))
-    SIDES = []
-    for tr, _ in STATES:
-        side = np.zeros(ln.N, np.int8)
-        for o, c, s in tr:
-            side[o:c] = s
-        SIDES.append(side)
-    MNR = m_no_rev([side[prt] for side in SIDES], prt)
+        for fl in FLIPS:
+            tr = [(o + k, min(c + k, ln.N), -s if fl else s) for o, c, s in trades if o + k < ln.N]
+            for fnc in FNCS:
+                alt = None if fnc == FNCS[0] else float(fnc)
+                STATES.append((off, fl, fnc, alt,
+                               ST if not off and not fl and alt is None else TA.run(LN, tr, alt)[0]))
+            if off or fl:
+                print('pivots +%d min%s: %d pseudo trades, first opens %s'
+                      % (off, ', flipped' if fl else '', len(tr), ln.U(tr[0][0])))
+            side = np.zeros(ln.N, np.int8)
+            for o, c, s in tr:
+                side[o:c] = s
+            SIDES[(off, fl)] = side
+    assert all(np.array_equal(SIDES[(off, 1)], -SIDES[(off, 0)]) for off in OFFS), \
+        'a flipped pseudo trade is not the as-found one on the same bars with the other target-side'
+    MNR = dict(zip(SIDES, m_no_rev([SIDES[key][prt] for key in SIDES], prt)))
     mats = {}
-    for off, (tr, ST), side, (mn, mv) in zip(OFFS, STATES, SIDES, MNR):
+    for off, fl, fnc, alt, ST in STATES:
+        side, (mn, mv) = SIDES[(off, fl)], MNR[(off, fl)]
         cols = list(base)
         live = side != 0
         sp = side[prt]
 
         def exf_at(t):
             #   HIS 1109 *"append `(inf)` or `(exf)`"*: ex-20/80 on the target-side by the banked reader - the
-            #   one the towards/away mech's own ex-fence test uses (closed-prev, or the emerging 60 s extreme)
-            return np.where(sp > 0, TA.exf_mask(LN, t, +1)[prt], TA.exf_mask(LN, t, -1)[prt]) & (sp != 0)
+            #   one the towards/away mech's own ex-fence test uses (closed-prev, or the emerging 60 s extreme).
+            #   HIS 1113: at 23/77 with the fence button on
+            return np.where(sp > 0, TA.exf_mask(LN, t, +1, alt)[prt], TA.exf_mask(LN, t, -1, alt)[prt]) & (sp != 0)
         #   TOWARDS/AWAY at the same print bar: 0 no state, 1 TO, 2 AW, and +2 when the line is ex-20/80 on the
         #   target-side there - 3 TO(exf), 4 AW(exf). Then per sum column the TO count and the AW count over its
         #   lines, both -1 where no pseudo trade is open (no target-side, so nothing to count)
+        CODE = {}
         for name in LINES:
             t = int(name[2:]) if name.startswith('ws') else 0
             if t not in ST:
                 cols.append(np.zeros(len(prt), np.int8))
                 continue
             st = ST[t][prt].astype(np.int8)
-            cols.append(np.where((st != TA.NONE) & exf_at(t), st + 2, st))
+            CODE[name] = np.where((st != TA.NONE) & exf_at(t), st + 2, st)
+            cols.append(CODE[name])
         for _, tfs in SUMS:
             for code in (TA.TO, TA.AW):
                 n = np.sum([(ST[t][prt] == code).astype(int) for t in tfs], 0)
@@ -330,6 +395,12 @@ def build():
             #   that row only - *"the 'AW's in the following rows are treated normally"*
             st = ST[int(name[2:])][prt]
             xc[1:] |= 4 * ((st[:-1] == TA.TO) & (st[1:] == TA.AW)).astype(np.int8)
+            #   HIS 1113 *"in ws1 only, in the same format as any flip to AW(*), highlight the field when ws1 flips to
+            #   TO(exf)"*, his answer *"any except TO(exf)"*: +8 on the ws1 row that reads TO(exf) where the row before
+            #   read anything else - blank, TO(inf), AW(inf) or AW(exf) - whichever pseudo trade that row is in
+            if name == FLIP_TOX:
+                cd = CODE[name]
+                xc[1:] |= 8 * ((cd[:-1] != TO_EXF) & (cd[1:] == TO_EXF)).astype(np.int8)
             cols.append(xc)
         #   HIS 1111 *"if any of the individual lines are printing TO(exf), print "TO(exf)" under the TO:x AW:x row"*:
         #   per sum column, how many of its lines read TO(exf) - the code a ws1..ws15 cell prints as TO(exf)
@@ -339,16 +410,16 @@ def build():
         cols.append((mv & 0xFF).astype(np.uint8).view(np.int8))
         cols.append((mv >> 8).astype(np.int8))
         cols.append(side[prt])                   # HIS 1109: the time cell's 20% colour, red LOW, green HIGH
-        mats[off] = np.ascontiguousarray(np.stack(cols, 1).astype(np.int8))
+        mats[(off, fl, fnc)] = np.ascontiguousarray(np.stack(cols, 1).astype(np.int8))
     return ts[first], mats
 
 
 T0 = time.time()
 OPEN, MATS = build()
-RP = MATS[0]                                    # the pivots as found - every check below reads it
+RP = MATS[(0, 0, FNCS[0])]                      # the pivots as found at the banked fence - every check below reads it
 assert all(m.shape == RP.shape for m in MATS.values()) and RP.shape[1] == STRIDE
 assert all(np.array_equal(m[:, :len(LINES) + len(SUMS)], RP[:, :len(LINES) + len(SUMS)]) for m in MATS.values()), \
-    'the r-pred bytes differ between the two pivot states'
+    'the r-pred bytes differ between the page states'
 DAYS = []
 for i, ms in enumerate(OPEN):
     d = time.strftime('%Y-%m-%d', time.gmtime(int(ms) // 1000))
@@ -359,7 +430,7 @@ TAC = RP[:, len(LINES) + len(SUMS):2 * len(LINES) + len(SUMS)]
 U = lambda ms: time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(int(ms) // 1000))
 META = json.dumps({
     'lines': LINES, 'mnr': MNR_LABEL, 'sums': [s for s, _ in SUMS], 'stride': STRIDE, 'rows': int(len(OPEN)), 't0': int(OPEN[0]), 'step': 60000,
-    'days': DAYS, 'shift': PIV_SHIFT})
+    'days': DAYS, 'shift': PIV_SHIFT, 'fences': list(FNCS), 'flips': list(FLIPS)})
 
 
 class H(BaseHTTPRequestHandler):
@@ -379,9 +450,11 @@ class H(BaseHTTPRequestHandler):
             return self._send(META.encode(), 'application/json')
         if self.path.startswith('/rows'):
             q = dict(kv.split('=') for kv in self.path.split('?', 1)[1].split('&'))
-            m = MATS.get(int(q.get('off', 0)))  # HIS 1112: 0 the pivots as found, PIV_SHIFT every pivot moved
+            #   HIS 1112 off: 0 the pivots as found, PIV_SHIFT every pivot moved; HIS 1113 fnc: 20 banked, 23 the button;
+            #   HIS 1113 flip: 0 the pivots' sides as found, 1 every side flipped
+            m = MATS.get((int(q.get('off', 0)), int(q.get('flip', 0)), int(q.get('fnc', FNCS[0]))))
             if m is None:
-                self.send_error(400, 'off must be one of %s' % (OFFS,))
+                self.send_error(400, 'off must be one of %s, flip one of %s and fnc one of %s' % (OFFS, FLIPS, FNCS))
                 return
             a = max(0, int(q['start'])); b = min(len(m), a + max(0, int(q['count'])))
             return self._send(m[a:b].tobytes(), 'application/octet-stream')    # STRIDE bytes per row
@@ -390,7 +463,7 @@ class H(BaseHTTPRequestHandler):
 
 PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>fdm2-diag1</title>
+<title>fdm2-oracle</title>
 <style>
 :root{--bg:#ffffff;--fg:#1d1d1f;--mut:#6e6e73;--line:#dcdce0;--hd:#f1f1f4;--zebra:#fafafb;--red:#d93025;--grn:#1e8e3e;
   --on:#ffffff;--sel:#1a73e8;--dis:#c4c4c8;--org:#d9650b;
@@ -449,7 +522,7 @@ h1{font-size:15px;margin:0 0 8px;font-weight:600}
 .row .o{background:var(--org);color:var(--on);font-weight:600}
 .hd .sx,.row .sx{border-left:2px solid var(--mut)}
 </style></head><body><div class="wrap">
-<h1>fdm2-diag1 - r-pred, gcws15 to ws15, M-no-rev, plus the ws16-22 and ws23-30 sums, emerging, on closed-prev ws1 bars, with towards/away</h1>
+<h1>fdm2-oracle - r-pred, gcws15 to ws15, M-no-rev, plus the ws16-22 and ws23-30 sums, emerging, on closed-prev ws1 bars, with towards/away</h1>
 <div class="cal" id="cal"></div>
 <div class="status"><span id="top">top row: -</span><span id="held">cache: -</span><span id="err"></span></div>
 <div class="box" id="box"><div class="inner"><div class="hd" id="hd"></div><div class="body" id="body"></div></div></div>
@@ -470,20 +543,22 @@ let lastTop = 0, dir = 1, raf = 0, dayOn = '';
 const NB = '\u00a0';   // HIS 1110: the place holder line - a blank line keeps a cell's 3 lines aligned
 let sel = -1;           // HIS 1110: the clicked row, highlighted; a click on another row moves it, on the same row clears it
 let OFF = 0;            // HIS 1112: minutes the pivots are moved forward - 0 as found, meta.shift with the button on
+let FNC = 0;            // HIS 1113: the towards/away fence's smaller end - meta.fences[0] banked, [1] with the button on
+let FLIP = 0;           // HIS 1113: 0 the pivots' sides as found, 1 every side flipped with the button on
 
 const fmt = ms => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
 
 function fetchBlock(b) {
-  const off = OFF, key = off + ':' + b;          // HIS 1112: each pivot state keeps its own blocks
+  const off = OFF, flip = FLIP, fnc = FNC, key = off + ':' + flip + ':' + fnc + ':' + b;   // HIS 1112 / 1113: each state keeps its own blocks
   if (b < 0 || b * BLOCK >= meta.rows || cache.has(key) || pending.has(key)) return;
   pending.add(key);
-  fetch('rows?start=' + (b * BLOCK) + '&count=' + BLOCK + '&off=' + off)
+  fetch('rows?start=' + (b * BLOCK) + '&count=' + BLOCK + '&off=' + off + '&flip=' + flip + '&fnc=' + fnc)
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
     .then(buf => { pending.delete(key); cache.set(key, new Int8Array(buf)); evict(); schedule(); })
     .catch(e => { pending.delete(key); document.getElementById('err').textContent = 'fetch failed: ' + e.message; });
 }
 function getBlock(b) {
-  const key = OFF + ':' + b, a = cache.get(key);
+  const key = OFF + ':' + FLIP + ':' + FNC + ':' + b, a = cache.get(key);
   if (a) { cache.delete(key); cache.set(key, a); }   // most recently used goes to the back
   return a;
 }
@@ -557,15 +632,18 @@ function draw() {
         const xc = blk[o + NC + NL + 2 * (NC - NL) + c];
         d.xc.textContent = [xc & 1 ? (sd < 0 ? 'X↑' : '↓X') : '', xc & 2 ? (sd < 0 ? '↑E' : '↓E') : '']
           .filter(Boolean).join('    ') || NB;
-        d.ta.className = xc & 4 ? 'f' : 'g';   // HIS 1110: TO on the row before, AW on this one - white, this row only;
-                                               // HIS 1111: every other TO/AW grey, on a -1/+1 cell too
+        d.ta.className = xc & 12 ? 'f' : 'g';  // HIS 1110: TO on the row before, AW on this one - white, this row only;
+                                               // HIS 1111: every other TO/AW grey, on a -1/+1 cell too;
+                                               // HIS 1113: ws1 only, TO(exf) after anything else - white, the same way
       } else {                          // a sum, HIS 1109: red below 0, green above 0, orange at 0
         d.n.textContent = v > 0 ? '+' + v : String(v);
         d.className = (v < 0 ? 'm' : v > 0 ? 'p' : 'o') + sx;
         const k = o + NC + NL + 2 * (c - NL), to = blk[k], aw = blk[k + 1];
         d.ta.textContent = to < 0 ? NB : 'TO:' + to + '  AW:' + aw;   // HIS "TO:x  AW:x", the weekday size
-        //   HIS 1111: "TO(exf)" under it when any of the column's lines reads TO(exf); the TO:x AW:x line's style
-        d.xc.textContent = blk[o + NC + 2 * NL + 2 * (NC - NL) + (c - NL)] > 0 ? 'TO(exf)' : NB;
+        //   HIS 1111: "TO(exf)" under it when any of the column's lines reads TO(exf); the TO:x AW:x line's style.
+        //   HIS 1113 *"add the count of TO(exf) lines, if TO(exf) is printing"*: "TO(exf):x"
+        const tx = blk[o + NC + 2 * NL + 2 * (NC - NL) + (c - NL)];
+        d.xc.textContent = tx > 0 ? 'TO(exf):' + tx : NB;
         d.xc.className = 's';
       }
     }
@@ -613,6 +691,7 @@ function buildCal() {
 }
 async function init() {
   meta = await (await fetch('meta')).json();
+  FNC = meta.fences[0];                          // HIS 1113: the banked fence until the button is pressed
   NL = meta.lines.length; NC = NL + meta.sums.length; NS = meta.stride;
   const hd = document.getElementById('hd');
   for (const h of ['ws1 time (UTC)'].concat(meta.lines, [meta.mnr], meta.sums)) { const d = document.createElement('div'); d.textContent = h; hd.appendChild(d); }
@@ -638,6 +717,33 @@ async function init() {
     schedule();
   };
   document.getElementById('cal').appendChild(tg);
+  //   HIS 1113 *"build a button that shows the data based on a 23/77 fence"*, beside the pivot button; the two combine
+  //   and, like it, it leaves the scroll position alone
+  const fb = document.createElement('button'); fb.className = 'tog';
+  fb.textContent = meta.fences[1] + '/' + (100 - meta.fences[1]) + ' fence';
+  fb.title = 'towards/away and its (inf)/(exf) at the ' + fb.textContent + '; click again for the banked ' +
+             meta.fences[0] + '/' + (100 - meta.fences[0]);
+  fb.setAttribute('aria-pressed', 'false');
+  fb.onclick = () => {
+    FNC = FNC === meta.fences[0] ? meta.fences[1] : meta.fences[0];
+    const on = FNC !== meta.fences[0];
+    fb.classList.toggle('on', on); fb.setAttribute('aria-pressed', String(on));
+    for (const p of pool) p.ok = false;
+    schedule();
+  };
+  document.getElementById('cal').appendChild(fb);
+  //   HIS 1113 *"add a button that flips the pivots directions, ie the green rows will become the red rows and vice
+  //   versa"*, beside the fence button; the three combine and, like them, it leaves the scroll position alone
+  const fp = document.createElement('button'); fp.className = 'tog'; fp.textContent = 'flip pivots';
+  fp.title = 'flip the side of every ws2Mage pivot, so a HIGH pivot reads LOW and a LOW pivot HIGH; click again for the sides as found';
+  fp.setAttribute('aria-pressed', 'false');
+  fp.onclick = () => {
+    FLIP = FLIP ? meta.flips[0] : meta.flips[1];
+    fp.classList.toggle('on', FLIP > 0); fp.setAttribute('aria-pressed', String(FLIP > 0));
+    for (const p of pool) p.ok = false;
+    schedule();
+  };
+  document.getElementById('cal').appendChild(fp);
   box.addEventListener('scroll', schedule, {passive: true});
   body.addEventListener('click', e => {           // HIS 1110: *"make a row highlighted if I click on that row"*
     const el = e.target.closest('.row'), p = el && pool.find(q => q.el === el);
@@ -670,6 +776,9 @@ if __name__ == '__main__':
           % tuple(int(((_xc & 3) == k).sum()) for k in (1, 2, 3)))
     print('TO -> AW flip cells (white AW text): %d, %d of them on a -1/+1 cell'
           % (int((_xc & 4).astype(bool).sum()), int(((_xc & 4).astype(bool) & (RP[:, :len(LINES)] != 0)).sum())))
+    _j = LINES.index(FLIP_TOX)
+    print('%s flips into TO(exf) (white TO(exf) text): %d, other columns marked %d'
+          % (FLIP_TOX, int((_xc[:, _j] & 8).astype(bool).sum()), int((_xc & 8).astype(bool).sum() - (_xc[:, _j] & 8).astype(bool).sum())))
     _rp = RP[:, :len(LINES)]
     print('r-pred -1/+1 cells on an AW line (55%% background): %d of %d flagged, all %d columns'
           % (int(((_rp != 0) & ((TAC == 2) | (TAC == 4))).sum()), int((_rp != 0).sum()), len(LINES)))
@@ -681,10 +790,14 @@ if __name__ == '__main__':
               % (label, int((_ex > 0).sum()), len(_ex), int(_ex.max())))
     print('M-no-rev (ws1..ws%dMage): rows printing a TF %d of %d, highest TF printed %d, value %.1f .. %.1f'
           % (MNR_TOP, int((_mn > 0).sum()), len(_mn), int(_mn.max()), _mv[_mn > 0].min() / 10, _mv[_mn > 0].max() / 10))
-    for _off in OFFS[1:]:
-        _m = MATS[_off]
-        print('pivots +%d min: rows whose target-side differs from the pivots as found %d of %d, cells that differ %d of %d'
-              % (_off, int((_m[:, STRIDE - 1] != RP[:, STRIDE - 1]).sum()), len(RP), int((_m != RP).sum()), RP.size))
+    for (_off, _fl, _fnc), _m in MATS.items():
+        if (_off, _fl, _fnc) == (0, 0, FNCS[0]):
+            continue
+        _tac = _m[:, len(LINES) + len(SUMS):2 * len(LINES) + len(SUMS)]
+        print('pivots +%d min%s, %d/%d fence: rows whose target-side differs from the pivots as found %d of %d, cells '
+              'that differ %d of %d; TO(inf) %d, AW(inf) %d, TO(exf) %d, AW(exf) %d'
+              % ((_off, ', flipped' if _fl else '', _fnc, 100 - _fnc, int((_m[:, STRIDE - 1] != RP[:, STRIDE - 1]).sum()), len(RP),
+                  int((_m != RP).sum()), RP.size) + tuple(int((_tac == k).sum()) for k in (1, 2, 3, 4))))
     print('towards/away knobs (banked): ' + ' '.join('%s=%s' % (k, v) for k, v, _, _ in TA.KNOBS))
     print('open http://127.0.0.1:%d' % PORT)
     sys.stdout.flush()

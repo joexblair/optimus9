@@ -192,9 +192,10 @@ def load():
     return dict(EMR=EMR, CPR=CPR, EMM=EMM, CPM=CPM, E=WSE.lines())
 
 
-def exf_mask(LN, t, side):
-    """The banked ex-20/80 reader at every bar. -> bool array. v4_fdm2.ex2080_line, vectorised."""
-    e = K.side_edge(K.FDM_FNC_2080, side)
+def exf_mask(LN, t, side, fnc=None):
+    """The banked ex-20/80 reader at every bar. -> bool array. v4_fdm2.ex2080_line, vectorised. `fnc` None is the
+    banked fence (FDM_FNC_2080); HIS 1113 the web UI's 23/77 button passes 23.0 - the same read at that fence."""
+    e = K.side_edge(K.FDM_FNC_2080 if fnc is None else fnc, side)
     mode = str(K.FDM_EXF_READ)
     with np.errstate(invalid='ignore'):
         cp = (LN['CPR'][t] >= e) if side > 0 else (LN['CPR'][t] <= e)
@@ -206,9 +207,12 @@ def exf_mask(LN, t, side):
     return {'either': cp | win, 'closed_prev': cp, 'emerging': win}[mode]
 
 
-def vote(v, side):
-    """Is an extremum's value ex-20/80 on `side`. -> bool (array in, array out)."""
-    return F2.ex2080(np.asarray(v, float), side)
+def vote(v, side, fnc=None):
+    """Is an extremum's value ex-20/80 on `side`. -> bool (array in, array out). `fnc` as exf_mask."""
+    if fnc is None:
+        return F2.ex2080(np.asarray(v, float), side)
+    e = K.side_edge(fnc, side)
+    return (np.asarray(v, float) >= e) if int(side) > 0 else (np.asarray(v, float) <= e)
 
 
 def lift_extrema(LN, t, side):
@@ -362,8 +366,12 @@ def row_rule(LN):
     return ask
 
 
-def run(LN, trades):
+def run(LN, trades, fnc=None):
     """The mech over the whole tape. -> (STATE {tf: int8 array}, detail).
+
+    `fnc` None reads the banked 20/80 fence everywhere ex-20/80 / in-fence is read: the reach, the scenario-1 vote, the
+    pair's in-fence samples and the x/e path's in-fence extremum. HIS 1113 *"build a button that shows the data based
+    on a 23/77 fence"*: the web UI passes 23.0 and every one of those reads moves to 23/77 together.
 
     detail['reach'][t][k]   the bar ws{t}r first reached ex-20/80 in trade k, or the trade's close if it never did
     detail['hunts'][t][k]   HIS 1112 the trade's hunts: [(start, end, reach)] - reach is None when the hunt ended
@@ -376,7 +384,7 @@ def run(LN, trades):
     AW1 = {t: np.zeros(N, bool) for t in TFS}
     det = {k: {t: {} for t in TFS} for k in ('reach', 'hunts', 's1', 'samples', 's2')}
     det['ties'] = 0
-    EXF = {(t, s): exf_mask(LN, t, s) for t in TFS for s in (-1, +1)}
+    EXF = {(t, s): exf_mask(LN, t, s, fnc) for t in TFS for s in (-1, +1)}
     LIFT = {(t, s): lift_extrema(LN, t, s) for t in TFS for s in (-1, +1)}
     LIFTE = {(t, s): lift_extrema_e(LN, t, s) for t in TFS for s in (-1, +1)}
     ROW = row_rule(LN)
@@ -400,7 +408,7 @@ def run(LN, trades):
                     #   while its hunt has reached ex-20/80, and its pivot is inside that hunt - HIS 1112, a value from
                     #   before the return over 50 is wiped
                     h = next((h for h in H if h[0] <= st[i] < h[1]), None)
-                    if h is None or pv[i] < h[0] or not bool(vote(val[i], s)):
+                    if h is None or pv[i] < h[0] or not bool(vote(val[i], s, fnc)):
                         continue
                     assert h[2] is not None and st[i] >= h[2], 'a voting extremum stamped before its line reached ex-20/80'
                     ev.append((int(st[i]), 0 if kind == 'lift' else 1, int(pv[i]), float(val[i]), kind))
@@ -471,7 +479,7 @@ def run(LN, trades):
                     tb = set()
                     for i in range(1, len(ok)):
                         (b, v, _, _, _, _, _), (_, vp, _, _, _, _, _) = ok[i], ok[i - 1]
-                        if not (np.isfinite(v) and np.isfinite(vp)) or vote(v, s) or vote(vp, s):
+                        if not (np.isfinite(v) and np.isfinite(vp)) or vote(v, s, fnc) or vote(vp, s, fnc):
                             continue
                         if abs(v - vp) > TK.PAIR_PTS:
                             continue
@@ -499,7 +507,7 @@ def run(LN, trades):
                             if i < 0 or lst[i] < ha:
                                 continue
                             v = float(lval[i])
-                            if not np.isfinite(v) or vote(v, s) or void50(v, s):
+                            if not np.isfinite(v) or vote(v, s, fnc) or void50(v, s):
                                 continue
                             good, aw, rw = under_test(b2)
                             if good:

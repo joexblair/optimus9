@@ -2417,3 +2417,24 @@ ece11471fa98  --confirm that the 22:08:35 value was taken from a target-side (hi
 9af30e92609a  the line's extremum is wiped if the line drops below counter-side 50 and returns to target-side of 50
 6751142aa2bf  bank and commit push ALL files. make the machines (lift-off, webui, towards/away) live on their current configs. advise your workmate of the changes
 38bc3208a831  make the machines (lift-off, webui, towards/away) live on their current configs
+660cfc6f6466  after ws25 m-no-rev at 09-24 0644, and after ws23 09-24 0633 what time do they both cross to ib. share the data with wobs of 24, 36 and 48 on the cross to ib
+e1b72a16b49f  emerging - yes please. add the wob 1 results also
+07007c15a128  I'd like to see the M-no-rev data using emerging bars to provide the lift-off reversal. build a button next to 'pivots +15 min' that shows the "M-no-rev on lift-off" data. keep the same requirment of positioning of the rows in the frame, and add a second liftoff cache that honors the pivot +15 button
+862f7c348116  ignore my m-no-rev request
+21d5f7a87b43  the exf/inf TO/AW is built based on a 20/80 fence. build a button that shows the data based on a 23/77 fence. the +15 pivot will work in both exf/inf TP/AW modes
+229743a45015  build a button that shows the data based on a 23/77 fence
+01dce0dd7528  the +15 pivot will work in both exf/inf TP/AW modes
+82dc5beafda3  how does the fence change impact AW decisions?
+5a368930fc2d  example 09-23 2339: ws13 flips to AWinf on 20/80, and flip has been replaced by TOexf on the 23/77 fence
+a97de071a44b  I know that liftoff is central to an AW flip, but there must be another mech involved
+1af28a49718c  share the lifoff samples for the high ws3r reversal, eyeballed at 09-23 0430. add the ws3x and ws3e crossunders
+0550931481b3  rename the webUI report: fdm2-oracle
+5521733988c3  of ws1 to ws15, on 23/77, how many low side flips to AW occured between 02:00:00 to 02:03:00
+eeca8a067d42  can you see if there were any on the emerging bars that flipped, then flipped back to TO?
+e62e817b4b7a  add a button that flips the pivots directions, ie the green rows will become the red rows and vice versa
+3cf44bb5156f  building the 8 combos in parallel is a great idea. add that as a docstring so that you remember it when we build the next iteration. note you have cupy available if that helps
+4b4c0e2f0f16  in ws1 only, in the same format as any flip to AW(*), highlight the field when ws1 flips to TO(exf)
+db79a4885396  in the ws16-22 and ws23-30 columns, add the count of TO(exf) lines, if TO(exf) is printing
+52ba4676ddd0  any except TO(exf)
+36f714db8bfd  GPU or CPU?
+bfbef6306254  build a gcws45b and gcws45r (45sec) lines and add them to the line cache
