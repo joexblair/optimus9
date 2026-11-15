@@ -37,7 +37,54 @@ SIDEWAYS_RETEST_SCAN_WINDOW = _knob('SIDEWAYS_RETEST_SCAN_WINDOW', 12.5)   # his
 #   divides by the first price clicked, so the earlier value is the one that matches both.
 SIDEWAYS_RETEST_DIFF_PCT = _knob('SIDEWAYS_RETEST_DIFF_PCT', 0.88)   # his `...-retest-diff-pct`
 
+#   ── the fdm3 fence ───────────────────────────────────────────────────────────────────────────
+#   HIS 1115: *"the 20/80 mom fence is now a 23/77 fence. this impacts the AW/TO(exf/inf)
+#   timestamps"*, then *"keep it as a fdm3 fence"*. So v4_knobs FDM_FNC_2080 STAYS at 20.0 and
+#   every fdm3 read of a towards/away ex-fence state uses this one instead - fdm2 step 1, the
+#   reversal population, the handoff walk's candidate test and the re-entry keep 20/80.
+#   THE SMALLER END OF THE PAIR, as FDM_FNC_2080 is: 23 -> (23.0, 77.0).
+#   MY NAME, derived from his own `fdm-20-80-fnc` - he has not named this one yet.
+MOM_FNC = _knob('MOM_FNC', 23.0)                # his `fdm3-23-77-fnc`, pending his own name
+
+#   ── fdm3-ltf-xcross ──────────────────────────────────────────────────────────────────────────
+#   HIS SPEC LINE: *">={knob:6,`fdm3-ltf-xcross-hits`} TFs are populated with an x-cross, inside of
+#   {knob:2,`fdm3-ltf-xcross-rows`} rows, within the ws1-ws{knob:8,`fdm3-ltf-xcross-maxTF`} fields"*.
+#   AN X-CROSS ALONE - he wrote "e-cross or x-cross" in his other two scenarios and "an x-cross" here.
+LTF_XCROSS_HITS = _knob('LTF_XCROSS_HITS', 6, int)
+LTF_XCROSS_ROWS = _knob('LTF_XCROSS_ROWS', 2, int)
+LTF_XCROSS_MAXTF = _knob('LTF_XCROSS_MAXTF', 8, int)
+
+#   HIS SPEC LINE: *"AND the fdm3-ltf-xcross-rows are contained within {knob:3,
+#   `fdm3-ltf-xcross-nof15-rows`} consecutive rows printing 13of15"*. Read COLLECTIVELY over those
+#   rows, settled by his own five examples: not one of 09-24 2230, 2248, 2259 or 09-25 0118, 0315
+#   has all three rows carrying 13 on its own.
+LTF_XCROSS_NOF15_ROWS = _knob('LTF_XCROSS_NOF15_ROWS', 3, int)
+
+#   HIS SPEC LINE: *">={knob:4, `fdm3-min-aw-prints`} fields prints `AW(*)` in ws1-ws15 AND
+#   >={knob:2,`fdm3-min_aw_flips`} new AW's have printed inside of ws1-ws15"*.
+#   HIS 1115 RULING ON THE FIRST: *"4 distinct TFs reading AW(*) anywhere in the 3 rows"* - so the
+#   AW(*) gate counts TIMEFRAMES, while the new-AW gate counts PRINTS.
+MIN_AW_PRINTS = _knob('MIN_AW_PRINTS', 4, int)
+MIN_AW_FLIPS = _knob('MIN_AW_FLIPS', 2, int)
+
+#   ── fdm3-4-ltf-aws ───────────────────────────────────────────────────────────────────────────
+#   HIS SPEC LINE: *">=4 AW flips on the same row, on TFs that are between ws1 and
+#   {knob:6,'fdm3-4-ltf-aws-maxTF'} AND are contained within no more than {knob:4,'4-ltf-aws-rows'}
+#   consecutive rows"*. HIS 1114: both names carry the fdm3- prefix.
+AWS4_MAXTF = _knob('AWS4_MAXTF', 6, int)
+AWS4_ROWS = _knob('AWS4_ROWS', 4, int)
+
 RULED = {
+    'MOM_FNC': (23.0, 'his 1115 fence, kept inside fdm3 - v4_knobs FDM_FNC_2080 stays 20.0'),
+    'LTF_XCROSS_HITS': (6, 'his `fdm3-ltf-xcross-hits` - TFs carrying an X-CROSS, not an e-cross'),
+    'LTF_XCROSS_ROWS': (2, 'his `fdm3-ltf-xcross-rows` - the window those hits sit in'),
+    'LTF_XCROSS_MAXTF': (8, 'his `fdm3-ltf-xcross-maxTF` - the hits count on ws1..ws8'),
+    'LTF_XCROSS_NOF15_ROWS': (3, 'his `fdm3-ltf-xcross-nof15-rows` - the outer window, and the '
+                                 '13of15 inside it is read collectively'),
+    'MIN_AW_PRINTS': (4, 'his `fdm3-min-aw-prints` - DISTINCT TFs reading AW(*), his 1115 ruling'),
+    'MIN_AW_FLIPS': (2, 'his `fdm3-min-aw-flips` - new AW PRINTS, the TO -> AW flip'),
+    'AWS4_MAXTF': (6, 'his `fdm3-4-ltf-aws-maxTF` - the AW flips count on ws1..ws6'),
+    'AWS4_ROWS': (4, 'his `fdm3-4-ltf-aws-rows` - the window both 4-ltf-aws gates sit inside'),
     'SIDEWAYS_TRIGGER': (5, 'his `fdm3-sideways-trigger` - the ONE timeframe whose b and r lines '
                             'the sideways trigger reads, closed-prev'),
     'SIDEWAYS_RETEST_SCAN_WINDOW': (12.5, 'his `fdm3-sideways-retest-scan-window` - minutes each '

@@ -34,8 +34,11 @@ THE CROSS CODE's bits, his 1110 and 1113: 1 an x-cross, 2 an e-cross, 3 both, on
 target-side; +4 the line reads AW on this row and TO on the row before - HIS TO -> AW FLIP; +8 ws1
 only, TO(exf) on this row where the row before was not.
 
-usage: oracle_rows.py                 # the rates over the whole tape, both pivot directions
-       oracle_rows.py '<from>' '<to>'  # one row per minute in a span, with the window counts
+usage: oracle_rows.py                        # the rates over the whole tape, both pivot directions
+       oracle_rows.py '<from>' '<to>'        # one row per minute in a span, with the window counts
+       oracle_rows.py find '<from>' '<to>'   # HIS 1115 discovery over a span: the windows carrying
+                                             # the signature of his 2026-09-24 22:48..22:50 window,
+                                             # and the same with his two relaxations
 """
 import datetime as dt
 import io
@@ -45,6 +48,9 @@ import sys
 import urllib.request
 
 import numpy as np
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fdm3_knobs as FK
 
 V4 = '/home/joe/thecodes/docs/octo-freedom/1022_v4'
 sys.path.insert(0, '/home/joe/thecodes')
@@ -91,7 +97,16 @@ LTFX_AW_FLIPS = 2               # fdm3-min_aw_flips: new AW's - the TO -> AW fli
 #   HIS 1115 SIDENOTE: *"the 20/80 mom fence is now a 23/77 fence. this impacts the AW/TO(exf/inf)
 #   timestamps"*. The oracle already serves that fence, so every AW/TO read here asks for it. v4_knobs
 #   FDM_FNC_2080 is UNTOUCHED at 20.0 until he rules whether the 23 reaches its other readers.
-MOM_FNC = 23
+MOM_FNC = int(FK.MOM_FNC)       # the banked fdm3 fence, his 1115 23/77
+
+#   HIS 1115 REFERENCE WINDOW, 2026-09-24 22:48:00 .. 22:50:00, as it reads at that fence:
+#   *"I see 8 AW flips and a 14of15 event in the 09-24 2248 to 2250 window, with an abundance of x
+#   crosses"*. Its three print counts and its row count are the signature the discovery searches for.
+REF_WINDOW = '2026-09-24 22:48:00'
+REF_ROWS = 3                    # his 2248, 2249, 2250
+REF_NOF15 = 14                  # his *"14of15 event"*, his own 2 row Nof15 definition, peak inside the window
+REF_FLIPS = 8                   # his *"8 AW flips"* - new AW PRINTS over ws1..ws15
+REF_XPRINTS = 17                # his *"abundance of x crosses"*, measured: 17 x-cross prints over ws1..ws15
 #   HIS #5 gate, asked of the xe-all-in rows: ws1b oob, or gcws30b external of a 7/93 fence
 OOB = float(K.FDM_FNC_OOB) if hasattr(K, 'FDM_FNC_OOB') else 15.0
 G30_FNC = 7.0
@@ -135,10 +150,11 @@ def load(off=0, flip=0, fnc=20, chunk=20000):
 
     'cross'  an x-cross OR an e-cross - what his Nof15 counts
     'x'      an x-cross alone - what his LTF-xcross hits count
+    'e'      an e-cross alone, printed beside the x count so the mix is visible
     'newaw'  the TO -> AW flip - his *"new AW"*
     'aw'     the cell reads AW(*), either AW(inf) or AW(exf)
     """
-    out = {k: np.zeros((NROWS, 16), bool) for k in ('cross', 'x', 'newaw', 'aw')}
+    out = {k: np.zeros((NROWS, 16), bool) for k in ('cross', 'x', 'e', 'newaw', 'aw')}
     sd = np.zeros(NROWS, np.int8)
     for a in range(0, NROWS, chunk):
         n = min(chunk, NROWS - a)
@@ -148,6 +164,7 @@ def load(off=0, flip=0, fnc=20, chunk=20000):
             c = b[:, O_CROSS + j].astype(int)
             out['cross'][a:a + n, tf] = (c & 3) > 0
             out['x'][a:a + n, tf] = (c & 1) > 0
+            out['e'][a:a + n, tf] = (c & 2) > 0
             out['newaw'][a:a + n, tf] = (c & 4) > 0
             out['aw'][a:a + n, tf] = np.isin(b[:, O_TA + j].astype(int), (2, 4))
         sd[a:a + n] = b[:, O_SIDE]
@@ -201,6 +218,57 @@ def nof15(x, rows):
     return window(x, rows)[:, 1:16].sum(1)
 
 
+def find(R, a, z):
+    """HIS 1115 DISCOVERY over rows a..z. Prints the windows carrying his reference signature, then the
+    counts under each relaxation he named - *"reducing the required print counts by a small amount, or
+    increasing the row counts by a small amount"*.
+
+    A WINDOW IS NAMED BY ITS FIRST ROW here, because his own words name his by its first row - *"the
+    09-24 2248 to 2250 window"*. Overlapping starts are grouped into one cluster, since the same
+    stretch qualifying three times running is one pattern, not three.
+    """
+    nof = nof15(R['cross'], 2)           # HIS Nof15 event, his own 2 row definition
+    cases = [('his window as it reads', REF_ROWS, REF_NOF15, REF_FLIPS, REF_XPRINTS),
+             ('print counts down 1', REF_ROWS, REF_NOF15 - 1, REF_FLIPS - 1, REF_XPRINTS - 1),
+             ('print counts down 2', REF_ROWS, REF_NOF15 - 1, REF_FLIPS - 2, REF_XPRINTS - 2),
+             ('rows up 1', REF_ROWS + 1, REF_NOF15, REF_FLIPS, REF_XPRINTS),
+             ('rows up 2', REF_ROWS + 2, REF_NOF15, REF_FLIPS, REF_XPRINTS)]
+    out = {}
+    print('| the relaxation | rows per window | Nof15 peak | new AW prints | x-cross prints '
+          '| windows | clusters |')
+    print('|' + '---|' * 7)
+    for lab, rows, n, f, xp in cases:
+        hit = [i for i in range(a, z - rows)
+               if nof[i:i + rows].max() >= n
+               and int(R['newaw'][i:i + rows, 1:16].sum()) >= f
+               and int(R['x'][i:i + rows, 1:16].sum()) >= xp]
+        hs = set(hit)
+        cl = [h for i, h in enumerate(hit) if i == 0 or h - hit[i - 1] > 1]
+        out[lab] = (hit, cl, rows)
+        print('| %s | %d | >=%d | >=%d | >=%d | %d | %d |' % (lab, rows, n, f, xp, len(hit), len(cl)))
+    hit, cl, rows = out['his window as it reads']
+    hs = set(hit)
+    ref = K_OF(REF_WINDOW)
+
+    def run(h):
+        n = 1
+        while h + n in hs:
+            n += 1
+        return n
+    print()
+    print('| the window | its last row | Nof15 peak inside it | new AW prints | x-cross prints '
+          '| e-cross prints | distinct x-cross TFs | distinct AW(*) TFs | his own |')
+    print('|' + '---|' * 9)
+    for h in cl:
+        w = slice(h, h + rows)
+        print('| %s | %s | %d | %d | %d | %d | %d | %d | %s |'
+              % (U(h), U(h + rows - 1)[11:19], int(nof[h:h + rows].max()),
+                 int(R['newaw'][w, 1:16].sum()), int(R['x'][w, 1:16].sum()),
+                 int(R['e'][w, 1:16].sum()), int(R['x'][w, 1:16].any(0).sum()),
+                 int(R['aw'][w, 1:16].any(0).sum()), 'HIS' if h <= ref <= h + run(h) - 1 else '-'))
+    return out
+
+
 def excursion():
     """HIS #5: ws1b oob, or gcws30b external of 7/93, at the row's print bar."""
     return ((np.abs(W1B[PRT] - 50.0) >= (50.0 - OOB))
@@ -208,6 +276,14 @@ def excursion():
 
 
 def main():
+    if len(sys.argv) >= 4 and sys.argv[1] == 'find':
+        R, _sd = load(fnc=MOM_FNC)
+        print('tape bars: %d. the fdm3 fence is %g/%g.' % (ln.N, FK.MOM_FNC, 100 - FK.MOM_FNC))
+        print('his reference: %s .. %s, Nof15 %d, new AW prints %d, x-cross prints %d'
+              % (REF_WINDOW, U(K_OF(REF_WINDOW) + REF_ROWS - 1), REF_NOF15, REF_FLIPS, REF_XPRINTS))
+        print()
+        find(R, K_OF(sys.argv[2]), K_OF(sys.argv[3]))
+        return
     days = NROWS / 1440.0
     exc = excursion()
     print('tape bars: %d, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
