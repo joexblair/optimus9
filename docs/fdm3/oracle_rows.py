@@ -107,13 +107,13 @@ MOM_FNC = int(FK.MOM_FNC)       # the banked fdm3 fence, his 1115 23/77 - now LO
 assert int(META['fence']) == MOM_FNC, (META['fence'], MOM_FNC)
 
 #   HIS 1115 ltf-5aw-6x. Its shared knobs are the LTF-xcross ones - *"the knob reprints are not
-#   duplications - this mech uses the same values"* - except that he wrote {knob:1} against
-#   fdm3-ltf-xcross-rows where that knob is banked at 2. OPEN, so both are counted.
+#   duplications - this mech uses the same values"* - except the x-cross hit window, which he gave
+#   its own knob: *"use this new knob: fdm3-ltf-5aw-6x-xcross-rows, value=1"*.
 AW6X_N15 = 10                   # his *"3 consecutive rows printing 10of15"*
 AW6X_EXF_MAXTF = (8, 15)        # his *"<=1 TFs between ws8 and ws15 printing exf"*, inclusive
 AW6X_EXF_MAX = 1
-AW6X_AW_PRINTS = 10             # his `fdm3-ltf-5aw-6x-min-aw-prints`
-AW6X_AW_FLIPS = 5               # his `fdm3-ltf-5aw-6x-min-aw-flips`
+AW6X_AW_PRINTS = int(FK.LTF_5AW_6X_MIN_AW_PRINTS)   # his `fdm3-ltf-5aw-6x-min-aw-prints`
+AW6X_AW_FLIPS = int(FK.LTF_5AW_6X_MIN_AW_FLIPS)     # his `fdm3-ltf-5aw-6x-min-aw-flips`
 
 #   HIS 1115 REFERENCE WINDOW, 2026-09-24 22:48:00 .. 22:50:00, as it reads at that fence:
 #   *"I see 8 AW flips and a 14of15 event in the 09-24 2248 to 2250 window, with an abundance of x
@@ -258,17 +258,17 @@ def direction(sd, a, z):
     return ' then '.join(seen)
 
 
-def ltf_5aw_6x(R, xrows=1, aw_cells=False):
+def ltf_5aw_6x(R, xrows=None, aw_cells=False):
     """HIS 1115 ltf-5aw-6x. -> bool per row, True on the row the scenario qualifies on.
 
     HIS #3 holds: every window ENDS on the qualifying row. The outer window is his
     fdm3-ltf-xcross-nof15-rows, 3 rows; the x-cross hit window is `xrows` rows and sits inside it.
 
-    `xrows` 1 is the value he wrote in this spec, 2 is where fdm3-ltf-xcross-rows is banked.
-    `aw_cells` False counts DISTINCT TIMEFRAMES reading AW(*), his 1115 ruling on the same wording
-    in LTF-xcross; True counts cells.
+    `xrows` defaults to his own fdm3-ltf-5aw-6x-xcross-rows, 1. `aw_cells` False counts DISTINCT
+    TIMEFRAMES reading AW(*), his 1115 ruling on the same wording in LTF-xcross; True counts cells.
     """
     rows = int(FK.LTF_XCROSS_NOF15_ROWS)
+    xrows = int(FK.LTF_5AW_6X_XCROSS_ROWS) if xrows is None else int(xrows)
     lo, hi = AW6X_EXF_MAXTF
     hits = window(R['x'], xrows)[:, 1:int(FK.LTF_XCROSS_MAXTF) + 1].sum(1)
     #   the hit window sits anywhere inside the outer one, so take the best placement
@@ -283,6 +283,46 @@ def ltf_5aw_6x(R, xrows=1, aw_cells=False):
            else window(R['aw'], rows)[:, 1:16].sum(1)) >= AW6X_AW_PRINTS)
     g5 = count(R['newaw'], rows) >= AW6X_AW_FLIPS
     return g1 & g2 & g3 & g4 & g5
+
+
+def dump(R, SD, a, z, path):
+    """Write every ltf-5aw-6x instance in rows a..z to `path`, in HIS 1115 columns."""
+    rows = int(FK.LTF_XCROSS_NOF15_ROWS)
+    m = ltf_5aw_6x(R)
+    nof = nof15(R['cross'], 2)           # HIS Nof15 event, his own 2 row definition
+    hit = [i for i in range(a, z + 1) if m[i]]
+    with open(path, 'w') as f:
+        f.write('# his ltf-5aw-6x, every instance from %s to %s\n' % (U(a), U(z)))
+        f.write('# read off fdm3-oracle\'s rows, %d bars on the tape, the oracle fence %g/%g,\n'
+                '# the pivots as found and both A buttons off\n'
+                % (ln.N, META['fence'], 100 - META['fence']))
+        f.write('# CONTROL: his 09-23 0028 reads 14of15 over 0027+0028, ws15 the only one missing\n')
+        f.write('#\n# the knobs this run read:\n')
+        for k, v in FK.live():
+            f.write('#   %-26s %s\n' % (k, v))
+        f.write('#\n# the columns:\n'
+                '#   the window                 its FIRST row - the window is %d rows long\n'
+                '#   its last row               the row the scenario qualifies on\n'
+                '#   the incoming pseudo trade  the trade live on these rows, the one that closes next\n'
+                '#   Nof15 peak inside it       the highest 2 row Nof15 event inside the window\n'
+                '#   new AW prints              TO -> AW flip cells over the window, ws1..ws15\n'
+                '#   x-cross TFs                distinct timeframes with an x-cross, ws1..ws15\n'
+                '#   e-cross TFs                distinct timeframes with an e-cross, ws1..ws15\n'
+                '#   AW(*) TFs                  distinct timeframes reading AW(inf) or AW(exf)\n'
+                '#\n# %d instances\n\n' % (rows, len(hit)))
+        hd = ['the window', 'its last row', 'the incoming pseudo trade', 'Nof15 peak inside it',
+              'new AW prints', 'x-cross TFs', 'e-cross TFs', 'AW(*) TFs']
+        wd = [19, 12, 25, 20, 13, 11, 11, 9]
+        f.write(' | '.join(h.ljust(w) for h, w in zip(hd, wd)).rstrip() + '\n')
+        f.write('-+-'.join('-' * w for w in wd) + '\n')
+        for i in hit:
+            w = slice(i - rows + 1, i + 1)
+            vals = [U(i - rows + 1), U(i)[11:19], direction(SD, i - rows + 1, i + 1),
+                    str(int(nof[w].max())), str(int(R['newaw'][w, 1:16].sum())),
+                    str(int(R['x'][w, 1:16].any(0).sum())), str(int(R['e'][w, 1:16].any(0).sum())),
+                    str(int(R['aw'][w, 1:16].any(0).sum()))]
+            f.write(' | '.join(v.ljust(x) for v, x in zip(vals, wd)).rstrip() + '\n')
+    print('wrote %d instances to %s' % (len(hit), path))
 
 
 def find(R, SD, a, z):
@@ -360,12 +400,12 @@ def main():
         print('tape bars: %d. the oracle fence is %g/%g.' % (ln.N, META['fence'], 100 - META['fence']))
         print('| the reading | fires between %s and %s |' % (sys.argv[2], sys.argv[3]))
         print('|---|---|')
-        for xr in (1, 2):
-            for cells in (False, True):
-                m = ltf_5aw_6x(R, xrows=xr, aw_cells=cells)
-                print('| x-hits inside %d row%s, AW(*) as %s | %d |'
-                      % (xr, '' if xr == 1 else 's', 'cells' if cells else 'distinct timeframes',
-                         int(m[a:z + 1].sum())))
+        for cells in (False, True):
+            m = ltf_5aw_6x(R, aw_cells=cells)
+            print('| AW(*) as %s | %d |'
+                  % ('cells' if cells else 'distinct timeframes', int(m[a:z + 1].sum())))
+        if len(sys.argv) >= 5:
+            dump(R, _SD, a, z, sys.argv[4])
         return
     if len(sys.argv) >= 4 and sys.argv[1] == 'find':
         R, SD = load()

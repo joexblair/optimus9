@@ -67,6 +67,21 @@ LTF_XCROSS_NOF15_ROWS = _knob('LTF_XCROSS_NOF15_ROWS', 3, int)
 MIN_AW_PRINTS = _knob('MIN_AW_PRINTS', 4, int)
 MIN_AW_FLIPS = _knob('MIN_AW_FLIPS', 2, int)
 
+#   ── fdm3-ltf-5aw-6x ──────────────────────────────────────────────────────────────────────────
+#   HIS 1115: this scenario reads the LTF-xcross knobs - *"the knob reprints are not duplications -
+#   this mech uses the same values"* - EXCEPT the x-cross hit window. He wrote 1 against
+#   fdm3-ltf-xcross-rows, which is banked at 2, then ruled: *"I need to replace fdm3-ltf-xcross-rows
+#   in the mech. use this new knob: fdm3-ltf-5aw-6x-xcross-rows, value=1"*.
+LTF_5AW_6X_XCROSS_ROWS = _knob('LTF_5AW_6X_XCROSS_ROWS', 1, int)
+
+#   HIS SPEC LINE: *">={knob:10, `fdm3-ltf-5aw-6x-min-aw-prints`} fields prints `AW(*)` in ws1-ws15
+#   AND >={knob:5,`fdm3-ltf-5aw-6x-min-aw-flips`} new AW's have printed inside of ws1-ws15"*.
+#   THE AW(*) READING IS STILL OPEN: he ruled the identical wording in LTF-xcross as DISTINCT
+#   TIMEFRAMES, and distinct timeframes is what this value runs as, but it is not his ruling for
+#   THIS scenario and his own 09-23 0943 example needs the cell count to pass it.
+LTF_5AW_6X_MIN_AW_PRINTS = _knob('LTF_5AW_6X_MIN_AW_PRINTS', 10, int)
+LTF_5AW_6X_MIN_AW_FLIPS = _knob('LTF_5AW_6X_MIN_AW_FLIPS', 5, int)
+
 #   ── fdm3-4-ltf-aws ───────────────────────────────────────────────────────────────────────────
 #   HIS SPEC LINE: *">=4 AW flips on the same row, on TFs that are between ws1 and
 #   {knob:6,'fdm3-4-ltf-aws-maxTF'} AND are contained within no more than {knob:4,'4-ltf-aws-rows'}
@@ -83,6 +98,11 @@ RULED = {
                                  '13of15 inside it is read collectively'),
     'MIN_AW_PRINTS': (4, 'his `fdm3-min-aw-prints` - DISTINCT TFs reading AW(*), his 1115 ruling'),
     'MIN_AW_FLIPS': (2, 'his `fdm3-min-aw-flips` - new AW PRINTS, the TO -> AW flip'),
+    'LTF_5AW_6X_XCROSS_ROWS': (1, 'his `fdm3-ltf-5aw-6x-xcross-rows` - this scenario\'s own x-cross '
+                                  'hit window, replacing fdm3-ltf-xcross-rows in it'),
+    'LTF_5AW_6X_MIN_AW_PRINTS': (10, 'his `fdm3-ltf-5aw-6x-min-aw-prints` - run as DISTINCT '
+                                     'timeframes reading AW(*), still unruled for this scenario'),
+    'LTF_5AW_6X_MIN_AW_FLIPS': (5, 'his `fdm3-ltf-5aw-6x-min-aw-flips` - new AW PRINTS'),
     'AWS4_MAXTF': (6, 'his `fdm3-4-ltf-aws-maxTF` - the AW flips count on ws1..ws6'),
     'AWS4_ROWS': (4, 'his `fdm3-4-ltf-aws-rows` - the window both 4-ltf-aws gates sit inside'),
     'SIDEWAYS_TRIGGER': (5, 'his `fdm3-sideways-trigger` - the ONE timeframe whose b and r lines '
