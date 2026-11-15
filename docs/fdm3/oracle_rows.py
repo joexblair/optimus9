@@ -73,8 +73,14 @@ LINES, SUMS = META['lines'], META['sums']
 STRIDE, NROWS = int(META['stride']), int(META['rows'])
 T0, STEP = int(META['t0']), int(META['step'])
 DAYS = dict((d, k) for d, k in META['days'])
-O_CROSS = len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS)
+O_TA = len(LINES) + len(SUMS)   # the TO/AW code per line: 0 none, 1 TO, 2 AW, 3 TO(exf), 4 AW(exf)
+O_CROSS = O_TA + len(LINES) + 2 * len(SUMS)
 O_SIDE = STRIDE - 1
+#   THE ORACLE WAS REBUILT 2026-11-15 21:06 UTC: gcws15 and gcws30 dropped from the columns, the fence
+#   locked at 23/77 with its button gone, the pivots +15 button gone, two new A buttons (ws1-ws6,
+#   ws7-ws15), an SL% pair of bytes before M-no-rev, and /rows now taking flip, alo and ahi. Every
+#   offset here is derived from /meta, so it followed the rebuild; this asserts the shape anyway.
+assert STRIDE == len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS) + 6, STRIDE
 #   HIS 1114: *"derived from ws1 to ws15"*. gcws15 and gcws30 are in the oracle's LINES and are NOT part of
 #   either scenario's count.
 WS = [(i, int(n[2:])) for i, n in enumerate(LINES) if n.startswith('ws') and int(n[2:]) <= 15]
@@ -97,7 +103,17 @@ LTFX_AW_FLIPS = 2               # fdm3-min_aw_flips: new AW's - the TO -> AW fli
 #   HIS 1115 SIDENOTE: *"the 20/80 mom fence is now a 23/77 fence. this impacts the AW/TO(exf/inf)
 #   timestamps"*. The oracle already serves that fence, so every AW/TO read here asks for it. v4_knobs
 #   FDM_FNC_2080 is UNTOUCHED at 20.0 until he rules whether the 23 reaches its other readers.
-MOM_FNC = int(FK.MOM_FNC)       # the banked fdm3 fence, his 1115 23/77
+MOM_FNC = int(FK.MOM_FNC)       # the banked fdm3 fence, his 1115 23/77 - now LOCKED in the oracle too
+assert int(META['fence']) == MOM_FNC, (META['fence'], MOM_FNC)
+
+#   HIS 1115 ltf-5aw-6x. Its shared knobs are the LTF-xcross ones - *"the knob reprints are not
+#   duplications - this mech uses the same values"* - except that he wrote {knob:1} against
+#   fdm3-ltf-xcross-rows where that knob is banked at 2. OPEN, so both are counted.
+AW6X_N15 = 10                   # his *"3 consecutive rows printing 10of15"*
+AW6X_EXF_MAXTF = (8, 15)        # his *"<=1 TFs between ws8 and ws15 printing exf"*, inclusive
+AW6X_EXF_MAX = 1
+AW6X_AW_PRINTS = 10             # his `fdm3-ltf-5aw-6x-min-aw-prints`
+AW6X_AW_FLIPS = 5               # his `fdm3-ltf-5aw-6x-min-aw-flips`
 
 #   HIS 1115 REFERENCE WINDOW, 2026-09-24 22:48:00 .. 22:50:00, as it reads at that fence:
 #   *"I see 8 AW flips and a 14of15 event in the 09-24 2248 to 2250 window, with an abundance of x
@@ -150,20 +166,21 @@ def K_OF(s):
 O_TA = len(LINES) + len(SUMS)   # the TO/AW code per line: 0 none, 1 TO, 2 AW, 3 TO(exf), 4 AW(exf)
 
 
-def load(off=0, flip=0, fnc=20, chunk=20000):
+def load(flip=0, alo=0, ahi=0, chunk=20000):
     """-> a dict of [n,16] bool per ws TF 1..15, plus the row's target-side [n].
 
     'cross'  an x-cross OR an e-cross - what his Nof15 counts
     'x'      an x-cross alone - what his LTF-xcross hits count
     'e'      an e-cross alone, printed beside the x count so the mix is visible
+    'exf'    the cell reads TO(exf) or AW(exf) - at or past the fence pair on the target side
     'newaw'  the TO -> AW flip - his *"new AW"*
     'aw'     the cell reads AW(*), either AW(inf) or AW(exf)
     """
-    out = {k: np.zeros((NROWS, 16), bool) for k in ('cross', 'x', 'e', 'newaw', 'aw')}
+    out = {k: np.zeros((NROWS, 16), bool) for k in ('cross', 'x', 'e', 'newaw', 'aw', 'exf')}
     sd = np.zeros(NROWS, np.int8)
     for a in range(0, NROWS, chunk):
         n = min(chunk, NROWS - a)
-        u = '%s/rows?start=%d&count=%d&off=%d&flip=%d&fnc=%d' % (BASE, a, n, off, flip, fnc)
+        u = '%s/rows?start=%d&count=%d&flip=%d&alo=%d&ahi=%d' % (BASE, a, n, flip, alo, ahi)
         b = np.frombuffer(urllib.request.urlopen(u).read(), np.int8).reshape(-1, STRIDE)
         for j, tf in WS:
             c = b[:, O_CROSS + j].astype(int)
@@ -171,7 +188,10 @@ def load(off=0, flip=0, fnc=20, chunk=20000):
             out['x'][a:a + n, tf] = (c & 1) > 0
             out['e'][a:a + n, tf] = (c & 2) > 0
             out['newaw'][a:a + n, tf] = (c & 4) > 0
-            out['aw'][a:a + n, tf] = np.isin(b[:, O_TA + j].astype(int), (2, 4))
+            st = b[:, O_TA + j].astype(int)
+            out['aw'][a:a + n, tf] = np.isin(st, (2, 4))
+            #   HIS *"printing exf"*: the ex-fence bit set - 3 TO(exf), 4 AW(exf). `ex` includes oob.
+            out['exf'][a:a + n, tf] = np.isin(st, (3, 4))
         sd[a:a + n] = b[:, O_SIDE]
     return out, sd
 
@@ -238,6 +258,33 @@ def direction(sd, a, z):
     return ' then '.join(seen)
 
 
+def ltf_5aw_6x(R, xrows=1, aw_cells=False):
+    """HIS 1115 ltf-5aw-6x. -> bool per row, True on the row the scenario qualifies on.
+
+    HIS #3 holds: every window ENDS on the qualifying row. The outer window is his
+    fdm3-ltf-xcross-nof15-rows, 3 rows; the x-cross hit window is `xrows` rows and sits inside it.
+
+    `xrows` 1 is the value he wrote in this spec, 2 is where fdm3-ltf-xcross-rows is banked.
+    `aw_cells` False counts DISTINCT TIMEFRAMES reading AW(*), his 1115 ruling on the same wording
+    in LTF-xcross; True counts cells.
+    """
+    rows = int(FK.LTF_XCROSS_NOF15_ROWS)
+    lo, hi = AW6X_EXF_MAXTF
+    hits = window(R['x'], xrows)[:, 1:int(FK.LTF_XCROSS_MAXTF) + 1].sum(1)
+    #   the hit window sits anywhere inside the outer one, so take the best placement
+    g1 = np.zeros(NROWS, bool)
+    for d in range(0, rows - xrows + 1):
+        g1 |= np.roll(hits, d) >= int(FK.LTF_XCROSS_HITS)
+    g1[:rows] = False
+    g2 = nof15(R['cross'], rows) >= AW6X_N15
+    #   his exf line carries no window of its own, so it inherits the scenario's outer window
+    g3 = window(R['exf'], rows)[:, lo:hi + 1].sum(1) <= AW6X_EXF_MAX
+    g4 = ((count(R['aw'], rows) if aw_cells
+           else window(R['aw'], rows)[:, 1:16].sum(1)) >= AW6X_AW_PRINTS)
+    g5 = count(R['newaw'], rows) >= AW6X_AW_FLIPS
+    return g1 & g2 & g3 & g4 & g5
+
+
 def find(R, SD, a, z):
     """HIS 1115 DISCOVERY over rows a..z. Prints the windows carrying his reference signature, then the
     counts under each relaxation he named - *"reducing the required print counts by a small amount, or
@@ -295,9 +342,34 @@ def excursion():
             | (np.abs(G30B[PRT] - 50.0) >= (50.0 - G30_FNC)))
 
 
+def control(R):
+    """HIS OWN 09-23 0028 EXAMPLE as the live control: 14 of ws1..ws15 crossing over 0027 and 0028,
+    ws15 the only one missing. Verified against his words before the oracle was rebuilt; every run
+    checks it after, so a changed row layout cannot pass silently."""
+    k = K_OF('2026-09-23 00:28:00')
+    tfs = [t for t in range(1, 16) if R['cross'][k - 1:k + 1, t].any()]
+    assert len(tfs) == 14 and 15 not in tfs, tfs
+    print('CONTROL ok: his 09-23 0028 reads 14of15 over 0027+0028, ws15 the only one missing')
+
+
 def main():
+    if len(sys.argv) >= 4 and sys.argv[1] == 'aw6x':
+        R, _SD = load()
+        control(R)
+        a, z = K_OF(sys.argv[2]), K_OF(sys.argv[3])
+        print('tape bars: %d. the oracle fence is %g/%g.' % (ln.N, META['fence'], 100 - META['fence']))
+        print('| the reading | fires between %s and %s |' % (sys.argv[2], sys.argv[3]))
+        print('|---|---|')
+        for xr in (1, 2):
+            for cells in (False, True):
+                m = ltf_5aw_6x(R, xrows=xr, aw_cells=cells)
+                print('| x-hits inside %d row%s, AW(*) as %s | %d |'
+                      % (xr, '' if xr == 1 else 's', 'cells' if cells else 'distinct timeframes',
+                         int(m[a:z + 1].sum())))
+        return
     if len(sys.argv) >= 4 and sys.argv[1] == 'find':
-        R, SD = load(fnc=MOM_FNC)
+        R, SD = load()
+        control(R)
         print('tape bars: %d. the fdm3 fence is %g/%g.' % (ln.N, FK.MOM_FNC, 100 - FK.MOM_FNC))
         print('a cross counts ONCE per timeframe per window, his 1115 rule, so either count tops out at 15.')
         print('his reference: %s .. %s, Nof15 %d, new AW prints %d, x-cross timeframes %d'
@@ -312,7 +384,7 @@ def main():
           'the window ENDS on the row (HIS #3). ws1b oob = %.0f/%.0f, gcws30b fence = %.0f/%.0f.'
           % (OOB, 100 - OOB, G30_FNC, 100 - G30_FNC))
     for flip in (0, 1):
-        R, sd = load(flip=flip, fnc=MOM_FNC)
+        R, sd = load(flip=flip)
         x, aw = R['cross'], R['newaw']
         lab = 'pivots as found' + (', flipped' if flip else '')
         c = nof15(x, ALLIN_ROWS)
