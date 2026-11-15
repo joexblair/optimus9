@@ -285,8 +285,14 @@ def ltf_5aw_6x(R, xrows=None, aw_cells=False):
     return g1 & g2 & g3 & g4 & g5
 
 
-def dump(R, SD, a, z, path):
-    """Write every ltf-5aw-6x instance in rows a..z to `path`, in HIS 1115 columns."""
+def dump(R, SD, a, z, path, alo=0, ahi=0):
+    """Write every ltf-5aw-6x instance in rows a..z to `path`, in HIS 1115 columns.
+
+    `alo` / `ahi` are the oracle's two A buttons, his 1115 *"the first button shows A for ws1-ws6,
+    and the second shows A for ws7-ws15"*: with one on, every r line in that band takes its lift-off
+    reads - natural and e-cross - off the window extreme on every bar of the span, which moves that
+    line's AW and the scenario-2 test of the lines above it. It cannot move an x or e cross.
+    """
     rows = int(FK.LTF_XCROSS_NOF15_ROWS)
     m = ltf_5aw_6x(R)
     nof = nof15(R['cross'], 2)           # HIS Nof15 event, his own 2 row definition
@@ -294,9 +300,16 @@ def dump(R, SD, a, z, path):
     with open(path, 'w') as f:
         f.write('# his ltf-5aw-6x, every instance from %s to %s\n' % (U(a), U(z)))
         f.write('# read off fdm3-oracle\'s rows, %d bars on the tape, the oracle fence %g/%g,\n'
-                '# the pivots as found and both A buttons off\n'
-                % (ln.N, META['fence'], 100 - META['fence']))
-        f.write('# CONTROL: his 09-23 0028 reads 14of15 over 0027+0028, ws15 the only one missing\n')
+                '# the pivots as found, A %s %s and A %s %s\n'
+                % (ln.N, META['fence'], 100 - META['fence'],
+                   META['abands'][0], 'ON' if alo else 'off',
+                   META['abands'][1], 'ON' if ahi else 'off'))
+        if alo or ahi:
+            f.write('# A ON means every r line in that band takes its lift-off reads - natural and\n'
+                    '# e-cross - off the window extreme on every bar of the span, which moves that\n'
+                    '# line\'s AW and the scenario-2 test of the lines above it. It cannot move an x\n'
+                    '# or an e cross, so the x-cross and e-cross columns are the same as with A off.\n')
+        f.write('# %s\n' % control(R))
         f.write('#\n# the knobs this run read:\n')
         for k, v in FK.live():
             f.write('#   %-26s %s\n' % (k, v))
@@ -385,17 +398,24 @@ def excursion():
 def control(R):
     """HIS OWN 09-23 0028 EXAMPLE as the live control: 14 of ws1..ws15 crossing over 0027 and 0028,
     ws15 the only one missing. Verified against his words before the oracle was rebuilt; every run
-    checks it after, so a changed row layout cannot pass silently."""
+    checks it after, so a changed row layout cannot pass silently.
+
+    IT HOLDS IN EVERY A STATE. fdm3_oracle.build() makes the x and e cross bits outside its state
+    loop, from the lift-off race alone, so no A button and no pivot flip can move them; the A list
+    goes to towards_away.run, which makes the TO/AW codes and so the AW(*) and TO -> AW flip bits.
+    """
     k = K_OF('2026-09-23 00:28:00')
     tfs = [t for t in range(1, 16) if R['cross'][k - 1:k + 1, t].any()]
     assert len(tfs) == 14 and 15 not in tfs, tfs
-    print('CONTROL ok: his 09-23 0028 reads 14of15 over 0027+0028, ws15 the only one missing')
+    return 'CONTROL ok: his 09-23 0028 reads 14of15 over 0027+0028, ws15 the only one missing'
 
 
 def main():
     if len(sys.argv) >= 4 and sys.argv[1] == 'aw6x':
-        R, _SD = load()
-        control(R)
+        alo = 1 if 'alo' in sys.argv else 0
+        ahi = 1 if 'ahi' in sys.argv else 0
+        R, _SD = load(alo=alo, ahi=ahi)
+        print(control(R))
         a, z = K_OF(sys.argv[2]), K_OF(sys.argv[3])
         print('tape bars: %d. the oracle fence is %g/%g.' % (ln.N, META['fence'], 100 - META['fence']))
         print('| the reading | fires between %s and %s |' % (sys.argv[2], sys.argv[3]))
@@ -404,12 +424,13 @@ def main():
             m = ltf_5aw_6x(R, aw_cells=cells)
             print('| AW(*) as %s | %d |'
                   % ('cells' if cells else 'distinct timeframes', int(m[a:z + 1].sum())))
-        if len(sys.argv) >= 5:
-            dump(R, _SD, a, z, sys.argv[4])
+        out = [v for v in sys.argv[4:] if v not in ('alo', 'ahi')]
+        if out:
+            dump(R, _SD, a, z, out[0], alo, ahi)
         return
     if len(sys.argv) >= 4 and sys.argv[1] == 'find':
         R, SD = load()
-        control(R)
+        print(control(R))
         print('tape bars: %d. the fdm3 fence is %g/%g.' % (ln.N, FK.MOM_FNC, 100 - FK.MOM_FNC))
         print('a cross counts ONCE per timeframe per window, his 1115 rule, so either count tops out at 15.')
         print('his reference: %s .. %s, Nof15 %d, new AW prints %d, x-cross timeframes %d'
