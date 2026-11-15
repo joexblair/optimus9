@@ -106,7 +106,12 @@ REF_WINDOW = '2026-09-24 22:48:00'
 REF_ROWS = 3                    # his 2248, 2249, 2250
 REF_NOF15 = 14                  # his *"14of15 event"*, his own 2 row Nof15 definition, peak inside the window
 REF_FLIPS = 8                   # his *"8 AW flips"* - new AW PRINTS over ws1..ws15
-REF_XPRINTS = 17                # his *"abundance of x crosses"*, measured: 17 x-cross prints over ws1..ws15
+#   HIS 1115 COUNTING RULE: *"the x and e crosses are 1 type per TF per scenario (ie the max for any
+#   scenario is 15 of e and 15 of x)"*. So a cross is counted ONCE per timeframe per window however
+#   many times it prints inside it, and the ceiling on either count is 15. His own per-TF double
+#   prints stay unused until he rules on them. The new-AW count is NOT covered by this: he ruled only
+#   the crosses, and his *"8 AW flips"* is a print count.
+REF_XTFS = 12                   # his *"abundance of x crosses"*, measured: 12 of ws1..ws15 carry an x-cross
 #   HIS #5 gate, asked of the xe-all-in rows: ws1b oob, or gcws30b external of a 7/93 fence
 OOB = float(K.FDM_FNC_OOB) if hasattr(K, 'FDM_FNC_OOB') else 15.0
 G30_FNC = 7.0
@@ -218,7 +223,22 @@ def nof15(x, rows):
     return window(x, rows)[:, 1:16].sum(1)
 
 
-def find(R, a, z):
+def direction(sd, a, z):
+    """The incoming pseudo trade's direction over rows a..z-1. -> 'LONG', 'SHORT', 'none', or both when the
+    window straddles a flip.
+
+    THE SIDE IS READ, NEVER DERIVED. The oracle's last row byte is the pseudo trade's TARGET side at the
+    row's print bar - -1 LOW, +1 HIGH - and towards_away.pseudo_trades() sets a trade's side to the
+    NEGATIVE of its ws2Mage pivot's side, so a LOW pivot makes a trade whose target is the HIGH. A trade
+    hunting the HIGH oob is LONG and one hunting the LOW oob is SHORT, which is the banked mapping.
+
+    The trade live on a row is the one that closes next, so it is the INCOMING one there.
+    """
+    seen = [{-1: 'SHORT', 0: 'none', +1: 'LONG'}[int(v)] for v in dict.fromkeys(sd[a:z])]
+    return ' then '.join(seen)
+
+
+def find(R, SD, a, z):
     """HIS 1115 DISCOVERY over rows a..z. Prints the windows carrying his reference signature, then the
     counts under each relaxation he named - *"reducing the required print counts by a small amount, or
     increasing the row counts by a small amount"*.
@@ -228,20 +248,20 @@ def find(R, a, z):
     stretch qualifying three times running is one pattern, not three.
     """
     nof = nof15(R['cross'], 2)           # HIS Nof15 event, his own 2 row definition
-    cases = [('his window as it reads', REF_ROWS, REF_NOF15, REF_FLIPS, REF_XPRINTS),
-             ('print counts down 1', REF_ROWS, REF_NOF15 - 1, REF_FLIPS - 1, REF_XPRINTS - 1),
-             ('print counts down 2', REF_ROWS, REF_NOF15 - 1, REF_FLIPS - 2, REF_XPRINTS - 2),
-             ('rows up 1', REF_ROWS + 1, REF_NOF15, REF_FLIPS, REF_XPRINTS),
-             ('rows up 2', REF_ROWS + 2, REF_NOF15, REF_FLIPS, REF_XPRINTS)]
+    cases = [('his window as it reads', REF_ROWS, REF_NOF15, REF_FLIPS, REF_XTFS),
+             ('print counts down 1', REF_ROWS, REF_NOF15 - 1, REF_FLIPS - 1, REF_XTFS - 1),
+             ('print counts down 2', REF_ROWS, REF_NOF15 - 1, REF_FLIPS - 2, REF_XTFS - 2),
+             ('rows up 1', REF_ROWS + 1, REF_NOF15, REF_FLIPS, REF_XTFS),
+             ('rows up 2', REF_ROWS + 2, REF_NOF15, REF_FLIPS, REF_XTFS)]
     out = {}
-    print('| the relaxation | rows per window | Nof15 peak | new AW prints | x-cross prints '
+    print('| the relaxation | rows per window | Nof15 peak | new AW prints | x-cross timeframes '
           '| windows | clusters |')
     print('|' + '---|' * 7)
     for lab, rows, n, f, xp in cases:
         hit = [i for i in range(a, z - rows)
                if nof[i:i + rows].max() >= n
                and int(R['newaw'][i:i + rows, 1:16].sum()) >= f
-               and int(R['x'][i:i + rows, 1:16].sum()) >= xp]
+               and int(R['x'][i:i + rows, 1:16].any(0).sum()) >= xp]
         hs = set(hit)
         cl = [h for i, h in enumerate(hit) if i == 0 or h - hit[i - 1] > 1]
         out[lab] = (hit, cl, rows)
@@ -256,15 +276,15 @@ def find(R, a, z):
             n += 1
         return n
     print()
-    print('| the window | its last row | Nof15 peak inside it | new AW prints | x-cross prints '
-          '| e-cross prints | distinct x-cross TFs | distinct AW(*) TFs | his own |')
+    print('| the window | its last row | the incoming pseudo trade | Nof15 peak inside it '
+          '| new AW prints | x-cross timeframes | e-cross timeframes | AW(*) timeframes | his own |')
     print('|' + '---|' * 9)
     for h in cl:
         w = slice(h, h + rows)
-        print('| %s | %s | %d | %d | %d | %d | %d | %d | %s |'
-              % (U(h), U(h + rows - 1)[11:19], int(nof[h:h + rows].max()),
-                 int(R['newaw'][w, 1:16].sum()), int(R['x'][w, 1:16].sum()),
-                 int(R['e'][w, 1:16].sum()), int(R['x'][w, 1:16].any(0).sum()),
+        print('| %s | %s | %s | %d | %d | %d | %d | %d | %s |'
+              % (U(h), U(h + rows - 1)[11:19], direction(SD, h, h + rows),
+                 int(nof[h:h + rows].max()), int(R['newaw'][w, 1:16].sum()),
+                 int(R['x'][w, 1:16].any(0).sum()), int(R['e'][w, 1:16].any(0).sum()),
                  int(R['aw'][w, 1:16].any(0).sum()), 'HIS' if h <= ref <= h + run(h) - 1 else '-'))
     return out
 
@@ -277,12 +297,13 @@ def excursion():
 
 def main():
     if len(sys.argv) >= 4 and sys.argv[1] == 'find':
-        R, _sd = load(fnc=MOM_FNC)
+        R, SD = load(fnc=MOM_FNC)
         print('tape bars: %d. the fdm3 fence is %g/%g.' % (ln.N, FK.MOM_FNC, 100 - FK.MOM_FNC))
-        print('his reference: %s .. %s, Nof15 %d, new AW prints %d, x-cross prints %d'
-              % (REF_WINDOW, U(K_OF(REF_WINDOW) + REF_ROWS - 1), REF_NOF15, REF_FLIPS, REF_XPRINTS))
+        print('a cross counts ONCE per timeframe per window, his 1115 rule, so either count tops out at 15.')
+        print('his reference: %s .. %s, Nof15 %d, new AW prints %d, x-cross timeframes %d'
+              % (REF_WINDOW, U(K_OF(REF_WINDOW) + REF_ROWS - 1), REF_NOF15, REF_FLIPS, REF_XTFS))
         print()
-        find(R, K_OF(sys.argv[2]), K_OF(sys.argv[3]))
+        find(R, SD, K_OF(sys.argv[2]), K_OF(sys.argv[3]))
         return
     days = NROWS / 1440.0
     exc = excursion()
