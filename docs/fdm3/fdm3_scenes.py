@@ -20,6 +20,9 @@ usage: fdm3_scenes.py <scenario>                        # its gates, as the tabl
        fdm3_scenes.py <scenario> count '<from>' '<to>'  # how many rows it fires on
        fdm3_scenes.py <scenario> rows '<from>' '<to>' [<file>]   # the rows it fires on, one per
                                                         # line, written to <file> if given
+       fdm3_scenes.py <scenario> blocked <knob> '<from>' '<to>' [<file>]
+                                 # the rows that pass EVERY OTHER gate and fail only <knob>, with
+                                 # that gate's reading on each - what a different threshold admits
 """
 import os
 import sys
@@ -192,6 +195,50 @@ def main():
                   % (g['knob'], v, g['bound'], g['threshold'], 'yes' if hit else 'NO'))
         print()
         print('| %s fires at %s | %s |' % (scenario, sys.argv[3], 'yes' if fires[k] else 'no'))
+        return
+    if mode == 'blocked':
+        knob = sys.argv[3]
+        g0 = [g for g in gates if g['knob'] == knob]
+        if not g0:
+            raise SystemExit('no gate %r in scene %r' % (knob, scenario))
+        g0 = g0[0]
+        oth = np.ones(OR.NROWS, bool)
+        for h in gates:
+            if h['knob'] == knob:
+                continue
+            w = vals[h['knob']]
+            oth &= (w >= int(h['threshold'])) if h['bound'] == 'min' else (w <= int(h['threshold']))
+        oth[:rows - 1] = False
+        v = vals[knob]
+        blk = oth & ((v < int(g0['threshold'])) if g0['bound'] == 'min'
+                     else (v > int(g0['threshold'])))
+        a, z = OR.K_OF(sys.argv[4]), OR.K_OF(sys.argv[5])
+        hit = [i for i in range(a, z + 1) if blk[i]]
+        hd = ['the window', 'its last row', 'the incoming pseudo trade', knob]
+        body = [[OR.U(i - rows + 1), OR.U(i)[11:19], OR.direction(_SD, i - rows + 1, i + 1),
+                 str(int(v[i]))] for i in hit]
+        head = ['# %s: the rows that pass every gate but %s, %s to %s'
+                % (scenario, knob, sys.argv[4], sys.argv[5]),
+                '# its bound is %s %d. %d rows' % (g0['bound'], int(g0['threshold']), len(body)),
+                '# %s' % OR.control(R)]
+        if len(sys.argv) < 7:
+            for h in head:
+                print(h)
+            print()
+            print('| %s |' % ' | '.join(hd))
+            print('|' + '---|' * len(hd))
+            for r in body:
+                print('| %s |' % ' | '.join(r))
+            return
+        wd = [max(len(hd[c]), *(len(r[c]) for r in body)) for c in range(len(hd))]
+        with open(sys.argv[6], 'w') as f:
+            for h in head:
+                f.write(h + '\n')
+            f.write('\n' + ' | '.join(x.ljust(w) for x, w in zip(hd, wd)).rstrip() + '\n')
+            f.write('-+-'.join('-' * w for w in wd) + '\n')
+            for r in body:
+                f.write(' | '.join(x.ljust(w) for x, w in zip(r, wd)).rstrip() + '\n')
+        print('wrote %d rows to %s' % (len(body), sys.argv[6]))
         return
     a, z = OR.K_OF(sys.argv[3]), OR.K_OF(sys.argv[4])
     hit = [i for i in range(a, z + 1) if fires[i]]
