@@ -82,7 +82,12 @@ O_SIDE = STRIDE - 1
 #   locked at 23/77 with its button gone, the pivots +15 button gone, two new A buttons (ws1-ws6,
 #   ws7-ws15), an SL% pair of bytes before M-no-rev, and /rows now taking flip, alo and ahi. Every
 #   offset here is derived from /meta, so it followed the rebuild; this asserts the shape anyway.
-assert STRIDE == len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS) + 6, STRIDE
+#   HIS 1116 added an up/dn block of len(LINES) bytes AFTER the TO(exf) counts, so 8788 serves a longer row than
+#   8789 until the reset page picks the change up. O_TA and O_CROSS sit before the insert and are unmoved; the side
+#   is still the last byte. Both layouts are accepted and the page says which it is.
+_BASE = len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS) + 6
+assert STRIDE in (_BASE, _BASE + len(LINES)), (STRIDE, _BASE)
+assert ('updn' in META) == (STRIDE == _BASE + len(LINES)), (STRIDE, 'updn' in META)
 #   HIS 1114: *"derived from ws1 to ws15"*. gcws15 and gcws30 are in the oracle's LINES and are NOT part of
 #   either scenario's count.
 WS = [(i, int(n[2:])) for i, n in enumerate(LINES) if n.startswith('ws') and int(n[2:]) <= 15]

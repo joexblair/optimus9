@@ -124,39 +124,47 @@ HIS 1111 *"in the summary columns (16-22 and 22-30)"*: *"if any of the individua
 target-side at the print bar); the sum cell's third line, blank when none of its lines does. MINE: the TO:x AW:x
 line's style (10 px, weight 700, the cell's white text), not the cross row's yellow.
 
-HIS 1112 PIVOT BUTTON: *"I want a button at the top (on the right of the calenders), to toggle an offset in the UI.
-clikcing the button will move the pivots forward 15 minutes - eg 09-21 1616 becomes 09-21 1631, and return to the
-current state when I click the button again"*. The pivots are the ws2Mage pivots that make the pseudo trades (his
-example is the 2026-09-21 16:17:15 HIGH pivot). With the button on, every pivot is PIV_SHIFT (15 min) later, so every
-pseudo trade opens and closes 15 min later on the same side and towards/away runs again on those trades: the time
-cell's colour, TO/AW and (inf)/(exf), the sums' TO:x AW:x and TO(exf), the cross row's side, the TO -> AW flip and
-M-no-rev all follow. The r-pred numbers do not read the pseudo trade and stay as they are (asserted). The server
-builds both states at start-up; the page keeps each state's blocks apart and the button changes no scroll position -
-*"if you can make it that the toggle doesn't change the visible timestamp rows positioning inside the frame"*.
-MINE: the label "pivots +15 min", blue when on like the selected day; the last trade still closes at the tape's end.
+HIS 1112 PIVOT BUTTON, REMOVED HIS 1115 *"remove also the pivots+15 button"*. It moved every ws2Mage pivot 15 min
+later (his 1112 *"move the pivots forward 15 minutes"*); no page state moves a pivot now.
 
 HIS 1112 TOWARDS/AWAY UPDATE: *"I want to see the flip from TO to AW based on the x and e cross."* No page change: the
 TO/AW codes come from towards_away.run, which now carries the 50 reset, the excursion sample on e and x, the void
 values, the row rule and the x/e path (spec section 12). Both pivot states read it.
 
-HIS 1113 FENCE BUTTON: *"the exf/inf TO/AW is built based on a 20/80 fence.  build a button that shows the data based
-on a 23/77 fence.  the +15 pivot will work in both exf/inf TP/AW modes"*. With the button on, towards/away runs again
-with every 20/80 read moved to 23/77 - the reach, the scenario-1 vote, the pair's in-fence samples, the x/e path's
-in-fence extremum - and the (inf)/(exf) tags and the sums' TO(exf) read 23/77 too. Everything that reads TO/AW follows
-(the 55% background, the TO -> AW flip, TO:x AW:x). The r-pred numbers, the cross row's x/e crosses and M-no-rev do not
-read the fence and stay as they are. The banked read beside it is unchanged: closed-prev OR the emerging extreme of
-the last 12 bars. The two buttons combine: the server builds all four states at start-up, the page keeps each state's
-blocks apart, and neither button changes the scroll position (his 1112 positioning rule). MINE: the label
-"23/77 fence", blue when on like the pivot button, on its right.
+HIS 1113 FENCE BUTTON, REMOVED HIS 1115 *"23/77 has proven to be the best option, so we can remove that button and lock
+23/77 for the UI"*. Every towards/away read on the page - the reach, the scenario-1 vote, the pair's in-fence samples,
+the x/e path's in-fence extremum - and the (inf)/(exf) tags and the sums' TO(exf) read 23/77 (FNC). The read itself
+is unchanged: closed-prev OR the emerging extreme of the last 12 bars. Where a paragraph below says ex-20/80, the page
+now reads ex-23/77. The banked towards/away run outside the page is still 20/80.
 
 HIS 1113 FLIP BUTTON: *"add a button that flips the pivots directions, ie the green rows will become the red rows and
 vice versa"*. With the button on, every ws2Mage pivot's side is flipped on its own bar - a HIGH pivot reads LOW and a
 LOW pivot HIGH - so every pseudo trade opens and closes on the same bars with its target-side flipped (asserted), and
 towards/away runs again on those trades. The time cell's red and green swap, and, as with the pivot button, everything
 that reads the pseudo trade follows: TO/AW and (inf)/(exf), the sums' TO:x AW:x and TO(exf), the cross row's side, the
-TO -> AW flip and M-no-rev. The r-pred numbers do not read the pseudo trade and stay as they are (asserted). The three
-buttons combine: the server builds all eight states at start-up, the page keeps each state's blocks apart, and no
-button changes the scroll position. MINE: the label "flip pivots", blue when on, on the right of the fence button.
+TO -> AW flip and M-no-rev. The r-pred numbers do not read the pseudo trade and stay as they are (asserted). No
+button changes the scroll position. MINE: the label "flip pivots", blue when on; since 1115 it is the first button.
+
+HIS 1115 THE TWO A BUTTONS: *"I want to try A first, but in way that I can control it. I'm deep in developing a strategy
+and my decisions have been made on the existing build"* / *"I'm not sure if the lower TFs and the higher TFs need the
+same mech shape.  create two buttons that A will be applied to - the first button shows A for ws1-ws6, and the second
+shows A for ws7-ws15"*. A is his choice from the 1115 ws5r 2026-09-20 trace: lift-off's window extreme is read off
+EVERY bar of its span, (LIFT_PTS - 1) x gap_for(TF) bars, not only the six samples - jig.at_extreme `line_extreme`,
+OFF BY DEFAULT so nothing outside these buttons moves. The six samples, the 2.0 tolerance, the 8-bar hold and the pivot
+rule are unchanged. With a button on, towards/away runs with A on the lift-off reads of that band's r lines: the
+natural reversals (scenario 1 and the x/e path's pivot) and, his *"1 and 2: agreed"*, the e-cross reversals, which read
+A's natural reversals. M-no-rev's Mage lift-off stays as built (agreed). A line with A on also moves the scenario-2
+test of the lines above it, which reads the 5 lines under them - so A ws1-ws6 can move ws7..ws11 cells, and A
+ws7-ws15 the ws16-22 and ws23-30 sums. The two buttons and flip pivots combine: 8 states built at start-up, each kept
+apart in the page. With both A buttons off a state is the 1113 page's 23/77 state byte for byte (checked 1115 against
+the running page). MINE: the labels "A ws1-ws6" and "A ws7-ws15", blue when on, on the right of flip pivots.
+
+HIS 1115 SL% AND THE gcws COLUMNS: *"while we're in test mode, add this dynamic stop loss mech and produce it in skinny
+column labeled 'SL%', to the right of 'ws1 time'"* / *"drop the gcws15 and gcws30 columns. keep the table's existing
+columns at their current width, ie don't attempt to fill the lost column space"*. sl_pct has his spec and his 09-20
+walk. The column is 48 px (MINE), 2 dp, blank where no leg ends in the last 6 h; it reads neither the pivots nor A, so
+it is the same in every state. gcws15 and gcws30 are gone from the page and the payload; the 1109 r-pred control still
+reads them (CONTROL_LINES), so its 257,295 is the same check. Every other column keeps its width and the box narrows.
 
 HIS 1113 ws1 TO(exf) FLIP: *"in ws1 only, in the same format as any flip to AW(*), highlight the field when ws1 flips to
 TO(exf)"*. His answer to which readings on the row before count: *"any except TO(exf)"* - blank, TO(inf), AW(inf) or
@@ -171,7 +179,7 @@ already carried), blank when none. MINE: the "TO:x" form of the line above it.
 
 HIS 1113 NEXT ITERATION - BUILD THE STATES IN PARALLEL: *"building the 8 combos in parallel is a great idea.  add that
 as a docstring so that you remember it when we build the next iteration.  note you have cupy available if that helps"*.
-build() makes the eight states one after another: towards_away.run once per state other than the bank, 7 runs of
+build() makes the eight states one after another: towards_away.run once per state other than the first, 7 runs of
 97.9 s to 109.4 s each (measured alone, 2026-11-13), and start-up is 1028.2 s on 16 cores. The states do not read each
 other, so each run can go to its own process (forked after the lines load, so the line arrays are shared, not copied),
 returning its 30 int8 state arrays; M-no-rev and the cross row stay in the parent. cupy 14.1.1 is installed with one GPU
@@ -210,6 +218,7 @@ try:
     import v4_lift_e as LE
     import v4_ws_e as WSE
     import v4_closed_prev as CP
+    import v4_backstop_trades as BT
     import v4_knobs as K
     from optimus9.analysis import jig as JIG
 finally:
@@ -229,27 +238,76 @@ if __name__ == '__main__':
         raise SystemExit('port %d is in use (%s) - not building' % (PORT, _e))
     finally:
         _sk.close()
-LINES = ['gcws15', 'gcws30'] + ['ws%d' % t for t in range(1, 16)]      # HIS 1109 wsf, + ws13..ws15 HIS 1111
+LINES = ['ws%d' % t for t in range(1, 16)]      # HIS 1109 wsf + ws13..ws15 HIS 1111; HIS 1115 *"drop the gcws15 and gcws30
+#                                                 columns"*
 SUMS = [('ws16-22', range(16, 23)), ('ws23-30', range(23, 31))]   # HIS 1111 two right columns (1109: ws13-20, ws21-30)
 CONTROL_FLAGGED = 257295        # 1109 measurement: the 14 wsf columns' cells at -1 or +1, whole tape
-CONTROL_COLS = 14               # the control reads gcws15..ws12, the first 14 columns, alone
+CONTROL_LINES = ['gcws15', 'gcws30'] + ['ws%d' % t for t in range(1, 13)]   # the 1109 control's 14 lines - gcws15 and
+#                                 gcws30 are still read for it, though the page no longer shows them (HIS 1115)
+SL_LINE = 'gcws15b'             # HIS 1115 STOPLOSS: *"between gcws15b extrema (oob to opposing oob)"*, on 15 s closed bars
+SL_HOURS = 6.0                  # HIS 1115 *"averaged over the last 6 hours"*
+SL_NONE = -1                    # SL% x 100 where no leg ends in the window, or the tape has under 6 h behind the row
 MNR_LABEL = 'M-no-rev'          # HIS 1111 column label, between ws15 and ws16-22
 MNR_TOP = 30                    # HIS 1111 answer: ws1..ws30Mage, not the ladder's 33
-STRIDE = len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS) + 4   # bytes per row: r-pred,
+MNR_RESET = True                # HIS 1116 reset, on. False restores the 1111 column exactly, for his A/B
+STRIDE = (len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)
+          + len(LINES) + 6)     # bytes per row: r-pred,
 #   the TO/AW codes, the TO/AW counts, the cross codes (HIS 1110: 1 X, 2 E, 3 both, on the row's target-side; +4 the
 #   line reads AW on this row and TO on the row before, HIS 1110 TO -> AW flip; +8 ws1 only, TO(exf) on this row and
 #   anything else on the row before, HIS 1113), per sum the count of its lines
-#   reading TO(exf) (HIS 1111), the M-no-rev TF (HIS 1111, 0 none),
+#   reading TO(exf) (HIS 1111), HIS 1116 the UP/DN pair per line (bits 0-1 position 1, this row against the row 3
+#   back; bits 2-3 position 2, against the row 2 back; 0 a dead tie or no row that far back, 1 up, 2 dn),
+#   HIS 1115 SL% x 100 as an int16 in two bytes (low byte first, SL_NONE blank), the M-no-rev TF (HIS 1111, 0 none),
 #   its line's closed-prev value x 10 as an int16 in two bytes (low byte first), then the pseudo trade's target-side at the row's read bar: -1 LOW, +1 HIGH, 0 no trade
 
 
-PIV_SHIFT = 15                  # minutes - HIS 1112 button: *"move the pivots forward 15 minutes"*
-OFFS = (0, PIV_SHIFT)           # the page's two states: the pivots as found, and every pivot PIV_SHIFT later
-FNC_ALT = 23.0                  # HIS 1113 button: *"shows the data based on a 23/77 fence"* - the smaller end, his 1103 rule
-FNCS = (int(K.FDM_FNC_2080), int(FNC_ALT))   # the page's two fences: the banked 20/80, and 23/77 with the button on
+FNC = 23.0                      # HIS 1115 *"23/77 has proven to be the best option, so we can remove that button and lock
+#                                 23/77 for the UI"* - the smaller end, his 1103 rule. The fence button is gone
+A_BANDS = (('ws1-ws6', tuple(range(1, 7))), ('ws7-ws15', tuple(range(7, 16))))   # HIS 1115 the two A buttons: *"the
+#                                 first button shows A for ws1-ws6, and the second shows A for ws7-ws15"*
+A_ONS = (0, 1)                  # each A button: 0 lift-off as built, 1 A on its band's r lines
 FLIP_TOX = 'ws1'                # HIS 1113: the one line whose flip into TO(exf) is highlighted, *"in ws1 only"*
 TO_EXF = 3                      # the TO/AW code a cell prints as TO(exf): TO 1, +2 ex-fence on the target-side
 FLIPS = (0, 1)                  # HIS 1113 button: *"flips the pivots directions"* - 0 as found, 1 every pivot's side flipped
+
+
+def mnr_reset(em, cp, oob, cross, st, raw, sd):
+    """HIS 1116 M-no-rev reset, walked per oob run. -> bool array: the line reads oob-and-not-yet-reversed here.
+
+    `em` the EMERGING Mage, `cp` its closed-prev (the oob test's own reading), `oob` / `cross` that test's run mask
+    and each bar's cross-into-oob bar, `st` the reversals' knowable stamps with `raw` their pivot bars, `sd` the
+    target-side. The stored value is em[pivot], HIS ruling; the comparison is on the same line, so a stored value
+    and the bar it is compared against are never two different readings.
+
+    CAUSAL: a reversal only arms from its KNOWABLE stamp, never from its pivot, and the loop never looks past the
+    bar it is deciding. The assert below holds the first of those.
+    """
+    o = np.argsort(st, kind='stable')
+    st_s, raw_s = st[o], raw[o]
+    assert (raw_s <= st_s).all(), 'a lift-off pivot sits after its own knowable stamp'
+    with np.errstate(invalid='ignore'):
+        stored_at = em[np.clip(raw_s, 0, len(em) - 1)]
+    out = np.zeros(len(em), bool)
+    n, i = len(st_s), 0
+    while i < len(em):
+        if not oob[i]:
+            i += 1
+            continue
+        c = int(cross[i])
+        armed, stored = True, np.nan            # a run opens not-yet-reversed, as it always did
+        p = int(np.searchsorted(st_s, c, side='left'))
+        while i < len(em) and oob[i]:
+            while p < n and st_s[p] <= i:       # every reversal knowable by this bar
+                if st_s[p] >= c:                # HIS 1111: only one at or after the cross counts
+                    armed, stored = False, stored_at[p]
+                p += 1
+            if not armed and np.isfinite(stored):
+                v = em[i]
+                if np.isfinite(v) and ((v > stored) if sd > 0 else (v < stored)):
+                    armed = True                # HIS 1116: further from 50 on the target-side, strictly
+            out[i] = armed
+            i += 1
+    return out
 
 
 def m_no_rev(sps, prt):
@@ -263,11 +321,27 @@ def m_no_rev(sps, prt):
                 colour). No pseudo trade open, no target-side, nothing prints
       the cross its cross INTO oob is the first bar of its current closed-prev oob run. The cross back to ib has
                 no bearing (HIS 1111)
-      reversal  no lift-off reversal printed between the cross and the print bar. The lift-off is jig.lift_off on
-                the EMERGING Mage line over the whole tape - one unbroken rolling window - at the banked LIFT_*
-                knobs with no e path, the call every Mage reader makes. A reversal counts from its KNOWABLE bar,
-                the end of its 40 s hold (lift_stamp), at or after the cross - HIS 1111: build it *"based on that
-                table's output"*, the 1111 table of every change from 2026-09-21 15:44:00, which read it that way
+      reversal  no lift-off reversal printed between the cross and the print bar, UNLESS the line has since been
+                reset - see below. The lift-off is jig.lift_off on the EMERGING Mage line over the whole tape - one
+                unbroken rolling window - at the banked LIFT_* knobs with no e path, the call every Mage reader
+                makes. A reversal counts from its KNOWABLE bar, the end of its 40 s hold (lift_stamp), at or after
+                the cross - HIS 1111: build it *"based on that table's output"*, the 1111 table of every change
+                from 2026-09-21 15:44:00, which read it that way
+
+    HIS 1116 RESET: *"m-no-rev column stops printing on the first MAge reversal, when the Mage is oob. the update to
+    the mech: -store that "final" reversal value with the line -if the Mage prints further "away from 50 towards
+    target-side" ... AND is bound to the current OOB excursion --reset the line to 'oob-and-not-yet-reversed', and
+    resume printing"*, and *"the stored value is read as emerging at the pivot"*.
+
+    So a reversal no longer ends the oob run's printing for good. It stores the EMERGING Mage's value at the
+    lift-off PIVOT bar - his ruling, over the same value at the knowable stamp and over either closed-prev reading -
+    and the line prints again from the first later bar whose EMERGING Mage is STRICTLY further from 50 on the
+    target-side than that stored value: above it on a HIGH target-side, below it on a LOW one. His *"increases"* is
+    why it is strict. The next reversal stamp stores a new value and stops the print again, so a run can cycle any
+    number of times.
+
+    *"bound to the current OOB excursion"* scopes all of it to the Mage's OWN current oob run: a fresh cross into
+    oob clears the stored value and nothing carries across. The oob test itself is unchanged - still closed-prev.
     """
     idx = np.arange(ln.N)
     res = [[np.zeros(len(prt), np.int8), np.zeros(len(prt), np.int16)] for _ in sps]
@@ -284,7 +358,7 @@ def m_no_rev(sps, prt):
             k = np.searchsorted(st, idx, side='right') - 1     # the last reversal knowable at or before each bar
             last = np.where(k >= 0, st[np.clip(k, 0, None)], -1)
             assert (last <= idx).all(), 'a reversal is read before it is knowable'
-            un = (oob & (last < cross))[prt]
+            un = (oob & (last < cross))[prt] if not MNR_RESET else mnr_reset(em, cp, oob, cross, st, raw, sd)[prt]
             for r, sp in zip(res, sps):
                 q = (sp == sd) & un
                 r[0] = np.where(q, t, r[0]).astype(np.int8)
@@ -294,11 +368,76 @@ def m_no_rev(sps, prt):
     return [tuple(r) for r in res]
 
 
+def sl_pct(prt):
+    """HIS 1115 STOPLOSS dynamic values. -> int16 [rows]: SL% x 100 at each row's print bar, SL_NONE where none.
+
+    HIS SPEC: *"collect the 15s closed bar abs(price pct diff), between gcws15b extrema (oob to opposing oob), averaged
+    over the last 6 hours"* / *"if the pct pattern continued for the full 6 hours, the stop loss would be ~2%"*. HIS
+    WALK, from 2026-09-20 09:41:45: *"the lowside oob to ib can only be known when g15b crosses to highside oob, and
+    vice-versa"* / *"this allows g15b to "bounce" on the opposing oob until it has completed its time on that side's
+    oob"* / *"the timestamp of g15b returning to high oob is 1015:45, and the walk can now detect that the final lowside
+    cross from oob to ib was 1013:45"* / *"the highside's final cross to ib is 1035:30, and this is known when g15b
+    crossed to lowside oob at 1040"*.
+
+    gcws15b is read on its closed 15 s bars (the value at each 15 s bar's last 5 s bar, the midnight grid), oob at 15/85
+    (OOB_LO / OOB_HI). A side's FINAL cross to ib is its last oob -> ib cross before g15b enters the opposing oob, and it
+    is known at the close of the 15 s bar that enters - readable from the next 5 s bar, closed-prev. A leg runs from one
+    final cross to the next (they alternate sides); its value is abs(price pct diff) of the two 15 s bars' closes (the
+    tape's raw close). The row's SL% is the mean of the legs that are known by the print bar and whose end cross is
+    inside the 6 h up to it. His 09-20 walk reproduces bar for bar (checked 1115).
+
+    MINE, his to change: the plain mean of the legs, not weighted by leg length; blank (SL_NONE) where no leg ends in
+    the window and where the tape has under SL_HOURS behind the print bar; a 15 s bar that goes from one oob straight
+    into the other is that side's final cross and the entry on the same bar.
+    """
+    b = np.asarray(LL.sub_line(SL_LINE), float)
+    close = np.asarray(BT.prices()[0], float)
+    ts = np.asarray(ln.ts, np.int64)
+    cb = np.flatnonzero(((ts + 5000) % 15000) == 0)      # each 15 s bar's last 5 s bar: its closed value and close
+    v, px = b[cb], close[cb]
+    lo, hi = float(K.OOB_LO), float(K.OOB_HI)
+    pts = []                                             # the final crosses: (5 s bar, price, side, known 5 s bar)
+    cur, last = 0, {+1: None, -1: None}
+    for i in range(1, len(cb)):
+        a, z = v[i - 1], v[i]
+        if not (np.isfinite(a) and np.isfinite(z)):
+            continue
+        if a >= hi > z:                                  # HIGH oob -> ib; the latest one is the side's final so far
+            last[+1] = i
+        if a <= lo < z:                                  # LOW oob -> ib
+            last[-1] = i
+        for s, enters in ((+1, a < hi <= z), (-1, a > lo >= z)):
+            if not enters or cur == s:
+                continue                                 # a bounce on the side it is already on changes nothing
+            if cur == -s and last[-s] is not None:       # the opposing side is complete: its final cross is known here
+                j = last[-s]
+                pts.append((int(cb[j]), float(px[j]), -s, int(cb[i])))
+            last[-s], last[s], cur = None, None, s
+    assert all(pts[k][2] != pts[k + 1][2] for k in range(len(pts) - 1)), 'two final crosses in a row share a side'
+    assert all(p[0] <= p[3] for p in pts), 'a final cross is known before its own bar'   # equal: one bar oob to oob
+    end = np.asarray([p[0] for p in pts[1:]], np.int64)
+    known = np.asarray([p[3] for p in pts[1:]], np.int64) + 1          # readable from the next 5 s bar
+    pct = np.asarray([abs(q[1] - p[1]) / p[1] * 100.0 for p, q in zip(pts[:-1], pts[1:])], float)
+    cs = np.concatenate([[0.0], np.cumsum(pct)])
+    w = int(SL_HOURS * 3600 * 1000)
+    k1 = np.searchsorted(known, prt, side='right')                     # legs readable at the print bar
+    k0 = np.searchsorted(ts[end], ts[prt] - w, side='left')            # legs whose end cross is inside the 6 h
+    n = k1 - k0
+    with np.errstate(invalid='ignore', divide='ignore'):
+        m = np.where(n > 0, (cs[np.maximum(k1, k0)] - cs[k0]) / np.maximum(n, 1), np.nan)
+    m[ts[prt] - ts[0] < w] = np.nan
+    out = np.where(np.isfinite(m), np.round(m * 100.0), SL_NONE)
+    assert (out < 32767).all(), 'an SL% x 100 does not fit an int16'
+    global SL_LEGS
+    SL_LEGS = (pts, pct)
+    return out.astype(np.int16)
+
+
 def build():
-    """-> (row open ms [n], {(offset minutes, flip, fence): [n, STRIDE] int8 - r-pred per line, then the two sums,
+    """-> (row open ms [n], {(flip, A ws1-ws6, A ws7-ws15): [n, STRIDE] int8 - r-pred per line, then the two sums,
     then the rest}). Row i is the ws1 bar opening at t0 + 60 s * i. The r-pred bytes are the same in every state; every
-    byte that reads the pseudo trade (its target-side, towards/away, the cross row's side, M-no-rev) is built per
-    offset and flip, and towards/away per fence too."""
+    byte that reads the pseudo trade (its target-side, towards/away, the cross row's side, M-no-rev) is built per flip,
+    and towards/away per A state too. Every towards/away read is at the locked 23/77 fence (HIS 1115)."""
     ts = np.asarray(ln.ts, np.int64)
     assert (np.diff(ts) == 5000).all(), 'the 5 s grid has a gap - a row would not be one ws1 bar'
     E = RS.load((RS.K0, RS.R0, RS.S0))           # fdm2's emerging r lines, ws1..ws30
@@ -319,9 +458,32 @@ def build():
     prt = first + 12                             # HIS ANSWER: the cell is the value where closed-prev shows it
     assert (ts[prt] - ts[first] == 60000).all()
     base = [rpred(name)[prt] for name in LINES]
+    global FLAGGED                               # the 1109 control: its own 14 lines, gcws15 and gcws30 included
+    FLAGGED = int(sum((rpred(name)[prt] != 0).sum() for name in CONTROL_LINES))
+    sl = sl_pct(prt)
     for _, tfs in SUMS:                          # the same read, summed: -7..+7 and -8..+8, fits int8
         base.append(np.sum([rpred('ws%d' % t)[prt].astype(int) for t in tfs], 0))
-    LN, piv, trades, ST, det = TA.build()
+    #   HIS 1116 TOP ROW: *"the top row (which currently prints r-pred +1, -1, 0) is replaced by a mech that
+    #   calculates if the current ws{tf}r row's value is higher or lower than the same ws{TF}r, 2 rows earlier and 3
+    #   rows earlier ... position1 is the diff between current row and current row - 3, and position2 reports on
+    #   current row - 2 --this update applies to ws1-15 only"*, and on a dead tie: *"'-'"*.
+    #   The r-pred byte stays and still sets the cell's colour - *"keep the r-pred colors as is"*.
+    #   THE EMERGING r AT THE ROW'S PRINT BAR, the line r-pred itself reads. Closed-prev was measured and rejected
+    #   before this was built: a high-TF closed line does not move between rows 2 and 3 minutes apart, so it ties on
+    #   52% of cells against 12.7% for emerging.
+    UD = []
+    for name in LINES:
+        v = np.asarray(E[int(name[2:])], float)[prt]
+        code = np.zeros(len(prt), np.int8)
+        for bit, back in ((0, 3), (2, 2)):
+            with np.errstate(invalid='ignore'):
+                up, dn = v[back:] > v[:-back], v[back:] < v[:-back]
+            one = np.zeros(len(prt), np.int8)
+            one[back:] = np.where(up, 1, np.where(dn, 2, 0))   # 0 is a dead tie OR no row that far back
+            code = (code | (one << bit)).astype(np.int8)
+        UD.append(code)
+    assert len(UD) == len(LINES) and all(0 <= int(c.min()) and int(c.max()) <= 10 for c in UD)
+    LN, piv, trades, ST, det = TA.build(FNC)        # the 23/77 run with A off: the first page state
     print('towards/away: %d ws2Mage pivots, %d pseudo trades, first opens %s'
           % (len(piv), len(trades), ln.U(trades[0][0])))
     #   HIS 1110 CROSS ROW: the e and x race wins per side over the whole tape, each put on the row of the ws1 bar it
@@ -342,35 +504,33 @@ def build():
                 row = row[(wins >= first[0]) & (row < len(prt))]
                 c[row] |= bit
             XC[name][sd] = c
-    #   HIS 1112 *"move the pivots forward 15 minutes"*: every ws2Mage pivot PIV_SHIFT later, so every pseudo trade
-    #   opens and closes PIV_SHIFT later on the same side, and towards/away runs again on those trades. The last
-    #   trade still closes at the tape's end
-    #   HIS 1113 *"the +15 pivot will work in both exf/inf TP/AW modes"*: towards/away runs once per pivot state and
-    #   fence - the banked 20/80 passes no fence, so its two states are the runs as before
     #   HIS 1113 *"flips the pivots directions"*: each pivot's side flips on its own bar, so every pseudo trade keeps
-    #   its bars and its target-side flips; it combines with the offset and the fence
+    #   its bars and its target-side flips
+    #   HIS 1115 the two A buttons: towards/away runs once per flip and A state, with A (jig.at_extreme `line_extreme`)
+    #   on the lift-off reads of the ws1..ws6 r lines, the ws7..ws15 r lines, both or neither. The pivots +15 min and
+    #   fence buttons are gone (HIS 1115), so no state moves a pivot and every state reads 23/77
     STATES, SIDES = [], {}
-    for off in OFFS:
-        k = off * 12                             # 5 s bars
-        for fl in FLIPS:
-            tr = [(o + k, min(c + k, ln.N), -s if fl else s) for o, c, s in trades if o + k < ln.N]
-            for fnc in FNCS:
-                alt = None if fnc == FNCS[0] else float(fnc)
-                STATES.append((off, fl, fnc, alt,
-                               ST if not off and not fl and alt is None else TA.run(LN, tr, alt)[0]))
-            if off or fl:
-                print('pivots +%d min%s: %d pseudo trades, first opens %s'
-                      % (off, ', flipped' if fl else '', len(tr), ln.U(tr[0][0])))
-            side = np.zeros(ln.N, np.int8)
-            for o, c, s in tr:
-                side[o:c] = s
-            SIDES[(off, fl)] = side
-    assert all(np.array_equal(SIDES[(off, 1)], -SIDES[(off, 0)]) for off in OFFS), \
+    for fl in FLIPS:
+        tr = [(o, c, -s if fl else s) for o, c, s in trades]
+        for alo in A_ONS:
+            for ahi in A_ONS:
+                a_tfs = [t for (_, band), on in zip(A_BANDS, (alo, ahi)) if on for t in band]
+                t1 = time.time()
+                STATES.append((fl, alo, ahi, ST if not fl and not a_tfs else TA.run(LN, tr, FNC, a_tfs)[0]))
+                print('state flip %d, A %s %d, A %s %d: %.1f s' % (fl, A_BANDS[0][0], alo, A_BANDS[1][0], ahi,
+                                                                   time.time() - t1))
+        if fl:
+            print('pivots flipped: %d pseudo trades, first opens %s' % (len(tr), ln.U(tr[0][0])))
+        side = np.zeros(ln.N, np.int8)
+        for o, c, s in tr:
+            side[o:c] = s
+        SIDES[fl] = side
+    assert np.array_equal(SIDES[1], -SIDES[0]), \
         'a flipped pseudo trade is not the as-found one on the same bars with the other target-side'
     MNR = dict(zip(SIDES, m_no_rev([SIDES[key][prt] for key in SIDES], prt)))
     mats = {}
-    for off, fl, fnc, alt, ST in STATES:
-        side, (mn, mv) = SIDES[(off, fl)], MNR[(off, fl)]
+    for fl, alo, ahi, ST in STATES:
+        side, (mn, mv) = SIDES[fl], MNR[fl]
         cols = list(base)
         live = side != 0
         sp = side[prt]
@@ -378,8 +538,8 @@ def build():
         def exf_at(t):
             #   HIS 1109 *"append `(inf)` or `(exf)`"*: ex-20/80 on the target-side by the banked reader - the
             #   one the towards/away mech's own ex-fence test uses (closed-prev, or the emerging 60 s extreme).
-            #   HIS 1113: at 23/77 with the fence button on
-            return np.where(sp > 0, TA.exf_mask(LN, t, +1, alt)[prt], TA.exf_mask(LN, t, -1, alt)[prt]) & (sp != 0)
+            #   HIS 1115: locked at 23/77
+            return np.where(sp > 0, TA.exf_mask(LN, t, +1, FNC)[prt], TA.exf_mask(LN, t, -1, FNC)[prt]) & (sp != 0)
         #   TOWARDS/AWAY at the same print bar: 0 no state, 1 TO, 2 AW, and +2 when the line is ex-20/80 on the
         #   target-side there - 3 TO(exf), 4 AW(exf). Then per sum column the TO count and the AW count over its
         #   lines, both -1 where no pseudo trade is open (no target-side, so nothing to count)
@@ -416,17 +576,20 @@ def build():
         #   per sum column, how many of its lines read TO(exf) - the code a ws1..ws15 cell prints as TO(exf)
         for _, tfs in SUMS:
             cols.append(np.sum([((ST[t][prt] == TA.TO) & exf_at(t)).astype(int) for t in tfs], 0))
+        cols.extend(UD)                          # HIS 1116 the up/dn pair per line, the same in every state
+        cols.append((sl & 0xFF).astype(np.uint8).view(np.int8))     # HIS 1115 SL%, the same in every state
+        cols.append((sl >> 8).astype(np.int8))
         cols.append(mn)                          # HIS 1111 M-no-rev: the highest qualifying TF, 0 none, and its value
         cols.append((mv & 0xFF).astype(np.uint8).view(np.int8))
         cols.append((mv >> 8).astype(np.int8))
         cols.append(side[prt])                   # HIS 1109: the time cell's 20% colour, red LOW, green HIGH
-        mats[(off, fl, fnc)] = np.ascontiguousarray(np.stack(cols, 1).astype(np.int8))
+        mats[(fl, alo, ahi)] = np.ascontiguousarray(np.stack(cols, 1).astype(np.int8))
     return ts[first], mats
 
 
 T0 = time.time()
 OPEN, MATS = build()
-RP = MATS[(0, 0, FNCS[0])]                      # the pivots as found at the banked fence - every check below reads it
+RP = MATS[(0, 0, 0)]                            # the pivots as found, A off, 23/77 - every check below reads it
 assert all(m.shape == RP.shape for m in MATS.values()) and RP.shape[1] == STRIDE
 assert all(np.array_equal(m[:, :len(LINES) + len(SUMS)], RP[:, :len(LINES) + len(SUMS)]) for m in MATS.values()), \
     'the r-pred bytes differ between the page states'
@@ -435,12 +598,13 @@ for i, ms in enumerate(OPEN):
     d = time.strftime('%Y-%m-%d', time.gmtime(int(ms) // 1000))
     if not DAYS or DAYS[-1][0] != d:
         DAYS.append([d, i])
-FLAGGED = int((RP[:, :CONTROL_COLS] != 0).sum())
 TAC = RP[:, len(LINES) + len(SUMS):2 * len(LINES) + len(SUMS)]
 U = lambda ms: time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(int(ms) // 1000))
 META = json.dumps({
     'lines': LINES, 'mnr': MNR_LABEL, 'sums': [s for s, _ in SUMS], 'stride': STRIDE, 'rows': int(len(OPEN)), 't0': int(OPEN[0]), 'step': 60000,
-    'days': DAYS, 'shift': PIV_SHIFT, 'fences': list(FNCS), 'flips': list(FLIPS)})
+    'days': DAYS, 'fence': FNC, 'abands': [b for b, _ in A_BANDS], 'flips': list(FLIPS),
+    #   HIS 1116: where the up/dn block starts, so a reader is told rather than re-deriving the layout
+    'updn': len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)})
 
 
 class H(BaseHTTPRequestHandler):
@@ -460,11 +624,11 @@ class H(BaseHTTPRequestHandler):
             return self._send(META.encode(), 'application/json')
         if self.path.startswith('/rows'):
             q = dict(kv.split('=') for kv in self.path.split('?', 1)[1].split('&'))
-            #   HIS 1112 off: 0 the pivots as found, PIV_SHIFT every pivot moved; HIS 1113 fnc: 20 banked, 23 the button;
-            #   HIS 1113 flip: 0 the pivots' sides as found, 1 every side flipped
-            m = MATS.get((int(q.get('off', 0)), int(q.get('flip', 0)), int(q.get('fnc', FNCS[0]))))
+            #   HIS 1113 flip: 0 the pivots' sides as found, 1 every side flipped; HIS 1115 alo / ahi: the A buttons,
+            #   0 lift-off as built, 1 A on ws1..ws6 / ws7..ws15
+            m = MATS.get((int(q.get('flip', 0)), int(q.get('alo', 0)), int(q.get('ahi', 0))))
             if m is None:
-                self.send_error(400, 'off must be one of %s, flip one of %s and fnc one of %s' % (OFFS, FLIPS, FNCS))
+                self.send_error(400, 'flip, alo and ahi must each be one of %s / %s / %s' % (FLIPS, A_ONS, A_ONS))
                 return
             a = max(0, int(q['start'])); b = min(len(m), a + max(0, int(q['count'])))
             return self._send(m[a:b].tobytes(), 'application/octet-stream')    # STRIDE bytes per row
@@ -532,7 +696,7 @@ h1{font-size:15px;margin:0 0 8px;font-weight:600}
 .row .o{background:var(--org);color:var(--on);font-weight:600}
 .hd .sx,.row .sx{border-left:2px solid var(--mut)}
 </style></head><body><div class="wrap">
-<h1>fdm3-oracle - r-pred, gcws15 to ws15, M-no-rev, plus the ws16-22 and ws23-30 sums, emerging, on closed-prev ws1 bars, with towards/away</h1>
+<h1>fdm3-oracle - SL%, r-pred ws1 to ws15, M-no-rev, plus the ws16-22 and ws23-30 sums, emerging, on closed-prev ws1 bars, with towards/away</h1>
 <div class="cal" id="cal"></div>
 <div class="status"><span id="top">top row: -</span><span id="held">cache: -</span><span id="err"></span></div>
 <div class="box" id="box"><div class="inner"><div class="hd" id="hd"></div><div class="body" id="body"></div></div></div>
@@ -545,30 +709,32 @@ const TW = 116;         // px, the time column: MM-DD HH:MM:SS (HIS 1111 drops t
 const TMIN = 94, SMIN = 56;   // px, the least the time column and a sum column give way to: their text, 84 and 52 px
 const MMIN = 68;      // px, the least M-no-rev gives way to: its widest text, "ws23:100.0", is 65.0 px in the cell (headless Chrome)
 const CW = 72.36;      // px, every line and sum column - HIS 1111 *"stay the same width as they are now"*
-let meta, NL, NC, NS;
+const SLW = 48;        // px, HIS 1115 *"skinny column labeled 'SL%', to the right of 'ws1 time'"* - its widest text, "99.99"
+let meta, NL, NC, NS, UD0;
+//   HIS 1116: the top row's two positions. 0 is a dead tie or no row that far back, and he asked for '-' there
+const UDW = ['-', 'up', 'dn', '-'];
 const cache = new Map(), pending = new Set();
 const box = document.getElementById('box'), body = document.getElementById('body');
 const pool = [];
 let lastTop = 0, dir = 1, raf = 0, dayOn = '';
 const NB = '\u00a0';   // HIS 1110: the place holder line - a blank line keeps a cell's 3 lines aligned
 let sel = -1;           // HIS 1110: the clicked row, highlighted; a click on another row moves it, on the same row clears it
-let OFF = 0;            // HIS 1112: minutes the pivots are moved forward - 0 as found, meta.shift with the button on
-let FNC = 0;            // HIS 1113: the towards/away fence's smaller end - meta.fences[0] banked, [1] with the button on
 let FLIP = 0;           // HIS 1113: 0 the pivots' sides as found, 1 every side flipped with the button on
+let ALO = 0, AHI = 0;   // HIS 1115: the two A buttons - A on ws1..ws6 / ws7..ws15, 0 lift-off as built
 
 const fmt = ms => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
 
 function fetchBlock(b) {
-  const off = OFF, flip = FLIP, fnc = FNC, key = off + ':' + flip + ':' + fnc + ':' + b;   // HIS 1112 / 1113: each state keeps its own blocks
+  const flip = FLIP, alo = ALO, ahi = AHI, key = flip + ':' + alo + ':' + ahi + ':' + b;   // each state keeps its own blocks
   if (b < 0 || b * BLOCK >= meta.rows || cache.has(key) || pending.has(key)) return;
   pending.add(key);
-  fetch('rows?start=' + (b * BLOCK) + '&count=' + BLOCK + '&off=' + off + '&flip=' + flip + '&fnc=' + fnc)
+  fetch('rows?start=' + (b * BLOCK) + '&count=' + BLOCK + '&flip=' + flip + '&alo=' + alo + '&ahi=' + ahi)
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
     .then(buf => { pending.delete(key); cache.set(key, new Int8Array(buf)); evict(); schedule(); })
     .catch(e => { pending.delete(key); document.getElementById('err').textContent = 'fetch failed: ' + e.message; });
 }
 function getBlock(b) {
-  const key = OFF + ':' + FLIP + ':' + FNC + ':' + b, a = cache.get(key);
+  const key = FLIP + ':' + ALO + ':' + AHI + ':' + b, a = cache.get(key);
   if (a) { cache.delete(key); cache.set(key, a); }   // most recently used goes to the back
   return a;
 }
@@ -587,7 +753,7 @@ function ensurePool(n) {
   while (pool.length < n) {
     const el = document.createElement('div'); el.className = 'row';
     const cells = [];
-    let mc = null;
+    let mc = null, slc = null;
     for (let c = 0; c <= NC; c++) {
       if (c === NL + 1) {              // HIS 1111 M-no-rev, between ws15 and the sums; 3 lines like every data cell
         mc = document.createElement('div'); mc.n = document.createElement('span');
@@ -595,11 +761,16 @@ function ensurePool(n) {
         el.appendChild(mc);
       }
       const d = document.createElement('div'); d.className = c ? '' : 't'; el.appendChild(d);
+      if (!c) {                         // HIS 1115 SL%, right of the time; 3 lines like every data cell
+        slc = document.createElement('div'); slc.n = document.createElement('span');
+        slc.ta = document.createElement('b'); slc.xc = document.createElement('b'); slc.append(slc.n, slc.ta, slc.xc);
+        el.appendChild(slc);
+      }
       if (c) { d.n = document.createElement('span'); d.ta = document.createElement('b'); d.append(d.n, d.ta); if (c > NL) d.ta.className = 's'; }
       if (c) { d.xc = document.createElement('b'); d.xc.className = 'x'; d.append(d.xc); }   // HIS 1110 cross row, every cell
       cells.push(d);
     }
-    body.appendChild(el); pool.push({el, cells, mc, i: -1, ok: false});
+    body.appendChild(el); pool.push({el, cells, mc, slc, i: -1, ok: false});
   }
 }
 function draw() {
@@ -628,12 +799,22 @@ function draw() {
     p.mc.n.textContent = !blk ? '·' : mv > 0 ? 'ws' + mv + ':' + (mx / 10).toFixed(1) : NB;
     p.mc.ta.textContent = NB; p.mc.xc.textContent = NB;
     p.mc.className = (blk ? 'mn' : 'w') + ' sx';
+    //   HIS 1115 SL%: the mean abs price % of the gcws15b legs (final oob -> ib to final oob -> ib) ending in the last
+    //   6 h, x 100 in two bytes; blank where there is none
+    const sl = blk ? ((blk[o + NS - 5] << 8) | (blk[o + NS - 6] & 255)) : 0;
+    p.slc.n.textContent = !blk ? '·' : sl < 0 ? NB : (sl / 100).toFixed(2);
+    p.slc.ta.textContent = NB; p.slc.xc.textContent = NB;
+    p.slc.className = blk ? 'sl' : 'w';
     for (let c = 0; c < NC; c++) {
       const d = p.cells[c + 1], sx = c === NL ? ' sx' : '';
       if (!blk) { d.n.textContent = '·'; d.ta.textContent = NB; d.xc.textContent = NB; d.className = 'w' + sx; continue; }
       const v = blk[o + c];
       if (c < NL) {                     // a wsf line: -1 red, +1 green, 0 plain
-        d.n.textContent = v === -1 ? '-1' : v === 1 ? '+1' : '0';
+        //   HIS 1116: the top row prints the UP/DN pair, not the r-pred number. position1 is this row against the
+        //   row 3 back, position2 against the row 2 back, and a dead tie prints '-'. The CELL'S COLOUR below still
+        //   comes from the r-pred byte - *"keep the r-pred colors as is"*
+        const ud = blk[o + UD0 + c];
+        d.n.textContent = UDW[ud & 3] + ' | ' + UDW[(ud >> 2) & 3];
         const s = blk[o + NC + c];      // HIS 1109: TO or AW below the number, bold
         //   HIS 1110: a -1 / +1 on an AW line (code 2 AW(inf), 4 AW(exf)) prints its background at 55% opaque
         d.className = (v === -1 ? 'm' : v === 1 ? 'p' : 'zr') + (v !== 0 && (s === 2 || s === 4) ? ' a' : '');
@@ -701,49 +882,24 @@ function buildCal() {
 }
 async function init() {
   meta = await (await fetch('meta')).json();
-  FNC = meta.fences[0];                          // HIS 1113: the banked fence until the button is pressed
-  NL = meta.lines.length; NC = NL + meta.sums.length; NS = meta.stride;
+  NL = meta.lines.length; NC = NL + meta.sums.length; NS = meta.stride; UD0 = meta.updn;
   const hd = document.getElementById('hd');
-  for (const h of ['ws1 time (UTC)'].concat(meta.lines, [meta.mnr], meta.sums)) { const d = document.createElement('div'); d.textContent = h; hd.appendChild(d); }
-  hd.children[NL + 1].className = 'sx'; hd.children[NL + 2].className = 'sx';
+  for (const h of ['ws1 time (UTC)', 'SL%'].concat(meta.lines, [meta.mnr], meta.sums)) { const d = document.createElement('div'); d.textContent = h; hd.appendChild(d); }
+  hd.children[NL + 2].className = 'sx'; hd.children[NL + 3].className = 'sx';
   body.style.height = (meta.rows * RH) + 'px';
   //   HIS 1111: no sideways bar. The lines stay CW; the time column takes what is left, then M-no-rev and the
   //   sums give way together
-  const inner = box.firstElementChild, tw = TW + (NC + 1) * CW;
-  inner.style.setProperty('--gt', 'minmax(' + TMIN + 'px,1fr) repeat(' + NL + ',' + CW + 'px) minmax(' + MMIN + 'px,' +
+  //   HIS 1115 *"keep the table's existing columns at their current width, ie don't attempt to fill the lost column space"*:
+  //   the box narrows by the two dropped columns, less the SL% column
+  const inner = box.firstElementChild, tw = TW + SLW + (NC + 1) * CW;
+  inner.style.setProperty('--gt', 'minmax(' + TMIN + 'px,1fr) ' + SLW + 'px repeat(' + NL + ',' + CW + 'px) minmax(' + MMIN + 'px,' +
                           CW + 'px) repeat(' + (NC - NL) + ',minmax(' + SMIN + 'px,' + CW + 'px))');
   //   after the body's height, so the vertical scrollbar is in the box's width
   document.querySelector('.wrap').style.maxWidth = (tw + box.offsetWidth - box.clientWidth + 32) + 'px';
   buildCal();
-  //   HIS 1112 *"I want a button at the top (on the right of the calenders), to toggle an offset in the UI"*. The
-  //   scroll position is not touched, so the rows on screen stay where they are and only their cells change
-  const tg = document.createElement('button'); tg.className = 'tog'; tg.textContent = 'pivots +' + meta.shift + ' min';
-  tg.title = 'move every ws2Mage pivot ' + meta.shift + ' minutes forward; click again for the pivots as found';
-  tg.setAttribute('aria-pressed', 'false');
-  tg.onclick = () => {
-    OFF = OFF ? 0 : meta.shift;
-    tg.classList.toggle('on', OFF > 0); tg.setAttribute('aria-pressed', String(OFF > 0));
-    for (const p of pool) p.ok = false;
-    schedule();
-  };
-  document.getElementById('cal').appendChild(tg);
-  //   HIS 1113 *"build a button that shows the data based on a 23/77 fence"*, beside the pivot button; the two combine
-  //   and, like it, it leaves the scroll position alone
-  const fb = document.createElement('button'); fb.className = 'tog';
-  fb.textContent = meta.fences[1] + '/' + (100 - meta.fences[1]) + ' fence';
-  fb.title = 'towards/away and its (inf)/(exf) at the ' + fb.textContent + '; click again for the banked ' +
-             meta.fences[0] + '/' + (100 - meta.fences[0]);
-  fb.setAttribute('aria-pressed', 'false');
-  fb.onclick = () => {
-    FNC = FNC === meta.fences[0] ? meta.fences[1] : meta.fences[0];
-    const on = FNC !== meta.fences[0];
-    fb.classList.toggle('on', on); fb.setAttribute('aria-pressed', String(on));
-    for (const p of pool) p.ok = false;
-    schedule();
-  };
-  document.getElementById('cal').appendChild(fb);
   //   HIS 1113 *"add a button that flips the pivots directions, ie the green rows will become the red rows and vice
-  //   versa"*, beside the fence button; the three combine and, like them, it leaves the scroll position alone
+  //   versa"*, on the right of the calendars. No button changes the scroll position (his 1112 positioning rule):
+  //   the rows on screen stay where they are and only their cells change
   const fp = document.createElement('button'); fp.className = 'tog'; fp.textContent = 'flip pivots';
   fp.title = 'flip the side of every ws2Mage pivot, so a HIGH pivot reads LOW and a LOW pivot HIGH; click again for the sides as found';
   fp.setAttribute('aria-pressed', 'false');
@@ -754,6 +910,22 @@ async function init() {
     schedule();
   };
   document.getElementById('cal').appendChild(fp);
+  //   HIS 1115 *"create two buttons that A will be applied to - the first button shows A for ws1-ws6, and the second
+  //   shows A for ws7-ws15"*. A: lift-off's window extreme off every bar of its span, not only the six samples. They
+  //   combine with each other and with flip pivots
+  for (const [i, band] of meta.abands.entries()) {
+    const ab = document.createElement('button'); ab.className = 'tog'; ab.textContent = 'A ' + band;
+    ab.title = 'lift-off A on the ' + band + ' r lines: the window extreme off every bar of the span, not only the six ' +
+               'samples; click again for lift-off as built';
+    ab.setAttribute('aria-pressed', 'false');
+    ab.onclick = () => {
+      const on = i === 0 ? (ALO = 1 - ALO) : (AHI = 1 - AHI);
+      ab.classList.toggle('on', on > 0); ab.setAttribute('aria-pressed', String(on > 0));
+      for (const p of pool) p.ok = false;
+      schedule();
+    };
+    document.getElementById('cal').appendChild(ab);
+  }
   box.addEventListener('scroll', schedule, {passive: true});
   body.addEventListener('click', e => {           // HIS 1110: *"make a row highlighted if I click on that row"*
     const el = e.target.closest('.row'), p = el && pool.find(q => q.el === el);
@@ -800,14 +972,22 @@ if __name__ == '__main__':
               % (label, int((_ex > 0).sum()), len(_ex), int(_ex.max())))
     print('M-no-rev (ws1..ws%dMage): rows printing a TF %d of %d, highest TF printed %d, value %.1f .. %.1f'
           % (MNR_TOP, int((_mn > 0).sum()), len(_mn), int(_mn.max()), _mv[_mn > 0].min() / 10, _mv[_mn > 0].max() / 10))
-    for (_off, _fl, _fnc), _m in MATS.items():
-        if (_off, _fl, _fnc) == (0, 0, FNCS[0]):
+    print('fence: %d/%d, locked (HIS 1115)' % (FNC, 100 - FNC))
+    for (_fl, _alo, _ahi), _m in MATS.items():
+        if (_fl, _alo, _ahi) == (0, 0, 0):
             continue
         _tac = _m[:, len(LINES) + len(SUMS):2 * len(LINES) + len(SUMS)]
-        print('pivots +%d min%s, %d/%d fence: rows whose target-side differs from the pivots as found %d of %d, cells '
+        #   HIS 1115 the A states against the same flip with A off, per column: which TO/AW cells A moved
+        _ref = MATS[(_fl, 0, 0)]
+        _dc = (_m[:, len(LINES) + len(SUMS):2 * len(LINES) + len(SUMS)] != _ref[:, len(LINES) + len(SUMS):2 * len(LINES) + len(SUMS)]).sum(0)
+        print('pivots %s, A %s %s, A %s %s: rows whose target-side differs from the pivots as found %d of %d, cells '
               'that differ %d of %d; TO(inf) %d, AW(inf) %d, TO(exf) %d, AW(exf) %d'
-              % ((_off, ', flipped' if _fl else '', _fnc, 100 - _fnc, int((_m[:, STRIDE - 1] != RP[:, STRIDE - 1]).sum()), len(RP),
-                  int((_m != RP).sum()), RP.size) + tuple(int((_tac == k).sum()) for k in (1, 2, 3, 4))))
+              % (('flipped' if _fl else 'as found', A_BANDS[0][0], 'on' if _alo else 'off', A_BANDS[1][0], 'on' if _ahi else 'off',
+                  int((_m[:, STRIDE - 1] != RP[:, STRIDE - 1]).sum()), len(RP), int((_m != RP).sum()), RP.size)
+                 + tuple(int((_tac == k).sum()) for k in (1, 2, 3, 4))))
+        if _alo or _ahi:
+            print('    TO/AW cells moved by A, against the same pivots with A off: '
+                  + ', '.join('%s %d' % (n, int(c)) for n, c in zip(LINES, _dc) if c))
     print('towards/away knobs (banked): ' + ' '.join('%s=%s' % (k, v) for k, v, _, _ in TA.KNOBS))
     print('open http://127.0.0.1:%d' % PORT)
     sys.stdout.flush()
