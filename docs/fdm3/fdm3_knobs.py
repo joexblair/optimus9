@@ -46,6 +46,21 @@ SIDEWAYS_RETEST_DIFF_PCT = _knob('SIDEWAYS_RETEST_DIFF_PCT', 0.88)   # his `...-
 #   MY NAME, derived from his own `fdm-20-80-fnc` - he has not named this one yet.
 MOM_FNC = _knob('MOM_FNC', 23.0)                # his `fdm3-23-77-fnc`, pending his own name
 
+#   ── the oracle A state, fdm3-wide ────────────────────────────────────────────────────────────
+#   HIS 1116: *"the A ws1-ws6 button is enabled now - I've found it to be better than having it
+#   disabled. bank this as the live machine"*, and earlier the same day *"the oracles 'A ws1-ws6
+#   button': this sits outside of the scenarion building. that button is underlying an
+#   infrastructure decision"*. So it is NOT a per-scenario knob: it is the state EVERY fdm3 read of
+#   the oracle's rows is taken at, and it lives here once.
+#
+#   A ON means every r line in that band takes its lift-off reads - natural and e-cross - off the
+#   window extreme on every bar of the span, which moves that line's AW and the scenario-2 test of
+#   the lines above it. It cannot move an x or an e cross: fdm3_oracle.build() makes those bits
+#   outside its state loop, from the lift-off race alone.
+#   MY NAMES, derived from his own button labels - he has not named these two.
+A_WS1_WS6 = _knob('A_WS1_WS6', 1, int)
+A_WS7_WS15 = _knob('A_WS7_WS15', 0, int)
+
 #   ── fdm3-ltf-xcross ──────────────────────────────────────────────────────────────────────────
 #   HIS SPEC LINE: *">={knob:6,`fdm3-ltf-xcross-hits`} TFs are populated with an x-cross, inside of
 #   {knob:2,`fdm3-ltf-xcross-rows`} rows, within the ws1-ws{knob:8,`fdm3-ltf-xcross-maxTF`} fields"*.
@@ -82,14 +97,7 @@ LTF_5AW_6X_XCROSS_ROWS = _knob('LTF_5AW_6X_XCROSS_ROWS', 1, int)
 LTF_5AW_6X_MIN_AW_PRINTS = _knob('LTF_5AW_6X_MIN_AW_PRINTS', 10, int)
 LTF_5AW_6X_MIN_AW_FLIPS = _knob('LTF_5AW_6X_MIN_AW_FLIPS', 5, int)
 
-#   HIS 1116 BANK: the file he confirmed was read with the oracle's A ws1-ws6 button ON, so that is
-#   the state this scenario's AW reads are banked at. A ON means every r line in ws1..ws6 takes its
-#   lift-off reads - natural and e-cross - off the window extreme on every bar of the span, which
-#   moves that line's AW and the scenario-2 test of the lines above it. It cannot move an x or an e
-#   cross. The ws7-ws15 button stays OFF: he banked one file, not both.
-#   MY NAMES, derived from his own button labels - he has not named these two.
-LTF_5AW_6X_A_WS1_WS6 = _knob('LTF_5AW_6X_A_WS1_WS6', 1, int)
-LTF_5AW_6X_A_WS7_WS15 = _knob('LTF_5AW_6X_A_WS7_WS15', 0, int)
+
 
 #   ── fdm3-4-ltf-aws ───────────────────────────────────────────────────────────────────────────
 #   HIS SPEC LINE: *">=4 AW flips on the same row, on TFs that are between ws1 and
@@ -111,9 +119,9 @@ RULED = {
                                   'hit window, replacing fdm3-ltf-xcross-rows in it'),
     'LTF_5AW_6X_MIN_AW_PRINTS': (10, 'his `fdm3-ltf-5aw-6x-min-aw-prints` - DISTINCT timeframes '
                                      'reading AW(*), settled by his 1116 bank'),
-    'LTF_5AW_6X_A_WS1_WS6': (1, 'the oracle A button this scenario is banked at, his 1116 '
-                                'confirmed file - ON'),
-    'LTF_5AW_6X_A_WS7_WS15': (0, 'the other oracle A button - OFF, he banked one file not both'),
+    'A_WS1_WS6': (1, 'the oracle A ws1-ws6 button - ON, his 1116 *"bank this as the live machine"*. '
+                     'fdm3-wide: infrastructure, not a scenario gate'),
+    'A_WS7_WS15': (0, 'the oracle A ws7-ws15 button - OFF. He banked the first one only'),
     'LTF_5AW_6X_MIN_AW_FLIPS': (5, 'his `fdm3-ltf-5aw-6x-min-aw-flips` - new AW PRINTS'),
     'AWS4_MAXTF': (6, 'his `fdm3-4-ltf-aws-maxTF` - the AW flips count on ws1..ws6'),
     'AWS4_ROWS': (4, 'his `fdm3-4-ltf-aws-rows` - the window both 4-ltf-aws gates sit inside'),

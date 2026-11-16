@@ -165,7 +165,7 @@ def K_OF(s):
 O_TA = len(LINES) + len(SUMS)   # the TO/AW code per line: 0 none, 1 TO, 2 AW, 3 TO(exf), 4 AW(exf)
 
 
-def load(flip=0, alo=0, ahi=0, chunk=20000):
+def load(flip=0, alo=None, ahi=None, chunk=20000):
     """-> a dict of [n,16] bool per ws TF 1..15, plus the row's target-side [n].
 
     'cross'  an x-cross OR an e-cross - what his Nof15 counts
@@ -177,6 +177,10 @@ def load(flip=0, alo=0, ahi=0, chunk=20000):
     'newaw'  the TO -> AW flip - his *"new AW"*
     'aw'     the cell reads AW(*), either AW(inf) or AW(exf)
     """
+    #   HIS 1116: the A ws1-ws6 button is the LIVE MACHINE, so the banked state is the default here
+    #   and a caller has to pass something else on purpose.
+    alo = int(FK.A_WS1_WS6) if alo is None else int(alo)
+    ahi = int(FK.A_WS7_WS15) if ahi is None else int(ahi)
     out = {k: np.zeros((NROWS, 16), bool) for k in ('cross', 'x', 'e', 'newaw', 'aw', 'exf', 'toexf')}
     sd = np.zeros(NROWS, np.int8)
     for a in range(0, NROWS, chunk):
@@ -329,8 +333,8 @@ def dump(R, SD, a, z, path, alo=0, ahi=0):
                 '#\n%s# %d instances\n\n'
                 % (rows,
                    '# BANKED by Joe 1116 as a confirmed aw-exhaust scenario\n'
-                   if alo == int(FK.LTF_5AW_6X_A_WS1_WS6)
-                   and ahi == int(FK.LTF_5AW_6X_A_WS7_WS15) and FK.RULED_OK else '',
+                   if alo == int(FK.A_WS1_WS6)
+                   and ahi == int(FK.A_WS7_WS15) and FK.RULED_OK else '',
                    len(hit)))
         hd = ['the window', 'its last row', 'the incoming pseudo trade', 'Nof15 peak inside it',
               'new AW prints', 'x-cross TFs', 'e-cross TFs', 'AW(*) TFs']
@@ -421,11 +425,11 @@ def control(R):
 
 def main():
     if len(sys.argv) >= 4 and sys.argv[1] == 'aw6x':
-        #   HIS 1116 BANK: this scenario's reads are banked at A ws1-ws6 ON, A ws7-ws15 OFF. The two
+        #   HIS 1116: the A state is fdm3-wide infrastructure, banked at A ws1-ws6 ON. The two
         #   buttons are knobs like any other, so fdm3_knobs.check() is what refuses an off-bank run -
         #   there is no second refusal here and no way to ask for a state from the command line.
-        alo = int(FK.LTF_5AW_6X_A_WS1_WS6)
-        ahi = int(FK.LTF_5AW_6X_A_WS7_WS15)
+        alo = int(FK.A_WS1_WS6)
+        ahi = int(FK.A_WS7_WS15)
         R, _SD = load(alo=alo, ahi=ahi)
         print(control(R))
         a, z = K_OF(sys.argv[2]), K_OF(sys.argv[3])

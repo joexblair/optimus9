@@ -172,7 +172,9 @@ def main():
     if mode == 'gates':
         _print_gates(frame, gates)
         return
-    R, _SD = OR.load(alo=0, ahi=0)
+    #   HIS 1116: the oracle A state is fdm3-wide infrastructure and banked in fdm3_knobs, so this
+    #   takes the live state rather than naming one.
+    R, _SD = OR.load()
     print(OR.control(R))
     fires, vals = evaluate(R, frame, gates)
     rows = int(frame['max_consecutive_rows'])
@@ -212,8 +214,10 @@ def main():
     with open(sys.argv[5], 'w') as f:
         f.write('# %s, every row it fires on from %s to %s\n' % (scenario, sys.argv[3], sys.argv[4]))
         f.write('# read off fdm3-oracle\'s rows, %d bars on the tape, the oracle fence %g/%g,\n'
-                '# the pivots as found and both A buttons off\n'
-                % (OR.ln.N, OR.META['fence'], 100 - OR.META['fence']))
+                '# the pivots as found, A %s %s and A %s %s\n'
+                % (OR.ln.N, OR.META['fence'], 100 - OR.META['fence'],
+                   OR.META['abands'][0], 'ON' if int(OR.FK.A_WS1_WS6) else 'off',
+                   OR.META['abands'][1], 'ON' if int(OR.FK.A_WS7_WS15) else 'off'))
         f.write('# %s\n#\n' % OR.control(R))
         f.write('# the scenario, as the fdm3_* tables hold it:\n')
         f.write('#   max-consecutive-rows %d, ltf-to-htf-pivot ws%d, confirmed %s\n'
