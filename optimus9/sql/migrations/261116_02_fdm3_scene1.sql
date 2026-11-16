@@ -19,7 +19,7 @@
 --     min-htf-aw-flips: 5                          -> a gate
 --     max-allowed-ltf-toexf-at-last-row: 0         -> a gate
 --     max-allowed-htf-toexf-at-last-row: 2         -> a gate
---     min-aw-flips-on-last-row: 4                  -> a gate
+--     min-aw-flips-on-last-row: 2                  -> a gate
 --     min-n-of-15: 13                              -> a gate, an x-cross OR an e-cross
 --
 --   HIS 1116 CORRECTION: *"my cross is x only. Nof15 covers x or e"*. So both xcross gates read the
@@ -37,8 +37,8 @@ DELETE FROM fdm3_scenario WHERE scenario = 'scene1';
 
 INSERT INTO fdm3_scenario
   (scenario, max_consecutive_rows, ltf_to_htf_pivot, confirmed, his_example, note) VALUES
-  ('scene1', 4, 7, 0, '2026-09-22 02:16:00',
-   'Joe 1116, his first scenario written as table data. NOT confirmed: he validates by eye first');
+  ('scene1', 4, 7, 1, '2026-09-22 02:16:00',
+   'Joe 1116: BANKED with min-aw-flips-on-last-row 2, read at A ws1-ws6 on, on the 8789 page');
 
 INSERT INTO fdm3_scenario_gate
   (scenario, seq, knob, measure, band, row_window, bound, threshold, window_rows) VALUES
@@ -53,5 +53,5 @@ INSERT INTO fdm3_scenario_gate
   ('scene1',  9, 'min-htf-aw-flips',                  'aw_flip', 'htf',   'range',      'min',  5, NULL),
   ('scene1', 10, 'max-allowed-ltf-toexf-at-last-row', 'toexf',   'ltf',   'last_row',   'max',  0, NULL),
   ('scene1', 11, 'max-allowed-htf-toexf-at-last-row', 'toexf',   'htf',   'last_row',   'max',  2, NULL),
-  ('scene1', 12, 'min-aw-flips-on-last-row',          'aw_flip', 'total', 'last_row',   'min',  4, NULL),
+  ('scene1', 12, 'min-aw-flips-on-last-row',          'aw_flip', 'total', 'last_row',   'min',  2, NULL),
   ('scene1', 13, 'min-n-of-15',                       'nof15',   'total', 'range',      'min', 13, NULL);
