@@ -111,10 +111,19 @@ LTFX_AW_FLIPS = 2               # fdm3-min_aw_flips: new AW's - the TO -> AW fli
 #   FDM_FNC_2080 is UNTOUCHED at 20.0 until he rules whether the 23 reaches its other readers.
 MOM_FNC = int(FK.MOM_FNC)       # the banked fdm3 fence, his 1115 23/77 - now LOCKED in the oracle too
 assert int(META['fence']) == MOM_FNC, (META['fence'], MOM_FNC)
-#   the page must be the one his ruling names: its reset fence and its locked A state have to match
-#   the bank, or every count below is off a different mech.
-assert float(META.get('reset', 0.0)) == float(FK.FENCE_RESET_TO), (META.get('reset'), FK.FENCE_RESET_TO)
-assert list(META.get('alock', [])) == [int(FK.A_WS1_WS6), int(FK.A_WS7_WS15)], META.get('alock')
+#   THE PAGE MUST BE THE ONE HIS RULING NAMES: its reset fence and its locked A state have to match
+#   the bank, or every count below is off a different mech. On the bank this is a hard stop; under
+#   W_FDM3_EXPERIMENT it prints the mismatch instead, so the two pages can be compared on purpose.
+_PAGE = [('its reset fence', META.get('reset'), float(FK.FENCE_RESET_TO)),
+         ('its locked A state', META.get('alock'), [int(FK.A_WS1_WS6), int(FK.A_WS7_WS15)])]
+_OFF = [(w, g, want) for w, g, want in _PAGE
+        if (float(g) if w.endswith('fence') and g is not None else g) != want]
+if _OFF:
+    _msg = '; '.join('%s is %r, the bank says %r' % t for t in _OFF)
+    if FK.RULED_OK:
+        raise SystemExit('the oracle on port %d is not the page the bank names: %s'
+                         % (int(FK.ORACLE_PORT), _msg))
+    sys.stderr.write('# the page on port %d is NOT the banked one: %s\n' % (int(FK.ORACLE_PORT), _msg))
 
 #   HIS 1115 ltf-5aw-6x. Its shared knobs are the LTF-xcross ones - *"the knob reprints are not
 #   duplications - this mech uses the same values"* - except the x-cross hit window, which he gave
