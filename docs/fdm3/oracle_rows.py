@@ -67,7 +67,9 @@ try:
 finally:
     sys.stderr = _err
 
-BASE = 'http://127.0.0.1:8788'
+#   HIS 1116: the scenarios read 8789, which carries his fdm3-fence-reset-TO at 33/67 and locks the
+#   A buttons. The port is a banked knob, so an off-bank run refuses rather than reading the wrong page.
+BASE = 'http://127.0.0.1:%d' % int(FK.ORACLE_PORT)
 META = json.load(urllib.request.urlopen(BASE + '/meta'))
 LINES, SUMS = META['lines'], META['sums']
 STRIDE, NROWS = int(META['stride']), int(META['rows'])
@@ -104,6 +106,10 @@ LTFX_AW_FLIPS = 2               # fdm3-min_aw_flips: new AW's - the TO -> AW fli
 #   FDM_FNC_2080 is UNTOUCHED at 20.0 until he rules whether the 23 reaches its other readers.
 MOM_FNC = int(FK.MOM_FNC)       # the banked fdm3 fence, his 1115 23/77 - now LOCKED in the oracle too
 assert int(META['fence']) == MOM_FNC, (META['fence'], MOM_FNC)
+#   the page must be the one his ruling names: its reset fence and its locked A state have to match
+#   the bank, or every count below is off a different mech.
+assert float(META.get('reset', 0.0)) == float(FK.FENCE_RESET_TO), (META.get('reset'), FK.FENCE_RESET_TO)
+assert list(META.get('alock', [])) == [int(FK.A_WS1_WS6), int(FK.A_WS7_WS15)], META.get('alock')
 
 #   HIS 1115 ltf-5aw-6x. Its shared knobs are the LTF-xcross ones - *"the knob reprints are not
 #   duplications - this mech uses the same values"* - except the x-cross hit window, which he gave

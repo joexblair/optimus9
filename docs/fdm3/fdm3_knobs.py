@@ -46,6 +46,18 @@ SIDEWAYS_RETEST_DIFF_PCT = _knob('SIDEWAYS_RETEST_DIFF_PCT', 0.88)   # his `...-
 #   MY NAME, derived from his own `fdm-20-80-fnc` - he has not named this one yet.
 MOM_FNC = _knob('MOM_FNC', 23.0)                # his `fdm3-23-77-fnc`, pending his own name
 
+#   ── which oracle the scenarios read ──────────────────────────────────────────────────────────
+#   HIS 1116, asked which instance is the live read: *"8789"*. 8789 carries his fdm3-fence-reset-TO
+#   at 33/67 - the flip at 50, the 50 reset and the void all move to the fence's target-side line,
+#   67 on a HIGH target-side and 33 on a LOW one - and has the A buttons locked at ws1-ws6 on.
+#   8788 is the committed `o9-fdm3-oracle` unit and has neither.
+#
+#   WHAT 8789 IS, and he should know it: an UNCOMMITTED copy of fdm3_oracle.py running from another
+#   session's scratchpad under /tmp, with no systemd unit. It does not survive a reboot or a /tmp
+#   clean, and the file behind it is not the one in git.
+ORACLE_PORT = _knob('ORACLE_PORT', 8789, int)
+FENCE_RESET_TO = _knob('FENCE_RESET_TO', 33.0)   # his `fdm3-fence-reset-TO`, as 8789 serves it
+
 #   ── the oracle A state, fdm3-wide ────────────────────────────────────────────────────────────
 #   HIS 1116: *"the A ws1-ws6 button is enabled now - I've found it to be better than having it
 #   disabled. bank this as the live machine"*, and earlier the same day *"the oracles 'A ws1-ws6
@@ -119,6 +131,10 @@ RULED = {
                                   'hit window, replacing fdm3-ltf-xcross-rows in it'),
     'LTF_5AW_6X_MIN_AW_PRINTS': (10, 'his `fdm3-ltf-5aw-6x-min-aw-prints` - DISTINCT timeframes '
                                      'reading AW(*), settled by his 1116 bank'),
+    'ORACLE_PORT': (8789, 'the oracle the scenarios read, his 1116 answer. 8789 carries the 33/67 '
+                          'fence reset and locks A ws1-ws6 on'),
+    'FENCE_RESET_TO': (33.0, 'his `fdm3-fence-reset-TO`, the fence the flip, the 50 reset and the '
+                             'void read on 8789 - asserted against that page on every run'),
     'A_WS1_WS6': (1, 'the oracle A ws1-ws6 button - ON, his 1116 *"bank this as the live machine"*. '
                      'fdm3-wide: infrastructure, not a scenario gate'),
     'A_WS7_WS15': (0, 'the oracle A ws7-ws15 button - OFF. He banked the first one only'),
