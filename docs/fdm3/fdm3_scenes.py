@@ -20,9 +20,11 @@ usage: fdm3_scenes.py <scenario>                        # its gates, as the tabl
        fdm3_scenes.py <scenario> count '<from>' '<to>'  # how many rows it fires on
        fdm3_scenes.py <scenario> rows '<from>' '<to>' [<file>]   # the rows it fires on, one per
                                                         # line, written to <file> if given
-       fdm3_scenes.py <scenario> blocked <knob> '<from>' '<to>' [<file>]
+       fdm3_scenes.py <scenario> blocked <knob> '<from>' '<to>' [<file>] [cull0]
                                  # the rows that pass EVERY OTHER gate and fail only <knob>, with
-                                 # that gate's reading on each - what a different threshold admits
+                                 # that gate's reading on each - what a different threshold admits.
+                                 # `cull0` leaves out the rows reading 0, HIS 1116 ask on this file;
+                                 # without it every blocked row prints
 """
 import os
 import sys
@@ -213,15 +215,21 @@ def main():
         blk = oth & ((v < int(g0['threshold'])) if g0['bound'] == 'min'
                      else (v > int(g0['threshold'])))
         a, z = OR.K_OF(sys.argv[4]), OR.K_OF(sys.argv[5])
-        hit = [i for i in range(a, z + 1) if blk[i]]
+        #   HIS 1116 *"cull the '0' rows from the txt file"*. OFF unless asked for, so the default
+        #   output still accounts for every blocked row.
+        cull0 = 'cull0' in sys.argv[6:]
+        hit = [i for i in range(a, z + 1) if blk[i] and not (cull0 and int(v[i]) == 0)]
         hd = ['the window', 'its last row', 'the incoming pseudo trade', knob]
         body = [[OR.U(i - rows + 1), OR.U(i)[11:19], OR.direction(_SD, i - rows + 1, i + 1),
                  str(int(v[i]))] for i in hit]
         head = ['# %s: the rows that pass every gate but %s, %s to %s'
                 % (scenario, knob, sys.argv[4], sys.argv[5]),
-                '# its bound is %s %d. %d rows' % (g0['bound'], int(g0['threshold']), len(body)),
+                '# its bound is %s %d. %d rows%s'
+                % (g0['bound'], int(g0['threshold']), len(body),
+                   ', the %d rows reading 0 culled at his ask'
+                   % int(((v[a:z + 1] == 0) & blk[a:z + 1]).sum()) if cull0 else ''),
                 '# %s' % OR.control(R)]
-        if len(sys.argv) < 7:
+        if len(sys.argv) < 7 or sys.argv[6] == 'cull0':
             for h in head:
                 print(h)
             print()
