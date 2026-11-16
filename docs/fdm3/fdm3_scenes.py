@@ -51,10 +51,10 @@ def load_scene(scenario, db=None):
     if not fr:
         raise SystemExit('no scenario %r in fdm3_scenario' % scenario)
     gates = d.execute(
-        'SELECT g.knob, g.seq, g.bound, g.threshold, '
+        'SELECT g.knob, g.seq, g.bound, g.threshold, g.window_rows, '
         '       g.measure, m.oracle_read, m.counted_as, '
         '       g.band, b.lo_tf, b.hi_tf, b.lo_pivot_off, b.hi_pivot_off, '
-        '       g.row_window, w.n_rows '
+        '       g.row_window, w.n_rows, w.size_from, w.placement '
         '  FROM fdm3_scenario_gate g '
         '  JOIN fdm3_measure    m ON m.measure    = g.measure '
         '  JOIN fdm3_band       b ON b.band       = g.band '
@@ -75,17 +75,31 @@ def band_of(gate, pivot):
     return lo, hi
 
 
-def read(R, gate, pivot, rows):
-    """A gate's measure over its band and its window, at every oracle row. -> int array.
+FIELD = {'aw': 'aw', 'aw_flip': 'newaw', 'toexf': 'toexf', 'cross': 'x', 'nof15': 'cross'}
+#   HIS 1116: *"my cross is x only. Nof15 covers x or e"* - so `cross` reads the oracle's x bit and
+#   `nof15` reads the x-or-e bit. The two were the other way round before he said it.
 
-    The window ALWAYS ends on the row - HIS 1114 *"treat N rows as a window. if all of the gates are
-    present inside the window, then the mech (the scenario) qualifies"*. Nothing later than the row
-    is read, so a verdict at a row is causal at that row.
+
+def rows_of(gate, rows):
+    """How many oracle rows a gate's window covers, and whether it may float. -> (n, anywhere).
+
+    The scenario's range always ENDS on the qualifying row - HIS 1114 *"treat N rows as a window. if
+    all of the gates are present inside the window, then the mech (the scenario) qualifies"*. A
+    window that may sit anywhere inside the range still never reaches past that row, so a verdict is
+    causal at the row either way.
     """
-    n = int(gate['n_rows']) if gate['n_rows'] is not None else rows
-    lo, hi = band_of(gate, pivot)
-    a = R[{'aw': 'aw', 'aw_flip': 'newaw', 'toexf': 'toexf', 'cross': 'cross'}[gate['measure']]]
-    if gate['counted_as'] == 'timeframes':
+    n = {'range': rows,
+         'fixed': gate['n_rows'],
+         'gate': gate['window_rows']}[gate['size_from']]
+    assert n is not None, (gate['knob'], gate['row_window'])
+    n = int(n)
+    assert 1 <= n <= rows, (gate['knob'], n, rows)
+    return n, gate['placement'] == 'anywhere'
+
+
+def _tally(a, lo, hi, n, counted_as):
+    """A measure over ws`lo`..ws`hi` in the `n` rows ending on each row. -> int array."""
+    if counted_as == 'timeframes':
         return OR.window(a, n)[:, lo:hi + 1].sum(1)
     #   prints: every cell inside the window, so the same timeframe can contribute more than once
     c = a[:, lo:hi + 1].astype(np.int32)
@@ -95,6 +109,26 @@ def read(R, gate, pivot, rows):
         s[d:] = c[:-d]
         t = t + s
     return t.sum(1)
+
+
+def read(R, gate, pivot, rows):
+    """A gate's measure over its band and its window, at every oracle row. -> int array.
+
+    A floating window is read at every placement that fits inside the range, and the one that serves
+    the gate is taken - the largest tally for a minimum, the smallest for a maximum - because the
+    gate asks whether SOME placement satisfies it.
+    """
+    n, anywhere = rows_of(gate, rows)
+    lo, hi = band_of(gate, pivot)
+    a = R[FIELD[gate['measure']]]
+    v = _tally(a, lo, hi, n, gate['counted_as'])
+    if not anywhere:
+        return v
+    best = v.copy()
+    pick = np.maximum if gate['bound'] == 'min' else np.minimum
+    for d in range(1, rows - n + 1):
+        best = pick(best, np.roll(v, d))
+    return best
 
 
 def evaluate(R, frame, gates):
@@ -116,14 +150,15 @@ def _print_gates(frame, gates):
           % (frame['scenario'], frame['max_consecutive_rows'], frame['ltf_to_htf_pivot'],
              'yes' if frame['confirmed'] else 'no', frame['his_example'] or '-'))
     print()
-    print('| his knob | what it counts | how | the timeframes | the rows | bound | threshold |')
-    print('|' + '---|' * 7)
+    print('| his knob | what it counts | how | the timeframes | rows | where those rows sit '
+          '| bound | threshold |')
+    print('|' + '---|' * 8)
     for g in gates:
         lo, hi = band_of(g, int(frame['ltf_to_htf_pivot']))
-        print('| %s | %s | %s | ws%d..ws%d | %s | %s | %d |'
-              % (g['knob'], g['measure'], g['counted_as'], lo, hi,
-                 '%d' % g['n_rows'] if g['n_rows'] is not None
-                 else '%d, the range' % frame['max_consecutive_rows'],
+        n, anywhere = rows_of(g, int(frame['max_consecutive_rows']))
+        print('| %s | %s | %s | ws%d..ws%d | %d | %s | %s | %d |'
+              % (g['knob'], g['measure'], g['counted_as'], lo, hi, n,
+                 'anywhere in the range' if anywhere else 'ending on the row',
                  g['bound'], g['threshold']))
 
 
