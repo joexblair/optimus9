@@ -36,6 +36,7 @@
 #   e-cross TFs                distinct timeframes with an e-cross, ws1..ws15
 #   AW(*) TFs                  distinct timeframes reading AW(inf) or AW(exf)
 #
+# BANKED by Joe 1116 as a confirmed aw-exhaust scenario
 # 40 instances
 
 the window          | its last row | the incoming pseudo trade | Nof15 peak inside it | new AW prints | x-cross TFs | e-cross TFs | AW(*) TFs

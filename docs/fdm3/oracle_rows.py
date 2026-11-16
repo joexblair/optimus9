@@ -324,7 +324,12 @@ def dump(R, SD, a, z, path, alo=0, ahi=0):
                 '#   x-cross TFs                distinct timeframes with an x-cross, ws1..ws15\n'
                 '#   e-cross TFs                distinct timeframes with an e-cross, ws1..ws15\n'
                 '#   AW(*) TFs                  distinct timeframes reading AW(inf) or AW(exf)\n'
-                '#\n# %d instances\n\n' % (rows, len(hit)))
+                '#\n%s# %d instances\n\n'
+                % (rows,
+                   '# BANKED by Joe 1116 as a confirmed aw-exhaust scenario\n'
+                   if alo == int(FK.LTF_5AW_6X_A_WS1_WS6)
+                   and ahi == int(FK.LTF_5AW_6X_A_WS7_WS15) and FK.RULED_OK else '',
+                   len(hit)))
         hd = ['the window', 'its last row', 'the incoming pseudo trade', 'Nof15 peak inside it',
               'new AW prints', 'x-cross TFs', 'e-cross TFs', 'AW(*) TFs']
         wd = [19, 12, 25, 20, 13, 11, 11, 9]
