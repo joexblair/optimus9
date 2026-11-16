@@ -10,6 +10,8 @@
 # the knobs this run read:
 #   AWS4_MAXTF                 6
 #   AWS4_ROWS                  4
+#   LTF_5AW_6X_A_WS1_WS6       1
+#   LTF_5AW_6X_A_WS7_WS15      0
 #   LTF_5AW_6X_MIN_AW_FLIPS    5
 #   LTF_5AW_6X_MIN_AW_PRINTS   10
 #   LTF_5AW_6X_XCROSS_ROWS     1

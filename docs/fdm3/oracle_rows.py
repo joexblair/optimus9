@@ -258,14 +258,17 @@ def direction(sd, a, z):
     return ' then '.join(seen)
 
 
-def ltf_5aw_6x(R, xrows=None, aw_cells=False):
+def ltf_5aw_6x(R, xrows=None):
     """HIS 1115 ltf-5aw-6x. -> bool per row, True on the row the scenario qualifies on.
 
     HIS #3 holds: every window ENDS on the qualifying row. The outer window is his
     fdm3-ltf-xcross-nof15-rows, 3 rows; the x-cross hit window is `xrows` rows and sits inside it.
 
-    `xrows` defaults to his own fdm3-ltf-5aw-6x-xcross-rows, 1. `aw_cells` False counts DISTINCT
-    TIMEFRAMES reading AW(*), his 1115 ruling on the same wording in LTF-xcross; True counts cells.
+    HIS 1116 BANK: *"bank docs/fdm3/out/ltf_5aw_6x_0920_0923_A_ws1_ws6.txt as a confirmed
+    aw-exhaust scenario"*. That file counts DISTINCT TIMEFRAMES reading AW(*) and was read with the
+    oracle's A ws1-ws6 button on, so both are the bank and neither is an option here any more.
+
+    `xrows` defaults to his own fdm3-ltf-5aw-6x-xcross-rows, 1.
     """
     rows = int(FK.LTF_XCROSS_NOF15_ROWS)
     xrows = int(FK.LTF_5AW_6X_XCROSS_ROWS) if xrows is None else int(xrows)
@@ -279,8 +282,7 @@ def ltf_5aw_6x(R, xrows=None, aw_cells=False):
     g2 = nof15(R['cross'], rows) >= AW6X_N15
     #   his exf line carries no window of its own, so it inherits the scenario's outer window
     g3 = window(R['exf'], rows)[:, lo:hi + 1].sum(1) <= AW6X_EXF_MAX
-    g4 = ((count(R['aw'], rows) if aw_cells
-           else window(R['aw'], rows)[:, 1:16].sum(1)) >= AW6X_AW_PRINTS)
+    g4 = window(R['aw'], rows)[:, 1:16].sum(1) >= AW6X_AW_PRINTS
     g5 = count(R['newaw'], rows) >= AW6X_AW_FLIPS
     return g1 & g2 & g3 & g4 & g5
 
@@ -412,21 +414,25 @@ def control(R):
 
 def main():
     if len(sys.argv) >= 4 and sys.argv[1] == 'aw6x':
-        alo = 1 if 'alo' in sys.argv else 0
-        ahi = 1 if 'ahi' in sys.argv else 0
+        #   HIS 1116 BANK: this scenario's reads are banked at A ws1-ws6 ON, A ws7-ws15 OFF. The two
+        #   buttons are knobs like any other, so fdm3_knobs.check() is what refuses an off-bank run -
+        #   there is no second refusal here and no way to ask for a state from the command line.
+        alo = int(FK.LTF_5AW_6X_A_WS1_WS6)
+        ahi = int(FK.LTF_5AW_6X_A_WS7_WS15)
         R, _SD = load(alo=alo, ahi=ahi)
         print(control(R))
         a, z = K_OF(sys.argv[2]), K_OF(sys.argv[3])
         print('tape bars: %d. the oracle fence is %g/%g.' % (ln.N, META['fence'], 100 - META['fence']))
         print('| the reading | fires between %s and %s |' % (sys.argv[2], sys.argv[3]))
         print('|---|---|')
-        for cells in (False, True):
-            m = ltf_5aw_6x(R, aw_cells=cells)
-            print('| AW(*) as %s | %d |'
-                  % ('cells' if cells else 'distinct timeframes', int(m[a:z + 1].sum())))
-        out = [v for v in sys.argv[4:] if v not in ('alo', 'ahi')]
-        if out:
-            dump(R, _SD, a, z, out[0], alo, ahi)
+        m = ltf_5aw_6x(R)
+        print('| A %s %s, A %s %s, AW(*) as distinct timeframes%s | %d |'
+              % (META['abands'][0], 'on' if alo else 'off',
+                 META['abands'][1], 'on' if ahi else 'off',
+                 '' if FK.RULED_OK else ' - NOT THE BANK, an experiment',
+                 int(m[a:z + 1].sum())))
+        if len(sys.argv) >= 5:
+            dump(R, _SD, a, z, sys.argv[4], alo, ahi)
         return
     if len(sys.argv) >= 4 and sys.argv[1] == 'find':
         R, SD = load()

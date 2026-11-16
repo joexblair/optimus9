@@ -76,11 +76,20 @@ LTF_5AW_6X_XCROSS_ROWS = _knob('LTF_5AW_6X_XCROSS_ROWS', 1, int)
 
 #   HIS SPEC LINE: *">={knob:10, `fdm3-ltf-5aw-6x-min-aw-prints`} fields prints `AW(*)` in ws1-ws15
 #   AND >={knob:5,`fdm3-ltf-5aw-6x-min-aw-flips`} new AW's have printed inside of ws1-ws15"*.
-#   THE AW(*) READING IS STILL OPEN: he ruled the identical wording in LTF-xcross as DISTINCT
-#   TIMEFRAMES, and distinct timeframes is what this value runs as, but it is not his ruling for
-#   THIS scenario and his own 09-23 0943 example needs the cell count to pass it.
+#   THE AW(*) READING IS SETTLED: he banked the 09-20..09-23 run that counts DISTINCT TIMEFRAMES -
+#   *"bank docs/fdm3/out/ltf_5aw_6x_0920_0923_A_ws1_ws6.txt as a confirmed aw-exhaust scenario"* -
+#   so distinct timeframes is the reading, and the cell count is not an option any more.
 LTF_5AW_6X_MIN_AW_PRINTS = _knob('LTF_5AW_6X_MIN_AW_PRINTS', 10, int)
 LTF_5AW_6X_MIN_AW_FLIPS = _knob('LTF_5AW_6X_MIN_AW_FLIPS', 5, int)
+
+#   HIS 1116 BANK: the file he confirmed was read with the oracle's A ws1-ws6 button ON, so that is
+#   the state this scenario's AW reads are banked at. A ON means every r line in ws1..ws6 takes its
+#   lift-off reads - natural and e-cross - off the window extreme on every bar of the span, which
+#   moves that line's AW and the scenario-2 test of the lines above it. It cannot move an x or an e
+#   cross. The ws7-ws15 button stays OFF: he banked one file, not both.
+#   MY NAMES, derived from his own button labels - he has not named these two.
+LTF_5AW_6X_A_WS1_WS6 = _knob('LTF_5AW_6X_A_WS1_WS6', 1, int)
+LTF_5AW_6X_A_WS7_WS15 = _knob('LTF_5AW_6X_A_WS7_WS15', 0, int)
 
 #   ── fdm3-4-ltf-aws ───────────────────────────────────────────────────────────────────────────
 #   HIS SPEC LINE: *">=4 AW flips on the same row, on TFs that are between ws1 and
@@ -100,8 +109,11 @@ RULED = {
     'MIN_AW_FLIPS': (2, 'his `fdm3-min-aw-flips` - new AW PRINTS, the TO -> AW flip'),
     'LTF_5AW_6X_XCROSS_ROWS': (1, 'his `fdm3-ltf-5aw-6x-xcross-rows` - this scenario\'s own x-cross '
                                   'hit window, replacing fdm3-ltf-xcross-rows in it'),
-    'LTF_5AW_6X_MIN_AW_PRINTS': (10, 'his `fdm3-ltf-5aw-6x-min-aw-prints` - run as DISTINCT '
-                                     'timeframes reading AW(*), still unruled for this scenario'),
+    'LTF_5AW_6X_MIN_AW_PRINTS': (10, 'his `fdm3-ltf-5aw-6x-min-aw-prints` - DISTINCT timeframes '
+                                     'reading AW(*), settled by his 1116 bank'),
+    'LTF_5AW_6X_A_WS1_WS6': (1, 'the oracle A button this scenario is banked at, his 1116 '
+                                'confirmed file - ON'),
+    'LTF_5AW_6X_A_WS7_WS15': (0, 'the other oracle A button - OFF, he banked one file not both'),
     'LTF_5AW_6X_MIN_AW_FLIPS': (5, 'his `fdm3-ltf-5aw-6x-min-aw-flips` - new AW PRINTS'),
     'AWS4_MAXTF': (6, 'his `fdm3-4-ltf-aws-maxTF` - the AW flips count on ws1..ws6'),
     'AWS4_ROWS': (4, 'his `fdm3-4-ltf-aws-rows` - the window both 4-ltf-aws gates sit inside'),
