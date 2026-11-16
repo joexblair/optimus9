@@ -90,8 +90,7 @@ AWS_MAXTF = 6                   # HIS knob fdm3-4-ltf-aws-maxTF: the AW flips co
 AWS_FLIPS = 4                   # HIS 4-ltf-aws: *">=4 AW flips on the same row"*
 AWS_ROWS = 4                    # HIS knob fdm3-4-ltf-aws-rows: the window the gates sit inside
 AWS_NOF15 = 13                  # HIS 4-ltf-aws: *">=13 of the ws1 to ws15 TFs"*, a MINIMUM
-ALLIN_ROWS = 2                  # HIS xe-all-in: *"15of15 prints collectively in 2 rows"*
-ALLIN_NOF15 = 15
+NOF_ROWS = 2                    # HIS Nof15 event's own window - the 2 rows he used to define it
 #   HIS 1115 LTF-xcross knobs, his names and his values
 LTFX_HITS = 6                   # fdm3-ltf-xcross-hits: TFs populated with an X-CROSS, not an e-cross
 LTFX_ROWS = 2                   # fdm3-ltf-xcross-rows: the window those hits sit in
@@ -173,10 +172,12 @@ def load(flip=0, alo=0, ahi=0, chunk=20000):
     'x'      an x-cross alone - what his LTF-xcross hits count
     'e'      an e-cross alone, printed beside the x count so the mix is visible
     'exf'    the cell reads TO(exf) or AW(exf) - at or past the fence pair on the target side
+    'toexf'  the cell reads TO(exf) ALONE. HIS 1116 scene1 distinguishes the two: his 09-22 0216
+             example passes max-allowed-*-toexf-at-last-row only on TO(exf), not on either code
     'newaw'  the TO -> AW flip - his *"new AW"*
     'aw'     the cell reads AW(*), either AW(inf) or AW(exf)
     """
-    out = {k: np.zeros((NROWS, 16), bool) for k in ('cross', 'x', 'e', 'newaw', 'aw', 'exf')}
+    out = {k: np.zeros((NROWS, 16), bool) for k in ('cross', 'x', 'e', 'newaw', 'aw', 'exf', 'toexf')}
     sd = np.zeros(NROWS, np.int8)
     for a in range(0, NROWS, chunk):
         n = min(chunk, NROWS - a)
@@ -192,6 +193,7 @@ def load(flip=0, alo=0, ahi=0, chunk=20000):
             out['aw'][a:a + n, tf] = np.isin(st, (2, 4))
             #   HIS *"printing exf"*: the ex-fence bit set - 3 TO(exf), 4 AW(exf). `ex` includes oob.
             out['exf'][a:a + n, tf] = np.isin(st, (3, 4))
+            out['toexf'][a:a + n, tf] = st == 3
         sd[a:a + n] = b[:, O_SIDE]
     return out, sd
 
@@ -218,7 +220,7 @@ def count(a, rows):
     return t.sum(1)
 
 
-def ltf_xcross(R, aw_cells=True):
+def ltf_xcross(R):
     """HIS 1115 LTF-xcross. -> bool per row, True on the row the scenario qualifies on.
 
     HIS #3 holds: every window ENDS on the qualifying row, so nothing later than it is read. The
@@ -231,9 +233,9 @@ def ltf_xcross(R, aw_cells=True):
     hits = window(R['x'], LTFX_ROWS)[:, 1:LTFX_MAXTF + 1].sum(1)
     g1 = np.maximum(hits, np.roll(hits, 1)) >= LTFX_HITS
     g2 = nof15(R['cross'], LTFX_N15_ROWS) >= LTFX_N15
-    #   OPEN: his *">=4 fields prints `AW(*)`"* - 4 cells inside the window, or 4 distinct TFs
-    g3a = ((count(R['aw'], LTFX_N15_ROWS) if aw_cells
-            else window(R['aw'], LTFX_N15_ROWS)[:, 1:16].sum(1)) >= LTFX_AW_PRINTS)
+    #   HIS 1115 RULING on *">=4 fields prints `AW(*)`"*: *"4 distinct TFs reading AW(*) anywhere in
+    #   the 3 rows"*. So it counts timeframes, not cells, and there is no second reading here.
+    g3a = window(R['aw'], LTFX_N15_ROWS)[:, 1:16].sum(1) >= LTFX_AW_PRINTS
     g3b = count(R['newaw'], LTFX_N15_ROWS) >= LTFX_AW_FLIPS
     return g1 & g2 & g3a & g3b
 
@@ -297,7 +299,7 @@ def dump(R, SD, a, z, path, alo=0, ahi=0):
     """
     rows = int(FK.LTF_XCROSS_NOF15_ROWS)
     m = ltf_5aw_6x(R)
-    nof = nof15(R['cross'], 2)           # HIS Nof15 event, his own 2 row definition
+    nof = nof15(R['cross'], NOF_ROWS)    # HIS Nof15 event, his own 2 row definition
     hit = [i for i in range(a, z + 1) if m[i]]
     with open(path, 'w') as f:
         f.write('# his ltf-5aw-6x, every instance from %s to %s\n' % (U(a), U(z)))
@@ -354,7 +356,7 @@ def find(R, SD, a, z):
     09-24 2248 to 2250 window"*. Overlapping starts are grouped into one cluster, since the same
     stretch qualifying three times running is one pattern, not three.
     """
-    nof = nof15(R['cross'], 2)           # HIS Nof15 event, his own 2 row definition
+    nof = nof15(R['cross'], NOF_ROWS)    # HIS Nof15 event, his own 2 row definition
     cases = [('his window as it reads', REF_ROWS, REF_NOF15, REF_FLIPS, REF_XTFS),
              ('print counts down 1', REF_ROWS, REF_NOF15 - 1, REF_FLIPS - 1, REF_XTFS - 1),
              ('print counts down 2', REF_ROWS, REF_NOF15 - 1, REF_FLIPS - 2, REF_XTFS - 2),
@@ -459,7 +461,7 @@ def main():
         R, sd = load(flip=flip)
         x, aw = R['cross'], R['newaw']
         lab = 'pivots as found' + (', flipped' if flip else '')
-        c = nof15(x, ALLIN_ROWS)
+        c = nof15(x, NOF_ROWS)
         f4 = nof15(x, AWS_ROWS)
         nf = window((aw[:, 1:AWS_MAXTF + 1].sum(1) >= AWS_FLIPS)[:, None], AWS_ROWS)[:, 0]
         print()
@@ -469,12 +471,7 @@ def main():
               % (int((sd == 0).sum()), (sd == 0).sum() / days))
         for n in (13, 14, 15):
             m = c >= n
-            print('| %dof15 in a %d row window | %d | %.1f |' % (n, ALLIN_ROWS, int(m.sum()), m.sum() / days))
-        m = c >= ALLIN_NOF15
-        print('| xe-all-in - %dof15 in %d rows | %d | %.1f |'
-              % (ALLIN_NOF15, ALLIN_ROWS, int(m.sum()), m.sum() / days))
-        print('| xe-all-in + ws1b oob or gcws30b ex-%.0f/%.0f | %d | %.1f |'
-              % (G30_FNC, 100 - G30_FNC, int((m & exc).sum()), (m & exc).sum() / days))
+            print('| %dof15 in a %d row window | %d | %.1f |' % (n, NOF_ROWS, int(m.sum()), m.sum() / days))
         print('| %d+ AW flips on one row within ws1..ws%d | %d | %.1f |'
               % (AWS_FLIPS, AWS_MAXTF, int(nf.sum()), nf.sum() / days))
         print('| %dof15 in a %d row window | %d | %.1f |'
@@ -484,14 +481,12 @@ def main():
               % (AWS_ROWS, int(a4.sum()), a4.sum() / days))
         print('| 4-ltf-aws + ws1b oob or gcws30b ex-%.0f/%.0f | %d | %.1f |'
               % (G30_FNC, 100 - G30_FNC, int((a4 & exc).sum()), (a4 & exc).sum() / days))
-        for cells in (True, False):
-            m = ltf_xcross(R, aw_cells=cells)
-            print('| LTF-xcross, AW(*) read as %s | %d | %.1f |'
-                  % ('cells' if cells else 'distinct TFs', int(m.sum()), m.sum() / days))
+        m = ltf_xcross(R)
+        print('| LTF-xcross | %d | %.1f |' % (int(m.sum()), m.sum() / days))
     if len(sys.argv) >= 3:
         R, sd = load(fnc=MOM_FNC)
         x, aw = R['cross'], R['newaw']
-        c, f4 = nof15(x, ALLIN_ROWS), nof15(x, AWS_ROWS)
+        c, f4 = nof15(x, NOF_ROWS), nof15(x, AWS_ROWS)
         lx = ltf_xcross(R)
         xh = window(R['x'], LTFX_ROWS)[:, 1:LTFX_MAXTF + 1].sum(1)
         awc = count(R['aw'], LTFX_N15_ROWS)
@@ -501,7 +496,7 @@ def main():
         print('| the row | its target-side | the TFs that crossed | %d row Nof15 | %d row Nof15 '
               '| AW flips ws1..ws%d | x-hits ws1..ws%d over %d rows | AW(*) cells over %d rows '
               '| new AW cells over %d rows | LTF-xcross | ws1b | gcws30b |'
-              % (ALLIN_ROWS, AWS_ROWS, AWS_MAXTF, LTFX_MAXTF, LTFX_ROWS, LTFX_N15_ROWS, LTFX_N15_ROWS))
+              % (NOF_ROWS, AWS_ROWS, AWS_MAXTF, LTFX_MAXTF, LTFX_ROWS, LTFX_N15_ROWS, LTFX_N15_ROWS))
         print('|' + '---|' * 12)
         for k in range(a, z + 1):
             tfs = [str(tf) for tf in range(1, 16) if x[k, tf]]
@@ -512,4 +507,5 @@ def main():
                      W1B[PRT[k]], G30B[PRT[k]]))
 
 
-main()
+if __name__ == '__main__':
+    main()
