@@ -5,7 +5,7 @@
 --   belongs to a single gate, and the other twelve are gates.
 --
 --   HIS LINES, in his order, and where each one went:
---     max-consecutive-rows: 3                      -> fdm3_scenario.max_consecutive_rows
+--     max-consecutive-rows: 4                      -> fdm3_scenario.max_consecutive_rows
 --     ltf-to-htf-pivot: 7                          -> fdm3_scenario.ltf_to_htf_pivot
 --     min-total-aw: 12                             -> a gate
 --     min-total-aw-flips: 9                        -> a gate
@@ -31,7 +31,7 @@ DELETE FROM fdm3_scenario WHERE scenario = 'scene1';
 
 INSERT INTO fdm3_scenario
   (scenario, max_consecutive_rows, ltf_to_htf_pivot, confirmed, his_example, note) VALUES
-  ('scene1', 3, 7, 0, '2026-09-22 02:16:00',
+  ('scene1', 4, 7, 0, '2026-09-22 02:16:00',
    'Joe 1116, his first scenario written as table data. NOT confirmed: he validates by eye first');
 
 INSERT INTO fdm3_scenario_gate
