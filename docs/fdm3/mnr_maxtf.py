@@ -147,10 +147,11 @@ def main():
     pv = [int(i) for i in np.flatnonzero(piv) if a <= i <= z]
     print('pivot rows between %s and %s: %d' % (sys.argv[1], sys.argv[2], len(pv)))
     print()
-    print('| the pivot row | the side it opens | the row | its M-no-rev TF at the ws30 ceiling '
-          '| rows that TF runs past the pivot | the ceiling that stops it at the pivot '
-          '| what that ceiling prints |')
-    print('|' + '---|' * 7)
+    #   KEYED BY THE M-NO-REV ROW, not by the pivot: he names a row by the one he is looking at.
+    print('| the M-no-rev row | its TF at the ws30 ceiling | its target-side | the pivot row '
+          '| where it sits | rows that TF runs past the pivot | the ceiling that stops it at the '
+          'pivot | what that ceiling prints |')
+    print('|' + '---|' * 8)
     for P in pv:
         for R in (P - 1, P):
             if R < 0 or not qual[R].any():
@@ -172,10 +173,11 @@ def main():
                 if not (P + 1 < NROWS and qual[P + 1, h]):
                     best, bt = c, h
                     break
-            print('| %s | %s | %s | ws%d | %d | %s | %s |'
-                  % (U(P), 'SHORT' if sd[P] < 0 else 'LONG' if sd[P] > 0 else 'none',
-                     'the pivot row' if R == P else 'the row before',
-                     t0, run, 'ws%d' % best if best else 'none at any ceiling',
+            print('| %s | ws%d | %s | %s | %s | %d | %s | %s |'
+                  % (U(R), t0,
+                     'SHORT' if sd[R] < 0 else 'LONG' if sd[R] > 0 else 'none', U(P),
+                     'the pivot row itself' if R == P else 'one row before the pivot',
+                     run, 'ws%d' % best if best else 'none at any ceiling',
                      'ws%d' % bt if best else '-'))
     #   HIS *"there's probably a need for some kind of dwell on the retested reversals"*
     g = np.asarray([r - k for _t, k, r in dwell if k >= 0], int)
