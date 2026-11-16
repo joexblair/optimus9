@@ -18,7 +18,8 @@ See optimus9/sql/migrations/261116_01_fdm3_scene_tables.sql.
 usage: fdm3_scenes.py <scenario>                        # its gates, as the tables hold them
        fdm3_scenes.py <scenario> at '<row>'             # every gate read at one row
        fdm3_scenes.py <scenario> count '<from>' '<to>'  # how many rows it fires on
-       fdm3_scenes.py <scenario> rows '<from>' '<to>'   # the rows it fires on, one per line
+       fdm3_scenes.py <scenario> rows '<from>' '<to>' [<file>]   # the rows it fires on, one per
+                                                        # line, written to <file> if given
 """
 import os
 import sys
@@ -197,13 +198,41 @@ def main():
         print('|---|---|')
         print('| it fires on | %d |' % len(hit))
         return
-    print('| the window | its last row | the incoming pseudo trade | %s |'
-          % ' | '.join(g['knob'] for g in gates))
-    print('|' + '---|' * (3 + len(gates)))
-    for i in hit:
-        print('| %s | %s | %s | %s |'
-              % (OR.U(i - rows + 1), OR.U(i)[11:19], OR.direction(_SD, i - rows + 1, i + 1),
-                 ' | '.join(str(int(vals[g['knob']][i])) for g in gates)))
+    hd = ['the window', 'its last row', 'the incoming pseudo trade'] + [g['knob'] for g in gates]
+    body = [[OR.U(i - rows + 1), OR.U(i)[11:19], OR.direction(_SD, i - rows + 1, i + 1)]
+            + [str(int(vals[g['knob']][i])) for g in gates] for i in hit]
+    if len(sys.argv) < 6:
+        print('| %s |' % ' | '.join(hd))
+        print('|' + '---|' * len(hd))
+        for r in body:
+            print('| %s |' % ' | '.join(r))
+        return
+    wd = [max(len(hd[c]), *(len(r[c]) for r in body)) if body else len(hd[c])
+          for c in range(len(hd))]
+    with open(sys.argv[5], 'w') as f:
+        f.write('# %s, every row it fires on from %s to %s\n' % (scenario, sys.argv[3], sys.argv[4]))
+        f.write('# read off fdm3-oracle\'s rows, %d bars on the tape, the oracle fence %g/%g,\n'
+                '# the pivots as found and both A buttons off\n'
+                % (OR.ln.N, OR.META['fence'], 100 - OR.META['fence']))
+        f.write('# %s\n#\n' % OR.control(R))
+        f.write('# the scenario, as the fdm3_* tables hold it:\n')
+        f.write('#   max-consecutive-rows %d, ltf-to-htf-pivot ws%d, confirmed %s\n'
+                % (rows, int(frame['ltf_to_htf_pivot']), 'yes' if frame['confirmed'] else 'NO'))
+        for g in gates:
+            lo, hi = band_of(g, int(frame['ltf_to_htf_pivot']))
+            n, anywhere = rows_of(g, rows)
+            f.write('#   %-36s %s %-3d  %-7s ws%d..ws%d over %d row%s %s\n'
+                    % (g['knob'], g['bound'], g['threshold'], g['measure'], lo, hi, n,
+                       '' if n == 1 else 's',
+                       'anywhere in the range' if anywhere else 'ending on the row'))
+        f.write('#\n# a window is named by its FIRST row. Every window ends on the row the\n'
+                '# scenario qualifies on, so nothing later than that row is read.\n'
+                '#\n# %d rows\n\n' % len(body))
+        f.write(' | '.join(h.ljust(w) for h, w in zip(hd, wd)).rstrip() + '\n')
+        f.write('-+-'.join('-' * w for w in wd) + '\n')
+        for r in body:
+            f.write(' | '.join(v.ljust(w) for v, w in zip(r, wd)).rstrip() + '\n')
+    print('wrote %d rows to %s' % (len(body), sys.argv[5]))
 
 
 if __name__ == '__main__':

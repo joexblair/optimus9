@@ -11,7 +11,8 @@
 --     min-total-aw-flips: 9                        -> a gate
 --     min-single-row-aw-flips: 4                   -> a gate, on ANY one row inside the range
 --     min-ltf-xcross-rows: 1                       -> the window_rows of the next gate
---     min-ltf-xcross-hits: 7                       -> a gate, an X-CROSS alone over that window
+--     min-ltf-xcross-hits: 5                       -> a gate, an X-CROSS alone over that window
+--     min-total-xcross-hits: 7                     -> a gate, the same measure over every timeframe
 --     min-ltf-aw: 6                                -> a gate
 --     min-htf-aw: 4                                -> a gate
 --     min-ltf-aw-flips: 4                          -> a gate
@@ -21,8 +22,13 @@
 --     min-aw-flips-on-last-row: 4                  -> a gate
 --     min-n-of-15: 13                              -> a gate, an x-cross OR an e-cross
 --
---   HIS 1116 CORRECTION: *"my cross is x only. Nof15 covers x or e"*. So `min-ltf-xcross-hits`
---   reads the `cross` measure, which is the x bit alone, and `min-n-of-15` reads `nof15`.
+--   HIS 1116 CORRECTION: *"my cross is x only. Nof15 covers x or e"*. So both xcross gates read the
+--   `cross` measure, which is the x bit alone, and `min-n-of-15` reads `nof15`.
+--
+--   OPEN - his to rule: `min-total-xcross-hits` carries no `-rows` of its own and no `-at-last-row`,
+--   so it is read over the whole range here, as every other unqualified gate is. It could instead
+--   share the one-row window that `min-ltf-xcross-rows` sets. His 09-22 0216 example passes either
+--   way - 14 over the range, 8 on its best single row, against his 7 - so it cannot settle it.
 --
 -- Usage: mysql pk_optimizer < 261116_02_fdm3_scene1.sql
 -- Dependencies: 261116_01_fdm3_scene_tables.sql
@@ -39,12 +45,13 @@ INSERT INTO fdm3_scenario_gate
   ('scene1',  1, 'min-total-aw',                      'aw',      'total', 'range',      'min', 12, NULL),
   ('scene1',  2, 'min-total-aw-flips',                'aw_flip', 'total', 'range',      'min',  9, NULL),
   ('scene1',  3, 'min-single-row-aw-flips',           'aw_flip', 'total', 'single_row', 'min',  4, NULL),
-  ('scene1',  4, 'min-ltf-xcross-hits',               'cross',   'ltf',   'inner',      'min',  7, 1),
-  ('scene1',  5, 'min-ltf-aw',                        'aw',      'ltf',   'range',      'min',  6, NULL),
-  ('scene1',  6, 'min-htf-aw',                        'aw',      'htf',   'range',      'min',  4, NULL),
-  ('scene1',  7, 'min-ltf-aw-flips',                  'aw_flip', 'ltf',   'range',      'min',  4, NULL),
-  ('scene1',  8, 'min-htf-aw-flips',                  'aw_flip', 'htf',   'range',      'min',  5, NULL),
-  ('scene1',  9, 'max-allowed-ltf-toexf-at-last-row', 'toexf',   'ltf',   'last_row',   'max',  0, NULL),
-  ('scene1', 10, 'max-allowed-htf-toexf-at-last-row', 'toexf',   'htf',   'last_row',   'max',  2, NULL),
-  ('scene1', 11, 'min-aw-flips-on-last-row',          'aw_flip', 'total', 'last_row',   'min',  4, NULL),
-  ('scene1', 12, 'min-n-of-15',                       'nof15',   'total', 'range',      'min', 13, NULL);
+  ('scene1',  4, 'min-ltf-xcross-hits',               'cross',   'ltf',   'inner',      'min',  5, 1),
+  ('scene1',  5, 'min-total-xcross-hits',             'cross',   'total', 'range',      'min',  7, NULL),
+  ('scene1',  6, 'min-ltf-aw',                        'aw',      'ltf',   'range',      'min',  6, NULL),
+  ('scene1',  7, 'min-htf-aw',                        'aw',      'htf',   'range',      'min',  4, NULL),
+  ('scene1',  8, 'min-ltf-aw-flips',                  'aw_flip', 'ltf',   'range',      'min',  4, NULL),
+  ('scene1',  9, 'min-htf-aw-flips',                  'aw_flip', 'htf',   'range',      'min',  5, NULL),
+  ('scene1', 10, 'max-allowed-ltf-toexf-at-last-row', 'toexf',   'ltf',   'last_row',   'max',  0, NULL),
+  ('scene1', 11, 'max-allowed-htf-toexf-at-last-row', 'toexf',   'htf',   'last_row',   'max',  2, NULL),
+  ('scene1', 12, 'min-aw-flips-on-last-row',          'aw_flip', 'total', 'last_row',   'min',  4, NULL),
+  ('scene1', 13, 'min-n-of-15',                       'nof15',   'total', 'range',      'min', 13, NULL);
