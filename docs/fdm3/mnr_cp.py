@@ -200,7 +200,10 @@ def leg(a_s, z_s, sd, table=True):
     print('| rows the consolidated print covers | %d of %d |' % (int(on[A:ZW + 1].sum()), ZW - A + 1))
 
 
-BANDS = [('ws1..ws4', range(1, 5)), ('ws5..ws25', range(5, 26)), ('ws26..ws30', range(26, 31))]
+#   MNR_BANDS=lo-hi,lo-hi,... sets the groups the bands mode measures; the default is his three.
+BANDS = [(('ws%s..ws%s' % tuple(b.split('-'))),
+          range(int(b.split('-')[0]), int(b.split('-')[1]) + 1))
+         for b in os.environ.get('MNR_BANDS', '1-4,5-25,26-30').split(',')]
 
 
 def bands():
