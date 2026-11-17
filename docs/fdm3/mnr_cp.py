@@ -54,7 +54,10 @@ try:
 finally:
     sys.stderr = _err
 
-TFS = list(range(5, 26))        # HIS 1117: *"add all of these lines: ws5 to ws25"*
+#   HIS 1117: *"add all of these lines: ws5 to ws25"*, then *"if we drop the lowest from ws5 to
+#   ws2"* - so the bottom of the range moves. MNR_TFS=lo:hi sets it for one run without an edit.
+_R = os.environ.get('MNR_TFS', '5:25').split(':')
+TFS = list(range(int(_R[0]), int(_R[1]) + 1))
 PORT = 8788                     # the page carrying the M-no-rev work, his testing ground
 META = json.load(urllib.request.urlopen('http://127.0.0.1:%d/meta' % PORT))
 STRIDE, NROWS = int(META['stride']), int(META['rows'])
@@ -199,6 +202,7 @@ def leg(a_s, z_s, sd, table=True):
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == 'legs':
+        print('# the lines: ws%d to ws%d' % (TFS[0], TFS[-1]))
         print('| his leg start | his leg end | its target | the print | it starts | where it ends '
               '| the line holding it last | that line\'s last printing row | its end against his end |')
         print('|' + '---|' * 9)
