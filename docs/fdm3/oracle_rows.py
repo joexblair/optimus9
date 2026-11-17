@@ -115,6 +115,9 @@ assert int(META['fence']) == MOM_FNC, (META['fence'], MOM_FNC)
 #   the bank, or every count below is off a different mech. On the bank this is a hard stop; under
 #   W_FDM3_EXPERIMENT it prints the mismatch instead, so the two pages can be compared on purpose.
 _PAGE = [('its reset fence', META.get('reset'), float(FK.FENCE_RESET_TO)),
+         ('its ex-fence fence', META.get('fence'), float(FK.ORACLE_FENCE)),
+         ('its pivot offset', META.get('shift'), int(FK.ORACLE_SHIFT)),
+         ('its M-no-rev ceilings', META.get('mnrtops'), list(FK.MNR_TOPS)),
          ('its locked A state', META.get('alock'), [int(FK.A_WS1_WS6), int(FK.A_WS7_WS15)])]
 _OFF = [(w, g, want) for w, g, want in _PAGE
         if (float(g) if w.endswith('fence') and g is not None else g) != want]

@@ -55,8 +55,17 @@ MOM_FNC = _knob('MOM_FNC', 23.0)                # his `fdm3-23-77-fnc`, pending 
 #   WHAT 8789 IS, and he should know it: an UNCOMMITTED copy of fdm3_oracle.py running from another
 #   session's scratchpad under /tmp, with no systemd unit. It does not survive a reboot or a /tmp
 #   clean, and the file behind it is not the one in git.
-ORACLE_PORT = _knob('ORACLE_PORT', 8789, int)
-FENCE_RESET_TO = _knob('FENCE_RESET_TO', 33.0)   # his `fdm3-fence-reset-TO`, as 8789 serves it
+#   HIS 1117: *"bank 8790 and make this config the machine"*. 8790 runs THE REPO FILE, so the bank
+#   is that page's CONFIG, not its address: a port serving this config passes, any other page fails.
+#   8790 is a plain process in this session, not a unit - 8788 runs the same file as the
+#   `o9-fdm3-oracle` unit and becomes this config the moment he restarts it.
+ORACLE_PORT = _knob('ORACLE_PORT', 8790, int)
+FENCE_RESET_TO = _knob('FENCE_RESET_TO', 33.0)   # his `fdm3-fence-reset-TO`, banked on the page
+ORACLE_FENCE = _knob('ORACLE_FENCE', 23.0)       # the ex-fence fence, locked on the page since 1115
+ORACLE_SHIFT = _knob('ORACLE_SHIFT', 30, int)    # his 1117 pivot offset button, minutes - was 15
+MNR_TOPS = tuple(int(x) for x in os.environ.get('W_FDM3_MNR_TOPS', '15,25').split(','))
+#   his 1117 two M-no-rev columns: mnr1 ws1..ws25's lower ceiling, mnr2 the higher one
+MNR_LO = _knob('MNR_LO', 1, int)                 # his *"we'll settle on ws1 to ws25"*
 
 #   ── the oracle A state, fdm3-wide ────────────────────────────────────────────────────────────
 #   HIS 1116: *"the A ws1-ws6 button is enabled now - I've found it to be better than having it
@@ -131,10 +140,14 @@ RULED = {
                                   'hit window, replacing fdm3-ltf-xcross-rows in it'),
     'LTF_5AW_6X_MIN_AW_PRINTS': (10, 'his `fdm3-ltf-5aw-6x-min-aw-prints` - DISTINCT timeframes '
                                      'reading AW(*), settled by his 1116 bank'),
-    'ORACLE_PORT': (8789, 'the oracle the scenarios read, his 1116 answer. 8789 carries the 33/67 '
-                          'fence reset and locks A ws1-ws6 on'),
+    'ORACLE_PORT': (8790, 'where the banked config is served, his 1117 *"bank 8790"*. A locator, '
+                          'not the bank: the CONFIG below is what a run asserts'),
     'FENCE_RESET_TO': (33.0, 'his `fdm3-fence-reset-TO`, the fence the flip, the 50 reset and the '
-                             'void read on 8789 - asserted against that page on every run'),
+                             'void read - asserted against the page on every run'),
+    'ORACLE_FENCE': (23.0, 'the ex-fence fence, locked on the page at his 1115 word'),
+    'ORACLE_SHIFT': (30, 'his 1117 pivot offset button, minutes - *"instead of +15, make it +30"*'),
+    'MNR_TOPS': ((15, 25), 'his 1117 two M-no-rev ceilings, mnr1 then mnr2'),
+    'MNR_LO': (1, 'the M-no-rev floor, his *"we\'ll settle on ws1 to ws25"*'),
     'A_WS1_WS6': (1, 'the oracle A ws1-ws6 button - ON, his 1116 *"bank this as the live machine"*. '
                      'fdm3-wide: infrastructure, not a scenario gate'),
     'A_WS7_WS15': (0, 'the oracle A ws7-ws15 button - OFF. He banked the first one only'),
