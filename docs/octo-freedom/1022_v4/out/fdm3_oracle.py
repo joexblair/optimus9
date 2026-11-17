@@ -256,8 +256,17 @@ MNR_LO = 1                      # HIS 1117: *"we'll settle on ws1 to ws25"* - ws
 #                                 walking' gate, not a 'bet the bank on it' event"*
 MNR_RESET = True                # HIS 1117 closed-prev resume, on. False restores the 1111 column
 #                                 exactly, for his A/B
-STRIDE = (len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)
-          + len(LINES) + 3 + 3 * len(MNR_TOPS))   # bytes per row: r-pred,
+#   HIS 1117: *"now I want to see oracle printing rows that are 30sec apart"* / *"my need is
+#   per-30s AW/TO data and per-30s x/e cross data"*. The row is a 30 s slot, read where closed-prev
+#   shows that slot - ROW_S / 5 bars on, as the minute row was read 12 bars on.
+ROW_S = 30                      # seconds per row - was 60, one ws1 bar
+#   HIS 1117: *"I'm not using r-pred at all so it can be disabled"*. The per-line r-pred byte and the
+#   two sums' r-pred byte are gone from the row; the two sum COLUMNS stay for their TO:x AW:x and
+#   TO(exf) lines, which are towards/away reads, not r-pred. The 1109 control still computes the
+#   r-pred of its own 14 lines, so the producer stays honest - it is just not stored or drawn.
+RPRED_ON = False
+STRIDE = (len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)
+          + len(LINES) + 3 + 3 * len(MNR_TOPS))   # bytes per row:
 #   the TO/AW codes, the TO/AW counts, the cross codes (HIS 1110: 1 X, 2 E, 3 both, on the row's target-side; +4 the
 #   line reads AW on this row and TO on the row before, HIS 1110 TO -> AW flip; +8 ws1 only, TO(exf) on this row and
 #   anything else on the row before, HIS 1113), per sum the count of its lines
@@ -505,17 +514,27 @@ def build():
             m, M = np.asarray(ln.line(name + 'm'), float), np.asarray(ln.line(name + 'Mage'), float)
         return predict_breach(r, m, M)
 
-    first = np.flatnonzero((ts % 60000) == 0)    # each ws1 bar's first 5 s bar
-    first = first[first + 12 < ln.N]             # its print bar, 12 five-second bars on, must be on the tape
-    assert (np.diff(ts[first]) == 60000).all(), 'a ws1 bar is missing - row i would not be t0 + 60 s * i'
-    prt = first + 12                             # HIS ANSWER: the cell is the value where closed-prev shows it
-    assert (ts[prt] - ts[first] == 60000).all()
-    base = [rpred(name)[prt] for name in LINES]
-    global FLAGGED                               # the 1109 control: its own 14 lines, gcws15 and gcws30 included
-    FLAGGED = int(sum((rpred(name)[prt] != 0).sum() for name in CONTROL_LINES))
+    #   HIS 1117: a ROW_S second slot, not a ws1 bar
+    _rb = ROW_S // 5                             # 5 s bars per row
+    first = np.flatnonzero((ts % (ROW_S * 1000)) == 0)
+    first = first[first + _rb < ln.N]            # its print bar, _rb bars on, must be on the tape
+    assert (np.diff(ts[first]) == ROW_S * 1000).all(), \
+        'a %d s slot is missing - row i would not be t0 + %d s * i' % (ROW_S, ROW_S)
+    prt = first + _rb                            # HIS ANSWER: the cell is the value where closed-prev shows it
+    assert (ts[prt] - ts[first] == ROW_S * 1000).all(), 'a print bar is not one row on from its row'
+    base = [rpred(name)[prt] for name in LINES] if RPRED_ON else []
+    #   THE 1109 CONTROL STAYS ON THE MINUTE GRID. It counted the flagged cells at each ws1 bar's
+    #   print bar, so reading it at a 30 s row would be a different measurement and its 257,295 would
+    #   never match again. It keeps its own bars, which also keeps the r-pred producer checked even
+    #   though RPRED_ON is False and no r-pred byte is stored.
+    global FLAGGED
+    _m1 = np.flatnonzero((ts % 60000) == 0)
+    _m1 = _m1[_m1 + 12 < ln.N] + 12
+    FLAGGED = int(sum((rpred(name)[_m1] != 0).sum() for name in CONTROL_LINES))
     sl = sl_pct(prt)
-    for _, tfs in SUMS:                          # the same read, summed: -7..+7 and -8..+8, fits int8
-        base.append(np.sum([rpred('ws%d' % t)[prt].astype(int) for t in tfs], 0))
+    if RPRED_ON:
+        for _, tfs in SUMS:                      # the same read, summed: -7..+7 and -8..+8, fits int8
+            base.append(np.sum([rpred('ws%d' % t)[prt].astype(int) for t in tfs], 0))
     #   HIS 1116 TOP ROW: *"the top row (which currently prints r-pred +1, -1, 0) is replaced by a mech that
     #   calculates if the current ws{tf}r row's value is higher or lower than the same ws{TF}r, 2 rows earlier and 3
     #   rows earlier ... position1 is the diff between current row and current row - 3, and position2 reports on
@@ -528,7 +547,11 @@ def build():
     for name in LINES:
         v = np.asarray(E[int(name[2:])], float)[prt]
         code = np.zeros(len(prt), np.int8)
-        for bit, back in ((0, 3), (2, 2)):
+        #   HIS 1117: *"the up/dn pairs stay on 180 and 120"* - SECONDS, so the look-back is pinned
+        #   to wall-clock time and a change to ROW_S cannot quietly redefine it
+        for bit, secs in ((0, 180), (2, 120)):
+            back = secs // ROW_S
+            assert back * ROW_S == secs, ('%d s is not a whole number of %d s rows' % (secs, ROW_S))
             with np.errstate(invalid='ignore'):
                 up, dn = v[back:] > v[:-back], v[back:] < v[:-back]
             one = np.zeros(len(prt), np.int8)
@@ -645,25 +668,36 @@ def build():
 
 
 T0 = time.time()
+#   HIS 1117 LAYOUT, with the r-pred block gone. One place names the offsets and every check below
+#   reads them, so a future insert moves one table and not a dozen expressions.
+O_TA = 0                                        # the TO/AW code per line
+O_TACNT = O_TA + len(LINES)                     # per sum, its TO count then its AW count
+O_XC = O_TACNT + 2 * len(SUMS)                  # the cross code per line
+O_TOEXF = O_XC + len(LINES)                     # per sum, how many of its lines read TO(exf)
+O_UD = O_TOEXF + len(SUMS)                      # HIS 1116 the up/dn pair per line
+O_SL = O_UD + len(LINES)                        # HIS 1115 SL% x 100, an int16
+O_MNR = O_SL + 2                                # per M-no-rev column: its TF, then its value x 10
+assert O_MNR + 3 * len(MNR_TOPS) + 1 == STRIDE, (O_MNR, STRIDE)
+
 OPEN, MATS = build()
 RP = MATS[(0, 0)]                               # the pivots as found, A locked, 23/77 - every check below reads it
 assert all(m.shape == RP.shape for m in MATS.values()) and RP.shape[1] == STRIDE
-assert all(np.array_equal(m[:, :len(LINES) + len(SUMS)], RP[:, :len(LINES) + len(SUMS)]) for m in MATS.values()), \
+assert all(np.array_equal(m[:, O_UD:O_UD + len(LINES)], RP[:, O_UD:O_UD + len(LINES)]) for m in MATS.values()), \
     'the r-pred bytes differ between the page states'
 DAYS = []
 for i, ms in enumerate(OPEN):
     d = time.strftime('%Y-%m-%d', time.gmtime(int(ms) // 1000))
     if not DAYS or DAYS[-1][0] != d:
         DAYS.append([d, i])
-TAC = RP[:, len(LINES) + len(SUMS):2 * len(LINES) + len(SUMS)]
+TAC = RP[:, O_TA:O_TA + len(LINES)]
 U = lambda ms: time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(int(ms) // 1000))
 META = json.dumps({
-    'lines': LINES, 'mnr': MNR_LABELS[0], 'sums': [s for s, _ in SUMS], 'stride': STRIDE, 'rows': int(len(OPEN)), 't0': int(OPEN[0]), 'step': 60000,
+    'lines': LINES, 'mnr': MNR_LABELS[0], 'sums': [s for s, _ in SUMS], 'stride': STRIDE, 'rows': int(len(OPEN)), 't0': int(OPEN[0]), 'step': ROW_S * 1000,
     'days': DAYS, 'fence': FNC, 'abands': [b for b, _ in A_BANDS], 'flips': list(FLIPS),
     'mnrs': list(MNR_LABELS), 'mnrtops': list(MNR_TOPS),
-    'shift': PIV_SHIFT, 'alock': list(A_LOCK), 'reset': FENCE_RESET_TO,
+    'shift': PIV_SHIFT, 'alock': list(A_LOCK), 'reset': FENCE_RESET_TO, 'rpred': RPRED_ON,
     #   HIS 1116: where the up/dn block starts, so a reader is told rather than re-deriving the layout
-    'updn': len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)})
+    'updn': O_UD})
 
 
 class H(BaseHTTPRequestHandler):
@@ -893,35 +927,35 @@ function draw() {
     for (let c = 0; c < NC; c++) {
       const d = p.cells[c + 1], sx = c === NL ? ' sx' : '';
       if (!blk) { d.n.textContent = '·'; d.ta.textContent = NB; d.xc.textContent = NB; d.className = 'w' + sx; continue; }
-      const v = blk[o + c];
-      if (c < NL) {                     // a wsf line: -1 red, +1 green, 0 plain
-        //   HIS 1116: the top row prints the UP/DN pair, not the r-pred number. position1 is this row against the
-        //   row 3 back, position2 against the row 2 back, and a dead tie prints '-'. The CELL'S COLOUR below still
-        //   comes from the r-pred byte - *"keep the r-pred colors as is"*
+      if (c < NL) {                     // a wsf line
+        //   HIS 1116: the top row prints the UP/DN pair. HIS 1117: its look-back is 180 s and 120 s,
+        //   pinned to wall-clock time, so at 30 s rows that is 6 and 4 rows. A dead tie prints '-'
         const ud = blk[o + UD0 + c];
         d.n.textContent = UDW[ud & 3] + ' | ' + UDW[(ud >> 2) & 3];
-        const s = blk[o + NC + c];      // HIS 1109: TO or AW below the number, bold
-        //   HIS 1110: a -1 / +1 on an AW line (code 2 AW(inf), 4 AW(exf)) prints its background at 55% opaque
-        //   HIS 1117: *"drop the rpred coloring for all but the 2 combined columns (ws16-22 and
-        //   ws23-30)"*. A ws line cell carries no red, green or grey now, and the 55% AW background
-        //   went with it - that class only ever shaded the red and the green
+        const s = blk[o + c];           // HIS 1109: TO or AW, bold - now the row's first block
+        //   HIS 1117: *"drop the rpred coloring for all but the 2 combined columns"*, then *"I'm
+        //   not using r-pred at all so it can be disabled"* - so NO cell carries a colour from it,
+        //   the sums included, and the 55% AW background went with it: that class only ever shaded
+        //   the red and the green
         d.className = '';
         d.ta.textContent = ['', 'TO(inf)', 'AW(inf)', 'TO(exf)', 'AW(exf)'][s] || NB;   // HIS 1109 (inf) / (exf)
         //   HIS 1110: crossovers on a LOW target-side, crossunders on HIGH; X and E on one ws1 bar join, 4 spaces apart
-        const xc = blk[o + NC + NL + 2 * (NC - NL) + c];
+        const xc = blk[o + NL + 2 * (NC - NL) + c];
         d.xc.textContent = [xc & 1 ? (sd < 0 ? 'X↑' : '↓X') : '', xc & 2 ? (sd < 0 ? '↑E' : '↓E') : '']
           .filter(Boolean).join('    ') || NB;
         d.ta.className = xc & 12 ? 'f' : 'g';  // HIS 1110: TO on the row before, AW on this one - white, this row only;
                                                // HIS 1111: every other TO/AW grey, on a -1/+1 cell too;
                                                // HIS 1113: ws1 only, TO(exf) after anything else - white, the same way
-      } else {                          // a sum, HIS 1109: red below 0, green above 0, orange at 0
-        d.n.textContent = v > 0 ? '+' + v : String(v);
-        d.className = (v < 0 ? 'm' : v > 0 ? 'p' : 'o') + sx;
-        const k = o + NC + NL + 2 * (c - NL), to = blk[k], aw = blk[k + 1];
+      } else {                          // a sum: its TO:x AW:x and TO(exf) lines, both towards/away
+        //   HIS 1117: with r-pred off the sum has no number of its own, so its top line is blank and
+        //   the other two keep their places - the cell's three lines stay aligned with a line cell's
+        d.n.textContent = NB;
+        d.className = sx.trim();
+        const k = o + NL + 2 * (c - NL), to = blk[k], aw = blk[k + 1];
         d.ta.textContent = to < 0 ? NB : 'TO:' + to + '  AW:' + aw;   // HIS "TO:x  AW:x", the weekday size
         //   HIS 1111: "TO(exf)" under it when any of the column's lines reads TO(exf); the TO:x AW:x line's style.
         //   HIS 1113 *"add the count of TO(exf) lines, if TO(exf) is printing"*: "TO(exf):x"
-        const tx = blk[o + NC + 2 * NL + 2 * (NC - NL) + (c - NL)];
+        const tx = blk[o + 2 * NL + 2 * (NC - NL) + (c - NL)];
         d.xc.textContent = tx > 0 ? 'TO(exf):' + tx : NB;
         d.xc.className = 's';
       }
@@ -1053,26 +1087,24 @@ if __name__ == '__main__':
               % (label, (v < 0).sum(), (v == 0).sum(), (v > 0).sum(), v.min(), v.max()))
     print('towards/away cells: TO(inf) %d, AW(inf) %d, TO(exf) %d, AW(exf) %d, none %d'
           % tuple((TAC == k).sum() for k in (1, 2, 3, 4, 0)))
-    _xc = RP[:, 2 * len(LINES) + 3 * len(SUMS):3 * len(LINES) + 3 * len(SUMS)]
+    _xc = RP[:, O_XC:O_XC + len(LINES)]
     print('cross row cells: X only %d, E only %d, both %d'
           % tuple(int(((_xc & 3) == k).sum()) for k in (1, 2, 3)))
     print('TO -> AW flip cells (white AW text): %d, %d of them on a -1/+1 cell'
-          % (int((_xc & 4).astype(bool).sum()), int(((_xc & 4).astype(bool) & (RP[:, :len(LINES)] != 0)).sum())))
+          % (int((_xc & 4).astype(bool).sum()), int((_xc & 4).astype(bool).sum())))
     _j = LINES.index(FLIP_TOX)
     print('%s flips into TO(exf) (white TO(exf) text): %d, other columns marked %d'
           % (FLIP_TOX, int((_xc[:, _j] & 8).astype(bool).sum()), int((_xc & 8).astype(bool).sum() - (_xc[:, _j] & 8).astype(bool).sum())))
-    _rp = RP[:, :len(LINES)]
-    #   HIS 1117 dropped the r-pred colour from the line cells, so this no longer describes a
-    #   background the page draws - it stays as the 1110 measurement of the same cells
-    print('r-pred -1/+1 cells on an AW line (the 1110 measurement): %d of %d flagged, all %d columns'
-          % (int(((_rp != 0) & ((TAC == 2) | (TAC == 4))).sum()), int((_rp != 0).sum()), len(LINES)))
+    #   HIS 1117: with r-pred off there is no r-pred byte in the row, so the 1110 count of its
+    #   -1/+1 cells on an AW line cannot be taken from the page any more. The 1109 control above
+    #   still checks the producer on its own minute grid.
     #   HIS 1117 two columns: mnr1's bytes sit at STRIDE-7..-5 and mnr2's at STRIDE-4..-2
     _MNR = [(RP[:, STRIDE - 1 - 3 * (len(MNR_TOPS) - k)].astype(int),
              (RP[:, STRIDE - 1 - 3 * (len(MNR_TOPS) - k) + 2].astype(int) << 8)
              | (RP[:, STRIDE - 1 - 3 * (len(MNR_TOPS) - k) + 1].astype(int) & 255))
             for k in range(len(MNR_TOPS))]
     for k, (label, _) in enumerate(SUMS):
-        _ex = RP[:, 3 * len(LINES) + 3 * len(SUMS) + k].astype(int)
+        _ex = RP[:, O_TOEXF + k].astype(int)
         print('%s: rows printing TO(exf) %d of %d, most lines reading TO(exf) on one row %d'
               % (label, int((_ex > 0).sum()), len(_ex), int(_ex.max())))
     for _lab, _top, (_mn, _mv) in zip(MNR_LABELS, MNR_TOPS, _MNR):
@@ -1084,7 +1116,7 @@ if __name__ == '__main__':
     for (_off, _fl), _m in MATS.items():
         if (_off, _fl) == (0, 0):
             continue
-        _tac = _m[:, len(LINES) + len(SUMS):2 * len(LINES) + len(SUMS)]
+        _tac = _m[:, O_TA:O_TA + len(LINES)]
         print('pivots +%d min%s: rows whose target-side differs from the pivots as found %d of %d, cells '
               'that differ %d of %d; TO(inf) %d, AW(inf) %d, TO(exf) %d, AW(exf) %d'
               % ((_off, ', flipped' if _fl else '',
@@ -1093,7 +1125,7 @@ if __name__ == '__main__':
         #   HIS 1117 banked A: there is no A-off state to compare against any more, so the per-column
         #   "cells A moved" line is gone with the buttons. Per column, what the pivot offset moved:
         _ref = MATS[(0, _fl)]
-        _lo, _hi = len(LINES) + len(SUMS), 2 * len(LINES) + len(SUMS)
+        _lo, _hi = O_TA, O_TA + len(LINES)
         _dc = (_m[:, _lo:_hi] != _ref[:, _lo:_hi]).sum(0)
         if _off:
             print('    TO/AW cells moved by the +%d min pivots, against the same flip at +0: %s'
