@@ -54,7 +54,7 @@ try:
 finally:
     sys.stderr = _err
 
-TFS = [5, 10, 12, 15]           # the four lines he named on 1116
+TFS = list(range(5, 26))        # HIS 1117: *"add all of these lines: ws5 to ws25"*
 PORT = 8788                     # the page carrying the M-no-rev work, his testing ground
 META = json.load(urllib.request.urlopen('http://127.0.0.1:%d/meta' % PORT))
 STRIDE, NROWS = int(META['stride']), int(META['rows'])
@@ -82,12 +82,19 @@ def K_OF(s):
                 .replace(tzinfo=dt.timezone.utc).timestamp() * 1000) - T0) // STEP
 
 
+_CACHE = {}
+
+
 def qualifies(t, sd):
     """-> (at each 5 s bar, at each oracle row, the closed-prev value, the resume bars).
 
     One walk per oob run. `armed` opens True at the cross, a reversal stamp turns it off, and one of
     the line's own closed bars more extreme than the bar before it turns it back on.
+
+    CACHED per line and side: a line's walk does not read the leg, so six legs share one walk.
     """
+    if (t, sd) in _CACHE:
+        return _CACHE[(t, sd)]
     em = np.asarray(ln.line('ws%dMage' % t), float)
     cp = np.asarray(CP.series(em, t * 60), float)
     idx = np.arange(ln.N)
@@ -124,7 +131,8 @@ def qualifies(t, sd):
                 res.append(i)
             u[i] = armed
             i += 1
-    return u, u[PRT], cp, res
+    _CACHE[(t, sd)] = (u, u[PRT], cp, res)
+    return _CACHE[(t, sd)]
 
 
 def leg(a_s, z_s, sd, table=True):
@@ -160,27 +168,27 @@ def leg(a_s, z_s, sd, table=True):
         return out
     print('# the leg %s .. %s, target as he named it: %s. Walked to %s to close the open print.'
           % (U(A), U(Z), 'HIGH' if sd > 0 else 'LOW', U(ZW)))
-    print('| the row | its target-side | the consolidated print | %s |'
-          % ' | '.join('ws%dMage' % t for t in TFS))
-    print('|' + '---|' * (3 + len(TFS)))
+    #   ONE COLUMN, TOP TO BOTTOM: 21 line columns would be the open book he banned, so each row
+    #   NAMES the lines that started and the lines that stopped on it.
+    print('| the row | its target-side | the consolidated print | the lines that START, with their '
+          'closed-prev value | the lines that STOP | lines printing after this row |')
+    print('|' + '---|' * 6)
     for i in range(A, ZW + 1):
-        cells, change = [], False
+        up, dn = [], []
         for t in TFS:
             now, was = bool(Q[t][i]), bool(Q[t][i - 1] if i else False)
             if now and not was:
-                cells.append('STARTS %.1f' % CPV[t][PRT[i]])
-                change = True
+                up.append('ws%d %.1f' % (t, CPV[t][PRT[i]]))
             elif was and not now:
-                cells.append('stops')
-                change = True
-            else:
-                cells.append('')
+                dn.append('ws%d' % t)
         c, cw = bool(on[i]), bool(on[i - 1] if i else False)
         cc = 'STARTS' if (c and not cw) else 'stops' if (cw and not c) else ('on' if c else '')
-        if c != cw:
-            change = True
-        if change:
-            print('| %s | %s | %s | %s |' % (U(i), 'HIGH' if sd > 0 else 'LOW', cc, ' | '.join(cells)))
+        if up or dn or c != cw:
+            live = [t for t in TFS if Q[t][i]]
+            print('| %s | %s | %s | %s | %s | %s |'
+                  % (U(i), 'HIGH' if sd > 0 else 'LOW', cc, ', '.join(up) or '-',
+                     ', '.join(dn) or '-',
+                     ', '.join('ws%d' % t for t in live) or 'none'))
     print()
     print('| the span | value |')
     print('|---|---|')
