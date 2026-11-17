@@ -259,7 +259,11 @@ MNR_RESET = True                # HIS 1117 closed-prev resume, on. False restore
 #   HIS 1117: *"now I want to see oracle printing rows that are 30sec apart"* / *"my need is
 #   per-30s AW/TO data and per-30s x/e cross data"*. The row is a 30 s slot, read where closed-prev
 #   shows that slot - ROW_S / 5 bars on, as the minute row was read 12 bars on.
-ROW_S = 30                      # seconds per row - was 60, one ws1 bar
+#   SECONDS PER ROW. 60 is the banked grid, one ws1 bar. FDM3_ROW_S=30 runs his 1117 30 s grid, so
+#   one file serves both sides of the A/B and they differ by the row step alone - same columns, same
+#   M-no-rev ceilings, r-pred off on both.
+ROW_S = int(os.environ.get('FDM3_ROW_S', 60))
+assert 60 % ROW_S == 0 and ROW_S % 5 == 0, 'a row must be a whole number of 5 s bars and divide a minute'
 #   HIS 1117: *"I'm not using r-pred at all so it can be disabled"*. The per-line r-pred byte and the
 #   two sums' r-pred byte are gone from the row; the two sum COLUMNS stay for their TO:x AW:x and
 #   TO(exf) lines, which are towards/away reads, not r-pred. The 1109 control still computes the
