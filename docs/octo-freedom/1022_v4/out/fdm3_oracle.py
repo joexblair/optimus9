@@ -1090,9 +1090,14 @@ if __name__ == '__main__':
               % ((_off, ', flipped' if _fl else '',
                   int((_m[:, STRIDE - 1] != RP[:, STRIDE - 1]).sum()), len(RP), int((_m != RP).sum()), RP.size)
                  + tuple(int((_tac == k).sum()) for k in (1, 2, 3, 4))))
-        if _alo or _ahi:
-            print('    TO/AW cells moved by A, against the same pivots with A off: '
-                  + ', '.join('%s %d' % (n, int(c)) for n, c in zip(LINES, _dc) if c))
+        #   HIS 1117 banked A: there is no A-off state to compare against any more, so the per-column
+        #   "cells A moved" line is gone with the buttons. Per column, what the pivot offset moved:
+        _ref = MATS[(0, _fl)]
+        _lo, _hi = len(LINES) + len(SUMS), 2 * len(LINES) + len(SUMS)
+        _dc = (_m[:, _lo:_hi] != _ref[:, _lo:_hi]).sum(0)
+        if _off:
+            print('    TO/AW cells moved by the +%d min pivots, against the same flip at +0: %s'
+                  % (_off, ', '.join('%s %d' % (n, int(c)) for n, c in zip(LINES, _dc) if c) or 'none'))
     print('towards/away knobs (banked): ' + ' '.join('%s=%s' % (k, v) for k, v, _, _ in TA.KNOBS))
     print('open http://127.0.0.1:%d' % PORT)
     sys.stdout.flush()
