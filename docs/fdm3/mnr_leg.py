@@ -25,10 +25,15 @@ target-side'"*.
   limbo. One unbroken run of that is one consolidated print, which is what his *"continuous print"*
   asks for.
 
-  WOB IS IN THE TABLE'S OWN ROWS - one row is one ws1 bar, one minute. HIS WORD WAS *"18bar"*
-  against a table whose bars are rows. His v4 LIFT_WOB counts 5 s bars instead, so if he meant those
-  the value here is 18/12 of a row; the run prints both counts so the reading can be flipped in a
-  word.
+  WOB IS IN 5 s EMERGING BARS, his 1117 correction: *"the terms 'bars' has always meant the 5s
+  emerging bars for us both"*. So it is applied on the 5 s grid, where the qualification itself is
+  computed, and the result is sampled at each row's print bar - NOT counted in the table's
+  one-minute rows, which is what I had wrong. Every run prints the wob in bars and in seconds so the
+  unit cannot drift again.
+
+  HIS END TIME IS NOT A CAP, his 1117 clarification: *"if you have an open m-no-rev at my end time,
+  keep walking until it is closed"*. So the table covers his whole leg and then keeps going, past
+  his end, until the consolidated print closes. It never shortens his leg.
 """
 import io, os, sys, json, datetime as dt, urllib.request
 import numpy as np
@@ -45,7 +50,7 @@ finally:
     sys.stderr = _e
 
 TFS = [5, 10, 12, 15]
-WOB = 18                        # HIS 1116 *"a 18bar wob"*, counted in the table's own rows
+WOB = 18                        # HIS 1116 *"a 18bar wob"* - 5 s emerging bars, his 1117 unit, so 90 s
 PORT = 8788                     # the page carrying the reprint, his testing ground
 M = json.load(urllib.request.urlopen('http://127.0.0.1:%d/meta' % PORT))
 STR, NR, T0, STEP = int(M['stride']), int(M['rows']), int(M['t0']), int(M['step'])
@@ -74,15 +79,18 @@ Z = Kof(sys.argv[2] if len(sys.argv) > 2 else '2026-09-25 18:30:00')
 #   list of five legs with their sides. THE SIDE IS AN INPUT, so a given side is read across the
 #   whole leg and the oracle's own row byte is not consulted for the qualification. Without one,
 #   the row byte decides, as the page does.
-LEG_SIDE = None
-if len(sys.argv) > 3:
-    LEG_SIDE = {'high': +1, 'low': -1}[sys.argv[3].lower()]
+#   THE SIDE IS REQUIRED. The wob runs on the 5 s grid and the oracle's side byte is only sampled at
+#   each row's print bar, so there is no 5 s side array to fall back on - rather than half-build one,
+#   this asks for the side he already states per leg.
+if len(sys.argv) < 4:
+    raise SystemExit('give the leg its target: high or low. ' + __doc__.splitlines()[-2])
+LEG_SIDE = {'high': +1, 'low': -1}[sys.argv[3].lower()]
 idx = np.arange(ln.N)
-QUAL, VAL, WHY = {}, {}, {}
+QUAL, QUAL5, VAL, WHY = {}, {}, {}, {}
 for t in TFS:
     em = np.asarray(ln.line('ws%dMage' % t), float)
     cp = np.asarray(CP.series(em, t*60), float)
-    q = np.zeros(NR, bool); why = {}
+    q = np.zeros(NR, bool); q5 = np.zeros(ln.N, bool); why = {}
     for sd in (+1, -1):
         with np.errstate(invalid='ignore'):
             oob = cp >= K.OOB_HI if sd > 0 else cp <= K.OOB_LO
@@ -114,41 +122,46 @@ for t in TFS:
                         note[i] = 'past the stored %.1f' % stored
                 u5[i] = armed
                 i += 1
-        if LEG_SIDE is None:
-            q |= u5[PRT] & (sd_rows == sd)
-        elif sd == LEG_SIDE:
+        if sd == LEG_SIDE:
             q |= u5[PRT]
+            q5 |= u5
         for bar, txt in note.items():
             why[bar] = txt
     QUAL[t] = q
+    QUAL5[t] = q5
     VAL[t] = cp
     WHY[t] = why
 
-#   HIS 1116 WOB: a line that stops sits in limbo for WOB rows before it closes. `state` is 2 while
-#   it prints, 1 while it is in limbo and 0 once it has closed.
+#   HIS 1116 WOB on the 5 s grid: a line that stops qualifying sits in limbo for WOB bars before it
+#   closes. `state` is 2 while it prints, 1 while it is in limbo and 0 once it has closed, sampled at
+#   each row's print bar.
 STATE = {}
 for t in TFS:
-    q = QUAL[t]
-    st = np.zeros(NR, np.int8)
+    q5 = QUAL5[t]
+    st5 = np.zeros(ln.N, np.int8)
     left = 0
-    for i in range(NR):
-        if q[i]:
-            st[i], left = 2, WOB
+    for i in range(ln.N):
+        if q5[i]:
+            st5[i], left = 2, WOB
         elif left > 0:
-            st[i], left = 1, left - 1
-    STATE[t] = st
+            st5[i], left = 1, left - 1
+    STATE[t] = st5[PRT]
 #   HIS *"consolidate them"*: on wherever ANY line is printing or in its limbo
 CONS = np.zeros(NR, bool)
 for t in TFS:
     CONS |= STATE[t] > 0
 
-print('# the leg %s .. %s, target %s'
-      % (U(A), U(Z), 'as he named it: %s' % ('HIGH' if LEG_SIDE > 0 else 'LOW') if LEG_SIDE
-         else "the oracle's own row byte"))
+#   HIS 1117: his end is not a cap. If the consolidated print is still on at his end, the table
+#   keeps going until it closes.
+ZW = Z
+while ZW + 1 < NR and CONS[ZW]:
+    ZW += 1
+print('# the leg %s .. %s, target as he named it: %s'
+      % (U(A), U(Z), 'HIGH' if LEG_SIDE > 0 else 'LOW'))
 print('| the row | its target-side | the consolidated print | ws5Mage | ws10Mage | ws12Mage | ws15Mage |')
 print('|---|---|---|---|---|---|---|')
 shown = 0
-for i in range(A, Z + 1):
+for i in range(A, ZW + 1):
     cells, change = [], False
     for t in TFS:
         now, was = int(STATE[t][i]), int(STATE[t][i-1] if i else 0)
@@ -180,15 +193,18 @@ for t in TFS:
     on = nh if (LEG_SIDE or 0) > 0 else nl if (LEG_SIDE or 0) < 0 else nh + nl
     print('| ws%dMage, its range and its oob bars on the leg target | %.1f .. %.1f, %d |'
           % (t, np.nanmin(cp), np.nanmax(cp), on))
-print('| rows in it | %d |' % (Z - A + 1))
+print('| rows in his leg | %d |' % (Z - A + 1))
+print('| rows walked, his leg plus the tail to close an open print | %d, to %s |'
+      % (ZW - A + 1, U(ZW)))
 print('| rows with a start or a stop | %d |' % shown)
-print('| the wob | %d rows, %.1f min - or %d five-second bars if he meant those | ' % (WOB, WOB, WOB))
+print('| the wob | %d bars of 5 s, so %d s | ' % (WOB, WOB * 5))
 runs = 0
-for i in range(A, Z + 1):
+for i in range(A, ZW + 1):
     if CONS[i] and not (CONS[i-1] if i > A else False):
         runs += 1
 print('| consolidated prints in the span | %d |' % runs)
-print('| rows the consolidated print covers | %d of %d |' % (int(CONS[A:Z+1].sum()), Z - A + 1))
+print('| rows the consolidated print covers | %d of %d walked |'
+      % (int(CONS[A:ZW+1].sum()), ZW - A + 1))
 print('| the target-side at %s | %s |' % (U(A), 'LOW' if sd_rows[A] < 0 else 'HIGH'))
 print('| the target-side at %s | %s |' % (U(Z), 'LOW' if sd_rows[Z] < 0 else 'HIGH'))
 ch = [i for i in range(A, Z+1) if sd_rows[i] != sd_rows[i-1]]

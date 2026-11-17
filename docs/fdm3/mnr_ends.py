@@ -25,7 +25,7 @@ try:
     from optimus9.analysis import jig as JIG
 finally:
     sys.stderr = _e
-TFS, WOB = [5, 10, 12, 15], 18
+TFS, WOB = [5, 10, 12, 15], 18   # HIS 1117: a bar is a 5 s emerging bar, so the wob is 90 s
 M = json.load(urllib.request.urlopen('http://127.0.0.1:8788/meta'))
 STR, NR, T0, STEP = int(M['stride']), int(M['rows']), int(M['t0']), int(M['step'])
 ts = np.asarray(ln.ts, np.int64)
@@ -33,7 +33,7 @@ first = np.flatnonzero((ts % 60000) == 0); first = first[first+12 < ln.N]; PRT =
 def U(k): return dt.datetime.fromtimestamp((T0+int(k)*STEP)/1000, dt.timezone.utc).strftime('%Y-%m-%d %H:%M')
 def Kof(s): return (int(dt.datetime.strptime(s,'%Y-%m-%d %H:%M:%S').replace(tzinfo=dt.timezone.utc).timestamp()*1000)-T0)//STEP
 idx = np.arange(ln.N)
-Q = {}                                   # (tf, side) -> qualifies at each oracle row
+Q, Q5 = {}, {}        # (tf, side) -> qualifies, at each oracle row and at each 5 s bar
 for t in TFS:
     em = np.asarray(ln.line('ws%dMage' % t), float)
     cp = np.asarray(CP.series(em, t*60), float)
@@ -64,6 +64,7 @@ for t in TFS:
                         armed = True
                 u[i] = armed; i += 1
         Q[(t, sd)] = u[PRT]
+        Q5[(t, sd)] = u
 LEGS = [('2026-09-25 15:40:00', '2026-09-25 20:42:00', +1),
         ('2026-09-26 13:22:00', '2026-09-26 15:33:00', +1),
         ('2026-09-26 15:17:00', '2026-09-26 21:00:00', -1),
@@ -77,17 +78,19 @@ print('|' + '---|' * 9)
 #   HIS 1116: *"don't treat my end time as a cap. keep going until the lines have reached an end (ie
 #   the wob expires)"*. So the wobbed state runs over the WHOLE tape and each leg's print is followed
 #   from its start to wherever it genuinely ends - his stated end is a marker, not a bound.
+#   the wob runs on the 5 s grid, where the qualification is computed, then samples at the row's
+#   print bar - HIS 1117 unit
 STATE = {}
 for t in TFS:
     for sd in (+1, -1):
-        q = Q[(t, sd)]
-        st = np.zeros(NR, np.int8); left = 0
-        for i in range(NR):
-            if q[i]:
-                st[i], left = 2, WOB
+        q5 = Q5[(t, sd)]
+        st5 = np.zeros(ln.N, np.int8); left = 0
+        for i in range(ln.N):
+            if q5[i]:
+                st5[i], left = 2, WOB
             elif left > 0:
-                st[i], left = 1, left - 1
-        STATE[(t, sd)] = st
+                st5[i], left = 1, left - 1
+        STATE[(t, sd)] = st5[PRT]
 for a_s, z_s, sd in LEGS:
     A, Z = Kof(a_s), Kof(z_s)
     on = np.zeros(NR, bool)
