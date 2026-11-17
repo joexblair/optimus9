@@ -272,7 +272,14 @@ FNC = 23.0                      # HIS 1115 *"23/77 has proven to be the best opt
 #                                 23/77 for the UI"* - the smaller end, his 1103 rule. The fence button is gone
 A_BANDS = (('ws1-ws6', tuple(range(1, 7))), ('ws7-ws15', tuple(range(7, 16))))   # HIS 1115 the two A buttons: *"the
 #                                 first button shows A for ws1-ws6, and the second shows A for ws7-ws15"*
-A_ONS = (0, 1)                  # each A button: 0 lift-off as built, 1 A on its band's r lines
+#   HIS 1117: *"bank A ws1-ws6 and make it the machine - that will reduce the build time"*. A is no
+#   longer switchable: ws1..ws6 is on, ws7..ws15 off, one A state instead of four.
+A_LOCK = (1, 0)                 # A ws1-ws6 on, A ws7-ws15 off - BANKED, not a button
+A_TFS = [t for (_, band), on in zip(A_BANDS, A_LOCK) if on for t in band]
+#   HIS 1117: *"I need the 'pivot +15 min' button reintroduced on 8790. instead of +15, make it +30
+#   minutes"*. It was dropped in the 1115 rebuild; this is HIS 1112 button at his new value.
+PIV_SHIFT = 30                  # minutes - HIS 1117, was 15 at his 1112
+OFFS = (0, PIV_SHIFT)           # the pivots as found, and every pivot PIV_SHIFT later
 FLIP_TOX = 'ws1'                # HIS 1113: the one line whose flip into TO(exf) is highlighted, *"in ws1 only"*
 TO_EXF = 3                      # the TO/AW code a cell prints as TO(exf): TO 1, +2 ex-fence on the target-side
 FLIPS = (0, 1)                  # HIS 1113 button: *"flips the pivots directions"* - 0 as found, 1 every pivot's side flipped
@@ -545,28 +552,29 @@ def build():
     #   HIS 1115 the two A buttons: towards/away runs once per flip and A state, with A (jig.at_extreme `line_extreme`)
     #   on the lift-off reads of the ws1..ws6 r lines, the ws7..ws15 r lines, both or neither. The pivots +15 min and
     #   fence buttons are gone (HIS 1115), so no state moves a pivot and every state reads 23/77
+    #   HIS 1117: A is locked, so the states are the pivot offset crossed with the flip - FOUR runs
+    #   where there were eight. Every pivot PIV_SHIFT later moves each pseudo trade's open and close
+    #   by the same amount on the same side, and towards/away runs again on those trades; the last
+    #   trade still closes at the tape's end.
     STATES, SIDES = [], {}
-    for fl in FLIPS:
-        tr = [(o, c, -s if fl else s) for o, c, s in trades]
-        for alo in A_ONS:
-            for ahi in A_ONS:
-                a_tfs = [t for (_, band), on in zip(A_BANDS, (alo, ahi)) if on for t in band]
-                t1 = time.time()
-                STATES.append((fl, alo, ahi, ST if not fl and not a_tfs else TA.run(LN, tr, FNC, a_tfs)[0]))
-                print('state flip %d, A %s %d, A %s %d: %.1f s' % (fl, A_BANDS[0][0], alo, A_BANDS[1][0], ahi,
-                                                                   time.time() - t1))
-        if fl:
-            print('pivots flipped: %d pseudo trades, first opens %s' % (len(tr), ln.U(tr[0][0])))
-        side = np.zeros(ln.N, np.int8)
-        for o, c, s in tr:
-            side[o:c] = s
-        SIDES[fl] = side
-    assert np.array_equal(SIDES[1], -SIDES[0]), \
+    for off in OFFS:
+        k = off * 12                             # 5 s bars
+        for fl in FLIPS:
+            tr = [(o + k, min(c + k, ln.N), -s if fl else s) for o, c, s in trades if o + k < ln.N]
+            t1 = time.time()
+            STATES.append((off, fl, ST if not off and not fl else TA.run(LN, tr, FNC, A_TFS)[0]))
+            print('state pivots +%d min, flip %d: %d pseudo trades, first opens %s, %.1f s'
+                  % (off, fl, len(tr), ln.U(tr[0][0]), time.time() - t1))
+            side = np.zeros(ln.N, np.int8)
+            for o, c, s in tr:
+                side[o:c] = s
+            SIDES[(off, fl)] = side
+    assert all(np.array_equal(SIDES[(off, 1)], -SIDES[(off, 0)]) for off in OFFS), \
         'a flipped pseudo trade is not the as-found one on the same bars with the other target-side'
     MNR = dict(zip(SIDES, m_no_rev([SIDES[key][prt] for key in SIDES], prt)))
     mats = {}
-    for fl, alo, ahi, ST in STATES:
-        side, mnr = SIDES[fl], MNR[fl]
+    for off, fl, ST in STATES:
+        side, mnr = SIDES[(off, fl)], MNR[(off, fl)]
         cols = list(base)
         live = side != 0
         sp = side[prt]
@@ -620,13 +628,13 @@ def build():
             cols.append((mv_k & 0xFF).astype(np.uint8).view(np.int8))
             cols.append((mv_k >> 8).astype(np.int8))
         cols.append(side[prt])                   # HIS 1109: the time cell's 20% colour, red LOW, green HIGH
-        mats[(fl, alo, ahi)] = np.ascontiguousarray(np.stack(cols, 1).astype(np.int8))
+        mats[(off, fl)] = np.ascontiguousarray(np.stack(cols, 1).astype(np.int8))
     return ts[first], mats
 
 
 T0 = time.time()
 OPEN, MATS = build()
-RP = MATS[(0, 0, 0)]                            # the pivots as found, A off, 23/77 - every check below reads it
+RP = MATS[(0, 0)]                               # the pivots as found, A locked, 23/77 - every check below reads it
 assert all(m.shape == RP.shape for m in MATS.values()) and RP.shape[1] == STRIDE
 assert all(np.array_equal(m[:, :len(LINES) + len(SUMS)], RP[:, :len(LINES) + len(SUMS)]) for m in MATS.values()), \
     'the r-pred bytes differ between the page states'
@@ -641,6 +649,7 @@ META = json.dumps({
     'lines': LINES, 'mnr': MNR_LABELS[0], 'sums': [s for s, _ in SUMS], 'stride': STRIDE, 'rows': int(len(OPEN)), 't0': int(OPEN[0]), 'step': 60000,
     'days': DAYS, 'fence': FNC, 'abands': [b for b, _ in A_BANDS], 'flips': list(FLIPS),
     'mnrs': list(MNR_LABELS), 'mnrtops': list(MNR_TOPS),
+    'shift': PIV_SHIFT, 'alock': list(A_LOCK),
     #   HIS 1116: where the up/dn block starts, so a reader is told rather than re-deriving the layout
     'updn': len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)})
 
@@ -664,9 +673,13 @@ class H(BaseHTTPRequestHandler):
             q = dict(kv.split('=') for kv in self.path.split('?', 1)[1].split('&'))
             #   HIS 1113 flip: 0 the pivots' sides as found, 1 every side flipped; HIS 1115 alo / ahi: the A buttons,
             #   0 lift-off as built, 1 A on ws1..ws6 / ws7..ws15
-            m = MATS.get((int(q.get('flip', 0)), int(q.get('alo', 0)), int(q.get('ahi', 0))))
+            #   HIS 1117: off is the pivot shift and flip the pivot direction. A is locked, so alo
+            #   and ahi are accepted only at their banked values.
+            _a = (int(q.get('alo', A_LOCK[0])), int(q.get('ahi', A_LOCK[1])))
+            m = MATS.get((int(q.get('off', 0)), int(q.get('flip', 0)))) if _a == A_LOCK else None
             if m is None:
-                self.send_error(400, 'flip, alo and ahi must each be one of %s / %s / %s' % (FLIPS, A_ONS, A_ONS))
+                self.send_error(400, 'off must be one of %s, flip one of %s, and alo / ahi the locked %s'
+                                % (OFFS, FLIPS, A_LOCK))
                 return
             a = max(0, int(q['start'])); b = min(len(m), a + max(0, int(q['count'])))
             return self._send(m[a:b].tobytes(), 'application/octet-stream')    # STRIDE bytes per row
@@ -702,6 +715,7 @@ h1{font-size:15px;margin:0 0 8px;font-weight:600}
   border-radius:4px;font:12px system-ui,sans-serif;cursor:pointer;white-space:nowrap}
 .tog:hover{border-color:var(--sel)}
 .tog.on{background:var(--sel);border-color:var(--sel);color:var(--bg);font-weight:600}
+.tog:disabled{cursor:default;opacity:.7}   /* HIS 1117: a banked A button shows its position, no click */
 .status{display:flex;gap:18px;color:var(--mut);font-size:12px;margin:4px 0 6px;font-variant-numeric:tabular-nums}
 .box{flex:1 1 0;min-height:320px;border:1px solid var(--line);border-radius:6px;overflow-y:auto;overflow-x:hidden;position:relative;overflow-anchor:none}
 .inner{min-width:0}
@@ -767,21 +781,23 @@ let lastTop = 0, dir = 1, raf = 0, dayOn = '';
 const NB = '\u00a0';   // HIS 1110: the place holder line - a blank line keeps a cell's 3 lines aligned
 let sel = -1;           // HIS 1110: the clicked row, highlighted; a click on another row moves it, on the same row clears it
 let FLIP = 0;           // HIS 1113: 0 the pivots' sides as found, 1 every side flipped with the button on
-let ALO = 0, AHI = 0;   // HIS 1115: the two A buttons - A on ws1..ws6 / ws7..ws15, 0 lift-off as built
+let OFF = 0;            // HIS 1117: the pivot offset button - 0 the pivots as found, meta.shift minutes later
+let ALO = 0, AHI = 0;   // HIS 1117: A is LOCKED, these take meta.alock and no button changes them
 
 const fmt = ms => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
 
 function fetchBlock(b) {
-  const flip = FLIP, alo = ALO, ahi = AHI, key = flip + ':' + alo + ':' + ahi + ':' + b;   // each state keeps its own blocks
+  const off = OFF, flip = FLIP, key = off + ':' + flip + ':' + b;   // each state keeps its own blocks
   if (b < 0 || b * BLOCK >= meta.rows || cache.has(key) || pending.has(key)) return;
   pending.add(key);
-  fetch('rows?start=' + (b * BLOCK) + '&count=' + BLOCK + '&flip=' + flip + '&alo=' + alo + '&ahi=' + ahi)
+  fetch('rows?start=' + (b * BLOCK) + '&count=' + BLOCK + '&off=' + off + '&flip=' + flip +
+        '&alo=' + ALO + '&ahi=' + AHI)
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
     .then(buf => { pending.delete(key); cache.set(key, new Int8Array(buf)); evict(); schedule(); })
     .catch(e => { pending.delete(key); document.getElementById('err').textContent = 'fetch failed: ' + e.message; });
 }
 function getBlock(b) {
-  const key = FLIP + ':' + ALO + ':' + AHI + ':' + b, a = cache.get(key);
+  const key = OFF + ':' + FLIP + ':' + b, a = cache.get(key);
   if (a) { cache.delete(key); cache.set(key, a); }   // most recently used goes to the back
   return a;
 }
@@ -943,6 +959,7 @@ function buildCal() {
 async function init() {
   meta = await (await fetch('meta')).json();
   NL = meta.lines.length; NC = NL + meta.sums.length; NS = meta.stride; UD0 = meta.updn;
+  [ALO, AHI] = meta.alock;   // HIS 1117: A is locked, the page only reports it
   const hd = document.getElementById('hd');
   for (const h of ['ws1 time (UTC)', 'SL%'].concat(meta.lines, meta.mnrs, meta.sums)) { const d = document.createElement('div'); d.textContent = h; hd.appendChild(d); }
   hd.children[NL + 2].className = 'sx'; hd.children[NL + 3].className = 'sx';
@@ -974,17 +991,27 @@ async function init() {
   //   HIS 1115 *"create two buttons that A will be applied to - the first button shows A for ws1-ws6, and the second
   //   shows A for ws7-ws15"*. A: lift-off's window extreme off every bar of its span, not only the six samples. They
   //   combine with each other and with flip pivots
+  //   HIS 1117: *"I need the 'pivot +15 min' button reintroduced on 8790. instead of +15, make it
+  //   +30 minutes"*. Every ws2Mage pivot meta.shift minutes later, so every pseudo trade opens and
+  //   closes that much later on the same side
+  const pb = document.createElement('button'); pb.className = 'tog';
+  pb.textContent = 'pivots +' + meta.shift + ' min';
+  pb.title = 'every ws2Mage pivot ' + meta.shift + ' minutes later; click again for the pivots as found';
+  pb.setAttribute('aria-pressed', 'false');
+  pb.onclick = () => {
+    OFF = OFF ? 0 : meta.shift;
+    pb.classList.toggle('on', OFF > 0); pb.setAttribute('aria-pressed', String(OFF > 0));
+    for (const p of pool) p.ok = false;
+    schedule();
+  };
+  document.getElementById('cal').appendChild(pb);
+  //   HIS 1117 banked A: the two buttons show the locked positions and cannot be clicked
   for (const [i, band] of meta.abands.entries()) {
     const ab = document.createElement('button'); ab.className = 'tog'; ab.textContent = 'A ' + band;
-    ab.title = 'lift-off A on the ' + band + ' r lines: the window extreme off every bar of the span, not only the six ' +
-               'samples; click again for lift-off as built';
-    ab.setAttribute('aria-pressed', 'false');
-    ab.onclick = () => {
-      const on = i === 0 ? (ALO = 1 - ALO) : (AHI = 1 - AHI);
-      ab.classList.toggle('on', on > 0); ab.setAttribute('aria-pressed', String(on > 0));
-      for (const p of pool) p.ok = false;
-      schedule();
-    };
+    const on = meta.alock[i];
+    ab.title = 'lift-off A on the ' + band + ' r lines: BANKED ' + (on ? 'on' : 'off') + ', not a button';
+    ab.disabled = true;
+    ab.classList.toggle('on', on > 0); ab.setAttribute('aria-pressed', String(on > 0));
     document.getElementById('cal').appendChild(ab);
   }
   box.addEventListener('scroll', schedule, {passive: true});
@@ -1041,16 +1068,13 @@ if __name__ == '__main__':
               % (_lab, MNR_LO, _top, int((_mn > 0).sum()), len(_mn), int(_mn.max()),
                  _mv[_mn > 0].min() / 10, _mv[_mn > 0].max() / 10))
     print('fence: %d/%d, locked (HIS 1115)' % (FNC, 100 - FNC))
-    for (_fl, _alo, _ahi), _m in MATS.items():
-        if (_fl, _alo, _ahi) == (0, 0, 0):
+    for (_off, _fl), _m in MATS.items():
+        if (_off, _fl) == (0, 0):
             continue
         _tac = _m[:, len(LINES) + len(SUMS):2 * len(LINES) + len(SUMS)]
-        #   HIS 1115 the A states against the same flip with A off, per column: which TO/AW cells A moved
-        _ref = MATS[(_fl, 0, 0)]
-        _dc = (_m[:, len(LINES) + len(SUMS):2 * len(LINES) + len(SUMS)] != _ref[:, len(LINES) + len(SUMS):2 * len(LINES) + len(SUMS)]).sum(0)
-        print('pivots %s, A %s %s, A %s %s: rows whose target-side differs from the pivots as found %d of %d, cells '
+        print('pivots +%d min%s: rows whose target-side differs from the pivots as found %d of %d, cells '
               'that differ %d of %d; TO(inf) %d, AW(inf) %d, TO(exf) %d, AW(exf) %d'
-              % (('flipped' if _fl else 'as found', A_BANDS[0][0], 'on' if _alo else 'off', A_BANDS[1][0], 'on' if _ahi else 'off',
+              % ((_off, ', flipped' if _fl else '',
                   int((_m[:, STRIDE - 1] != RP[:, STRIDE - 1]).sum()), len(RP), int((_m != RP).sum()), RP.size)
                  + tuple(int((_tac == k).sum()) for k in (1, 2, 3, 4))))
         if _alo or _ahi:
