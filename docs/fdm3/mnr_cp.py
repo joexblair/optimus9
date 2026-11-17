@@ -200,7 +200,56 @@ def leg(a_s, z_s, sd, table=True):
     print('| rows the consolidated print covers | %d of %d |' % (int(on[A:ZW + 1].sum()), ZW - A + 1))
 
 
+BANDS = [('ws1..ws4', range(1, 5)), ('ws5..ws25', range(5, 26)), ('ws26..ws30', range(26, 31))]
+
+
+def bands():
+    """HIS 1117 HYPOTHESIS: he cut ws1..ws4 and ws26..ws30 out of the column on an eyeballed read -
+    *"I think that they will overrun"*. This measures each band's own prints against each leg end.
+    """
+    print('| his leg | its end | its target | the band | prints beginning in the leg '
+          '| its LAST print starts | it ends | the line holding it | its end against his end |')
+    print('|' + '---|' * 9)
+    for a_s, z_s, sd in LEGS:
+        A, Z = K_OF(a_s), K_OF(z_s)
+        for lab, rng in BANDS:
+            Q = {}
+            for t in rng:
+                _u5, q, _cp, _r = qualifies(t, sd)
+                Q[t] = q
+            on = np.zeros(NROWS, bool)
+            for t in rng:
+                on |= Q[t]
+            runs, i = [], A
+            while i <= Z:
+                if not on[i] or (i > A and on[i - 1]):
+                    i += 1
+                    continue
+                j = i
+                while j < NROWS and on[j]:
+                    j += 1
+                last = {}
+                for t in rng:
+                    pr = np.flatnonzero(Q[t][i:j])
+                    if len(pr):
+                        last[t] = i + int(pr[-1])
+                lt = max(last, key=lambda x: last[x]) if last else 0
+                runs.append((i, j - 1, lt))
+                i = j
+            if not runs:
+                print('| %s | %s | %s | %s | 0 | never | - | - | - |'
+                      % (a_s[5:16], z_s[11:16], 'HIGH' if sd > 0 else 'LOW', lab))
+                continue
+            s0, end, lt = runs[-1]
+            print('| %s | %s | %s | %s | %d | %s | %s | ws%d | %+d rows |'
+                  % (a_s[5:16], z_s[11:16], 'HIGH' if sd > 0 else 'LOW', lab, len(runs),
+                     U(s0)[11:16], U(end)[11:16], lt, end - Z))
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == 'bands':
+        bands()
+        return
     if len(sys.argv) > 1 and sys.argv[1] == 'legs':
         print('# the lines: ws%d to ws%d' % (TFS[0], TFS[-1]))
         print('| his leg start | his leg end | its target | the print | it starts | where it ends '
