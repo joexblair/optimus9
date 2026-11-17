@@ -581,7 +581,10 @@ def build():
             c = np.zeros(len(prt), np.int8)
             for bit, line in ((1, np.asarray(ln.line('ws%dx' % t), float)), (2, WSE.lines()[t])):
                 wins = np.asarray([b for b, _ in JIG.e_race_wins(line, race, sd)], np.int64)
-                row = (wins - first[0]) // 12
+                #   HIS 1117: the row a win lands in is ROW_S seconds wide, not a fixed 12 bars. At
+                #   ROW_S 30 a //12 here binned every cross at half its row index, so the whole page
+                #   lost them.
+                row = (wins - first[0]) // _rb
                 row = row[(wins >= first[0]) & (row < len(prt))]
                 c[row] |= bit
             XC[name][sd] = c
