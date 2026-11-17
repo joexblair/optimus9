@@ -248,8 +248,14 @@ SL_LINE = 'gcws15b'             # HIS 1115 STOPLOSS: *"between gcws15b extrema (
 SL_HOURS = 6.0                  # HIS 1115 *"averaged over the last 6 hours"*
 SL_NONE = -1                    # SL% x 100 where no leg ends in the window, or the tape has under 6 h behind the row
 MNR_LABEL = 'M-no-rev'          # HIS 1111 column label, between ws15 and ws16-22
-MNR_TOP = 30                    # HIS 1111 answer: ws1..ws30Mage, not the ladder's 33
-MNR_RESET = True                # HIS 1116 reset, on. False restores the 1111 column exactly, for his A/B
+MNR_LO = 1                      # HIS 1117: *"we'll settle on ws1 to ws25"* - ws1 adds no leg end that
+#                                 ws2 does not already give, but he keeps it: *"m-no-rev is a 'keep
+#                                 walking' gate, not a 'bet the bank on it' event"*
+MNR_TOP = 25                    # HIS 1117 ceiling, measured against ws22 and ws20: cutting to either
+#                                 loses 5 rows on his 09-27 0500 leg end and 2 on 09-25, and saves
+#                                 nothing - the print count is 88 at all three. Was ws30 (HIS 1111)
+MNR_RESET = True                # HIS 1117 closed-prev resume, on. False restores the 1111 column
+#                                 exactly, for his A/B
 STRIDE = (len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)
           + len(LINES) + 6)     # bytes per row: r-pred,
 #   the TO/AW codes, the TO/AW counts, the cross codes (HIS 1110: 1 X, 2 E, 3 both, on the row's target-side; +4 the
@@ -271,40 +277,39 @@ TO_EXF = 3                      # the TO/AW code a cell prints as TO(exf): TO 1,
 FLIPS = (0, 1)                  # HIS 1113 button: *"flips the pivots directions"* - 0 as found, 1 every pivot's side flipped
 
 
-def mnr_reset(em, cp, oob, cross, st, raw, sd):
-    """HIS 1116 M-no-rev reset, walked per oob run. -> bool array: the line reads oob-and-not-yet-reversed here.
+def mnr_reset(cp, oob, cross, st, step, sd):
+    """HIS 1117 M-no-rev resume, walked per oob run. -> bool array: the line reads oob-and-not-yet-reversed here.
 
-    `em` the EMERGING Mage, `cp` its closed-prev (the oob test's own reading), `oob` / `cross` that test's run mask
-    and each bar's cross-into-oob bar, `st` the reversals' knowable stamps with `raw` their pivot bars, `sd` the
-    target-side. The stored value is em[pivot], HIS ruling; the comparison is on the same line, so a stored value
-    and the bar it is compared against are never two different readings.
+    HIS WORDS: *"let's go back to the banked state (any Mage to oob, m-no-rev prints. Mage reverses, m-no-rev
+    stops printing) / instead of reacting to a more extreme Mage value using emerging values, we'll use
+    closed-prev... then, if the following closed-prev bar is more extreme, m-no-rev starts printing again until it
+    is terminated by a fresh reversal. if the next closed-prev bar is less extreme, nothing happens"*.
 
-    CAUSAL: a reversal only arms from its KNOWABLE stamp, never from its pivot, and the loop never looks past the
-    bar it is deciding. The assert below holds the first of those.
+    `cp` the closed-prev Mage - the oob test's own reading and the only one this mech reads. `oob` / `cross` that
+    test's run mask and each bar's cross-into-oob bar. `st` the reversals' knowable stamps, sorted. `step` True on
+    the bars where cp carries a NEW value that is more extreme on the target side than the one before it - the
+    line's own closed bars, from v4_closed_prev.seam_bars, so for ws15Mage one comparison every 15 minutes.
+
+    CAUSAL: a reversal arms only from its KNOWABLE stamp, a step is read on the bar it lands on, and the loop
+    never looks past the bar it is deciding.
     """
-    o = np.argsort(st, kind='stable')
-    st_s, raw_s = st[o], raw[o]
-    assert (raw_s <= st_s).all(), 'a lift-off pivot sits after its own knowable stamp'
-    with np.errstate(invalid='ignore'):
-        stored_at = em[np.clip(raw_s, 0, len(em) - 1)]
-    out = np.zeros(len(em), bool)
-    n, i = len(st_s), 0
-    while i < len(em):
+    assert (np.diff(st) >= 0).all(), 'the reversal stamps are not sorted'
+    out = np.zeros(len(cp), bool)
+    n, i = len(st), 0
+    while i < len(cp):
         if not oob[i]:
             i += 1
             continue
         c = int(cross[i])
-        armed, stored = True, np.nan            # a run opens not-yet-reversed, as it always did
-        p = int(np.searchsorted(st_s, c, side='left'))
-        while i < len(em) and oob[i]:
-            while p < n and st_s[p] <= i:       # every reversal knowable by this bar
-                if st_s[p] >= c:                # HIS 1111: only one at or after the cross counts
-                    armed, stored = False, stored_at[p]
+        armed = True                            # a run opens not-yet-reversed, as it always did
+        p = int(np.searchsorted(st, c, side='left'))
+        while i < len(cp) and oob[i]:
+            while p < n and st[p] <= i:         # every reversal knowable by this bar
+                if st[p] >= c:                  # HIS 1111: only one at or after the cross counts
+                    armed = False
                 p += 1
-            if not armed and np.isfinite(stored):
-                v = em[i]
-                if np.isfinite(v) and ((v > stored) if sd > 0 else (v < stored)):
-                    armed = True                # HIS 1116: further from 50 on the target-side, strictly
+            if not armed and step[i]:
+                armed = True                    # HIS 1117: a more extreme closed bar resumes the print
             out[i] = armed
             i += 1
     return out
@@ -345,7 +350,9 @@ def m_no_rev(sps, prt):
     """
     idx = np.arange(ln.N)
     res = [[np.zeros(len(prt), np.int8), np.zeros(len(prt), np.int16)] for _ in sps]
-    for t in range(1, MNR_TOP + 1):               # ascending, so the highest qualifying TF is the one left
+    #   HIS 1117 ws1..ws25. Ascending, so the highest qualifying TF is the one left
+    seam_of = {}
+    for t in range(MNR_LO, MNR_TOP + 1):
         em = np.asarray(ln.line('ws%dMage' % t), float)
         cp = CP.series(em, t * 60)
         for sd in (+1, -1):
@@ -354,11 +361,23 @@ def m_no_rev(sps, prt):
             start = oob & ~np.concatenate([[False], oob[:-1]])
             cross = np.where(oob, np.maximum.accumulate(np.where(start, idx, -1)), -1)
             raw = np.asarray(JIG.lift_off(em, sd, K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL, K.LIFT_WOB), int)
-            st = np.asarray([K.lift_stamp(int(b)) for b in raw], int)
+            st = np.sort(np.asarray([K.lift_stamp(int(b)) for b in raw], int))
             k = np.searchsorted(st, idx, side='right') - 1     # the last reversal knowable at or before each bar
             last = np.where(k >= 0, st[np.clip(k, 0, None)], -1)
             assert (last <= idx).all(), 'a reversal is read before it is knowable'
-            un = (oob & (last < cross))[prt] if not MNR_RESET else mnr_reset(em, cp, oob, cross, st, raw, sd)[prt]
+            if not MNR_RESET:
+                un = (oob & (last < cross))[prt]
+            else:
+                #   HIS 1117: the bars cp steps on, and whether the step is more extreme on this side
+                if t not in seam_of:
+                    m = np.zeros(ln.N, bool)
+                    m[np.asarray(CP.seam_bars(t * 60), int)] = True
+                    seam_of[t] = m
+                step = np.zeros(ln.N, bool)
+                with np.errstate(invalid='ignore'):
+                    more = (cp[1:] > cp[:-1]) if sd > 0 else (cp[1:] < cp[:-1])
+                step[1:] = seam_of[t][1:] & more
+                un = mnr_reset(cp, oob, cross, st, step, sd)[prt]
             for r, sp in zip(res, sps):
                 q = (sp == sd) & un
                 r[0] = np.where(q, t, r[0]).astype(np.int8)
@@ -678,6 +697,11 @@ h1{font-size:15px;margin:0 0 8px;font-weight:600}
 .row div{text-align:center;height:49px;display:flex;flex-direction:column;justify-content:center;line-height:16px}
 .row .t{display:block;line-height:49px}
 .row div b{font-weight:700;font-size:10px}
+/*   HIS 1117: *"the dn/up rows are printing bold when rpred coloring is applied. ensure that the top row
+     (of the cell) is non-bold"*. The red/green r-pred classes put font-weight 600 on the whole cell and the
+     top line is a span inside it, so the span gets its own weight. The two <b> lines below keep theirs -
+     his *"the ws1 TO(exf) flap and any ws AW(*) flip on the [middle] row needs to stay bolded"*   */
+.row div span.ud{font-weight:400}
 .row div b.s,.row div b.x{white-space:pre}
 .row div b.x{color:var(--xc);font-weight:900}
 .row .mn{font-weight:600}
@@ -766,7 +790,7 @@ function ensurePool(n) {
         slc.ta = document.createElement('b'); slc.xc = document.createElement('b'); slc.append(slc.n, slc.ta, slc.xc);
         el.appendChild(slc);
       }
-      if (c) { d.n = document.createElement('span'); d.ta = document.createElement('b'); d.append(d.n, d.ta); if (c > NL) d.ta.className = 's'; }
+      if (c) { d.n = document.createElement('span'); d.ta = document.createElement('b'); d.append(d.n, d.ta); if (c > NL) d.ta.className = 's'; else d.n.className = 'ud'; }
       if (c) { d.xc = document.createElement('b'); d.xc.className = 'x'; d.append(d.xc); }   // HIS 1110 cross row, every cell
       cells.push(d);
     }
