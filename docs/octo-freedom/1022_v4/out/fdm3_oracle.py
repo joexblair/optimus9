@@ -247,24 +247,25 @@ CONTROL_LINES = ['gcws15', 'gcws30'] + ['ws%d' % t for t in range(1, 13)]   # th
 SL_LINE = 'gcws15b'             # HIS 1115 STOPLOSS: *"between gcws15b extrema (oob to opposing oob)"*, on 15 s closed bars
 SL_HOURS = 6.0                  # HIS 1115 *"averaged over the last 6 hours"*
 SL_NONE = -1                    # SL% x 100 where no leg ends in the window, or the tape has under 6 h behind the row
-MNR_LABEL = 'M-no-rev'          # HIS 1111 column label, between ws15 and ws16-22
+#   HIS 1117: *"I can't decide between ws15 and ws25, so we'll need two m-no-rev columns - one for
+#   each. the columns can be skinny. label them mnr1 and mnr2"*. mnr1 is the LOWER ceiling.
+MNR_LABELS = ('mnr1', 'mnr2')
+MNR_TOPS = (15, 25)             # mnr1 ws1..ws15, mnr2 ws1..ws25
 MNR_LO = 1                      # HIS 1117: *"we'll settle on ws1 to ws25"* - ws1 adds no leg end that
 #                                 ws2 does not already give, but he keeps it: *"m-no-rev is a 'keep
 #                                 walking' gate, not a 'bet the bank on it' event"*
-MNR_TOP = 25                    # HIS 1117 ceiling, measured against ws22 and ws20: cutting to either
-#                                 loses 5 rows on his 09-27 0500 leg end and 2 on 09-25, and saves
-#                                 nothing - the print count is 88 at all three. Was ws30 (HIS 1111)
 MNR_RESET = True                # HIS 1117 closed-prev resume, on. False restores the 1111 column
 #                                 exactly, for his A/B
 STRIDE = (len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)
-          + len(LINES) + 6)     # bytes per row: r-pred,
+          + len(LINES) + 3 + 3 * len(MNR_TOPS))   # bytes per row: r-pred,
 #   the TO/AW codes, the TO/AW counts, the cross codes (HIS 1110: 1 X, 2 E, 3 both, on the row's target-side; +4 the
 #   line reads AW on this row and TO on the row before, HIS 1110 TO -> AW flip; +8 ws1 only, TO(exf) on this row and
 #   anything else on the row before, HIS 1113), per sum the count of its lines
 #   reading TO(exf) (HIS 1111), HIS 1116 the UP/DN pair per line (bits 0-1 position 1, this row against the row 3
 #   back; bits 2-3 position 2, against the row 2 back; 0 a dead tie or no row that far back, 1 up, 2 dn),
-#   HIS 1115 SL% x 100 as an int16 in two bytes (low byte first, SL_NONE blank), the M-no-rev TF (HIS 1111, 0 none),
-#   its line's closed-prev value x 10 as an int16 in two bytes (low byte first), then the pseudo trade's target-side at the row's read bar: -1 LOW, +1 HIGH, 0 no trade
+#   HIS 1115 SL% x 100 as an int16 in two bytes (low byte first, SL_NONE blank), then PER M-no-rev COLUMN (HIS 1117
+#   mnr1 ws1..ws15, mnr2 ws1..ws25) its TF (0 none) and that line's closed-prev value x 10 as an int16 in two bytes
+#   (low byte first), then the pseudo trade's target-side at the row's read bar: -1 LOW, +1 HIGH, 0 no trade
 
 
 FNC = 23.0                      # HIS 1115 *"23/77 has proven to be the best option, so we can remove that button and lock
@@ -349,10 +350,13 @@ def m_no_rev(sps, prt):
     oob clears the stored value and nothing carries across. The oob test itself is unchanged - still closed-prev.
     """
     idx = np.arange(ln.N)
-    res = [[np.zeros(len(prt), np.int8), np.zeros(len(prt), np.int16)] for _ in sps]
-    #   HIS 1117 ws1..ws25. Ascending, so the highest qualifying TF is the one left
+    #   HIS 1117: one result per ceiling per target-side array. One pass over the lines fills both,
+    #   because mnr2's range contains mnr1's - a line that qualifies for mnr1 qualifies for mnr2.
+    res = [[[np.zeros(len(prt), np.int8), np.zeros(len(prt), np.int16)] for _ in MNR_TOPS]
+           for _ in sps]
+    #   HIS 1117 ws1 up. Ascending, so the highest qualifying TF is the one left in each column
     seam_of = {}
-    for t in range(MNR_LO, MNR_TOP + 1):
+    for t in range(MNR_LO, max(MNR_TOPS) + 1):
         em = np.asarray(ln.line('ws%dMage' % t), float)
         cp = CP.series(em, t * 60)
         for sd in (+1, -1):
@@ -390,11 +394,14 @@ def m_no_rev(sps, prt):
                 un = mnr_reset(cp, oob, cross, st, step, sd)[prt]
             for r, sp in zip(res, sps):
                 q = (sp == sd) & un
-                r[0] = np.where(q, t, r[0]).astype(np.int8)
                 v10 = np.round(np.where(q, cp[prt], 0.0) * 10.0)
                 assert (np.abs(v10) < 32767).all(), 'a Mage value x 10 does not fit an int16'
-                r[1] = np.where(q, v10, r[1]).astype(np.int16)
-    return [tuple(r) for r in res]
+                for k, top in enumerate(MNR_TOPS):
+                    if t > top:
+                        continue                 # this line sits above that column's ceiling
+                    r[k][0] = np.where(q, t, r[k][0]).astype(np.int8)
+                    r[k][1] = np.where(q, v10, r[k][1]).astype(np.int16)
+    return [tuple(tuple(c) for c in r) for r in res]
 
 
 def sl_pct(prt):
@@ -559,7 +566,7 @@ def build():
     MNR = dict(zip(SIDES, m_no_rev([SIDES[key][prt] for key in SIDES], prt)))
     mats = {}
     for fl, alo, ahi, ST in STATES:
-        side, (mn, mv) = SIDES[fl], MNR[fl]
+        side, mnr = SIDES[fl], MNR[fl]
         cols = list(base)
         live = side != 0
         sp = side[prt]
@@ -608,9 +615,10 @@ def build():
         cols.extend(UD)                          # HIS 1116 the up/dn pair per line, the same in every state
         cols.append((sl & 0xFF).astype(np.uint8).view(np.int8))     # HIS 1115 SL%, the same in every state
         cols.append((sl >> 8).astype(np.int8))
-        cols.append(mn)                          # HIS 1111 M-no-rev: the highest qualifying TF, 0 none, and its value
-        cols.append((mv & 0xFF).astype(np.uint8).view(np.int8))
-        cols.append((mv >> 8).astype(np.int8))
+        for mn_k, mv_k in mnr:                   # HIS 1117 mnr1 then mnr2: its TF, 0 none, and its value
+            cols.append(mn_k)
+            cols.append((mv_k & 0xFF).astype(np.uint8).view(np.int8))
+            cols.append((mv_k >> 8).astype(np.int8))
         cols.append(side[prt])                   # HIS 1109: the time cell's 20% colour, red LOW, green HIGH
         mats[(fl, alo, ahi)] = np.ascontiguousarray(np.stack(cols, 1).astype(np.int8))
     return ts[first], mats
@@ -630,8 +638,9 @@ for i, ms in enumerate(OPEN):
 TAC = RP[:, len(LINES) + len(SUMS):2 * len(LINES) + len(SUMS)]
 U = lambda ms: time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(int(ms) // 1000))
 META = json.dumps({
-    'lines': LINES, 'mnr': MNR_LABEL, 'sums': [s for s, _ in SUMS], 'stride': STRIDE, 'rows': int(len(OPEN)), 't0': int(OPEN[0]), 'step': 60000,
+    'lines': LINES, 'mnr': MNR_LABELS[0], 'sums': [s for s, _ in SUMS], 'stride': STRIDE, 'rows': int(len(OPEN)), 't0': int(OPEN[0]), 'step': 60000,
     'days': DAYS, 'fence': FNC, 'abands': [b for b, _ in A_BANDS], 'flips': list(FLIPS),
+    'mnrs': list(MNR_LABELS), 'mnrtops': list(MNR_TOPS),
     #   HIS 1116: where the up/dn block starts, so a reader is told rather than re-deriving the layout
     'updn': len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)})
 
@@ -714,7 +723,11 @@ h1{font-size:15px;margin:0 0 8px;font-weight:600}
 .row div span.ud{font-weight:400}
 .row div b.s,.row div b.x{white-space:pre}
 .row div b.x{color:var(--xc);font-weight:900}
-.row .mn{font-weight:600}
+/*   HIS 1117: *"the columns can be skinny... the cells' data can be wordwrapped, ws{TF} on the top row
+     and the line value on the lower row. reduce the font"*. Two lines in the cell's own three-line box,
+     so the wrap is deterministic rather than left to the browser   */
+.row .mn{font-weight:600;font-size:9px}
+.row .mn b{font-size:9px;font-weight:600}
 .row div b.g{color:var(--mut)}
 .row div b.f{color:var(--flip)}
 .row.sel{background:var(--hl);outline:2px solid var(--sel);outline-offset:-2px}
@@ -741,7 +754,7 @@ const AHEAD = 3;        // blocks prefetched in the scroll direction
 const KEEP = 60;        // blocks held before the least recently used is dropped
 const TW = 116;         // px, the time column: MM-DD HH:MM:SS (HIS 1111 drops the year) plus the 32 px it had
 const TMIN = 94, SMIN = 56;   // px, the least the time column and a sum column give way to: their text, 84 and 52 px
-const MMIN = 68;      // px, the least M-no-rev gives way to: its widest text, "ws23:100.0", is 65.0 px in the cell (headless Chrome)
+const MNRW = 34;      // px, HIS 1117 *"the columns can be skinny"* - its widest line, "100.0" at 9px, is 25 px
 const CW = 72.36;      // px, every line and sum column - HIS 1111 *"stay the same width as they are now"*
 const SLW = 48;        // px, HIS 1115 *"skinny column labeled 'SL%', to the right of 'ws1 time'"* - its widest text, "99.99"
 let meta, NL, NC, NS, UD0;
@@ -787,12 +800,15 @@ function ensurePool(n) {
   while (pool.length < n) {
     const el = document.createElement('div'); el.className = 'row';
     const cells = [];
-    let mc = null, slc = null;
+    let mcs = [], slc = null;
     for (let c = 0; c <= NC; c++) {
       if (c === NL + 1) {              // HIS 1111 M-no-rev, between ws15 and the sums; 3 lines like every data cell
-        mc = document.createElement('div'); mc.n = document.createElement('span');
-        mc.ta = document.createElement('b'); mc.xc = document.createElement('b'); mc.append(mc.n, mc.ta, mc.xc);
-        el.appendChild(mc);
+        //   HIS 1117: one skinny cell per M-no-rev ceiling, mnr1 then mnr2
+        for (const _ of meta.mnrs) {
+          const m = document.createElement('div'); m.n = document.createElement('span');
+          m.ta = document.createElement('b'); m.xc = document.createElement('b'); m.append(m.n, m.ta, m.xc);
+          el.appendChild(m); mcs.push(m);
+        }
       }
       const d = document.createElement('div'); d.className = c ? '' : 't'; el.appendChild(d);
       if (!c) {                         // HIS 1115 SL%, right of the time; 3 lines like every data cell
@@ -804,7 +820,7 @@ function ensurePool(n) {
       if (c) { d.xc = document.createElement('b'); d.xc.className = 'x'; d.append(d.xc); }   // HIS 1110 cross row, every cell
       cells.push(d);
     }
-    body.appendChild(el); pool.push({el, cells, mc, slc, i: -1, ok: false});
+    body.appendChild(el); pool.push({el, cells, mcs, slc, i: -1, ok: false});
   }
 }
 function draw() {
@@ -829,10 +845,17 @@ function draw() {
     //   HIS 1111 M-no-rev: the highest target-side oob Mage TF with no lift-off reversal since its cross to oob;
     //   *"if there is no Mage qualifying, don't print anything in the field"*
     //   HIS 1111 *"if the field is populated, add the line's value to the text"*: closed-prev, 1 dp, "ws23:95.2"
-    const mv = blk ? blk[o + NS - 4] : 0, mx = blk ? ((blk[o + NS - 2] << 8) | (blk[o + NS - 3] & 255)) : 0;
-    p.mc.n.textContent = !blk ? '·' : mv > 0 ? 'ws' + mv + ':' + (mx / 10).toFixed(1) : NB;
-    p.mc.ta.textContent = NB; p.mc.xc.textContent = NB;
-    p.mc.className = (blk ? 'mn' : 'w') + ' sx';
+    //   HIS 1117: mnr1's three bytes then mnr2's, both before the side. ws{TF} on the top line and the
+    //   line's closed-prev value under it
+    for (let k = 0; k < p.mcs.length; k++) {
+      const b0 = o + NS - 1 - 3 * (p.mcs.length - k);
+      const mv = blk ? blk[b0] : 0, mx = blk ? ((blk[b0 + 2] << 8) | (blk[b0 + 1] & 255)) : 0;
+      const m = p.mcs[k];
+      m.n.textContent = !blk ? '·' : mv > 0 ? 'ws' + mv : NB;
+      m.ta.textContent = (blk && mv > 0) ? (mx / 10).toFixed(1) : NB;
+      m.xc.textContent = NB;
+      m.className = (blk ? 'mn' : 'w') + (k === 0 ? ' sx' : '');
+    }
     //   HIS 1115 SL%: the mean abs price % of the gcws15b legs (final oob -> ib to final oob -> ib) ending in the last
     //   6 h, x 100 in two bytes; blank where there is none
     const sl = blk ? ((blk[o + NS - 5] << 8) | (blk[o + NS - 6] & 255)) : 0;
@@ -851,7 +874,10 @@ function draw() {
         d.n.textContent = UDW[ud & 3] + ' | ' + UDW[(ud >> 2) & 3];
         const s = blk[o + NC + c];      // HIS 1109: TO or AW below the number, bold
         //   HIS 1110: a -1 / +1 on an AW line (code 2 AW(inf), 4 AW(exf)) prints its background at 55% opaque
-        d.className = (v === -1 ? 'm' : v === 1 ? 'p' : 'zr') + (v !== 0 && (s === 2 || s === 4) ? ' a' : '');
+        //   HIS 1117: *"drop the rpred coloring for all but the 2 combined columns (ws16-22 and
+        //   ws23-30)"*. A ws line cell carries no red, green or grey now, and the 55% AW background
+        //   went with it - that class only ever shaded the red and the green
+        d.className = '';
         d.ta.textContent = ['', 'TO(inf)', 'AW(inf)', 'TO(exf)', 'AW(exf)'][s] || NB;   // HIS 1109 (inf) / (exf)
         //   HIS 1110: crossovers on a LOW target-side, crossunders on HIGH; X and E on one ws1 bar join, 4 spaces apart
         const xc = blk[o + NC + NL + 2 * (NC - NL) + c];
@@ -918,16 +944,17 @@ async function init() {
   meta = await (await fetch('meta')).json();
   NL = meta.lines.length; NC = NL + meta.sums.length; NS = meta.stride; UD0 = meta.updn;
   const hd = document.getElementById('hd');
-  for (const h of ['ws1 time (UTC)', 'SL%'].concat(meta.lines, [meta.mnr], meta.sums)) { const d = document.createElement('div'); d.textContent = h; hd.appendChild(d); }
+  for (const h of ['ws1 time (UTC)', 'SL%'].concat(meta.lines, meta.mnrs, meta.sums)) { const d = document.createElement('div'); d.textContent = h; hd.appendChild(d); }
   hd.children[NL + 2].className = 'sx'; hd.children[NL + 3].className = 'sx';
   body.style.height = (meta.rows * RH) + 'px';
   //   HIS 1111: no sideways bar. The lines stay CW; the time column takes what is left, then M-no-rev and the
   //   sums give way together
   //   HIS 1115 *"keep the table's existing columns at their current width, ie don't attempt to fill the lost column space"*:
   //   the box narrows by the two dropped columns, less the SL% column
-  const inner = box.firstElementChild, tw = TW + SLW + (NC + 1) * CW;
-  inner.style.setProperty('--gt', 'minmax(' + TMIN + 'px,1fr) ' + SLW + 'px repeat(' + NL + ',' + CW + 'px) minmax(' + MMIN + 'px,' +
-                          CW + 'px) repeat(' + (NC - NL) + ',minmax(' + SMIN + 'px,' + CW + 'px))');
+  //   HIS 1117: the one wide M-no-rev column becomes two skinny ones
+  const inner = box.firstElementChild, tw = TW + SLW + NC * CW + meta.mnrs.length * MNRW;
+  inner.style.setProperty('--gt', 'minmax(' + TMIN + 'px,1fr) ' + SLW + 'px repeat(' + NL + ',' + CW + 'px) repeat(' +
+                          meta.mnrs.length + ',' + MNRW + 'px) repeat(' + (NC - NL) + ',minmax(' + SMIN + 'px,' + CW + 'px))');
   //   after the body's height, so the vertical scrollbar is in the box's width
   document.querySelector('.wrap').style.maxWidth = (tw + box.offsetWidth - box.clientWidth + 32) + 'px';
   buildCal();
@@ -996,16 +1023,23 @@ if __name__ == '__main__':
     print('%s flips into TO(exf) (white TO(exf) text): %d, other columns marked %d'
           % (FLIP_TOX, int((_xc[:, _j] & 8).astype(bool).sum()), int((_xc & 8).astype(bool).sum() - (_xc[:, _j] & 8).astype(bool).sum())))
     _rp = RP[:, :len(LINES)]
-    print('r-pred -1/+1 cells on an AW line (55%% background): %d of %d flagged, all %d columns'
+    #   HIS 1117 dropped the r-pred colour from the line cells, so this no longer describes a
+    #   background the page draws - it stays as the 1110 measurement of the same cells
+    print('r-pred -1/+1 cells on an AW line (the 1110 measurement): %d of %d flagged, all %d columns'
           % (int(((_rp != 0) & ((TAC == 2) | (TAC == 4))).sum()), int((_rp != 0).sum()), len(LINES)))
-    _mn = RP[:, STRIDE - 4].astype(int)
-    _mv = (RP[:, STRIDE - 2].astype(int) << 8) | (RP[:, STRIDE - 3].astype(int) & 255)
+    #   HIS 1117 two columns: mnr1's bytes sit at STRIDE-7..-5 and mnr2's at STRIDE-4..-2
+    _MNR = [(RP[:, STRIDE - 1 - 3 * (len(MNR_TOPS) - k)].astype(int),
+             (RP[:, STRIDE - 1 - 3 * (len(MNR_TOPS) - k) + 2].astype(int) << 8)
+             | (RP[:, STRIDE - 1 - 3 * (len(MNR_TOPS) - k) + 1].astype(int) & 255))
+            for k in range(len(MNR_TOPS))]
     for k, (label, _) in enumerate(SUMS):
         _ex = RP[:, 3 * len(LINES) + 3 * len(SUMS) + k].astype(int)
         print('%s: rows printing TO(exf) %d of %d, most lines reading TO(exf) on one row %d'
               % (label, int((_ex > 0).sum()), len(_ex), int(_ex.max())))
-    print('M-no-rev (ws1..ws%dMage): rows printing a TF %d of %d, highest TF printed %d, value %.1f .. %.1f'
-          % (MNR_TOP, int((_mn > 0).sum()), len(_mn), int(_mn.max()), _mv[_mn > 0].min() / 10, _mv[_mn > 0].max() / 10))
+    for _lab, _top, (_mn, _mv) in zip(MNR_LABELS, MNR_TOPS, _MNR):
+        print('%s (ws%d..ws%dMage): rows printing a TF %d of %d, highest TF printed %d, value %.1f .. %.1f'
+              % (_lab, MNR_LO, _top, int((_mn > 0).sum()), len(_mn), int(_mn.max()),
+                 _mv[_mn > 0].min() / 10, _mv[_mn > 0].max() / 10))
     print('fence: %d/%d, locked (HIS 1115)' % (FNC, 100 - FNC))
     for (_fl, _alo, _ahi), _m in MATS.items():
         if (_fl, _alo, _ahi) == (0, 0, 0):
