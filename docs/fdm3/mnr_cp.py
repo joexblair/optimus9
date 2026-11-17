@@ -108,12 +108,14 @@ def qualifies(t, sd):
     rw = np.asarray(JIG.lift_off(em, sd, K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL, K.LIFT_WOB), int)
     st = np.sort(np.asarray([K.lift_stamp(int(b)) for b in rw], int))
     #   the only bars the closed-prev series steps on, and whether that step is more extreme
-    seam = np.zeros(ln.N, bool)
-    seam[np.asarray(CP.seam_bars(t * 60), int)] = True
+    #   A CLOSED-PREV SERIES STEPS ONE BAR AFTER ITS SEAM - seam_bars names the last 5 s bar of a
+    #   completed bucket and the new value lands on the bar after it. Reading the step ON the seam
+    #   compares a value with itself and the resume never fires, which is what it did until 1117.
     step = np.zeros(ln.N, bool)
     with np.errstate(invalid='ignore'):
+        changed = cp[1:] != cp[:-1]
         more = (cp[1:] > cp[:-1]) if sd > 0 else (cp[1:] < cp[:-1])
-    step[1:] = seam[1:] & more
+    step[1:] = changed & more
     u = np.zeros(ln.N, bool)
     res = []
     n, i = len(st), 0

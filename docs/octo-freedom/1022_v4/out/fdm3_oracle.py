@@ -369,14 +369,24 @@ def m_no_rev(sps, prt):
                 un = (oob & (last < cross))[prt]
             else:
                 #   HIS 1117: the bars cp steps on, and whether the step is more extreme on this side
+                #   A CLOSED-PREV SERIES STEPS ONE BAR AFTER ITS SEAM: seam_bars names the last 5 s
+                #   bar of a completed bucket and the new value lands on the bar after it. So the
+                #   comparison is simply "this bar's value against the one it replaced", and the
+                #   assert holds it to CP's own seams rather than trusting that reading.
                 if t not in seam_of:
                     m = np.zeros(ln.N, bool)
-                    m[np.asarray(CP.seam_bars(t * 60), int)] = True
-                    seam_of[t] = m
+                    m[np.asarray(CP.seam_bars(t * 60), int) + 1] = True
+                    seam_of[t] = m[:ln.N]
                 step = np.zeros(ln.N, bool)
                 with np.errstate(invalid='ignore'):
+                    changed = cp[1:] != cp[:-1]
                     more = (cp[1:] > cp[:-1]) if sd > 0 else (cp[1:] < cp[:-1])
-                step[1:] = seam_of[t][1:] & more
+                step[1:] = changed & more
+                #   A RESUME CAN ONLY LAND ON THE SEAM GRID. A closed-prev value also "changes"
+                #   where the line warms up out of NaN, but a NaN comparison is False on both sides,
+                #   so `more` cannot fire there - measured: every off-grid change on ws1, ws5, ws9,
+                #   ws15 and ws25 has a non-finite value on one side, 0 with both finite.
+                assert not (step & ~seam_of[t]).any(), 'a resume landed off the closed-prev seams'
                 un = mnr_reset(cp, oob, cross, st, step, sd)[prt]
             for r, sp in zip(res, sps):
                 q = (sp == sd) & un
