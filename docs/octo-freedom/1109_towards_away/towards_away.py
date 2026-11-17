@@ -89,6 +89,14 @@ ta_knobs; all of them off is the bank before it, exactly (spec section 12).
                   extremum is the latest natural lift-off pivot stamped inside the hunt before the earlier one;
                   in-fence, not void, the under-lines test or the row rule; AW from the later cross (XE_PATH).
 
+THE 1115 fdm3-fence-reset-TO, HIS *"I want to simply swap the static 50 'line' with a (100 -
+{knob:33,`fdm3-fence-reset-TO`}) 33/67 fence"* / *"if the line continues through the fence entirely (eg travels from 90
+to 30, then back to 80) the same logic applies: the r will be tagged TO when r crosses over 67"*. run's `rst`, None =
+the banked 50 line; the fdm3-oracle test page passes 33.0. The flip at 50, the 50 reset and void all read the fence's
+target-side line (line50): 67 on a HIGH target-side, 33 on a LOW one - his *"Q1: move them to the fence"*, the same line
+as the flip. His 1110 answers stay (*"Q4: the question's answers stay the same"*): emerging r, an AW that starts in or
+beyond the fence already counts, the extremum retired after the flip.
+
 MINE, each one flagged here and in the report:
     - an extremum is superseded by going STRICTLY past it (knob SUPERSEDE 'strict'). Equal is not past: under
       9B the second sample can be the stored extremum itself, and 'inclusive' would end the AW on the bar it starts.
@@ -215,24 +223,26 @@ def vote(v, side, fnc=None):
     return (np.asarray(v, float) >= e) if int(side) > 0 else (np.asarray(v, float) <= e)
 
 
-def lift_extrema(LN, t, side):
-    """Lift-off's NATURAL target-side reversals on the emerging r. -> (stamps, pivots, values), stamp-ascending."""
-    lp = JIG.lift_off_pivot(LN['EMR'][t], side, K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL, K.LIFT_WOB)
+def lift_extrema(LN, t, side, a=False):
+    """Lift-off's NATURAL target-side reversals on the emerging r. -> (stamps, pivots, values), stamp-ascending.
+    `a` HIS 1115 "A" (jig.at_extreme `line_extreme`): the window extreme off every bar of the span. Default off."""
+    lp = JIG.lift_off_pivot(LN['EMR'][t], side, K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL, K.LIFT_WOB, line_extreme=a)
     lb = sorted(lp)
     st = np.asarray([K.lift_stamp(int(b)) for b in lb], int)
     pv = np.asarray([lp[b] for b in lb], int)
     return st, pv, LN['EMR'][t][pv] if len(pv) else np.zeros(0)
 
 
-def lift_extrema_e(LN, t, side):
+def lift_extrema_e(LN, t, side, a=False):
     """Lift-off's e-CROSS reversals (his 1110 update) on the emerging r. -> (stamps, pivots, values).
 
     The pivot is his walk-back bar, so the value is *"the ws{TF}r value at that time"*. Empty when the
-    lift-off e path is switched off (v4_lift_e LIFT_E_ON 0).
+    lift-off e path is switched off (v4_lift_e LIFT_E_ON 0). `a` as lift_extrema: with HIS 1115 "A" on, the natural
+    reversals the e path reads are A's - his *"1 and 2: agreed"*.
     """
     ep = LE.get(t, len(LN['EMR'][t]), side)
     ev = [] if ep is None else JIG.lift_off_e(LN['EMR'][t], side, K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL,
-                                             K.LIFT_WOB, ep)
+                                             K.LIFT_WOB, ep, line_extreme=a)
     st = np.asarray([x[0] for x in ev], int)
     pv = np.asarray([x[1] for x in ev], int)
     return st, pv, LN['EMR'][t][pv] if len(pv) else np.zeros(0)
@@ -252,13 +262,25 @@ def first_past(r, a, z, x, side):
     return a + int(g[0]) if g.size else z
 
 
-def first_back50(r50, a, z, side):
+def line50(side, rst=None):
+    """The line the flip at 50, the 50 reset and void read on `side`. -> r-points. `rst` None is the banked
+    FLIP50_LEVEL. HIS 1115 fdm3-fence-reset-TO: *"I want to simply swap the static 50 'line' with a (100 -
+    {knob:33,`fdm3-fence-reset-TO`}) 33/67 fence"* - the page passes 33.0, and all three read the fence's target-side
+    line, 67 on a HIGH target-side and 33 on a LOW one (his answers: *"Q1: move them to the fence"*, the same line as
+    the flip; *"Q2: In the test it reads AW, because only a cross back over 67 gives TO."*)."""
+    if rst is None:
+        return TK.FLIP50_LEVEL
+    return 100.0 - float(rst) if int(side) > 0 else float(rst)
+
+
+def first_back50(r50, a, z, side, lv=None):
     """HIS 1110 FLIP AT 50: the first bar in [a, z) where r is back on the target side of FLIP50_LEVEL after a bar
     on the far side (above it on a LOW target-side, below it on a HIGH one), else z. A far-side bar at `a` itself
-    counts - his answer, an AW that starts on the far side already counts. Strict both ways. z when FLIP50 is 0."""
+    counts - his answer, an AW that starts on the far side already counts. Strict both ways. z when FLIP50 is 0.
+    `lv` the line50 to read, FLIP50_LEVEL when None."""
     if not TK.FLIP50:
         return z
-    seg, lv = r50[a:z], TK.FLIP50_LEVEL
+    seg, lv = r50[a:z], TK.FLIP50_LEVEL if lv is None else lv
     with np.errstate(invalid='ignore'):
         f = np.flatnonzero(seg > lv if side < 0 else seg < lv)
         if not f.size:
@@ -267,7 +289,7 @@ def first_back50(r50, a, z, side):
     return a + int(f[0]) + 1 + int(g[0]) if g.size else z
 
 
-def hunts(r50, o, c, s):
+def hunts(r50, o, c, s, lv=None):
     """HIS 1112 THE 50 RESET: the trade's hunts. -> [(start, end)], bar order.
 
     A pass is a bar strictly on the counter side of FLIP50_LEVEL (under it on a HIGH target-side) whose bar before is
@@ -275,10 +297,11 @@ def hunts(r50, o, c, s):
     side after it starts a fresh hunt - his *"so it starts hunting for an infence extremum while its trying to reach
     exfence"*. The bars between are no hunt. The trade's open always starts the first hunt, wherever r is - his
     *"the mech says that all lines are reset to TO when a trade opens"*. One hunt, [o, c), when RESET50 is 0.
+    `lv` the line50 to read, FLIP50_LEVEL when None.
     """
     if not TK.RESET50:
         return [(o, c)]
-    lv = TK.FLIP50_LEVEL
+    lv = TK.FLIP50_LEVEL if lv is None else lv
     seg = r50[o:c]
     with np.errstate(invalid='ignore'):
         far = (seg > lv) if s < 0 else (seg < lv)
@@ -323,12 +346,13 @@ def excursion_peak(line, runs, a, b, side):
     return st + int(np.nanargmax(seg) if side > 0 else np.nanargmin(seg))
 
 
-def void50(v, side):
+def void50(v, side, lv=None):
     """HIS 1112 *"values from the counter side of 50 are void"*: strictly on the counter side of FLIP50_LEVEL. -> bool.
-    Never void when VOID50 is 0."""
+    Never void when VOID50 is 0. `lv` the line50 to read, FLIP50_LEVEL when None."""
     if not TK.VOID50 or not np.isfinite(v):
         return False
-    return v < TK.FLIP50_LEVEL if side > 0 else v > TK.FLIP50_LEVEL
+    lv = TK.FLIP50_LEVEL if lv is None else lv
+    return v < lv if side > 0 else v > lv
 
 
 def row_rule(LN):
@@ -366,12 +390,20 @@ def row_rule(LN):
     return ask
 
 
-def run(LN, trades, fnc=None):
+def run(LN, trades, fnc=None, a_tfs=(), rst=None):
     """The mech over the whole tape. -> (STATE {tf: int8 array}, detail).
 
     `fnc` None reads the banked 20/80 fence everywhere ex-20/80 / in-fence is read: the reach, the scenario-1 vote, the
     pair's in-fence samples and the x/e path's in-fence extremum. HIS 1113 *"build a button that shows the data based
     on a 23/77 fence"*: the web UI passes 23.0 and every one of those reads moves to 23/77 together.
+
+    `a_tfs` HIS 1115 "A", *"in way that I can control it"*: the TFs whose lift-off reads (natural and e-cross) take the
+    window extreme off every bar of the span. Empty by default - the banked run. The fdm3-oracle page passes ws1..ws6
+    and/or ws7..ws15 from its two A buttons. A line with A on also moves the scenario-2 test of the lines above it
+    (the 5 lines under them), as any change to a line's AW does.
+
+    `rst` HIS 1115 fdm3-fence-reset-TO (line50): None is the banked 50 line for the flip at 50, the 50 reset and void.
+    The fdm3-oracle test page passes 33.0, and all three read the 33/67 fence's target-side line - 67 HIGH, 33 LOW.
 
     detail['reach'][t][k]   the bar ws{t}r first reached ex-20/80 in trade k, or the trade's close if it never did
     detail['hunts'][t][k]   HIS 1112 the trade's hunts: [(start, end, reach)] - reach is None when the hunt ended
@@ -385,18 +417,21 @@ def run(LN, trades, fnc=None):
     det = {k: {t: {} for t in TFS} for k in ('reach', 'hunts', 's1', 'samples', 's2')}
     det['ties'] = 0
     EXF = {(t, s): exf_mask(LN, t, s, fnc) for t in TFS for s in (-1, +1)}
-    LIFT = {(t, s): lift_extrema(LN, t, s) for t in TFS for s in (-1, +1)}
-    LIFTE = {(t, s): lift_extrema_e(LN, t, s) for t in TFS for s in (-1, +1)}
+    LV = {s: line50(s, rst) for s in (-1, +1)}                     # HIS 1115 the line the three 50 reads use
+    A = {int(t) for t in a_tfs}
+    assert A <= set(TFS), ('an A TF has no towards/away state', sorted(A - set(TFS)))
+    LIFT = {(t, s): lift_extrema(LN, t, s, t in A) for t in TFS for s in (-1, +1)}
+    LIFTE = {(t, s): lift_extrema_e(LN, t, s, t in A) for t in TFS for s in (-1, +1)}
     ROW = row_rule(LN)
     more = lambda v, x, s: (v > x) if s > 0 else (v < x)          # v more extreme than x on side s
     #   scenario 1, every line first - scenario 2 reads the lines under it
     for t in TFS:
         r, r50 = LN['EMR'][t], LN[R50][t]
-        end = lambda a, z, x, s: min(first_past(r, a, z, x, s), first_back50(r50, a, z, s))
+        end = lambda a, z, x, s: min(first_past(r, a, z, x, s), first_back50(r50, a, z, s, LV[s]))
         for k, (o, c, s) in enumerate(trades):
             #   HIS 1112 THE 50 RESET: each hunt has its own ex-20/80 reach; a pass to the counter side nulls it
             H = []
-            for a, z in hunts(r50, o, c, s):
+            for a, z in hunts(r50, o, c, s, LV[s]):
                 f = np.flatnonzero(EXF[(t, s)][a:z])
                 H.append((a, z, a + int(f[0]) if f.size else None))
             det['hunts'][t][k] = H
@@ -471,7 +506,7 @@ def run(LN, trades, fnc=None):
                             else:
                                 w = JIG.e_walk_back(line, b, s, TK.E_STEP)
                             v = float(r[w]) if w is not None else float('nan')
-                            hs.append((int(b), v, '+'.join(race[n][0] for n in hit), w, lab, hi, void50(v, s)))
+                            hs.append((int(b), v, '+'.join(race[n][0] for n in hit), w, lab, hi, void50(v, s, LV[s])))
                     hs.sort(key=lambda x: (x[0], x[4] != 'X'))
                     smp += hs
                     #   the pairs: each valid sample with the last valid one before it in this hunt (void skipped)
@@ -507,7 +542,7 @@ def run(LN, trades, fnc=None):
                             if i < 0 or lst[i] < ha:
                                 continue
                             v = float(lval[i])
-                            if not np.isfinite(v) or vote(v, s, fnc) or void50(v, s):
+                            if not np.isfinite(v) or vote(v, s, fnc) or void50(v, s, LV[s]):
                                 continue
                             good, aw, rw = under_test(b2)
                             if good:
@@ -520,7 +555,7 @@ def run(LN, trades, fnc=None):
                 rows = []
                 for i, g in enumerate(trig):
                     nxt = min(trig[i + 1][0] if i + 1 < len(trig) else c, lim[g[5]])
-                    z = min(first_past(r, g[0], nxt, g[1], s), first_back50(r50, g[0], nxt, s))
+                    z = min(first_past(r, g[0], nxt, g[1], s), first_back50(r50, g[0], nxt, s, LV[s]))
                     AW2[g[0]:z] = True
                     rows.append((g[0], g[1], g[2], z, g[3], g[4]))
                 det['s2'][t][k] = rows
@@ -535,8 +570,9 @@ def run(LN, trades, fnc=None):
         STATE[t] = st
     return STATE, det
 
-def build():
-    """-> (LN, pivots, trades, STATE, detail), with the controls run."""
+def build(fnc=None, a_tfs=(), rst=None):
+    """-> (LN, pivots, trades, STATE, detail), with the controls run. `fnc`, `a_tfs` and `rst` as run: the banked run
+    when none is given; HIS 1115 the fdm3-oracle page builds its first state here."""
     LN = load()
     piv, trades = pseudo_trades()
     rng = np.random.default_rng(1109)            # CONTROL: the vectorised reader against v4_fdm2's own
@@ -545,7 +581,7 @@ def build():
             m = exf_mask(LN, t, s)
             for b in rng.integers(0, ln.N, 400):
                 assert bool(m[b]) == F2.ex2080_line(LN, t, int(b), s), ('ex-20/80 reader differs', t, s, b)
-    STATE, det = run(LN, trades)
+    STATE, det = run(LN, trades, fnc, a_tfs, rst)
     return LN, piv, trades, STATE, det
 
 

@@ -3317,7 +3317,15 @@ def wsf_facing_dr(mages, hi, lo):
 #
 # NOTHING IS DEFAULTED. `pts`, `gap` and `tol` are the caller's. Joe 1022: *"the sample gaps should
 # be TF adjusted"*, and no gap is banked - on ws5r, gaps 5 to 11 bars all land his four targets.
-def at_extreme(r, k, side, pts, gap, tol):
+#   HIS 1115 "A", `line_extreme`: *"the sampling needs to be supplemented by the actual line's behaviour"*. On ws5r
+#   2026-09-20 the line printed 2.75 at 10:21:00 between two samples, so the window LOW never held it: at 10:22:00 the
+#   samples read 13.34, 12.73, 12.38, 9.47, 4.06, 3.70 and 3.70 counted as the low. With `line_extreme` True the
+#   window extreme is read off EVERY bar of the same span, [k - (pts-1) x gap, k] - the six samples are not moved, the
+#   line only supplies the extreme they skipped. The newest value is still the bar's own, the hold and the pivot rule
+#   are unchanged. HIS 1115 *"I want to try A first, but in way that I can control it"*: OFF BY DEFAULT, so every
+#   caller that does not ask for it is the 1022 producer exactly. MINE: with it on, every bar of the span must be
+#   finite (the samples-only read needs the six samples finite).
+def at_extreme(r, k, side, pts, gap, tol, line_extreme=False):
     """[PRODUCER - Joe 1022] Is the line within `tol` of its window extreme at bar k. -> dist, None.
 
         r     the line on the 5 s grid
@@ -3326,6 +3334,7 @@ def at_extreme(r, k, side, pts, gap, tol):
         pts   samples in the window
         gap   bars between samples
         tol   how far off the extreme the line may be, in r-points
+        line_extreme  HIS 1115 "A": the extreme off every bar of the span, not only the samples. Default off
 
     -> the distance from the extreme in r-points when the state HOLDS, else None. 0.0 means the
     newest sample IS the window extreme, so `None` and `0.0` are different answers - test `is None`.
@@ -3334,24 +3343,37 @@ def at_extreme(r, k, side, pts, gap, tol):
     lo = k - (pts - 1) * gap
     if lo < 0:
         return None
-    w = np.asarray(r[lo:k + 1:gap], float)
-    if len(w) < pts or not np.isfinite(w).all():
+    w = np.asarray(r[lo:k + 1] if line_extreme else r[lo:k + 1:gap], float)
+    if len(w) < (k + 1 - lo if line_extreme else pts) or not np.isfinite(w).all():
         return None
     now = float(w[-1])
     dist = (float(w.max()) - now) if int(side) > 0 else (now - float(w.min()))
     return dist if dist <= float(tol) else None
 
 
-def at_extreme_mask(r, side, pts, gap, tol):
+def at_extreme_mask(r, side, pts, gap, tol, line_extreme=False):
     """[PRODUCER - Joe 1022] at_extreme asked at EVERY bar, in one pass. -> bool array.
 
     Mirrors stall_mask's contract: one value per grid bar, False where the lattice does not fit.
+    `line_extreme` as at_extreme: HIS 1115 "A", default off.
     """
     r = np.asarray(r, float)
     pts, gap = max(2, int(pts)), max(1, int(gap))
     span = (pts - 1) * gap
     out = np.zeros(len(r), bool)
     if len(r) <= span:
+        return out
+    if line_extreme:
+        w = np.lib.stride_tricks.sliding_window_view(r, span + 1)    # row j is bars [j, j + span], newest last
+        bad = np.concatenate([[0], np.cumsum(~np.isfinite(r))])
+        ok = (bad[span + 1:] - bad[:-span - 1]) == 0
+        dist = np.full(len(w), np.inf)
+        if ok.any():
+            now = r[span:]
+            with np.errstate(invalid='ignore'):
+                ext = w.max(axis=1) if int(side) > 0 else w.min(axis=1)
+            dist[ok] = ((ext - now) if int(side) > 0 else (now - ext))[ok]
+        out[span:] = ok & (dist <= float(tol))
         return out
     idx = np.arange(span, len(r))[:, None] - (np.arange(pts - 1, -1, -1) * gap)[None, :]
     w = r[idx]
@@ -3390,7 +3412,7 @@ def cp_reversal_pivot(cp, side):
     return out
 
 
-def lift_off(r, side, pts, gap, tol, wob, e_path=None):
+def lift_off(r, side, pts, gap, tol, wob, e_path=None, line_extreme=False):
     """[PRODUCER - Joe 1022] THE LIFT-OFF BARS: where at_extreme stops holding. -> int array.
 
     `e_path`  OPTIONAL, HIS 1110 e-cross reversals (lift_off_e). None is the 1022 producer exactly.
@@ -3412,8 +3434,12 @@ def lift_off(r, side, pts, gap, tol, wob, e_path=None):
     and the two differ by 35 s at wob 8.
 
     NOTHING IS DEFAULTED, here or in at_extreme. pts, gap, tol and wob are all the caller's.
+
+    `line_extreme`  HIS 1115 "A" (at_extreme): the window extreme off every bar of the span. Default off. It
+              reaches the e path too - HIS 1115 *"1 and 2: agreed"*: an e-cross reversal on a line with A on
+              reads A's natural reversals.
     """
-    m = at_extreme_mask(r, side, pts, gap, tol)
+    m = at_extreme_mask(r, side, pts, gap, tol, line_extreme)
     wob = max(1, int(wob))
     if not m.any():
         return np.zeros(0, int)
@@ -3423,12 +3449,12 @@ def lift_off(r, side, pts, gap, tol, wob, e_path=None):
     keep = [int(b) for b in off if b + wob <= len(m) and not m[b:b + wob].any()]
     assert all(b + wob - 1 < len(m) for b in keep), 'a lift-off hold ran past the tape'
     if e_path is not None:
-        ev = lift_off_e(r, side, pts, gap, tol, wob, e_path)
+        ev = lift_off_e(r, side, pts, gap, tol, wob, e_path, line_extreme)
         keep = sorted(set(keep) | {int(st) - (wob - 1) for st, _, _ in ev})
     return np.asarray(keep, int)
 
 
-def lift_off_pivot(r, side, pts, gap, tol, wob, e_path=None):
+def lift_off_pivot(r, side, pts, gap, tol, wob, e_path=None, line_extreme=False):
     """[PRODUCER - Joe 1105] THE PIVOT THAT CREATED EACH LIFT-OFF REVERSAL. -> {lift bar: pivot}.
 
     `e_path`  OPTIONAL, as lift_off's. An e reversal's key is its raw bar stamp - (wob - 1) and its
@@ -3446,10 +3472,12 @@ def lift_off_pivot(r, side, pts, gap, tol, wob, e_path=None):
 
     The returned bar is always at or before its own lift-off bar, asserted, so nothing after the
     reversal is read. Keys are lift-off BARS, not stamps; the caller adds the wob as always.
+
+    `line_extreme` as lift_off: HIS 1115 "A", default off. The pivot rule is the same with it on.
     """
     r = np.asarray(r, float)
-    m = at_extreme_mask(r, side, pts, gap, tol)
-    offs = lift_off(r, side, pts, gap, tol, wob)
+    m = at_extreme_mask(r, side, pts, gap, tol, line_extreme)
+    offs = lift_off(r, side, pts, gap, tol, wob, line_extreme=line_extreme)
     out = {}
     for b in offs:
         b = int(b)
@@ -3468,7 +3496,7 @@ def lift_off_pivot(r, side, pts, gap, tol, wob, e_path=None):
         assert pv <= b, 'a lift-off pivot is after its own lift-off bar'
         out[b] = pv
     if e_path is not None:
-        for st, w, _ in lift_off_e(r, side, pts, gap, tol, wob, e_path):
+        for st, w, _ in lift_off_e(r, side, pts, gap, tol, wob, e_path, line_extreme):
             out.setdefault(int(st) - (int(wob) - 1), int(w))
     return out
 
@@ -3548,7 +3576,7 @@ def e_walk_back(e, bar, side, step):
     return None if res is None else int(res[0])
 
 
-def lift_off_e(r, side, pts, gap, tol, wob, e_path):
+def lift_off_e(r, side, pts, gap, tol, wob, e_path, line_extreme=False):
     """[PRODUCER - Joe 1110] THE e-CROSS REVERSALS on one r line. -> [(stamp, pivot, cross)], stamp-ascending.
 
       r         the r line lift-off reads (the caller's own read)
@@ -3574,19 +3602,23 @@ def lift_off_e(r, side, pts, gap, tol, wob, e_path):
 
     MEMOISED per process on the BYTES of r and e plus every parameter: lift_off and lift_off_pivot both
     ask for the same answer, and one line-side costs ~1.8 s on the 1,632,960-bar tape.
+
+    `line_extreme`  HIS 1115 "A": the natural reversals this reads (gate 2, and the wait's end) are lift_off's with
+              A on - his *"1 and 2: agreed"*. Default off. It is in the memo key.
     """
     import hashlib
     r = np.asarray(r, float)
     e = np.asarray(e_path['e'], float)
     dg = lambda a: hashlib.blake2b(np.ascontiguousarray(a, float).tobytes(), digest_size=12).hexdigest()
     mk = (dg(r), dg(e), tuple((nm, dg(X)) for nm, X in e_path['race']), int(side), int(pts), int(gap),
-          float(tol), int(wob), int(e_path['step']), float(e_path['min_less']))
+          float(tol), int(wob), int(e_path['step']), float(e_path['min_less']), bool(line_extreme))
     if mk in _LOE:
         return list(_LOE[mk])
     assert len(r) == len(e), 'the e path is not on the r line\'s grid (%d against %d bars)' % (len(r), len(e))
     side, pts, gap, wob = int(side), max(2, int(pts)), max(1, int(gap)), max(1, int(wob))
     step, ml = int(e_path['step']), float(e_path['min_less'])
-    nat = np.asarray(sorted(int(b) + wob - 1 for b in lift_off(r, side, pts, gap, tol, wob)), int)
+    nat = np.asarray(sorted(int(b) + wob - 1 for b in lift_off(r, side, pts, gap, tol, wob,
+                                                               line_extreme=line_extreme)), int)
     wins = [c for c, _ in e_race_wins(e, e_path['race'], side)]
     span = (pts - 1) * gap
     out, est = [], []

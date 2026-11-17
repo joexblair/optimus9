@@ -275,6 +275,16 @@ A_BANDS = (('ws1-ws6', tuple(range(1, 7))), ('ws7-ws15', tuple(range(7, 16))))  
 #   HIS 1117: *"bank A ws1-ws6 and make it the machine - that will reduce the build time"*. A is no
 #   longer switchable: ws1..ws6 is on, ws7..ws15 off, one A state instead of four.
 A_LOCK = (1, 0)                 # A ws1-ws6 on, A ws7-ws15 off - BANKED, not a button
+#   HIS 1117: *"The 33/67 reset is your workmate's work, uncommitted" / "take ownership of this and
+#   build it into 8790"*. HIS 1115 SPEC: *"I want to simply swap the static 50 'line' with a
+#   (100 - {knob:33,`fdm3-fence-reset-TO`}) 33/67 fence"* / *"the mech will reset r to TO if it
+#   crosses into the fence then crosses out if the fence on the sameside as the infence incursion"* /
+#   *"if the line continues through the fence entirely (eg travels from 90 to 30, then back to 80)
+#   the same logic applies: the r will be tagged TO when r crosses over 67"*. towards_away.run takes
+#   it as `rst`: the flip at 50, the 50 reset and the void all read the fence's target-side line - 67
+#   on a HIGH target-side, 33 on a LOW one, his *"Q1: move them to the fence"*. BANKED here, no
+#   button: every page state reads it.
+FENCE_RESET_TO = 33.0           # his `fdm3-fence-reset-TO`, the smaller end of the pair
 A_TFS = [t for (_, band), on in zip(A_BANDS, A_LOCK) if on for t in band]
 #   HIS 1117: *"I need the 'pivot +15 min' button reintroduced on 8790. instead of +15, make it +30
 #   minutes"*. It was dropped in the 1115 rebuild; this is HIS 1112 button at his new value.
@@ -526,7 +536,8 @@ def build():
             code = (code | (one << bit)).astype(np.int8)
         UD.append(code)
     assert len(UD) == len(LINES) and all(0 <= int(c.min()) and int(c.max()) <= 10 for c in UD)
-    LN, piv, trades, ST, det = TA.build(FNC)        # the 23/77 run with A off: the first page state
+    #   the 23/77 run with A ws1-ws6 on and the 33/67 reset: the first page state
+    LN, piv, trades, ST, det = TA.build(FNC, A_TFS, FENCE_RESET_TO)
     print('towards/away: %d ws2Mage pivots, %d pseudo trades, first opens %s'
           % (len(piv), len(trades), ln.U(trades[0][0])))
     #   HIS 1110 CROSS ROW: the e and x race wins per side over the whole tape, each put on the row of the ws1 bar it
@@ -562,7 +573,8 @@ def build():
         for fl in FLIPS:
             tr = [(o + k, min(c + k, ln.N), -s if fl else s) for o, c, s in trades if o + k < ln.N]
             t1 = time.time()
-            STATES.append((off, fl, ST if not off and not fl else TA.run(LN, tr, FNC, A_TFS)[0]))
+            STATES.append((off, fl, ST if not off and not fl
+                           else TA.run(LN, tr, FNC, A_TFS, FENCE_RESET_TO)[0]))
             print('state pivots +%d min, flip %d: %d pseudo trades, first opens %s, %.1f s'
                   % (off, fl, len(tr), ln.U(tr[0][0]), time.time() - t1))
             side = np.zeros(ln.N, np.int8)
@@ -649,7 +661,7 @@ META = json.dumps({
     'lines': LINES, 'mnr': MNR_LABELS[0], 'sums': [s for s, _ in SUMS], 'stride': STRIDE, 'rows': int(len(OPEN)), 't0': int(OPEN[0]), 'step': 60000,
     'days': DAYS, 'fence': FNC, 'abands': [b for b, _ in A_BANDS], 'flips': list(FLIPS),
     'mnrs': list(MNR_LABELS), 'mnrtops': list(MNR_TOPS),
-    'shift': PIV_SHIFT, 'alock': list(A_LOCK),
+    'shift': PIV_SHIFT, 'alock': list(A_LOCK), 'reset': FENCE_RESET_TO,
     #   HIS 1116: where the up/dn block starts, so a reader is told rather than re-deriving the layout
     'updn': len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)})
 
@@ -1067,7 +1079,8 @@ if __name__ == '__main__':
         print('%s (ws%d..ws%dMage): rows printing a TF %d of %d, highest TF printed %d, value %.1f .. %.1f'
               % (_lab, MNR_LO, _top, int((_mn > 0).sum()), len(_mn), int(_mn.max()),
                  _mv[_mn > 0].min() / 10, _mv[_mn > 0].max() / 10))
-    print('fence: %d/%d, locked (HIS 1115)' % (FNC, 100 - FNC))
+    print('fence: %d/%d, locked (HIS 1115). fence reset TO: %g/%g, banked (HIS 1117)'
+          % (FNC, 100 - FNC, FENCE_RESET_TO, 100 - FENCE_RESET_TO))
     for (_off, _fl), _m in MATS.items():
         if (_off, _fl) == (0, 0):
             continue
