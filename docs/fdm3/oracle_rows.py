@@ -82,12 +82,14 @@ O_SIDE = STRIDE - 1
 #   locked at 23/77 with its button gone, the pivots +15 button gone, two new A buttons (ws1-ws6,
 #   ws7-ws15), an SL% pair of bytes before M-no-rev, and /rows now taking flip, alo and ahi. Every
 #   offset here is derived from /meta, so it followed the rebuild; this asserts the shape anyway.
-#   HIS 1116 added an up/dn block of len(LINES) bytes AFTER the TO(exf) counts, so 8788 serves a longer row than
-#   8789 until the reset page picks the change up. O_TA and O_CROSS sit before the insert and are unmoved; the side
-#   is still the last byte. Both layouts are accepted and the page says which it is.
-_BASE = len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS) + 6
-assert STRIDE in (_BASE, _BASE + len(LINES)), (STRIDE, _BASE)
-assert ('updn' in META) == (STRIDE == _BASE + len(LINES)), (STRIDE, 'updn' in META)
+#   THE ROW GREW TWICE at his 1116 and 1117: an up/dn block of len(LINES) bytes after the TO(exf) counts, then a
+#   second M-no-rev column's three bytes. O_TA and O_CROSS sit before both inserts and are unmoved, and the side is
+#   still the last byte. The stride is derived from the page's own layout rather than a list of accepted values, so
+#   a page serving any shape this reader does not expect fails by name.
+_TAIL = 3 + 3 * len(META.get('mnrtops', [1]))      # SL% as an int16, then each M-no-rev column's TF and value
+_WANT = (len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)
+         + (len(LINES) if 'updn' in META else 0) + _TAIL)
+assert STRIDE == _WANT, ('the page\'s row is not the shape this reader expects', STRIDE, _WANT)
 #   HIS 1114: *"derived from ws1 to ws15"*. gcws15 and gcws30 are in the oracle's LINES and are NOT part of
 #   either scenario's count.
 WS = [(i, int(n[2:])) for i, n in enumerate(LINES) if n.startswith('ws') and int(n[2:]) <= 15]
