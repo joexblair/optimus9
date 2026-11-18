@@ -437,10 +437,17 @@ def orac_exhaust(R):
     #   CAUSAL: a grace that walks FORWARD cannot be answered at the 3rd row, so the event fires at
     #   the bar inside the grace where highband completes, not at the 3rd row. s3 is True on THAT
     #   row and gate_row says which 3rd row opened it.
-    #   MINE, stated to him and open: the gate counts AW(any) on the 3rd row alone; the grace is the
-    #   3rd row and the rows after it up to 5 minutes, the 3rd row included; the flips are distinct
-    #   ws8..ws15 counted from the 3rd row to the bar being tested; the TO(exf) ceiling is read on
-    #   that bar. A 3rd row whose gate fails produces nothing - his spec has no ELSE.
+    #   HIS 1118 CORRECTED MECH: *"IF >=4 AWs print in lowband at the 3rd row"*. His 6 became 4
+    #   after he settled the counting - *"AW, TO, x, e prints are all per distinct TF"* - so the
+    #   count is DISTINCT ws1..ws7 reading AW(any), and his 00:08:30 reaches exactly 4 of them on
+    #   its 3rd row. The gate reads THE 3rd ROW ALONE, which is what his spec text says; the 3 row
+    #   count sits beside it in the report so the difference is a number he can look at.
+    #   His earlier *"Read the 3 rows instead ... and 00:08:30 comes back"* was aimed at recovering
+    #   that row, and dropping the gate to 4 recovers it on the 3rd row alone.
+    #   MINE, stated to him and still open: the grace is the 3rd row and the rows after it up to 5
+    #   minutes, the 3rd row included; the flips are distinct ws8..ws15 counted from the 3rd row to
+    #   the bar being tested; the TO(exf) ceiling is read on that bar. A 3rd row whose gate fails
+    #   produces nothing - his spec has no ELSE.
     high_toexf = R['toexf'][:, hi_lo:hi_hi + 1].sum(1)
     low_aw3 = R['aw'][:, 1:lo_hi + 1].sum(1)
     gate = low_aw3 >= int(FK.ORAC_LOW_AW_3RD)
@@ -792,12 +799,13 @@ def orac_file(day, a, z, R, reads, walk, V, path):
         w('#                           the other side of his OR, wants >=%d' % int(FK.ORAC_LOW_FLIPS))
         w('#   lowTOexf                ws1..ws%d reading TO(exf) ON THIS ROW - 0 on every row here' % lo_hi)
         w('#   ws1-15TOexf             the same count over ws1..ws%d, his general note\'s range' % hi_hi)
-        w('#   lowAW here              ws1..ws%d reading AW(any) ON THIS ROW - the state 3 gate,' % lo_hi)
-        w('#                           which wants >=%d' % int(FK.ORAC_LOW_AW_3RD))
+        w('#   lowAW here              distinct ws1..ws%d reading AW(any) ON THIS ROW - THE STATE 3'
+          % lo_hi)
+        w('#                           GATE, which wants >=%d' % int(FK.ORAC_LOW_AW_3RD))
         w('#   highTOexf               ws%d..ws%d reading TO(exf) ON THIS ROW' % (hi_lo, hi_hi))
         w('#   state 1 / state 2       PASS or fail')
-        w('#   gate                    the state 3 gate on this row: PASS opens a %g minute grace'
-          % float(FK.ORAC_GRACE_MIN))
+        w('#   gate                    >=%d of "lowAW here": PASS opens a %g minute grace'
+          % (int(FK.ORAC_LOW_AW_3RD), float(FK.ORAC_GRACE_MIN)))
         w('#   fired at                the bar that grace completed on, or - when it never did')
         w('#   ws1r walk               his general note\'s walk. STUB: the `ex-ws1r-mom-fence`')
         w('#                           trigger is not defined yet, so only the oob trigger starts')
@@ -832,6 +840,8 @@ def orac_file(day, a, z, R, reads, walk, V, path):
                ('state 1 + state 2', V['s1'] & V['s2']),
                ('the state 3 gate: >=%d lowband AW(any) on the 3rd row'
                 % int(FK.ORAC_LOW_AW_3RD), V['gate']),
+               ('the same gate read across the %d rows instead' % int(FK.ORAC_ROWS),
+                V['low_aw'] >= int(FK.ORAC_LOW_AW_3RD)),
                ('states 1 + 2 AND the gate - a %g minute grace opens here'
                 % float(FK.ORAC_GRACE_MIN), V['s1'] & V['s2'] & V['gate']),
                ('ORAC-EXHAUST', V['fires']),
@@ -853,9 +863,11 @@ def orac_file(day, a, z, R, reads, walk, V, path):
                 if V['s3'][j] and V['gate_row'][j] == g:
                     fired, when = 'FIRES', U(int(j))
                     break
-            gr.append([U(int(g)), sdof(g), V['low_aw3'][g], best, V['high_toexf'][g], when, fired])
-        for t in fixed_table(['the 3rd row', 'side', 'lowAW here', 'most highband flips reached',
-                              'highTOexf at the 3rd row', 'fired at', ''], gr):
+            gr.append([U(int(g)), sdof(g), V['low_aw'][g], V['low_aw3'][g], best,
+                       V['high_toexf'][g], when, fired])
+        for t in fixed_table(['the 3rd row', 'side', 'lowAW/%d' % nrow, 'lowAW here',
+                              'most highband flips reached', 'highTOexf at the 3rd row',
+                              'fired at', ''], gr):
             w(t)
         w('')
         w('## 4. EACH ORAC-EXHAUST, ITS GRACE BAR BY BAR')
@@ -977,6 +989,8 @@ def main():
                        ('state 1 + state 2', V['s1'] & V['s2']),
                        ('the state 3 gate: >=%d lowband AW(any) on the 3rd row'
                         % int(FK.ORAC_LOW_AW_3RD), V['gate']),
+                       ('the same gate read across the %d rows instead' % int(FK.ORAC_ROWS),
+                        V['low_aw'] >= int(FK.ORAC_LOW_AW_3RD)),
                        ('states 1 + 2 AND the gate - a %g minute grace opens here'
                         % float(FK.ORAC_GRACE_MIN), V['s1'] & V['s2'] & V['gate']),
                        ('state 3: highband made >=%d AW flips with <=%d TO(exf) inside the grace'

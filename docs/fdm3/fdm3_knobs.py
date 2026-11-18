@@ -99,7 +99,10 @@ ORAC_HIGH_XE = _knob('ORAC_HIGH_XE', 1, int)         # his *"highband must print
 #   HIS 1118 STATE 3, REWRITTEN: *"IF >=6 AWs print in lowband at the 3rd row / -highband has 5
 #   minutes (walk forward) grace to produce >=2 AW flips and a maximum of 1 TOexf"*. The two knobs
 #   above belong to the state 3 he replaced and nothing reads them now.
-ORAC_LOW_AW_3RD = _knob('ORAC_LOW_AW_3RD', 6, int)     # his *">=6 AWs print in lowband at the 3rd row"*
+#   HIS 1118 CORRECTED MECH: *"IF >=4 AWs print in lowband at the 3rd row"*. His 6 became 4 once he
+#   settled the counting - *"AW, TO, x, e prints are all per distinct TF"*. Read on the 3rd row
+#   alone, as his spec text says; his 00:08:30 reaches exactly 4 distinct lowband TFs there.
+ORAC_LOW_AW_3RD = _knob('ORAC_LOW_AW_3RD', 4, int)     # his *">=4 AWs print in lowband"*
 ORAC_GRACE_MIN = _knob('ORAC_GRACE_MIN', 5.0)          # his *"5 minutes (walk forward) grace"*
 ORAC_HIGH_FLIPS = _knob('ORAC_HIGH_FLIPS', 2, int)     # his *">=2 AW flips"* in highband
 ORAC_HIGH_TOEXF_MAX = _knob('ORAC_HIGH_TOEXF_MAX', 1, int)   # his *"a maximum of 1 TOexf"*
@@ -205,7 +208,8 @@ RULED = {
     'ORAC_LOW_FLIPS': (2, 'his 1118 state 2, the other side of the OR: *"(>=5 AW(any) OR '
                           '>=2 AW flips)"*. An AW flip is the TO -> AW flip, his *"new AW"*'),
     'ORAC_HIGH_AW': (3, 'his state 3: *">=3 AW(any) are required if any of these conditions qualify"*'),
-    'ORAC_LOW_AW_3RD': (6, 'his 1118 state 3 gate: *">=6 AWs print in lowband at the 3rd row"*'),
+    'ORAC_LOW_AW_3RD': (4, 'his 1118 state 3 gate: *">=4 AWs print in lowband at the 3rd row"*, '
+                           'distinct TFs, read on the 3rd row alone'),
     'ORAC_GRACE_MIN': (5.0, 'his 1118 *"highband has 5 minutes (walk forward) grace"*, minutes'),
     'ORAC_HIGH_FLIPS': (2, 'his 1118 *">=2 AW flips"* in highband inside the grace'),
     'ORAC_HIGH_TOEXF_MAX': (1, 'his 1118 *"a maximum of 1 TOexf"* in highband'),
