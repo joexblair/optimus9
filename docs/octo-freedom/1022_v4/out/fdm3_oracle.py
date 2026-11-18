@@ -834,6 +834,24 @@ let lastTop = 0, dir = 1, raf = 0, dayOn = '';
 const NB = '\u00a0';   // HIS 1110: the place holder line - a blank line keeps a cell's 3 lines aligned
 let sel = -1;           // HIS 1110: the clicked row, highlighted; a click on another row moves it, on the same row clears it
 let FLIP = 0;           // HIS 1113: 0 the pivots' sides as found, 1 every side flipped with the button on
+//   HIS 1118 OPACITY TEST, TEMPORARY - *"so that I can get the opaque setting correct, I'd like to
+//   test opaque settings before the actual Mage over/under 50 mech is built"*. It paints the
+//   ws1..ws15 cells from the EXISTING 180 s up/dn indicator, not from the Mage, over a fixed window:
+//   *"starting at 09-24 0600 ... start with full opaque ... for every 10 minutes (20 rows), decrease
+//   the opaque level in steps of 10, until opaque is zero"*. 20 rows is 10 minutes on the 30 s page.
+//   100 down to 0 in steps of 10 is 11 bands, so the window runs 110 minutes to 07:50.
+//   DELETE THIS BLOCK AND ITS USE once he has picked a level - the real mech reads ws{TF}Mage
+//   against 50.00, which is a different read.
+const OPQ_FROM = Date.UTC(2026, 8, 24, 6, 0, 0);   // 2026-09-24 06:00:00 UTC
+const OPQ_ROWS = 20;        // rows per band - 10 minutes at a 30 s row
+const OPQ_BANDS = 11;       // 100, 90, ... 10, 0
+let OPQ_A = -1, OPQ_Z = -1;                        // the row range, filled once meta is in
+function opqLevel(i) {      // -> the band's alpha 0..1, or -1 outside the window
+  if (OPQ_A < 0 || i < OPQ_A || i > OPQ_Z) return -1;
+  const band = Math.floor((i - OPQ_A) / OPQ_ROWS);
+  return band >= OPQ_BANDS ? -1 : (100 - band * 10) / 100;
+}
+
 let OFF = 0;            // HIS 1117: the pivot offset button - 0 the pivots as found, meta.shift minutes later
 let ALO = 0, AHI = 0;   // HIS 1117: A is LOCKED, these take meta.alock and no button changes them
 
@@ -933,12 +951,20 @@ function draw() {
     p.slc.className = blk ? 'sl' : 'w';
     for (let c = 0; c < NC; c++) {
       const d = p.cells[c + 1], sx = c === NL ? ' sx' : '';
+      d.style.background = '';   // HIS 1118: the pool reuses cells, so clear last row's test paint
       if (!blk) { d.n.textContent = '·'; d.ta.textContent = NB; d.xc.textContent = NB; d.className = 'w' + sx; continue; }
       if (c < NL) {                     // a wsf line
         //   HIS 1116: the top row prints the UP/DN pair. HIS 1117: its look-back is 180 s and 120 s,
         //   pinned to wall-clock time, so at 30 s rows that is 6 and 4 rows. A dead tie prints '-'
         const ud = blk[o + UD0 + c];
         d.n.textContent = UDW[ud & 3] + ' | ' + UDW[(ud >> 2) & 3];
+        //   HIS 1118 OPACITY TEST, TEMPORARY: the 180 s position paints the cell, green for up and
+        //   red for dn, at the band's level. Outside his window the cell keeps no background.
+        const al = opqLevel(i), p1 = ud & 3;
+        d.style.background = (al >= 0 && (p1 === 1 || p1 === 2))
+          ? 'color-mix(in srgb, var(--' + (p1 === 1 ? 'grn' : 'red') + ') ' + Math.round(al * 100) +
+            '%, transparent)'
+          : '';
         const s = blk[o + c];           // HIS 1109: TO or AW, bold - now the row's first block
         //   HIS 1117: *"drop the rpred coloring for all but the 2 combined columns"*, then *"I'm
         //   not using r-pred at all so it can be disabled"* - so NO cell carries a colour from it,
@@ -1013,6 +1039,9 @@ async function init() {
   meta = await (await fetch('meta')).json();
   NL = meta.lines.length; NC = NL + meta.sums.length; NS = meta.stride; UD0 = meta.updn;
   [ALO, AHI] = meta.alock;   // HIS 1117: A is locked, the page only reports it
+  //   HIS 1118 opacity test: its row range, from his start and his band count
+  OPQ_A = Math.round((OPQ_FROM - meta.t0) / meta.step);
+  OPQ_Z = OPQ_A + OPQ_ROWS * OPQ_BANDS - 1;
   const hd = document.getElementById('hd');
   for (const h of ['ws1 time (UTC)', 'SL%'].concat(meta.lines, meta.mnrs, meta.sums)) { const d = document.createElement('div'); d.textContent = h; hd.appendChild(d); }
   hd.children[NL + 2].className = 'sx'; hd.children[NL + 3].className = 'sx';
