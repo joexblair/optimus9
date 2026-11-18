@@ -72,6 +72,24 @@ MNR_LO = _knob('MNR_LO', 1, int)                 # his *"we'll settle on ws1 to 
 #   THE READ IS EMERGING, his 1118 *"my bad: use emerging"*.
 ORACLE_MAGE50_PCT = _knob('ORACLE_MAGE50_PCT', 20, int)
 
+#   ── orac-exhaust (HIS 1118 spec) ─────────────────────────────────────────────────────────────
+#   HIS 1118, asked which oracle its "2 rows" and "3 rows" count: *"1, 30sec"*. So this mech reads
+#   the 30 SECOND page, not the 60 second one every other fdm3 read uses. ORACLE_PORT stays at
+#   8790 - his 1117 bank - and orac-exhaust alone reads this one.
+ORAC_EXHAUST_PORT = _knob('ORAC_EXHAUST_PORT', 8791, int)
+ORAC_EXHAUST_ROW_S = _knob('ORAC_EXHAUST_ROW_S', 30, int)   # seconds per row, asserted against /meta
+ORAC_6X_ROWS = _knob('ORAC_6X_ROWS', 2, int)         # his *"six x-crosses printing in 2 rows"*
+ORAC_6X_HITS = _knob('ORAC_6X_HITS', 6, int)         # his *"six"* - distinct lowband TFs
+ORAC_ROWS = _knob('ORAC_ROWS', 3, int)               # his *"must qualify within 3 rows"*
+ORAC_LOW_HI = _knob('ORAC_LOW_HI', 7, int)           # his *"lowband is ws1-ws7"*
+ORAC_HIGH_HI = _knob('ORAC_HIGH_HI', 15, int)        # his *"highband is ws8-ws15"*
+ORAC_LOW_AW = _knob('ORAC_LOW_AW', 5, int)           # his *"lowband is printing >=5 AW(any)"*
+ORAC_HIGH_AW = _knob('ORAC_HIGH_AW', 3, int)         # his *">=3 AW(any) are required if"*
+ORAC_HIGH_XE = _knob('ORAC_HIGH_XE', 1, int)         # his *"highband must print ... >=1 x/e cross"*
+ORAC_TOEXF_GATE = _knob('ORAC_TOEXF_GATE', 1, int)   # his condition1 *"TO(exf): {>1}"* - strictly above
+ORAC_MAGE_OOB = _knob('ORAC_MAGE_OOB', 3, int)       # his condition2 *"more than 3 Mages"* - strictly above
+ORAC_MAGE_HI = _knob('ORAC_MAGE_HI', 15, int)        # his 1118 *"contains the in-use TFs to ws1-ws15"*
+
 #   ── the oracle A state, fdm3-wide ────────────────────────────────────────────────────────────
 #   HIS 1116: *"the A ws1-ws6 button is enabled now - I've found it to be better than having it
 #   disabled. bank this as the live machine"*, and earlier the same day *"the oracles 'A ws1-ws6
@@ -155,6 +173,23 @@ RULED = {
     'MNR_LO': (1, 'the M-no-rev floor, his *"we\'ll settle on ws1 to ws25"*'),
     'ORACLE_MAGE50_PCT': (20, 'the Mage-side-of-50 paint strength on the oracle\'s ws1..ws15 '
                               'cells, per cent - his 1118 *"the setting at 0726 is perfect"*'),
+    'ORAC_EXHAUST_PORT': (8791, 'orac-exhaust reads the 30 second oracle - his 1118 *"1, 30sec"*'),
+    'ORAC_EXHAUST_ROW_S': (30, 'seconds per row on the page orac-exhaust reads, his 1118 *"30sec"*'),
+    'ORAC_6X_ROWS': (2, 'his `6x`: *"six x-crosses printing in 2 rows in lowband"*'),
+    'ORAC_6X_HITS': (6, 'his `6x`: *"six"* distinct lowband timeframes carrying an x-cross'),
+    'ORAC_ROWS': (3, 'his *"the next 2 must qualify within 3 rows, and those 3 rows encompass 6x"*'),
+    'ORAC_LOW_HI': (7, 'his *"lowband is ws1-ws7"*'),
+    'ORAC_HIGH_HI': (15, 'his *"highband is ws8-ws15"*'),
+    'ORAC_LOW_AW': (5, 'his state 2: *"lowband is printing >=5 AW(any)"*'),
+    'ORAC_HIGH_AW': (3, 'his state 3: *">=3 AW(any) are required if any of these conditions qualify"*'),
+    'ORAC_HIGH_XE': (1, 'his state 3 fall-through: *"highband must print 0 TOexf and >=1 x/e cross"*'),
+    'ORAC_TOEXF_GATE': (1, 'his condition1 `toexf-gate`: the two sum columns\' TO(exf) counts added '
+                           'together, STRICTLY ABOVE this - *"TO(exf): {>1}"*, his 1118 *"the sum of '
+                           'the 2 columns"*'),
+    'ORAC_MAGE_OOB': (3, 'his condition2: *"more than 3 Mages have been oob during the trade"*, so '
+                         'strictly above 3 distinct timeframes'),
+    'ORAC_MAGE_HI': (15, 'his 1118 *"this new spec intentionaly contains the in-use TFs to '
+                         'ws1-ws15"*, so condition2 counts ws1..ws15 Mages'),
     'A_WS1_WS6': (1, 'the oracle A ws1-ws6 button - ON, his 1116 *"bank this as the live machine"*. '
                      'fdm3-wide: infrastructure, not a scenario gate'),
     'A_WS7_WS15': (0, 'the oracle A ws7-ws15 button - OFF. He banked the first one only'),

@@ -64,12 +64,19 @@ try:
     import v4_live_lines as LL
     import v4_closed_prev as CP
     import v4_knobs as K
+    sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1109_towards_away')
+    import towards_away as TA          # HIS 1118 answer 2: *"use the pivot based psuedo-trades"*
 finally:
     sys.stderr = _err
 
 #   HIS 1116: the scenarios read 8789, which carries his fdm3-fence-reset-TO at 33/67 and locks the
 #   A buttons. The port is a banked knob, so an off-bank run refuses rather than reading the wrong page.
-BASE = 'http://127.0.0.1:%d' % int(FK.ORACLE_PORT)
+#   HIS 1118, asked which oracle orac-exhaust's row counts mean: *"1, 30sec"*. That mech alone reads
+#   the 30 second page; every other mode keeps the 60 second one he banked on 1117. Both ports are
+#   banked knobs, so neither is a free choice at the command line.
+MODE = sys.argv[1] if len(sys.argv) > 1 else ''
+PORT = int(FK.ORAC_EXHAUST_PORT) if MODE == 'orac-exhaust' else int(FK.ORACLE_PORT)
+BASE = 'http://127.0.0.1:%d' % PORT
 META = json.load(urllib.request.urlopen(BASE + '/meta'))
 LINES, SUMS = META['lines'], META['sums']
 STRIDE, NROWS = int(META['stride']), int(META['rows'])
@@ -81,6 +88,7 @@ DAYS = dict((d, k) for d, k in META['days'])
 _RP = len(LINES) + len(SUMS) if META.get('rpred', True) else 0
 O_TA = _RP                      # the TO/AW code per line: 0 none, 1 TO, 2 AW, 3 TO(exf), 4 AW(exf)
 O_CROSS = O_TA + len(LINES) + 2 * len(SUMS)
+O_TOEXF = O_CROSS + len(LINES)  # per sum column, how many of ITS lines read TO(exf) - his `toexf-gate`
 O_SIDE = STRIDE - 1
 #   THE ORACLE WAS REBUILT 2026-11-15 21:06 UTC: gcws15 and gcws30 dropped from the columns, the fence
 #   locked at 23/77 with its button gone, the pivots +15 button gone, two new A buttons (ws1-ws6,
@@ -132,8 +140,8 @@ if _OFF:
     _msg = '; '.join('%s is %r, the bank says %r' % t for t in _OFF)
     if FK.RULED_OK:
         raise SystemExit('the oracle on port %d is not the page the bank names: %s'
-                         % (int(FK.ORACLE_PORT), _msg))
-    sys.stderr.write('# the page on port %d is NOT the banked one: %s\n' % (int(FK.ORACLE_PORT), _msg))
+                         % (PORT, _msg))
+    sys.stderr.write('# the page on port %d is NOT the banked one: %s\n' % (PORT, _msg))
 
 #   HIS 1115 ltf-5aw-6x. Its shared knobs are the LTF-xcross ones - *"the knob reprints are not
 #   duplications - this mech uses the same values"* - except the x-cross hit window, which he gave
@@ -162,15 +170,20 @@ OOB = float(K.FDM_FNC_OOB) if hasattr(K, 'FDM_FNC_OOB') else 15.0
 G30_FNC = 7.0
 
 #   THE ORACLE'S OWN ROW FRAME, rebuilt here so a line can be read where a row reads it. fdm3_oracle.build():
-#   row i is the ws1 bar opening at t0 + 60 s * i, and its print bar is 12 five-second bars on - *"the cell is
-#   the value where closed-prev shows it"*.
+#   row i opens at t0 + step * i and its print bar is step/5 five-second bars on - *"the cell is the value
+#   where closed-prev shows it"*.
+#   THE ROW LENGTH COMES FROM THE PAGE, not from a 60 that was true until his 1117 30 second page: at 30
+#   second rows a hardcoded 60 s frame would read every cell against the wrong bar.
 TS = np.asarray(ln.ts, np.int64)
-FIRST = np.flatnonzero((TS % 60000) == 0)
-FIRST = FIRST[FIRST + 12 < ln.N]
-PRT = FIRST + 12
+ROW_MS = STEP                                   # ms per row, straight off /meta
+RB = ROW_MS // 5000                             # 5 s bars per row
+assert RB * 5000 == ROW_MS, ('the page row is not a whole number of 5 s bars', ROW_MS)
+FIRST = np.flatnonzero((TS % ROW_MS) == 0)
+FIRST = FIRST[FIRST + RB < ln.N]
+PRT = FIRST + RB
 assert len(PRT) == NROWS, (len(PRT), NROWS)
 assert TS[FIRST[0]] == T0, 'the row frame does not start where the oracle says it does'
-assert (TS[PRT] - TS[FIRST] == 60000).all(), 'a print bar is not one ws1 bar on from its row'
+assert (TS[PRT] - TS[FIRST] == ROW_MS).all(), 'a print bar is not one row on from its row'
 
 
 def closed(emerging, tf_seconds):
@@ -212,6 +225,10 @@ def load(flip=0, alo=None, ahi=None, chunk=20000):
     alo = int(FK.A_WS1_WS6) if alo is None else int(alo)
     ahi = int(FK.A_WS7_WS15) if ahi is None else int(ahi)
     out = {k: np.zeros((NROWS, 16), bool) for k in ('cross', 'x', 'e', 'newaw', 'aw', 'exf', 'toexf')}
+    #   HIS 1118 `toexf-gate`: the ws16-22 and ws23-30 columns each print how many of their own lines
+    #   read TO(exf). His condition1 reads *"the sum of the 2 columns"*, kept here per column so the
+    #   sum is taken where it is used.
+    out['sumtoexf'] = np.zeros((NROWS, len(SUMS)), np.int32)
     sd = np.zeros(NROWS, np.int8)
     for a in range(0, NROWS, chunk):
         n = min(chunk, NROWS - a)
@@ -228,6 +245,8 @@ def load(flip=0, alo=None, ahi=None, chunk=20000):
             #   HIS *"printing exf"*: the ex-fence bit set - 3 TO(exf), 4 AW(exf). `ex` includes oob.
             out['exf'][a:a + n, tf] = np.isin(st, (3, 4))
             out['toexf'][a:a + n, tf] = st == 3
+        for k in range(len(SUMS)):
+            out['sumtoexf'][a:a + n, k] = b[:, O_TOEXF + k].astype(np.int32)
         sd[a:a + n] = b[:, O_SIDE]
     return out, sd
 
@@ -272,6 +291,142 @@ def mage50_check(m50):
         off = np.flatnonzero(m50[:, tf] != want)
         out.append(('ws%d' % tf, NROWS, len(off), off))
     return out
+
+
+#   ── HIS 1118 orac-exhaust ────────────────────────────────────────────────────────────────────
+#   HIS SPEC, verbatim: *"1) six x-crosses printing in 2 rows in lowband (refered to as `6x`) / ***the
+#   next 2 must qualify within 3 rows, and those 3 rows encompass 6x*** / 2) lowband is printing >=5
+#   AW(any) and 0 TOexf / 3) the conditional highband output: >=3 AW(any) are required if any of these
+#   conditions qualify: condition1: ws>15 printed TO(exf): {>1}; condition2: more than 3 Mages have
+#   been oob during the trade; condition3: ws1r did not cross to oob during the trade / IF all of
+#   these highband conditions fail: highband must print 0 TOexf and >=1 x/e cross"*.
+#   HIS 1118 ANSWERS: the page is the 30 second one; the trade is the pivot-based pseudo trade; *"the
+#   zero TOexf condtion belongs to the final row, the other conditions are placed anywhere in the
+#   three rows"*; condition1 adds the two sum columns; condition2 counts ws1..ws15 Mages.
+#   HIS GENERAL NOTE: *"all sides are target-side unless otherwise specified"*, so the Mage oob and the
+#   ws1r oob reads below are on the row's own target side.
+
+
+def trade_frame(TR):
+    """-> (tk, topen) per row: the pseudo trade the row sits in, and that trade's open BAR. -1 / -1
+    before the first trade opens. TR is towards_away.pseudo_trades()'s trades, [(open, close, side)]."""
+    o = np.asarray([t[0] for t in TR], np.int64)
+    k = np.searchsorted(o, PRT, side='right') - 1
+    tk = np.where(k >= 0, k, -1)
+    return tk, np.where(tk >= 0, o[np.clip(tk, 0, len(o) - 1)], -1)
+
+
+def _any_in_trade(flag, topen):
+    """Did `flag` (per 5 s bar) fire anywhere from the trade's open bar to THIS row's print bar?
+
+    CAUSAL BY CONSTRUCTION: the window closes on the row's own print bar, so no later bar is read.
+    """
+    c = np.concatenate(([0], np.cumsum(flag.astype(np.int64))))   # c[i] = flags in bars 0..i-1
+    assert len(c) == len(flag) + 1
+    lo = np.where(topen >= 0, topen, 0)
+    assert (lo <= PRT).all(), 'a trade opens after the row that reads it'
+    return (c[PRT + 1] - c[lo]) > 0
+
+
+def orac_reads(TR):
+    """Every trade-scoped read his conditions 2 and 3 need, per oracle row. -> dict of bool/int arrays."""
+    tk, topen = trade_frame(TR)
+    sd = np.asarray([t[2] for t in TR], np.int8)
+    side = np.where(tk >= 0, sd[np.clip(tk, 0, len(sd) - 1)], 0)   # the row's trade target-side
+    oobf = float(K.FDM_FNC_OOB) if hasattr(K, 'FDM_FNC_OOB') else 15.0
+    #   HIS condition2, ws1..ws15 Mages, CLOSED-PREV and on the target side
+    nmage = np.zeros(NROWS, np.int32)
+    for tf in range(1, int(FK.ORAC_MAGE_HI) + 1):
+        m = closed(ln.line('ws%dMage' % tf), tf * 60)
+        with np.errstate(invalid='ignore'):
+            hi, lo = _any_in_trade(m >= 100 - oobf, topen), _any_in_trade(m <= oobf, topen)
+        nmage += np.where(side > 0, hi, np.where(side < 0, lo, False)).astype(np.int32)
+    #   HIS condition3, ws1r crossing INTO oob during the trade, closed-prev, on the target side
+    r1 = closed(ln.line('ws1r'), 60)
+    with np.errstate(invalid='ignore'):
+        inhi = (r1 >= 100 - oobf); inlo = (r1 <= oobf)
+    xhi = np.zeros(len(r1), bool); xlo = np.zeros(len(r1), bool)
+    xhi[1:] = inhi[1:] & ~inhi[:-1]; xlo[1:] = inlo[1:] & ~inlo[:-1]
+    r1oob = np.where(side > 0, _any_in_trade(xhi, topen),
+                     np.where(side < 0, _any_in_trade(xlo, topen), False))
+    #   THE WALK, his general note: ws1r crosses to ib FROM oob, then walk to ws2r's AW flip, then to
+    #   the first AW flip of the ws3r/ws4r/ws5r race. The row is gated in while that walk is running.
+    bhi = np.zeros(len(r1), bool); blo = np.zeros(len(r1), bool)
+    bhi[1:] = ~inhi[1:] & inhi[:-1]; blo[1:] = ~inlo[1:] & inlo[:-1]
+    back = np.where(side > 0, bhi[PRT], np.where(side < 0, blo[PRT], False))
+    return dict(tk=tk, topen=topen, side=side, nmage=nmage, r1oob=r1oob, backin=back)
+
+
+def orac_walk(R, reads):
+    """HIS general note's walk, as a gate. -> bool per row, True while the walk is running.
+
+    STUB, and he asked for one: the second trigger - *"crosses to infence from ex-ws1r-mom-fence"* -
+    is NOT built, because `ex-ws1r-mom-fence` is not yet defined. Only *"crosses to ib from oob"*
+    starts a walk here, so the gate is NARROWER than his spec, never wider.
+    MINE: a fresh trigger inside a running walk restarts it at stage 1.
+    """
+    aw2 = R['newaw'][:, 2]
+    race = R['newaw'][:, 3] | R['newaw'][:, 4] | R['newaw'][:, 5]
+    start, stage = reads['backin'], 0
+    on = np.zeros(NROWS, bool)
+    for i in range(NROWS):
+        if start[i]:
+            stage = 1                            # walking to ws2r's AW flip
+        if stage == 1:
+            on[i] = True
+            if aw2[i]:
+                stage = 2                        # now walking to the ws3/4/5r race's AW flip
+        elif stage == 2:
+            on[i] = True
+            if race[i]:
+                stage = 0
+    return on
+
+
+def orac_exhaust(R, reads, gate_window):
+    """-> dict of the per-row verdicts his three states need. `gate_window` picks his condition1's
+    span, which he has not ruled: 'row' reads the final row alone, 'trade' any row of the trade up
+    to and including it."""
+    lo_hi, hi_lo, hi_hi = int(FK.ORAC_LOW_HI), int(FK.ORAC_LOW_HI) + 1, int(FK.ORAC_HIGH_HI)
+    nrow, n6 = int(FK.ORAC_ROWS), int(FK.ORAC_6X_ROWS)
+    #   STATE 1: six distinct lowband TFs carry an x-cross inside 2 rows, and those 2 rows sit inside
+    #   the 3. A cross counts ONCE per TF per window - his 1115 ruling.
+    six = window(R['x'], n6)[:, 1:lo_hi + 1].sum(1) >= int(FK.ORAC_6X_HITS)
+    s1 = six.copy()
+    for d in range(1, nrow - n6 + 1):            # 6x may end on the row or up to (3 - 2) rows earlier
+        s1[d:] |= six[:-d]
+    #   STATE 2: >=5 lowband AW(any) anywhere in the 3 rows, and 0 lowband TO(exf) ON THE FINAL ROW
+    low_aw = window(R['aw'], nrow)[:, 1:lo_hi + 1].sum(1)
+    low_toexf = R['toexf'][:, 1:lo_hi + 1].sum(1)
+    s2 = (low_aw >= int(FK.ORAC_LOW_AW)) & (low_toexf == 0)
+    #   STATE 3: the conditional highband output
+    high_aw = window(R['aw'], nrow)[:, hi_lo:hi_hi + 1].sum(1)
+    high_toexf = R['toexf'][:, hi_lo:hi_hi + 1].sum(1)
+    high_xe = window(R['cross'], nrow)[:, hi_lo:hi_hi + 1].sum(1)
+    #   condition1 `toexf-gate`: the two sum columns added together, strictly above the knob
+    gsum = R['sumtoexf'].sum(1)
+    if gate_window == 'row':
+        c1 = gsum > int(FK.ORAC_TOEXF_GATE)
+    else:
+        hit = (gsum > int(FK.ORAC_TOEXF_GATE))
+        c = np.concatenate(([0], np.cumsum(hit.astype(np.int64))))
+        orow = np.searchsorted(PRT, np.where(reads['topen'] >= 0, reads['topen'], 0), side='left')
+        c1 = (c[np.arange(NROWS) + 1] - c[np.minimum(orow, np.arange(NROWS))]) > 0
+    c2 = reads['nmage'] > int(FK.ORAC_MAGE_OOB)
+    c3 = ~reads['r1oob']
+    anyc = c1 | c2 | c3
+    s3 = np.where(anyc, high_aw >= int(FK.ORAC_HIGH_AW),
+                  (high_toexf == 0) & (high_xe >= int(FK.ORAC_HIGH_XE)))
+    #   HIS GENERAL NOTE reads the other way too: *"'printing TOexf' means 'any of the cells in the
+    #   current row, between ws1 and ws15, that are printing TO(exf)'"* - the WHOLE range, where his
+    #   state 2 says "lowband is printing ... 0 TOexf". Both readings are carried so the difference
+    #   is a number he can look at, not a choice I made for him.
+    all_toexf = R['toexf'][:, 1:hi_hi + 1].sum(1)
+    s2w = (low_aw >= int(FK.ORAC_LOW_AW)) & (all_toexf == 0)
+    return dict(s1=s1, s2=s2, s2w=s2w, s3=s3, six=six, low_aw=low_aw, low_toexf=low_toexf,
+                all_toexf=all_toexf, high_aw=high_aw, high_toexf=high_toexf, high_xe=high_xe,
+                c1=c1, c2=c2, c3=c3, anyc=anyc, gsum=gsum,
+                fires=s1 & s2 & s3, fires_w=s1 & s2w & s3)
 
 
 def window(a, rows):
@@ -489,13 +644,103 @@ def control(R):
     loop, from the lift-off race alone, so no A button and no pivot flip can move them; the A list
     goes to towards_away.run, which makes the TO/AW codes and so the AW(*) and TO -> AW flip bits.
     """
-    k = K_OF('2026-09-23 00:28:00')
-    tfs = [t for t in range(1, 16) if R['cross'][k - 1:k + 1, t].any()]
+    #   HIS TWO ROWS ARE TWO MINUTES, 00:27:00 up to 00:29:00. On the 60 s page that is rows 0027
+    #   and 0028; on the 30 s page it is four rows covering the same wall clock. Taking it as a span
+    #   rather than a row count is what lets the same control check either page.
+    a, z = K_OF('2026-09-23 00:27:00'), K_OF('2026-09-23 00:29:00')
+    tfs = [t for t in range(1, 16) if R['cross'][a:z, t].any()]
     assert len(tfs) == 14 and 15 not in tfs, tfs
-    return 'CONTROL ok: his 09-23 0028 reads 14of15 over 0027+0028, ws15 the only one missing'
+    return ('CONTROL ok: his 09-23 00:27:00 .. 00:29:00 reads 14of15 over %d rows of %d s, '
+            'ws15 the only one missing' % (z - a, STEP // 1000))
 
 
 def main():
+    if MODE == 'orac-exhaust':
+        #   HIS 1118: report the orac-exhaust events on the day he names, on the 30 second oracle
+        day = sys.argv[2]
+        assert int(META['step']) == int(FK.ORAC_EXHAUST_ROW_S) * 1000, \
+            ('orac-exhaust reads his 30 second oracle', META['step'])
+        a, z = K_OF(day + ' 00:00:00'), K_OF(day + ' 23:59:59')
+        z = min(z, NROWS - 1)
+        R, SD = load()
+        print(control(R))
+        TR = TA.pseudo_trades()[1]
+        reads = orac_reads(TR)
+        walk = orac_walk(R, reads)
+        V = {w: orac_exhaust(R, reads, w) for w in ('row', 'trade')}
+        print('bars %d, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
+        print('page port %d, %d rows %d s apart, %s .. %s'
+              % (PORT, NROWS, int(META['step']) // 1000, U(0), U(NROWS - 1)))
+        print('%s: rows %d .. %d (%s .. %s), pseudo trades on the tape %d'
+              % (day, a, z, U(a), U(z), len(TR)))
+        print('knobs (banked): ' + ' '.join('%s=%s' % (k, v) for k, v in FK.live()
+                                            if k.startswith('ORAC')))
+        print()
+        print('| the reading | rows in %s |' % day)
+        print('|' + '---|' * 2)
+        for lab, m in (('6x: %d of ws1..ws%d carry an x-cross inside %d rows'
+                        % (int(FK.ORAC_6X_HITS), int(FK.ORAC_LOW_HI), int(FK.ORAC_6X_ROWS)),
+                        V['row']['six']),
+                       ('state 1: that 6x sits inside the %d rows ending here'
+                        % int(FK.ORAC_ROWS), V['row']['s1']),
+                       ('state 2: >=%d lowband AW(any) in the %d rows AND 0 lowband TO(exf) here'
+                        % (int(FK.ORAC_LOW_AW), int(FK.ORAC_ROWS)), V['row']['s2']),
+                       ('state 1 + state 2', V['row']['s1'] & V['row']['s2']),
+                       ('state 3, toexf-gate read on the final row', V['row']['s3']),
+                       ('state 3, toexf-gate read across the trade', V['trade']['s3']),
+                       ('orac-exhaust, toexf-gate on the final row', V['row']['fires']),
+                       ('orac-exhaust, toexf-gate across the trade', V['trade']['fires']),
+                       ('the ws1r walk gate is open', walk),
+                       ('orac-exhaust (final row) AND the walk gate open',
+                        V['row']['fires'] & walk),
+                       ('orac-exhaust if "0 TOexf" in state 2 means ws1..ws15, not ws1..ws%d'
+                        % int(FK.ORAC_LOW_HI), V['row']['fires_w'])):
+            print('| %s | %d |' % (lab, int(m[a:z + 1].sum())))
+        print()
+        #   every row that gets past his first two states, so a row that dies later shows WHERE
+        k = np.flatnonzero((V['row']['s1'] & V['row']['s2'])[a:z + 1]) + a
+        print('| the row | trade opened | side | 6x here | lowband AW in 3 | lowband TO(exf) here '
+              '| highband AW in 3 | highband TO(exf) here | highband x/e in 3 | toexf-gate sum here '
+              '| cond1 row | cond1 trade | cond2 Mages oob | cond3 no ws1r oob | highband branch '
+              '| state 3 row | state 3 trade | walk gate | ORAC-EXHAUST |')
+        print('|' + '---|' * 19)
+        for i in k:
+            vr, vt = V['row'], V['trade']
+            print('| %s | %s | %s | %s | %d | %d | %d | %d | %d | %d | %s | %s | %d | %s | %s | %s '
+                  '| %s | %s | %s |'
+                  % (U(int(i)), U(int(np.searchsorted(PRT, reads['topen'][i], 'left'))),
+                     'HIGH' if reads['side'][i] > 0 else 'LOW' if reads['side'][i] < 0 else '-',
+                     'yes' if vr['six'][i] else 'earlier row',
+                     vr['low_aw'][i], vr['low_toexf'][i], vr['high_aw'][i], vr['high_toexf'][i],
+                     vr['high_xe'][i], vr['gsum'][i],
+                     'yes' if vr['c1'][i] else 'no', 'yes' if vt['c1'][i] else 'no',
+                     reads['nmage'][i], 'yes' if vr['c3'][i] else 'no',
+                     '>=%d AW' % int(FK.ORAC_HIGH_AW) if vr['anyc'][i] else '0 TO(exf) + x/e',
+                     'PASS' if vr['s3'][i] else 'fail', 'PASS' if vt['s3'][i] else 'fail',
+                     'open' if walk[i] else 'shut',
+                     'FIRES' if vr['fires'][i] else '-'))
+        if not len(k):
+            print('| no row in %s passes state 1 and state 2 | | | | | | | | | | | | | | | | | | |'
+                  % day)
+        #   every row of every firing event's 3 row window, so the counts above can be read off the
+        #   rows themselves rather than taken on trust
+        nrow = int(FK.ORAC_ROWS)
+        lo_hi, hi_lo = int(FK.ORAC_LOW_HI), int(FK.ORAC_LOW_HI) + 1
+        hi_hi = int(FK.ORAC_HIGH_HI)
+        tfs = lambda m, a_, b_: ','.join('ws%d' % t for t in range(a_, b_ + 1) if m[t]) or '-'
+        for i in np.flatnonzero(V['row']['fires'][a:z + 1]) + a:
+            print()
+            print('| orac-exhaust %s | lowband x-cross | lowband AW(any) | lowband TO(exf) '
+                  '| highband AW(any) | highband TO(exf) | highband x or e | ws16-22 TO(exf) '
+                  '| ws23-30 TO(exf) |' % U(int(i)))
+            print('|' + '---|' * 9)
+            for j in range(i - nrow + 1, i + 1):
+                print('| %s | %s | %s | %s | %s | %s | %s | %d | %d |'
+                      % (U(int(j)), tfs(R['x'][j], 1, lo_hi), tfs(R['aw'][j], 1, lo_hi),
+                         tfs(R['toexf'][j], 1, lo_hi), tfs(R['aw'][j], hi_lo, hi_hi),
+                         tfs(R['toexf'][j], hi_lo, hi_hi), tfs(R['cross'][j], hi_lo, hi_hi),
+                         R['sumtoexf'][j, 0], R['sumtoexf'][j, 1]))
+        return
     if len(sys.argv) >= 4 and sys.argv[1] == 'aw6x':
         #   HIS 1116: the A state is fdm3-wide infrastructure, banked at A ws1-ws6 ON. The two
         #   buttons are knobs like any other, so fdm3_knobs.check() is what refuses an off-bank run -
@@ -564,7 +809,7 @@ def main():
         #   at every row's print bar as the check on it
         m50, MNR = mage50()
         print('page port %d, %d rows, %s .. %s, paint %d%%'
-              % (int(FK.ORACLE_PORT), NROWS, U(0), U(NROWS - 1), int(META['mage50'])))
+              % (PORT, NROWS, U(0), U(NROWS - 1), int(META['mage50'])))
         print()
         print('| the line | over 50.00 | under 50.00 | neither | rows |')
         print('|' + '---|' * 5)
