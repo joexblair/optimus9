@@ -96,6 +96,13 @@ ORAC_LOW_FLIPS = _knob('ORAC_LOW_FLIPS', 2, int)     # his 1118 *"OR >=2 AW flip
 #   values for when he builds out from the denominator; nothing reads them in the meantime.
 ORAC_HIGH_AW = _knob('ORAC_HIGH_AW', 3, int)         # his *">=3 AW(any) are required if"*
 ORAC_HIGH_XE = _knob('ORAC_HIGH_XE', 1, int)         # his *"highband must print ... >=1 x/e cross"*
+#   HIS 1118 STATE 3, REWRITTEN: *"IF >=6 AWs print in lowband at the 3rd row / -highband has 5
+#   minutes (walk forward) grace to produce >=2 AW flips and a maximum of 1 TOexf"*. The two knobs
+#   above belong to the state 3 he replaced and nothing reads them now.
+ORAC_LOW_AW_3RD = _knob('ORAC_LOW_AW_3RD', 6, int)     # his *">=6 AWs print in lowband at the 3rd row"*
+ORAC_GRACE_MIN = _knob('ORAC_GRACE_MIN', 5.0)          # his *"5 minutes (walk forward) grace"*
+ORAC_HIGH_FLIPS = _knob('ORAC_HIGH_FLIPS', 2, int)     # his *">=2 AW flips"* in highband
+ORAC_HIGH_TOEXF_MAX = _knob('ORAC_HIGH_TOEXF_MAX', 1, int)   # his *"a maximum of 1 TOexf"*
 ORAC_TOEXF_GATE = _knob('ORAC_TOEXF_GATE', 1, int)   # his condition1 *"TO(exf): {>1}"* - strictly above
 ORAC_MAGE_OOB = _knob('ORAC_MAGE_OOB', 3, int)       # his condition2 *"more than 3 Mages"* - strictly above
 ORAC_MAGE_HI = _knob('ORAC_MAGE_HI', 15, int)        # his 1118 *"contains the in-use TFs to ws1-ws15"*
@@ -198,6 +205,10 @@ RULED = {
     'ORAC_LOW_FLIPS': (2, 'his 1118 state 2, the other side of the OR: *"(>=5 AW(any) OR '
                           '>=2 AW flips)"*. An AW flip is the TO -> AW flip, his *"new AW"*'),
     'ORAC_HIGH_AW': (3, 'his state 3: *">=3 AW(any) are required if any of these conditions qualify"*'),
+    'ORAC_LOW_AW_3RD': (6, 'his 1118 state 3 gate: *">=6 AWs print in lowband at the 3rd row"*'),
+    'ORAC_GRACE_MIN': (5.0, 'his 1118 *"highband has 5 minutes (walk forward) grace"*, minutes'),
+    'ORAC_HIGH_FLIPS': (2, 'his 1118 *">=2 AW flips"* in highband inside the grace'),
+    'ORAC_HIGH_TOEXF_MAX': (1, 'his 1118 *"a maximum of 1 TOexf"* in highband'),
     'ORAC_HIGH_XE': (1, 'his state 3 fall-through: *"highband must print 0 TOexf and >=1 x/e cross"*'),
     'ORAC_TOEXF_GATE': (1, 'his condition1 `toexf-gate`: the two sum columns\' TO(exf) counts added '
                            'together, STRICTLY ABOVE this - *"TO(exf): {>1}"*, his 1118 *"the sum of '
