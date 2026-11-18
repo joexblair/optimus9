@@ -784,6 +784,48 @@ def orac_file(day, a, z, R, reads, walk, V, path):
 
 
 def main():
+    if MODE == 'line':
+        #   HIS 1118: *"drop the the ws6x emerging values, sampled at 15s gaps, between 0255 snd
+        #   0320, into a txt file"*. A line read straight off the tape, EMERGING - the value at the
+        #   bar itself, no closed-prev step. The gap is his, in seconds, on the 5 s bar grid.
+        name, t0s, t1s, gap = sys.argv[2], sys.argv[3], sys.argv[4], int(sys.argv[5])
+        assert gap % 5 == 0, ('a %d s gap is not a whole number of 5 s bars' % gap)
+        v = np.asarray(ln.line(name), float)
+        k0, k1 = ln.K(t0s), ln.K(t1s)
+        assert k0 <= k1, (t0s, t1s)
+        bars = list(range(k0, k1 + 1, gap // 5))
+        out = sys.argv[6] if os.path.isabs(sys.argv[6]) else os.path.join(HERE, sys.argv[6])
+        with open(out, 'w') as f:
+            w = lambda t: f.write(t + '\n')
+            w('# %s, EMERGING, every %d s from %s to %s' % (name, gap, t0s, t1s))
+            w('#')
+            w('# EMERGING means the value at that bar itself - no closed-prev step, so this is what')
+            w('# the line reads live on that bar rather than what a closed %s bar would show.' % name)
+            w('# the tape is 5 s bars, so a %d s gap is every %d bars. Both ends are included.'
+              % (gap, gap // 5))
+            w('# the tape: %d bars, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
+            w('#')
+            w('# THE COLUMNS')
+            w('#   the bar     the 5 s bar, its own time (UTC)')
+            w('#   %-11s the emerging value there, 4 dp. "-" where the line has no value yet' % name)
+            w('')
+            w('| the bar | %s |' % name)
+            w('|---|---|')
+            for b in bars:
+                w('| %s | %s |' % (ln.U(b), '-' if not np.isfinite(v[b]) else '%.4f' % v[b]))
+            fin = np.asarray([v[b] for b in bars], float)
+            fin = fin[np.isfinite(fin)]
+            w('')
+            w('| the count | value |')
+            w('|---|---|')
+            w('| samples | %d |' % len(bars))
+            w('| with a value | %d |' % len(fin))
+            w('| lowest | %s |' % ('-' if not len(fin) else '%.4f' % fin.min()))
+            w('| highest | %s |' % ('-' if not len(fin) else '%.4f' % fin.max()))
+        print('bars %d, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
+        print('file: %s, %d samples of %s every %d s, %s .. %s'
+              % (out, len(bars), name, gap, t0s, t1s))
+        return
     if MODE == 'orac-exhaust':
         #   HIS 1118: *"let's find the denominator and build out from there"* - his three states,
         #   with the conditional highband out, reported on the day he names
