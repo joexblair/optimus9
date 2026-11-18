@@ -274,8 +274,9 @@ STRIDE = (len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)
 #   the TO/AW codes, the TO/AW counts, the cross codes (HIS 1110: 1 X, 2 E, 3 both, on the row's target-side; +4 the
 #   line reads AW on this row and TO on the row before, HIS 1110 TO -> AW flip; +8 ws1 only, TO(exf) on this row and
 #   anything else on the row before, HIS 1113), per sum the count of its lines
-#   reading TO(exf) (HIS 1111), HIS 1116 the UP/DN pair per line (bits 0-1 position 1, this row against the row 3
-#   back; bits 2-3 position 2, against the row 2 back; 0 a dead tie or no row that far back, 1 up, 2 dn),
+#   reading TO(exf) (HIS 1111), HIS 1116 the UP/DN pair per line (bits 0-1 position 1, this row against the row 180 s
+#   back; bits 2-3 position 2, against the row 120 s back; 0 a dead tie or no row that far back, 1 up, 2 dn) with
+#   HIS 1118 the EMERGING Mage's side of 50.00 in bits 4-5 of the same byte (0 neither, 1 over, 2 under),
 #   HIS 1115 SL% x 100 as an int16 in two bytes (low byte first, SL_NONE blank), then PER M-no-rev COLUMN (HIS 1117
 #   mnr1 ws1..ws15, mnr2 ws1..ws25) its TF (0 none) and that line's closed-prev value x 10 as an int16 in two bytes
 #   (low byte first), then the pseudo trade's target-side at the row's read bar: -1 LOW, +1 HIGH, 0 no trade
@@ -298,6 +299,11 @@ A_LOCK = (1, 0)                 # A ws1-ws6 on, A ws7-ws15 off - BANKED, not a b
 #   on a HIGH target-side, 33 on a LOW one, his *"Q1: move them to the fence"*. BANKED here, no
 #   button: every page state reads it.
 FENCE_RESET_TO = 33.0           # his `fdm3-fence-reset-TO`, the smaller end of the pair
+#   HIS 1118: the ws1..ws15 cell carries its ws{TF}Mage's side of 50 as a background - green over
+#   50.00, red under it. He set the strength by eye off a test that stepped 100% down to 0% in
+#   tens: *"the setting at 0726 is perfect"*, and 07:26 fell in the 20% step. BANKED, no button.
+#   THE READ IS EMERGING, his 1118 *"my bad: use emerging"*.
+MAGE50_PCT = 20                 # his `fdm3-oracle-mage50-pct` (MY name) - per cent, 0 paints nothing
 A_TFS = [t for (_, band), on in zip(A_BANDS, A_LOCK) if on for t in band]
 #   HIS 1117: *"I need the 'pivot +15 min' button reintroduced on 8790. instead of +15, make it +30
 #   minutes"*. It was dropped in the 1115 rebuild; this is HIS 1112 button at his new value.
@@ -547,10 +553,20 @@ def build():
     #   THE EMERGING r AT THE ROW'S PRINT BAR, the line r-pred itself reads. Closed-prev was measured and rejected
     #   before this was built: a high-TF closed line does not move between rows 2 and 3 minutes apart, so it ties on
     #   52% of cells against 12.7% for emerging.
+    #   HIS 1118 MAGE SIDE OF 50: *"add a mech that shows the Mage's side of 50, ws1-ws15. if
+    #   ws{TF}Mage is over 50.00, print a green background. under 50.00, red background"*. It rides
+    #   in the same per-line byte as the up/dn pair - bits 4-5, where the two positions use 0-3 - so
+    #   the row does not grow: 0 neither way, 1 over 50.00, 2 under 50.00.
+    #   EMERGING - HIS 1118 *"my bad: use emerging"*, correcting the closed-prev read I had put in.
+    #   So it is the Mage at the row's print bar itself, the same bar and the same reading the up/dn
+    #   pair beside it takes. Exactly 50.00 is neither, and so is a bar where the line has no value.
     UD = []
     for name in LINES:
         v = np.asarray(E[int(name[2:])], float)[prt]
         code = np.zeros(len(prt), np.int8)
+        _mg = np.asarray(ln.line(name + 'Mage'), float)[prt]
+        with np.errstate(invalid='ignore'):
+            code |= np.where(_mg > 50.0, 1 << 4, np.where(_mg < 50.0, 2 << 4, 0)).astype(np.int8)
         #   HIS 1117: *"the up/dn pairs stay on 180 and 120"* - SECONDS, so the look-back is pinned
         #   to wall-clock time and a change to ROW_S cannot quietly redefine it
         for bit, secs in ((0, 180), (2, 120)):
@@ -562,7 +578,7 @@ def build():
             one[back:] = np.where(up, 1, np.where(dn, 2, 0))   # 0 is a dead tie OR no row that far back
             code = (code | (one << bit)).astype(np.int8)
         UD.append(code)
-    assert len(UD) == len(LINES) and all(0 <= int(c.min()) and int(c.max()) <= 10 for c in UD)
+    assert len(UD) == len(LINES) and all(0 <= int(c.min()) and int(c.max()) <= 42 for c in UD)
     #   the 23/77 run with A ws1-ws6 on and the 33/67 reset: the first page state
     LN, piv, trades, ST, det = TA.build(FNC, A_TFS, FENCE_RESET_TO)
     print('towards/away: %d ws2Mage pivots, %d pseudo trades, first opens %s'
@@ -703,6 +719,7 @@ META = json.dumps({
     'days': DAYS, 'fence': FNC, 'abands': [b for b, _ in A_BANDS], 'flips': list(FLIPS),
     'mnrs': list(MNR_LABELS), 'mnrtops': list(MNR_TOPS),
     'shift': PIV_SHIFT, 'alock': list(A_LOCK), 'reset': FENCE_RESET_TO, 'rpred': RPRED_ON,
+    'mage50': MAGE50_PCT,
     #   HIS 1116: where the up/dn block starts, so a reader is told rather than re-deriving the layout
     'updn': O_UD})
 
@@ -834,24 +851,6 @@ let lastTop = 0, dir = 1, raf = 0, dayOn = '';
 const NB = '\u00a0';   // HIS 1110: the place holder line - a blank line keeps a cell's 3 lines aligned
 let sel = -1;           // HIS 1110: the clicked row, highlighted; a click on another row moves it, on the same row clears it
 let FLIP = 0;           // HIS 1113: 0 the pivots' sides as found, 1 every side flipped with the button on
-//   HIS 1118 OPACITY TEST, TEMPORARY - *"so that I can get the opaque setting correct, I'd like to
-//   test opaque settings before the actual Mage over/under 50 mech is built"*. It paints the
-//   ws1..ws15 cells from the EXISTING 180 s up/dn indicator, not from the Mage, over a fixed window:
-//   *"starting at 09-24 0600 ... start with full opaque ... for every 10 minutes (20 rows), decrease
-//   the opaque level in steps of 10, until opaque is zero"*. 20 rows is 10 minutes on the 30 s page.
-//   100 down to 0 in steps of 10 is 11 bands, so the window runs 110 minutes to 07:50.
-//   DELETE THIS BLOCK AND ITS USE once he has picked a level - the real mech reads ws{TF}Mage
-//   against 50.00, which is a different read.
-const OPQ_FROM = Date.UTC(2026, 8, 24, 6, 0, 0);   // 2026-09-24 06:00:00 UTC
-const OPQ_ROWS = 20;        // rows per band - 10 minutes at a 30 s row
-const OPQ_BANDS = 11;       // 100, 90, ... 10, 0
-let OPQ_A = -1, OPQ_Z = -1;                        // the row range, filled once meta is in
-function opqLevel(i) {      // -> the band's alpha 0..1, or -1 outside the window
-  if (OPQ_A < 0 || i < OPQ_A || i > OPQ_Z) return -1;
-  const band = Math.floor((i - OPQ_A) / OPQ_ROWS);
-  return band >= OPQ_BANDS ? -1 : (100 - band * 10) / 100;
-}
-
 let OFF = 0;            // HIS 1117: the pivot offset button - 0 the pivots as found, meta.shift minutes later
 let ALO = 0, AHI = 0;   // HIS 1117: A is LOCKED, these take meta.alock and no button changes them
 
@@ -951,18 +950,20 @@ function draw() {
     p.slc.className = blk ? 'sl' : 'w';
     for (let c = 0; c < NC; c++) {
       const d = p.cells[c + 1], sx = c === NL ? ' sx' : '';
-      d.style.background = '';   // HIS 1118: the pool reuses cells, so clear last row's test paint
+      d.style.background = '';   // the pool reuses cells, so clear the last row's paint
       if (!blk) { d.n.textContent = '·'; d.ta.textContent = NB; d.xc.textContent = NB; d.className = 'w' + sx; continue; }
       if (c < NL) {                     // a wsf line
         //   HIS 1116: the top row prints the UP/DN pair. HIS 1117: its look-back is 180 s and 120 s,
         //   pinned to wall-clock time, so at 30 s rows that is 6 and 4 rows. A dead tie prints '-'
         const ud = blk[o + UD0 + c];
         d.n.textContent = UDW[ud & 3] + ' | ' + UDW[(ud >> 2) & 3];
-        //   HIS 1118 OPACITY TEST, TEMPORARY: the 180 s position paints the cell, green for up and
-        //   red for dn, at the band's level. Outside his window the cell keeps no background.
-        const al = opqLevel(i), p1 = ud & 3;
-        d.style.background = (al >= 0 && (p1 === 1 || p1 === 2))
-          ? 'color-mix(in srgb, var(--' + (p1 === 1 ? 'grn' : 'red') + ') ' + Math.round(al * 100) +
+        //   HIS 1118: the Mage's side of 50 paints the cell - green over 50.00, red under it, at his
+        //   20%. Bits 4-5 of the same byte: 0 neither way, 1 over, 2 under. Exactly 50.00 and a bar
+        //   with no value are both left plain.
+        //   the strength is meta.mage50, so the page and the knobs file cannot drift apart
+        const mg = (ud >> 4) & 3;
+        d.style.background = (mg === 1 || mg === 2)
+          ? 'color-mix(in srgb, var(--' + (mg === 1 ? 'grn' : 'red') + ') ' + meta.mage50 +
             '%, transparent)'
           : '';
         const s = blk[o + c];           // HIS 1109: TO or AW, bold - now the row's first block
@@ -1039,9 +1040,6 @@ async function init() {
   meta = await (await fetch('meta')).json();
   NL = meta.lines.length; NC = NL + meta.sums.length; NS = meta.stride; UD0 = meta.updn;
   [ALO, AHI] = meta.alock;   // HIS 1117: A is locked, the page only reports it
-  //   HIS 1118 opacity test: its row range, from his start and his band count
-  OPQ_A = Math.round((OPQ_FROM - meta.t0) / meta.step);
-  OPQ_Z = OPQ_A + OPQ_ROWS * OPQ_BANDS - 1;
   const hd = document.getElementById('hd');
   for (const h of ['ws1 time (UTC)', 'SL%'].concat(meta.lines, meta.mnrs, meta.sums)) { const d = document.createElement('div'); d.textContent = h; hd.appendChild(d); }
   hd.children[NL + 2].className = 'sx'; hd.children[NL + 3].className = 'sx';
@@ -1147,6 +1145,13 @@ if __name__ == '__main__':
         print('%s (ws%d..ws%dMage): rows printing a TF %d of %d, highest TF printed %d, value %.1f .. %.1f'
               % (_lab, MNR_LO, _top, int((_mn > 0).sum()), len(_mn), int(_mn.max()),
                  _mv[_mn > 0].min() / 10, _mv[_mn > 0].max() / 10))
+    #   HIS 1118 the Mage's side of 50: bits 4-5 of each line's up/dn byte, counted over every cell
+    _m50 = (RP[:, O_UD:O_UD + len(LINES)].astype(int) >> 4) & 3
+    _thin = int(np.argmin((_m50 > 0).sum(0)))
+    print('Mage side of 50 (ws1..ws%d, emerging, paints at %d%%): over 50.00 %d cells, under 50.00 '
+          '%d, neither %d of %d; thinnest line %s, %d of %d cells painted'
+          % (len(LINES), MAGE50_PCT, int((_m50 == 1).sum()), int((_m50 == 2).sum()), int((_m50 == 0).sum()),
+             _m50.size, LINES[_thin], int((_m50[:, _thin] > 0).sum()), len(_m50)))
     print('fence: %d/%d, locked (HIS 1115). fence reset TO: %g/%g, banked (HIS 1117)'
           % (FNC, 100 - FNC, FENCE_RESET_TO, 100 - FENCE_RESET_TO))
     for (_off, _fl), _m in MATS.items():

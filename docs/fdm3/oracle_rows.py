@@ -75,7 +75,11 @@ LINES, SUMS = META['lines'], META['sums']
 STRIDE, NROWS = int(META['stride']), int(META['rows'])
 T0, STEP = int(META['t0']), int(META['step'])
 DAYS = dict((d, k) for d, k in META['days'])
-O_TA = len(LINES) + len(SUMS)   # the TO/AW code per line: 0 none, 1 TO, 2 AW, 3 TO(exf), 4 AW(exf)
+#   HIS 1117 *"I'm not using r-pred at all so it can be disabled"*: with it off the page stores no
+#   r-pred byte at all, so the row's first block - one byte per line and one per sum - is NOT there
+#   and the TO/AW codes start at byte 0. The page says which it is, in /meta.
+_RP = len(LINES) + len(SUMS) if META.get('rpred', True) else 0
+O_TA = _RP                      # the TO/AW code per line: 0 none, 1 TO, 2 AW, 3 TO(exf), 4 AW(exf)
 O_CROSS = O_TA + len(LINES) + 2 * len(SUMS)
 O_SIDE = STRIDE - 1
 #   THE ORACLE WAS REBUILT 2026-11-15 21:06 UTC: gcws15 and gcws30 dropped from the columns, the fence
@@ -87,7 +91,7 @@ O_SIDE = STRIDE - 1
 #   still the last byte. The stride is derived from the page's own layout rather than a list of accepted values, so
 #   a page serving any shape this reader does not expect fails by name.
 _TAIL = 3 + 3 * len(META.get('mnrtops', [1]))      # SL% as an int16, then each M-no-rev column's TF and value
-_WANT = (len(LINES) + len(SUMS) + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)
+_WANT = (_RP + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)
          + (len(LINES) if 'updn' in META else 0) + _TAIL)
 assert STRIDE == _WANT, ('the page\'s row is not the shape this reader expects', STRIDE, _WANT)
 #   HIS 1114: *"derived from ws1 to ws15"*. gcws15 and gcws30 are in the oracle's LINES and are NOT part of
@@ -120,7 +124,8 @@ _PAGE = [('its reset fence', META.get('reset'), float(FK.FENCE_RESET_TO)),
          ('its ex-fence fence', META.get('fence'), float(FK.ORACLE_FENCE)),
          ('its pivot offset', META.get('shift'), int(FK.ORACLE_SHIFT)),
          ('its M-no-rev ceilings', META.get('mnrtops'), list(FK.MNR_TOPS)),
-         ('its locked A state', META.get('alock'), [int(FK.A_WS1_WS6), int(FK.A_WS7_WS15)])]
+         ('its locked A state', META.get('alock'), [int(FK.A_WS1_WS6), int(FK.A_WS7_WS15)]),
+         ('its Mage-side-of-50 paint', META.get('mage50'), int(FK.ORACLE_MAGE50_PCT))]
 _OFF = [(w, g, want) for w, g, want in _PAGE
         if (float(g) if w.endswith('fence') and g is not None else g) != want]
 if _OFF:
@@ -225,6 +230,48 @@ def load(flip=0, alo=None, ahi=None, chunk=20000):
             out['toexf'][a:a + n, tf] = st == 3
         sd[a:a + n] = b[:, O_SIDE]
     return out, sd
+
+
+def mage50(chunk=20000):
+    """HIS 1118 -> (m50, MNR). m50 is [n,16] int8 per ws TF 1..15: 0 neither, 1 over 50.00, 2 under.
+
+    The Mage's side of 50 rides in bits 4-5 of each line's up/dn byte, so the row did not grow and
+    this reader's stride assert is unchanged. MNR is [(tf, value)] per M-no-rev column, kept so a
+    row can be read beside the column that named it. THE CHECK BELOW DOES NOT USE IT: the
+    paint reads the EMERGING Mage and that column reads the closed-prev one, so the two differ
+    by design. mage50_check reads the line off the tape instead.
+    """
+    m50 = np.zeros((NROWS, 16), np.int8)
+    MNR = [(np.zeros(NROWS, np.int16), np.zeros(NROWS, np.int32)) for _ in META['mnrtops']]
+    for a in range(0, NROWS, chunk):
+        n = min(chunk, NROWS - a)
+        u = '%s/rows?start=%d&count=%d&flip=0&alo=%d&ahi=%d' % (BASE, a, n, int(FK.A_WS1_WS6),
+                                                                int(FK.A_WS7_WS15))
+        b = np.frombuffer(urllib.request.urlopen(u).read(), np.int8).reshape(-1, STRIDE)
+        for j, tf in WS:
+            m50[a:a + n, tf] = (b[:, int(META['updn']) + j].astype(int) >> 4) & 3
+        for k, (tfs, vals) in enumerate(MNR):
+            o = STRIDE - 1 - 3 * (len(MNR) - k)
+            tfs[a:a + n] = b[:, o].astype(int)
+            vals[a:a + n] = (b[:, o + 2].astype(int) << 8) | (b[:, o + 1].astype(int) & 255)
+    return m50, MNR
+
+
+def mage50_check(m50):
+    """-> [(line, rows judged, rows the paint disagrees, the offending rows)] per ws1..ws15.
+
+    THE INDEPENDENT CHECK: it reads ws{TF}Mage off the tape at each row's own print bar - the
+    EMERGING value, his 1118 read - and demands 1 over 50.00, 2 under it, and 0 both at 50.00
+    exactly and where the line has no value yet.
+    """
+    out = []
+    for _j, tf in WS:
+        v = np.asarray(ln.line('ws%dMage' % tf), float)[PRT]
+        with np.errstate(invalid='ignore'):
+            want = np.where(v > 50.0, 1, np.where(v < 50.0, 2, 0)).astype(np.int8)
+        off = np.flatnonzero(m50[:, tf] != want)
+        out.append(('ws%d' % tf, NROWS, len(off), off))
+    return out
 
 
 def window(a, rows):
@@ -512,6 +559,29 @@ def main():
               % (G30_FNC, 100 - G30_FNC, int((a4 & exc).sum()), (a4 & exc).sum() / days))
         m = ltf_xcross(R)
         print('| LTF-xcross | %d | %.1f |' % (int(m.sum()), m.sum() / days))
+    if len(sys.argv) >= 2 and sys.argv[1] == 'mage50':
+        #   HIS 1118: the Mage's side of 50 on the ws1..ws15 cells, with the line read off the tape
+        #   at every row's print bar as the check on it
+        m50, MNR = mage50()
+        print('page port %d, %d rows, %s .. %s, paint %d%%'
+              % (int(FK.ORACLE_PORT), NROWS, U(0), U(NROWS - 1), int(META['mage50'])))
+        print()
+        print('| the line | over 50.00 | under 50.00 | neither | rows |')
+        print('|' + '---|' * 5)
+        for _j, tf in WS:
+            c = m50[:, tf]
+            print('| ws%d | %d | %d | %d | %d |'
+                  % (tf, int((c == 1).sum()), int((c == 2).sum()), int((c == 0).sum()), NROWS))
+        print()
+        print('| the line | rows judged | rows the paint disagrees with the emerging Mage |')
+        print('|' + '---|' * 3)
+        _chk = mage50_check(m50)
+        for lab, n, nbad, _off in _chk:
+            print('| %s | %d | %d |' % (lab, n, nbad))
+        for lab, _n, _nb, off in _chk:
+            for k in off:
+                print('| %s | %s | DISAGREES |' % (U(int(k)), lab))
+        return
     if len(sys.argv) >= 3:
         R, sd = load(fnc=MOM_FNC)
         x, aw = R['cross'], R['newaw']

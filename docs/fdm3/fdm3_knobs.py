@@ -66,6 +66,11 @@ ORACLE_SHIFT = _knob('ORACLE_SHIFT', 30, int)    # his 1117 pivot offset button,
 MNR_TOPS = tuple(int(x) for x in os.environ.get('W_FDM3_MNR_TOPS', '15,25').split(','))
 #   his 1117 two M-no-rev columns: mnr1 ws1..ws25's lower ceiling, mnr2 the higher one
 MNR_LO = _knob('MNR_LO', 1, int)                 # his *"we'll settle on ws1 to ws25"*
+#   HIS 1118 the Mage's side of 50 on the ws1..ws15 cells: he picked the paint strength by eye off a
+#   test that stepped 100% down to 0% in tens - *"the setting at 0726 is perfect"*, and 07:26 fell
+#   in the 20% step. The page publishes it in /meta so this value and the page cannot drift apart.
+#   THE READ IS EMERGING, his 1118 *"my bad: use emerging"*.
+ORACLE_MAGE50_PCT = _knob('ORACLE_MAGE50_PCT', 20, int)
 
 #   ── the oracle A state, fdm3-wide ────────────────────────────────────────────────────────────
 #   HIS 1116: *"the A ws1-ws6 button is enabled now - I've found it to be better than having it
@@ -148,6 +153,8 @@ RULED = {
     'ORACLE_SHIFT': (30, 'his 1117 pivot offset button, minutes - *"instead of +15, make it +30"*'),
     'MNR_TOPS': ((15, 25), 'his 1117 two M-no-rev ceilings, mnr1 then mnr2'),
     'MNR_LO': (1, 'the M-no-rev floor, his *"we\'ll settle on ws1 to ws25"*'),
+    'ORACLE_MAGE50_PCT': (20, 'the Mage-side-of-50 paint strength on the oracle\'s ws1..ws15 '
+                              'cells, per cent - his 1118 *"the setting at 0726 is perfect"*'),
     'A_WS1_WS6': (1, 'the oracle A ws1-ws6 button - ON, his 1116 *"bank this as the live machine"*. '
                      'fdm3-wide: infrastructure, not a scenario gate'),
     'A_WS7_WS15': (0, 'the oracle A ws7-ws15 button - OFF. He banked the first one only'),
