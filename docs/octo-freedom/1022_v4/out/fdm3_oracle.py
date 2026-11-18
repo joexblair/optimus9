@@ -720,6 +720,9 @@ META = json.dumps({
     'mnrs': list(MNR_LABELS), 'mnrtops': list(MNR_TOPS),
     'shift': PIV_SHIFT, 'alock': list(A_LOCK), 'reset': FENCE_RESET_TO, 'rpred': RPRED_ON,
     'mage50': MAGE50_PCT,
+    #   WHERE EACH BLOCK STARTS, so a reader is told rather than deriving it. A derived offset is
+    #   how oracle_rows came to hold a stale O_TA and read every TO/AW cell out of the wrong byte.
+    'ta': O_TA, 'xc': O_XC, 'toexf': O_TOEXF, 'sl': O_SL, 'omnr': O_MNR,
     #   HIS 1116: where the up/dn block starts, so a reader is told rather than re-deriving the layout
     'updn': O_UD})
 

@@ -44,6 +44,7 @@ import datetime as dt
 import io
 import json
 import os
+import re
 import sys
 import urllib.request
 
@@ -87,9 +88,17 @@ DAYS = dict((d, k) for d, k in META['days'])
 #   r-pred byte at all, so the row's first block - one byte per line and one per sum - is NOT there
 #   and the TO/AW codes start at byte 0. The page says which it is, in /meta.
 _RP = len(LINES) + len(SUMS) if META.get('rpred', True) else 0
-O_TA = _RP                      # the TO/AW code per line: 0 none, 1 TO, 2 AW, 3 TO(exf), 4 AW(exf)
-O_CROSS = O_TA + len(LINES) + 2 * len(SUMS)
-O_TOEXF = O_CROSS + len(LINES)  # per sum column, how many of ITS lines read TO(exf) - his `toexf-gate`
+#   THE PAGE SAYS WHERE ITS BLOCKS ARE when it publishes them; the derivation is the fall-back for a
+#   page built before it did. Deriving an offset is how this reader came to hold TWO answers for
+#   O_TA, the stale one last - every TO/AW, cross and TO(exf) read came out of the wrong bytes and
+#   nothing complained.
+O_TA = int(META.get('ta', _RP))     # the TO/AW code per line: 0 none, 1 TO, 2 AW, 3 TO(exf), 4 AW(exf)
+O_CROSS = int(META.get('xc', O_TA + len(LINES) + 2 * len(SUMS)))
+O_TOEXF = int(META.get('toexf', O_CROSS + len(LINES)))   # per sum, how many of ITS lines read TO(exf)
+#   how many lines each sum column holds, off its own label - "ws16-22" is 7 lines. Its TO(exf)
+#   count can never exceed that, which is what the byte check below leans on.
+SUM_N = [int(m.group(2)) - int(m.group(1)) + 1 if m else len(LINES)
+         for m in (re.match(r'ws(\d+)-(\d+)$', x) for x in SUMS)]
 O_SIDE = STRIDE - 1
 #   THE ORACLE WAS REBUILT 2026-11-15 21:06 UTC: gcws15 and gcws30 dropped from the columns, the fence
 #   locked at 23/77 with its button gone, the pivots +15 button gone, two new A buttons (ws1-ws6,
@@ -206,9 +215,6 @@ def K_OF(s):
                 .replace(tzinfo=dt.timezone.utc).timestamp() * 1000) - T0) // STEP
 
 
-O_TA = len(LINES) + len(SUMS)   # the TO/AW code per line: 0 none, 1 TO, 2 AW, 3 TO(exf), 4 AW(exf)
-
-
 def load(flip=0, alo=None, ahi=None, chunk=20000):
     """-> a dict of [n,16] bool per ws TF 1..15, plus the row's target-side [n].
 
@@ -235,6 +241,20 @@ def load(flip=0, alo=None, ahi=None, chunk=20000):
         n = min(chunk, NROWS - a)
         u = '%s/rows?start=%d&count=%d&flip=%d&alo=%d&ahi=%d' % (BASE, a, n, flip, alo, ahi)
         b = np.frombuffer(urllib.request.urlopen(u).read(), np.int8).reshape(-1, STRIDE)
+        #   EVERY BLOCK IS CHECKED AGAINST THE VALUES IT CAN HOLD. A TO/AW code is 0..4, a cross
+        #   code 0..15, a sum's TO(exf) count 0 .. the lines in that sum. Reading one block at
+        #   another's offset lands outside its range almost at once, which is what was missing when
+        #   O_TA was stale.
+        _ta = b[:, O_TA:O_TA + len(LINES)].astype(int)
+        assert _ta.min() >= 0 and _ta.max() <= 4, \
+            ('the TO/AW block is not at byte %d on this page' % O_TA, int(_ta.min()), int(_ta.max()))
+        _xc = b[:, O_CROSS:O_CROSS + len(LINES)].astype(int)
+        assert _xc.min() >= 0 and _xc.max() <= 15, \
+            ('the cross block is not at byte %d on this page' % O_CROSS, int(_xc.min()), int(_xc.max()))
+        for k, _lab in enumerate(SUMS):
+            _c = b[:, O_TOEXF + k].astype(int)
+            assert _c.min() >= 0 and _c.max() <= SUM_N[k], \
+                ('the %s TO(exf) count is not at byte %d' % (_lab, O_TOEXF + k), int(_c.max()))
         for j, tf in WS:
             c = b[:, O_CROSS + j].astype(int)
             out['cross'][a:a + n, tf] = (c & 3) > 0
