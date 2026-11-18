@@ -84,6 +84,10 @@ ORAC_ROWS = _knob('ORAC_ROWS', 3, int)               # his *"must qualify within
 ORAC_LOW_HI = _knob('ORAC_LOW_HI', 7, int)           # his *"lowband is ws1-ws7"*
 ORAC_HIGH_HI = _knob('ORAC_HIGH_HI', 15, int)        # his *"highband is ws8-ws15"*
 ORAC_LOW_AW = _knob('ORAC_LOW_AW', 5, int)           # his *"lowband is printing >=5 AW(any)"*
+ORAC_LOW_FLIPS = _knob('ORAC_LOW_FLIPS', 2, int)     # his 1118 *"OR >=2 AW flips"*
+#   HIS 1118 LATER: he rewrote states 2 and 3 to find the denominator - the conditional highband
+#   and its three conditions are NOT in the spec he is working from now. These four keep his
+#   values for when he builds out from the denominator; nothing reads them in the meantime.
 ORAC_HIGH_AW = _knob('ORAC_HIGH_AW', 3, int)         # his *">=3 AW(any) are required if"*
 ORAC_HIGH_XE = _knob('ORAC_HIGH_XE', 1, int)         # his *"highband must print ... >=1 x/e cross"*
 ORAC_TOEXF_GATE = _knob('ORAC_TOEXF_GATE', 1, int)   # his condition1 *"TO(exf): {>1}"* - strictly above
@@ -181,6 +185,8 @@ RULED = {
     'ORAC_LOW_HI': (7, 'his *"lowband is ws1-ws7"*'),
     'ORAC_HIGH_HI': (15, 'his *"highband is ws8-ws15"*'),
     'ORAC_LOW_AW': (5, 'his state 2: *"lowband is printing >=5 AW(any)"*'),
+    'ORAC_LOW_FLIPS': (2, 'his 1118 state 2, the other side of the OR: *"(>=5 AW(any) OR '
+                          '>=2 AW flips)"*. An AW flip is the TO -> AW flip, his *"new AW"*'),
     'ORAC_HIGH_AW': (3, 'his state 3: *">=3 AW(any) are required if any of these conditions qualify"*'),
     'ORAC_HIGH_XE': (1, 'his state 3 fall-through: *"highband must print 0 TOexf and >=1 x/e cross"*'),
     'ORAC_TOEXF_GATE': (1, 'his condition1 `toexf-gate`: the two sum columns\' TO(exf) counts added '

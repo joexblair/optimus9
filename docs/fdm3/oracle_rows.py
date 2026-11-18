@@ -384,27 +384,52 @@ def orac_walk(R, reads):
     return on
 
 
-def orac_exhaust(R, reads, gate_window):
-    """-> dict of the per-row verdicts his three states need. `gate_window` picks his condition1's
-    span, which he has not ruled: 'row' reads the final row alone, 'trade' any row of the trade up
-    to and including it."""
+def orac_exhaust(R):
+    """HIS 1118 DENOMINATOR SPEC, verbatim: *"1) six x-crosses printing in 2 rows in lowband
+    (refered to as `6x`) / ***the next 2 must qualify within 3 rows, and those 3 rows encompass
+    6x*** / 2) lowband is printing (>=5 AW(any) OR >=2 AW flips) and 0 TOexf / 3) highband must
+    print 0 TOexf and >=1 x/e cross"*.
+
+    His 1118 answers still hold: the page is the 30 second oracle, and *"the zero TOexf condtion
+    belongs to the final row, the other conditions are placed anywhere in the three rows"*.
+    An AW flip is the TO -> AW flip, his *"new AW"*.
+    THE CONDITIONAL HIGHBAND IS NOT IN THIS SPEC - he replaced it to find the denominator. Its
+    three conditions live in orac_conditions below and nothing here reads them.
+    """
     lo_hi, hi_lo, hi_hi = int(FK.ORAC_LOW_HI), int(FK.ORAC_LOW_HI) + 1, int(FK.ORAC_HIGH_HI)
     nrow, n6 = int(FK.ORAC_ROWS), int(FK.ORAC_6X_ROWS)
-    #   STATE 1: six distinct lowband TFs carry an x-cross inside 2 rows, and those 2 rows sit inside
-    #   the 3. A cross counts ONCE per TF per window - his 1115 ruling.
+    #   STATE 1: six distinct lowband TFs carry an x-cross inside 2 rows, and those 2 rows sit
+    #   inside the 3. A cross counts ONCE per TF per window - his 1115 ruling.
     six = window(R['x'], n6)[:, 1:lo_hi + 1].sum(1) >= int(FK.ORAC_6X_HITS)
     s1 = six.copy()
     for d in range(1, nrow - n6 + 1):            # 6x may end on the row or up to (3 - 2) rows earlier
         s1[d:] |= six[:-d]
-    #   STATE 2: >=5 lowband AW(any) anywhere in the 3 rows, and 0 lowband TO(exf) ON THE FINAL ROW
+    #   STATE 2: across the 3 rows, >=5 lowband AW(any) OR >=2 lowband AW flips; and 0 lowband
+    #   TO(exf) ON THE FINAL ROW
     low_aw = window(R['aw'], nrow)[:, 1:lo_hi + 1].sum(1)
+    low_fl = window(R['newaw'], nrow)[:, 1:lo_hi + 1].sum(1)
     low_toexf = R['toexf'][:, 1:lo_hi + 1].sum(1)
-    s2 = (low_aw >= int(FK.ORAC_LOW_AW)) & (low_toexf == 0)
-    #   STATE 3: the conditional highband output
-    high_aw = window(R['aw'], nrow)[:, hi_lo:hi_hi + 1].sum(1)
+    s2 = ((low_aw >= int(FK.ORAC_LOW_AW)) | (low_fl >= int(FK.ORAC_LOW_FLIPS))) & (low_toexf == 0)
+    #   STATE 3: 0 highband TO(exf) ON THE FINAL ROW, and >=1 highband x or e cross across the 3
     high_toexf = R['toexf'][:, hi_lo:hi_hi + 1].sum(1)
     high_xe = window(R['cross'], nrow)[:, hi_lo:hi_hi + 1].sum(1)
-    #   condition1 `toexf-gate`: the two sum columns added together, strictly above the knob
+    s3 = (high_toexf == 0) & (high_xe >= int(FK.ORAC_HIGH_XE))
+    #   HIS GENERAL NOTE reads the other way too: *"'printing TOexf' means 'any of the cells in the
+    #   current row, between ws1 and ws15, that are printing TO(exf)'"* - the WHOLE range, where his
+    #   states say lowband and highband. Carried beside it so the difference is a number.
+    all_toexf = R['toexf'][:, 1:hi_hi + 1].sum(1)
+    return dict(s1=s1, s2=s2, s3=s3, six=six, low_aw=low_aw, low_fl=low_fl, low_toexf=low_toexf,
+                all_toexf=all_toexf, high_toexf=high_toexf, high_xe=high_xe,
+                fires=s1 & s2 & s3)
+
+
+def orac_conditions(R, reads, gate_window):
+    """HIS 1118 CONDITIONAL HIGHBAND - *"3) the conditional highband output"* with its condition1,
+    condition2 and condition3. OUT OF THE CURRENT SPEC: he replaced states 2 and 3 to find the
+    denominator first, so nothing fires off this. Kept whole, with his values, for when he builds
+    out from the denominator. `gate_window` is his condition1 span, which he never ruled: 'row'
+    reads the final row alone, 'trade' any row of the trade up to and including it.
+    """
     gsum = R['sumtoexf'].sum(1)
     if gate_window == 'row':
         c1 = gsum > int(FK.ORAC_TOEXF_GATE)
@@ -415,19 +440,7 @@ def orac_exhaust(R, reads, gate_window):
         c1 = (c[np.arange(NROWS) + 1] - c[np.minimum(orow, np.arange(NROWS))]) > 0
     c2 = reads['nmage'] > int(FK.ORAC_MAGE_OOB)
     c3 = ~reads['r1oob']
-    anyc = c1 | c2 | c3
-    s3 = np.where(anyc, high_aw >= int(FK.ORAC_HIGH_AW),
-                  (high_toexf == 0) & (high_xe >= int(FK.ORAC_HIGH_XE)))
-    #   HIS GENERAL NOTE reads the other way too: *"'printing TOexf' means 'any of the cells in the
-    #   current row, between ws1 and ws15, that are printing TO(exf)'"* - the WHOLE range, where his
-    #   state 2 says "lowband is printing ... 0 TOexf". Both readings are carried so the difference
-    #   is a number he can look at, not a choice I made for him.
-    all_toexf = R['toexf'][:, 1:hi_hi + 1].sum(1)
-    s2w = (low_aw >= int(FK.ORAC_LOW_AW)) & (all_toexf == 0)
-    return dict(s1=s1, s2=s2, s2w=s2w, s3=s3, six=six, low_aw=low_aw, low_toexf=low_toexf,
-                all_toexf=all_toexf, high_aw=high_aw, high_toexf=high_toexf, high_xe=high_xe,
-                c1=c1, c2=c2, c3=c3, anyc=anyc, gsum=gsum,
-                fires=s1 & s2 & s3, fires_w=s1 & s2w & s3)
+    return dict(c1=c1, c2=c2, c3=c3, anyc=c1 | c2 | c3, gsum=gsum)
 
 
 def window(a, rows):
@@ -655,107 +668,105 @@ def control(R):
             'ws15 the only one missing' % (z - a, STEP // 1000))
 
 
-def orac_state2_file(day, a, z, R, reads, walk, V, path):
-    """HIS 1118: the state 2 rows of `day`, one record per row, with every other test beside it."""
-    vr, vt = V['row'], V['trade']
-    k = np.flatnonzero(vr['s2'][a:z + 1]) + a
+def orac_file(day, a, z, R, reads, walk, V, path):
+    """HIS 1118: every row of `day` that passes STATE 2, one record per row, with the other two
+    states beside it, then every firing event's three rows in full."""
+    lo_hi, hi_lo = int(FK.ORAC_LOW_HI), int(FK.ORAC_LOW_HI) + 1
+    hi_hi, nrow = int(FK.ORAC_HIGH_HI), int(FK.ORAC_ROWS)
+    k = np.flatnonzero(V['s2'][a:z + 1]) + a
+    tfs = lambda m, a_, b_: ','.join('ws%d' % t for t in range(a_, b_ + 1) if m[t]) or '-'
     with open(path, 'w') as f:
         w = lambda t: f.write(t + '\n')
-        w('# orac-exhaust, every row of %s that passes HIS STATE 2' % day)
+        w('# orac-exhaust on %s - HIS 1118 DENOMINATOR SPEC' % day)
         w('#')
-        w('# HIS STATE 2: *"lowband is printing >=5 AW(any) and 0 TOexf"*, with his 1118 answer')
-        w('# *"the zero TOexf condtion belongs to the final row, the other conditions are placed')
-        w('# anywhere in the three rows"*. So: >=%d of ws1..ws%d read AW(inf) or AW(exf) somewhere in'
-          % (int(FK.ORAC_LOW_AW), int(FK.ORAC_LOW_HI)))
-        w('# the %d rows ENDING on this row, and none of ws1..ws%d reads TO(exf) on this row itself.'
-          % (int(FK.ORAC_ROWS), int(FK.ORAC_LOW_HI)))
+        w('# HIS SPEC, verbatim:')
+        w('#   1) six x-crosses printing in 2 rows in lowband (refered to as `6x`)')
+        w('#   ***the next 2 must qualify within 3 rows, and those 3 rows encompass 6x***')
+        w('#   2) lowband is printing (>=5 AW(any) OR >=2 AW flips) and 0 TOexf')
+        w('#   3) highband must print 0 TOexf and >=1 x/e cross')
+        w('#')
+        w('# HIS 1118 ANSWERS, still in force: the page is the 30 second oracle; *"the zero TOexf')
+        w('# condtion belongs to the final row, the other conditions are placed anywhere in the')
+        w('# three rows"*; lowband is ws1-ws%d, highband is ws%d-ws%d.' % (lo_hi, hi_lo, hi_hi))
+        w('# An AW flip is the TO -> AW flip, his *"new AW"*. A cross counts once per TF per window.')
         w('#')
         w('# the page: port %d, %d rows %d s apart, %s .. %s'
           % (PORT, NROWS, STEP // 1000, U(0), U(NROWS - 1)))
         w('# the tape: %d bars, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
         w('# the knobs (banked): ' + ' '.join('%s=%s' % (kk, vv) for kk, vv in FK.live()
-                                              if kk.startswith('ORAC')))
+                                              if kk.startswith('ORAC_')))
         w('#')
         w('# THE COLUMNS')
         w('#   the row              the oracle row, its own open time (UTC)')
         w('#   trade opened         the pivot-based pseudo trade this row sits in, by its open row')
-        w('#   side                 that trade\'s target-side. Every read below is on it')
-        w('#   state 1 6x           his `6x`: %d of ws1..ws%d carry an x-cross inside %d rows, and'
-          % (int(FK.ORAC_6X_HITS), int(FK.ORAC_LOW_HI), int(FK.ORAC_6X_ROWS)))
-        w('#                        those rows sit inside the %d. "this row" / "the row before" /'
-          % int(FK.ORAC_ROWS))
-        w('#                        "no" says where it landed')
-        w('#   lowband AW in %d      distinct ws1..ws%d reading AW(any) across the %d rows'
-          % (int(FK.ORAC_ROWS), int(FK.ORAC_LOW_HI), int(FK.ORAC_ROWS)))
-        w('#   lowband TOexf        ws1..ws%d reading TO(exf) ON THIS ROW - 0 on every row here'
-          % int(FK.ORAC_LOW_HI))
-        w('#   ws1-15 TOexf         the same count over ws1..ws%d, his general note\'s range'
-          % int(FK.ORAC_HIGH_HI))
-        w('#   highband AW in %d     distinct ws%d..ws%d reading AW(any) across the %d rows'
-          % (int(FK.ORAC_ROWS), int(FK.ORAC_LOW_HI) + 1, int(FK.ORAC_HIGH_HI), int(FK.ORAC_ROWS)))
-        w('#   highband TOexf       ws%d..ws%d reading TO(exf) ON THIS ROW'
-          % (int(FK.ORAC_LOW_HI) + 1, int(FK.ORAC_HIGH_HI)))
-        w('#   highband x/e in %d    distinct ws%d..ws%d carrying an x-cross or an e-cross across the %d'
-          % (int(FK.ORAC_ROWS), int(FK.ORAC_LOW_HI) + 1, int(FK.ORAC_HIGH_HI), int(FK.ORAC_ROWS)))
-        w('#   toexf-gate sum       the ws16-22 and ws23-30 TO(exf) counts added, ON THIS ROW')
-        w('#   cond1 row            his condition1, that sum > %d on this row' % int(FK.ORAC_TOEXF_GATE))
-        w('#   cond1 trade          the same, anywhere in the trade up to and including this row')
-        w('#   cond2 Mages          distinct ws1..ws%d Mages that were oob %g/%g on the target side'
-          % (int(FK.ORAC_MAGE_HI), float(OOB), 100 - float(OOB)))
-        w('#                        during the trade, closed-prev. His condition2 wants > %d'
-          % int(FK.ORAC_MAGE_OOB))
-        w('#   cond3                his condition3: ws1r did NOT cross to oob during the trade')
-        w('#   highband branch      which test state 3 runs - ">=%d AW" if any condition qualified,'
-          % int(FK.ORAC_HIGH_AW))
-        w('#                        else "0 TOexf + x/e"')
-        w('#   state 3 row          state 3 with condition1 read on this row')
-        w('#   state 3 trade        state 3 with condition1 read across the trade')
+        w('#   side                 that trade\'s target-side')
+        w('#   state 1 6x           where the 6x landed: this row / the row before / no')
+        w('#   lowband AW in %d      distinct ws1..ws%d reading AW(any) across the %d rows - wants >=%d'
+          % (nrow, lo_hi, nrow, int(FK.ORAC_LOW_AW)))
+        w('#   lowband flips in %d   distinct ws1..ws%d whose cell flipped TO -> AW across the %d rows'
+          % (nrow, lo_hi, nrow))
+        w('#                        - the other side of his OR, wants >=%d' % int(FK.ORAC_LOW_FLIPS))
+        w('#   lowband TOexf        ws1..ws%d reading TO(exf) ON THIS ROW - 0 on every row here' % lo_hi)
+        w('#   ws1-15 TOexf         the same count over ws1..ws%d, his general note\'s range' % hi_hi)
+        w('#   highband TOexf       ws%d..ws%d reading TO(exf) ON THIS ROW - state 3 wants 0'
+          % (hi_lo, hi_hi))
+        w('#   highband x/e in %d    distinct ws%d..ws%d carrying an x-cross or an e-cross across the'
+          % (nrow, hi_lo, hi_hi))
+        w('#                        %d rows - state 3 wants >=%d' % (nrow, int(FK.ORAC_HIGH_XE)))
+        w('#   state 1 / 2 / 3      PASS or fail, each of his three states')
         w('#   ws1r walk            his general note\'s walk: ws1r crosses to ib from oob, walk to')
         w('#                        ws2r\'s AW flip, then to the first AW flip of ws3r/ws4r/ws5r.')
         w('#                        STUB: the `ex-ws1r-mom-fence` trigger is not defined yet, so')
-        w('#                        only the oob trigger starts it and this gate is NARROWER than')
-        w('#                        his spec, never wider')
-        w('#   orac-exhaust         state 1 AND state 2 AND state 3, condition1 read on this row')
-        w('#')
-        w('# EVERY TRADE-SCOPED READ CLOSES ON THIS ROW\'S OWN PRINT BAR. No later bar is read.')
+        w('#                        only the oob trigger starts it and this is NARROWER than his')
+        w('#                        spec, never wider. It is NOT part of the denominator - it is')
+        w('#                        printed beside it, which is the capture he asked for')
+        w('#   orac-exhaust         state 1 AND state 2 AND state 3')
         w('')
-        w('| the row | trade opened | side | state 1 6x | lowband AW in %d | lowband TOexf '
-          '| ws1-15 TOexf | highband AW in %d | highband TOexf | highband x/e in %d '
-          '| toexf-gate sum | cond1 row | cond1 trade | cond2 Mages | cond3 | highband branch '
-          '| state 3 row | state 3 trade | ws1r walk | orac-exhaust |'
-          % (int(FK.ORAC_ROWS), int(FK.ORAC_ROWS), int(FK.ORAC_ROWS)))
-        w('|' + '---|' * 20)
+        w('| the row | trade opened | side | state 1 6x | lowband AW in %d | lowband flips in %d '
+          '| lowband TOexf | ws1-15 TOexf | highband TOexf | highband x/e in %d | state 1 | state 2 '
+          '| state 3 | ws1r walk | orac-exhaust |' % (nrow, nrow, nrow))
+        w('|' + '---|' * 15)
         for i in k:
-            six = ('this row' if vr['six'][i] else
-                   'the row before' if (i > 0 and vr['six'][i - 1]) else 'no')
-            w('| %s | %s | %s | %s | %d | %d | %d | %d | %d | %d | %d | %s | %s | %d | %s | %s '
-              '| %s | %s | %s | %s |'
+            six = ('this row' if V['six'][i] else
+                   'the row before' if (i > 0 and V['six'][i - 1]) else 'no')
+            w('| %s | %s | %s | %s | %d | %d | %d | %d | %d | %d | %s | %s | %s | %s | %s |'
               % (U(int(i)), U(int(np.searchsorted(PRT, reads['topen'][i], 'left'))),
                  'HIGH' if reads['side'][i] > 0 else 'LOW' if reads['side'][i] < 0 else '-',
-                 six, vr['low_aw'][i], vr['low_toexf'][i], vr['all_toexf'][i], vr['high_aw'][i],
-                 vr['high_toexf'][i], vr['high_xe'][i], vr['gsum'][i],
-                 'yes' if vr['c1'][i] else 'no', 'yes' if vt['c1'][i] else 'no',
-                 reads['nmage'][i], 'yes' if vr['c3'][i] else 'no',
-                 '>=%d AW' % int(FK.ORAC_HIGH_AW) if vr['anyc'][i] else '0 TOexf + x/e',
-                 'PASS' if vr['s3'][i] else 'fail', 'PASS' if vt['s3'][i] else 'fail',
+                 six, V['low_aw'][i], V['low_fl'][i], V['low_toexf'][i], V['all_toexf'][i],
+                 V['high_toexf'][i], V['high_xe'][i],
+                 'PASS' if V['s1'][i] else 'fail', 'PASS' if V['s2'][i] else 'fail',
+                 'PASS' if V['s3'][i] else 'fail',
                  'running' if walk[i] else 'not running',
-                 'FIRES' if vr['fires'][i] else '-'))
+                 'FIRES' if V['fires'][i] else '-'))
         w('')
         w('| the count | rows |')
         w('|---|---|')
         for lab, m in (('rows in %s' % day, np.ones(NROWS, bool)),
-                       ('pass state 2', vr['s2']),
-                       ('pass state 2 and state 1', vr['s2'] & vr['s1']),
-                       ('pass state 2 and state 3', vr['s2'] & vr['s3']),
-                       ('orac-exhaust', vr['fires']),
-                       ('orac-exhaust with his ws1r walk running', vr['fires'] & walk)):
+                       ('6x: %d of ws1..ws%d carry an x-cross inside %d rows'
+                        % (int(FK.ORAC_6X_HITS), lo_hi, int(FK.ORAC_6X_ROWS)), V['six']),
+                       ('state 1', V['s1']), ('state 2', V['s2']), ('state 3', V['s3']),
+                       ('state 1 + state 2', V['s1'] & V['s2']),
+                       ('ORAC-EXHAUST', V['fires']),
+                       ('orac-exhaust with his ws1r walk running', V['fires'] & walk)):
             w('| %s | %d |' % (lab, int(m[a:z + 1].sum())))
+        for i in np.flatnonzero(V['fires'][a:z + 1]) + a:
+            w('')
+            w('| orac-exhaust %s | lowband x-cross | lowband AW(any) | lowband AW flip '
+              '| lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |' % U(int(i)))
+            w('|' + '---|' * 8)
+            for j in range(i - nrow + 1, i + 1):
+                w('| %s | %s | %s | %s | %s | %s | %s | %s |'
+                  % (U(int(j)), tfs(R['x'][j], 1, lo_hi), tfs(R['aw'][j], 1, lo_hi),
+                     tfs(R['newaw'][j], 1, lo_hi), tfs(R['toexf'][j], 1, lo_hi),
+                     tfs(R['aw'][j], hi_lo, hi_hi), tfs(R['toexf'][j], hi_lo, hi_hi),
+                     tfs(R['cross'][j], hi_lo, hi_hi)))
     return len(k)
 
 
 def main():
     if MODE == 'orac-exhaust':
-        #   HIS 1118: report the orac-exhaust events on the day he names, on the 30 second oracle
+        #   HIS 1118: *"let's find the denominator and build out from there"* - his three states,
+        #   with the conditional highband out, reported on the day he names
         day = sys.argv[2]
         assert int(META['step']) == int(FK.ORAC_EXHAUST_ROW_S) * 1000, \
             ('orac-exhaust reads his 30 second oracle', META['step'])
@@ -766,155 +777,45 @@ def main():
         TR = TA.pseudo_trades()[1]
         reads = orac_reads(TR)
         walk = orac_walk(R, reads)
-        V = {w: orac_exhaust(R, reads, w) for w in ('row', 'trade')}
+        V = orac_exhaust(R)
         print('bars %d, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
         print('page port %d, %d rows %d s apart, %s .. %s'
               % (PORT, NROWS, int(META['step']) // 1000, U(0), U(NROWS - 1)))
         print('%s: rows %d .. %d (%s .. %s), pseudo trades on the tape %d'
               % (day, a, z, U(a), U(z), len(TR)))
         print('knobs (banked): ' + ' '.join('%s=%s' % (k, v) for k, v in FK.live()
-                                            if k.startswith('ORAC')))
-        print()
-        print('| the reading | rows in %s |' % day)
-        print('|' + '---|' * 2)
-        for lab, m in (('6x: %d of ws1..ws%d carry an x-cross inside %d rows'
-                        % (int(FK.ORAC_6X_HITS), int(FK.ORAC_LOW_HI), int(FK.ORAC_6X_ROWS)),
-                        V['row']['six']),
-                       ('state 1: that 6x sits inside the %d rows ending here'
-                        % int(FK.ORAC_ROWS), V['row']['s1']),
-                       ('state 2: >=%d lowband AW(any) in the %d rows AND 0 lowband TO(exf) here'
-                        % (int(FK.ORAC_LOW_AW), int(FK.ORAC_ROWS)), V['row']['s2']),
-                       ('state 1 + state 2', V['row']['s1'] & V['row']['s2']),
-                       ('state 3, toexf-gate read on the final row', V['row']['s3']),
-                       ('state 3, toexf-gate read across the trade', V['trade']['s3']),
-                       ('orac-exhaust, toexf-gate on the final row', V['row']['fires']),
-                       ('orac-exhaust, toexf-gate across the trade', V['trade']['fires']),
-                       ('the ws1r walk gate is open', walk),
-                       ('orac-exhaust (final row) AND the walk gate open',
-                        V['row']['fires'] & walk),
-                       ('orac-exhaust if "0 TOexf" in state 2 means ws1..ws15, not ws1..ws%d'
-                        % int(FK.ORAC_LOW_HI), V['row']['fires_w'])):
-            print('| %s | %d |' % (lab, int(m[a:z + 1].sum())))
-        print()
-        #   every row that gets past his first two states, so a row that dies later shows WHERE
-        k = np.flatnonzero((V['row']['s1'] & V['row']['s2'])[a:z + 1]) + a
-        print('| the row | trade opened | side | 6x here | lowband AW in 3 | lowband TO(exf) here '
-              '| highband AW in 3 | highband TO(exf) here | highband x/e in 3 | toexf-gate sum here '
-              '| cond1 row | cond1 trade | cond2 Mages oob | cond3 no ws1r oob | highband branch '
-              '| state 3 row | state 3 trade | walk gate | ORAC-EXHAUST |')
-        print('|' + '---|' * 19)
-        for i in k:
-            vr, vt = V['row'], V['trade']
-            print('| %s | %s | %s | %s | %d | %d | %d | %d | %d | %d | %s | %s | %d | %s | %s | %s '
-                  '| %s | %s | %s |'
-                  % (U(int(i)), U(int(np.searchsorted(PRT, reads['topen'][i], 'left'))),
-                     'HIGH' if reads['side'][i] > 0 else 'LOW' if reads['side'][i] < 0 else '-',
-                     'yes' if vr['six'][i] else 'earlier row',
-                     vr['low_aw'][i], vr['low_toexf'][i], vr['high_aw'][i], vr['high_toexf'][i],
-                     vr['high_xe'][i], vr['gsum'][i],
-                     'yes' if vr['c1'][i] else 'no', 'yes' if vt['c1'][i] else 'no',
-                     reads['nmage'][i], 'yes' if vr['c3'][i] else 'no',
-                     '>=%d AW' % int(FK.ORAC_HIGH_AW) if vr['anyc'][i] else '0 TO(exf) + x/e',
-                     'PASS' if vr['s3'][i] else 'fail', 'PASS' if vt['s3'][i] else 'fail',
-                     'open' if walk[i] else 'shut',
-                     'FIRES' if vr['fires'][i] else '-'))
-        if not len(k):
-            print('| no row in %s passes state 1 and state 2 | | | | | | | | | | | | | | | | | | |'
-                  % day)
-        #   HIS 1118: *"drop these 75 to a txt file"* - every row that passes STATE 2, whether or not
-        #   it passes the other two, so a near miss shows which test it died on
+                                            if k.startswith('ORAC_')))
         if len(sys.argv) >= 4:
             #   THIS MODULE CHDIRS TO THE TAPE'S DIRECTORY at import, so a relative path would land
             #   beside the oracle rather than with the other fdm3 out files. It is resolved here.
             out = sys.argv[3] if os.path.isabs(sys.argv[3]) else os.path.join(HERE, sys.argv[3])
-            orac_state2_file(day, a, z, R, reads, walk, V, out)
-            sys.argv[3] = out
-            print()
-            print('| the file | rows |')
-            print('|---|---|')
-            print('| %s | %d |' % (sys.argv[3], int(V['row']['s2'][a:z + 1].sum())))
-        #   every row of every firing event's 3 row window, so the counts above can be read off the
-        #   rows themselves rather than taken on trust
-        nrow = int(FK.ORAC_ROWS)
-        lo_hi, hi_lo = int(FK.ORAC_LOW_HI), int(FK.ORAC_LOW_HI) + 1
-        hi_hi = int(FK.ORAC_HIGH_HI)
-        tfs = lambda m, a_, b_: ','.join('ws%d' % t for t in range(a_, b_ + 1) if m[t]) or '-'
-        for i in np.flatnonzero(V['row']['fires'][a:z + 1]) + a:
-            print()
-            print('| orac-exhaust %s | lowband x-cross | lowband AW(any) | lowband TO(exf) '
-                  '| highband AW(any) | highband TO(exf) | highband x or e | ws16-22 TO(exf) '
-                  '| ws23-30 TO(exf) |' % U(int(i)))
-            print('|' + '---|' * 9)
-            for j in range(i - nrow + 1, i + 1):
-                print('| %s | %s | %s | %s | %s | %s | %s | %d | %d |'
-                      % (U(int(j)), tfs(R['x'][j], 1, lo_hi), tfs(R['aw'][j], 1, lo_hi),
-                         tfs(R['toexf'][j], 1, lo_hi), tfs(R['aw'][j], hi_lo, hi_hi),
-                         tfs(R['toexf'][j], hi_lo, hi_hi), tfs(R['cross'][j], hi_lo, hi_hi),
-                         R['sumtoexf'][j, 0], R['sumtoexf'][j, 1]))
-        return
-    if len(sys.argv) >= 4 and sys.argv[1] == 'aw6x':
-        #   HIS 1116: the A state is fdm3-wide infrastructure, banked at A ws1-ws6 ON. The two
-        #   buttons are knobs like any other, so fdm3_knobs.check() is what refuses an off-bank run -
-        #   there is no second refusal here and no way to ask for a state from the command line.
-        alo = int(FK.A_WS1_WS6)
-        ahi = int(FK.A_WS7_WS15)
-        R, _SD = load(alo=alo, ahi=ahi)
-        print(control(R))
-        a, z = K_OF(sys.argv[2]), K_OF(sys.argv[3])
-        print('tape bars: %d. the oracle fence is %g/%g.' % (ln.N, META['fence'], 100 - META['fence']))
-        print('| the reading | fires between %s and %s |' % (sys.argv[2], sys.argv[3]))
-        print('|---|---|')
-        m = ltf_5aw_6x(R)
-        print('| A %s %s, A %s %s, AW(*) as distinct timeframes%s | %d |'
-              % (META['abands'][0], 'on' if alo else 'off',
-                 META['abands'][1], 'on' if ahi else 'off',
-                 '' if FK.RULED_OK else ' - NOT THE BANK, an experiment',
-                 int(m[a:z + 1].sum())))
-        if len(sys.argv) >= 5:
-            dump(R, _SD, a, z, sys.argv[4], alo, ahi)
-        return
-    if len(sys.argv) >= 4 and sys.argv[1] == 'find':
-        R, SD = load()
-        print(control(R))
-        print('tape bars: %d. the fdm3 fence is %g/%g.' % (ln.N, FK.MOM_FNC, 100 - FK.MOM_FNC))
-        print('a cross counts ONCE per timeframe per window, his 1115 rule, so either count tops out at 15.')
-        print('his reference: %s .. %s, Nof15 %d, new AW prints %d, x-cross timeframes %d'
-              % (REF_WINDOW, U(K_OF(REF_WINDOW) + REF_ROWS - 1), REF_NOF15, REF_FLIPS, REF_XTFS))
+            n = orac_file(day, a, z, R, reads, walk, V, out)
+            print('file: %s, %d state 2 rows' % (out, n))
         print()
-        find(R, SD, K_OF(sys.argv[2]), K_OF(sys.argv[3]))
+        print('| the reading | rows in %s |' % day)
+        print('|' + '---|' * 2)
+        for lab, m in (('rows in the day', np.ones(NROWS, bool)),
+                       ('6x: %d of ws1..ws%d carry an x-cross inside %d rows'
+                        % (int(FK.ORAC_6X_HITS), int(FK.ORAC_LOW_HI), int(FK.ORAC_6X_ROWS)),
+                        V['six']),
+                       ('state 1: that 6x sits inside the %d rows ending here'
+                        % int(FK.ORAC_ROWS), V['s1']),
+                       ('state 2: (>=%d lowband AW(any) OR >=%d lowband AW flips) in the %d rows, '
+                        'AND 0 lowband TO(exf) here'
+                        % (int(FK.ORAC_LOW_AW), int(FK.ORAC_LOW_FLIPS), int(FK.ORAC_ROWS)),
+                        V['s2']),
+                       ('state 2, the >=%d AW(any) side alone' % int(FK.ORAC_LOW_AW),
+                        (V['low_aw'] >= int(FK.ORAC_LOW_AW)) & (V['low_toexf'] == 0)),
+                       ('state 2, the >=%d AW flips side alone' % int(FK.ORAC_LOW_FLIPS),
+                        (V['low_fl'] >= int(FK.ORAC_LOW_FLIPS)) & (V['low_toexf'] == 0)),
+                       ('state 3: 0 highband TO(exf) here AND >=%d highband x/e in the %d rows'
+                        % (int(FK.ORAC_HIGH_XE), int(FK.ORAC_ROWS)), V['s3']),
+                       ('state 1 + state 2', V['s1'] & V['s2']),
+                       ('ORAC-EXHAUST', V['fires']),
+                       ('his ws1r walk is running', walk),
+                       ('orac-exhaust with that ws1r walk running', V['fires'] & walk)):
+            print('| %s | %d |' % (lab, int(m[a:z + 1].sum())))
         return
-    days = NROWS / 1440.0
-    exc = excursion()
-    print('tape bars: %d, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
-    print('legend: Nof15 = N or more of ws1..ws15 crossed inside the window (HIS #2, a minimum). '
-          'the window ENDS on the row (HIS #3). ws1b oob = %.0f/%.0f, gcws30b fence = %.0f/%.0f.'
-          % (OOB, 100 - OOB, G30_FNC, 100 - G30_FNC))
-    for flip in (0, 1):
-        R, sd = load(flip=flip)
-        x, aw = R['cross'], R['newaw']
-        lab = 'pivots as found' + (', flipped' if flip else '')
-        c = nof15(x, NOF_ROWS)
-        f4 = nof15(x, AWS_ROWS)
-        nf = window((aw[:, 1:AWS_MAXTF + 1].sum(1) >= AWS_FLIPS)[:, None], AWS_ROWS)[:, 0]
-        print()
-        print('| %s | rows | per day |' % lab)
-        print('|---|---|---|')
-        print('| rows with no target-side, so no cross can print | %d | %.1f |'
-              % (int((sd == 0).sum()), (sd == 0).sum() / days))
-        for n in (13, 14, 15):
-            m = c >= n
-            print('| %dof15 in a %d row window | %d | %.1f |' % (n, NOF_ROWS, int(m.sum()), m.sum() / days))
-        print('| %d+ AW flips on one row within ws1..ws%d | %d | %.1f |'
-              % (AWS_FLIPS, AWS_MAXTF, int(nf.sum()), nf.sum() / days))
-        print('| %dof15 in a %d row window | %d | %.1f |'
-              % (AWS_NOF15, AWS_ROWS, int((f4 >= AWS_NOF15).sum()), (f4 >= AWS_NOF15).sum() / days))
-        a4 = nf & (f4 >= AWS_NOF15)
-        print('| 4-ltf-aws - both gates inside the %d row window | %d | %.1f |'
-              % (AWS_ROWS, int(a4.sum()), a4.sum() / days))
-        print('| 4-ltf-aws + ws1b oob or gcws30b ex-%.0f/%.0f | %d | %.1f |'
-              % (G30_FNC, 100 - G30_FNC, int((a4 & exc).sum()), (a4 & exc).sum() / days))
-        m = ltf_xcross(R)
-        print('| LTF-xcross | %d | %.1f |' % (int(m.sum()), m.sum() / days))
     if len(sys.argv) >= 2 and sys.argv[1] == 'mage50':
         #   HIS 1118: the Mage's side of 50 on the ws1..ws15 cells, with the line read off the tape
         #   at every row's print bar as the check on it

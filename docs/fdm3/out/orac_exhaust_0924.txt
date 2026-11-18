@@ -1,0 +1,489 @@
+# orac-exhaust on 2026-09-24 - HIS 1118 DENOMINATOR SPEC
+#
+# HIS SPEC, verbatim:
+#   1) six x-crosses printing in 2 rows in lowband (refered to as `6x`)
+#   ***the next 2 must qualify within 3 rows, and those 3 rows encompass 6x***
+#   2) lowband is printing (>=5 AW(any) OR >=2 AW flips) and 0 TOexf
+#   3) highband must print 0 TOexf and >=1 x/e cross
+#
+# HIS 1118 ANSWERS, still in force: the page is the 30 second oracle; *"the zero TOexf
+# condtion belongs to the final row, the other conditions are placed anywhere in the
+# three rows"*; lowband is ws1-ws7, highband is ws8-ws15.
+# An AW flip is the TO -> AW flip, his *"new AW"*. A cross counts once per TF per window.
+#
+# the page: port 8791, 272159 rows 30 s apart, 2026-07-02 12:00:00 .. 2026-10-04 23:59:00
+# the tape: 1632960 bars, 2026-07-02 12:00:00 .. 2026-10-04 23:59:55
+# the knobs (banked): ORAC_6X_HITS=6 ORAC_6X_ROWS=2 ORAC_EXHAUST_PORT=8791 ORAC_EXHAUST_ROW_S=30 ORAC_HIGH_AW=3 ORAC_HIGH_HI=15 ORAC_HIGH_XE=1 ORAC_LOW_AW=5 ORAC_LOW_FLIPS=2 ORAC_LOW_HI=7 ORAC_MAGE_HI=15 ORAC_MAGE_OOB=3 ORAC_ROWS=3 ORAC_TOEXF_GATE=1
+#
+# THE COLUMNS
+#   the row              the oracle row, its own open time (UTC)
+#   trade opened         the pivot-based pseudo trade this row sits in, by its open row
+#   side                 that trade's target-side
+#   state 1 6x           where the 6x landed: this row / the row before / no
+#   lowband AW in 3      distinct ws1..ws7 reading AW(any) across the 3 rows - wants >=5
+#   lowband flips in 3   distinct ws1..ws7 whose cell flipped TO -> AW across the 3 rows
+#                        - the other side of his OR, wants >=2
+#   lowband TOexf        ws1..ws7 reading TO(exf) ON THIS ROW - 0 on every row here
+#   ws1-15 TOexf         the same count over ws1..ws15, his general note's range
+#   highband TOexf       ws8..ws15 reading TO(exf) ON THIS ROW - state 3 wants 0
+#   highband x/e in 3    distinct ws8..ws15 carrying an x-cross or an e-cross across the
+#                        3 rows - state 3 wants >=1
+#   state 1 / 2 / 3      PASS or fail, each of his three states
+#   ws1r walk            his general note's walk: ws1r crosses to ib from oob, walk to
+#                        ws2r's AW flip, then to the first AW flip of ws3r/ws4r/ws5r.
+#                        STUB: the `ex-ws1r-mom-fence` trigger is not defined yet, so
+#                        only the oob trigger starts it and this is NARROWER than his
+#                        spec, never wider. It is NOT part of the denominator - it is
+#                        printed beside it, which is the capture he asked for
+#   orac-exhaust         state 1 AND state 2 AND state 3
+
+| the row | trade opened | side | state 1 6x | lowband AW in 3 | lowband flips in 3 | lowband TOexf | ws1-15 TOexf | highband TOexf | highband x/e in 3 | state 1 | state 2 | state 3 | ws1r walk | orac-exhaust |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-09-24 00:08:30 | 2026-09-23 23:45:30 | HIGH | this row | 3 | 3 | 0 | 0 | 0 | 5 | PASS | PASS | PASS | running | FIRES |
+| 2026-09-24 00:09:00 | 2026-09-23 23:45:30 | HIGH | the row before | 3 | 3 | 0 | 4 | 4 | 8 | PASS | PASS | fail | not running | - |
+| 2026-09-24 00:21:00 | 2026-09-23 23:45:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 7 | fail | PASS | PASS | not running | - |
+| 2026-09-24 00:25:00 | 2026-09-23 23:45:30 | HIGH | no | 5 | 0 | 0 | 1 | 1 | 8 | fail | PASS | fail | not running | - |
+| 2026-09-24 00:25:30 | 2026-09-23 23:45:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 8 | fail | PASS | PASS | not running | - |
+| 2026-09-24 00:26:00 | 2026-09-23 23:45:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 7 | fail | PASS | PASS | not running | - |
+| 2026-09-24 00:33:30 | 2026-09-23 23:45:30 | HIGH | no | 3 | 3 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 00:34:00 | 2026-09-23 23:45:30 | HIGH | no | 3 | 3 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 00:40:00 | 2026-09-24 00:35:00 | LOW | no | 5 | 0 | 0 | 0 | 0 | 5 | fail | PASS | PASS | not running | - |
+| 2026-09-24 00:40:30 | 2026-09-24 00:35:00 | LOW | no | 5 | 0 | 0 | 0 | 0 | 3 | fail | PASS | PASS | not running | - |
+| 2026-09-24 00:46:30 | 2026-09-24 00:35:00 | LOW | no | 2 | 2 | 0 | 0 | 0 | 5 | fail | PASS | PASS | running | - |
+| 2026-09-24 00:47:00 | 2026-09-24 00:35:00 | LOW | no | 3 | 2 | 0 | 0 | 0 | 5 | fail | PASS | PASS | running | - |
+| 2026-09-24 00:50:00 | 2026-09-24 00:35:00 | LOW | no | 4 | 3 | 0 | 0 | 0 | 5 | fail | PASS | PASS | running | - |
+| 2026-09-24 00:50:30 | 2026-09-24 00:35:00 | LOW | no | 4 | 3 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 00:51:00 | 2026-09-24 00:35:00 | LOW | no | 3 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 00:55:30 | 2026-09-24 00:35:00 | LOW | no | 2 | 2 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 00:56:00 | 2026-09-24 00:35:00 | LOW | no | 2 | 2 | 0 | 1 | 1 | 7 | fail | PASS | fail | not running | - |
+| 2026-09-24 00:56:30 | 2026-09-24 00:35:00 | LOW | no | 2 | 3 | 0 | 0 | 0 | 8 | fail | PASS | PASS | not running | - |
+| 2026-09-24 00:57:00 | 2026-09-24 00:35:00 | LOW | no | 1 | 2 | 0 | 0 | 0 | 8 | fail | PASS | PASS | not running | - |
+| 2026-09-24 00:57:30 | 2026-09-24 00:35:00 | LOW | no | 1 | 2 | 0 | 0 | 0 | 6 | fail | PASS | PASS | not running | - |
+| 2026-09-24 02:03:00 | 2026-09-24 00:35:00 | LOW | no | 5 | 0 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 02:05:00 | 2026-09-24 00:35:00 | LOW | no | 5 | 0 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 02:06:00 | 2026-09-24 00:35:00 | LOW | no | 5 | 0 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 02:10:30 | 2026-09-24 00:35:00 | LOW | no | 3 | 2 | 0 | 0 | 0 | 5 | fail | PASS | PASS | running | - |
+| 2026-09-24 02:11:00 | 2026-09-24 00:35:00 | LOW | no | 1 | 2 | 0 | 0 | 0 | 5 | fail | PASS | PASS | running | - |
+| 2026-09-24 02:11:30 | 2026-09-24 00:35:00 | LOW | no | 1 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 02:12:30 | 2026-09-24 00:35:00 | LOW | no | 1 | 2 | 0 | 0 | 0 | 7 | fail | PASS | PASS | running | - |
+| 2026-09-24 02:16:00 | 2026-09-24 02:14:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 2 | fail | PASS | PASS | running | - |
+| 2026-09-24 02:21:00 | 2026-09-24 02:14:30 | HIGH | no | 5 | 1 | 0 | 0 | 0 | 2 | fail | PASS | PASS | running | - |
+| 2026-09-24 02:46:30 | 2026-09-24 02:14:30 | HIGH | no | 2 | 2 | 0 | 0 | 0 | 0 | fail | PASS | fail | not running | - |
+| 2026-09-24 02:49:30 | 2026-09-24 02:14:30 | HIGH | no | 3 | 3 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 02:50:00 | 2026-09-24 02:14:30 | HIGH | no | 2 | 2 | 0 | 1 | 1 | 4 | fail | PASS | fail | running | - |
+| 2026-09-24 02:50:30 | 2026-09-24 02:14:30 | HIGH | no | 3 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 02:57:00 | 2026-09-24 02:14:30 | HIGH | no | 3 | 2 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 02:57:30 | 2026-09-24 02:14:30 | HIGH | no | 2 | 2 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 02:58:30 | 2026-09-24 02:14:30 | HIGH | no | 2 | 3 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 02:59:00 | 2026-09-24 02:14:30 | HIGH | no | 2 | 3 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 02:59:30 | 2026-09-24 02:14:30 | HIGH | no | 2 | 2 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 03:25:30 | 2026-09-24 03:15:00 | LOW | no | 5 | 1 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 03:26:00 | 2026-09-24 03:15:00 | LOW | no | 5 | 1 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 03:32:00 | 2026-09-24 03:15:00 | LOW | no | 4 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 03:32:30 | 2026-09-24 03:15:00 | LOW | no | 3 | 2 | 0 | 0 | 0 | 2 | fail | PASS | PASS | running | - |
+| 2026-09-24 03:43:30 | 2026-09-24 03:15:00 | LOW | the row before | 2 | 2 | 0 | 0 | 0 | 6 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 03:44:30 | 2026-09-24 03:15:00 | LOW | no | 2 | 3 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 04:07:00 | 2026-09-24 03:15:00 | LOW | no | 1 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 04:07:30 | 2026-09-24 03:15:00 | LOW | no | 1 | 2 | 0 | 1 | 1 | 8 | fail | PASS | fail | running | - |
+| 2026-09-24 04:08:00 | 2026-09-24 03:15:00 | LOW | no | 1 | 2 | 0 | 1 | 1 | 8 | fail | PASS | fail | running | - |
+| 2026-09-24 04:46:00 | 2026-09-24 04:23:30 | HIGH | no | 4 | 4 | 0 | 1 | 1 | 7 | fail | PASS | fail | not running | - |
+| 2026-09-24 04:46:30 | 2026-09-24 04:23:30 | HIGH | no | 2 | 5 | 0 | 1 | 1 | 8 | fail | PASS | fail | not running | - |
+| 2026-09-24 04:47:00 | 2026-09-24 04:23:30 | HIGH | no | 2 | 3 | 0 | 2 | 2 | 7 | fail | PASS | fail | not running | - |
+| 2026-09-24 05:06:30 | 2026-09-24 04:23:30 | HIGH | no | 3 | 3 | 0 | 0 | 0 | 1 | fail | PASS | PASS | running | - |
+| 2026-09-24 05:07:00 | 2026-09-24 04:23:30 | HIGH | no | 3 | 3 | 0 | 0 | 0 | 1 | fail | PASS | PASS | running | - |
+| 2026-09-24 05:07:30 | 2026-09-24 04:23:30 | HIGH | no | 2 | 3 | 0 | 0 | 0 | 0 | fail | PASS | fail | running | - |
+| 2026-09-24 05:16:00 | 2026-09-24 04:23:30 | HIGH | no | 3 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | not running | - |
+| 2026-09-24 05:16:30 | 2026-09-24 04:23:30 | HIGH | no | 3 | 3 | 0 | 0 | 0 | 3 | fail | PASS | PASS | not running | - |
+| 2026-09-24 05:17:00 | 2026-09-24 04:23:30 | HIGH | no | 2 | 3 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 05:17:30 | 2026-09-24 04:23:30 | HIGH | no | 1 | 2 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 06:12:00 | 2026-09-24 04:23:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 6 | fail | PASS | PASS | running | - |
+| 2026-09-24 06:12:30 | 2026-09-24 04:23:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 2 | fail | PASS | PASS | running | - |
+| 2026-09-24 06:14:30 | 2026-09-24 04:23:30 | HIGH | no | 3 | 2 | 0 | 0 | 0 | 8 | fail | PASS | PASS | running | - |
+| 2026-09-24 06:15:00 | 2026-09-24 04:23:30 | HIGH | no | 3 | 2 | 0 | 0 | 0 | 8 | fail | PASS | PASS | running | - |
+| 2026-09-24 06:15:30 | 2026-09-24 04:23:30 | HIGH | no | 2 | 2 | 0 | 0 | 0 | 4 | fail | PASS | PASS | running | - |
+| 2026-09-24 06:19:30 | 2026-09-24 04:23:30 | HIGH | no | 4 | 2 | 0 | 0 | 0 | 4 | fail | PASS | PASS | running | - |
+| 2026-09-24 06:20:30 | 2026-09-24 04:23:30 | HIGH | this row | 3 | 2 | 0 | 2 | 2 | 7 | PASS | PASS | fail | not running | - |
+| 2026-09-24 06:26:30 | 2026-09-24 04:23:30 | HIGH | this row | 2 | 2 | 0 | 0 | 0 | 6 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 06:27:30 | 2026-09-24 04:23:30 | HIGH | no | 4 | 2 | 0 | 0 | 0 | 5 | fail | PASS | PASS | not running | - |
+| 2026-09-24 06:30:30 | 2026-09-24 04:23:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 06:38:00 | 2026-09-24 04:23:30 | HIGH | no | 3 | 2 | 0 | 1 | 1 | 6 | fail | PASS | fail | running | - |
+| 2026-09-24 06:40:30 | 2026-09-24 04:23:30 | HIGH | this row | 2 | 4 | 0 | 0 | 0 | 8 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 06:41:30 | 2026-09-24 04:23:30 | HIGH | this row | 4 | 3 | 0 | 0 | 0 | 8 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 06:44:30 | 2026-09-24 04:23:30 | HIGH | no | 3 | 2 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 06:46:00 | 2026-09-24 04:23:30 | HIGH | the row before | 1 | 2 | 0 | 5 | 5 | 8 | PASS | PASS | fail | not running | - |
+| 2026-09-24 06:46:30 | 2026-09-24 04:23:30 | HIGH | no | 1 | 2 | 0 | 0 | 0 | 8 | fail | PASS | PASS | not running | - |
+| 2026-09-24 06:47:00 | 2026-09-24 04:23:30 | HIGH | no | 1 | 2 | 0 | 0 | 0 | 8 | fail | PASS | PASS | not running | - |
+| 2026-09-24 06:56:00 | 2026-09-24 04:23:30 | HIGH | no | 4 | 3 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 06:56:30 | 2026-09-24 04:23:30 | HIGH | no | 3 | 3 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 07:01:30 | 2026-09-24 04:23:30 | HIGH | no | 0 | 2 | 0 | 1 | 1 | 8 | fail | PASS | fail | not running | - |
+| 2026-09-24 07:16:00 | 2026-09-24 04:23:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 5 | fail | PASS | PASS | not running | - |
+| 2026-09-24 07:21:30 | 2026-09-24 04:23:30 | HIGH | this row | 2 | 2 | 0 | 1 | 1 | 7 | PASS | PASS | fail | not running | - |
+| 2026-09-24 07:22:00 | 2026-09-24 04:23:30 | HIGH | the row before | 1 | 2 | 0 | 0 | 0 | 8 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 07:31:30 | 2026-09-24 04:23:30 | HIGH | no | 2 | 2 | 0 | 0 | 0 | 5 | fail | PASS | PASS | not running | - |
+| 2026-09-24 07:33:00 | 2026-09-24 04:23:30 | HIGH | no | 5 | 1 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 07:40:30 | 2026-09-24 04:23:30 | HIGH | this row | 3 | 2 | 0 | 0 | 0 | 5 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 07:41:00 | 2026-09-24 04:23:30 | HIGH | the row before | 2 | 2 | 0 | 0 | 0 | 4 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 07:41:30 | 2026-09-24 04:23:30 | HIGH | no | 2 | 2 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 07:45:30 | 2026-09-24 04:23:30 | HIGH | the row before | 0 | 2 | 0 | 0 | 0 | 8 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 08:17:00 | 2026-09-24 08:09:30 | LOW | no | 5 | 3 | 0 | 0 | 0 | 5 | fail | PASS | PASS | not running | - |
+| 2026-09-24 08:17:30 | 2026-09-24 08:09:30 | LOW | no | 2 | 2 | 0 | 0 | 0 | 4 | fail | PASS | PASS | running | - |
+| 2026-09-24 08:18:00 | 2026-09-24 08:09:30 | LOW | no | 1 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 08:25:00 | 2026-09-24 08:09:30 | LOW | no | 4 | 4 | 0 | 0 | 0 | 4 | fail | PASS | PASS | running | - |
+| 2026-09-24 08:25:30 | 2026-09-24 08:09:30 | LOW | no | 3 | 4 | 0 | 0 | 0 | 0 | fail | PASS | fail | not running | - |
+| 2026-09-24 08:26:00 | 2026-09-24 08:09:30 | LOW | no | 2 | 3 | 0 | 0 | 0 | 0 | fail | PASS | fail | not running | - |
+| 2026-09-24 08:30:30 | 2026-09-24 08:09:30 | LOW | no | 2 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | not running | - |
+| 2026-09-24 08:31:00 | 2026-09-24 08:09:30 | LOW | no | 3 | 3 | 0 | 0 | 0 | 3 | fail | PASS | PASS | not running | - |
+| 2026-09-24 08:31:30 | 2026-09-24 08:09:30 | LOW | no | 3 | 3 | 0 | 0 | 0 | 3 | fail | PASS | PASS | not running | - |
+| 2026-09-24 08:42:30 | 2026-09-24 08:09:30 | LOW | the row before | 5 | 0 | 0 | 0 | 0 | 7 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 08:51:30 | 2026-09-24 08:09:30 | LOW | no | 3 | 2 | 0 | 0 | 0 | 5 | fail | PASS | PASS | running | - |
+| 2026-09-24 09:15:00 | 2026-09-24 08:09:30 | LOW | no | 5 | 0 | 0 | 0 | 0 | 2 | fail | PASS | PASS | running | - |
+| 2026-09-24 09:20:00 | 2026-09-24 08:09:30 | LOW | this row | 5 | 1 | 0 | 2 | 2 | 6 | PASS | PASS | fail | running | - |
+| 2026-09-24 09:20:30 | 2026-09-24 08:09:30 | LOW | this row | 4 | 2 | 0 | 0 | 0 | 5 | PASS | PASS | PASS | running | FIRES |
+| 2026-09-24 09:21:30 | 2026-09-24 08:09:30 | LOW | this row | 2 | 2 | 0 | 0 | 0 | 5 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 09:35:30 | 2026-09-24 08:09:30 | LOW | this row | 4 | 2 | 0 | 0 | 0 | 5 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 09:36:00 | 2026-09-24 08:09:30 | LOW | the row before | 4 | 2 | 0 | 3 | 3 | 8 | PASS | PASS | fail | not running | - |
+| 2026-09-24 09:50:00 | 2026-09-24 08:09:30 | LOW | no | 5 | 0 | 0 | 1 | 1 | 7 | fail | PASS | fail | running | - |
+| 2026-09-24 10:09:30 | 2026-09-24 08:09:30 | LOW | the row before | 6 | 0 | 0 | 2 | 2 | 7 | PASS | PASS | fail | running | - |
+| 2026-09-24 10:15:30 | 2026-09-24 10:13:30 | HIGH | no | 1 | 2 | 0 | 0 | 0 | 5 | fail | PASS | PASS | running | - |
+| 2026-09-24 10:16:30 | 2026-09-24 10:13:30 | HIGH | no | 3 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | not running | - |
+| 2026-09-24 10:19:30 | 2026-09-24 10:13:30 | HIGH | this row | 0 | 2 | 0 | 0 | 0 | 6 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 10:20:00 | 2026-09-24 10:13:30 | HIGH | the row before | 1 | 2 | 0 | 0 | 0 | 6 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 10:23:00 | 2026-09-24 10:13:30 | HIGH | no | 2 | 2 | 0 | 0 | 0 | 7 | fail | PASS | PASS | not running | - |
+| 2026-09-24 10:24:30 | 2026-09-24 10:13:30 | HIGH | this row | 2 | 4 | 0 | 0 | 0 | 8 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 10:25:00 | 2026-09-24 10:13:30 | HIGH | the row before | 4 | 5 | 0 | 0 | 0 | 8 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 10:25:30 | 2026-09-24 10:13:30 | HIGH | no | 3 | 4 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 10:31:00 | 2026-09-24 10:13:30 | HIGH | this row | 2 | 6 | 0 | 0 | 0 | 8 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 10:31:30 | 2026-09-24 10:13:30 | HIGH | the row before | 1 | 6 | 0 | 0 | 0 | 7 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 10:32:00 | 2026-09-24 10:13:30 | HIGH | no | 1 | 3 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 10:34:00 | 2026-09-24 10:13:30 | HIGH | no | 2 | 2 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 10:34:30 | 2026-09-24 10:13:30 | HIGH | no | 2 | 2 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 10:44:00 | 2026-09-24 10:13:30 | HIGH | no | 5 | 4 | 0 | 0 | 0 | 6 | fail | PASS | PASS | not running | - |
+| 2026-09-24 10:44:30 | 2026-09-24 10:13:30 | HIGH | no | 3 | 4 | 0 | 1 | 1 | 7 | fail | PASS | fail | not running | - |
+| 2026-09-24 10:45:00 | 2026-09-24 10:13:30 | HIGH | no | 1 | 3 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 10:55:00 | 2026-09-24 10:13:30 | HIGH | no | 2 | 2 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 11:00:00 | 2026-09-24 10:13:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 3 | fail | PASS | PASS | not running | - |
+| 2026-09-24 11:00:30 | 2026-09-24 10:13:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 3 | fail | PASS | PASS | not running | - |
+| 2026-09-24 11:01:00 | 2026-09-24 10:13:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 3 | fail | PASS | PASS | not running | - |
+| 2026-09-24 11:07:00 | 2026-09-24 10:13:30 | HIGH | no | 0 | 2 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 11:07:30 | 2026-09-24 10:13:30 | HIGH | no | 1 | 3 | 0 | 0 | 0 | 0 | fail | PASS | fail | not running | - |
+| 2026-09-24 11:08:00 | 2026-09-24 10:13:30 | HIGH | no | 2 | 3 | 0 | 0 | 0 | 0 | fail | PASS | fail | not running | - |
+| 2026-09-24 11:18:30 | 2026-09-24 10:13:30 | HIGH | no | 1 | 2 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 11:19:00 | 2026-09-24 10:13:30 | HIGH | no | 0 | 2 | 0 | 1 | 1 | 2 | fail | PASS | fail | not running | - |
+| 2026-09-24 11:19:30 | 2026-09-24 10:13:30 | HIGH | no | 0 | 2 | 0 | 1 | 1 | 1 | fail | PASS | fail | not running | - |
+| 2026-09-24 11:51:00 | 2026-09-24 10:13:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 11:51:30 | 2026-09-24 10:13:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 12:14:00 | 2026-09-24 10:13:30 | HIGH | no | 3 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 12:14:30 | 2026-09-24 10:13:30 | HIGH | no | 2 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 12:18:30 | 2026-09-24 10:13:30 | HIGH | no | 3 | 2 | 0 | 0 | 0 | 8 | fail | PASS | PASS | not running | - |
+| 2026-09-24 12:25:30 | 2026-09-24 10:13:30 | HIGH | this row | 4 | 4 | 0 | 0 | 0 | 5 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 12:26:00 | 2026-09-24 10:13:30 | HIGH | the row before | 4 | 4 | 0 | 0 | 0 | 7 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 12:26:30 | 2026-09-24 10:13:30 | HIGH | no | 4 | 4 | 0 | 1 | 1 | 7 | fail | PASS | fail | not running | - |
+| 2026-09-24 12:46:00 | 2026-09-24 10:13:30 | HIGH | no | 5 | 1 | 0 | 0 | 0 | 3 | fail | PASS | PASS | not running | - |
+| 2026-09-24 13:00:00 | 2026-09-24 10:13:30 | HIGH | no | 3 | 2 | 0 | 0 | 0 | 4 | fail | PASS | PASS | running | - |
+| 2026-09-24 13:06:30 | 2026-09-24 10:13:30 | HIGH | no | 1 | 2 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 13:10:00 | 2026-09-24 10:13:30 | HIGH | no | 5 | 2 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 13:10:30 | 2026-09-24 10:13:30 | HIGH | no | 4 | 2 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 13:20:00 | 2026-09-24 10:13:30 | HIGH | no | 5 | 0 | 0 | 1 | 1 | 2 | fail | PASS | fail | not running | - |
+| 2026-09-24 13:21:30 | 2026-09-24 10:13:30 | HIGH | this row | 3 | 2 | 0 | 0 | 0 | 3 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 13:34:00 | 2026-09-24 10:13:30 | HIGH | no | 2 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | not running | - |
+| 2026-09-24 14:02:30 | 2026-09-24 10:13:30 | HIGH | no | 5 | 1 | 0 | 3 | 3 | 8 | fail | PASS | fail | running | - |
+| 2026-09-24 14:03:30 | 2026-09-24 10:13:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 7 | fail | PASS | PASS | running | - |
+| 2026-09-24 14:20:00 | 2026-09-24 10:13:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 3 | fail | PASS | PASS | not running | - |
+| 2026-09-24 14:21:00 | 2026-09-24 10:13:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 14:30:30 | 2026-09-24 10:13:30 | HIGH | no | 3 | 5 | 0 | 0 | 0 | 5 | fail | PASS | PASS | running | - |
+| 2026-09-24 14:31:00 | 2026-09-24 10:13:30 | HIGH | no | 3 | 5 | 0 | 0 | 0 | 6 | fail | PASS | PASS | running | - |
+| 2026-09-24 14:31:30 | 2026-09-24 10:13:30 | HIGH | no | 3 | 4 | 0 | 0 | 0 | 2 | fail | PASS | PASS | running | - |
+| 2026-09-24 14:34:00 | 2026-09-24 10:13:30 | HIGH | no | 3 | 3 | 0 | 0 | 0 | 4 | fail | PASS | PASS | running | - |
+| 2026-09-24 14:34:30 | 2026-09-24 10:13:30 | HIGH | no | 3 | 3 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 14:38:00 | 2026-09-24 10:13:30 | HIGH | no | 2 | 3 | 0 | 0 | 0 | 5 | fail | PASS | PASS | not running | - |
+| 2026-09-24 14:38:30 | 2026-09-24 10:13:30 | HIGH | no | 2 | 3 | 0 | 0 | 0 | 5 | fail | PASS | PASS | not running | - |
+| 2026-09-24 14:39:00 | 2026-09-24 10:13:30 | HIGH | no | 1 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | not running | - |
+| 2026-09-24 14:51:30 | 2026-09-24 14:40:00 | LOW | no | 4 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 14:52:00 | 2026-09-24 14:40:00 | LOW | no | 5 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 14:52:30 | 2026-09-24 14:40:00 | LOW | no | 3 | 2 | 0 | 0 | 0 | 2 | fail | PASS | PASS | running | - |
+| 2026-09-24 15:01:30 | 2026-09-24 14:40:00 | LOW | no | 3 | 2 | 0 | 0 | 0 | 1 | fail | PASS | PASS | running | - |
+| 2026-09-24 15:02:00 | 2026-09-24 14:40:00 | LOW | no | 3 | 2 | 0 | 0 | 0 | 2 | fail | PASS | PASS | running | - |
+| 2026-09-24 15:08:00 | 2026-09-24 15:03:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 2 | fail | PASS | PASS | running | - |
+| 2026-09-24 15:08:30 | 2026-09-24 15:03:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 2 | fail | PASS | PASS | running | - |
+| 2026-09-24 15:24:00 | 2026-09-24 15:03:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 6 | fail | PASS | PASS | running | - |
+| 2026-09-24 15:25:00 | 2026-09-24 15:03:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 15:25:30 | 2026-09-24 15:03:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 4 | fail | PASS | PASS | running | - |
+| 2026-09-24 15:26:00 | 2026-09-24 15:03:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 4 | fail | PASS | PASS | running | - |
+| 2026-09-24 15:32:30 | 2026-09-24 15:03:30 | HIGH | no | 2 | 2 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 15:33:00 | 2026-09-24 15:03:30 | HIGH | no | 4 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | not running | - |
+| 2026-09-24 15:33:30 | 2026-09-24 15:03:30 | HIGH | no | 4 | 2 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 15:38:30 | 2026-09-24 15:03:30 | HIGH | no | 3 | 2 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 15:39:30 | 2026-09-24 15:03:30 | HIGH | no | 5 | 3 | 0 | 0 | 0 | 5 | fail | PASS | PASS | not running | - |
+| 2026-09-24 15:40:30 | 2026-09-24 15:03:30 | HIGH | no | 5 | 2 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 15:41:00 | 2026-09-24 15:03:30 | HIGH | no | 5 | 1 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 15:42:00 | 2026-09-24 15:03:30 | HIGH | no | 5 | 0 | 0 | 0 | 0 | 6 | fail | PASS | PASS | not running | - |
+| 2026-09-24 15:42:30 | 2026-09-24 15:03:30 | HIGH | no | 5 | 2 | 0 | 0 | 0 | 6 | fail | PASS | PASS | not running | - |
+| 2026-09-24 15:43:00 | 2026-09-24 15:03:30 | HIGH | no | 5 | 2 | 0 | 0 | 0 | 5 | fail | PASS | PASS | not running | - |
+| 2026-09-24 15:43:30 | 2026-09-24 15:03:30 | HIGH | no | 4 | 2 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 17:01:30 | 2026-09-24 16:48:00 | LOW | this row | 1 | 2 | 0 | 2 | 2 | 8 | PASS | PASS | fail | not running | - |
+| 2026-09-24 17:16:30 | 2026-09-24 16:48:00 | LOW | the row before | 2 | 2 | 0 | 0 | 0 | 8 | PASS | PASS | PASS | running | FIRES |
+| 2026-09-24 17:17:00 | 2026-09-24 16:48:00 | LOW | no | 1 | 2 | 0 | 0 | 0 | 8 | fail | PASS | PASS | running | - |
+| 2026-09-24 17:18:30 | 2026-09-24 16:48:00 | LOW | no | 2 | 2 | 0 | 0 | 0 | 5 | fail | PASS | PASS | running | - |
+| 2026-09-24 17:19:00 | 2026-09-24 16:48:00 | LOW | no | 2 | 2 | 0 | 0 | 0 | 5 | fail | PASS | PASS | running | - |
+| 2026-09-24 17:19:30 | 2026-09-24 16:48:00 | LOW | no | 1 | 2 | 0 | 0 | 0 | 2 | fail | PASS | PASS | running | - |
+| 2026-09-24 17:24:30 | 2026-09-24 16:48:00 | LOW | no | 4 | 2 | 0 | 0 | 0 | 5 | fail | PASS | PASS | running | - |
+| 2026-09-24 17:26:30 | 2026-09-24 16:48:00 | LOW | no | 1 | 4 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 17:27:00 | 2026-09-24 16:48:00 | LOW | no | 0 | 3 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 17:27:30 | 2026-09-24 16:48:00 | LOW | no | 0 | 3 | 0 | 0 | 0 | 2 | fail | PASS | PASS | running | - |
+| 2026-09-24 17:46:00 | 2026-09-24 16:48:00 | LOW | no | 6 | 1 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 17:46:30 | 2026-09-24 16:48:00 | LOW | no | 5 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 17:47:00 | 2026-09-24 16:48:00 | LOW | no | 2 | 3 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 17:47:30 | 2026-09-24 16:48:00 | LOW | no | 2 | 2 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 18:06:30 | 2026-09-24 16:48:00 | LOW | no | 3 | 2 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 18:07:00 | 2026-09-24 16:48:00 | LOW | no | 1 | 2 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 18:07:30 | 2026-09-24 16:48:00 | LOW | no | 1 | 2 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 18:21:30 | 2026-09-24 16:48:00 | LOW | no | 6 | 0 | 0 | 0 | 0 | 6 | fail | PASS | PASS | not running | - |
+| 2026-09-24 18:22:30 | 2026-09-24 16:48:00 | LOW | no | 5 | 0 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 18:54:30 | 2026-09-24 18:35:30 | HIGH | the row before | 3 | 2 | 0 | 0 | 0 | 7 | PASS | PASS | PASS | not running | FIRES |
+| 2026-09-24 18:55:00 | 2026-09-24 18:35:30 | HIGH | no | 4 | 2 | 0 | 1 | 1 | 7 | fail | PASS | fail | not running | - |
+| 2026-09-24 19:10:00 | 2026-09-24 18:35:30 | HIGH | no | 5 | 1 | 0 | 1 | 1 | 1 | fail | PASS | fail | running | - |
+| 2026-09-24 19:10:30 | 2026-09-24 18:35:30 | HIGH | no | 5 | 1 | 0 | 0 | 0 | 1 | fail | PASS | PASS | running | - |
+| 2026-09-24 19:13:00 | 2026-09-24 18:35:30 | HIGH | no | 5 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 19:13:30 | 2026-09-24 18:35:30 | HIGH | no | 4 | 2 | 0 | 1 | 1 | 3 | fail | PASS | fail | running | - |
+| 2026-09-24 19:15:00 | 2026-09-24 18:35:30 | HIGH | this row | 4 | 2 | 0 | 0 | 0 | 6 | PASS | PASS | PASS | running | FIRES |
+| 2026-09-24 19:15:30 | 2026-09-24 18:35:30 | HIGH | the row before | 2 | 2 | 0 | 0 | 0 | 8 | PASS | PASS | PASS | running | FIRES |
+| 2026-09-24 19:35:30 | 2026-09-24 18:35:30 | HIGH | the row before | 4 | 6 | 0 | 0 | 0 | 6 | PASS | PASS | PASS | running | FIRES |
+| 2026-09-24 19:36:00 | 2026-09-24 18:35:30 | HIGH | no | 4 | 6 | 0 | 0 | 0 | 6 | fail | PASS | PASS | not running | - |
+| 2026-09-24 19:36:30 | 2026-09-24 18:35:30 | HIGH | no | 3 | 5 | 0 | 1 | 1 | 6 | fail | PASS | fail | not running | - |
+| 2026-09-24 19:52:00 | 2026-09-24 19:41:30 | LOW | the row before | 3 | 2 | 0 | 0 | 0 | 7 | PASS | PASS | PASS | running | FIRES |
+| 2026-09-24 19:52:30 | 2026-09-24 19:41:30 | LOW | no | 3 | 2 | 0 | 0 | 0 | 5 | fail | PASS | PASS | not running | - |
+| 2026-09-24 20:04:30 | 2026-09-24 19:41:30 | LOW | no | 5 | 1 | 0 | 0 | 0 | 8 | fail | PASS | PASS | not running | - |
+| 2026-09-24 20:06:00 | 2026-09-24 19:41:30 | LOW | no | 6 | 0 | 0 | 0 | 0 | 1 | fail | PASS | PASS | not running | - |
+| 2026-09-24 20:16:00 | 2026-09-24 19:41:30 | LOW | no | 5 | 2 | 0 | 0 | 0 | 3 | fail | PASS | PASS | not running | - |
+| 2026-09-24 20:16:30 | 2026-09-24 19:41:30 | LOW | no | 5 | 2 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 20:17:00 | 2026-09-24 19:41:30 | LOW | no | 5 | 1 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 20:21:30 | 2026-09-24 19:41:30 | LOW | no | 5 | 0 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 20:22:00 | 2026-09-24 19:41:30 | LOW | no | 5 | 0 | 0 | 1 | 1 | 7 | fail | PASS | fail | not running | - |
+| 2026-09-24 20:27:00 | 2026-09-24 19:41:30 | LOW | no | 3 | 2 | 0 | 0 | 0 | 6 | fail | PASS | PASS | not running | - |
+| 2026-09-24 20:27:30 | 2026-09-24 19:41:30 | LOW | no | 2 | 2 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 20:28:00 | 2026-09-24 19:41:30 | LOW | no | 2 | 2 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 20:39:00 | 2026-09-24 19:41:30 | LOW | no | 5 | 0 | 0 | 3 | 3 | 6 | fail | PASS | fail | not running | - |
+| 2026-09-24 20:46:30 | 2026-09-24 19:41:30 | LOW | no | 5 | 0 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 21:06:00 | 2026-09-24 19:41:30 | LOW | no | 6 | 0 | 0 | 0 | 0 | 5 | fail | PASS | PASS | not running | - |
+| 2026-09-24 21:06:30 | 2026-09-24 19:41:30 | LOW | no | 6 | 0 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 21:07:00 | 2026-09-24 19:41:30 | LOW | no | 5 | 0 | 0 | 0 | 0 | 0 | fail | PASS | fail | not running | - |
+| 2026-09-24 21:09:00 | 2026-09-24 19:41:30 | LOW | no | 5 | 1 | 0 | 0 | 0 | 7 | fail | PASS | PASS | not running | - |
+| 2026-09-24 21:09:30 | 2026-09-24 19:41:30 | LOW | no | 5 | 1 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 21:10:00 | 2026-09-24 19:41:30 | LOW | no | 5 | 0 | 0 | 0 | 0 | 3 | fail | PASS | PASS | not running | - |
+| 2026-09-24 21:40:00 | 2026-09-24 21:37:00 | LOW | no | 5 | 0 | 0 | 1 | 1 | 3 | fail | PASS | fail | running | - |
+| 2026-09-24 21:41:00 | 2026-09-24 21:37:00 | LOW | no | 5 | 0 | 0 | 0 | 0 | 2 | fail | PASS | PASS | running | - |
+| 2026-09-24 21:52:30 | 2026-09-24 21:37:00 | LOW | no | 2 | 2 | 0 | 0 | 0 | 6 | fail | PASS | PASS | running | - |
+| 2026-09-24 21:53:00 | 2026-09-24 21:37:00 | LOW | no | 2 | 2 | 0 | 0 | 0 | 6 | fail | PASS | PASS | running | - |
+| 2026-09-24 21:53:30 | 2026-09-24 21:37:00 | LOW | no | 2 | 2 | 0 | 0 | 0 | 4 | fail | PASS | PASS | running | - |
+| 2026-09-24 22:03:30 | 2026-09-24 21:37:00 | LOW | no | 3 | 2 | 0 | 1 | 1 | 4 | fail | PASS | fail | not running | - |
+| 2026-09-24 22:04:00 | 2026-09-24 21:37:00 | LOW | no | 3 | 2 | 0 | 0 | 0 | 4 | fail | PASS | PASS | not running | - |
+| 2026-09-24 22:12:30 | 2026-09-24 21:37:00 | LOW | no | 2 | 4 | 0 | 0 | 0 | 6 | fail | PASS | PASS | not running | - |
+| 2026-09-24 22:13:00 | 2026-09-24 21:37:00 | LOW | no | 2 | 4 | 0 | 0 | 0 | 6 | fail | PASS | PASS | not running | - |
+| 2026-09-24 22:14:30 | 2026-09-24 21:37:00 | LOW | no | 2 | 2 | 0 | 0 | 0 | 6 | fail | PASS | PASS | not running | - |
+| 2026-09-24 22:15:00 | 2026-09-24 21:37:00 | LOW | no | 2 | 2 | 0 | 0 | 0 | 6 | fail | PASS | PASS | not running | - |
+| 2026-09-24 22:25:00 | 2026-09-24 21:37:00 | LOW | this row | 1 | 3 | 0 | 1 | 1 | 7 | PASS | PASS | fail | running | - |
+| 2026-09-24 22:25:30 | 2026-09-24 21:37:00 | LOW | the row before | 0 | 3 | 0 | 0 | 0 | 6 | PASS | PASS | PASS | running | FIRES |
+| 2026-09-24 22:31:30 | 2026-09-24 21:37:00 | LOW | the row before | 0 | 2 | 0 | 1 | 1 | 6 | PASS | PASS | fail | running | - |
+| 2026-09-24 22:48:30 | 2026-09-24 21:37:00 | LOW | the row before | 3 | 3 | 0 | 0 | 0 | 7 | PASS | PASS | PASS | running | FIRES |
+| 2026-09-24 22:49:00 | 2026-09-24 21:37:00 | LOW | no | 1 | 2 | 0 | 0 | 0 | 6 | fail | PASS | PASS | running | - |
+| 2026-09-24 23:16:30 | 2026-09-24 21:37:00 | LOW | no | 7 | 1 | 0 | 0 | 0 | 3 | fail | PASS | PASS | running | - |
+| 2026-09-24 23:32:00 | 2026-09-24 23:19:30 | HIGH | the row before | 3 | 2 | 0 | 0 | 0 | 7 | PASS | PASS | PASS | running | FIRES |
+| 2026-09-24 23:57:30 | 2026-09-24 23:19:30 | HIGH | no | 1 | 2 | 0 | 0 | 0 | 2 | fail | PASS | PASS | not running | - |
+| 2026-09-24 23:59:00 | 2026-09-24 23:19:30 | HIGH | no | 2 | 2 | 0 | 0 | 0 | 6 | fail | PASS | PASS | not running | - |
+
+| the count | rows |
+|---|---|
+| rows in 2026-09-24 | 2880 |
+| 6x: 6 of ws1..ws7 carry an x-cross inside 2 rows | 173 |
+| state 1 | 275 |
+| state 2 | 251 |
+| state 3 | 1970 |
+| state 1 + state 2 | 41 |
+| ORAC-EXHAUST | 31 |
+| orac-exhaust with his ws1r walk running | 10 |
+
+| orac-exhaust 2026-09-24 00:08:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 00:07:30 | - | ws2 | - | - | ws9 | - | - |
+| 2026-09-24 00:08:00 | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | ws2 | - | ws4,ws5,ws6,ws7 | - | ws8,ws10 | ws8,ws10,ws11,ws14,ws15 |
+| 2026-09-24 00:08:30 | ws3,ws5 | ws2,ws3,ws6 | ws1,ws3,ws4 | - | - | - | ws14 |
+
+| orac-exhaust 2026-09-24 03:43:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 03:42:30 | ws1,ws2,ws3,ws4,ws5 | - | - | ws3,ws5 | ws8,ws9,ws10,ws11,ws14,ws15 | - | ws8,ws9,ws12,ws13 |
+| 2026-09-24 03:43:00 | ws1,ws2,ws3,ws6,ws7 | - | - | ws3,ws5 | ws10,ws11,ws14,ws15 | ws8,ws9 | ws8,ws9,ws10,ws11,ws12,ws13 |
+| 2026-09-24 03:43:30 | - | ws6,ws7 | ws4,ws5 | - | - | - | - |
+
+| orac-exhaust 2026-09-24 06:26:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 06:25:30 | - | ws3,ws7 | ws4 | - | ws9,ws12,ws14 | - | ws10,ws12,ws15 |
+| 2026-09-24 06:26:00 | ws1,ws2,ws4,ws5,ws6,ws7 | - | - | ws3,ws4,ws7 | ws10,ws15 | ws9,ws12,ws13 | ws8,ws10,ws11,ws12,ws13,ws15 |
+| 2026-09-24 06:26:30 | - | ws7 | ws5 | - | - | - | ws15 |
+
+| orac-exhaust 2026-09-24 06:40:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 06:39:30 | ws3 | - | - | - | - | - | ws14 |
+| 2026-09-24 06:40:00 | ws1,ws2,ws3,ws4,ws5,ws7 | - | ws3,ws7 | ws3,ws4,ws6,ws7 | ws8,ws11,ws13,ws14,ws15 | ws12 | ws8,ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
+| 2026-09-24 06:40:30 | - | ws4,ws7 | ws2,ws5 | - | ws11 | - | ws8,ws9 |
+
+| orac-exhaust 2026-09-24 06:41:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 06:40:30 | - | ws4,ws7 | ws2,ws5 | - | ws11 | - | ws8,ws9 |
+| 2026-09-24 06:41:00 | ws1,ws2,ws3,ws4,ws5,ws7 | - | - | ws3,ws5,ws6 | ws8,ws11,ws13,ws14,ws15 | ws9 | ws8,ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
+| 2026-09-24 06:41:30 | ws7 | ws5,ws6 | ws4 | - | ws13,ws15 | - | ws10,ws11,ws13,ws15 |
+
+| orac-exhaust 2026-09-24 07:22:00 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 07:21:00 | ws2,ws3,ws4,ws5,ws7 | ws3 | ws1,ws2 | ws5 | ws8,ws11,ws14 | ws9 | ws9,ws10,ws11,ws12,ws14,ws15 |
+| 2026-09-24 07:21:30 | ws5,ws6,ws7 | - | - | - | ws14 | ws8 | ws8,ws10,ws11,ws12,ws14,ws15 |
+| 2026-09-24 07:22:00 | - | - | - | - | ws12,ws15 | - | ws13 |
+
+| orac-exhaust 2026-09-24 07:40:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 07:39:30 | ws1,ws2,ws3,ws6 | ws6,ws7 | - | ws4 | ws10,ws13,ws14 | ws8 | ws8,ws9,ws11,ws12 |
+| 2026-09-24 07:40:00 | ws1,ws2,ws3,ws4,ws5 | - | - | ws4,ws6,ws7 | ws8,ws10,ws13 | ws12 | ws8,ws9,ws10,ws11 |
+| 2026-09-24 07:40:30 | ws6 | ws5,ws6 | ws3,ws4 | - | - | - | - |
+
+| orac-exhaust 2026-09-24 07:41:00 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 07:40:00 | ws1,ws2,ws3,ws4,ws5 | - | - | ws4,ws6,ws7 | ws8,ws10,ws13 | ws12 | ws8,ws9,ws10,ws11 |
+| 2026-09-24 07:40:30 | ws6 | ws5,ws6 | ws3,ws4 | - | - | - | - |
+| 2026-09-24 07:41:00 | - | - | - | - | - | - | - |
+
+| orac-exhaust 2026-09-24 07:45:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 07:44:30 | ws3,ws5,ws6 | - | ws4 | ws5,ws7 | ws11,ws13 | ws12 | ws9,ws10,ws11,ws12,ws14 |
+| 2026-09-24 07:45:00 | ws1,ws2,ws4,ws7 | - | - | ws3,ws4 | ws8,ws15 | ws9,ws10 | ws8,ws9,ws11,ws13,ws15 |
+| 2026-09-24 07:45:30 | - | - | ws6 | - | ws8,ws11,ws12,ws13,ws15 | - | ws8,ws13 |
+
+| orac-exhaust 2026-09-24 08:42:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 08:41:30 | ws1,ws2,ws4,ws6 | ws5,ws7 | - | ws6 | ws9,ws10,ws12,ws15 | ws8 | ws8,ws10,ws13 |
+| 2026-09-24 08:42:00 | ws3,ws5,ws6 | ws3,ws4,ws6 | - | ws5 | ws11,ws13,ws14 | ws8 | ws9,ws11,ws12,ws14 |
+| 2026-09-24 08:42:30 | - | ws5 | - | - | ws8,ws11 | - | ws9 |
+
+| orac-exhaust 2026-09-24 09:20:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 09:19:30 | ws1 | ws4,ws5,ws6 | - | ws3 | - | - | - |
+| 2026-09-24 09:20:00 | ws2,ws4,ws5,ws6,ws7 | ws3 | ws1 | - | ws10 | ws9,ws12 | ws8,ws9,ws10,ws14,ws15 |
+| 2026-09-24 09:20:30 | ws3,ws6 | ws4 | ws2 | - | - | - | ws8,ws9,ws15 |
+
+| orac-exhaust 2026-09-24 09:21:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 09:20:30 | ws3,ws6 | ws4 | ws2 | - | - | - | ws8,ws9,ws15 |
+| 2026-09-24 09:21:00 | ws1,ws2,ws3,ws4,ws7 | - | ws3 | ws3,ws4 | ws13 | ws9 | ws10,ws11 |
+| 2026-09-24 09:21:30 | ws2,ws5 | ws5 | - | - | - | - | ws9 |
+
+| orac-exhaust 2026-09-24 09:35:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 09:34:30 | - | ws5 | - | - | ws9,ws13,ws15 | - | ws11,ws13,ws14 |
+| 2026-09-24 09:35:00 | ws1,ws2,ws5,ws7 | ws2,ws5,ws6 | ws3 | ws3,ws7 | ws13,ws14 | ws9 | ws11,ws12,ws14 |
+| 2026-09-24 09:35:30 | ws3,ws4 | ws2,ws3 | ws1 | - | - | - | ws11,ws15 |
+
+| orac-exhaust 2026-09-24 10:19:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 10:18:30 | ws2,ws3,ws4,ws5,ws6,ws7 | - | - | ws6,ws7 | ws12,ws13 | ws14 | ws8,ws10,ws11,ws12,ws13,ws15 |
+| 2026-09-24 10:19:00 | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | - | ws3,ws6 | ws3,ws6,ws7 | ws12,ws13 | ws14 | ws8,ws10,ws11,ws12,ws13,ws15 |
+| 2026-09-24 10:19:30 | ws5 | - | - | - | ws9,ws12,ws13 | - | ws10,ws11,ws13 |
+
+| orac-exhaust 2026-09-24 10:20:00 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 10:19:00 | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | - | ws3,ws6 | ws3,ws6,ws7 | ws12,ws13 | ws14 | ws8,ws10,ws11,ws12,ws13,ws15 |
+| 2026-09-24 10:19:30 | ws5 | - | - | - | ws9,ws12,ws13 | - | ws10,ws11,ws13 |
+| 2026-09-24 10:20:00 | - | ws6 | - | - | ws9,ws10,ws15 | - | ws8,ws13 |
+
+| orac-exhaust 2026-09-24 10:24:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 10:23:30 | ws2,ws3,ws6,ws7 | - | - | ws5 | - | ws8,ws11,ws14 | ws8,ws9,ws10,ws11,ws12,ws14,ws15 |
+| 2026-09-24 10:24:00 | ws2,ws3,ws4,ws5,ws6,ws7 | ws3 | ws3 | ws4,ws6,ws7 | ws10,ws13 | ws8,ws11,ws12,ws14,ws15 | ws8,ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
+| 2026-09-24 10:24:30 | ws1,ws5 | ws4 | ws2,ws6,ws7 | - | ws8,ws13 | - | ws8,ws11 |
+
+| orac-exhaust 2026-09-24 10:25:00 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 10:24:00 | ws2,ws3,ws4,ws5,ws6,ws7 | ws3 | ws3 | ws4,ws6,ws7 | ws10,ws13 | ws8,ws11,ws12,ws14,ws15 | ws8,ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
+| 2026-09-24 10:24:30 | ws1,ws5 | ws4 | ws2,ws6,ws7 | - | ws8,ws13 | - | ws8,ws11 |
+| 2026-09-24 10:25:00 | - | ws6,ws7 | ws4 | - | ws9 | - | - |
+
+| orac-exhaust 2026-09-24 10:31:00 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 10:30:00 | ws1,ws2,ws3,ws5,ws6,ws7 | ws6 | - | ws3,ws4,ws5,ws7 | - | ws8,ws9,ws11,ws12,ws13 | ws9,ws10,ws11,ws14,ws15 |
+| 2026-09-24 10:30:30 | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | - | ws1,ws2,ws3 | ws6 | ws10 | ws13,ws14,ws15 | ws8,ws9,ws10,ws11,ws12,ws13,ws15 |
+| 2026-09-24 10:31:00 | - | ws7 | ws5,ws6,ws7 | - | ws8,ws9 | - | ws8 |
+
+| orac-exhaust 2026-09-24 10:31:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 10:30:30 | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | - | ws1,ws2,ws3 | ws6 | ws10 | ws13,ws14,ws15 | ws8,ws9,ws10,ws11,ws12,ws13,ws15 |
+| 2026-09-24 10:31:00 | - | ws7 | ws5,ws6,ws7 | - | ws8,ws9 | - | ws8 |
+| 2026-09-24 10:31:30 | - | - | - | - | - | - | ws8 |
+
+| orac-exhaust 2026-09-24 12:25:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 12:24:30 | - | - | - | - | - | - | - |
+| 2026-09-24 12:25:00 | ws1,ws2,ws3,ws4,ws5,ws6 | - | - | ws3,ws4,ws5,ws6,ws7 | ws9,ws10,ws15 | ws8,ws14 | ws8,ws12,ws13,ws14,ws15 |
+| 2026-09-24 12:25:30 | ws7 | ws3,ws5,ws6,ws7 | ws1,ws3,ws4,ws5 | - | - | - | - |
+
+| orac-exhaust 2026-09-24 12:26:00 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 12:25:00 | ws1,ws2,ws3,ws4,ws5,ws6 | - | - | ws3,ws4,ws5,ws6,ws7 | ws9,ws10,ws15 | ws8,ws14 | ws8,ws12,ws13,ws14,ws15 |
+| 2026-09-24 12:25:30 | ws7 | ws3,ws5,ws6,ws7 | ws1,ws3,ws4,ws5 | - | - | - | - |
+| 2026-09-24 12:26:00 | ws2,ws3,ws5,ws6,ws7 | - | - | - | ws11,ws13 | - | ws8,ws9,ws11,ws12,ws15 |
+
+| orac-exhaust 2026-09-24 13:21:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 13:20:30 | - | ws3,ws6 | ws4 | - | ws12 | - | ws10 |
+| 2026-09-24 13:21:00 | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | - | - | ws5 | ws11 | - | ws9,ws14 |
+| 2026-09-24 13:21:30 | - | ws7 | ws5 | - | ws8,ws9 | - | - |
+
+| orac-exhaust 2026-09-24 17:16:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 17:15:30 | ws1,ws2,ws3 | ws6,ws7 | - | ws3,ws4,ws5 | ws8,ws11,ws14,ws15 | - | ws9,ws12,ws13,ws15 |
+| 2026-09-24 17:16:00 | ws4,ws5,ws6,ws7 | - | ws4 | - | ws12 | ws9 | ws8,ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
+| 2026-09-24 17:16:30 | - | ws7 | ws5 | - | - | - | ws10,ws14 |
+
+| orac-exhaust 2026-09-24 18:54:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 18:53:30 | ws1,ws4,ws6,ws7 | ws4,ws5 | - | - | ws10,ws13,ws15 | ws8,ws9 | ws8,ws9,ws11,ws12,ws13,ws14,ws15 |
+| 2026-09-24 18:54:00 | ws2,ws3,ws5,ws6 | ws3 | ws1 | - | ws11 | - | ws9,ws13 |
+| 2026-09-24 18:54:30 | ws2,ws4,ws5 | ws5 | ws7 | - | ws9,ws10,ws15 | - | ws8,ws12,ws13 |
+
+| orac-exhaust 2026-09-24 19:15:00 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 19:14:00 | - | ws3,ws4 | - | - | ws8 | - | ws8,ws10,ws14 |
+| 2026-09-24 19:14:30 | ws1,ws2,ws4,ws5,ws6,ws7 | ws5 | ws6,ws7 | ws3,ws4,ws6 | - | ws10,ws11 | ws8,ws9,ws10,ws12,ws13,ws14 |
+| 2026-09-24 19:15:00 | - | ws7 | - | - | - | - | - |
+
+| orac-exhaust 2026-09-24 19:15:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 19:14:30 | ws1,ws2,ws4,ws5,ws6,ws7 | ws5 | ws6,ws7 | ws3,ws4,ws6 | - | ws10,ws11 | ws8,ws9,ws10,ws12,ws13,ws14 |
+| 2026-09-24 19:15:00 | - | ws7 | - | - | - | - | - |
+| 2026-09-24 19:15:30 | ws6 | - | - | - | ws15 | - | ws10,ws11,ws13,ws14,ws15 |
+
+| orac-exhaust 2026-09-24 19:35:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 19:34:30 | ws1,ws2 | ws5,ws6,ws7 | - | ws4 | ws8,ws11,ws15 | - | ws9,ws10,ws13,ws15 |
+| 2026-09-24 19:35:00 | ws3,ws4,ws5,ws6 | ws4 | ws2 | ws5 | ws9,ws13 | ws8 | ws8,ws10,ws11 |
+| 2026-09-24 19:35:30 | ws6 | ws5,ws6,ws7 | ws3,ws4,ws5,ws6,ws7 | - | ws9,ws10,ws11 | - | ws8,ws10,ws13,ws15 |
+
+| orac-exhaust 2026-09-24 19:52:00 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 19:51:00 | ws1,ws2,ws3,ws4,ws5,ws7 | - | - | ws5 | ws8,ws10 | ws11,ws13,ws14 | ws8,ws9,ws10,ws11,ws12,ws15 |
+| 2026-09-24 19:51:30 | ws4,ws6,ws7 | ws3 | ws1 | ws6 | ws11,ws13,ws14 | ws10,ws15 | ws8,ws9,ws11,ws12,ws13 |
+| 2026-09-24 19:52:00 | - | ws5,ws6 | ws3 | - | ws15 | - | ws13 |
+
+| orac-exhaust 2026-09-24 22:25:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 22:24:30 | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | - | ws5 | ws3,ws4,ws5,ws6 | - | ws12,ws13 | ws8,ws9,ws10,ws11,ws14 |
+| 2026-09-24 22:25:00 | - | - | ws6,ws7 | - | ws8,ws9,ws11,ws13 | ws15 | ws9,ws13 |
+| 2026-09-24 22:25:30 | - | - | - | - | - | - | - |
+
+| orac-exhaust 2026-09-24 22:48:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 22:47:30 | ws2 | ws3,ws5 | ws1 | - | ws9,ws13,ws15 | - | ws11,ws13,ws15 |
+| 2026-09-24 22:48:00 | ws3,ws4,ws5,ws6,ws7 | ws4 | ws2,ws3 | ws6 | ws12 | ws8,ws10,ws11,ws14 | ws8,ws9,ws10,ws12,ws13,ws15 |
+| 2026-09-24 22:48:30 | ws3,ws4,ws5,ws6,ws7 | - | - | - | ws12 | - | ws8,ws9,ws10,ws12,ws13,ws15 |
+
+| orac-exhaust 2026-09-24 23:32:00 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|---|---|---|---|---|---|---|---|
+| 2026-09-24 23:31:00 | ws1,ws6,ws7 | ws6,ws7 | ws7 | ws3 | - | ws8,ws10,ws12 | ws8,ws9,ws10,ws14 |
+| 2026-09-24 23:31:30 | ws2,ws3,ws4,ws5 | ws3 | ws1 | ws4,ws5,ws7 | ws9,ws11 | - | ws9,ws12,ws13,ws15 |
+| 2026-09-24 23:32:00 | - | - | - | - | - | - | - |
