@@ -753,7 +753,30 @@ class H(BaseHTTPRequestHandler):
                 return
             a = max(0, int(q['start'])); b = min(len(m), a + max(0, int(q['count'])))
             return self._send(m[a:b].tobytes(), 'application/octet-stream')    # STRIDE bytes per row
-        return self._send(PAGE.encode(), 'text/html; charset=utf-8')
+        return self._send(page().encode(), 'text/html; charset=utf-8')
+
+
+def page():
+    """-> the HTML, RE-READ FROM THIS FILE on every page load.
+
+    A rebuild of the matrices costs ~11 minutes, and a cosmetic change touches only the HTML below.
+    Re-reading it means a style or layout change is live on the next browser reload with no restart.
+    It parses this file and takes the PAGE assignment's own string, so a half-saved file cannot be
+    served: anything that does not parse falls back to the PAGE this process started with.
+    MY CALL, structural - it changes no data and no byte of a row.
+    """
+    try:
+        import ast as _ast
+        with open(__file__) as f:
+            for node in _ast.parse(f.read()).body:
+                if (isinstance(node, _ast.Assign) and len(node.targets) == 1
+                        and getattr(node.targets[0], 'id', None) == 'PAGE'
+                        and isinstance(node.value, _ast.Constant)
+                        and isinstance(node.value.value, str)):
+                    return node.value.value
+    except Exception as e:                       # a syntax error mid-save, or the file moved
+        sys.stderr.write('page() fell back to the built-in HTML: %s\n' % e)
+    return PAGE
 
 
 PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -770,14 +793,30 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.4 system-ui,-apple-system,Segoe UI,sans-serif}
 .wrap{max-width:1420px;margin:0 auto;padding:12px 16px;height:100vh;display:flex;flex-direction:column}
-h1{font-size:15px;margin:0 0 8px;font-weight:600}
-.cal{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px}
+/*   HIS 1118: *"move the buttons and the calenders to the bottom of the screen"*, so the data box is
+     first in the column and this strip sits under it   */
+.foot{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;margin-top:10px}
+.cal{display:flex;gap:18px;flex-wrap:wrap}
+/*   HIS 1118: *"move these 2 lines under the buttons, using a table that is as wide as the buttons
+     space"*. The buttons get their own box so the table can sit beneath them, and the table's width
+     is set in JS from the button row itself - CSS cannot size a box from one child and its sibling
+     from the box at the same time   */
+.btns{display:flex;flex-direction:column;gap:6px}
+/*   align-self keeps this row at the buttons' own width. Without it the column stretches it to
+     the box, which on the first layout is as wide as the untamed text in the table below -
+     and that width is what the table would then be pinned to   */
+.btnrow{display:flex;gap:6px;flex-wrap:wrap;align-self:flex-start}
+.info{table-layout:fixed;border-collapse:collapse;font-size:11px;color:var(--mut)}
+.info td{padding:3px 5px;border:1px solid var(--line);font-variant-numeric:tabular-nums;
+  word-break:break-word}
 .mon{min-width:200px}
-.mon b{display:block;font-size:12px;margin-bottom:3px}
+/*   HIS 1118: *"reduce all of the calender's fonts by 2px"* - the month name 12 -> 10, the weekday
+     letters 10 -> 8, the day numbers 11 -> 9. The cell geometry is untouched: he asked for fonts   */
+.mon b{display:block;font-size:10px;margin-bottom:3px}
 .grid{display:grid;grid-template-columns:repeat(7,26px);gap:2px}
-.grid span{font-size:10px;color:var(--mut);text-align:center}
+.grid span{font-size:8px;color:var(--mut);text-align:center}
 .grid button{height:22px;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;
-  font:11px system-ui,sans-serif;cursor:pointer;padding:0}
+  font:9px system-ui,sans-serif;cursor:pointer;padding:0}
 .grid button:hover{border-color:var(--sel)}
 .grid button:disabled{color:var(--dis);border-color:transparent;cursor:default}
 .grid button.on{background:var(--sel);border-color:var(--sel);color:var(--bg);font-weight:600}
@@ -786,7 +825,6 @@ h1{font-size:15px;margin:0 0 8px;font-weight:600}
 .tog:hover{border-color:var(--sel)}
 .tog.on{background:var(--sel);border-color:var(--sel);color:var(--bg);font-weight:600}
 .tog:disabled{cursor:default;opacity:.7}   /* HIS 1117: a banked A button shows its position, no click */
-.status{display:flex;gap:18px;color:var(--mut);font-size:12px;margin:4px 0 6px;font-variant-numeric:tabular-nums}
 .box{flex:1 1 0;min-height:320px;border:1px solid var(--line);border-radius:6px;overflow-y:auto;overflow-x:hidden;position:relative;overflow-anchor:none}
 .inner{min-width:0}
 .hd,.row{display:grid;grid-template-columns:var(--gt);height:24px;align-items:center}
@@ -827,10 +865,14 @@ h1{font-size:15px;margin:0 0 8px;font-weight:600}
 .row .o{background:var(--org);color:var(--on);font-weight:600}
 .hd .sx,.row .sx{border-left:2px solid var(--mut)}
 </style></head><body><div class="wrap">
-<h1>fdm3-oracle - SL%, r-pred ws1 to ws15, M-no-rev, plus the ws16-22 and ws23-30 sums, emerging, on closed-prev ws1 bars, with towards/away</h1>
-<div class="cal" id="cal"></div>
-<div class="status"><span id="top">top row: -</span><span id="held">cache: -</span><span id="err"></span></div>
 <div class="box" id="box"><div class="inner"><div class="hd" id="hd"></div><div class="body" id="body"></div></div></div>
+<div class="foot">
+<div class="cal" id="cal"></div>
+<div class="btns"><div class="btnrow" id="btnrow"></div>
+<table class="info" id="info"><tr><td><span id="top">top row: -</span> <span id="held">cache: -</span>
+<span id="err"></span></td></tr>
+<tr><td id="what">fdm3-oracle - SL%, r-pred ws1 to ws15, M-no-rev, plus the ws16-22 and ws23-30 sums, emerging, on closed-prev ws1 bars, with towards/away</td></tr></table>
+</div></div>
 </div><script>
 const RH = 50;          // row height, px - three lines: the number, TO / AW, then the crosses (HIS 1110)
 const BLOCK = 720;      // rows per fetch: 12 h of ws1 bars
@@ -1019,8 +1061,14 @@ function buildCal() {
     const g = document.createElement('div'); g.className = 'grid';
     for (const w of ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']) { const s = document.createElement('span'); s.textContent = w; g.appendChild(s); }
     const lead = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7;
-    for (let k = 0; k < lead; k++) g.appendChild(document.createElement('span'));
     const nd = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    //   HIS 1118: *"the '31' in august can wrap around and sit on the top row, ie the top row will
+    //   now print '31, , , , ,1,2'"*. Every month is laid out in 5 rows of 7, and a day that would
+    //   have needed a 6th row goes to the same column in the FIRST row instead. It always fits:
+    //   the spill is lead + nd - 35 cells and the first row has lead empty cells, and nd is never
+    //   more than 35, so the spill can never reach the 1st of the month.
+    const CELLS = 35;
+    const cell = new Array(CELLS).fill(null);
     for (let d = 1; d <= nd; d++) {
       const key = ym + '-' + String(d).padStart(2, '0');
       const b = document.createElement('button'); b.textContent = d; b.dataset.d = key;
@@ -1031,8 +1079,12 @@ function buildCal() {
         b.onmouseenter = () => { const b0 = Math.floor(r / BLOCK); fetchBlock(b0); fetchBlock(b0 + 1); fetchBlock(b0 + 2); };
         b.onclick = () => { dir = 1; box.scrollTop = r * RH; lastTop = box.scrollTop; draw(); };
       }
-      g.appendChild(b);
+      const p = lead + d - 1;
+      const at = p < CELLS ? p : p - CELLS;
+      if (cell[at]) throw new Error('two days want cell ' + at + ' of ' + ym);
+      cell[at] = b;
     }
+    for (const c of cell) g.appendChild(c || document.createElement('span'));
     mon.appendChild(g); cal.appendChild(mon);
   }
 }
@@ -1067,7 +1119,7 @@ async function init() {
     for (const p of pool) p.ok = false;
     schedule();
   };
-  document.getElementById('cal').appendChild(fp);
+  document.getElementById('btnrow').appendChild(fp);
   //   HIS 1115 *"create two buttons that A will be applied to - the first button shows A for ws1-ws6, and the second
   //   shows A for ws7-ws15"*. A: lift-off's window extreme off every bar of its span, not only the six samples. They
   //   combine with each other and with flip pivots
@@ -1084,7 +1136,7 @@ async function init() {
     for (const p of pool) p.ok = false;
     schedule();
   };
-  document.getElementById('cal').appendChild(pb);
+  document.getElementById('btnrow').appendChild(pb);
   //   HIS 1117 banked A: the two buttons show the locked positions and cannot be clicked
   for (const [i, band] of meta.abands.entries()) {
     const ab = document.createElement('button'); ab.className = 'tog'; ab.textContent = 'A ' + band;
@@ -1092,8 +1144,16 @@ async function init() {
     ab.title = 'lift-off A on the ' + band + ' r lines: BANKED ' + (on ? 'on' : 'off') + ', not a button';
     ab.disabled = true;
     ab.classList.toggle('on', on > 0); ab.setAttribute('aria-pressed', String(on > 0));
-    document.getElementById('cal').appendChild(ab);
+    document.getElementById('btnrow').appendChild(ab);
   }
+  //   HIS 1118 *"as wide as the buttons space"*: the table is sized from the button row, which can
+  //   itself wrap at a narrow window, so it is re-measured on every resize
+  const fitInfo = () => {
+    const w = document.getElementById('btnrow').offsetWidth;
+    if (w > 0) document.getElementById('info').style.width = w + 'px';
+  };
+  fitInfo();
+  window.addEventListener('resize', fitInfo);
   box.addEventListener('scroll', schedule, {passive: true});
   body.addEventListener('click', e => {           // HIS 1110: *"make a row highlighted if I click on that row"*
     const el = e.target.closest('.row'), p = el && pool.find(q => q.el === el);
