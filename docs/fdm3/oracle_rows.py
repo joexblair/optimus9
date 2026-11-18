@@ -143,7 +143,9 @@ _PAGE = [('its reset fence', META.get('reset'), float(FK.FENCE_RESET_TO)),
          ('its pivot offset', META.get('shift'), int(FK.ORACLE_SHIFT)),
          ('its M-no-rev ceilings', META.get('mnrtops'), list(FK.MNR_TOPS)),
          ('its locked A state', META.get('alock'), [int(FK.A_WS1_WS6), int(FK.A_WS7_WS15)]),
-         ('its Mage-side-of-50 paint', META.get('mage50'), int(FK.ORACLE_MAGE50_PCT))]
+         ('its Mage-side-of-50 paint', META.get('mage50'), int(FK.ORACLE_MAGE50_PCT)),
+         ('its x race re-open', META.get('xreopen'), FK.ORACLE_X_REOPEN),
+         ('its e race re-open', META.get('ereopen'), FK.ORACLE_E_REOPEN)]
 _OFF = [(w, g, want) for w, g, want in _PAGE
         if (float(g) if w.endswith('fence') and g is not None else g) != want]
 if _OFF:

@@ -3517,14 +3517,16 @@ def lift_off_pivot(r, side, pts, gap, tol, wob, e_path=None, line_extreme=False)
 #   (6B, *"SRP rules"*, and *"if they move, they move"*).
 
 
-def e_race_crosses(e, X, side):
-    """ws{TF}e against one race line. -> (forward, back) bool arrays.
+def race_crosses(line, X, side):
+    """THE CROSSING LINE against one race line. -> (forward, back) bool arrays.
 
+      line  ws{TF}x OR ws{TF}e - whichever line is running this race. The two never meet: a caller
+            runs one race per line and each keeps its own open/shut state.
     forward  the target-side cross: UNDER on a HIGH side, OVER on a LOW side - the banked x-cross rule.
-    back     the cross the other way, which re-opens a race the line won.
+    back     the cross the other way, which re-opens a race.
     Index b is the cross from bar b-1 to bar b. A NaN on either bar is no cross.
     """
-    e, X = np.asarray(e, float), np.asarray(X, float)
+    e, X = np.asarray(line, float), np.asarray(X, float)
     a, b, oa, ob = e[:-1], e[1:], X[:-1], X[1:]
     fin = np.isfinite(a) & np.isfinite(b) & np.isfinite(oa) & np.isfinite(ob)
     with np.errstate(invalid='ignore'):
@@ -3536,24 +3538,33 @@ def e_race_crosses(e, X, side):
     return np.concatenate([pad, fw & fin]), np.concatenate([pad, bk & fin])
 
 
-def e_race_prep(e, race, side):
-    """The cross arrays e_race_wins walks, built once per (line, side). -> (event bars, forward, back)."""
-    FB = [e_race_crosses(e, X, side) for _, X in race]
+def race_prep(line, race, side):
+    """The cross arrays race_wins walks, built once per (line, side). -> (event bars, forward, back)."""
+    FB = [race_crosses(line, X, side) for _, X in race]
     FW, BK = [f for f, _ in FB], [b for _, b in FB]
     return np.flatnonzero(np.any(FW, 0) | np.any(BK, 0)), FW, BK
 
 
-def e_race_wins(e, race, side, a=0, z=None, prep=None):
-    """HIS race:{boundary,Mage,r} for ws{TF}e, run over [a, z). -> [(cross bar, (race indexes won))].
+def race_wins(line, race, side, a=0, z=None, prep=None, reopen='winner'):
+    """HIS race:{boundary,Mage,r} for ONE crossing line, over [a, z). -> [(cross bar, (indexes won))].
 
-      race   [(name, array)] - the lines e races to, in tie-report order
-      prep   OPTIONAL e_race_prep(e, race, side), for a caller running many spans on one line
-    HIS 1109 4B: only the first race line crossed counts; the race re-opens once e crosses back over
-    that same line the other way. No hold (his 3A). Two lines crossed on one bar are one win, and the
-    race re-opens on crossing back over either - MINE. The race starts open at `a`.
+      line    the line running this race - ws{TF}x or ws{TF}e. ONE line per call; two lines never
+              share a race, so an x race and an e race cannot shut each other.
+      race    [(name, array)] - the lines it races to, in tie-report order
+      prep    OPTIONAL race_prep(line, race, side), for a caller running many spans on one line
+      reopen  'winner' - HIS 1109 4B, asked and answered about ws{TF}e: the race re-opens only when
+                         the line crosses back over THE LINE THAT WON.
+              'any'    - HIS 1118, after reading what 'winner' does to ws6x on 09-24: *"lines move
+                         all the time and there is no gaurantee that they will be available for the
+                         reset. the only workable answer is B"*. The race re-opens when the line
+                         crosses back over ANY of the race lines.
+    Only the first race line crossed counts, either way - a race has one winner and that bar is the
+    timestamp. No hold (his 3A). Two lines crossed on one bar are one win - MINE. The race starts
+    open at `a`.
     """
-    evb, FW, BK = e_race_prep(e, race, side) if prep is None else prep
-    z = len(e) if z is None else int(z)
+    assert reopen in ('winner', 'any'), reopen
+    evb, FW, BK = race_prep(line, race, side) if prep is None else prep
+    z = len(line) if z is None else int(z)
     out, is_open, win = [], True, ()
     for b in evb[np.searchsorted(evb, int(a)):np.searchsorted(evb, z)]:
         if is_open:
@@ -3561,7 +3572,7 @@ def e_race_wins(e, race, side, a=0, z=None, prep=None):
             if hit:
                 out.append((int(b), hit))
                 win, is_open = hit, False
-        elif any(BK[n][b] for n in win):
+        elif any(BK[n][b] for n in (range(len(race)) if reopen == 'any' else win)):
             is_open = True
     return out
 
@@ -3583,7 +3594,7 @@ def lift_off_e(r, side, pts, gap, tol, wob, e_path, line_extreme=False):
       e_path    {'e': ws{TF}e, 'race': [(name, array)], 'step': walk-back bars, 'min_less': r-points}
                 The arrays are the tape's own length; a shorter `r` is refused, not padded.
 
-    AT EACH RACE WIN c (e_race_wins over the whole tape - lift-off has no trade):
+    AT EACH RACE WIN c (race_wins over the whole tape - lift-off has no trade):
       gate 1  HIS 1B: r on the cross bar is NOT a new extreme - not beyond every r value in lift-off's
               window before it, [c - (pts-1) x gap, c - 1]. MINE: the window's span, every bar.
       gate 2  HIS 5A: no lift-off reversal (natural or e) has stamped since the bar of r's most extreme
@@ -3619,7 +3630,9 @@ def lift_off_e(r, side, pts, gap, tol, wob, e_path, line_extreme=False):
     step, ml = int(e_path['step']), float(e_path['min_less'])
     nat = np.asarray(sorted(int(b) + wob - 1 for b in lift_off(r, side, pts, gap, tol, wob,
                                                                line_extreme=line_extreme)), int)
-    wins = [c for c, _ in e_race_wins(e, e_path['race'], side)]
+    #   lift-off's e path keeps the 1109 4B re-open, which is what he ruled for ws{TF}e. His 1118
+    #   'any' ruling came out of the oracle's ws{TF}x row and is not carried here.
+    wins = [c for c, _ in race_wins(e, e_path['race'], side)]
     span = (pts - 1) * gap
     out, est = [], []
     toward = (lambda v, x: v > x) if side > 0 else (lambda v, x: v < x)

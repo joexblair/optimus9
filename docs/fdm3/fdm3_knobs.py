@@ -71,6 +71,12 @@ MNR_LO = _knob('MNR_LO', 1, int)                 # his *"we'll settle on ws1 to 
 #   in the 20% step. The page publishes it in /meta so this value and the page cannot drift apart.
 #   THE READ IS EMERGING, his 1118 *"my bad: use emerging"*.
 ORACLE_MAGE50_PCT = _knob('ORACLE_MAGE50_PCT', 20, int)
+#   HIS 1118: *"lines move all the time and there is no gaurantee that they will be available for the
+#   reset. the only workable answer is B"*. B = a ws{TF}x race re-opens when the line crosses back
+#   over ANY of its three race lines, not only over the one that won. HIS ws{TF}x ROW ONLY: the
+#   ws{TF}e race keeps his 1109 4B until he rules on it, and so does lift-off's e path.
+ORACLE_X_REOPEN = os.environ.get('W_FDM3_ORACLE_X_REOPEN', 'any')
+ORACLE_E_REOPEN = os.environ.get('W_FDM3_ORACLE_E_REOPEN', 'winner')
 
 #   ── orac-exhaust (HIS 1118 spec) ─────────────────────────────────────────────────────────────
 #   HIS 1118, asked which oracle its "2 rows" and "3 rows" count: *"1, 30sec"*. So this mech reads
@@ -175,6 +181,10 @@ RULED = {
     'ORACLE_SHIFT': (30, 'his 1117 pivot offset button, minutes - *"instead of +15, make it +30"*'),
     'MNR_TOPS': ((15, 25), 'his 1117 two M-no-rev ceilings, mnr1 then mnr2'),
     'MNR_LO': (1, 'the M-no-rev floor, his *"we\'ll settle on ws1 to ws25"*'),
+    'ORACLE_X_REOPEN': ('any', 'his 1118 B - the ws{TF}x race re-opens on crossing back over ANY '
+                               'of its three race lines: *"the only workable answer is B"*'),
+    'ORACLE_E_REOPEN': ('winner', 'his 1109 4B, unchanged - the ws{TF}e race re-opens only on '
+                                  'crossing back over the line that won. Not yet re-ruled'),
     'ORACLE_MAGE50_PCT': (20, 'the Mage-side-of-50 paint strength on the oracle\'s ws1..ws15 '
                               'cells, per cent - his 1118 *"the setting at 0726 is perfect"*'),
     'ORAC_EXHAUST_PORT': (8791, 'orac-exhaust reads the 30 second oracle - his 1118 *"1, 30sec"*'),

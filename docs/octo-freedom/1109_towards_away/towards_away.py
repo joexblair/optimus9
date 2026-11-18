@@ -355,7 +355,7 @@ def void50(v, side, lv=None):
     return v < lv if side > 0 else v > lv
 
 
-def row_rule(LN):
+def row_rule(LN, xreopen='winner'):
     """HIS 1112 THE ROW RULE, ready to ask. -> f(b, side) -> (qualifies, TFs crossing, TFs with X and E), or None
     when ROWX is 0.
 
@@ -374,7 +374,9 @@ def row_rule(LN):
             race = LE.race(t, s)
             for lab, line in (('X', np.asarray(ln.line('ws%dx' % t), float)), ('E', LN['E'][t])):
                 hit = np.zeros(ln.N, np.int32)
-                hit[[b for b, _ in JIG.e_race_wins(line, race, s)]] = 1
+                #   HIS 1118 B on the ws{TF}x race only - the ws{TF}e race keeps his 1109 4B
+                hit[[b for b, _ in JIG.race_wins(line, race, s,
+                                                 reopen=xreopen if lab == 'X' else 'winner')]] = 1
                 cum[(t, s, lab)] = np.concatenate([[0], np.cumsum(hit)])
 
     def ask(b, s):
@@ -390,7 +392,7 @@ def row_rule(LN):
     return ask
 
 
-def run(LN, trades, fnc=None, a_tfs=(), rst=None):
+def run(LN, trades, fnc=None, a_tfs=(), rst=None, xreopen='winner'):
     """The mech over the whole tape. -> (STATE {tf: int8 array}, detail).
 
     `fnc` None reads the banked 20/80 fence everywhere ex-20/80 / in-fence is read: the reach, the scenario-1 vote, the
@@ -422,7 +424,13 @@ def run(LN, trades, fnc=None, a_tfs=(), rst=None):
     assert A <= set(TFS), ('an A TF has no towards/away state', sorted(A - set(TFS)))
     LIFT = {(t, s): lift_extrema(LN, t, s, t in A) for t in TFS for s in (-1, +1)}
     LIFTE = {(t, s): lift_extrema_e(LN, t, s, t in A) for t in TFS for s in (-1, +1)}
-    ROW = row_rule(LN)
+    #   HIS 1118: *"lines move all the time and there is no gaurantee that they will be available
+    #   for the reset. the only workable answer is B"*. B is reopen='any' - the ws{TF}x race
+    #   re-opens on crossing back over ANY of its three race lines. He ruled it on the oracle's
+    #   x-cross row and asked for a BUTTON here rather than a ruling: *"the only way to answer is a
+    #   button on 8791"*. So this stays 'winner' - his 1109 4B - unless a caller asks otherwise, and
+    #   it never touches the ws{TF}e race.
+    ROW = row_rule(LN, xreopen)
     more = lambda v, x, s: (v > x) if s > 0 else (v < x)          # v more extreme than x on side s
     #   scenario 1, every line first - scenario 2 reads the lines under it
     for t in TFS:
@@ -479,7 +487,7 @@ def run(LN, trades, fnc=None, a_tfs=(), rst=None):
         AW2 = np.zeros(N, bool)
         for s in (-1, +1):
             race = LE.race(t, s)
-            prep = {lab: JIG.e_race_prep(line, race, s) for lab, line in lines.items()}
+            prep = {lab: JIG.race_prep(line, race, s) for lab, line in lines.items()}
             runs = {lab: oob_runs(line, s) for lab, line in lines.items()} if TK.SAMPLE_AT == 'excursion' else None
             lst, lpv, lval = LIFT[(t, s)]
 
@@ -499,7 +507,8 @@ def run(LN, trades, fnc=None, a_tfs=(), rst=None):
                     #   is a sample. X before E on one bar, the cross row's order
                     hs = []
                     for lab, line in lines.items():
-                        for b, hit in JIG.e_race_wins(line, race, s, a=ha, z=zz, prep=prep[lab]):
+                        for b, hit in JIG.race_wins(line, race, s, a=ha, z=zz, prep=prep[lab],
+                                                    reopen=xreopen if lab == 'X' else 'winner'):
                             det['ties'] += len(hit) > 1
                             if TK.SAMPLE_AT == 'excursion':
                                 w = excursion_peak(line, runs[lab], ha, b, s)
@@ -570,7 +579,7 @@ def run(LN, trades, fnc=None, a_tfs=(), rst=None):
         STATE[t] = st
     return STATE, det
 
-def build(fnc=None, a_tfs=(), rst=None):
+def build(fnc=None, a_tfs=(), rst=None, xreopen='winner'):
     """-> (LN, pivots, trades, STATE, detail), with the controls run. `fnc`, `a_tfs` and `rst` as run: the banked run
     when none is given; HIS 1115 the fdm3-oracle page builds its first state here."""
     LN = load()
@@ -581,7 +590,7 @@ def build(fnc=None, a_tfs=(), rst=None):
             m = exf_mask(LN, t, s)
             for b in rng.integers(0, ln.N, 400):
                 assert bool(m[b]) == F2.ex2080_line(LN, t, int(b), s), ('ex-20/80 reader differs', t, s, b)
-    STATE, det = run(LN, trades, fnc, a_tfs, rst)
+    STATE, det = run(LN, trades, fnc, a_tfs, rst, xreopen)
     return LN, piv, trades, STATE, det
 
 

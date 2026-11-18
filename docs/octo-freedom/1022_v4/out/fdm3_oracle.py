@@ -66,9 +66,12 @@ The sums carry no single TO/AW state, so they are unchanged.
 HIS 1110 CROSS ROW: *"the e-crosses and the x-crosses need to be printed on a row under the AW/TO data.  if the target
 is low side, print only the crossovers. inverted for high side.  center the text.  the format will be "X↑, ↓X, ↓E, ↑E".
 if ws{TF}e and ws{TF}x  fire on the same ws1 bar, print them together in the label with 4 spaces between them"*. His
-answer on the x-cross: raw, no hold. Both are jig.e_race_wins over the whole tape, per side - the race lift-off's e path
-uses (v4_lift_e.race: the 15/85 boundary, closed-prev ws{TF}Mage, closed-prev ws{TF}r; first line crossed wins; it
-re-opens on crossing back; no hold) - with ws{TF}e or ws{TF}x (emerging) as the crossing line. A cross prints on the row
+Both are jig.race_wins over the whole tape, per side, EACH IN ITS OWN RACE - the race
+lift-off's e path uses (v4_lift_e.race: the 15/85 boundary, closed-prev ws{TF}Mage, closed-prev ws{TF}r; first line
+crossed wins; no hold) - with ws{TF}e or ws{TF}x (emerging) as the crossing line. HIS 1118 set the ws{TF}x race's
+re-open to B, crossing back over ANY of the three; ws{TF}e keeps his 1109 4B, crossing back over the winner.
+STRUCK 1118: this note used to read *"His answer on the x-cross: raw, no hold"* and no such words of his exist -
+he never ruled an x-cross race or hold. Reusing the e race on the x line was MINE. A cross prints on the row
 of the ws1 bar it lands in, [open, open + 60 s), in the direction of the row's target-side (the time cell's colour).
 MINE: X before E in the joined label, the race over the whole tape (lift-off's, not re-opened at a trade's open), the
 ws1..ws15 cells only (the cells that carry TO/AW).
@@ -304,6 +307,20 @@ FENCE_RESET_TO = 33.0           # his `fdm3-fence-reset-TO`, the smaller end of 
 #   tens: *"the setting at 0726 is perfect"*, and 07:26 fell in the 20% step. BANKED, no button.
 #   THE READ IS EMERGING, his 1118 *"my bad: use emerging"*.
 MAGE50_PCT = 20                 # his `fdm3-oracle-mage50-pct` (MY name) - per cent, 0 paints nothing
+#   HIS 1118, after reading what the 1109 re-open does to ws6x on 09-24: *"lines move all the time
+#   and there is no gaurantee that they will be available for the reset. the only workable answer is
+#   B"*. B is: a race re-opens when the line crosses back over ANY of its three race lines, not only
+#   over the one that won. HIS ws{TF}x ROW ONLY - he ruled it looking at the x-cross row, and the
+#   ws{TF}e row keeps his 1109 4B until he rules on it.
+X_REOPEN = 'any'                # his B, the ws{TF}x race's re-open
+E_REOPEN = 'winner'             # his 1109 4B, unchanged - the ws{TF}e race
+#   HIS 1118, asked whether B reaches the towards/away ws{TF}x races - the 1112 row rule and the
+#   hunt samples - as well as the cross row: *"the only way to answer is a button on 8791"*. So this
+#   process builds BOTH towards/away states when FDM3_XRE_BUTTON=1 and the page carries a button;
+#   with it off there is one state and no button, which is what 8790 runs. Each extra state is a
+#   full towards/away run, so the button roughly doubles the start-up.
+XRE_BUTTON = os.environ.get('FDM3_XRE_BUTTON', '0') == '1'
+XRES = ('winner', 'any') if XRE_BUTTON else ('winner',)
 A_TFS = [t for (_, band), on in zip(A_BANDS, A_LOCK) if on for t in band]
 #   HIS 1117: *"I need the 'pivot +15 min' button reintroduced on 8790. instead of +15, make it +30
 #   minutes"*. It was dropped in the 1115 rebuild; this is HIS 1112 button at his new value.
@@ -595,8 +612,13 @@ def build():
         for sd in (-1, +1):
             race = LE.race(t, sd)
             c = np.zeros(len(prt), np.int8)
-            for bit, line in ((1, np.asarray(ln.line('ws%dx' % t), float)), (2, WSE.lines()[t])):
-                wins = np.asarray([b for b, _ in JIG.e_race_wins(line, race, sd)], np.int64)
+            #   TWO SEPARATE RACES. The x line and the e line each run their own, with their own
+            #   open/shut state: neither can shut the other. HIS 1118 asked whether they were
+            #   linked - they never were, but the reader's old parameter name said `e` and read as
+            #   though they might be.
+            for bit, line, ro in ((1, np.asarray(ln.line('ws%dx' % t), float), X_REOPEN),
+                                  (2, WSE.lines()[t], E_REOPEN)):
+                wins = np.asarray([b for b, _ in JIG.race_wins(line, race, sd, reopen=ro)], np.int64)
                 #   HIS 1117: the row a win lands in is ROW_S seconds wide, not a fixed 12 bars. At
                 #   ROW_S 30 a //12 here binned every cross at half its row index, so the whole page
                 #   lost them.
@@ -613,25 +635,31 @@ def build():
     #   where there were eight. Every pivot PIV_SHIFT later moves each pseudo trade's open and close
     #   by the same amount on the same side, and towards/away runs again on those trades; the last
     #   trade still closes at the tape's end.
+    #   HIS 1118 BUTTON: the ws{TF}x race's re-open is a third state dimension when XRE_BUTTON is
+    #   on. It changes the towards/away run only - the cross row's own x bits are built above at
+    #   X_REOPEN and are the same in every state.
     STATES, SIDES = [], {}
     for off in OFFS:
         k = off * 12                             # 5 s bars
         for fl in FLIPS:
             tr = [(o + k, min(c + k, ln.N), -s if fl else s) for o, c, s in trades if o + k < ln.N]
-            t1 = time.time()
-            STATES.append((off, fl, ST if not off and not fl
-                           else TA.run(LN, tr, FNC, A_TFS, FENCE_RESET_TO)[0]))
-            print('state pivots +%d min, flip %d: %d pseudo trades, first opens %s, %.1f s'
-                  % (off, fl, len(tr), ln.U(tr[0][0]), time.time() - t1))
             side = np.zeros(ln.N, np.int8)
             for o, c, s in tr:
                 side[o:c] = s
             SIDES[(off, fl)] = side
+            for xre in XRES:
+                t1 = time.time()
+                STATES.append((off, fl, xre,
+                               ST if not off and not fl and xre == 'winner'
+                               else TA.run(LN, tr, FNC, A_TFS, FENCE_RESET_TO, xre)[0]))
+                print('state pivots +%d min, flip %d, x race re-opens on %s: %d pseudo trades, '
+                      'first opens %s, %.1f s'
+                      % (off, fl, xre, len(tr), ln.U(tr[0][0]), time.time() - t1))
     assert all(np.array_equal(SIDES[(off, 1)], -SIDES[(off, 0)]) for off in OFFS), \
         'a flipped pseudo trade is not the as-found one on the same bars with the other target-side'
     MNR = dict(zip(SIDES, m_no_rev([SIDES[key][prt] for key in SIDES], prt)))
     mats = {}
-    for off, fl, ST in STATES:
+    for off, fl, xre, ST in STATES:
         side, mnr = SIDES[(off, fl)], MNR[(off, fl)]
         cols = list(base)
         live = side != 0
@@ -686,7 +714,7 @@ def build():
             cols.append((mv_k & 0xFF).astype(np.uint8).view(np.int8))
             cols.append((mv_k >> 8).astype(np.int8))
         cols.append(side[prt])                   # HIS 1109: the time cell's 20% colour, red LOW, green HIGH
-        mats[(off, fl)] = np.ascontiguousarray(np.stack(cols, 1).astype(np.int8))
+        mats[(off, fl, xre)] = np.ascontiguousarray(np.stack(cols, 1).astype(np.int8))
     return ts[first], mats
 
 
@@ -703,7 +731,7 @@ O_MNR = O_SL + 2                                # per M-no-rev column: its TF, t
 assert O_MNR + 3 * len(MNR_TOPS) + 1 == STRIDE, (O_MNR, STRIDE)
 
 OPEN, MATS = build()
-RP = MATS[(0, 0)]                               # the pivots as found, A locked, 23/77 - every check below reads it
+RP = MATS[(0, 0, 'winner')]                     # the pivots as found, A locked, 23/77, his 1109 4B x race
 assert all(m.shape == RP.shape for m in MATS.values()) and RP.shape[1] == STRIDE
 assert all(np.array_equal(m[:, O_UD:O_UD + len(LINES)], RP[:, O_UD:O_UD + len(LINES)]) for m in MATS.values()), \
     'the r-pred bytes differ between the page states'
@@ -723,6 +751,7 @@ META = json.dumps({
     #   WHERE EACH BLOCK STARTS, so a reader is told rather than deriving it. A derived offset is
     #   how oracle_rows came to hold a stale O_TA and read every TO/AW cell out of the wrong byte.
     'ta': O_TA, 'xc': O_XC, 'toexf': O_TOEXF, 'sl': O_SL, 'omnr': O_MNR,
+    'xreopen': X_REOPEN, 'ereopen': E_REOPEN, 'xres': list(XRES),
     #   HIS 1116: where the up/dn block starts, so a reader is told rather than re-deriving the layout
     'updn': O_UD})
 
@@ -749,10 +778,11 @@ class H(BaseHTTPRequestHandler):
             #   HIS 1117: off is the pivot shift and flip the pivot direction. A is locked, so alo
             #   and ahi are accepted only at their banked values.
             _a = (int(q.get('alo', A_LOCK[0])), int(q.get('ahi', A_LOCK[1])))
-            m = MATS.get((int(q.get('off', 0)), int(q.get('flip', 0)))) if _a == A_LOCK else None
+            m = (MATS.get((int(q.get('off', 0)), int(q.get('flip', 0)), q.get('xre', 'winner')))
+                 if _a == A_LOCK else None)
             if m is None:
-                self.send_error(400, 'off must be one of %s, flip one of %s, and alo / ahi the locked %s'
-                                % (OFFS, FLIPS, A_LOCK))
+                self.send_error(400, 'off must be one of %s, flip one of %s, xre one of %s, and '
+                                     'alo / ahi the locked %s' % (OFFS, FLIPS, XRES, A_LOCK))
                 return
             a = max(0, int(q['start'])); b = min(len(m), a + max(0, int(q['count'])))
             return self._send(m[a:b].tobytes(), 'application/octet-stream')    # STRIDE bytes per row
@@ -897,22 +927,26 @@ const NB = '\u00a0';   // HIS 1110: the place holder line - a blank line keeps a
 let sel = -1;           // HIS 1110: the clicked row, highlighted; a click on another row moves it, on the same row clears it
 let FLIP = 0;           // HIS 1113: 0 the pivots' sides as found, 1 every side flipped with the button on
 let OFF = 0;            // HIS 1117: the pivot offset button - 0 the pivots as found, meta.shift minutes later
+//   HIS 1118: the towards/away ws{TF}x race's re-open. 'winner' is his 1109 4B - the race re-opens only when
+//   x crosses back over the line that won. 'any' is his B - it re-opens on crossing back over any of the three.
+//   The button exists only where the server built both, which is the page started with FDM3_XRE_BUTTON=1.
+let XRE = 'winner';
 let ALO = 0, AHI = 0;   // HIS 1117: A is LOCKED, these take meta.alock and no button changes them
 
 const fmt = ms => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
 
 function fetchBlock(b) {
-  const off = OFF, flip = FLIP, key = off + ':' + flip + ':' + b;   // each state keeps its own blocks
+  const off = OFF, flip = FLIP, xre = XRE, key = off + ':' + flip + ':' + xre + ':' + b;   // each state keeps its own blocks
   if (b < 0 || b * BLOCK >= meta.rows || cache.has(key) || pending.has(key)) return;
   pending.add(key);
-  fetch('rows?start=' + (b * BLOCK) + '&count=' + BLOCK + '&off=' + off + '&flip=' + flip +
+  fetch('rows?start=' + (b * BLOCK) + '&count=' + BLOCK + '&off=' + off + '&flip=' + flip + '&xre=' + xre +
         '&alo=' + ALO + '&ahi=' + AHI)
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
     .then(buf => { pending.delete(key); cache.set(key, new Int8Array(buf)); evict(); schedule(); })
     .catch(e => { pending.delete(key); document.getElementById('err').textContent = 'fetch failed: ' + e.message; });
 }
 function getBlock(b) {
-  const key = OFF + ':' + FLIP + ':' + b, a = cache.get(key);
+  const key = OFF + ':' + FLIP + ':' + XRE + ':' + b, a = cache.get(key);
   if (a) { cache.delete(key); cache.set(key, a); }   // most recently used goes to the back
   return a;
 }
@@ -1140,6 +1174,23 @@ async function init() {
     schedule();
   };
   document.getElementById('btnrow').appendChild(pb);
+  //   HIS 1118: *"the only way to answer is a button on 8791"* - whether his B reaches the
+  //   towards/away ws{TF}x races (the 1112 row rule and the hunt samples) as well as the cross row.
+  //   On = B. The cross row's own x bits are at B in every state; this button moves the TO/AW cells.
+  if ((meta.xres || ['winner']).length > 1) {
+    const xb = document.createElement('button'); xb.className = 'tog';
+    xb.textContent = 'towards/away x race = B';
+    xb.title = 'the towards/away ws{TF}x race re-opens on crossing back over ANY of its three race lines (his B); '
+             + 'click again for his 1109 4B, re-opening only over the line that won';
+    xb.setAttribute('aria-pressed', 'false');
+    xb.onclick = () => {
+      XRE = XRE === 'winner' ? 'any' : 'winner';
+      xb.classList.toggle('on', XRE === 'any'); xb.setAttribute('aria-pressed', String(XRE === 'any'));
+      for (const p of pool) p.ok = false;
+      schedule();
+    };
+    document.getElementById('btnrow').appendChild(xb);
+  }
   //   HIS 1117 banked A: the two buttons show the locked positions and cannot be clicked
   for (const [i, band] of meta.abands.entries()) {
     const ab = document.createElement('button'); ab.className = 'tog'; ab.textContent = 'A ' + band;
@@ -1185,8 +1236,8 @@ if __name__ == '__main__':
     print('towards/away cells: TO(inf) %d, AW(inf) %d, TO(exf) %d, AW(exf) %d, none %d'
           % tuple((TAC == k).sum() for k in (1, 2, 3, 4, 0)))
     _xc = RP[:, O_XC:O_XC + len(LINES)]
-    print('cross row cells: X only %d, E only %d, both %d'
-          % tuple(int(((_xc & 3) == k).sum()) for k in (1, 2, 3)))
+    print('cross row cells: X only %d, E only %d, both %d; race re-opens on x %s, on e %s'
+          % tuple(list(int(((_xc & 3) == k).sum()) for k in (1, 2, 3)) + [X_REOPEN, E_REOPEN]))
     print('TO -> AW flip cells (white AW text): %d, %d of them on a -1/+1 cell'
           % (int((_xc & 4).astype(bool).sum()), int((_xc & 4).astype(bool).sum())))
     _j = LINES.index(FLIP_TOX)
@@ -1217,23 +1268,32 @@ if __name__ == '__main__':
              _m50.size, LINES[_thin], int((_m50[:, _thin] > 0).sum()), len(_m50)))
     print('fence: %d/%d, locked (HIS 1115). fence reset TO: %g/%g, banked (HIS 1117)'
           % (FNC, 100 - FNC, FENCE_RESET_TO, 100 - FENCE_RESET_TO))
-    for (_off, _fl), _m in MATS.items():
-        if (_off, _fl) == (0, 0):
+    _lo, _hi = O_TA, O_TA + len(LINES)
+    for (_off, _fl, _xre), _m in MATS.items():
+        if (_off, _fl, _xre) == (0, 0, 'winner'):
             continue
-        _tac = _m[:, O_TA:O_TA + len(LINES)]
-        print('pivots +%d min%s: rows whose target-side differs from the pivots as found %d of %d, cells '
-              'that differ %d of %d; TO(inf) %d, AW(inf) %d, TO(exf) %d, AW(exf) %d'
-              % ((_off, ', flipped' if _fl else '',
+        _tac = _m[:, _lo:_hi]
+        print('pivots +%d min%s, x race re-opens on %s: rows whose target-side differs from the '
+              'pivots as found %d of %d, cells that differ %d of %d; TO(inf) %d, AW(inf) %d, '
+              'TO(exf) %d, AW(exf) %d'
+              % ((_off, ', flipped' if _fl else '', _xre,
                   int((_m[:, STRIDE - 1] != RP[:, STRIDE - 1]).sum()), len(RP), int((_m != RP).sum()), RP.size)
                  + tuple(int((_tac == k).sum()) for k in (1, 2, 3, 4))))
         #   HIS 1117 banked A: there is no A-off state to compare against any more, so the per-column
         #   "cells A moved" line is gone with the buttons. Per column, what the pivot offset moved:
-        _ref = MATS[(0, _fl)]
-        _lo, _hi = O_TA, O_TA + len(LINES)
+        _ref = MATS[(0, _fl, _xre)]
         _dc = (_m[:, _lo:_hi] != _ref[:, _lo:_hi]).sum(0)
         if _off:
             print('    TO/AW cells moved by the +%d min pivots, against the same flip at +0: %s'
                   % (_off, ', '.join('%s %d' % (n, int(c)) for n, c in zip(LINES, _dc) if c) or 'none'))
+        #   HIS 1118 BUTTON: what B moves, against the same pivots and flip at his 1109 4B
+        if _xre != 'winner':
+            _b = MATS[(_off, _fl, 'winner')]
+            _db = (_m[:, _lo:_hi] != _b[:, _lo:_hi]).sum(0)
+            print('    TO/AW cells moved by B on the towards/away x race, against 4B at the same '
+                  'pivots and flip: %d of %d; per column %s'
+                  % (int(_db.sum()), len(RP) * len(LINES),
+                     ', '.join('%s %d' % (n, int(c)) for n, c in zip(LINES, _db) if c) or 'none'))
     print('towards/away knobs (banked): ' + ' '.join('%s=%s' % (k, v) for k, v, _, _ in TA.KNOBS))
     print('open http://127.0.0.1:%d' % PORT)
     sys.stdout.flush()
