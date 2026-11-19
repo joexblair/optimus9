@@ -132,10 +132,17 @@ ORAC_CUT_PCT = _knob('ORAC_CUT_PCT', 20.0)
 #   HIS 1118 FOUR-READ PIVOTS: *"bake the 4 lines into the sweep-pivots machine: every test uses all
 #   lines to decide if dwell is qualified"* / *"1, the longest"* / *"2, it shouldn't matter - we're
 #   going from a 'final' cross to ib, to the next 'final' cross to ib"*. The four reads are ws{TF}
-#   Mage and b, each emerging and closed-prev. 3 minutes is his *"at least 3 minutes"*, and it is
-#   the value that holds all four of his 09-24 chain marks with one noise pivot in 4.5 hours.
-ORAC_PIVOT_TF = _knob('ORAC_PIVOT_TF', 1, int)             # ws1 Mage and b
-ORAC_PIVOT_DWELL_S = _knob('ORAC_PIVOT_DWELL_S', 180, int)  # seconds the longest read must hold oob
+#   Mage and b, each emerging and closed-prev.
+#   THE DWELL IS 0. His 1118 self-validation - *"for each pivot that you print, wait for 2 more
+#   pivots to print, then look back at the extremes between each pair"* - killed the 180 I had
+#   banked off his *"at least 3 minutes"*. His own example: the real price high between 12:02 and
+#   13:45 on 09-28 is 12:55:20; at dwell 0 a HIGH pivot prints 13:00:00, 4.7 min after it, and the
+#   dwell deletes that pivot so 13:45:00 survives instead, 49.7 min late. Over 09-22..09-28 the
+#   mean lag to the real extreme runs 7.0 min at dwell 0 and 13.0 at 180 s, and every other measure
+#   moves the same way. The POOLING and the final-cross collapse do the noise work: 218 pivots over
+#   7 days against the 9,257 crosses raw emerging ws1Mage makes on the tape.
+ORAC_PIVOT_TF = _knob('ORAC_PIVOT_TF', 1, int)           # ws1 Mage and b
+ORAC_PIVOT_DWELL_S = _knob('ORAC_PIVOT_DWELL_S', 0, int)  # seconds the longest read must hold oob
 ORAC_GRACE_MIN = _knob('ORAC_GRACE_MIN', 5.0)          # his *"5 minutes (walk forward) grace"*
 ORAC_HIGH_FLIPS = _knob('ORAC_HIGH_FLIPS', 2, int)     # his *">=2 AW flips"* in highband
 ORAC_HIGH_TOEXF_MAX = _knob('ORAC_HIGH_TOEXF_MAX', 1, int)   # his *"a maximum of 1 TOexf"*
@@ -250,9 +257,10 @@ RULED = {
                                     'it is the line the pseudo trades already pivot on'),
     'ORAC_PIVOT_TF': (1, 'his 1118 four-read pivots run on ws1 - Mage and b, each emerging '
                          'and closed-prev'),
-    'ORAC_PIVOT_DWELL_S': (180, 'his 1118 *"at least 3 minutes"*, seconds. The LONGEST of '
-                                'the four reads must hold oob this long for the run to '
-                                'qualify; the pivot is its final cross to ib'),
+    'ORAC_PIVOT_DWELL_S': (0, 'seconds the LONGEST of the four reads must hold oob for a run '
+                              'to qualify. 0 at his 1118 *"ok for the dwell"* - his own lag test '
+                              'showed 180 s doubles the lag to the real extreme and deletes the '
+                              'pivot nearest it'),
     'ORAC_CUT_PCT': (20.0, 'his 1118 top-and-bottom cut, per cent of each side\'s rows'),
     'ORAC_RANK_BY': ('mfe_over_mae', 'his 1118 *"I take your recommendation"* - rank on MFE '
                                      'over abs(MAE), per side, not on MAE alone'),
