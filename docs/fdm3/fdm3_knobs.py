@@ -113,7 +113,15 @@ ORAC_OOB_JUMP = _knob('ORAC_OOB_JUMP', 2, int)         # timeframes the climb ma
 #   are 19.22 at 06:02:00 and 16.82 at 12:02:05 - so it has no oob run to leave and no cross at
 #   either, at any hold length. ws1Mage crosses LOW at 06:03:10 and 12:02:10, 2m50s before each of
 #   his times. SCORING ONLY: the pseudo trades stay on ws2Mage, untouched.
-ORAC_MAEMFE_LINE = os.environ.get('W_FDM3_ORAC_MAEMFE_LINE', 'ws1Mage')
+#   HIS 1118 LEG MODE: *"I thought sweep-pivots went from 'last cross to ib' to opposing side
+#   'last-cross to ib'"*, then *"don't rebuild it - create a mode for this new mech so that the
+#   existing pivots remain untouched in any now or future fdm3-oracle updates"*. The banked leg
+#   rule is unchanged; v4_sweep_pivots.legs takes mode='last_cross' for this one.
+ORAC_LEG_MODE = os.environ.get('W_FDM3_ORAC_LEG_MODE', 'last_cross')
+#   BACK TO ws2Mage. ws1Mage was only ever chosen because ws2Mage had no cross at his 06:06 and
+#   12:05 under the BANKED leg rule. Under his own rule ws2Mage reads both as LOW legs, so the
+#   reason for ws1Mage is gone and the scoring line is the one the pseudo trades already pivot on.
+ORAC_MAEMFE_LINE = os.environ.get('W_FDM3_ORAC_MAEMFE_LINE', 'ws2Mage')
 #   HIS 1118: *"I take your recommendation"* - rank by MFE over abs(MAE), not by MAE alone, so a
 #   row with a tiny MAE AND a tiny MFE does not score as a winner. Ranked inside each side.
 ORAC_RANK_BY = os.environ.get('W_FDM3_ORAC_RANK_BY', 'mfe_over_mae')
@@ -223,9 +231,12 @@ RULED = {
     'ORAC_LOW_FLIPS': (2, 'his 1118 state 2, the other side of the OR: *"(>=5 AW(any) OR '
                           '>=2 AW flips)"*. An AW flip is the TO -> AW flip, his *"new AW"*'),
     'ORAC_HIGH_AW': (3, 'his state 3: *">=3 AW(any) are required if any of these conditions qualify"*'),
-    'ORAC_MAEMFE_LINE': ('ws1Mage', 'the line whose sweep-pivot legs score MAE/MFE. His 1118 '
-                                   '06:06 and 12:05 targets land on it; ws2Mage has no cross '
-                                   'at either. Scoring only - the pseudo trades keep ws2Mage'),
+    'ORAC_LEG_MODE': ('last_cross', 'his 1118 leg rule as a MODE on v4_sweep_pivots.legs - last '
+                                    'cross to ib, to the opposing side\'s last cross to ib. The '
+                                    'banked rule is untouched'),
+    'ORAC_MAEMFE_LINE': ('ws2Mage', 'the line whose sweep-pivot legs score MAE/MFE. Under his '
+                                    '1118 leg mode it reads his 06:06 and 12:05 as LOW legs, and '
+                                    'it is the line the pseudo trades already pivot on'),
     'ORAC_RANK_BY': ('mfe_over_mae', 'his 1118 *"I take your recommendation"* - rank on MFE '
                                      'over abs(MAE), per side, not on MAE alone'),
     'ORAC_OOB_JUMP': (2, 'his 1118 *"jumps of 2 should be allowed to make it more sane"* - the '

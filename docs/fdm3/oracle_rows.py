@@ -539,10 +539,12 @@ def leg_containing(bar, line):
     HIS 1118 *"when the MAE MFE stats are tied to a reliable pivot"*. v4_sweep_pivots.swing picks
     the leg that MARKS a cadence event, aligning to one nearby, and handed a setup bar it returned
     legs that opened 24 minutes after it or closed before it. This takes the leg the bar is inside:
-    legs overlap, so it is the one with the LATEST open at or before the bar.
+    legs overlap, so it is the one with the LATEST open at or before the bar. Under his 1118
+    'last_cross' mode they tile instead, so exactly one leg holds any bar and the LATEST open is
+    simply that one.
     """
     best = None
-    for o, z, sd in SP.legs(line):
+    for o, z, sd in SP.legs(line, mode=FK.ORAC_LEG_MODE):
         if o <= bar < z and (best is None or o > best[0]):
             best = (int(o), int(z), int(sd))
     return best

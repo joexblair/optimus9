@@ -168,8 +168,22 @@ def mage(tf):
     return np.asarray(_LL.sub_line(tf), float)
 
 
-def legs(tf, xwob=None):
+def legs(tf, xwob=None, mode=None):
     """The legs one Mage brackets with its OWN crosses. -> list of (open, close, side).
+
+    `mode` picks HOW the crosses are paired, and the DEFAULT IS THE BANKED RULE so no existing
+    caller moves:
+      None / 'banked'  every cross opens a leg and it closes on the FIRST opposite cross. The legs
+                       overlap. This is what every v4 and fdm3 read has always used.
+      'last_cross'     HIS 1118 fdm3 MODE, in his words: *"I thought sweep-pivots went from 'last
+                       cross to ib' to opposing side 'last-cross to ib'"*. Each RUN of same-side
+                       crosses collapses to its last, so the legs tile end to end and never
+                       overlap. HIS 1118: *"don't rebuild it - create a mode for this new mech so
+                       that the existing pivots remain untouched in any now or future fdm3-oracle
+                       updates"*. On ws2Mage it yields 1564 legs, which is the pseudo trade count,
+                       because towards_away's pivot builder already collapses same-side runs this
+                       way.
+    Both modes pair CONFIRM bars, not cross bars - the first bar a cross is knowable.
 
     A leg opens on a cross and closes on the next OPPOSITE-side cross of the same line. Both ends
     are mechanism-defined, which is the whole point - no pct and no horizon. `side` is the opening
@@ -182,9 +196,26 @@ def legs(tf, xwob=None):
     crosses are a line re-entering oob and leaving again; each of them still opens a leg that runs
     to the next opposite boundary, so the legs OVERLAP and that is correct.
     """
-    key = (tf, XWOB if xwob is None else xwob)
+    xwob = XWOB if xwob is None else xwob
+    mode = 'banked' if mode is None else mode
+    assert mode in ('banked', 'last_cross'), mode
+    key = (tf, xwob, mode)
     if key in _LEG:
         return _LEG[key]
+    if mode == 'last_cross':
+        #   HIS 1118 MODE: keep only the LAST cross of each same-side run, then consecutive pairs
+        #   are the legs. They tile - one leg's close is the next one's open - and never overlap.
+        _xc = crosses(tf, xwob)
+        _last = [_xc[i] for i in range(len(_xc))
+                 if i + 1 == len(_xc) or int(_xc[i + 1][2]) != int(_xc[i][2])]
+        _out = [(int(_last[i][1]), int(_last[i + 1][1]), int(_last[i][2]))
+                for i in range(len(_last) - 1)]
+        assert all(_out[i][1] == _out[i + 1][0] for i in range(len(_out) - 1)), \
+            'his last_cross legs must tile, one leg closing where the next opens'
+        assert all(_out[i][2] != _out[i + 1][2] for i in range(len(_out) - 1)), \
+            'two of his last_cross legs in a row share a side'
+        _LEG[key] = _out
+        return _out
     xc = crosses(tf, xwob)
     out, nxt = [], {}
     for i in range(len(xc) - 1, -1, -1):              # one backward pass, not a nested scan
