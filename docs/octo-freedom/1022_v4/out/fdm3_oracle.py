@@ -349,6 +349,20 @@ PIV_SHIFT = 15                  # minutes - HIS 1119, was 30 at his 1117 and 15 
 OFFS = (0, PIV_SHIFT)           # the pivots as found, and every pivot PIV_SHIFT later
 FLIP_TOX = 'ws1'                # HIS 1113: the one line whose flip into TO(exf) is highlighted, *"in ws1 only"*
 TO_EXF = 3                      # the TO/AW code a cell prints as TO(exf): TO 1, +2 ex-fence on the target-side
+#   HIS 1119 `fdm3-infence-power`: *"for every TO(inf) line, add a suffix based on these critreria"*,
+#   with his five bands, and his ruling on the 7.9% of cells his bands did not reach - a -3 band
+#   under the low edge and a +3 band at or over the high one. The cause of those cells: the ex-fence
+#   test reads the TARGET side only, so a HIGH target-side line is in-fence at any value under 77.
+#   HIS *"all values are 2dp: eg 62 to 73 is actually 62.00 to 72.99"*, so the value is ROUNDED to
+#   2dp and then placed. THE VALUE IS THE CLOSED-PREV r, the banked chart-matched read: emerging is
+#   lift-off's read alone.
+IFP_EDGES = (23.0, 28.0, 38.0, 62.0, 73.0, 77.0)
+IFP_LABELS = ('-3', '-2', '-1', '0', '+1', '+2', '+3')
+IFP_DP = 2                      # his 2dp - the value is rounded before it is placed
+IFP_BARE = [0]                  # TO(inf) cells with no value to band, counted across every state
+IFP_INF = [0]                   # TO(inf) cells in all, so the bare share is readable
+#   the band is stored as band+1 in bits 3-5 of the TO/AW byte, so 0 means NO VALUE and prints a
+#   bare TO(inf). The code itself stays in bits 0-2, which is why every reader masks with 7.
 FLIPS = (0, 1)                  # HIS 1113 button: *"flips the pivots directions"* - 0 as found, 1 every pivot's side flipped
 
 
@@ -770,6 +784,24 @@ def build():
                 continue
             st = ST[t][prt].astype(np.int8)
             CODE[name] = np.where((st != TA.NONE) & exf_at(t), st + 2, st)
+            #   HIS 1119 `fdm3-infence-power`: the band of the line's own value, on a TO(inf) cell
+            #   only - his *"for every TO(inf) line"*. searchsorted on his edges with side='right'
+            #   gives 0 under the first edge and len(edges) at or over the last, which is his -3
+            #   and +3; +1 keeps 0 free for a cell with no value.
+            _v = np.round(np.asarray(LN['CPR'][t], float)[prt], IFP_DP)
+            _bd = (np.searchsorted(IFP_EDGES, _v, side='right') + 1).astype(np.int8)
+            _bd = np.where(np.isfinite(_v), _bd, 0).astype(np.int8)
+            _inf = CODE[name] == TA.TO                   # TO(inf): TO, and the ex-fence bit unset
+            CODE[name] = (CODE[name] | np.where(_inf, _bd << 3, 0)).astype(np.int8)
+            #   A TO(inf) cell CAN be bandless, and only in the tape's warm-up: a line has no
+            #   closed-prev value until its first bar closes, which for ws15 is 2026-07-02
+            #   16:29:55, after the first pseudo trade opens at 14:33:45. Those cells keep band 0
+            #   and print a bare TO(inf). What must never happen is a cell WITH a value and no
+            #   band - that would be a packing fault, so that is what this holds.
+            assert not np.any(_inf & (_bd == 0) & np.isfinite(_v)), \
+                'a TO(inf) cell has a closed-prev value but no band'
+            IFP_BARE[0] += int(np.sum(_inf & (_bd == 0)))
+            IFP_INF[0] += int(np.sum(_inf))
             cols.append(CODE[name])
         for _, tfs in SUMS:
             for code in (TA.TO, TA.AW):
@@ -788,7 +820,7 @@ def build():
             #   TO(exf)"*, his answer *"any except TO(exf)"*: +8 on the ws1 row that reads TO(exf) where the row before
             #   read anything else - blank, TO(inf), AW(inf) or AW(exf) - whichever pseudo trade that row is in
             if name == FLIP_TOX:
-                cd = CODE[name]
+                cd = CODE[name] & 7          # HIS 1119: bits 3-5 are the in-fence power band
                 xc[1:] |= 8 * ((cd[:-1] != TO_EXF) & (cd[1:] == TO_EXF)).astype(np.int8)
             cols.append(xc)
         #   HIS 1111 *"if any of the individual lines are printing TO(exf), print "TO(exf)" under the TO:x AW:x row"*:
@@ -834,6 +866,7 @@ META = json.dumps({
     'days': DAYS, 'fence': FNC, 'abands': [b for b, _ in A_BANDS], 'flips': list(FLIPS),
     'mnrs': list(MNR_LABELS), 'mnrtops': list(MNR_TOPS),
     'shift': PIV_SHIFT, 'alock': list(A_LOCK), 'reset': FENCE_RESET_TO, 'rpred': RPRED_ON,
+    'ifp': list(IFP_LABELS), 'ifpedges': list(IFP_EDGES), 'ifpdp': IFP_DP,
     'mage50': MAGE50_PCT,
     #   WHERE EACH BLOCK STARTS, so a reader is told rather than deriving it. A derived offset is
     #   how oracle_rows came to hold a stale O_TA and read every TO/AW cell out of the wrong byte.
@@ -1140,7 +1173,11 @@ function draw() {
         //   the sums included, and the 55% AW background went with it: that class only ever shaded
         //   the red and the green
         d.className = '';
-        d.ta.textContent = ['', 'TO(inf)', 'AW(inf)', 'TO(exf)', 'AW(exf)'][s] || NB;   // HIS 1109 (inf) / (exf)
+        //   HIS 1119 `fdm3-infence-power`: the code is bits 0-2, the power band is bits 3-5 held as
+        //   band+1, so 0 prints a bare TO(inf). The suffix goes on a TO(inf) cell only
+        const tc = s & 7, pw = (s >> 3) & 7;
+        d.ta.textContent = (['', 'TO(inf)', 'AW(inf)', 'TO(exf)', 'AW(exf)'][tc] || NB)
+          + (tc === 1 && pw ? meta.ifp[pw - 1] : '');   // HIS 1109 (inf) / (exf)
         //   HIS 1110: crossovers on a LOW target-side, crossunders on HIGH; X and E on one ws1 bar join, 4 spaces apart
         const xc = blk[o + NL + 2 * (NC - NL) + c];
         d.xc.textContent = [xc & 1 ? (sd < 0 ? 'X↑' : '↓X') : '', xc & 2 ? (sd < 0 ? '↑E' : '↓E') : '']
@@ -1354,6 +1391,9 @@ if __name__ == '__main__':
           % (len(LINES), MAGE50_PCT, int((_m50 == 1).sum()), int((_m50 == 2).sum()), int((_m50 == 0).sum()),
              _m50.size, LINES[_thin], int((_m50[:, _thin] > 0).sum()), len(_m50)))
     print('pivots: %s' % PIVOTS)
+    print('fdm3-infence-power: %d TO(inf) cells over every state, %d of them bare (%.2f%%) - a '
+          'line has no closed-prev value until its first bar closes'
+          % (IFP_INF[0], IFP_BARE[0], 100.0 * IFP_BARE[0] / max(1, IFP_INF[0])))
     print('fence: %d/%d, locked (HIS 1115). fence reset TO: %g/%g, banked (HIS 1117)'
           % (FNC, 100 - FNC, FENCE_RESET_TO, 100 - FENCE_RESET_TO))
     _lo, _hi = O_TA, O_TA + len(LINES)

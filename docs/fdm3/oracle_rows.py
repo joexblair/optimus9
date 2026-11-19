@@ -152,6 +152,8 @@ _PAGE = [('its reset fence', META.get('reset'), float(FK.FENCE_RESET_TO)),
          ('its M-no-rev ceilings', META.get('mnrtops'), list(FK.MNR_TOPS)),
          ('its locked A state', META.get('alock'), [int(FK.A_WS1_WS6), int(FK.A_WS7_WS15)]),
          ('its Mage-side-of-50 paint', META.get('mage50'), int(FK.ORACLE_MAGE50_PCT)),
+         ('its in-fence power edges', META.get('ifpedges'), list(FK.INFENCE_EDGES)),
+         ('its in-fence power 2dp', META.get('ifpdp'), int(FK.INFENCE_DP)),
          ('its x race re-open', META.get('xreopen'), FK.ORACLE_X_REOPEN),
          ('its e race re-open', META.get('ereopen'), FK.ORACLE_E_REOPEN)]
 _OFF = [(w, g, want) for w, g, want in _PAGE
@@ -248,6 +250,7 @@ def load(flip=0, alo=None, ahi=None, chunk=20000):
     out['sumtoexf'] = np.zeros((NROWS, len(SUMS)), np.int32)
     #   HIS 1119: the leg's max oob Mage TF, one byte just before the side byte. It is the INCOMING
     #   leg's max, stamped at this leg's open and the same on every row of the leg.
+    out['tapow'] = np.zeros((NROWS, 16), np.int8)
     out['legmage'] = np.zeros(NROWS, np.int16)
     sd = np.zeros(NROWS, np.int8)
     for a in range(0, NROWS, chunk):
@@ -258,7 +261,7 @@ def load(flip=0, alo=None, ahi=None, chunk=20000):
         #   code 0..15, a sum's TO(exf) count 0 .. the lines in that sum. Reading one block at
         #   another's offset lands outside its range almost at once, which is what was missing when
         #   O_TA was stale.
-        _ta = b[:, O_TA:O_TA + len(LINES)].astype(int)
+        _ta = b[:, O_TA:O_TA + len(LINES)].astype(int) & 7   # HIS 1119: bits 3-5 are the band
         assert _ta.min() >= 0 and _ta.max() <= 4, \
             ('the TO/AW block is not at byte %d on this page' % O_TA, int(_ta.min()), int(_ta.max()))
         _xc = b[:, O_CROSS:O_CROSS + len(LINES)].astype(int)
@@ -274,7 +277,16 @@ def load(flip=0, alo=None, ahi=None, chunk=20000):
             out['x'][a:a + n, tf] = (c & 1) > 0
             out['e'][a:a + n, tf] = (c & 2) > 0
             out['newaw'][a:a + n, tf] = (c & 4) > 0
+            #   HIS 1119 `fdm3-infence-power` put the power band in bits 3-5 of this byte, so
+            #   every read of the code masks with 7. `tapow` is the band as the page stores it:
+            #   0 no value, 1..7 his -3 .. +3.
             st = b[:, O_TA + j].astype(int)
+            out['tapow'][a:a + n, tf] = (st >> 3) & 7
+            #   a band may only sit on a TO(inf) cell - his *"for every TO(inf) line"*. If this
+            #   fires, the page put the band somewhere his words do not reach.
+            assert not np.any(((st & 7) != 1) & (((st >> 3) & 7) != 0)), \
+                'a power band sits on a cell that is not TO(inf)'
+            st = st & 7
             out['aw'][a:a + n, tf] = np.isin(st, (2, 4))
             #   HIS *"printing exf"*: the ex-fence bit set - 3 TO(exf), 4 AW(exf). `ex` includes oob.
             out['exf'][a:a + n, tf] = np.isin(st, (3, 4))
@@ -624,7 +636,7 @@ def rank_per_side(mm, side):
     return ratio, rank
 
 
-def orac_setups(R, reads, rows):
+def orac_setups(R, reads, rows, every=False):
     """HIS 1118 SETUP HUNT: *"6x or 7x (low band) / with at least 1 aw flip / across 2 or 3 rows /
     with any AW flips in the post 6x/8x grace walk, seperated to high and low bands"*, plus *"thr
     number of x crosses in the high band might have meaning"*. `rows` is his 2 or 3.
@@ -637,6 +649,19 @@ def orac_setups(R, reads, rows):
     xl = window(R['x'], rows)[:, 1:lo_hi + 1].sum(1)        # distinct lowband TFs with an x-cross
     fl = window(R['newaw'], rows)[:, 1:lo_hi + 1].sum(1)    # distinct lowband AW flips
     hx = window(R['x'], rows)[:, hi_lo:hi_hi + 1].sum(1)    # his highband x-cross count
+    #   HIS 1119: *"add columns for the count of lowband AWs and highband AWs"* and *"add TOexf
+    #   counts for lband, hband, 16-22, 23-30"*. Each is DISTINCT TIMEFRAMES across the window, the
+    #   span he ruled for the AW counts. The two sums have no per-line mask on the page - it serves
+    #   them as a count of lines - so they take the HIGHEST per-row count in the window instead.
+    law = window(R['aw'], rows)[:, 1:lo_hi + 1].sum(1)
+    haw = window(R['aw'], rows)[:, hi_lo:hi_hi + 1].sum(1)
+    lxf = window(R['toexf'], rows)[:, 1:lo_hi + 1].sum(1)
+    hxf = window(R['toexf'], rows)[:, hi_lo:hi_hi + 1].sum(1)
+    sxf = R['sumtoexf'].astype(np.int16).copy()
+    for d in range(1, rows):                       # the same window `window` spans, with max
+        sh = np.zeros_like(sxf)
+        sh[d:] = R['sumtoexf'][:-d]
+        sxf = np.maximum(sxf, sh)
     setup = (xl >= int(FK.ORAC_6X_HITS)) & (fl >= 1)
     grace = int(round(float(FK.ORAC_GRACE_MIN) * 60000 / STEP))
     #   the grace walk: the setup row and the rows after it up to his 5 minutes, the setup row
@@ -644,12 +669,16 @@ def orac_setups(R, reads, rows):
     glo = np.zeros(NROWS, np.int16)
     ghi = np.zeros(NROWS, np.int16)
     gx = np.zeros(NROWS, np.int16)
-    for g in np.flatnonzero(setup):
+    #   HIS 1119 *"show all of the raw rows"*: the table holds every row, so the grace columns have
+    #   to mean the same thing on a row the hunt did not flag. `every` walks them all; the reports
+    #   leave it off and the flagged rows' values are identical either way.
+    for g in (range(NROWS) if every else np.flatnonzero(setup)):
         z = min(g + grace, NROWS)
         glo[g] = int(R['newaw'][g:z, 1:lo_hi + 1].any(0).sum())
         ghi[g] = int(R['newaw'][g:z, hi_lo:hi_hi + 1].any(0).sum())
         gx[g] = int(R['x'][g:z, hi_lo:hi_hi + 1].any(0).sum())
-    return dict(setup=setup, xl=xl, fl=fl, hx=hx, glo=glo, ghi=ghi, gx=gx, grace=grace, rows=rows)
+    return dict(setup=setup, xl=xl, fl=fl, hx=hx, glo=glo, ghi=ghi, gx=gx, grace=grace,
+                rows=rows, law=law, haw=haw, lxf=lxf, hxf=hxf, sxf=sxf)
 
 
 def orac_conditions(R, reads, gate_window):
@@ -1470,9 +1499,15 @@ def main():
                                       'mean grace highband x-crosses',
                                       'setups reaching >=2 grace highband flips'], grp):
                     wr(t)
-        #   HIS 1119: *"drop this into a db table - I'll read it in excel"*. One row per setup,
-        #   the same rows the text report prints. The key carries the knob set, so a rerun at
-        #   different values lands beside its sibling instead of overwriting it.
+        #   HIS 1119: *"drop this into a db table - I'll read it in excel"*, then *"show all of
+        #   the raw rows, ie the pre 20% cull"* - EVERY oracle row of the day, no gate, with the
+        #   hunt's own flag as a column. His 1118 reason: *"if gates are applied, we don't have a
+        #   fighting chance"*.
+        #   HIS 1119 SHAPE: *"collate them instead of separating them into 2 partitions of the
+        #   table - ie print the 2-row-count values for a timestamp, and the following table row
+        #   will print the 3-row-count for the same timestamp. this will need a sequence column"*.
+        #   So one timestamp owns two consecutive rows, the 2-row window then the 3-row, and `seq`
+        #   numbers them in that order.
         if '--db' in sys.argv:
             from optimus9.config import get_db_config
             from optimus9.db.database_manager import DatabaseManager
@@ -1480,37 +1515,46 @@ def main():
             _d.connect()
             _kn = ' '.join('%s=%s' % (kk, vv) for kk, vv in FK.live() if kk.startswith('ORAC_'))
             assert len(_kn) <= 512, 'the knob set does not fit the key column'
-            _n = 0
-            for rows_ in (2, 3):
-                S = orac_setups(R, reads, rows_)
-                kk_ = np.flatnonzero(S['setup'][a:z + 1]) + a
-                MM = setup_maemfe(PRT[kk_], reads['side'][kk_])
-                RT, RK = rank_per_side(MM, reads['side'][kk_])
-                _d.execute('DELETE FROM fdm3_orac_setup WHERE day=%s AND win_rows=%s AND knobs=%s',
-                           (day, rows_, _kn))
-                for j, i in enumerate(kk_):
-                    zc, mae, mfe = MM[j]
-                    _d.execute(
-                        'INSERT INTO fdm3_orac_setup (day, win_rows, knobs, setup_row, side, '
-                        'mae_pct, mfe_pct, mfe_over_mae, rank_in_side, '
-                        'leg_mage, low_xcross, low_aw_flip, high_xcross, grace_low_flip, '
-                        'grace_high_flip, grace_high_x, leg_closes) VALUES (%s, %s, %s, %s, %s, '
-                        '%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
-                        (day, rows_, _kn, U(int(i)),
-                         'HIGH' if reads['side'][i] > 0 else 'LOW' if reads['side'][i] < 0 else 'none',
-                         None if mae is None else float(mae),
-                         None if mfe is None else float(mfe),
-                         None if RT[j] is None else float(RT[j]),
-                         None if RK[j] is None else int(RK[j]),
-                         int(R['legmage'][i]),
-                         int(S['xl'][i]), int(S['fl'][i]), int(S['hx'][i]),
-                         int(S['glo'][i]), int(S['ghi'][i]), int(S['gx'][i]),
-                         None if zc is None else ln.U(int(zc))))
-                    _n += 1
+            _all = np.arange(a, z + 1)
+            #   the MAE/MFE span and the rank are the leg's, not the window's, so they are read
+            #   once and both of a timestamp's rows carry the same pair
+            _MM = setup_maemfe(PRT[_all], reads['side'][_all])
+            _RT, _RK = rank_per_side(_MM, reads['side'][_all])
+            _S = {r_: orac_setups(R, reads, r_, every=True) for r_ in (2, 3)}
+            _d.execute('DELETE FROM fdm3_orac_setup WHERE day=%s AND knobs=%s', (day, _kn))
+            _batch = []
+            for j_, i_ in enumerate(_all):
+                zc, mae, mfe = _MM[j_]
+                for r_ in (2, 3):
+                    S = _S[r_]
+                    _batch.append((
+                        day, r_, _kn, len(_batch) + 1, U(int(i_)),
+                        'HIGH' if reads['side'][i_] > 0 else 'LOW' if reads['side'][i_] < 0 else 'none',
+                        int(S['setup'][i_]),
+                        None if mae is None else float(mae),
+                        None if mfe is None else float(mfe),
+                        None if _RT[j_] is None else float(_RT[j_]),
+                        None if _RK[j_] is None else int(_RK[j_]),
+                        int(R['legmage'][i_]),
+                        int(S['xl'][i_]), int(S['fl'][i_]), int(S['hx'][i_]),
+                        int(S['glo'][i_]), int(S['ghi'][i_]), int(S['gx'][i_]),
+                        int(S['law'][i_]), int(S['haw'][i_]),
+                        int(S['lxf'][i_]), int(S['hxf'][i_]),
+                        int(S['sxf'][i_, 0]), int(S['sxf'][i_, 1]),
+                        None if zc is None else ln.U(int(zc))))
+            _d.executemany(
+                'INSERT INTO fdm3_orac_setup (day, win_rows, knobs, seq, setup_row, side, '
+                'is_setup, mae_pct, mfe_pct, mfe_over_mae, rank_in_side, leg_mage, low_xcross, '
+                'low_aw_flip, high_xcross, grace_low_flip, grace_high_flip, grace_high_x, '
+                'low_aw, high_aw, low_toexf, high_toexf, toexf_16_22, toexf_23_30, leg_closes) '
+                'VALUES (' + ', '.join(['%s'] * 25) + ')', _batch)
             print()
-            print('| the table | rows written |')
+            print('| the table | value |')
             print('|---|---|')
-            print('| fdm3_orac_setup, %s, both window widths | %d |' % (day, _n))
+            print('| fdm3_orac_setup, %s | %d rows |' % (day, len(_batch)))
+            print('| its timestamps | %d, each owning a 2-row and a 3-row window row |' % len(_all))
+            print('| of them the hunt flags, 2 row window | %d |' % int(_S[2]['setup'][_all].sum()))
+            print('| of them the hunt flags, 3 row window | %d |' % int(_S[3]['setup'][_all].sum()))
         for t in buf:
             print(t)
         if out:

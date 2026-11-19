@@ -63,6 +63,13 @@ ORACLE_PORT = _knob('ORACLE_PORT', 8790, int)
 FENCE_RESET_TO = _knob('FENCE_RESET_TO', 33.0)   # his `fdm3-fence-reset-TO`, banked on the page
 ORACLE_FENCE = _knob('ORACLE_FENCE', 23.0)       # the ex-fence fence, locked on the page since 1115
 ORACLE_SHIFT = _knob('ORACLE_SHIFT', 15, int)    # his 1119 pivot offset button, minutes - was 30 at 1117
+#   HIS 1119 `fdm3-infence-power`: *"for every TO(inf) line, add a suffix based on these critreria"*.
+#   His five bands, plus the -3 and +3 he ruled for the 7.9% of TO(inf) cells his five did not
+#   reach. The edges are the band boundaries read LOW-inclusive at 2dp, so 62.00 opens the +1 band
+#   and 72.99 closes it. The value is the closed-prev r - the banked chart-matched read.
+INFENCE_EDGES = (23.0, 28.0, 38.0, 62.0, 73.0, 77.0)
+INFENCE_DP = _knob('INFENCE_DP', 2, int)         # his *"all values are 2dp"*
+INFENCE_READ = os.environ.get('W_FDM3_INFENCE_READ', 'closed_prev')
 #   HIS 1119: *"I'm not using the m-no-rev column. drop it and replace it with a new max Mage TF
 #   column that repeats the value on every row of the leg"*. The two M-no-rev columns are gone;
 #   one column takes their place, holding the INCOMING leg's max oob Mage TF carried across the
@@ -233,6 +240,13 @@ RULED = {
     'ORACLE_FENCE': (23.0, 'the ex-fence fence, locked on the page at his 1115 word'),
     'ORACLE_SHIFT': (15, 'his 1119 pivot offset button, minutes - *"rebuild 8792 with a pivot '
                          '+15 minute button , and drop pivot +30 button"*, ruled for all three pages'),
+    'INFENCE_EDGES': ((23.0, 28.0, 38.0, 62.0, 73.0, 77.0),
+                      'his 1119 `fdm3-infence-power` band edges, low-inclusive at 2dp: under 23 is '
+                      '-3, 23-27.99 -2, 28-37.99 -1, 38-61.99 0, 62-72.99 +1, 73-76.99 +2, 77 and '
+                      'over +3. The -3 and +3 are his ruling on the cells the five did not reach'),
+    'INFENCE_DP': (2, 'his *"all values are 2dp: eg 62 to 73 is actually 62.00 to 72.99"*'),
+    'INFENCE_READ': ('closed_prev', 'the line value the band reads - the banked chart-matched '
+                                    'read, since emerging is lift-off\'s read alone'),
     'MNR_TOPS': ((15,), 'the leg-Mage column\'s ceiling. HIS 1119 dropped the two M-no-rev '
                         'columns for one max-Mage-TF column; ws1..ws15 is his in-use range'),
     'MNR_LO': (1, 'the leg-Mage climb starts at the lowest oob line in the leg'),
