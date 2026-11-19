@@ -1253,7 +1253,6 @@ def main():
         side = reads['side'][k]
         mm = setup_maemfe(PRT[k], side)
         ratio, rank = rank_per_side(mm, side)
-        TAG = {x: max_oob_line(reads, x)[0] for x in ('Mage', 'b')}
         XLO = window(R['x'], n6)[:, 1:lo_hi + 1].sum(1)
         XHI = window(R['x'], n6)[:, hi_lo:hi_hi + 1].sum(1)
         S2 = orac_setups(R, reads, nrow)
@@ -1263,7 +1262,7 @@ def main():
                 ('lowAW/%d' % nrow, V['low_aw'], 1), ('lowFLIP/%d' % nrow, V['low_fl'], 1),
                 ('lowTOexf here', V['low_toexf'], 1), ('ws1-15TOexf here', V['all_toexf'], 1),
                 ('lowAW here', V['low_aw3'], 1), ('highTOexf here', V['high_toexf'], 1),
-                ('max oob Mage', TAG['Mage'], 1), ('max oob b', TAG['b'], 1),
+                ('legMage', R['legmage'], 1),      # HIS 1119: the one-bar reads are gone
                 ('grace lowband AW flips', S2['glo'], 0),
                 ('grace highband AW flips', S2['ghi'], 0),
                 ('grace highband x-crosses', S2['gx'], 0)]
@@ -1351,9 +1350,6 @@ def main():
         print(control(R))
         TR = TA.pseudo_trades()[1]
         reads = orac_reads(TR)
-        TAG = {sfx: max_oob_line(reads, sfx) for sfx in ('Mage', 'b')}
-        step, top = TAG['Mage']
-        MNR = mage50()[1][0][0] if 'mnrtops' in META else np.zeros(NROWS, np.int16)
         print('bars %d, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
         print('page port %d, %d rows %d s apart' % (PORT, NROWS, int(META['step']) // 1000))
         print('%s: rows %d .. %d (%s .. %s)' % (day, a, z, U(a), U(z)))
@@ -1385,8 +1381,6 @@ def main():
             wr('#                          scoring the OUTGOING trade: a LOW target-side creates an')
             wr('#                          OUTGOING LONG so up is favourable, a HIGH one an OUTGOING')
             wr('#                          SHORT so down is. MAE never above 0, MFE never below it')
-            wr('#   max oob Mage           the oob climb on ws{TF}Mage, - when no line is oob')
-            wr('#   max oob b              the same climb on ws{TF}b')
             wr('#   M-no-rev               the M-no-rev column\'s TF at that row')
             wr('#   lowband x-cross        distinct ws1..ws%d with an x-cross across the %d rows'
                % (lo_hi, rows))
@@ -1408,8 +1402,10 @@ def main():
                             'HIGH' if reads['side'][i] > 0 else 'LOW' if reads['side'][i] < 0 else '-',
                             '-' if mae is None else '%+.3f' % mae,
                             '-' if mfe is None else '%+.3f' % mfe,
-                            'ws%d' % TAG['Mage'][0][i] if TAG['Mage'][0][i] else '-',
-                            'ws%d' % TAG['b'][0][i] if TAG['b'][0][i] else '-',
+                            #   HIS 1119: *"drop the one-bar read columns"*. The max-oob reads
+                            #   taken AT the setup row, on Mage and on b, are gone. legMage - the
+                            #   INCOMING leg's max - is the one he keeps; the two disagreed on
+                            #   354 of 399 rows on 09-24.
                             'ws%d' % R['legmage'][i] if R['legmage'][i] else '-',
                             S['xl'][i], S['fl'][i], S['hx'][i],
                             S['glo'][i], S['ghi'][i], S['gx'][i],
@@ -1417,8 +1413,8 @@ def main():
             #   HIS 1118: *"please use the prior txt format"* - the long names are back. The
             #   short ones were codes I coined, which he cannot read. MAE and MFE stay at the
             #   front, which was the other half of his ask.
-            for t in fixed_table(['the setup row', 'side', 'MAE %', 'MFE %', 'max oob Mage',
-                                  'max oob b', 'legMage', 'lowband x-cross', 'lowband AW flip',
+            for t in fixed_table(['the setup row', 'side', 'MAE %', 'MFE %',
+                                  'legMage', 'lowband x-cross', 'lowband AW flip',
                                   'highband x-cross', 'grace lowband AW flips',
                                   'grace highband AW flips', 'grace highband x-crosses',
                                   'the leg closes'], tab):
@@ -1442,11 +1438,11 @@ def main():
             for t in fixed_table(['the read', 'value'], agg):
                 wr(t)
             MAP = {int(i): (m, f) for i, (_z, m, f) in zip(k, MM)}
-            for sfx in ('Mage', 'b'):
+            for sfx in ('leg',):
                 wr('')
-                wr('## THE SAME SETUPS GROUPED BY THEIR MAX OOB %s' % sfx.upper())
+                wr('## THE SAME SETUPS GROUPED BY THEIR legMage')
                 wr('')
-                tag = TAG[sfx][0]
+                tag = R['legmage']
                 grp = []
                 for t_ in range(0, int(FK.ORAC_HIGH_HI) + 1):
                     sel = k[tag[k] == t_]
@@ -1465,7 +1461,7 @@ def main():
                 wr('#   MFE > abs(MAE)  how many of the scored have MFE above abs(MAE)')
                 wr('#   the means are per setup, over the same columns as the row table above')
                 wr('')
-                for t in fixed_table(['max oob %s' % sfx, 'setups', 'scored', 'mean MAE %',
+                for t in fixed_table(['legMage', 'setups', 'scored', 'mean MAE %',
                                       'mean MFE %', 'MFE > abs(MAE)', 'mean grace lowband AW flips',
                                       'mean grace highband AW flips', 'mean highband x-cross',
                                       'mean grace highband x-crosses',
@@ -1493,17 +1489,17 @@ def main():
                     zc, mae, mfe = MM[j]
                     _d.execute(
                         'INSERT INTO fdm3_orac_setup (day, win_rows, knobs, setup_row, side, '
-                        'mae_pct, mfe_pct, mfe_over_mae, rank_in_side, max_oob_mage, max_oob_b, '
+                        'mae_pct, mfe_pct, mfe_over_mae, rank_in_side, '
                         'leg_mage, low_xcross, low_aw_flip, high_xcross, grace_low_flip, '
                         'grace_high_flip, grace_high_x, leg_closes) VALUES (%s, %s, %s, %s, %s, '
-                        '%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+                        '%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
                         (day, rows_, _kn, U(int(i)),
                          'HIGH' if reads['side'][i] > 0 else 'LOW' if reads['side'][i] < 0 else 'none',
                          None if mae is None else float(mae),
                          None if mfe is None else float(mfe),
                          None if RT[j] is None else float(RT[j]),
                          None if RK[j] is None else int(RK[j]),
-                         int(TAG['Mage'][0][i]), int(TAG['b'][0][i]), int(R['legmage'][i]),
+                         int(R['legmage'][i]),
                          int(S['xl'][i]), int(S['fl'][i]), int(S['hx'][i]),
                          int(S['glo'][i]), int(S['ghi'][i]), int(S['gx'][i]),
                          None if zc is None else ln.U(int(zc))))
@@ -1521,15 +1517,6 @@ def main():
                 f.write('# 3 rows / with any AW flips in the post 6x/8x grace walk, seperated to high\n')
                 f.write('# and low bands"*, and *"thr number of x crosses in the high band might have\n')
                 f.write('# meaning"*.\n#\n')
-                f.write('# max oob Mage / max oob b: HIS *"the maximum oob Mage at any decision defines the\n')
-                f.write('# max(ws1 to 15) that needs to weigh in on the decision"* - the highest\n')
-                f.write('# ws1..ws%d whose CLOSED-PREV Mage is oob %g/%g on the row\'s own target-side\n'
-                        % (int(FK.ORAC_HIGH_HI), float(OOB), 100 - float(OOB)))
-                f.write('# at that row. PLAIN OOB, no lift-off reversal condition - that is what the\n')
-                f.write('# M-no-rev column beside it adds, so the two can be compared.\n')
-                f.write('# BOTH LINES: his *"there might be a difference for `b` instead of `mage`"*, so the\n')
-                f.write('# same climb runs on ws{TF}Mage and on ws{TF}b and each gets its own tag and its\n')
-                f.write('# own grouping.\n')
                 f.write('# MAE/MFE: his *"use sweep-pivot\'s MAE/MFE"*. The span is the setup bar to the bar\n')
                 f.write('# v4_sweep_pivots closes its leg on - mechanism-defined, no horizon and no percentage.\n')
                 f.write('# THE SETUP IS THE INCOMING TRADE, the one being closed. What is scored is the\n')
@@ -1537,10 +1524,19 @@ def main():
                 f.write('#     " LOW target-side creates a *OUTGOING* LONG,..."\n')
                 f.write('# so a LOW target-side scores a LONG (up favourable) and a HIGH target-side scores an\n')
                 f.write('# OUTGOING SHORT (down favourable). MAE is never above 0 and MFE never below it.\n')
-                f.write('# THE CLIMB: start at the LOWEST ws1..ws%d that is oob and step up one timeframe at\n'
-                        % int(FK.ORAC_HIGH_HI))
-                f.write('# a time while the next is oob too - his *"I\'ve only measured in single steps: ws1\n')
-                f.write('# to 2, 2 to 3, 3 to 4"*. A gap stops the climb. "highest oob anywhere" ignores gaps.\n#\n')
+                f.write('# legMage: HIS 1118 *"the maximum oob Mage at any decision defines the max(ws1 to\n')
+                f.write('# 15) that needs to weigh in on the decision"*. PLAIN OOB %g/%g, no lift-off\n'
+                        % (float(OOB), 100 - float(OOB)))
+                f.write('# reversal condition.\n')
+                f.write('# legMage is the INCOMING leg\'s own max, stamped at this leg\'s open and the same\n')
+                f.write('# on every row of it - his *"a new max Mage TF column that repeats the value on every\n')
+                f.write('# row of the leg"*. THE CLIMB: start at the LOWEST ws1..ws%d whose closed-prev Mage\n'
+                        % int(FK.ORAC_MAGE_HI))
+                f.write('# is oob on the INCOMING leg\'s own target-side at some bar of that leg, then step up\n')
+                f.write('# while the next timeframe - or the one after it, his *"jumps of 2 should be allowed\n')
+                f.write('# to make it more sane"* - is oob too. "-" where no line was oob in that leg.\n#\n')
+                f.write('# HIS 1119: *"drop the one-bar read columns"*. The max-oob reads taken AT the setup\n')
+                f.write('# row, on Mage and on b, are gone. They disagreed with legMage on 354 of 399 rows.\n#\n')
                 f.write('# the grace walk is the setup row and the rows after it up to %g minutes,\n'
                         % float(FK.ORAC_GRACE_MIN))
                 f.write('# the setup row included. Every count is DISTINCT TFs - his *"AW, TO, x, e\n')

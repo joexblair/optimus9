@@ -5,14 +5,6 @@
 # and low bands"*, and *"thr number of x crosses in the high band might have
 # meaning"*.
 #
-# max oob Mage / max oob b: HIS *"the maximum oob Mage at any decision defines the
-# max(ws1 to 15) that needs to weigh in on the decision"* - the highest
-# ws1..ws15 whose CLOSED-PREV Mage is oob 15/85 on the row's own target-side
-# at that row. PLAIN OOB, no lift-off reversal condition - that is what the
-# M-no-rev column beside it adds, so the two can be compared.
-# BOTH LINES: his *"there might be a difference for `b` instead of `mage`"*, so the
-# same climb runs on ws{TF}Mage and on ws{TF}b and each gets its own tag and its
-# own grouping.
 # MAE/MFE: his *"use sweep-pivot's MAE/MFE"*. The span is the setup bar to the bar
 # v4_sweep_pivots closes its leg on - mechanism-defined, no horizon and no percentage.
 # THE SETUP IS THE INCOMING TRADE, the one being closed. What is scored is the
@@ -20,9 +12,18 @@
 #     " LOW target-side creates a *OUTGOING* LONG,..."
 # so a LOW target-side scores a LONG (up favourable) and a HIGH target-side scores an
 # OUTGOING SHORT (down favourable). MAE is never above 0 and MFE never below it.
-# THE CLIMB: start at the LOWEST ws1..ws15 that is oob and step up one timeframe at
-# a time while the next is oob too - his *"I've only measured in single steps: ws1
-# to 2, 2 to 3, 3 to 4"*. A gap stops the climb. "highest oob anywhere" ignores gaps.
+# legMage: HIS 1118 *"the maximum oob Mage at any decision defines the max(ws1 to
+# 15) that needs to weigh in on the decision"*. PLAIN OOB 15/85, no lift-off
+# reversal condition.
+# legMage is the INCOMING leg's own max, stamped at this leg's open and the same
+# on every row of it - his *"a new max Mage TF column that repeats the value on every
+# row of the leg"*. THE CLIMB: start at the LOWEST ws1..ws15 whose closed-prev Mage
+# is oob on the INCOMING leg's own target-side at some bar of that leg, then step up
+# while the next timeframe - or the one after it, his *"jumps of 2 should be allowed
+# to make it more sane"* - is oob too. "-" where no line was oob in that leg.
+#
+# HIS 1119: *"drop the one-bar read columns"*. The max-oob reads taken AT the setup
+# row, on Mage and on b, are gone. They disagreed with legMage on 354 of 399 rows.
 #
 # the grace walk is the setup row and the rows after it up to 5 minutes,
 # the setup row included. Every count is DISTINCT TFs - his *"AW, TO, x, e
@@ -39,8 +40,6 @@
 #                          scoring the OUTGOING trade: a LOW target-side creates an
 #                          OUTGOING LONG so up is favourable, a HIGH one an OUTGOING
 #                          SHORT so down is. MAE never above 0, MFE never below it
-#   max oob Mage           the oob climb on ws{TF}Mage, - when no line is oob
-#   max oob b              the same climb on ws{TF}b
 #   M-no-rev               the M-no-rev column's TF at that row
 #   lowband x-cross        distinct ws1..ws7 with an x-cross across the 2 rows
 #   lowband AW flip        distinct ws1..ws7 flipping TO -> AW across the 2 rows
@@ -50,48 +49,48 @@
 #   grace highband x-cross distinct ws8..ws15 with an x-cross in that grace
 #   the leg closes         the bar v4_sweep_pivots closes the leg on
 
-| the setup row       | side | MAE %  | MFE %  | max oob Mage | max oob b | legMage | lowband x-cross | lowband AW flip | highband x-cross | grace lowband AW flips | grace highband AW flips | grace highband x-crosses | the leg closes      |
-|---------------------|------|--------|--------|--------------|-----------|---------|-----------------|-----------------|------------------|------------------------|-------------------------|--------------------------|---------------------|
-| 2026-09-24 00:08:30 | HIGH | -0.601 | +0.444 | ws2          | ws2       | ws2     | 7               | 3               | 5                | 3                      | 0                       | 7                        | 2026-09-24 00:35:15 |
-| 2026-09-24 00:22:30 | HIGH | -0.825 | +0.022 | -            | -         | ws2     | 7               | 1               | 7                | 1                      | 0                       | 7                        | 2026-09-24 00:35:15 |
-| 2026-09-24 01:52:00 | LOW  | -0.884 | +0.027 | ws7          | ws5       | ws3     | 7               | 1               | 8                | 0                      | 1                       | 8                        | 2026-09-24 02:13:35 |
-| 2026-09-24 02:35:00 | HIGH | -2.826 | +0.005 | ws3          | ws2       | ws11    | 7               | 1               | 5                | 1                      | 0                       | 5                        | 2026-09-24 03:06:50 |
-| 2026-09-24 05:44:30 | HIGH | -1.161 | +1.113 | ws15         | ws11      | ws2     | 7               | 1               | 2                | 2                      | 0                       | 4                        | 2026-09-24 08:09:45 |
-| 2026-09-24 05:47:30 | HIGH | -1.269 | +1.008 | ws15         | ws12      | ws2     | 7               | 1               | 2                | 0                      | 0                       | 1                        | 2026-09-24 08:09:45 |
-| 2026-09-24 06:51:00 | HIGH | -0.892 | +0.590 | -            | ws15      | ws2     | 7               | 1               | 3                | 3                      | 0                       | 3                        | 2026-09-24 08:09:45 |
-| 2026-09-24 06:51:30 | HIGH | -0.882 | +0.600 | -            | ws15      | ws2     | 7               | 1               | 3                | 4                      | 0                       | 3                        | 2026-09-24 08:09:45 |
-| 2026-09-24 07:00:30 | HIGH | -0.753 | +0.727 | ws2          | ws2       | ws2     | 7               | 1               | 3                | 2                      | 1                       | 8                        | 2026-09-24 08:09:45 |
-| 2026-09-24 07:45:00 | HIGH | -0.306 | +0.290 | ws15         | ws3       | ws2     | 7               | 1               | 5                | 2                      | 4                       | 8                        | 2026-09-24 08:09:45 |
-| 2026-09-24 08:04:30 | HIGH | -0.248 | +0.206 | -            | ws14      | ws2     | 7               | 1               | 6                | 0                      | 3                       | 8                        | 2026-09-24 08:09:45 |
-| 2026-09-24 09:28:00 | LOW  | -1.233 | +0.011 | ws13         | ws12      | ws15    | 7               | 1               | 3                | 1                      | 0                       | 3                        | 2026-09-24 09:36:55 |
-| 2026-09-24 10:18:30 | HIGH | -6.638 | +0.226 | -            | -         | ws15    | 7               | 1               | 5                | 5                      | 0                       | 7                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:19:00 | HIGH | -6.662 | +0.204 | -            | -         | ws15    | 7               | 2               | 5                | 5                      | 0                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:19:30 | HIGH | -6.721 | +0.149 | -            | -         | ws15    | 7               | 2               | 6                | 4                      | 0                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:22:00 | HIGH | -6.709 | +0.110 | -            | -         | ws15    | 7               | 2               | 7                | 5                      | 0                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:22:30 | HIGH | -6.468 | +0.335 | -            | -         | ws15    | 7               | 2               | 7                | 5                      | 0                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:24:30 | HIGH | -6.750 | +0.072 | -            | -         | ws15    | 7               | 4               | 7                | 4                      | 1                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:30:30 | HIGH | -6.680 | +0.138 | -            | -         | ws15    | 7               | 3               | 7                | 7                      | 0                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:31:00 | HIGH | -6.691 | +0.127 | -            | -         | ws15    | 7               | 6               | 8                | 4                      | 0                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:34:00 | HIGH | -6.732 | +0.088 | -            | -         | ws15    | 7               | 2               | 8                | 2                      | 0                       | 7                        | 2026-09-24 14:40:10 |
-| 2026-09-24 12:25:30 | HIGH | -5.208 | +0.907 | ws5          | -         | ws15    | 7               | 4               | 1                | 4                      | 1                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 13:21:00 | HIGH | -3.174 | +0.831 | ws9          | ws6       | ws15    | 7               | 1               | 0                | 1                      | 0                       | 2                        | 2026-09-24 14:40:10 |
-| 2026-09-24 13:21:30 | HIGH | -3.114 | +0.889 | ws9          | ws6       | ws15    | 7               | 1               | 0                | 1                      | 0                       | 2                        | 2026-09-24 14:40:10 |
-| 2026-09-24 14:15:30 | HIGH | -2.742 | +0.027 | ws10         | ws7       | ws15    | 7               | 1               | 5                | 1                      | 1                       | 5                        | 2026-09-24 14:40:10 |
-| 2026-09-24 15:13:00 | HIGH | -3.208 | +0.112 | -            | -         | ws1     | 7               | 1               | 1                | 1                      | 0                       | 4                        | 2026-09-24 16:44:40 |
-| 2026-09-24 15:51:00 | HIGH | -1.712 | +1.250 | ws12         | ws9       | ws1     | 7               | 1               | 1                | 2                      | 0                       | 1                        | 2026-09-24 16:44:40 |
-| 2026-09-24 17:01:30 | LOW  | -2.083 | +0.548 | -            | -         | ws15    | 7               | 2               | 8                | 1                      | 0                       | 7                        | 2026-09-24 18:09:25 |
-| 2026-09-24 17:02:00 | LOW  | -2.409 | +0.213 | -            | -         | ws15    | 7               | 1               | 7                | 0                      | 0                       | 7                        | 2026-09-24 18:09:25 |
-| 2026-09-24 17:16:00 | LOW  | -2.006 | +0.078 | -            | -         | ws15    | 7               | 1               | 6                | 4                      | 0                       | 8                        | 2026-09-24 18:09:25 |
-| 2026-09-24 18:40:00 | HIGH | -0.797 | +0.628 | -            | -         | ws4     | 7               | 1               | 8                | 3                      | 0                       | 7                        | 2026-09-24 19:36:35 |
-| 2026-09-24 18:54:00 | HIGH | -0.802 | +0.623 | -            | -         | ws4     | 7               | 1               | 6                | 2                      | 0                       | 7                        | 2026-09-24 19:36:35 |
-| 2026-09-24 19:21:00 | HIGH | -0.834 | +0.074 | -            | -         | ws4     | 7               | 1               | 8                | 0                      | 1                       | 8                        | 2026-09-24 19:36:35 |
-| 2026-09-24 19:51:30 | LOW  | -1.304 | +0.095 | -            | -         | ws3     | 7               | 1               | 7                | 2                      | 0                       | 8                        | 2026-09-24 21:09:10 |
-| 2026-09-24 22:14:00 | LOW  | -1.270 | +0.204 | ws14         | ws12      | ws2     | 7               | 1               | 6                | 2                      | 1                       | 7                        | 2026-09-24 22:48:50 |
-| 2026-09-24 22:24:30 | LOW  | -0.880 | +0.162 | ws15         | ws12      | ws2     | 7               | 1               | 6                | 3                      | 2                       | 7                        | 2026-09-24 22:48:50 |
-| 2026-09-24 22:25:00 | LOW  | -0.955 | +0.086 | ws15         | ws12      | ws2     | 7               | 3               | 5                | 2                      | 2                       | 7                        | 2026-09-24 22:48:50 |
-| 2026-09-24 22:30:30 | LOW  | -0.880 | +0.162 | ws15         | ws12      | ws2     | 7               | 1               | 3                | 2                      | 7                       | 8                        | 2026-09-24 22:48:50 |
-| 2026-09-24 22:31:00 | LOW  | -0.993 | +0.049 | ws15         | ws12      | ws2     | 7               | 1               | 3                | 1                      | 7                       | 8                        | 2026-09-24 22:48:50 |
-| 2026-09-24 23:31:30 | HIGH | -1.489 | +0.119 | -            | -         | ws15    | 7               | 2               | 8                | 1                      | 0                       | 8                        | 2026-09-25 01:20:35 |
+| the setup row       | side | MAE %  | MFE %  | legMage | lowband x-cross | lowband AW flip | highband x-cross | grace lowband AW flips | grace highband AW flips | grace highband x-crosses | the leg closes      |
+|---------------------|------|--------|--------|---------|-----------------|-----------------|------------------|------------------------|-------------------------|--------------------------|---------------------|
+| 2026-09-24 00:08:30 | HIGH | -0.601 | +0.444 | ws2     | 7               | 3               | 5                | 3                      | 0                       | 7                        | 2026-09-24 00:35:15 |
+| 2026-09-24 00:22:30 | HIGH | -0.825 | +0.022 | ws2     | 7               | 1               | 7                | 1                      | 0                       | 7                        | 2026-09-24 00:35:15 |
+| 2026-09-24 01:52:00 | LOW  | -0.884 | +0.027 | ws3     | 7               | 1               | 8                | 0                      | 1                       | 8                        | 2026-09-24 02:13:35 |
+| 2026-09-24 02:35:00 | HIGH | -2.826 | +0.005 | ws11    | 7               | 1               | 5                | 1                      | 0                       | 5                        | 2026-09-24 03:06:50 |
+| 2026-09-24 05:44:30 | HIGH | -1.161 | +1.113 | ws2     | 7               | 1               | 2                | 2                      | 0                       | 4                        | 2026-09-24 08:09:45 |
+| 2026-09-24 05:47:30 | HIGH | -1.269 | +1.008 | ws2     | 7               | 1               | 2                | 0                      | 0                       | 1                        | 2026-09-24 08:09:45 |
+| 2026-09-24 06:51:00 | HIGH | -0.892 | +0.590 | ws2     | 7               | 1               | 3                | 3                      | 0                       | 3                        | 2026-09-24 08:09:45 |
+| 2026-09-24 06:51:30 | HIGH | -0.882 | +0.600 | ws2     | 7               | 1               | 3                | 4                      | 0                       | 3                        | 2026-09-24 08:09:45 |
+| 2026-09-24 07:00:30 | HIGH | -0.753 | +0.727 | ws2     | 7               | 1               | 3                | 2                      | 1                       | 8                        | 2026-09-24 08:09:45 |
+| 2026-09-24 07:45:00 | HIGH | -0.306 | +0.290 | ws2     | 7               | 1               | 5                | 2                      | 4                       | 8                        | 2026-09-24 08:09:45 |
+| 2026-09-24 08:04:30 | HIGH | -0.248 | +0.206 | ws2     | 7               | 1               | 6                | 0                      | 3                       | 8                        | 2026-09-24 08:09:45 |
+| 2026-09-24 09:28:00 | LOW  | -1.233 | +0.011 | ws15    | 7               | 1               | 3                | 1                      | 0                       | 3                        | 2026-09-24 09:36:55 |
+| 2026-09-24 10:18:30 | HIGH | -6.638 | +0.226 | ws15    | 7               | 1               | 5                | 5                      | 0                       | 7                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:19:00 | HIGH | -6.662 | +0.204 | ws15    | 7               | 2               | 5                | 5                      | 0                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:19:30 | HIGH | -6.721 | +0.149 | ws15    | 7               | 2               | 6                | 4                      | 0                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:22:00 | HIGH | -6.709 | +0.110 | ws15    | 7               | 2               | 7                | 5                      | 0                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:22:30 | HIGH | -6.468 | +0.335 | ws15    | 7               | 2               | 7                | 5                      | 0                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:24:30 | HIGH | -6.750 | +0.072 | ws15    | 7               | 4               | 7                | 4                      | 1                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:30:30 | HIGH | -6.680 | +0.138 | ws15    | 7               | 3               | 7                | 7                      | 0                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:31:00 | HIGH | -6.691 | +0.127 | ws15    | 7               | 6               | 8                | 4                      | 0                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:34:00 | HIGH | -6.732 | +0.088 | ws15    | 7               | 2               | 8                | 2                      | 0                       | 7                        | 2026-09-24 14:40:10 |
+| 2026-09-24 12:25:30 | HIGH | -5.208 | +0.907 | ws15    | 7               | 4               | 1                | 4                      | 1                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 13:21:00 | HIGH | -3.174 | +0.831 | ws15    | 7               | 1               | 0                | 1                      | 0                       | 2                        | 2026-09-24 14:40:10 |
+| 2026-09-24 13:21:30 | HIGH | -3.114 | +0.889 | ws15    | 7               | 1               | 0                | 1                      | 0                       | 2                        | 2026-09-24 14:40:10 |
+| 2026-09-24 14:15:30 | HIGH | -2.742 | +0.027 | ws15    | 7               | 1               | 5                | 1                      | 1                       | 5                        | 2026-09-24 14:40:10 |
+| 2026-09-24 15:13:00 | HIGH | -3.208 | +0.112 | ws1     | 7               | 1               | 1                | 1                      | 0                       | 4                        | 2026-09-24 16:44:40 |
+| 2026-09-24 15:51:00 | HIGH | -1.712 | +1.250 | ws1     | 7               | 1               | 1                | 2                      | 0                       | 1                        | 2026-09-24 16:44:40 |
+| 2026-09-24 17:01:30 | LOW  | -2.083 | +0.548 | ws15    | 7               | 2               | 8                | 1                      | 0                       | 7                        | 2026-09-24 18:09:25 |
+| 2026-09-24 17:02:00 | LOW  | -2.409 | +0.213 | ws15    | 7               | 1               | 7                | 0                      | 0                       | 7                        | 2026-09-24 18:09:25 |
+| 2026-09-24 17:16:00 | LOW  | -2.006 | +0.078 | ws15    | 7               | 1               | 6                | 4                      | 0                       | 8                        | 2026-09-24 18:09:25 |
+| 2026-09-24 18:40:00 | HIGH | -0.797 | +0.628 | ws4     | 7               | 1               | 8                | 3                      | 0                       | 7                        | 2026-09-24 19:36:35 |
+| 2026-09-24 18:54:00 | HIGH | -0.802 | +0.623 | ws4     | 7               | 1               | 6                | 2                      | 0                       | 7                        | 2026-09-24 19:36:35 |
+| 2026-09-24 19:21:00 | HIGH | -0.834 | +0.074 | ws4     | 7               | 1               | 8                | 0                      | 1                       | 8                        | 2026-09-24 19:36:35 |
+| 2026-09-24 19:51:30 | LOW  | -1.304 | +0.095 | ws3     | 7               | 1               | 7                | 2                      | 0                       | 8                        | 2026-09-24 21:09:10 |
+| 2026-09-24 22:14:00 | LOW  | -1.270 | +0.204 | ws2     | 7               | 1               | 6                | 2                      | 1                       | 7                        | 2026-09-24 22:48:50 |
+| 2026-09-24 22:24:30 | LOW  | -0.880 | +0.162 | ws2     | 7               | 1               | 6                | 3                      | 2                       | 7                        | 2026-09-24 22:48:50 |
+| 2026-09-24 22:25:00 | LOW  | -0.955 | +0.086 | ws2     | 7               | 3               | 5                | 2                      | 2                       | 7                        | 2026-09-24 22:48:50 |
+| 2026-09-24 22:30:30 | LOW  | -0.880 | +0.162 | ws2     | 7               | 1               | 3                | 2                      | 7                       | 8                        | 2026-09-24 22:48:50 |
+| 2026-09-24 22:31:00 | LOW  | -0.993 | +0.049 | ws2     | 7               | 1               | 3                | 1                      | 7                       | 8                        | 2026-09-24 22:48:50 |
+| 2026-09-24 23:31:30 | HIGH | -1.489 | +0.119 | ws15    | 7               | 2               | 8                | 1                      | 0                       | 8                        | 2026-09-25 01:20:35 |
 
 ## THE MAE/MFE SUMMARY - the setup bar to the bar sweep-pivots closes its leg on
 
@@ -108,47 +107,21 @@
 | best MFE %     | +1.250   |
 | MFE > abs(MAE) | 0 of 40  |
 
-## THE SAME SETUPS GROUPED BY THEIR MAX OOB MAGE
+## THE SAME SETUPS GROUPED BY THEIR legMage
 
 #   setups          how many setups carry this tag
 #   scored          how many of them sweep-pivots could close a leg for
 #   MFE > abs(MAE)  how many of the scored have MFE above abs(MAE)
 #   the means are per setup, over the same columns as the row table above
 
-| max oob Mage | setups | scored | mean MAE % | mean MFE % | MFE > abs(MAE) | mean grace lowband AW flips | mean grace highband AW flips | mean highband x-cross | mean grace highband x-crosses | setups reaching >=2 grace highband flips |
-|--------------|--------|--------|------------|------------|----------------|-----------------------------|------------------------------|-----------------------|-------------------------------|------------------------------------------|
-| none oob     | 22     | 22     | -3.538     | +0.243     | 0              | 2.9                         | 0.2                          | 6.3                   | 7.0                           | 1                                        |
-| ws2          | 2      | 2      | -0.677     | +0.585     | 0              | 2.5                         | 0.5                          | 4.0                   | 7.5                           | 0                                        |
-| ws3          | 1      | 1      | -2.826     | +0.005     | 0              | 1.0                         | 0.0                          | 5.0                   | 5.0                           | 0                                        |
-| ws5          | 1      | 1      | -5.208     | +0.907     | 0              | 4.0                         | 1.0                          | 1.0                   | 8.0                           | 0                                        |
-| ws7          | 1      | 1      | -0.884     | +0.027     | 0              | 0.0                         | 1.0                          | 8.0                   | 8.0                           | 0                                        |
-| ws9          | 2      | 2      | -3.144     | +0.860     | 0              | 1.0                         | 0.0                          | 0.0                   | 2.0                           | 0                                        |
-| ws10         | 1      | 1      | -2.742     | +0.027     | 0              | 1.0                         | 1.0                          | 5.0                   | 5.0                           | 0                                        |
-| ws12         | 1      | 1      | -1.712     | +1.250     | 0              | 2.0                         | 0.0                          | 1.0                   | 1.0                           | 0                                        |
-| ws13         | 1      | 1      | -1.233     | +0.011     | 0              | 1.0                         | 0.0                          | 3.0                   | 3.0                           | 0                                        |
-| ws14         | 1      | 1      | -1.270     | +0.204     | 0              | 2.0                         | 1.0                          | 6.0                   | 7.0                           | 0                                        |
-| ws15         | 7      | 7      | -0.921     | +0.410     | 0              | 1.7                         | 3.1                          | 3.7                   | 6.1                           | 5                                        |
-
-## THE SAME SETUPS GROUPED BY THEIR MAX OOB B
-
-#   setups          how many setups carry this tag
-#   scored          how many of them sweep-pivots could close a leg for
-#   MFE > abs(MAE)  how many of the scored have MFE above abs(MAE)
-#   the means are per setup, over the same columns as the row table above
-
-| max oob b | setups | scored | mean MAE % | mean MFE % | MFE > abs(MAE) | mean grace lowband AW flips | mean grace highband AW flips | mean highband x-cross | mean grace highband x-crosses | setups reaching >=2 grace highband flips |
-|-----------|--------|--------|------------|------------|----------------|-----------------------------|------------------------------|-----------------------|-------------------------------|------------------------------------------|
-| none oob  | 20     | 20     | -4.051     | +0.243     | 0              | 3.0                         | 0.1                          | 6.3                   | 7.5                           | 0                                        |
-| ws2       | 3      | 3      | -1.393     | +0.392     | 0              | 2.0                         | 0.3                          | 4.3                   | 6.7                           | 0                                        |
-| ws3       | 1      | 1      | -0.306     | +0.290     | 0              | 2.0                         | 4.0                          | 5.0                   | 8.0                           | 1                                        |
-| ws5       | 1      | 1      | -0.884     | +0.027     | 0              | 0.0                         | 1.0                          | 8.0                   | 8.0                           | 0                                        |
-| ws6       | 2      | 2      | -3.144     | +0.860     | 0              | 1.0                         | 0.0                          | 0.0                   | 2.0                           | 0                                        |
-| ws7       | 1      | 1      | -2.742     | +0.027     | 0              | 1.0                         | 1.0                          | 5.0                   | 5.0                           | 0                                        |
-| ws9       | 1      | 1      | -1.712     | +1.250     | 0              | 2.0                         | 0.0                          | 1.0                   | 1.0                           | 0                                        |
-| ws11      | 1      | 1      | -1.161     | +1.113     | 0              | 2.0                         | 0.0                          | 2.0                   | 4.0                           | 0                                        |
-| ws12      | 7      | 7      | -1.069     | +0.240     | 0              | 1.6                         | 2.7                          | 4.0                   | 5.9                           | 4                                        |
-| ws14      | 1      | 1      | -0.248     | +0.206     | 0              | 0.0                         | 3.0                          | 6.0                   | 8.0                           | 1                                        |
-| ws15      | 2      | 2      | -0.887     | +0.595     | 0              | 3.5                         | 0.0                          | 3.0                   | 3.0                           | 0                                        |
+| legMage | setups | scored | mean MAE % | mean MFE % | MFE > abs(MAE) | mean grace lowband AW flips | mean grace highband AW flips | mean highband x-cross | mean grace highband x-crosses | setups reaching >=2 grace highband flips |
+|---------|--------|--------|------------|------------|----------------|-----------------------------|------------------------------|-----------------------|-------------------------------|------------------------------------------|
+| ws1     | 2      | 2      | -2.460     | +0.681     | 0              | 1.5                         | 0.0                          | 1.0                   | 2.5                           | 0                                        |
+| ws2     | 14     | 14     | -0.851     | +0.404     | 0              | 1.9                         | 1.9                          | 4.2                   | 6.1                           | 6                                        |
+| ws3     | 2      | 2      | -1.094     | +0.061     | 0              | 1.0                         | 0.5                          | 7.5                   | 8.0                           | 0                                        |
+| ws4     | 3      | 3      | -0.811     | +0.442     | 0              | 1.7                         | 0.3                          | 7.3                   | 7.3                           | 0                                        |
+| ws11    | 1      | 1      | -2.826     | +0.005     | 0              | 1.0                         | 0.0                          | 5.0                   | 5.0                           | 0                                        |
+| ws15    | 18     | 18     | -4.639     | +0.282     | 0              | 3.1                         | 0.2                          | 5.4                   | 6.7                           | 0                                        |
 
 ## SETUPS ACROSS 3 ROWS - >=7 of ws1..ws7 carry an x-cross AND >=1 lowband AW flip
 
@@ -158,8 +131,6 @@
 #                          scoring the OUTGOING trade: a LOW target-side creates an
 #                          OUTGOING LONG so up is favourable, a HIGH one an OUTGOING
 #                          SHORT so down is. MAE never above 0, MFE never below it
-#   max oob Mage           the oob climb on ws{TF}Mage, - when no line is oob
-#   max oob b              the same climb on ws{TF}b
 #   M-no-rev               the M-no-rev column's TF at that row
 #   lowband x-cross        distinct ws1..ws7 with an x-cross across the 3 rows
 #   lowband AW flip        distinct ws1..ws7 flipping TO -> AW across the 3 rows
@@ -169,117 +140,117 @@
 #   grace highband x-cross distinct ws8..ws15 with an x-cross in that grace
 #   the leg closes         the bar v4_sweep_pivots closes the leg on
 
-| the setup row       | side | MAE %  | MFE %  | max oob Mage | max oob b | legMage | lowband x-cross | lowband AW flip | highband x-cross | grace lowband AW flips | grace highband AW flips | grace highband x-crosses | the leg closes      |
-|---------------------|------|--------|--------|--------------|-----------|---------|-----------------|-----------------|------------------|------------------------|-------------------------|--------------------------|---------------------|
-| 2026-09-24 00:08:30 | HIGH | -0.601 | +0.444 | ws2          | ws2       | ws2     | 7               | 3               | 5                | 3                      | 0                       | 7                        | 2026-09-24 00:35:15 |
-| 2026-09-24 00:09:00 | HIGH | -0.781 | +0.266 | ws2          | ws2       | ws2     | 7               | 3               | 8                | 0                      | 0                       | 6                        | 2026-09-24 00:35:15 |
-| 2026-09-24 00:22:30 | HIGH | -0.825 | +0.022 | -            | -         | ws2     | 7               | 1               | 7                | 1                      | 0                       | 7                        | 2026-09-24 00:35:15 |
-| 2026-09-24 00:23:00 | HIGH | -0.819 | +0.027 | -            | -         | ws2     | 7               | 1               | 7                | 0                      | 0                       | 7                        | 2026-09-24 00:35:15 |
-| 2026-09-24 01:48:00 | LOW  | -0.689 | +0.224 | ws5          | ws5       | ws3     | 7               | 1               | 3                | 1                      | 3                       | 8                        | 2026-09-24 02:13:35 |
-| 2026-09-24 01:48:30 | LOW  | -0.634 | +0.279 | ws5          | ws1       | ws3     | 7               | 1               | 3                | 1                      | 2                       | 8                        | 2026-09-24 02:13:35 |
-| 2026-09-24 01:52:00 | LOW  | -0.884 | +0.027 | ws7          | ws5       | ws3     | 7               | 1               | 8                | 0                      | 1                       | 8                        | 2026-09-24 02:13:35 |
-| 2026-09-24 01:52:30 | LOW  | -0.862 | +0.049 | ws7          | ws5       | ws3     | 7               | 1               | 8                | 0                      | 1                       | 7                        | 2026-09-24 02:13:35 |
-| 2026-09-24 02:35:00 | HIGH | -2.826 | +0.005 | ws3          | ws2       | ws11    | 7               | 1               | 5                | 1                      | 0                       | 5                        | 2026-09-24 03:06:50 |
-| 2026-09-24 02:35:30 | HIGH | -2.770 | -0.000 | -            | -         | ws11    | 7               | 1               | 5                | 1                      | 0                       | 1                        | 2026-09-24 03:06:50 |
-| 2026-09-24 03:43:30 | LOW  | -1.276 | +0.339 | -            | -         | ws15    | 7               | 2               | 2                | 3                      | 0                       | 8                        | 2026-09-24 04:23:25 |
-| 2026-09-24 03:44:00 | LOW  | -1.329 | +0.285 | -            | -         | ws15    | 7               | 2               | 3                | 1                      | 0                       | 8                        | 2026-09-24 04:23:25 |
-| 2026-09-24 05:44:30 | HIGH | -1.161 | +1.113 | ws15         | ws11      | ws2     | 7               | 1               | 2                | 2                      | 0                       | 4                        | 2026-09-24 08:09:45 |
-| 2026-09-24 05:45:00 | HIGH | -1.112 | +1.160 | ws15         | ws11      | ws2     | 7               | 1               | 2                | 1                      | 0                       | 4                        | 2026-09-24 08:09:45 |
-| 2026-09-24 05:47:00 | HIGH | -1.075 | +1.197 | ws15         | ws11      | ws2     | 7               | 1               | 3                | 1                      | 0                       | 3                        | 2026-09-24 08:09:45 |
-| 2026-09-24 05:47:30 | HIGH | -1.269 | +1.008 | ws15         | ws12      | ws2     | 7               | 1               | 3                | 0                      | 0                       | 1                        | 2026-09-24 08:09:45 |
-| 2026-09-24 05:48:00 | HIGH | -1.280 | +0.997 | ws15         | ws12      | ws2     | 7               | 1               | 2                | 0                      | 0                       | 1                        | 2026-09-24 08:09:45 |
-| 2026-09-24 06:20:30 | HIGH | -1.323 | +0.165 | -            | ws12      | ws2     | 7               | 2               | 5                | 0                      | 0                       | 8                        | 2026-09-24 08:09:45 |
-| 2026-09-24 06:34:00 | HIGH | -1.075 | +0.410 | -            | ws15      | ws2     | 7               | 1               | 5                | 3                      | 0                       | 6                        | 2026-09-24 08:09:45 |
-| 2026-09-24 06:42:00 | HIGH | -0.994 | +0.489 | -            | ws15      | ws2     | 7               | 1               | 2                | 5                      | 0                       | 8                        | 2026-09-24 08:09:45 |
-| 2026-09-24 06:42:30 | HIGH | -0.919 | +0.563 | -            | ws15      | ws2     | 7               | 1               | 2                | 5                      | 0                       | 8                        | 2026-09-24 08:09:45 |
-| 2026-09-24 06:46:00 | HIGH | -1.177 | +0.309 | -            | ws15      | ws2     | 7               | 2               | 8                | 2                      | 0                       | 8                        | 2026-09-24 08:09:45 |
-| 2026-09-24 06:51:00 | HIGH | -0.892 | +0.590 | -            | ws15      | ws2     | 7               | 2               | 3                | 3                      | 0                       | 3                        | 2026-09-24 08:09:45 |
-| 2026-09-24 06:51:30 | HIGH | -0.882 | +0.600 | -            | ws15      | ws2     | 7               | 1               | 3                | 4                      | 0                       | 3                        | 2026-09-24 08:09:45 |
-| 2026-09-24 06:52:00 | HIGH | -0.780 | +0.700 | -            | ws15      | ws2     | 7               | 1               | 3                | 4                      | 0                       | 3                        | 2026-09-24 08:09:45 |
-| 2026-09-24 06:54:00 | HIGH | -0.630 | +0.848 | -            | ws15      | ws2     | 7               | 1               | 3                | 3                      | 0                       | 1                        | 2026-09-24 08:09:45 |
-| 2026-09-24 07:00:30 | HIGH | -0.753 | +0.727 | ws2          | ws2       | ws2     | 7               | 1               | 3                | 2                      | 1                       | 8                        | 2026-09-24 08:09:45 |
-| 2026-09-24 07:01:00 | HIGH | -0.978 | +0.505 | ws2          | ws2       | ws2     | 7               | 1               | 8                | 1                      | 1                       | 8                        | 2026-09-24 08:09:45 |
-| 2026-09-24 07:11:30 | HIGH | -0.983 | -0.000 | ws15         | ws15      | ws2     | 7               | 1               | 8                | 1                      | 1                       | 7                        | 2026-09-24 08:09:45 |
-| 2026-09-24 07:21:30 | HIGH | -0.700 | +0.148 | ws3          | ws11      | ws2     | 7               | 2               | 4                | 0                      | 2                       | 8                        | 2026-09-24 08:09:45 |
-| 2026-09-24 07:45:00 | HIGH | -0.306 | +0.290 | ws15         | ws3       | ws2     | 7               | 1               | 5                | 2                      | 4                       | 8                        | 2026-09-24 08:09:45 |
-| 2026-09-24 07:45:30 | HIGH | -0.354 | +0.243 | ws15         | ws3       | ws2     | 7               | 2               | 5                | 2                      | 4                       | 8                        | 2026-09-24 08:09:45 |
-| 2026-09-24 07:56:00 | HIGH | -0.317 | +0.280 | ws3          | ws3       | ws2     | 7               | 1               | 5                | 0                      | 3                       | 7                        | 2026-09-24 08:09:45 |
-| 2026-09-24 08:04:30 | HIGH | -0.248 | +0.206 | -            | ws14      | ws2     | 7               | 1               | 6                | 0                      | 3                       | 8                        | 2026-09-24 08:09:45 |
-| 2026-09-24 08:05:00 | HIGH | -0.375 | +0.079 | -            | ws14      | ws2     | 7               | 1               | 6                | 0                      | 2                       | 8                        | 2026-09-24 08:09:45 |
-| 2026-09-24 09:20:30 | LOW  | -1.287 | +0.077 | ws13         | ws10      | ws15    | 7               | 2               | 3                | 2                      | 0                       | 3                        | 2026-09-24 09:36:55 |
-| 2026-09-24 09:21:00 | LOW  | -1.362 | +0.000 | ws13         | ws10      | ws15    | 7               | 3               | 3                | 2                      | 0                       | 2                        | 2026-09-24 09:36:55 |
-| 2026-09-24 09:21:30 | LOW  | -1.325 | +0.000 | ws13         | ws10      | ws15    | 7               | 2               | 3                | 1                      | 0                       | 2                        | 2026-09-24 09:36:55 |
-| 2026-09-24 09:28:00 | LOW  | -1.233 | +0.011 | ws13         | ws12      | ws15    | 7               | 1               | 3                | 1                      | 0                       | 3                        | 2026-09-24 09:36:55 |
-| 2026-09-24 09:28:30 | LOW  | -1.103 | +0.143 | ws13         | ws12      | ws15    | 7               | 1               | 3                | 0                      | 0                       | 0                        | 2026-09-24 09:36:55 |
-| 2026-09-24 09:36:00 | LOW  | +0.000 | +0.143 | ws15         | ws14      | ws15    | 7               | 2               | 6                | 0                      | 4                       | 8                        | 2026-09-24 09:36:55 |
-| 2026-09-24 09:46:00 | LOW  | -0.490 | +6.597 | ws15         | ws15      | ws15    | 7               | 1               | 8                | 1                      | 2                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 09:46:30 | LOW  | -0.566 | +6.515 | ws15         | ws15      | ws15    | 7               | 1               | 8                | 0                      | 2                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:11:00 | LOW  | -0.457 | +6.633 | ws15         | ws15      | ws15    | 7               | 1               | 8                | 2                      | 4                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:16:00 | HIGH | -6.562 | +0.297 | -            | -         | ws15    | 7               | 2               | 6                | 4                      | 0                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:18:30 | HIGH | -6.638 | +0.226 | -            | -         | ws15    | 7               | 1               | 8                | 5                      | 0                       | 7                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:19:00 | HIGH | -6.662 | +0.204 | -            | -         | ws15    | 7               | 3               | 6                | 5                      | 0                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:19:30 | HIGH | -6.721 | +0.149 | -            | -         | ws15    | 7               | 2               | 6                | 4                      | 0                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:20:00 | HIGH | -6.791 | +0.083 | -            | -         | ws15    | 7               | 2               | 6                | 6                      | 0                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:22:00 | HIGH | -6.709 | +0.110 | -            | -         | ws15    | 7               | 2               | 7                | 5                      | 0                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:22:30 | HIGH | -6.468 | +0.335 | -            | -         | ws15    | 7               | 2               | 7                | 5                      | 0                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:23:00 | HIGH | -6.504 | +0.302 | -            | -         | ws15    | 7               | 2               | 7                | 5                      | 0                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:24:30 | HIGH | -6.750 | +0.072 | -            | -         | ws15    | 7               | 4               | 7                | 4                      | 1                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:25:00 | HIGH | -6.750 | +0.072 | -            | -         | ws15    | 7               | 5               | 8                | 1                      | 1                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:26:00 | HIGH | -6.562 | +0.248 | -            | -         | ws15    | 7               | 1               | 7                | 3                      | 1                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:30:30 | HIGH | -6.680 | +0.138 | -            | -         | ws15    | 7               | 3               | 7                | 7                      | 0                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:31:00 | HIGH | -6.691 | +0.127 | -            | -         | ws15    | 7               | 6               | 8                | 4                      | 0                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:31:30 | HIGH | -6.709 | +0.110 | -            | -         | ws15    | 7               | 6               | 8                | 2                      | 0                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:34:00 | HIGH | -6.732 | +0.088 | -            | -         | ws15    | 7               | 2               | 8                | 2                      | 0                       | 7                        | 2026-09-24 14:40:10 |
-| 2026-09-24 10:34:30 | HIGH | -6.721 | +0.099 | -            | -         | ws15    | 7               | 2               | 8                | 0                      | 0                       | 7                        | 2026-09-24 14:40:10 |
-| 2026-09-24 11:25:30 | HIGH | -4.969 | +1.279 | ws4          | ws3       | ws15    | 7               | 1               | 1                | 2                      | 7                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 12:25:30 | HIGH | -5.208 | +0.907 | ws5          | -         | ws15    | 7               | 4               | 1                | 4                      | 1                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 12:26:00 | HIGH | -5.431 | +0.697 | ws5          | -         | ws15    | 7               | 4               | 3                | 0                      | 1                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 12:46:00 | HIGH | -5.719 | +0.044 | -            | -         | ws15    | 7               | 1               | 8                | 1                      | 0                       | 8                        | 2026-09-24 14:40:10 |
-| 2026-09-24 13:12:00 | HIGH | -3.555 | +0.465 | ws8          | ws6       | ws15    | 7               | 1               | 0                | 0                      | 1                       | 0                        | 2026-09-24 14:40:10 |
-| 2026-09-24 13:21:00 | HIGH | -3.174 | +0.831 | ws9          | ws6       | ws15    | 7               | 1               | 1                | 1                      | 0                       | 2                        | 2026-09-24 14:40:10 |
-| 2026-09-24 13:21:30 | HIGH | -3.114 | +0.889 | ws9          | ws6       | ws15    | 7               | 2               | 0                | 1                      | 0                       | 2                        | 2026-09-24 14:40:10 |
-| 2026-09-24 13:22:00 | HIGH | -3.048 | +0.952 | ws9          | ws6       | ws15    | 7               | 1               | 0                | 0                      | 0                       | 2                        | 2026-09-24 14:40:10 |
-| 2026-09-24 13:41:00 | HIGH | -3.400 | +0.614 | ws9          | ws7       | ws15    | 7               | 1               | 7                | 0                      | 5                       | 4                        | 2026-09-24 14:40:10 |
-| 2026-09-24 14:15:30 | HIGH | -2.742 | +0.027 | ws10         | ws7       | ws15    | 7               | 1               | 5                | 1                      | 1                       | 5                        | 2026-09-24 14:40:10 |
-| 2026-09-24 14:16:00 | HIGH | -2.568 | -0.000 | ws10         | ws7       | ws15    | 7               | 1               | 5                | 0                      | 1                       | 1                        | 2026-09-24 14:40:10 |
-| 2026-09-24 14:35:00 | HIGH | -0.073 | +0.550 | ws15         | ws15      | ws15    | 7               | 2               | 2                | 3                      | 3                       | 5                        | 2026-09-24 14:40:10 |
-| 2026-09-24 14:36:00 | HIGH | -0.202 | +0.420 | ws15         | ws15      | ws15    | 7               | 1               | 2                | 3                      | 3                       | 5                        | 2026-09-24 14:40:10 |
-| 2026-09-24 15:13:00 | HIGH | -3.208 | +0.112 | -            | -         | ws1     | 7               | 1               | 2                | 1                      | 0                       | 4                        | 2026-09-24 16:44:40 |
-| 2026-09-24 15:13:30 | HIGH | -3.274 | +0.048 | -            | -         | ws1     | 7               | 1               | 1                | 0                      | 0                       | 4                        | 2026-09-24 16:44:40 |
-| 2026-09-24 15:51:00 | HIGH | -1.712 | +1.250 | ws12         | ws9       | ws1     | 7               | 1               | 1                | 2                      | 0                       | 1                        | 2026-09-24 16:44:40 |
-| 2026-09-24 15:51:30 | HIGH | -1.520 | +1.436 | ws12         | ws9       | ws1     | 7               | 1               | 1                | 1                      | 0                       | 1                        | 2026-09-24 16:44:40 |
-| 2026-09-24 15:57:00 | HIGH | -1.674 | +1.286 | ws12         | ws9       | ws1     | 7               | 1               | 1                | 2                      | 0                       | 8                        | 2026-09-24 16:44:40 |
-| 2026-09-24 17:01:30 | LOW  | -2.083 | +0.548 | -            | -         | ws15    | 7               | 2               | 8                | 1                      | 0                       | 7                        | 2026-09-24 18:09:25 |
-| 2026-09-24 17:02:00 | LOW  | -2.409 | +0.213 | -            | -         | ws15    | 7               | 2               | 8                | 0                      | 0                       | 7                        | 2026-09-24 18:09:25 |
-| 2026-09-24 17:02:30 | LOW  | -2.617 | +0.000 | -            | -         | ws15    | 7               | 1               | 7                | 0                      | 0                       | 5                        | 2026-09-24 18:09:25 |
-| 2026-09-24 17:16:00 | LOW  | -2.006 | +0.078 | -            | -         | ws15    | 7               | 1               | 6                | 4                      | 0                       | 8                        | 2026-09-24 18:09:25 |
-| 2026-09-24 17:16:30 | LOW  | -2.063 | +0.000 | -            | -         | ws15    | 7               | 2               | 8                | 3                      | 0                       | 6                        | 2026-09-24 18:09:25 |
-| 2026-09-24 18:40:00 | HIGH | -0.797 | +0.628 | -            | -         | ws4     | 7               | 1               | 8                | 3                      | 0                       | 7                        | 2026-09-24 19:36:35 |
-| 2026-09-24 18:40:30 | HIGH | -0.887 | +0.539 | -            | -         | ws4     | 7               | 1               | 8                | 2                      | 0                       | 7                        | 2026-09-24 19:36:35 |
-| 2026-09-24 18:54:00 | HIGH | -0.802 | +0.623 | -            | -         | ws4     | 7               | 1               | 7                | 2                      | 0                       | 7                        | 2026-09-24 19:36:35 |
-| 2026-09-24 18:54:30 | HIGH | -0.749 | +0.675 | -            | -         | ws4     | 7               | 2               | 6                | 1                      | 0                       | 6                        | 2026-09-24 19:36:35 |
-| 2026-09-24 18:55:00 | HIGH | -0.680 | +0.743 | -            | -         | ws4     | 7               | 2               | 7                | 1                      | 0                       | 5                        | 2026-09-24 19:36:35 |
-| 2026-09-24 19:00:00 | HIGH | -0.813 | +0.612 | -            | -         | ws4     | 7               | 1               | 8                | 0                      | 1                       | 8                        | 2026-09-24 19:36:35 |
-| 2026-09-24 19:13:00 | HIGH | -0.983 | -0.000 | -            | -         | ws4     | 7               | 2               | 7                | 3                      | 0                       | 8                        | 2026-09-24 19:36:35 |
-| 2026-09-24 19:21:00 | HIGH | -0.834 | +0.074 | -            | -         | ws4     | 7               | 1               | 8                | 0                      | 1                       | 8                        | 2026-09-24 19:36:35 |
-| 2026-09-24 19:21:30 | HIGH | -0.722 | +0.100 | -            | -         | ws4     | 7               | 1               | 8                | 0                      | 1                       | 8                        | 2026-09-24 19:36:35 |
-| 2026-09-24 19:51:30 | LOW  | -1.304 | +0.095 | -            | -         | ws3     | 7               | 1               | 7                | 2                      | 0                       | 8                        | 2026-09-24 21:09:10 |
-| 2026-09-24 19:52:00 | LOW  | -1.319 | +0.079 | -            | -         | ws3     | 7               | 2               | 7                | 1                      | 0                       | 8                        | 2026-09-24 21:09:10 |
-| 2026-09-24 20:59:00 | LOW  | -0.477 | +0.212 | -            | -         | ws3     | 7               | 1               | 8                | 1                      | 1                       | 4                        | 2026-09-24 21:09:10 |
-| 2026-09-24 22:14:00 | LOW  | -1.270 | +0.204 | ws14         | ws12      | ws2     | 7               | 1               | 6                | 2                      | 1                       | 7                        | 2026-09-24 22:48:50 |
-| 2026-09-24 22:14:30 | LOW  | -1.370 | +0.102 | ws15         | ws12      | ws2     | 7               | 2               | 7                | 1                      | 1                       | 7                        | 2026-09-24 22:48:50 |
-| 2026-09-24 22:24:30 | LOW  | -0.880 | +0.162 | ws15         | ws12      | ws2     | 7               | 1               | 6                | 3                      | 2                       | 7                        | 2026-09-24 22:48:50 |
-| 2026-09-24 22:25:00 | LOW  | -0.955 | +0.086 | ws15         | ws12      | ws2     | 7               | 3               | 7                | 2                      | 2                       | 7                        | 2026-09-24 22:48:50 |
-| 2026-09-24 22:25:30 | LOW  | -0.880 | +0.162 | ws15         | ws12      | ws2     | 7               | 3               | 5                | 0                      | 1                       | 6                        | 2026-09-24 22:48:50 |
-| 2026-09-24 22:26:00 | LOW  | -0.838 | +0.205 | ws15         | ws12      | ws2     | 7               | 2               | 3                | 1                      | 1                       | 6                        | 2026-09-24 22:48:50 |
-| 2026-09-24 22:30:30 | LOW  | -0.880 | +0.162 | ws15         | ws12      | ws2     | 7               | 1               | 4                | 2                      | 7                       | 8                        | 2026-09-24 22:48:50 |
-| 2026-09-24 22:31:00 | LOW  | -0.993 | +0.049 | ws15         | ws12      | ws2     | 7               | 1               | 4                | 1                      | 7                       | 8                        | 2026-09-24 22:48:50 |
-| 2026-09-24 22:31:30 | LOW  | -0.816 | +0.227 | ws15         | ws12      | ws2     | 7               | 2               | 4                | 1                      | 7                       | 8                        | 2026-09-24 22:48:50 |
-| 2026-09-24 22:48:00 | LOW  | -0.049 | +0.043 | ws15         | ws13      | ws2     | 7               | 3               | 5                | 2                      | 5                       | 7                        | 2026-09-24 22:48:50 |
-| 2026-09-24 23:16:30 | LOW  | -0.427 | +1.341 | ws9          | ws12      | ws2     | 7               | 1               | 2                | 1                      | 0                       | 8                        | 2026-09-25 01:20:35 |
-| 2026-09-24 23:31:30 | HIGH | -1.489 | +0.119 | -            | -         | ws15    | 7               | 3               | 8                | 1                      | 0                       | 8                        | 2026-09-25 01:20:35 |
-| 2026-09-24 23:32:00 | HIGH | -1.451 | +0.157 | -            | -         | ws15    | 7               | 2               | 8                | 0                      | 0                       | 6                        | 2026-09-25 01:20:35 |
-| 2026-09-24 23:40:00 | HIGH | -1.440 | +0.168 | -            | -         | ws15    | 7               | 1               | 5                | 0                      | 1                       | 7                        | 2026-09-25 01:20:35 |
+| the setup row       | side | MAE %  | MFE %  | legMage | lowband x-cross | lowband AW flip | highband x-cross | grace lowband AW flips | grace highband AW flips | grace highband x-crosses | the leg closes      |
+|---------------------|------|--------|--------|---------|-----------------|-----------------|------------------|------------------------|-------------------------|--------------------------|---------------------|
+| 2026-09-24 00:08:30 | HIGH | -0.601 | +0.444 | ws2     | 7               | 3               | 5                | 3                      | 0                       | 7                        | 2026-09-24 00:35:15 |
+| 2026-09-24 00:09:00 | HIGH | -0.781 | +0.266 | ws2     | 7               | 3               | 8                | 0                      | 0                       | 6                        | 2026-09-24 00:35:15 |
+| 2026-09-24 00:22:30 | HIGH | -0.825 | +0.022 | ws2     | 7               | 1               | 7                | 1                      | 0                       | 7                        | 2026-09-24 00:35:15 |
+| 2026-09-24 00:23:00 | HIGH | -0.819 | +0.027 | ws2     | 7               | 1               | 7                | 0                      | 0                       | 7                        | 2026-09-24 00:35:15 |
+| 2026-09-24 01:48:00 | LOW  | -0.689 | +0.224 | ws3     | 7               | 1               | 3                | 1                      | 3                       | 8                        | 2026-09-24 02:13:35 |
+| 2026-09-24 01:48:30 | LOW  | -0.634 | +0.279 | ws3     | 7               | 1               | 3                | 1                      | 2                       | 8                        | 2026-09-24 02:13:35 |
+| 2026-09-24 01:52:00 | LOW  | -0.884 | +0.027 | ws3     | 7               | 1               | 8                | 0                      | 1                       | 8                        | 2026-09-24 02:13:35 |
+| 2026-09-24 01:52:30 | LOW  | -0.862 | +0.049 | ws3     | 7               | 1               | 8                | 0                      | 1                       | 7                        | 2026-09-24 02:13:35 |
+| 2026-09-24 02:35:00 | HIGH | -2.826 | +0.005 | ws11    | 7               | 1               | 5                | 1                      | 0                       | 5                        | 2026-09-24 03:06:50 |
+| 2026-09-24 02:35:30 | HIGH | -2.770 | -0.000 | ws11    | 7               | 1               | 5                | 1                      | 0                       | 1                        | 2026-09-24 03:06:50 |
+| 2026-09-24 03:43:30 | LOW  | -1.276 | +0.339 | ws15    | 7               | 2               | 2                | 3                      | 0                       | 8                        | 2026-09-24 04:23:25 |
+| 2026-09-24 03:44:00 | LOW  | -1.329 | +0.285 | ws15    | 7               | 2               | 3                | 1                      | 0                       | 8                        | 2026-09-24 04:23:25 |
+| 2026-09-24 05:44:30 | HIGH | -1.161 | +1.113 | ws2     | 7               | 1               | 2                | 2                      | 0                       | 4                        | 2026-09-24 08:09:45 |
+| 2026-09-24 05:45:00 | HIGH | -1.112 | +1.160 | ws2     | 7               | 1               | 2                | 1                      | 0                       | 4                        | 2026-09-24 08:09:45 |
+| 2026-09-24 05:47:00 | HIGH | -1.075 | +1.197 | ws2     | 7               | 1               | 3                | 1                      | 0                       | 3                        | 2026-09-24 08:09:45 |
+| 2026-09-24 05:47:30 | HIGH | -1.269 | +1.008 | ws2     | 7               | 1               | 3                | 0                      | 0                       | 1                        | 2026-09-24 08:09:45 |
+| 2026-09-24 05:48:00 | HIGH | -1.280 | +0.997 | ws2     | 7               | 1               | 2                | 0                      | 0                       | 1                        | 2026-09-24 08:09:45 |
+| 2026-09-24 06:20:30 | HIGH | -1.323 | +0.165 | ws2     | 7               | 2               | 5                | 0                      | 0                       | 8                        | 2026-09-24 08:09:45 |
+| 2026-09-24 06:34:00 | HIGH | -1.075 | +0.410 | ws2     | 7               | 1               | 5                | 3                      | 0                       | 6                        | 2026-09-24 08:09:45 |
+| 2026-09-24 06:42:00 | HIGH | -0.994 | +0.489 | ws2     | 7               | 1               | 2                | 5                      | 0                       | 8                        | 2026-09-24 08:09:45 |
+| 2026-09-24 06:42:30 | HIGH | -0.919 | +0.563 | ws2     | 7               | 1               | 2                | 5                      | 0                       | 8                        | 2026-09-24 08:09:45 |
+| 2026-09-24 06:46:00 | HIGH | -1.177 | +0.309 | ws2     | 7               | 2               | 8                | 2                      | 0                       | 8                        | 2026-09-24 08:09:45 |
+| 2026-09-24 06:51:00 | HIGH | -0.892 | +0.590 | ws2     | 7               | 2               | 3                | 3                      | 0                       | 3                        | 2026-09-24 08:09:45 |
+| 2026-09-24 06:51:30 | HIGH | -0.882 | +0.600 | ws2     | 7               | 1               | 3                | 4                      | 0                       | 3                        | 2026-09-24 08:09:45 |
+| 2026-09-24 06:52:00 | HIGH | -0.780 | +0.700 | ws2     | 7               | 1               | 3                | 4                      | 0                       | 3                        | 2026-09-24 08:09:45 |
+| 2026-09-24 06:54:00 | HIGH | -0.630 | +0.848 | ws2     | 7               | 1               | 3                | 3                      | 0                       | 1                        | 2026-09-24 08:09:45 |
+| 2026-09-24 07:00:30 | HIGH | -0.753 | +0.727 | ws2     | 7               | 1               | 3                | 2                      | 1                       | 8                        | 2026-09-24 08:09:45 |
+| 2026-09-24 07:01:00 | HIGH | -0.978 | +0.505 | ws2     | 7               | 1               | 8                | 1                      | 1                       | 8                        | 2026-09-24 08:09:45 |
+| 2026-09-24 07:11:30 | HIGH | -0.983 | -0.000 | ws2     | 7               | 1               | 8                | 1                      | 1                       | 7                        | 2026-09-24 08:09:45 |
+| 2026-09-24 07:21:30 | HIGH | -0.700 | +0.148 | ws2     | 7               | 2               | 4                | 0                      | 2                       | 8                        | 2026-09-24 08:09:45 |
+| 2026-09-24 07:45:00 | HIGH | -0.306 | +0.290 | ws2     | 7               | 1               | 5                | 2                      | 4                       | 8                        | 2026-09-24 08:09:45 |
+| 2026-09-24 07:45:30 | HIGH | -0.354 | +0.243 | ws2     | 7               | 2               | 5                | 2                      | 4                       | 8                        | 2026-09-24 08:09:45 |
+| 2026-09-24 07:56:00 | HIGH | -0.317 | +0.280 | ws2     | 7               | 1               | 5                | 0                      | 3                       | 7                        | 2026-09-24 08:09:45 |
+| 2026-09-24 08:04:30 | HIGH | -0.248 | +0.206 | ws2     | 7               | 1               | 6                | 0                      | 3                       | 8                        | 2026-09-24 08:09:45 |
+| 2026-09-24 08:05:00 | HIGH | -0.375 | +0.079 | ws2     | 7               | 1               | 6                | 0                      | 2                       | 8                        | 2026-09-24 08:09:45 |
+| 2026-09-24 09:20:30 | LOW  | -1.287 | +0.077 | ws15    | 7               | 2               | 3                | 2                      | 0                       | 3                        | 2026-09-24 09:36:55 |
+| 2026-09-24 09:21:00 | LOW  | -1.362 | +0.000 | ws15    | 7               | 3               | 3                | 2                      | 0                       | 2                        | 2026-09-24 09:36:55 |
+| 2026-09-24 09:21:30 | LOW  | -1.325 | +0.000 | ws15    | 7               | 2               | 3                | 1                      | 0                       | 2                        | 2026-09-24 09:36:55 |
+| 2026-09-24 09:28:00 | LOW  | -1.233 | +0.011 | ws15    | 7               | 1               | 3                | 1                      | 0                       | 3                        | 2026-09-24 09:36:55 |
+| 2026-09-24 09:28:30 | LOW  | -1.103 | +0.143 | ws15    | 7               | 1               | 3                | 0                      | 0                       | 0                        | 2026-09-24 09:36:55 |
+| 2026-09-24 09:36:00 | LOW  | +0.000 | +0.143 | ws15    | 7               | 2               | 6                | 0                      | 4                       | 8                        | 2026-09-24 09:36:55 |
+| 2026-09-24 09:46:00 | LOW  | -0.490 | +6.597 | ws15    | 7               | 1               | 8                | 1                      | 2                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 09:46:30 | LOW  | -0.566 | +6.515 | ws15    | 7               | 1               | 8                | 0                      | 2                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:11:00 | LOW  | -0.457 | +6.633 | ws15    | 7               | 1               | 8                | 2                      | 4                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:16:00 | HIGH | -6.562 | +0.297 | ws15    | 7               | 2               | 6                | 4                      | 0                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:18:30 | HIGH | -6.638 | +0.226 | ws15    | 7               | 1               | 8                | 5                      | 0                       | 7                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:19:00 | HIGH | -6.662 | +0.204 | ws15    | 7               | 3               | 6                | 5                      | 0                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:19:30 | HIGH | -6.721 | +0.149 | ws15    | 7               | 2               | 6                | 4                      | 0                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:20:00 | HIGH | -6.791 | +0.083 | ws15    | 7               | 2               | 6                | 6                      | 0                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:22:00 | HIGH | -6.709 | +0.110 | ws15    | 7               | 2               | 7                | 5                      | 0                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:22:30 | HIGH | -6.468 | +0.335 | ws15    | 7               | 2               | 7                | 5                      | 0                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:23:00 | HIGH | -6.504 | +0.302 | ws15    | 7               | 2               | 7                | 5                      | 0                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:24:30 | HIGH | -6.750 | +0.072 | ws15    | 7               | 4               | 7                | 4                      | 1                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:25:00 | HIGH | -6.750 | +0.072 | ws15    | 7               | 5               | 8                | 1                      | 1                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:26:00 | HIGH | -6.562 | +0.248 | ws15    | 7               | 1               | 7                | 3                      | 1                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:30:30 | HIGH | -6.680 | +0.138 | ws15    | 7               | 3               | 7                | 7                      | 0                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:31:00 | HIGH | -6.691 | +0.127 | ws15    | 7               | 6               | 8                | 4                      | 0                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:31:30 | HIGH | -6.709 | +0.110 | ws15    | 7               | 6               | 8                | 2                      | 0                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:34:00 | HIGH | -6.732 | +0.088 | ws15    | 7               | 2               | 8                | 2                      | 0                       | 7                        | 2026-09-24 14:40:10 |
+| 2026-09-24 10:34:30 | HIGH | -6.721 | +0.099 | ws15    | 7               | 2               | 8                | 0                      | 0                       | 7                        | 2026-09-24 14:40:10 |
+| 2026-09-24 11:25:30 | HIGH | -4.969 | +1.279 | ws15    | 7               | 1               | 1                | 2                      | 7                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 12:25:30 | HIGH | -5.208 | +0.907 | ws15    | 7               | 4               | 1                | 4                      | 1                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 12:26:00 | HIGH | -5.431 | +0.697 | ws15    | 7               | 4               | 3                | 0                      | 1                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 12:46:00 | HIGH | -5.719 | +0.044 | ws15    | 7               | 1               | 8                | 1                      | 0                       | 8                        | 2026-09-24 14:40:10 |
+| 2026-09-24 13:12:00 | HIGH | -3.555 | +0.465 | ws15    | 7               | 1               | 0                | 0                      | 1                       | 0                        | 2026-09-24 14:40:10 |
+| 2026-09-24 13:21:00 | HIGH | -3.174 | +0.831 | ws15    | 7               | 1               | 1                | 1                      | 0                       | 2                        | 2026-09-24 14:40:10 |
+| 2026-09-24 13:21:30 | HIGH | -3.114 | +0.889 | ws15    | 7               | 2               | 0                | 1                      | 0                       | 2                        | 2026-09-24 14:40:10 |
+| 2026-09-24 13:22:00 | HIGH | -3.048 | +0.952 | ws15    | 7               | 1               | 0                | 0                      | 0                       | 2                        | 2026-09-24 14:40:10 |
+| 2026-09-24 13:41:00 | HIGH | -3.400 | +0.614 | ws15    | 7               | 1               | 7                | 0                      | 5                       | 4                        | 2026-09-24 14:40:10 |
+| 2026-09-24 14:15:30 | HIGH | -2.742 | +0.027 | ws15    | 7               | 1               | 5                | 1                      | 1                       | 5                        | 2026-09-24 14:40:10 |
+| 2026-09-24 14:16:00 | HIGH | -2.568 | -0.000 | ws15    | 7               | 1               | 5                | 0                      | 1                       | 1                        | 2026-09-24 14:40:10 |
+| 2026-09-24 14:35:00 | HIGH | -0.073 | +0.550 | ws15    | 7               | 2               | 2                | 3                      | 3                       | 5                        | 2026-09-24 14:40:10 |
+| 2026-09-24 14:36:00 | HIGH | -0.202 | +0.420 | ws15    | 7               | 1               | 2                | 3                      | 3                       | 5                        | 2026-09-24 14:40:10 |
+| 2026-09-24 15:13:00 | HIGH | -3.208 | +0.112 | ws1     | 7               | 1               | 2                | 1                      | 0                       | 4                        | 2026-09-24 16:44:40 |
+| 2026-09-24 15:13:30 | HIGH | -3.274 | +0.048 | ws1     | 7               | 1               | 1                | 0                      | 0                       | 4                        | 2026-09-24 16:44:40 |
+| 2026-09-24 15:51:00 | HIGH | -1.712 | +1.250 | ws1     | 7               | 1               | 1                | 2                      | 0                       | 1                        | 2026-09-24 16:44:40 |
+| 2026-09-24 15:51:30 | HIGH | -1.520 | +1.436 | ws1     | 7               | 1               | 1                | 1                      | 0                       | 1                        | 2026-09-24 16:44:40 |
+| 2026-09-24 15:57:00 | HIGH | -1.674 | +1.286 | ws1     | 7               | 1               | 1                | 2                      | 0                       | 8                        | 2026-09-24 16:44:40 |
+| 2026-09-24 17:01:30 | LOW  | -2.083 | +0.548 | ws15    | 7               | 2               | 8                | 1                      | 0                       | 7                        | 2026-09-24 18:09:25 |
+| 2026-09-24 17:02:00 | LOW  | -2.409 | +0.213 | ws15    | 7               | 2               | 8                | 0                      | 0                       | 7                        | 2026-09-24 18:09:25 |
+| 2026-09-24 17:02:30 | LOW  | -2.617 | +0.000 | ws15    | 7               | 1               | 7                | 0                      | 0                       | 5                        | 2026-09-24 18:09:25 |
+| 2026-09-24 17:16:00 | LOW  | -2.006 | +0.078 | ws15    | 7               | 1               | 6                | 4                      | 0                       | 8                        | 2026-09-24 18:09:25 |
+| 2026-09-24 17:16:30 | LOW  | -2.063 | +0.000 | ws15    | 7               | 2               | 8                | 3                      | 0                       | 6                        | 2026-09-24 18:09:25 |
+| 2026-09-24 18:40:00 | HIGH | -0.797 | +0.628 | ws4     | 7               | 1               | 8                | 3                      | 0                       | 7                        | 2026-09-24 19:36:35 |
+| 2026-09-24 18:40:30 | HIGH | -0.887 | +0.539 | ws4     | 7               | 1               | 8                | 2                      | 0                       | 7                        | 2026-09-24 19:36:35 |
+| 2026-09-24 18:54:00 | HIGH | -0.802 | +0.623 | ws4     | 7               | 1               | 7                | 2                      | 0                       | 7                        | 2026-09-24 19:36:35 |
+| 2026-09-24 18:54:30 | HIGH | -0.749 | +0.675 | ws4     | 7               | 2               | 6                | 1                      | 0                       | 6                        | 2026-09-24 19:36:35 |
+| 2026-09-24 18:55:00 | HIGH | -0.680 | +0.743 | ws4     | 7               | 2               | 7                | 1                      | 0                       | 5                        | 2026-09-24 19:36:35 |
+| 2026-09-24 19:00:00 | HIGH | -0.813 | +0.612 | ws4     | 7               | 1               | 8                | 0                      | 1                       | 8                        | 2026-09-24 19:36:35 |
+| 2026-09-24 19:13:00 | HIGH | -0.983 | -0.000 | ws4     | 7               | 2               | 7                | 3                      | 0                       | 8                        | 2026-09-24 19:36:35 |
+| 2026-09-24 19:21:00 | HIGH | -0.834 | +0.074 | ws4     | 7               | 1               | 8                | 0                      | 1                       | 8                        | 2026-09-24 19:36:35 |
+| 2026-09-24 19:21:30 | HIGH | -0.722 | +0.100 | ws4     | 7               | 1               | 8                | 0                      | 1                       | 8                        | 2026-09-24 19:36:35 |
+| 2026-09-24 19:51:30 | LOW  | -1.304 | +0.095 | ws3     | 7               | 1               | 7                | 2                      | 0                       | 8                        | 2026-09-24 21:09:10 |
+| 2026-09-24 19:52:00 | LOW  | -1.319 | +0.079 | ws3     | 7               | 2               | 7                | 1                      | 0                       | 8                        | 2026-09-24 21:09:10 |
+| 2026-09-24 20:59:00 | LOW  | -0.477 | +0.212 | ws3     | 7               | 1               | 8                | 1                      | 1                       | 4                        | 2026-09-24 21:09:10 |
+| 2026-09-24 22:14:00 | LOW  | -1.270 | +0.204 | ws2     | 7               | 1               | 6                | 2                      | 1                       | 7                        | 2026-09-24 22:48:50 |
+| 2026-09-24 22:14:30 | LOW  | -1.370 | +0.102 | ws2     | 7               | 2               | 7                | 1                      | 1                       | 7                        | 2026-09-24 22:48:50 |
+| 2026-09-24 22:24:30 | LOW  | -0.880 | +0.162 | ws2     | 7               | 1               | 6                | 3                      | 2                       | 7                        | 2026-09-24 22:48:50 |
+| 2026-09-24 22:25:00 | LOW  | -0.955 | +0.086 | ws2     | 7               | 3               | 7                | 2                      | 2                       | 7                        | 2026-09-24 22:48:50 |
+| 2026-09-24 22:25:30 | LOW  | -0.880 | +0.162 | ws2     | 7               | 3               | 5                | 0                      | 1                       | 6                        | 2026-09-24 22:48:50 |
+| 2026-09-24 22:26:00 | LOW  | -0.838 | +0.205 | ws2     | 7               | 2               | 3                | 1                      | 1                       | 6                        | 2026-09-24 22:48:50 |
+| 2026-09-24 22:30:30 | LOW  | -0.880 | +0.162 | ws2     | 7               | 1               | 4                | 2                      | 7                       | 8                        | 2026-09-24 22:48:50 |
+| 2026-09-24 22:31:00 | LOW  | -0.993 | +0.049 | ws2     | 7               | 1               | 4                | 1                      | 7                       | 8                        | 2026-09-24 22:48:50 |
+| 2026-09-24 22:31:30 | LOW  | -0.816 | +0.227 | ws2     | 7               | 2               | 4                | 1                      | 7                       | 8                        | 2026-09-24 22:48:50 |
+| 2026-09-24 22:48:00 | LOW  | -0.049 | +0.043 | ws2     | 7               | 3               | 5                | 2                      | 5                       | 7                        | 2026-09-24 22:48:50 |
+| 2026-09-24 23:16:30 | LOW  | -0.427 | +1.341 | ws2     | 7               | 1               | 2                | 1                      | 0                       | 8                        | 2026-09-25 01:20:35 |
+| 2026-09-24 23:31:30 | HIGH | -1.489 | +0.119 | ws15    | 7               | 3               | 8                | 1                      | 0                       | 8                        | 2026-09-25 01:20:35 |
+| 2026-09-24 23:32:00 | HIGH | -1.451 | +0.157 | ws15    | 7               | 2               | 8                | 0                      | 0                       | 6                        | 2026-09-25 01:20:35 |
+| 2026-09-24 23:40:00 | HIGH | -1.440 | +0.168 | ws15    | 7               | 1               | 5                | 0                      | 1                       | 7                        | 2026-09-25 01:20:35 |
 
 ## THE MAE/MFE SUMMARY - the setup bar to the bar sweep-pivots closes its leg on
 
@@ -296,49 +267,18 @@
 | best MFE %     | +6.633     |
 | MFE > abs(MAE) | 11 of 109  |
 
-## THE SAME SETUPS GROUPED BY THEIR MAX OOB MAGE
+## THE SAME SETUPS GROUPED BY THEIR legMage
 
 #   setups          how many setups carry this tag
 #   scored          how many of them sweep-pivots could close a leg for
 #   MFE > abs(MAE)  how many of the scored have MFE above abs(MAE)
 #   the means are per setup, over the same columns as the row table above
 
-| max oob Mage | setups | scored | mean MAE % | mean MFE % | MFE > abs(MAE) | mean grace lowband AW flips | mean grace highband AW flips | mean highband x-cross | mean grace highband x-crosses | setups reaching >=2 grace highband flips |
-|--------------|--------|--------|------------|------------|----------------|-----------------------------|------------------------------|-----------------------|-------------------------------|------------------------------------------|
-| none oob     | 55     | 55     | -2.929     | +0.257     | 2              | 2.3                         | 0.2                          | 6.2                   | 6.8                           | 2                                        |
-| ws2          | 4      | 4      | -0.778     | +0.485     | 0              | 1.5                         | 0.5                          | 6.0                   | 7.2                           | 0                                        |
-| ws3          | 3      | 3      | -1.281     | +0.145     | 0              | 0.3                         | 1.7                          | 4.7                   | 6.7                           | 2                                        |
-| ws4          | 1      | 1      | -4.969     | +1.279     | 0              | 2.0                         | 7.0                          | 1.0                   | 8.0                           | 1                                        |
-| ws5          | 4      | 4      | -2.991     | +0.527     | 0              | 1.5                         | 1.8                          | 2.5                   | 8.0                           | 2                                        |
-| ws7          | 2      | 2      | -0.873     | +0.038     | 0              | 0.0                         | 1.0                          | 8.0                   | 7.5                           | 0                                        |
-| ws8          | 1      | 1      | -3.555     | +0.465     | 0              | 0.0                         | 1.0                          | 0.0                   | 0.0                           | 0                                        |
-| ws9          | 5      | 5      | -2.633     | +0.925     | 1              | 0.6                         | 1.0                          | 2.0                   | 3.6                           | 1                                        |
-| ws10         | 2      | 2      | -2.655     | +0.013     | 0              | 0.5                         | 1.0                          | 5.0                   | 3.0                           | 0                                        |
-| ws12         | 3      | 3      | -1.635     | +1.324     | 0              | 1.7                         | 0.0                          | 1.0                   | 3.3                           | 0                                        |
-| ws13         | 5      | 5      | -1.262     | +0.046     | 0              | 1.2                         | 0.0                          | 3.0                   | 2.0                           | 0                                        |
-| ws14         | 1      | 1      | -1.270     | +0.204     | 0              | 2.0                         | 1.0                          | 6.0                   | 7.0                           | 0                                        |
-| ws15         | 23     | 23     | -0.739     | +1.220     | 8              | 1.3                         | 2.6                          | 4.7                   | 6.2                           | 14                                       |
-
-## THE SAME SETUPS GROUPED BY THEIR MAX OOB B
-
-#   setups          how many setups carry this tag
-#   scored          how many of them sweep-pivots could close a leg for
-#   MFE > abs(MAE)  how many of the scored have MFE above abs(MAE)
-#   the means are per setup, over the same columns as the row table above
-
-| max oob b | setups | scored | mean MAE % | mean MFE % | MFE > abs(MAE) | mean grace lowband AW flips | mean grace highband AW flips | mean highband x-cross | mean grace highband x-crosses | setups reaching >=2 grace highband flips |
-|-----------|--------|--------|------------|------------|----------------|-----------------------------|------------------------------|-----------------------|-------------------------------|------------------------------------------|
-| none oob  | 46     | 46     | -3.531     | +0.235     | 1              | 2.2                         | 0.2                          | 6.5                   | 7.1                           | 0                                        |
-| ws1       | 1      | 1      | -0.634     | +0.279     | 0              | 1.0                         | 2.0                          | 3.0                   | 8.0                           | 1                                        |
-| ws2       | 5      | 5      | -1.188     | +0.389     | 0              | 1.4                         | 0.4                          | 5.8                   | 6.8                           | 0                                        |
-| ws3       | 4      | 4      | -1.486     | +0.523     | 0              | 1.5                         | 4.5                          | 4.0                   | 7.8                           | 4                                        |
-| ws5       | 3      | 3      | -0.811     | +0.100     | 0              | 0.3                         | 1.7                          | 6.3                   | 7.7                           | 1                                        |
-| ws6       | 4      | 4      | -3.223     | +0.784     | 0              | 0.5                         | 0.2                          | 0.2                   | 1.5                           | 0                                        |
-| ws7       | 3      | 3      | -2.903     | +0.213     | 0              | 0.3                         | 2.3                          | 5.7                   | 3.3                           | 1                                        |
-| ws9       | 3      | 3      | -1.635     | +1.324     | 0              | 1.7                         | 0.0                          | 1.0                   | 3.3                           | 0                                        |
-| ws10      | 3      | 3      | -1.325     | +0.026     | 0              | 1.7                         | 0.0                          | 3.0                   | 2.3                           | 0                                        |
-| ws11      | 4      | 4      | -1.012     | +0.905     | 2              | 1.0                         | 0.5                          | 2.8                   | 4.8                           | 1                                        |
-| ws12      | 15     | 15     | -1.034     | +0.335     | 1              | 1.0                         | 1.9                          | 4.3                   | 5.7                           | 5                                        |
-| ws13      | 1      | 1      | -0.049     | +0.043     | 0              | 2.0                         | 5.0                          | 5.0                   | 7.0                           | 1                                        |
-| ws14      | 3      | 3      | -0.208     | +0.143     | 1              | 0.0                         | 3.0                          | 6.0                   | 8.0                           | 3                                        |
-| ws15      | 14     | 14     | -0.723     | +1.802     | 6              | 2.8                         | 1.1                          | 4.6                   | 5.8                           | 5                                        |
+| legMage | setups | scored | mean MAE % | mean MFE % | MFE > abs(MAE) | mean grace lowband AW flips | mean grace highband AW flips | mean highband x-cross | mean grace highband x-crosses | setups reaching >=2 grace highband flips |
+|---------|--------|--------|------------|------------|----------------|-----------------------------|------------------------------|-----------------------|-------------------------------|------------------------------------------|
+| ws1     | 5      | 5      | -2.277     | +0.826     | 0              | 1.2                         | 0.0                          | 1.2                   | 3.6                           | 0                                        |
+| ws2     | 38     | 38     | -0.841     | +0.424     | 4              | 1.6                         | 1.4                          | 4.6                   | 6.2                           | 12                                       |
+| ws3     | 7      | 7      | -0.881     | +0.138     | 0              | 0.9                         | 1.1                          | 6.3                   | 7.3                           | 2                                        |
+| ws4     | 9      | 9      | -0.808     | +0.444     | 1              | 1.3                         | 0.3                          | 7.4                   | 7.1                           | 0                                        |
+| ws11    | 2      | 2      | -2.798     | +0.003     | 0              | 1.0                         | 0.0                          | 5.0                   | 3.0                           | 0                                        |
+| ws15    | 48     | 48     | -3.663     | +0.674     | 6              | 2.1                         | 0.8                          | 5.4                   | 6.1                           | 8                                        |

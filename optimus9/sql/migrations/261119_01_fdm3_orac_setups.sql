@@ -6,6 +6,10 @@
 --   grace highband AW flips | grace highband x-crosses | the leg closes |"*, then *"drop this into
 --   a db table - I'll read it in excel"*.
 --
+--   HIS 1119: *"drop the one-bar read columns"*. max_oob_mage and max_oob_b - the climb read
+--   at the setup row's own bar - are gone. leg_mage, the INCOMING leg's max, is the one he
+--   keeps; the two disagreed on 354 of 399 rows on 09-24.
+--
 --   ONE ROW PER SETUP. The text report stays as it is; this is the same rows in a form a
 --   spreadsheet can sort and filter.
 --
@@ -33,8 +37,6 @@ CREATE TABLE fdm3_orac_setup (
   mfe_pct        DOUBLE       NULL COMMENT 'favourable excursion %, the same span. Never below 0',
   mfe_over_mae   DOUBLE       NULL COMMENT 'mfe_pct / abs(mae_pct). NULL when mae_pct is 0',
   rank_in_side   SMALLINT     NULL COMMENT '1 is the best of this row own side on mfe_over_mae',
-  max_oob_mage   TINYINT      NOT NULL COMMENT 'the single-step oob climb on ws{TF}Mage at this row, 0 none oob',
-  max_oob_b      TINYINT      NOT NULL COMMENT 'the same climb on ws{TF}b',
   leg_mage       TINYINT      NOT NULL COMMENT 'the INCOMING leg max oob Mage TF, carried across the leg. HIS 1119 replaced M-no-rev with it',
   low_xcross     TINYINT      NOT NULL COMMENT 'distinct lowband TFs with an x-cross across the window',
   low_aw_flip    TINYINT      NOT NULL COMMENT 'distinct lowband TFs flipping TO -> AW across the window',
@@ -45,7 +47,6 @@ CREATE TABLE fdm3_orac_setup (
   leg_closes     DATETIME     NULL COMMENT 'the bar v4_sweep_pivots closes the scoring leg on',
   PRIMARY KEY (day, win_rows, knobs, setup_row),
   KEY k_side_rank (day, win_rows, side, rank_in_side),
-  KEY k_mage (day, win_rows, max_oob_mage),
-  KEY k_b (day, win_rows, max_oob_b)
+  KEY k_leg (day, win_rows, leg_mage)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   COMMENT='fdm3 setup hunt rows, one per setup. Joe 1119: "drop this into a db table - I will read it in excel"';
