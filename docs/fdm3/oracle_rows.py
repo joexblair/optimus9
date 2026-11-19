@@ -908,8 +908,8 @@ def orac_file(day, a, z, R, reads, walk, V, path):
         w('')
         w('## 1. EVERY ROW OF %s THAT PASSES STATE 2' % day)
         w('#')
-        w('#   the row                 the oracle row, its own open time (UTC)')
-        w('#   trade opened            the pivot-based pseudo trade it sits in, by its open row')
+        w('#   the row                 the oracle row, its own open time. HH:MM:SS at his 1118')
+        w('#                          *"for this report format only"* - the day is %s' % day)
         w('#   side                    that trade\'s target-side')
         w('#   6x                      where the 6x landed: this row / the row before / no')
         w('#   lowAW/%d                 distinct ws1..ws%d reading AW(any) across the %d rows - state'
@@ -931,13 +931,12 @@ def orac_file(day, a, z, R, reads, walk, V, path):
         w('#                          scoring the OUTGOING trade: a LOW target-side creates an')
         w('#                          OUTGOING LONG so up is favourable, a HIGH one an OUTGOING')
         w('#                          SHORT so down is. MAE never above 0, MFE never below it')
-        w('#   grace opens             YES where state 1, state 2 and the gate all pass - the rows')
+        w('#   the 57                  yes where state 1, state 2 and the gate all pass - the rows')
         w('#                          a %g minute grace opens on' % float(FK.ORAC_GRACE_MIN))
+        w('#   x in %d rows             distinct ws1..ws%d carrying an x-cross across the %d rows'
+          % (nrow, hi_hi, nrow))
         w('#   fired at                the bar that grace completed on, or - when it never did')
         w('#   the leg closes          the bar v4_sweep_pivots closes the leg on')
-        w('#   ws1r walk               his general note\'s walk. STUB: the `ex-ws1r-mom-fence`')
-        w('#                           trigger is not defined yet, so only the oob trigger starts')
-        w('#                           it. NOT part of the mech - printed beside it')
         w('')
         FIRED = {}
         for i in np.flatnonzero(V['s3'][a:z + 1]) + a:
@@ -946,6 +945,16 @@ def orac_file(day, a, z, R, reads, walk, V, path):
         #   AND the gate, which is where one of his graces opens. It is the AND of the three
         #   columns beside it, in one place so the 57 can be grepped.
         OPENS = V['s1'] & V['s2'] & V['gate']
+        #   HIS 1118: *"drop any rows that do not print a 6x event, unless they are one of the
+        #   57"*. "print" is the row's own 6x - V['six'] - so a row whose 6x landed on the row
+        #   before is dropped unless it is one of the 57.
+        k = np.asarray([i for i in k if V['six'][i] or OPENS[i]], np.int64)
+        #   HIS 1118: *"for this report format only, show timestamps as hh:mm:ss"*
+        HM = lambda ms_i: U(int(ms_i))[11:]
+        HMB = lambda b: ln.U(int(b))[11:]
+        #   distinct ws1..ws%d carrying an x-cross across the %d rows - his *"how many distinct x
+        #   were printed inside of the 3 rows"*, the whole range since he named no band
+        XIN3 = window(R['x'], nrow)[:, 1:hi_hi + 1].sum(1)
         #   HIS 1118 MAE/MFE here too: this file had none at all. The same read as the setup hunt -
         #   the row's own bar to the bar sweep-pivots closes its leg on, scoring the OUTGOING trade
         MM = {int(i): mm for i, mm in zip(k, setup_maemfe(PRT[k], reads['side'][k]))}
@@ -954,22 +963,24 @@ def orac_file(day, a, z, R, reads, walk, V, path):
             six = ('this row' if V['six'][i] else
                    'the row before' if (i > 0 and V['six'][i - 1]) else 'no')
             _zc, _mae, _mfe = MM[int(i)]
-            #   HIS 1118: the flag sits *"next to the timestamp"*, so it is column 2
-            rows.append([U(int(i)), 'YES' if OPENS[i] else '-', sdof(i),
+            #   HIS 1118: the flag sits *"next to the timestamp"*, so it is column 2.
+            #   DROPPED at his word: `trade opened` duplicated the oracle's own pivot flips, and
+            #   `ws1r walk`. `the leg closes` stays - it is a v4_sweep_pivots leg on whichever line
+            #   marks the bar (ws10Mage, ws30Mage and others on this day), not the ws2Mage pivots
+            #   the oracle flips on, so it is not a duplicate.
+            rows.append([HM(i), 'yes' if OPENS[i] else '-', sdof(i),
                          '-' if _mae is None else '%+.3f' % _mae,
                          '-' if _mfe is None else '%+.3f' % _mfe,
-                         FIRED.get(int(i), '-') if OPENS[i] else '-',
-                         U(int(np.searchsorted(PRT, reads['topen'][i], 'left'))),
-                         six, V['low_aw'][i], V['low_fl'][i], V['low_toexf'][i], V['all_toexf'][i],
-                         V['low_aw3'][i], V['high_toexf'][i],
+                         FIRED.get(int(i), '-')[11:] if OPENS[i] and int(i) in FIRED else '-',
+                         six, XIN3[i], V['low_aw'][i], V['low_fl'][i], V['low_toexf'][i],
+                         V['all_toexf'][i], V['low_aw3'][i], V['high_toexf'][i],
                          'PASS' if V['s1'][i] else 'fail', 'PASS' if V['s2'][i] else 'fail',
                          'PASS' if V['gate'][i] else 'fail',
-                         'running' if walk[i] else 'not running',
-                         ln.U(int(_zc)) if _zc is not None else '-'])
-        for t in fixed_table(['the row', 'grace opens', 'side', 'MAE %', 'MFE %', 'fired at',
-                              'trade opened', '6x', 'lowAW/%d' % nrow, 'lowFLIP/%d' % nrow,
+                         HMB(_zc) if _zc is not None else '-'])
+        for t in fixed_table(['the row', 'the 57', 'side', 'MAE %', 'MFE %', 'fired at',
+                              '6x', 'x in %d rows' % nrow, 'lowAW/%d' % nrow, 'lowFLIP/%d' % nrow,
                               'lowTOexf', 'ws1-15TOexf', 'lowAW here', 'highTOexf',
-                              'state 1', 'state 2', 'gate', 'ws1r walk', 'the leg closes'],
+                              'state 1', 'state 2', 'gate', 'the leg closes'],
                              rows):
             w(t)
         w('')
@@ -1005,8 +1016,8 @@ def orac_file(day, a, z, R, reads, walk, V, path):
                 if V['s3'][j] and V['gate_row'][j] == g:
                     fired, when = 'FIRES', U(int(j))
                     break
-            gr.append([U(int(g)), sdof(g), V['low_aw'][g], V['low_aw3'][g], best,
-                       V['high_toexf'][g], when, fired])
+            gr.append([HM(g), sdof(g), V['low_aw'][g], V['low_aw3'][g], best,
+                       V['high_toexf'][g], when[11:] if when != '-' else '-', fired])
         for t in fixed_table(['the 3rd row', 'side', 'lowAW/%d' % nrow, 'lowAW here',
                               'most highband flips reached', 'highTOexf at the 3rd row',
                               'fired at', ''], gr):
@@ -1017,11 +1028,11 @@ def orac_file(day, a, z, R, reads, walk, V, path):
             w('')
             rows = []
             for j in range(g, min(g + V['grace'], NROWS)):
-                rows.append([U(int(j)), tfs(R['newaw'][j], hi_lo, hi_hi), V['high_toexf'][j],
+                rows.append([HM(j), tfs(R['newaw'][j], hi_lo, hi_hi), V['high_toexf'][j],
                              'FIRES' if (V['s3'][j] and V['gate_row'][j] == g) else '-'])
                 if V['s3'][j] and V['gate_row'][j] == g:
                     break
-            for t in fixed_table(['grace opened %s' % U(g), 'highband AW flip', 'highTOexf', ''],
+            for t in fixed_table(['grace opened %s' % HM(g), 'highband AW flip', 'highTOexf', ''],
                                  rows):
                 w(t)
         w('')
@@ -1030,11 +1041,11 @@ def orac_file(day, a, z, R, reads, walk, V, path):
             w('')
             rows = []
             for j in range(g - nrow + 1, g + 1):
-                rows.append([U(int(j)), tfs(R['x'][j], 1, lo_hi), tfs(R['aw'][j], 1, lo_hi),
+                rows.append([HM(j), tfs(R['x'][j], 1, lo_hi), tfs(R['aw'][j], 1, lo_hi),
                              tfs(R['newaw'][j], 1, lo_hi), tfs(R['toexf'][j], 1, lo_hi),
                              tfs(R['aw'][j], hi_lo, hi_hi), tfs(R['toexf'][j], hi_lo, hi_hi),
                              tfs(R['cross'][j], hi_lo, hi_hi)])
-            for t in fixed_table(['3rd row %s' % U(int(g)), 'lowband x-cross', 'lowband AW(any)',
+            for t in fixed_table(['3rd row %s' % HM(g), 'lowband x-cross', 'lowband AW(any)',
                                   'lowband AW flip', 'lowband TO(exf)', 'highband AW(any)',
                                   'highband TO(exf)', 'highband x or e'], rows):
                 w(t)
