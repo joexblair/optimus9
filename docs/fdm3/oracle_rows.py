@@ -70,6 +70,7 @@ try:
     import v4_backstop_trades as BT   # the price series towards_away's own pivots are built on
     sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1109_towards_away')
     import towards_away as TA          # HIS 1118 answer 2: *"use the pivot based psuedo-trades"*
+    from optimus9.analysis import jig as JIG   # its Pine emitter owns the bgcolor format
 finally:
     sys.stderr = _err
 
@@ -80,7 +81,7 @@ finally:
 #   banked knobs, so neither is a free choice at the command line.
 MODE = sys.argv[1] if len(sys.argv) > 1 else ''
 #   every orac- mode reads his 30 second page; the rest read the 60 second one he banked
-PORT = (int(FK.ORAC_EXHAUST_PORT) if MODE in ('orac-exhaust', 'setups', 'contrast')
+PORT = (int(FK.ORAC_EXHAUST_PORT) if MODE in ('orac-exhaust', 'setups', 'contrast', 'pine')
         else int(FK.ORACLE_PORT))
 BASE = 'http://127.0.0.1:%d' % PORT
 META = json.load(urllib.request.urlopen(BASE + '/meta'))
@@ -1159,6 +1160,60 @@ def main():
         print('bars %d, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
         print('file: %s, %d samples of %s every %d s, %s .. %s'
               % (out, len(bars), name, gap, t0s, t1s))
+        return
+    if MODE == 'pine':
+        #   HIS 1118: *"create a pine module that I can load on a TF1 pane and see your view of the
+        #   pivots"*, *"useing only the red and green bgcolors mech"*. The jig's emit_bgcolor owns
+        #   the format and it is LOCKED - this only hands it two streams.
+        d0, d1 = sys.argv[2], sys.argv[3]
+        out = sys.argv[4] if len(sys.argv) >= 5 else 'out/fdm3_pivots.pine'
+        if not os.path.isabs(out):
+            out = os.path.join(HERE, out)
+        tf = int(FK.ORAC_PIVOT_TF)
+        dw = int(FK.ORAC_PIVOT_DWELL_S)
+        pv = SP.pooled_pivots(tf, dw)
+        a, z = ln.K(d0 + ' 00:00:00'), ln.K(d1 + ' 23:59:55')
+        TS = np.asarray(ln.ts, np.int64)
+        #   A TF1 PANE'S BAR IS A MINUTE, so each pivot paints the minute bar holding it: its 5 s
+        #   timestamp floored to the minute. The chart's `time` is that minute's open in ms.
+        lo = sorted({int(TS[c] // 60000 * 60000) for cf, c, sd in pv if a <= c <= z and sd < 0})
+        hi = sorted({int(TS[c] // 60000 * 60000) for cf, c, sd in pv if a <= c <= z and sd > 0})
+        #   HIS 1118 RULING on the sides: *" LOW target-side creates a *OUTGOING* LONG,..."*. So a
+        #   LOW pivot opens a LONG and paints GREEN; a HIGH pivot opens a SHORT and paints RED.
+        notes = [
+            'fdm3 four-read pivots, %s .. %s' % (d0, d1),
+            'HIS 1118 RULE: pool ws%dMage and ws%db, each EMERGING and CLOSED-PREV, into one' % (tf, tf),
+            'list of oob->ib crosses. Split into runs of consecutive same-side crosses. A run',
+            'qualifies when the LONGEST dwell inside it reaches %d s; the pivot is that run\'s' % dw,
+            'FINAL cross to ib. His words: "1, the longest" and "we\'re going from a final cross',
+            'to ib, to the next final cross to ib".',
+            '',
+            'GREEN = a LOW pivot, which opens an OUTGOING LONG - his " LOW target-side creates a',
+            '        *OUTGOING* LONG,...". RED = a HIGH pivot, an OUTGOING SHORT.',
+            '',
+            'EACH PIVOT PAINTS THE MINUTE BAR THAT HOLDS IT, so load this on a 1 minute pane.',
+            'The 5 s bar is floored to its minute; the cross is knowable %d s later (the hold).'
+            % (int(SP.XWOB) * 5),
+            '',
+            'the knobs: ' + ' '.join('%s=%s' % (k, v) for k, v in FK.live() if k.startswith('ORAC_PIVOT')),
+            'sweep-pivots: SP_XWOB=%d bars, oob %g/%g' % (int(SP.XWOB), float(K.OOB_LO), float(K.OOB_HI)),
+            'the tape: %d bars, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)),
+            'pivots on the whole tape at this dwell: %d' % len(pv)]
+        n = JIG._Score(None).emit_bgcolor(
+            [{'name': 'pivot_high_short', 'ts': hi, 'color': 'color.red'},
+             {'name': 'pivot_low_long', 'ts': lo, 'color': 'color.green'}],
+            out, 'fdm3 pivots %s..%s' % (d0, d1), notes=notes)
+        print('bars %d, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
+        print()
+        print('| the stream | colour | what it marks | pivots %s .. %s |' % (d0, d1))
+        print('|' + '---|' * 4)
+        print('| pivot_low_long | green | a LOW pivot, opening an OUTGOING LONG | %d |' % len(lo))
+        print('| pivot_high_short | red | a HIGH pivot, opening an OUTGOING SHORT | %d |' % len(hi))
+        print('| both | | | %d |' % (len(lo) + len(hi)))
+        print()
+        print('| the file | timestamps it carries |')
+        print('|---|---|')
+        print('| %s | %d |' % (out, n))
         return
     if MODE == 'contrast':
         #   HIS 1118: *"would the 'top' 20% be a good starting place to pare from?"* - the top and

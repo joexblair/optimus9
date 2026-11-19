@@ -229,6 +229,71 @@ def legs(tf, xwob=None, mode=None):
     return out
 
 
+def pooled_pivots(tf, dwell_s, xwob=None, reads=('Mage', 'b')):
+    """HIS 1118 FOUR-READ PIVOTS. -> list of (confirm bar, cross bar, side), alternating.
+
+    HIS WORDS, in order: *"bake the 4 lines into the sweep-pivots machine: every test uses all
+    lines to decide if dwell is qualified"*, then on how they combine *"1, the longest"*, and on
+    how the crosses group *"2, it shouldn't matter - we're going from a 'final' cross to ib, to
+    the next 'final' cross to ib"*.
+
+    THE FOUR READS of ws{tf}: Mage emerging, Mage closed-prev, b emerging, b closed-prev. Every
+    one of them contributes its own oob->ib crosses, each carrying the DWELL - how long that read
+    held out of bounds immediately before the cross.
+    THE RULE: pool all four, split into runs of consecutive SAME-SIDE crosses, and a run qualifies
+    when the LONGEST dwell inside it reaches `dwell_s`. The pivot is that run's FINAL cross to ib.
+    Runs that fail are dropped, and two surviving runs that then touch on the same side merge,
+    again taking the last.
+    NO TIME TOLERANCE is needed: the group is a same-side run, which is what he ruled.
+
+    WHY FOUR READS. The emerging line flickers in and out of the fence, so a real 2.4 minute oob
+    run measures as 0.1 on it while closed-prev measures the same move as 3.0. Taking the longest
+    lets the steady read supply the dwell and the fast read supply the bar.
+    """
+    import v4_closed_prev as CP
+    import ln as _ln
+    xwob = XWOB if xwob is None else xwob
+    key = ('pooled', tf, xwob, int(dwell_s), reads)
+    if key in _LEG:
+        return _LEG[key]
+    ev = []
+    for role in reads:
+        em = np.asarray(_ln.line('ws%d%s' % (int(tf), role)), float)
+        for lab, arr in (('em', em), ('cp', np.asarray(CP.series(em, int(tf) * 60), float))):
+            for c, cf, sd in oob_ib_cross(arr, K.OOB_HI, K.OOB_LO, xwob):
+                n, i = 0, int(c) - 1
+                while i >= 0 and np.isfinite(arr[i]) and (
+                        (arr[i] >= K.OOB_HI) if sd > 0 else (arr[i] <= K.OOB_LO)):
+                    n += 1
+                    i -= 1
+                ev.append((int(c), int(cf), int(sd), n * 5))
+    ev.sort()
+    runs, cur = [], []
+    for e in ev:
+        if cur and e[2] == cur[0][2]:
+            cur.append(e)
+        else:
+            if cur:
+                runs.append(cur)
+            cur = [e]
+    if cur:
+        runs.append(cur)
+    out = []
+    for r in runs:
+        if max(x[3] for x in r) < int(dwell_s):
+            continue
+        last = r[-1]
+        if out and out[-1][2] == last[2]:
+            out[-1] = (last[1], last[0], last[2])       # same side again: take the later one
+        else:
+            out.append((last[1], last[0], last[2]))
+    assert all(out[i][2] != out[i + 1][2] for i in range(len(out) - 1)), \
+        'two of his pooled pivots in a row share a side'
+    assert all(out[i][0] <= out[i + 1][0] for i in range(len(out) - 1)), 'the pivots are not in order'
+    _LEG[key] = out
+    return out
+
+
 def marks(tf, bar, side, align_s=None, xwob=None):
     """Does this Mage mark `bar` on `side`. -> the confirm bar of its nearest same-side cross, or None.
 

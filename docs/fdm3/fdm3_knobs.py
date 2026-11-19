@@ -129,6 +129,13 @@ ORAC_RANK_BY = os.environ.get('W_FDM3_ORAC_RANK_BY', 'mfe_over_mae')
 #   BOTTOM 20% printed beside it, because a column shared by the top means nothing if the bottom
 #   shares it too. Per cent of each side's rows taken from each end.
 ORAC_CUT_PCT = _knob('ORAC_CUT_PCT', 20.0)
+#   HIS 1118 FOUR-READ PIVOTS: *"bake the 4 lines into the sweep-pivots machine: every test uses all
+#   lines to decide if dwell is qualified"* / *"1, the longest"* / *"2, it shouldn't matter - we're
+#   going from a 'final' cross to ib, to the next 'final' cross to ib"*. The four reads are ws{TF}
+#   Mage and b, each emerging and closed-prev. 3 minutes is his *"at least 3 minutes"*, and it is
+#   the value that holds all four of his 09-24 chain marks with one noise pivot in 4.5 hours.
+ORAC_PIVOT_TF = _knob('ORAC_PIVOT_TF', 1, int)             # ws1 Mage and b
+ORAC_PIVOT_DWELL_S = _knob('ORAC_PIVOT_DWELL_S', 180, int)  # seconds the longest read must hold oob
 ORAC_GRACE_MIN = _knob('ORAC_GRACE_MIN', 5.0)          # his *"5 minutes (walk forward) grace"*
 ORAC_HIGH_FLIPS = _knob('ORAC_HIGH_FLIPS', 2, int)     # his *">=2 AW flips"* in highband
 ORAC_HIGH_TOEXF_MAX = _knob('ORAC_HIGH_TOEXF_MAX', 1, int)   # his *"a maximum of 1 TOexf"*
@@ -241,6 +248,11 @@ RULED = {
     'ORAC_MAEMFE_LINE': ('ws2Mage', 'the line whose sweep-pivot legs score MAE/MFE. Under his '
                                     '1118 leg mode it reads his 06:06 and 12:05 as LOW legs, and '
                                     'it is the line the pseudo trades already pivot on'),
+    'ORAC_PIVOT_TF': (1, 'his 1118 four-read pivots run on ws1 - Mage and b, each emerging '
+                         'and closed-prev'),
+    'ORAC_PIVOT_DWELL_S': (180, 'his 1118 *"at least 3 minutes"*, seconds. The LONGEST of '
+                                'the four reads must hold oob this long for the run to '
+                                'qualify; the pivot is its final cross to ib'),
     'ORAC_CUT_PCT': (20.0, 'his 1118 top-and-bottom cut, per cent of each side\'s rows'),
     'ORAC_RANK_BY': ('mfe_over_mae', 'his 1118 *"I take your recommendation"* - rank on MFE '
                                      'over abs(MAE), per side, not on MAE alone'),
