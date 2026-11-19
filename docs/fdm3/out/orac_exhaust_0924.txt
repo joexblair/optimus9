@@ -46,7 +46,7 @@
 #   highTOexf               ws8..ws15 reading TO(exf) ON THIS ROW
 #   state 1 / state 2       PASS or fail
 #   gate                    >=4 of "lowAW here": PASS opens a 5 minute grace
-#   MAE %% / MFE %%          this row's bar to the bar sweep-pivots closes its leg on,
+#   MAE % / MFE %           this row's bar to the bar sweep-pivots closes its leg on,
 #                          scoring the OUTGOING trade: a LOW target-side creates an
 #                          OUTGOING LONG so up is favourable, a HIGH one an OUTGOING
 #                          SHORT so down is. MAE never above 0, MFE never below it

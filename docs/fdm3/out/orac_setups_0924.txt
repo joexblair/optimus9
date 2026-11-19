@@ -35,7 +35,7 @@
 
 #   the setup row          the setup row, its own open time (UTC)
 #   side                   the pseudo trade's target-side there
-#   MAE %% / MFE %%          the setup bar to the bar sweep-pivots closes its leg on,
+#   MAE % / MFE %           the setup bar to the bar sweep-pivots closes its leg on,
 #                          scoring the OUTGOING trade: a LOW target-side creates an
 #                          OUTGOING LONG so up is favourable, a HIGH one an OUTGOING
 #                          SHORT so down is. MAE never above 0, MFE never below it
@@ -223,7 +223,7 @@
 
 #   the setup row          the setup row, its own open time (UTC)
 #   side                   the pseudo trade's target-side there
-#   MAE %% / MFE %%          the setup bar to the bar sweep-pivots closes its leg on,
+#   MAE % / MFE %           the setup bar to the bar sweep-pivots closes its leg on,
 #                          scoring the OUTGOING trade: a LOW target-side creates an
 #                          OUTGOING LONG so up is favourable, a HIGH one an OUTGOING
 #                          SHORT so down is. MAE never above 0, MFE never below it

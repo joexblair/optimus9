@@ -927,7 +927,7 @@ def orac_file(day, a, z, R, reads, walk, V, path):
         w('#   state 1 / state 2       PASS or fail')
         w('#   gate                    >=%d of "lowAW here": PASS opens a %g minute grace'
           % (int(FK.ORAC_LOW_AW_3RD), float(FK.ORAC_GRACE_MIN)))
-        w('#   MAE %% / MFE %%          this row\'s bar to the bar sweep-pivots closes its leg on,')
+        w("#   MAE % / MFE %           this row's bar to the bar sweep-pivots closes its leg on,")
         w('#                          scoring the OUTGOING trade: a LOW target-side creates an')
         w('#                          OUTGOING LONG so up is favourable, a HIGH one an OUTGOING')
         w('#                          SHORT so down is. MAE never above 0, MFE never below it')
@@ -1136,7 +1136,7 @@ def main():
             #   above the table says what each short name holds.
             wr('#   the setup row          the setup row, its own open time (UTC)')
             wr('#   side                   the pseudo trade\'s target-side there')
-            wr('#   MAE %% / MFE %%          the setup bar to the bar sweep-pivots closes its leg on,')
+            wr("#   MAE % / MFE %           the setup bar to the bar sweep-pivots closes its leg on,")
             wr('#                          scoring the OUTGOING trade: a LOW target-side creates an')
             wr('#                          OUTGOING LONG so up is favourable, a HIGH one an OUTGOING')
             wr('#                          SHORT so down is. MAE never above 0, MFE never below it')
