@@ -361,6 +361,17 @@ IFP_LABELS = ('-3', '-2', '-1', '0', '+1', '+2', '+3')
 IFP_DP = 2                      # his 2dp - the value is rounded before it is placed
 IFP_BARE = [0]                  # TO(inf) cells with no value to band, counted across every state
 IFP_INF = [0]                   # TO(inf) cells in all, so the bare share is readable
+#   HIS 1119 `fdm3-small-trade`: *"can you turn this small-trade detector into a causal mech? it would
+#   have to evolve with the walk - the resting state is `small-trade` until the mech(s) prove
+#   `large-trade`"*, on his ruling *"highband lines printing TO(exf) during the trade:  2 is the max
+#   for a small trade."*, then *"print it underneath the existing 'legmage' data.  the labels will be
+#   `sml` and `lrg`"*, held to the trade's close. One bit of the legMage byte - legMage is ws1..ws15,
+#   bits 0-3 - so the row stays 55 bytes, and every legMage read masks with 15.
+SMALL_HI = tuple(range(8, 16))  # his highband, ws8..ws15
+SMALL_LRG = 64                  # the bit in the legMage byte: set = `lrg`, clear inside a trade = `sml`
+SMALL_ROWS = [0, 0]             # rows inside a trade, and of them `lrg`, over every state
+import fdm3_knobs_shim as _FKS  # noqa: E402 - the banked fdm3 knobs, from the page's own directory
+SMALL_MAX = int(_FKS.SMALL_TRADE_MAX_TOEXF)     # his `fdm3-small-trade-max-toexf`, 2 lines
 #   the band is stored as band+1 in bits 3-5 of the TO/AW byte, so 0 means NO VALUE and prints a
 #   bare TO(inf). The code itself stays in bits 0-2, which is why every reader masks with 7.
 FLIPS = (0, 1)                  # HIS 1113 button: *"flips the pivots directions"* - 0 as found, 1 every pivot's side flipped
@@ -453,6 +464,32 @@ def leg_max_mage(side, prt):
             carry = 0
     assert val.min() >= 0 and val.max() <= hi, ('the leg Mage TF is outside ws1..ws%d' % hi)
     return [val[prt]]
+
+
+def small_trade(code, side, prt, cap):
+    """HIS 1119 `fdm3-small-trade`. -> bool per row, True = `lrg`.
+
+    THE COUNT: distinct ws8..ws15 lines whose cell reads TO(exf) on ANY row from the trade's first
+    row to this one - his *"highband lines printing TO(exf) during the trade"* read as it evolves,
+    so a row never reads a later row. `lrg` once the count passes `cap` (his 2), and it holds to
+    the trade's close because the count only grows; the next trade opens back at `sml`.
+    THE ROW GRAIN IS THE PAGE'S: the cells he reads. A trade is a run of bars sharing one
+    target-side, as leg_max_mage takes it - the trades alternate sides.
+    """
+    tid = np.concatenate(([0], np.cumsum(side[1:] != side[:-1])))[prt]   # trade id per row
+    first = np.concatenate(([0], np.flatnonzero(np.diff(tid)) + 1))     # each trade's first row
+    start = first[np.searchsorted(first, np.arange(len(prt)), side='right') - 1]
+    n = np.zeros(len(prt), np.int32)
+    for t in SMALL_HI:
+        hit = ((code['ws%d' % t] & 7) == TO_EXF).astype(np.int64)
+        cs = np.cumsum(hit)
+        before = np.where(start > 0, cs[np.maximum(start - 1, 0)], 0)
+        n += ((cs - before) > 0).astype(np.int32)                   # seen since the trade's first row
+    live = side[prt] != 0
+    lrg = live & (n > int(cap))
+    #   THE HOLD: inside one trade `lrg` never goes back to `sml`
+    assert not np.any(lrg[:-1] & ~lrg[1:] & (tid[:-1] == tid[1:])), 'a trade went lrg -> sml'
+    return lrg
 
 
 def m_no_rev(sps, prt):
@@ -741,7 +778,7 @@ def build():
     #   HIS 1118 BUTTON: the ws{TF}x race's re-open is a third state dimension when XRE_BUTTON is
     #   on. It changes the towards/away run only - the cross row's own x bits are built above at
     #   X_REOPEN and are the same in every state.
-    STATES, SIDES = [], {}
+    STATES, SIDES, TRS = [], {}, {}
     for off in OFFS:
         k = off * 12                             # 5 s bars
         for fl in FLIPS:
@@ -750,6 +787,7 @@ def build():
             for o, c, s in tr:
                 side[o:c] = s
             SIDES[(off, fl)] = side
+            TRS[(off, fl)] = tr
             for xre in XRES:
                 t1 = time.time()
                 STATES.append((off, fl, xre,
@@ -830,8 +868,23 @@ def build():
         cols.extend(UD)                          # HIS 1116 the up/dn pair per line, the same in every state
         cols.append((sl & 0xFF).astype(np.uint8).view(np.int8))     # HIS 1115 SL%, the same in every state
         cols.append((sl >> 8).astype(np.int8))
+        #   HIS 1119 `fdm3-small-trade` rides in bit 6 of the legMage byte - `lrg` set, `sml` clear
+        lrg = small_trade(CODE, side, prt, SMALL_MAX)
+        #   THE CHECK, a second construction: each trade off this state's own trade list, its rows
+        #   cut by the print bar, the lines seen accumulated row by row inside it
+        _chk = np.zeros(len(prt), bool)
+        for _o, _c, _s in TRS[(off, fl)]:
+            _a, _z = np.searchsorted(prt, _o, 'left'), np.searchsorted(prt, _c, 'left')
+            if _z > _a:
+                _h = np.stack([(CODE['ws%d' % t][_a:_z] & 7) == TO_EXF for t in SMALL_HI], 1)
+                _chk[_a:_z] = np.logical_or.accumulate(_h, 0).sum(1) > SMALL_MAX
+        assert np.array_equal(_chk, lrg), ('fdm3-small-trade disagrees with its own check',
+                                           off, fl, int((_chk != lrg).sum()))
+        SMALL_ROWS[0] += int((side[prt] != 0).sum())
+        SMALL_ROWS[1] += int(lrg.sum())
         for mn_k in mnr:                         # HIS 1119: the incoming leg's max Mage TF, 0 none
-            cols.append(mn_k)
+            assert int(mn_k.max()) < SMALL_LRG, 'legMage reaches the small-trade bit'
+            cols.append((mn_k | np.where(lrg, SMALL_LRG, 0)).astype(np.int8))
         cols.append(side[prt])                   # HIS 1109: the time cell's 20% colour, red LOW, green HIGH
         mats[(off, fl, xre)] = np.ascontiguousarray(np.stack(cols, 1).astype(np.int8))
     return ts[first], mats
@@ -867,7 +920,7 @@ META = json.dumps({
     'mnrs': list(MNR_LABELS), 'mnrtops': list(MNR_TOPS),
     'shift': PIV_SHIFT, 'alock': list(A_LOCK), 'reset': FENCE_RESET_TO, 'rpred': RPRED_ON,
     'ifp': list(IFP_LABELS), 'ifpedges': list(IFP_EDGES), 'ifpdp': IFP_DP,
-    'mage50': MAGE50_PCT,
+    'mage50': MAGE50_PCT, 'smallmax': SMALL_MAX, 'smallbit': SMALL_LRG,
     #   WHERE EACH BLOCK STARTS, so a reader is told rather than deriving it. A derived offset is
     #   how oracle_rows came to hold a stale O_TA and read every TO/AW cell out of the wrong byte.
     'ta': O_TA, 'xc': O_XC, 'toexf': O_TOEXF, 'sl': O_SL, 'omnr': O_MNR,
@@ -1136,10 +1189,12 @@ function draw() {
       //   HIS 1119: one byte per column now, not three. The value is the INCOMING leg's max Mage
       //   TF, stamped at this leg's open and the same on every row of it
       const b0 = o + NS - 1 - (p.mcs.length - k);
-      const mv = blk ? blk[b0] : 0;
+      const mb = blk ? blk[b0] : 0, mv = mb & 15;   // HIS 1119: bits 0-3 legMage, bit 6 small-trade
       const m = p.mcs[k];
       m.n.textContent = !blk ? '·' : mv > 0 ? 'ws' + mv : NB;
-      m.ta.textContent = NB;
+      //   HIS 1119 `fdm3-small-trade`: *"print it underneath the existing 'legmage' data"*, `sml` until
+      //   more than meta.smallmax highband lines have printed TO(exf) in the trade, then `lrg`
+      m.ta.textContent = blk && k === 0 && sd !== 0 ? (mb & meta.smallbit ? 'lrg' : 'sml') : NB;
       m.xc.textContent = NB;
       m.className = (blk ? 'mn' : 'w') + (k === 0 ? ' sx' : '');
     }
@@ -1373,7 +1428,7 @@ if __name__ == '__main__':
     #   -1/+1 cells on an AW line cannot be taken from the page any more. The 1109 control above
     #   still checks the producer on its own minute grid.
     #   HIS 1119: one byte per row, just before the side byte
-    _MNR = [RP[:, STRIDE - 1 - (len(MNR_TOPS) - k)].astype(int) for k in range(len(MNR_TOPS))]
+    _MNR = [RP[:, STRIDE - 1 - (len(MNR_TOPS) - k)].astype(int) & 15 for k in range(len(MNR_TOPS))]
     for k, (label, _) in enumerate(SUMS):
         _ex = RP[:, O_TOEXF + k].astype(int)
         print('%s: rows printing TO(exf) %d of %d, most lines reading TO(exf) on one row %d'
@@ -1391,6 +1446,10 @@ if __name__ == '__main__':
           % (len(LINES), MAGE50_PCT, int((_m50 == 1).sum()), int((_m50 == 2).sum()), int((_m50 == 0).sum()),
              _m50.size, LINES[_thin], int((_m50[:, _thin] > 0).sum()), len(_m50)))
     print('pivots: %s' % PIVOTS)
+    _lrg = (RP[:, O_MNR].astype(int) & SMALL_LRG) > 0
+    print('fdm3-small-trade (max %d highband lines in TO(exf)): pivots as found, rows in a trade %d, lrg %d; '
+          'every state, rows in a trade %d, lrg %d'
+          % (SMALL_MAX, int((RP[:, STRIDE - 1] != 0).sum()), int(_lrg.sum()), SMALL_ROWS[0], SMALL_ROWS[1]))
     print('fdm3-infence-power: %d TO(inf) cells over every state, %d of them bare (%.2f%%) - a '
           'line has no closed-prev value until its first bar closes'
           % (IFP_INF[0], IFP_BARE[0], 100.0 * IFP_BARE[0] / max(1, IFP_INF[0])))

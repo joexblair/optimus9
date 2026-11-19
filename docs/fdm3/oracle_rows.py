@@ -252,6 +252,7 @@ def load(flip=0, alo=None, ahi=None, chunk=20000):
     #   leg's max, stamped at this leg's open and the same on every row of the leg.
     out['tapow'] = np.zeros((NROWS, 16), np.int8)
     out['legmage'] = np.zeros(NROWS, np.int16)
+    out['lrg'] = np.zeros(NROWS, bool)        # HIS 1119 `fdm3-small-trade`: True = `lrg`
     sd = np.zeros(NROWS, np.int8)
     for a in range(0, NROWS, chunk):
         n = min(chunk, NROWS - a)
@@ -293,7 +294,10 @@ def load(flip=0, alo=None, ahi=None, chunk=20000):
             out['toexf'][a:a + n, tf] = st == 3
         for k in range(len(SUMS)):
             out['sumtoexf'][a:a + n, k] = b[:, O_TOEXF + k].astype(np.int32)
-        out['legmage'][a:a + n] = b[:, O_SIDE - len(META.get('mnrtops', [1]))].astype(np.int16)
+        #   HIS 1119 `fdm3-small-trade` rides in bit 6 of the same byte, so legMage is bits 0-3
+        _lm = b[:, O_SIDE - len(META.get('mnrtops', [1]))].astype(np.int16)
+        out['legmage'][a:a + n] = _lm & 15
+        out['lrg'][a:a + n] = (_lm & int(META.get('smallbit', 0))) > 0
         sd[a:a + n] = b[:, O_SIDE]
     return out, sd
 
@@ -319,7 +323,7 @@ def mage50(chunk=20000):
         #   HIS 1119: the page dropped M-no-rev for ONE leg-Mage byte per column, so the old
         #   3-bytes-per-column arithmetic read an SL% byte and returned timeframes like ws78.
         for k, (tfs, vals) in enumerate(MNR):
-            tfs[a:a + n] = b[:, STRIDE - 1 - (len(MNR) - k)].astype(int)
+            tfs[a:a + n] = b[:, STRIDE - 1 - (len(MNR) - k)].astype(int) & 15   # bit 6 is fdm3-small-trade
             vals[a:a + n] = 0
         assert int(MNR[0][0].max()) <= int(META.get('mnrtops', [15])[0]), \
             'the leg-Mage byte is not where this reader thinks it is'

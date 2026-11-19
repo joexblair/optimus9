@@ -2466,3 +2466,24 @@ a429f01373cd  this will need to be built on the port 8789 ui first. to speed up 
 f0838e617209  Q4: the question's answers stay the same
 1331e0ca1960  1 and 2: agreed
 9dc42579cc00  in way that I can control it
+4042dd3aa2fa  the highband TO(inf) prints are mostly in the mid board ranges (0,-1,+1), and have hovered around mid board for the duration of the psuedo-trade
+1127b47133c3  what I need is a way to predict if a TOexf line will convert to AW, based on the 4 mechs and their states
+bc7590821433  to gather this data, you'll start with finding the psuedo-trades that print mostly mid-board in the highband. this is a sign of a small trade, the game in which our Fu is not yet strong
+fe2bcc962df9  next, find the last AW flips from both highband and lowband (if they exist), and walk back along the trade to hunt for a loose interpretation of my 4 mech's scenarios
+18bca455534d  for each small trade that you analyse, report (in a table) the counts of the 4 mechs. add a short-form commentary column if you observe anything that feels important
+c45475b57520  x/e cluster can be minimum 4
+a5b6623f0024  for the reporting, the table will need data on the last TOexf flip, for both lowband and highband
+cbc91e0fcae9  lineage2 has already printed exhaust at 02:11:30
+bdc48dfa6f45  0258 was anything but small, so this tells me that my criteria is inadequate.
+e4add5600a3d  the other marker is the count of distinct lines printing TO(exf) during the trade - I think anthing more the 1 line in TO(exf) during the trade would make the trade 'not small'
+f8952182d0c4  highband lines printing TO(exf) during the trade: 2 is the max for a small trade.
+598d3547be0a  there's no differentiation here. this means the TOexf prints are the decider
+90df3f4689ae  can you turn this small-trade detector into a causal mech? it would have to evolve with the walk - the resting state is `small-trade` until the mech(s) prove `large-trade`
+8310c7102aca  print it underneath the existing 'legmage' data. the labels will be `sml` and `lrg`
+ed16b08c2d73  the resting state is `small-trade` until the mech(s) prove `large-trade`
+4e51e00e2651  highband lines printing TO(exf) during the trade
+da3a1627413e  print it underneath the existing 'legmage' data
+c0fb27c8bb87  you can overwrite 8792
+ccb7bad03405  and stop the other instances
+03066aec2bb9  mostly in the mid board ranges (0,-1,+1)
+7fe0627388da  commit and push all. bank the updates and make this the machine

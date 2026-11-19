@@ -70,6 +70,11 @@ ORACLE_SHIFT = _knob('ORACLE_SHIFT', 15, int)    # his 1119 pivot offset button,
 INFENCE_EDGES = (23.0, 28.0, 38.0, 62.0, 73.0, 77.0)
 INFENCE_DP = _knob('INFENCE_DP', 2, int)         # his *"all values are 2dp"*
 INFENCE_READ = os.environ.get('W_FDM3_INFENCE_READ', 'closed_prev')
+#   HIS 1119 `fdm3-small-trade`: *"highband lines printing TO(exf) during the trade:  2 is the max for
+#   a small trade."*, then *"the resting state is `small-trade` until the mech(s) prove
+#   `large-trade`"*. Distinct ws8..ws15 lines, counted from the trade's first row to the row being
+#   read; the first row past this count prints `lrg` and holds it to the trade's close.
+SMALL_TRADE_MAX_TOEXF = _knob('SMALL_TRADE_MAX_TOEXF', 2, int)   # his `fdm3-small-trade-max-toexf`
 #   HIS 1119: *"I'm not using the m-no-rev column. drop it and replace it with a new max Mage TF
 #   column that repeats the value on every row of the leg"*. The two M-no-rev columns are gone;
 #   one column takes their place, holding the INCOMING leg's max oob Mage TF carried across the
@@ -245,6 +250,9 @@ RULED = {
                       '-3, 23-27.99 -2, 28-37.99 -1, 38-61.99 0, 62-72.99 +1, 73-76.99 +2, 77 and '
                       'over +3. The -3 and +3 are his ruling on the cells the five did not reach'),
     'INFENCE_DP': (2, 'his *"all values are 2dp: eg 62 to 73 is actually 62.00 to 72.99"*'),
+    'SMALL_TRADE_MAX_TOEXF': (2, 'his 1119 `fdm3-small-trade-max-toexf` - the most distinct '
+                                 'highband lines that may print TO(exf) since the trade opened '
+                                 'for it to stay sml'),
     'INFENCE_READ': ('closed_prev', 'the line value the band reads - the banked chart-matched '
                                     'read, since emerging is lift-off\'s read alone'),
     'MNR_TOPS': ((15,), 'the leg-Mage column\'s ceiling. HIS 1119 dropped the two M-no-rev '
