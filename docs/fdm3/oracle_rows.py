@@ -77,7 +77,8 @@ finally:
 #   the 30 second page; every other mode keeps the 60 second one he banked on 1117. Both ports are
 #   banked knobs, so neither is a free choice at the command line.
 MODE = sys.argv[1] if len(sys.argv) > 1 else ''
-PORT = int(FK.ORAC_EXHAUST_PORT) if MODE == 'orac-exhaust' else int(FK.ORACLE_PORT)
+#   every orac- mode reads his 30 second page; the rest read the 60 second one he banked
+PORT = int(FK.ORAC_EXHAUST_PORT) if MODE in ('orac-exhaust', 'setups') else int(FK.ORACLE_PORT)
 BASE = 'http://127.0.0.1:%d' % PORT
 META = json.load(urllib.request.urlopen(BASE + '/meta'))
 LINES, SUMS = META['lines'], META['sums']
@@ -478,6 +479,54 @@ def orac_exhaust(R):
     return dict(s1=s1, s2=s2, s3=s3, six=six, low_aw=low_aw, low_fl=low_fl, low_toexf=low_toexf,
                 all_toexf=all_toexf, high_toexf=high_toexf, low_aw3=low_aw3, gate=gate,
                 gate_row=gate_row, grace=grace, fires=s3)
+
+
+def max_oob_mage(reads):
+    """HIS 1118: *"the maximum oob Mage at any decision defines the max(ws1 to 15) that needs to
+    'weigh in' on the decision"*. -> the highest ws1..ws15 whose Mage is oob on the row's own
+    target-side at that row's print bar, 0 where none is.
+
+    CLOSED-PREV, the banked read for every line but lift-off's, and the same read the M-no-rev
+    column's own oob test uses. PLAIN OOB: no lift-off reversal condition, which is what separates
+    this from M-no-rev. mnr1 prints beside it in the report so the two can be compared.
+    """
+    oobf = float(K.FDM_FNC_OOB) if hasattr(K, 'FDM_FNC_OOB') else 15.0
+    side = reads['side']
+    top = np.zeros(NROWS, np.int16)
+    for tf in range(1, int(FK.ORAC_HIGH_HI) + 1):
+        m = closed(ln.line('ws%dMage' % tf), tf * 60)[PRT]
+        with np.errstate(invalid='ignore'):
+            oob = np.where(side > 0, m >= 100 - oobf, np.where(side < 0, m <= oobf, False))
+        top = np.where(oob, tf, top).astype(np.int16)
+    return top
+
+
+def orac_setups(R, reads, rows):
+    """HIS 1118 SETUP HUNT: *"6x or 7x (low band) / with at least 1 aw flip / across 2 or 3 rows /
+    with any AW flips in the post 6x/8x grace walk, seperated to high and low bands"*, plus *"thr
+    number of x crosses in the high band might have meaning"*. `rows` is his 2 or 3.
+
+    -> a dict of per-row arrays. The setup row is the row its window ENDS on, so nothing later than
+    the row is read for the setup itself; the grace walk forward is reported apart from it.
+    """
+    lo_hi, hi_lo = int(FK.ORAC_LOW_HI), int(FK.ORAC_LOW_HI) + 1
+    hi_hi = int(FK.ORAC_HIGH_HI)
+    xl = window(R['x'], rows)[:, 1:lo_hi + 1].sum(1)        # distinct lowband TFs with an x-cross
+    fl = window(R['newaw'], rows)[:, 1:lo_hi + 1].sum(1)    # distinct lowband AW flips
+    hx = window(R['x'], rows)[:, hi_lo:hi_hi + 1].sum(1)    # his highband x-cross count
+    setup = (xl >= int(FK.ORAC_6X_HITS)) & (fl >= 1)
+    grace = int(round(float(FK.ORAC_GRACE_MIN) * 60000 / STEP))
+    #   the grace walk: the setup row and the rows after it up to his 5 minutes, the setup row
+    #   included - the same span his state 3 grace uses
+    glo = np.zeros(NROWS, np.int16)
+    ghi = np.zeros(NROWS, np.int16)
+    gx = np.zeros(NROWS, np.int16)
+    for g in np.flatnonzero(setup):
+        z = min(g + grace, NROWS)
+        glo[g] = int(R['newaw'][g:z, 1:lo_hi + 1].any(0).sum())
+        ghi[g] = int(R['newaw'][g:z, hi_lo:hi_hi + 1].any(0).sum())
+        gx[g] = int(R['x'][g:z, hi_lo:hi_hi + 1].any(0).sum())
+    return dict(setup=setup, xl=xl, fl=fl, hx=hx, glo=glo, ghi=ghi, gx=gx, grace=grace, rows=rows)
 
 
 def orac_conditions(R, reads, gate_window):
@@ -941,6 +990,88 @@ def main():
         print('bars %d, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
         print('file: %s, %d samples of %s every %d s, %s .. %s'
               % (out, len(bars), name, gap, t0s, t1s))
+        return
+    if MODE == 'setups':
+        #   HIS 1118: find his setups, tag each with the max oob Mage TF, and show whether that
+        #   number separates the 00:08 kind from the 03:05 kind
+        day = sys.argv[2]
+        assert int(META['step']) == int(FK.ORAC_EXHAUST_ROW_S) * 1000, \
+            ('this reads his 30 second oracle', META['step'])
+        a, z = K_OF(day + ' 00:00:00'), min(K_OF(day + ' 23:59:59'), NROWS - 1)
+        R, SD = load()
+        print(control(R))
+        TR = TA.pseudo_trades()[1]
+        reads = orac_reads(TR)
+        top = max_oob_mage(reads)
+        MNR = mage50()[1][0][0] if 'mnrtops' in META else np.zeros(NROWS, np.int16)
+        print('bars %d, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
+        print('page port %d, %d rows %d s apart' % (PORT, NROWS, int(META['step']) // 1000))
+        print('%s: rows %d .. %d (%s .. %s)' % (day, a, z, U(a), U(z)))
+        out = (sys.argv[3] if len(sys.argv) >= 4 else None)
+        if out and not os.path.isabs(out):
+            out = os.path.join(HERE, out)
+        buf = []
+        wr = buf.append
+        for rows in (2, 3):
+            S = orac_setups(R, reads, rows)
+            k = np.flatnonzero(S['setup'][a:z + 1]) + a
+            wr('')
+            wr('## SETUPS ACROSS %d ROWS - >=%d of ws1..ws%d carry an x-cross AND >=1 lowband AW flip'
+               % (rows, int(FK.ORAC_6X_HITS), int(FK.ORAC_LOW_HI)))
+            wr('')
+            tab = []
+            for i in k:
+                tab.append([U(int(i)),
+                            'HIGH' if reads['side'][i] > 0 else 'LOW' if reads['side'][i] < 0 else '-',
+                            'ws%d' % top[i] if top[i] else '-',
+                            'ws%d' % MNR[i] if MNR[i] else '-',
+                            S['xl'][i], S['fl'][i], S['hx'][i],
+                            S['glo'][i], S['ghi'][i], S['gx'][i]])
+            for t in fixed_table(['the setup row', 'side', 'max oob Mage', 'M-no-rev',
+                                  'lowband x-cross', 'lowband AW flip',
+                                  'highband x-cross', 'grace lowband AW flips',
+                                  'grace highband AW flips', 'grace highband x-crosses'], tab):
+                wr(t)
+            wr('')
+            wr('## THE SAME SETUPS GROUPED BY THEIR MAX OOB MAGE')
+            wr('')
+            grp = []
+            for t_ in range(0, int(FK.ORAC_HIGH_HI) + 1):
+                sel = k[top[k] == t_]
+                if not len(sel):
+                    continue
+                grp.append(['ws%d' % t_ if t_ else 'none oob', len(sel),
+                            '%.1f' % S['glo'][sel].mean(), '%.1f' % S['ghi'][sel].mean(),
+                            '%.1f' % S['hx'][sel].mean(), '%.1f' % S['gx'][sel].mean(),
+                            int((S['ghi'][sel] >= 2).sum())])
+            for t in fixed_table(['max oob Mage', 'setups', 'mean grace lowband AW flips',
+                                  'mean grace highband AW flips', 'mean highband x-cross',
+                                  'mean grace highband x-crosses',
+                                  'setups reaching >=2 grace highband flips'], grp):
+                wr(t)
+        for t in buf:
+            print(t)
+        if out:
+            with open(out, 'w') as f:
+                f.write('# HIS 1118 SETUP HUNT on %s\n#\n' % day)
+                f.write('# HIS WORDS: *"6x or 7x (low band) / with at least 1 aw flip / across 2 or\n')
+                f.write('# 3 rows / with any AW flips in the post 6x/8x grace walk, seperated to high\n')
+                f.write('# and low bands"*, and *"thr number of x crosses in the high band might have\n')
+                f.write('# meaning"*.\n#\n')
+                f.write('# max oob Mage: HIS *"the maximum oob Mage at any decision defines the\n')
+                f.write('# max(ws1 to 15) that needs to weigh in on the decision"* - the highest\n')
+                f.write('# ws1..ws%d whose CLOSED-PREV Mage is oob %g/%g on the row\'s own target-side\n'
+                        % (int(FK.ORAC_HIGH_HI), float(OOB), 100 - float(OOB)))
+                f.write('# at that row. PLAIN OOB, no lift-off reversal condition - that is what the\n')
+                f.write('# M-no-rev column beside it adds, so the two can be compared.\n#\n')
+                f.write('# the grace walk is the setup row and the rows after it up to %g minutes,\n'
+                        % float(FK.ORAC_GRACE_MIN))
+                f.write('# the setup row included. Every count is DISTINCT TFs - his *"AW, TO, x, e\n')
+                f.write('# prints are all per distinct TF"*.\n#\n')
+                f.write('# the page: port %d, %d rows %d s apart\n' % (PORT, NROWS, STEP // 1000))
+                f.write('# the tape: %d bars, %s .. %s\n' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
+                f.write('\n'.join(buf) + '\n')
+            print('file: %s' % out)
         return
     if MODE == 'orac-exhaust':
         #   HIS 1118: *"let's find the denominator and build out from there"* - his three states,
