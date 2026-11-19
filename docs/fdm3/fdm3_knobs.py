@@ -84,8 +84,9 @@ ORACLE_E_REOPEN = os.environ.get('W_FDM3_ORACLE_E_REOPEN', 'winner')
 #   8790 - his 1117 bank - and orac-exhaust alone reads this one.
 ORAC_EXHAUST_PORT = _knob('ORAC_EXHAUST_PORT', 8791, int)
 ORAC_EXHAUST_ROW_S = _knob('ORAC_EXHAUST_ROW_S', 30, int)   # seconds per row, asserted against /meta
-ORAC_6X_ROWS = _knob('ORAC_6X_ROWS', 2, int)         # his *"six x-crosses printing in 2 rows"*
-ORAC_6X_HITS = _knob('ORAC_6X_HITS', 6, int)         # his *"six"* - distinct lowband TFs
+#   HIS 1118: *"allow 4 rows to build 6x, and make it seven ws1-7 distinct x crosses"*
+ORAC_6X_ROWS = _knob('ORAC_6X_ROWS', 4, int)         # was his 2, now his 4
+ORAC_6X_HITS = _knob('ORAC_6X_HITS', 7, int)         # his 1118 *"seven ws1-7 distinct x crosses"*
 ORAC_ROWS = _knob('ORAC_ROWS', 3, int)               # his *"must qualify within 3 rows"*
 ORAC_LOW_HI = _knob('ORAC_LOW_HI', 7, int)           # his *"lowband is ws1-ws7"*
 ORAC_HIGH_HI = _knob('ORAC_HIGH_HI', 15, int)        # his *"highband is ws8-ws15"*
@@ -203,8 +204,9 @@ RULED = {
                               'cells, per cent - his 1118 *"the setting at 0726 is perfect"*'),
     'ORAC_EXHAUST_PORT': (8791, 'orac-exhaust reads the 30 second oracle - his 1118 *"1, 30sec"*'),
     'ORAC_EXHAUST_ROW_S': (30, 'seconds per row on the page orac-exhaust reads, his 1118 *"30sec"*'),
-    'ORAC_6X_ROWS': (2, 'his `6x`: *"six x-crosses printing in 2 rows in lowband"*'),
-    'ORAC_6X_HITS': (6, 'his `6x`: *"six"* distinct lowband timeframes carrying an x-cross'),
+    'ORAC_6X_ROWS': (4, 'his 1118 *"allow 4 rows to build 6x"* - was the 2 of *"six '
+                        'x-crosses printing in 2 rows in lowband"*'),
+    'ORAC_6X_HITS': (7, 'his 1118 *"make it seven ws1-7 distinct x crosses"* - was six'),
     'ORAC_ROWS': (3, 'his *"the next 2 must qualify within 3 rows, and those 3 rows encompass 6x"*'),
     'ORAC_LOW_HI': (7, 'his *"lowband is ws1-ws7"*'),
     'ORAC_HIGH_HI': (15, 'his *"highband is ws8-ws15"*'),

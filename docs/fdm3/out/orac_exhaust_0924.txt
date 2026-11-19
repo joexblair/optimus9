@@ -27,14 +27,15 @@
 #
 # the page: port 8791, 272159 rows 30 s apart, 2026-07-02 12:00:00 .. 2026-10-04 23:59:00
 # the tape: 1632960 bars, 2026-07-02 12:00:00 .. 2026-10-04 23:59:55
-# the knobs (banked): ORAC_6X_HITS=6 ORAC_6X_ROWS=2 ORAC_EXHAUST_PORT=8791 ORAC_EXHAUST_ROW_S=30 ORAC_GRACE_MIN=5.0 ORAC_HIGH_AW=3 ORAC_HIGH_FLIPS=2 ORAC_HIGH_HI=15 ORAC_HIGH_TOEXF_MAX=1 ORAC_HIGH_XE=1 ORAC_LOW_AW=5 ORAC_LOW_AW_3RD=4 ORAC_LOW_FLIPS=2 ORAC_LOW_HI=7 ORAC_MAGE_HI=15 ORAC_MAGE_OOB=3 ORAC_OOB_JUMP=2 ORAC_ROWS=3 ORAC_TOEXF_GATE=1
+# the knobs (banked): ORAC_6X_HITS=7 ORAC_6X_ROWS=4 ORAC_EXHAUST_PORT=8791 ORAC_EXHAUST_ROW_S=30 ORAC_GRACE_MIN=5.0 ORAC_HIGH_AW=3 ORAC_HIGH_FLIPS=2 ORAC_HIGH_HI=15 ORAC_HIGH_TOEXF_MAX=1 ORAC_HIGH_XE=1 ORAC_LOW_AW=5 ORAC_LOW_AW_3RD=4 ORAC_LOW_FLIPS=2 ORAC_LOW_HI=7 ORAC_MAGE_HI=15 ORAC_MAGE_OOB=3 ORAC_OOB_JUMP=2 ORAC_ROWS=3 ORAC_TOEXF_GATE=1
 
 ## 1. EVERY ROW OF 2026-09-24 THAT PASSES STATE 2
 #
 #   the row                 the oracle row, its own open time. HH:MM:SS at his 1118
 #                          *"for this report format only"* - the day is 2026-09-24
 #   side                    that trade's target-side
-#   6x                      where the 6x landed: this row / the row before / no
+#   6x                      where the 6x landed. The 4 row 6x window is wider than the
+#                          3 row outer window, so it can only end on the row
 #   lowAW/3                 distinct ws1..ws7 reading AW(any) across the 3 rows - state
 #                           2 wants >=5
 #   lowFLIP/3               distinct ws1..ws7 that flipped TO -> AW across the 3 rows -
@@ -52,91 +53,91 @@
 #                          SHORT so down is. MAE never above 0, MFE never below it
 #   the 57                  yes where state 1, state 2 and the gate all pass - the rows
 #                          a 5 minute grace opens on
-#   x in 3 rows             distinct ws1..ws15 carrying an x-cross across the 3 rows
+#   xlo                     distinct ws1..ws7 with an x-cross across the 4 rows the
+#                          6x is built over - >=7 of them IS the 6x
+#   xhi                     distinct ws8..ws15 with an x-cross across those same 4 rows
 #   fired at                the bar that grace completed on, or - when it never did
 #   the leg closes          the bar v4_sweep_pivots closes the leg on
 
-| the row  | the 57 | side | MAE %  | MFE %  | fired at | 6x             | x in 3 rows | lowAW/3 | lowFLIP/3 | lowTOexf | ws1-15TOexf | lowAW here | highTOexf | state 1 | state 2 | gate | the leg closes |
-|----------|--------|------|--------|--------|----------|----------------|-------------|---------|-----------|----------|-------------|------------|-----------|---------|---------|------|----------------|
-| 00:08:30 | yes    | HIGH | -0.601 | +1.624 | -        | this row       | 12          | 4       | 3         | 0        | 0           | 4          | 0         | PASS    | PASS    | PASS | 02:12:30       |
-| 00:09:00 | yes    | HIGH | -0.781 | +1.448 | -        | the row before | 15          | 4       | 3         | 0        | 0           | 4          | 0         | PASS    | PASS    | PASS | 02:12:30       |
-| 01:18:30 | yes    | LOW  | -0.196 | +0.104 | -        | this row       | 14          | 5       | 1         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 01:17:15       |
-| 01:19:00 | yes    | LOW  | -0.262 | +0.098 | -        | this row       | 14          | 5       | 1         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 01:17:15       |
-| 01:19:30 | yes    | LOW  | -0.349 | +0.038 | -        | this row       | 14          | 5       | 0         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 01:17:15       |
-| 01:20:00 | yes    | LOW  | -0.343 | +0.071 | 01:24:30 | the row before | 13          | 5       | 0         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 01:17:15       |
-| 03:04:00 | yes    | HIGH | -0.196 | +1.913 | 03:07:30 | this row       | 6           | 7       | 1         | 0        | 7           | 7          | 7         | PASS    | PASS    | PASS | 03:32:40       |
-| 03:04:30 | yes    | HIGH | -0.153 | +1.955 | -        | this row       | 6           | 7       | 1         | 0        | 7           | 7          | 7         | PASS    | PASS    | PASS | 03:32:40       |
-| 03:05:00 | yes    | HIGH | -0.053 | +1.898 | -        | this row       | 7           | 7       | 0         | 0        | 7           | 7          | 7         | PASS    | PASS    | PASS | 03:32:40       |
-| 03:05:30 | yes    | HIGH | -0.000 | +3.030 | -        | this row       | 8           | 7       | 0         | 0        | 7           | 7          | 7         | PASS    | PASS    | PASS | 04:07:25       |
-| 03:06:00 | yes    | HIGH | -0.005 | +2.901 | -        | the row before | 8           | 7       | 0         | 0        | 6           | 7          | 6         | PASS    | PASS    | PASS | 04:07:25       |
-| 05:44:30 | yes    | HIGH | -0.298 | +1.113 | -        | this row       | 9           | 7       | 1         | 0        | 0           | 7          | 0         | PASS    | PASS    | PASS | 06:04:35       |
-| 05:45:00 | yes    | HIGH | -0.250 | +1.160 | -        | the row before | 9           | 7       | 1         | 0        | 0           | 7          | 0         | PASS    | PASS    | PASS | 06:04:35       |
-| 05:45:30 | yes    | HIGH | -0.261 | +1.150 | -        | this row       | 7           | 7       | 1         | 0        | 0           | 7          | 0         | PASS    | PASS    | PASS | 06:04:35       |
-| 05:46:00 | yes    | HIGH | -0.165 | +1.244 | -        | this row       | 7           | 7       | 0         | 0        | 0           | 6          | 0         | PASS    | PASS    | PASS | 06:04:35       |
-| 05:46:30 | yes    | HIGH | -0.016 | +1.344 | -        | the row before | 9           | 7       | 0         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 06:04:35       |
-| 05:47:00 | yes    | HIGH | -0.000 | +1.197 | -        | this row       | 10          | 7       | 1         | 0        | 0           | 6          | 0         | PASS    | PASS    | PASS | 06:04:35       |
-| 05:47:30 | yes    | HIGH | -0.021 | +1.008 | -        | this row       | 10          | 6       | 1         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 06:04:35       |
-| 05:48:00 | yes    | HIGH | -0.805 | +0.997 | -        | the row before | 9           | 6       | 1         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 07:07:30       |
-| 06:05:30 | yes    | HIGH | -1.102 | +0.273 | -        | this row       | 9           | 5       | 0         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 07:07:30       |
-| 06:06:00 | yes    | HIGH | -1.313 | +0.064 | -        | this row       | 9           | 5       | 0         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 07:07:30       |
-| 06:06:30 | yes    | HIGH | -1.204 | +0.048 | -        | the row before | 8           | 5       | 0         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 07:07:30       |
-| 06:26:30 | yes    | HIGH | -0.633 | +0.378 | -        | this row       | 10          | 6       | 2         | 0        | 0           | 6          | 0         | PASS    | PASS    | PASS | 07:07:30       |
-| 06:27:00 | yes    | HIGH | -0.580 | +0.431 | -        | the row before | 10          | 6       | 1         | 0        | 0           | 6          | 0         | PASS    | PASS    | PASS | 07:07:30       |
-| 06:40:30 | yes    | HIGH | -0.542 | +0.468 | -        | this row       | 8           | 6       | 4         | 0        | 0           | 6          | 0         | PASS    | PASS    | PASS | 07:07:30       |
-| 07:21:00 | yes    | HIGH | -0.566 | +3.796 | 07:23:30 | this row       | 8           | 4       | 2         | 0        | 2           | 4          | 2         | PASS    | PASS    | PASS | 09:21:00       |
-| 07:21:30 | yes    | HIGH | -0.700 | +3.668 | -        | this row       | 11          | 4       | 2         | 0        | 2           | 4          | 2         | PASS    | PASS    | PASS | 09:21:00       |
-| 07:22:00 | yes    | HIGH | -0.684 | +3.684 | -        | the row before | 10          | 4       | 2         | 0        | 1           | 4          | 1         | PASS    | PASS    | PASS | 09:21:00       |
-| 07:40:30 | yes    | HIGH | -0.301 | +4.810 | -        | this row       | 8           | 4       | 2         | 0        | 2           | 4          | 2         | PASS    | PASS    | PASS | 09:37:50       |
-| 07:41:00 | yes    | HIGH | -0.222 | +4.886 | 07:45:30 | the row before | 8           | 4       | 2         | 0        | 2           | 4          | 2         | PASS    | PASS    | PASS | 09:37:50       |
-| 07:45:30 | yes    | HIGH | -0.354 | +3.999 | -        | the row before | 12          | 5       | 2         | 0        | 1           | 4          | 1         | PASS    | PASS    | PASS | 09:21:00       |
-| 07:46:30 | yes    | HIGH | -0.338 | +4.775 | -        | this row       | 11          | 5       | 2         | 0        | 2           | 4          | 2         | PASS    | PASS    | PASS | 09:37:50       |
-| 10:31:00 | yes    | HIGH | -1.939 | +0.127 | -        | this row       | 15          | 7       | 6         | 0        | 0           | 7          | 0         | PASS    | PASS    | PASS | 11:42:35       |
-| 10:31:30 | yes    | HIGH | -1.955 | +0.110 | -        | the row before | 15          | 7       | 6         | 0        | 0           | 7          | 0         | PASS    | PASS    | PASS | 11:42:35       |
-| 12:25:30 | yes    | HIGH | -0.016 | +0.907 | -        | this row       | 8           | 6       | 4         | 0        | 1           | 6          | 1         | PASS    | PASS    | PASS | 12:37:20       |
-| 12:26:00 | yes    | HIGH | -0.109 | +0.697 | -        | the row before | 10          | 6       | 4         | 0        | 1           | 6          | 1         | PASS    | PASS    | PASS | 12:37:20       |
-| 15:49:00 | yes    | HIGH | -0.404 | +1.281 | -        | this row       | 7           | 6       | 2         | 0        | 0           | 6          | 0         | PASS    | PASS    | PASS | 16:15:25       |
-| 15:51:00 | yes    | HIGH | -0.436 | +1.250 | -        | this row       | 8           | 6       | 1         | 0        | 0           | 6          | 0         | PASS    | PASS    | PASS | 16:15:25       |
-| 15:57:30 | yes    | HIGH | -0.032 | +1.265 | -        | the row before | 8           | 5       | 2         | 0        | 0           | 4          | 0         | PASS    | PASS    | PASS | 16:15:25       |
-| 17:01:30 | -      | LOW  | -2.083 | +0.548 | -        | this row       | 15          | 4       | 2         | 0        | 0           | 3          | 0         | PASS    | PASS    | fail | 19:36:35       |
-| 17:02:00 | -      | LOW  | -2.409 | +0.213 | -        | this row       | 15          | 4       | 2         | 0        | 0           | 3          | 0         | PASS    | PASS    | fail | 19:36:35       |
-| 17:16:30 | yes    | LOW  | -2.063 | +0.000 | -        | the row before | 15          | 5       | 2         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 19:36:35       |
-| 18:54:30 | -      | HIGH | -0.396 | +0.675 | -        | this row       | 13          | 3       | 2         | 0        | 0           | 3          | 0         | PASS    | PASS    | fail | 19:06:40       |
-| 19:13:00 | -      | HIGH | -0.983 | +0.222 | -        | this row       | 14          | 2       | 2         | 0        | 0           | 2          | 0         | PASS    | PASS    | fail | 20:07:55       |
-| 19:14:30 | -      | HIGH | -0.834 | +0.370 | -        | this row       | 14          | 3       | 2         | 0        | 0           | 3          | 0         | PASS    | PASS    | fail | 20:07:55       |
-| 19:15:00 | -      | HIGH | -0.627 | +0.574 | -        | this row       | 14          | 3       | 2         | 0        | 0           | 1          | 0         | PASS    | PASS    | fail | 20:07:55       |
-| 19:35:30 | yes    | HIGH | -0.105 | +0.804 | 19:38:00 | the row before | 9           | 6       | 6         | 0        | 1           | 6          | 1         | PASS    | PASS    | PASS | 20:07:55       |
-| 20:27:00 | yes    | LOW  | -0.228 | +0.472 | -        | the row before | 8           | 6       | 2         | 0        | 0           | 6          | 0         | PASS    | PASS    | PASS | 20:42:30       |
-| 20:34:00 | yes    | LOW  | -0.180 | +0.398 | -        | this row       | 11          | 5       | 0         | 0        | 2           | 5          | 2         | PASS    | PASS    | PASS | 20:42:30       |
-| 20:34:30 | yes    | LOW  | -0.127 | +0.451 | -        | this row       | 12          | 5       | 0         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 20:42:30       |
-| 20:35:00 | yes    | LOW  | -0.106 | +0.472 | -        | the row before | 10          | 5       | 0         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 20:42:30       |
-| 20:36:00 | yes    | LOW  | -0.117 | +0.462 | -        | this row       | 13          | 5       | 0         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 20:42:30       |
-| 20:36:30 | yes    | LOW  | -0.217 | +0.361 | -        | this row       | 13          | 5       | 0         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 20:42:30       |
-| 20:37:00 | yes    | LOW  | -0.005 | +0.552 | -        | the row before | 12          | 5       | 0         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 20:42:30       |
-| 20:37:30 | yes    | LOW  | +0.000 | +0.558 | -        | this row       | 12          | 5       | 0         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 20:42:30       |
-| 20:38:00 | yes    | LOW  | -0.090 | +0.398 | -        | this row       | 13          | 5       | 0         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 20:42:30       |
-| 20:38:30 | yes    | LOW  | +0.000 | +0.488 | -        | this row       | 12          | 5       | 0         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 20:42:30       |
-| 20:39:00 | yes    | LOW  | +0.000 | +0.291 | -        | the row before | 14          | 5       | 0         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 20:42:30       |
-| 22:14:30 | yes    | LOW  | -1.370 | +0.715 | -        | this row       | 14          | 5       | 2         | 0        | 3           | 5          | 3         | PASS    | PASS    | PASS | 01:22:00       |
-| 22:15:00 | yes    | LOW  | -1.328 | +0.758 | -        | the row before | 12          | 5       | 2         | 0        | 2           | 5          | 2         | PASS    | PASS    | PASS | 01:22:00       |
-| 22:25:30 | yes    | LOW  | -0.880 | +1.215 | -        | the row before | 12          | 4       | 3         | 0        | 6           | 4          | 6         | PASS    | PASS    | PASS | 01:22:00       |
-| 22:26:00 | yes    | LOW  | -0.838 | +1.259 | -        | this row       | 10          | 4       | 2         | 0        | 6           | 4          | 6         | PASS    | PASS    | PASS | 01:22:00       |
-| 22:31:30 | yes    | LOW  | -0.816 | +1.281 | -        | the row before | 11          | 4       | 2         | 0        | 4           | 4          | 4         | PASS    | PASS    | PASS | 01:22:00       |
-| 23:31:30 | -      | HIGH | -1.489 | +0.222 | -        | this row       | 15          | 3       | 3         | 0        | 0           | 3          | 0         | PASS    | PASS    | fail | 01:37:50       |
+| the row  | the 57 | side | MAE %  | MFE %  | fired at | 6x       | xlo | xhi | lowAW/3 | lowFLIP/3 | lowTOexf | ws1-15TOexf | lowAW here | highTOexf | state 1 | state 2 | gate | the leg closes |
+|----------|--------|------|--------|--------|----------|----------|-----|-----|---------|-----------|----------|-------------|------------|-----------|---------|---------|------|----------------|
+| 00:08:30 | yes    | HIGH | -0.601 | +1.624 | -        | this row | 7   | 5   | 4       | 3         | 0        | 0           | 4          | 0         | PASS    | PASS    | PASS | 02:12:30       |
+| 00:09:00 | yes    | HIGH | -0.781 | +1.448 | -        | this row | 7   | 8   | 4       | 3         | 0        | 0           | 4          | 0         | PASS    | PASS    | PASS | 02:12:30       |
+| 00:09:30 | yes    | HIGH | -0.694 | +1.533 | -        | this row | 7   | 8   | 4       | 3         | 0        | 0           | 4          | 0         | PASS    | PASS    | PASS | 02:12:30       |
+| 03:05:30 | yes    | HIGH | -0.000 | +3.030 | 03:07:30 | this row | 7   | 1   | 7       | 0         | 0        | 7           | 7          | 7         | PASS    | PASS    | PASS | 04:07:25       |
+| 03:06:00 | yes    | HIGH | -0.005 | +2.901 | -        | this row | 7   | 1   | 7       | 0         | 0        | 6           | 7          | 6         | PASS    | PASS    | PASS | 04:07:25       |
+| 03:06:30 | yes    | HIGH | -0.175 | +2.675 | -        | this row | 7   | 1   | 7       | 0         | 0        | 5           | 7          | 5         | PASS    | PASS    | PASS | 04:07:25       |
+| 05:44:30 | yes    | HIGH | -0.298 | +1.113 | -        | this row | 7   | 3   | 7       | 1         | 0        | 0           | 7          | 0         | PASS    | PASS    | PASS | 06:04:35       |
+| 05:45:00 | yes    | HIGH | -0.250 | +1.160 | -        | this row | 7   | 2   | 7       | 1         | 0        | 0           | 7          | 0         | PASS    | PASS    | PASS | 06:04:35       |
+| 05:45:30 | yes    | HIGH | -0.261 | +1.150 | -        | this row | 7   | 2   | 7       | 1         | 0        | 0           | 7          | 0         | PASS    | PASS    | PASS | 06:04:35       |
+| 05:47:00 | yes    | HIGH | -0.000 | +1.197 | -        | this row | 7   | 3   | 7       | 1         | 0        | 0           | 6          | 0         | PASS    | PASS    | PASS | 06:04:35       |
+| 05:47:30 | yes    | HIGH | -0.021 | +1.008 | -        | this row | 7   | 3   | 6       | 1         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 06:04:35       |
+| 05:48:00 | yes    | HIGH | -0.805 | +0.997 | -        | this row | 7   | 3   | 6       | 1         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 07:07:30       |
+| 05:48:30 | yes    | HIGH | -1.004 | +0.801 | -        | this row | 7   | 2   | 5       | 0         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 07:07:30       |
+| 06:05:30 | yes    | HIGH | -1.102 | +0.273 | -        | this row | 7   | 3   | 5       | 0         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 07:07:30       |
+| 06:06:00 | yes    | HIGH | -1.313 | +0.064 | -        | this row | 7   | 2   | 5       | 0         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 07:07:30       |
+| 06:06:30 | yes    | HIGH | -1.204 | +0.048 | -        | this row | 7   | 2   | 5       | 0         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 07:07:30       |
+| 06:07:00 | yes    | HIGH | -1.194 | +0.037 | -        | this row | 7   | 1   | 5       | 0         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 07:07:30       |
+| 06:19:00 | yes    | HIGH | -0.500 | +0.510 | -        | this row | 7   | 7   | 6       | 0         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 07:07:30       |
+| 06:19:30 | yes    | HIGH | -0.735 | +0.277 | -        | this row | 7   | 8   | 7       | 2         | 0        | 0           | 7          | 0         | PASS    | PASS    | PASS | 07:07:30       |
+| 06:46:30 | yes    | HIGH | -0.671 | +0.341 | -        | this row | 7   | 8   | 4       | 2         | 0        | 0           | 4          | 0         | PASS    | PASS    | PASS | 07:07:30       |
+| 07:01:30 | yes    | HIGH | -0.048 | +0.473 | -        | this row | 7   | 8   | 5       | 2         | 0        | 0           | 4          | 0         | PASS    | PASS    | PASS | 07:07:30       |
+| 07:21:30 | yes    | HIGH | -0.700 | +3.668 | 07:23:30 | this row | 7   | 4   | 4       | 2         | 0        | 2           | 4          | 2         | PASS    | PASS    | PASS | 09:21:00       |
+| 07:22:00 | yes    | HIGH | -0.684 | +3.684 | -        | this row | 7   | 4   | 4       | 2         | 0        | 1           | 4          | 1         | PASS    | PASS    | PASS | 09:21:00       |
+| 07:45:30 | yes    | HIGH | -0.354 | +3.999 | 07:45:30 | this row | 7   | 5   | 5       | 2         | 0        | 1           | 4          | 1         | PASS    | PASS    | PASS | 09:21:00       |
+| 10:31:00 | yes    | HIGH | -1.939 | +0.127 | -        | this row | 7   | 8   | 7       | 6         | 0        | 0           | 7          | 0         | PASS    | PASS    | PASS | 11:42:35       |
+| 10:31:30 | yes    | HIGH | -1.955 | +0.110 | -        | this row | 7   | 8   | 7       | 6         | 0        | 0           | 7          | 0         | PASS    | PASS    | PASS | 11:42:35       |
+| 10:32:00 | yes    | HIGH | -1.922 | +0.143 | -        | this row | 7   | 8   | 7       | 3         | 0        | 0           | 7          | 0         | PASS    | PASS    | PASS | 11:42:35       |
+| 10:44:30 | yes    | HIGH | -1.944 | +0.033 | -        | this row | 7   | 7   | 5       | 4         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 11:42:35       |
+| 12:25:30 | yes    | HIGH | -0.016 | +0.907 | -        | this row | 7   | 1   | 6       | 4         | 0        | 1           | 6          | 1         | PASS    | PASS    | PASS | 12:37:20       |
+| 12:26:00 | yes    | HIGH | -0.109 | +0.697 | -        | this row | 7   | 3   | 6       | 4         | 0        | 1           | 6          | 1         | PASS    | PASS    | PASS | 12:37:20       |
+| 12:26:30 | yes    | HIGH | -0.109 | +0.697 | -        | this row | 7   | 6   | 6       | 4         | 0        | 0           | 6          | 0         | PASS    | PASS    | PASS | 12:37:20       |
+| 12:46:00 | yes    | HIGH | -0.235 | +0.311 | -        | this row | 7   | 8   | 6       | 1         | 0        | 0           | 6          | 0         | PASS    | PASS    | PASS | 12:37:20       |
+| 12:46:30 | yes    | HIGH | -0.142 | +0.403 | -        | this row | 7   | 8   | 6       | 1         | 0        | 0           | 6          | 0         | PASS    | PASS    | PASS | 12:37:20       |
+| 15:51:00 | yes    | HIGH | -0.436 | +1.250 | -        | this row | 7   | 1   | 6       | 1         | 0        | 0           | 6          | 0         | PASS    | PASS    | PASS | 16:15:25       |
+| 15:57:30 | yes    | HIGH | -0.032 | +1.265 | -        | this row | 7   | 2   | 5       | 2         | 0        | 0           | 4          | 0         | PASS    | PASS    | PASS | 16:15:25       |
+| 17:01:30 | -      | LOW  | -2.083 | +0.548 | -        | this row | 7   | 8   | 4       | 2         | 0        | 0           | 3          | 0         | PASS    | PASS    | fail | 19:36:35       |
+| 17:02:00 | -      | LOW  | -2.409 | +0.213 | -        | this row | 7   | 8   | 4       | 2         | 0        | 0           | 3          | 0         | PASS    | PASS    | fail | 19:36:35       |
+| 17:16:30 | yes    | LOW  | -2.063 | +0.000 | -        | this row | 7   | 8   | 5       | 2         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 19:36:35       |
+| 17:17:00 | yes    | LOW  | -1.909 | +0.000 | -        | this row | 7   | 8   | 5       | 2         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 19:36:35       |
+| 18:54:30 | -      | HIGH | -0.396 | +0.675 | -        | this row | 7   | 7   | 3       | 2         | 0        | 0           | 3          | 0         | PASS    | PASS    | fail | 19:06:40       |
+| 18:55:00 | -      | HIGH | -0.327 | +0.743 | -        | this row | 7   | 8   | 3       | 2         | 0        | 0           | 3          | 0         | PASS    | PASS    | fail | 19:06:40       |
+| 19:13:00 | -      | HIGH | -0.983 | +0.222 | -        | this row | 7   | 7   | 2       | 2         | 0        | 0           | 2          | 0         | PASS    | PASS    | fail | 20:07:55       |
+| 19:13:30 | -      | HIGH | -0.770 | +0.433 | -        | this row | 7   | 7   | 2       | 2         | 0        | 0           | 1          | 0         | PASS    | PASS    | fail | 20:07:55       |
+| 19:14:30 | -      | HIGH | -0.834 | +0.370 | -        | this row | 7   | 8   | 3       | 2         | 0        | 0           | 3          | 0         | PASS    | PASS    | fail | 20:07:55       |
+| 19:52:00 | -      | LOW  | -1.319 | +0.079 | -        | this row | 7   | 7   | 3       | 2         | 0        | 0           | 3          | 0         | PASS    | PASS    | fail | 21:37:05       |
+| 19:52:30 | -      | LOW  | -1.148 | +0.090 | -        | this row | 7   | 7   | 3       | 2         | 0        | 0           | 3          | 0         | PASS    | PASS    | fail | 21:37:05       |
+| 20:27:00 | yes    | LOW  | -0.228 | +0.472 | -        | this row | 7   | 2   | 6       | 2         | 0        | 0           | 6          | 0         | PASS    | PASS    | PASS | 20:42:30       |
+| 20:34:00 | yes    | LOW  | -0.180 | +0.398 | -        | this row | 7   | 4   | 5       | 0         | 0        | 2           | 5          | 2         | PASS    | PASS    | PASS | 20:42:30       |
+| 20:34:30 | yes    | LOW  | -0.127 | +0.451 | -        | this row | 7   | 5   | 5       | 0         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 20:42:30       |
+| 20:35:00 | yes    | LOW  | -0.106 | +0.472 | -        | this row | 7   | 5   | 5       | 0         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 20:42:30       |
+| 20:37:30 | yes    | LOW  | +0.000 | +0.558 | -        | this row | 7   | 6   | 5       | 0         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 20:42:30       |
+| 20:38:00 | yes    | LOW  | -0.090 | +0.398 | -        | this row | 7   | 6   | 5       | 0         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 20:42:30       |
+| 20:38:30 | yes    | LOW  | +0.000 | +0.488 | -        | this row | 7   | 6   | 5       | 0         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 20:42:30       |
+| 20:39:00 | yes    | LOW  | +0.000 | +0.291 | -        | this row | 7   | 7   | 5       | 0         | 0        | 1           | 5          | 1         | PASS    | PASS    | PASS | 20:42:30       |
+| 20:39:30 | yes    | LOW  | -0.042 | +0.196 | -        | this row | 7   | 7   | 5       | 0         | 0        | 0           | 5          | 0         | PASS    | PASS    | PASS | 20:42:30       |
+| 22:14:30 | yes    | LOW  | -1.370 | +0.715 | -        | this row | 7   | 7   | 5       | 2         | 0        | 3           | 5          | 3         | PASS    | PASS    | PASS | 01:22:00       |
+| 22:15:00 | yes    | LOW  | -1.328 | +0.758 | -        | this row | 7   | 7   | 5       | 2         | 0        | 2           | 5          | 2         | PASS    | PASS    | PASS | 01:22:00       |
+| 22:25:30 | yes    | LOW  | -0.880 | +1.215 | -        | this row | 7   | 7   | 4       | 3         | 0        | 6           | 4          | 6         | PASS    | PASS    | PASS | 01:22:00       |
+| 22:26:00 | yes    | LOW  | -0.838 | +1.259 | -        | this row | 7   | 5   | 4       | 2         | 0        | 6           | 4          | 6         | PASS    | PASS    | PASS | 01:22:00       |
+| 22:31:30 | yes    | LOW  | -0.816 | +1.281 | -        | this row | 7   | 5   | 4       | 2         | 0        | 4           | 4          | 4         | PASS    | PASS    | PASS | 01:22:00       |
+| 23:31:30 | -      | HIGH | -1.489 | +0.222 | -        | this row | 7   | 8   | 3       | 3         | 0        | 0           | 3          | 0         | PASS    | PASS    | fail | 01:37:50       |
+| 23:32:00 | -      | HIGH | -1.451 | +0.260 | -        | this row | 7   | 8   | 3       | 2         | 0        | 0           | 3          | 0         | PASS    | PASS    | fail | 01:37:50       |
 
 ## 2. THE COUNTS
 
 | the count                                               | rows |
 |---------------------------------------------------------|------|
 | rows in 2026-09-24                                      | 2880 |
-| 6x: 6 of ws1..ws7 carry an x-cross inside 2 rows        | 332  |
-| state 1                                                 | 505  |
+| 6x: 7 of ws1..ws7 carry an x-cross inside 4 rows        | 399  |
+| state 1                                                 | 399  |
 | state 2                                                 | 358  |
-| state 1 + state 2                                       | 69   |
+| state 1 + state 2                                       | 62   |
 | the state 3 gate: >=4 lowband AW(any) on the 3rd row    | 1021 |
 | the same gate read across the 3 rows instead            | 1209 |
-| states 1 + 2 AND the gate - a 5 minute grace opens here | 57   |
-| ORAC-EXHAUST                                            | 5    |
-| orac-exhaust with his ws1r walk running                 | 1    |
+| states 1 + 2 AND the gate - a 5 minute grace opens here | 51   |
+| ORAC-EXHAUST                                            | 3    |
+| orac-exhaust with his ws1r walk running                 | 0    |
 
 ## 3. EVERY GRACE, AND WHAT HIGHBAND DID INSIDE IT
 
@@ -144,56 +145,50 @@
 |-------------|------|---------|------------|-----------------------------|--------------------------|----------|-------|
 | 00:08:30    | HIGH | 4       | 4          | 0                           | 0                        | -        | -     |
 | 00:09:00    | HIGH | 4       | 4          | 0                           | 0                        | -        | -     |
-| 01:18:30    | LOW  | 5       | 5          | 1                           | 1                        | -        | -     |
-| 01:19:00    | LOW  | 5       | 5          | 0                           | 1                        | -        | -     |
-| 01:19:30    | LOW  | 5       | 5          | 1                           | 1                        | -        | -     |
-| 01:20:00    | LOW  | 5       | 5          | 2                           | 1                        | 01:24:30 | FIRES |
-| 03:04:00    | HIGH | 7       | 7          | 6                           | 7                        | 03:07:30 | FIRES |
-| 03:04:30    | HIGH | 7       | 7          | 7                           | 7                        | -        | -     |
-| 03:05:00    | HIGH | 7       | 7          | 7                           | 7                        | -        | -     |
-| 03:05:30    | HIGH | 7       | 7          | 7                           | 7                        | -        | -     |
+| 00:09:30    | HIGH | 4       | 4          | 0                           | 0                        | -        | -     |
+| 03:05:30    | HIGH | 7       | 7          | 6                           | 7                        | 03:07:30 | FIRES |
 | 03:06:00    | HIGH | 7       | 7          | 7                           | 6                        | -        | -     |
+| 03:06:30    | HIGH | 7       | 7          | 6                           | 5                        | -        | -     |
 | 05:44:30    | HIGH | 7       | 7          | 0                           | 0                        | -        | -     |
 | 05:45:00    | HIGH | 7       | 7          | 0                           | 0                        | -        | -     |
 | 05:45:30    | HIGH | 7       | 7          | 0                           | 0                        | -        | -     |
-| 05:46:00    | HIGH | 7       | 6          | 0                           | 0                        | -        | -     |
-| 05:46:30    | HIGH | 7       | 5          | 0                           | 0                        | -        | -     |
 | 05:47:00    | HIGH | 7       | 6          | 0                           | 0                        | -        | -     |
 | 05:47:30    | HIGH | 6       | 5          | 0                           | 0                        | -        | -     |
 | 05:48:00    | HIGH | 6       | 5          | 0                           | 0                        | -        | -     |
+| 05:48:30    | HIGH | 5       | 5          | 0                           | 0                        | -        | -     |
 | 06:05:30    | HIGH | 5       | 5          | 0                           | 0                        | -        | -     |
 | 06:06:00    | HIGH | 5       | 5          | 0                           | 0                        | -        | -     |
 | 06:06:30    | HIGH | 5       | 5          | 0                           | 0                        | -        | -     |
-| 06:26:30    | HIGH | 6       | 6          | 0                           | 0                        | -        | -     |
-| 06:27:00    | HIGH | 6       | 6          | 0                           | 0                        | -        | -     |
-| 06:40:30    | HIGH | 6       | 6          | 0                           | 0                        | -        | -     |
-| 07:21:00    | HIGH | 4       | 4          | 2                           | 2                        | 07:23:30 | FIRES |
-| 07:21:30    | HIGH | 4       | 4          | 2                           | 2                        | -        | -     |
+| 06:07:00    | HIGH | 5       | 5          | 0                           | 0                        | -        | -     |
+| 06:19:00    | HIGH | 6       | 5          | 0                           | 0                        | -        | -     |
+| 06:19:30    | HIGH | 7       | 7          | 0                           | 0                        | -        | -     |
+| 06:46:30    | HIGH | 4       | 4          | 0                           | 0                        | -        | -     |
+| 07:01:30    | HIGH | 5       | 4          | 0                           | 0                        | -        | -     |
+| 07:21:30    | HIGH | 4       | 4          | 2                           | 2                        | 07:23:30 | FIRES |
 | 07:22:00    | HIGH | 4       | 4          | 2                           | 1                        | -        | -     |
-| 07:40:30    | HIGH | 4       | 4          | 3                           | 2                        | -        | -     |
-| 07:41:00    | HIGH | 4       | 4          | 5                           | 2                        | 07:45:30 | FIRES |
-| 07:45:30    | HIGH | 5       | 4          | 4                           | 1                        | -        | -     |
-| 07:46:30    | HIGH | 5       | 4          | 1                           | 2                        | -        | -     |
+| 07:45:30    | HIGH | 5       | 4          | 3                           | 1                        | 07:45:30 | FIRES |
 | 10:31:00    | HIGH | 7       | 7          | 0                           | 0                        | -        | -     |
 | 10:31:30    | HIGH | 7       | 7          | 0                           | 0                        | -        | -     |
+| 10:32:00    | HIGH | 7       | 7          | 0                           | 0                        | -        | -     |
+| 10:44:30    | HIGH | 5       | 5          | 0                           | 1                        | -        | -     |
 | 12:25:30    | HIGH | 6       | 6          | 1                           | 1                        | -        | -     |
 | 12:26:00    | HIGH | 6       | 6          | 1                           | 1                        | -        | -     |
-| 15:49:00    | HIGH | 6       | 6          | 0                           | 0                        | -        | -     |
+| 12:26:30    | HIGH | 6       | 6          | 1                           | 0                        | -        | -     |
+| 12:46:00    | HIGH | 6       | 6          | 0                           | 0                        | -        | -     |
+| 12:46:30    | HIGH | 6       | 6          | 0                           | 0                        | -        | -     |
 | 15:51:00    | HIGH | 6       | 6          | 0                           | 0                        | -        | -     |
 | 15:57:30    | HIGH | 5       | 4          | 0                           | 0                        | -        | -     |
 | 17:16:30    | LOW  | 5       | 5          | 0                           | 0                        | -        | -     |
-| 19:35:30    | HIGH | 6       | 6          | 2                           | 1                        | 19:38:00 | FIRES |
+| 17:17:00    | LOW  | 5       | 5          | 0                           | 0                        | -        | -     |
 | 20:27:00    | LOW  | 6       | 6          | 0                           | 0                        | -        | -     |
 | 20:34:00    | LOW  | 5       | 5          | 0                           | 2                        | -        | -     |
 | 20:34:30    | LOW  | 5       | 5          | 0                           | 1                        | -        | -     |
 | 20:35:00    | LOW  | 5       | 5          | 1                           | 1                        | -        | -     |
-| 20:36:00    | LOW  | 5       | 5          | 1                           | 1                        | -        | -     |
-| 20:36:30    | LOW  | 5       | 5          | 1                           | 1                        | -        | -     |
-| 20:37:00    | LOW  | 5       | 5          | 1                           | 1                        | -        | -     |
 | 20:37:30    | LOW  | 5       | 5          | 1                           | 1                        | -        | -     |
 | 20:38:00    | LOW  | 5       | 5          | 1                           | 1                        | -        | -     |
 | 20:38:30    | LOW  | 5       | 5          | 1                           | 1                        | -        | -     |
 | 20:39:00    | LOW  | 5       | 5          | 1                           | 1                        | -        | -     |
+| 20:39:30    | LOW  | 5       | 5          | 1                           | 0                        | -        | -     |
 | 22:14:30    | LOW  | 5       | 5          | 1                           | 3                        | -        | -     |
 | 22:15:00    | LOW  | 5       | 5          | 1                           | 2                        | -        | -     |
 | 22:25:30    | LOW  | 4       | 4          | 1                           | 6                        | -        | -     |
@@ -202,60 +197,25 @@
 
 ## 4. EACH ORAC-EXHAUST, ITS GRACE BAR BY BAR
 
-| grace opened 01:20:00 | highband AW flip | highTOexf |       |
+| grace opened 03:05:30 | highband AW flip | highTOexf |       |
 |-----------------------|------------------|-----------|-------|
-| 01:20:00              | -                | 1         | -     |
-| 01:20:30              | -                | 2         | -     |
-| 01:21:00              | -                | 2         | -     |
-| 01:21:30              | -                | 2         | -     |
-| 01:22:00              | -                | 2         | -     |
-| 01:22:30              | -                | 2         | -     |
-| 01:23:00              | -                | 2         | -     |
-| 01:23:30              | -                | 2         | -     |
-| 01:24:00              | ws15             | 1         | -     |
-| 01:24:30              | ws8              | 0         | FIRES |
-
-| grace opened 03:04:00 | highband AW flip | highTOexf |       |
-|-----------------------|------------------|-----------|-------|
-| 03:04:00              | -                | 7         | -     |
-| 03:04:30              | -                | 7         | -     |
-| 03:05:00              | -                | 7         | -     |
 | 03:05:30              | -                | 7         | -     |
 | 03:06:00              | ws8              | 6         | -     |
 | 03:06:30              | ws14             | 5         | -     |
 | 03:07:00              | ws9,ws13         | 3         | -     |
 | 03:07:30              | ws10,ws12        | 1         | FIRES |
 
-| grace opened 07:21:00 | highband AW flip | highTOexf |       |
+| grace opened 07:21:30 | highband AW flip | highTOexf |       |
 |-----------------------|------------------|-----------|-------|
-| 07:21:00              | -                | 2         | -     |
 | 07:21:30              | -                | 2         | -     |
 | 07:22:00              | ws10             | 1         | -     |
 | 07:22:30              | -                | 1         | -     |
 | 07:23:00              | -                | 1         | -     |
 | 07:23:30              | ws9              | 0         | FIRES |
 
-| grace opened 07:41:00 | highband AW flip | highTOexf |       |
+| grace opened 07:45:30 | highband AW flip | highTOexf |       |
 |-----------------------|------------------|-----------|-------|
-| 07:41:00              | -                | 2         | -     |
-| 07:41:30              | -                | 2         | -     |
-| 07:42:00              | ws11             | 1         | -     |
-| 07:42:30              | -                | 1         | -     |
-| 07:43:00              | -                | 1         | -     |
-| 07:43:30              | -                | 1         | -     |
-| 07:44:00              | -                | 4         | -     |
-| 07:44:30              | ws12,ws14        | 4         | -     |
-| 07:45:00              | -                | 4         | -     |
 | 07:45:30              | ws9,ws10,ws11    | 1         | FIRES |
-
-| grace opened 19:35:30 | highband AW flip | highTOexf |       |
-|-----------------------|------------------|-----------|-------|
-| 19:35:30              | ws9              | 1         | -     |
-| 19:36:00              | -                | 1         | -     |
-| 19:36:30              | -                | 1         | -     |
-| 19:37:00              | -                | 1         | -     |
-| 19:37:30              | -                | 1         | -     |
-| 19:38:00              | ws8              | 0         | FIRES |
 
 ## 5. THE THREE ROWS OF EACH 3rd ROW THAT OPENED A GRACE
 
@@ -271,47 +231,11 @@
 | 00:08:30         | ws3,ws5                     | ws1,ws2,ws3,ws4 | ws1,ws3,ws4     | -               | -                | -                | ws10,ws14                         |
 | 00:09:00         | ws6,ws7                     | ws1,ws2,ws3,ws4 | -               | -               | -                | -                | ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
 
-| 3rd row 01:18:30 | lowband x-cross         | lowband AW(any)     | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e                       |
-|------------------|-------------------------|---------------------|-----------------|-----------------|------------------|------------------|---------------------------------------|
-| 01:17:30         | ws6                     | ws2,ws3,ws4,ws5     | -               | ws1             | -                | ws15             | ws9,ws10,ws12,ws14,ws15               |
-| 01:18:00         | ws6,ws7                 | ws1,ws2,ws3,ws4,ws5 | ws1             | -               | -                | ws15             | ws8,ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
-| 01:18:30         | ws1,ws2,ws3,ws5,ws6,ws7 | ws1,ws2,ws3,ws4,ws5 | -               | -               | ws8              | ws15             | ws8,ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
-
-| 3rd row 01:19:00 | lowband x-cross         | lowband AW(any)     | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e                       |
-|------------------|-------------------------|---------------------|-----------------|-----------------|------------------|------------------|---------------------------------------|
-| 01:18:00         | ws6,ws7                 | ws1,ws2,ws3,ws4,ws5 | ws1             | -               | -                | ws15             | ws8,ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
-| 01:18:30         | ws1,ws2,ws3,ws5,ws6,ws7 | ws1,ws2,ws3,ws4,ws5 | -               | -               | ws8              | ws15             | ws8,ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
-| 01:19:00         | ws1,ws2,ws3,ws5,ws6,ws7 | ws1,ws2,ws3,ws4,ws5 | -               | -               | ws8              | ws15             | ws8,ws9,ws10,ws11,ws14,ws15           |
-
-| 3rd row 01:19:30 | lowband x-cross         | lowband AW(any)     | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e                       |
-|------------------|-------------------------|---------------------|-----------------|-----------------|------------------|------------------|---------------------------------------|
-| 01:18:30         | ws1,ws2,ws3,ws5,ws6,ws7 | ws1,ws2,ws3,ws4,ws5 | -               | -               | ws8              | ws15             | ws8,ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
-| 01:19:00         | ws1,ws2,ws3,ws5,ws6,ws7 | ws1,ws2,ws3,ws4,ws5 | -               | -               | ws8              | ws15             | ws8,ws9,ws10,ws11,ws14,ws15           |
-| 01:19:30         | ws1,ws2,ws3,ws5         | ws1,ws2,ws3,ws4,ws5 | -               | -               | -                | ws15             | ws8,ws10,ws11,ws12,ws14,ws15          |
-
-| 3rd row 01:20:00 | lowband x-cross         | lowband AW(any)     | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e              |
-|------------------|-------------------------|---------------------|-----------------|-----------------|------------------|------------------|------------------------------|
-| 01:19:00         | ws1,ws2,ws3,ws5,ws6,ws7 | ws1,ws2,ws3,ws4,ws5 | -               | -               | ws8              | ws15             | ws8,ws9,ws10,ws11,ws14,ws15  |
-| 01:19:30         | ws1,ws2,ws3,ws5         | ws1,ws2,ws3,ws4,ws5 | -               | -               | -                | ws15             | ws8,ws10,ws11,ws12,ws14,ws15 |
-| 01:20:00         | ws5                     | ws1,ws2,ws3,ws4,ws5 | -               | -               | -                | ws15             | ws8,ws10,ws11                |
-
-| 3rd row 03:04:00 | lowband x-cross         | lowband AW(any)             | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf)                 | highband x or e |
-|------------------|-------------------------|-----------------------------|-----------------|-----------------|------------------|----------------------------------|-----------------|
-| 03:03:00         | ws1,ws2,ws4,ws7         | ws1,ws2,ws3,ws4,ws5,ws6     | -               | ws7             | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14 | -               |
-| 03:03:30         | ws1,ws2,ws4,ws5,ws7     | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | ws7             | -               | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14 | -               |
-| 03:04:00         | ws1,ws2,ws3,ws4,ws5,ws7 | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14 | -               |
-
-| 3rd row 03:04:30 | lowband x-cross         | lowband AW(any)             | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf)                 | highband x or e |
-|------------------|-------------------------|-----------------------------|-----------------|-----------------|------------------|----------------------------------|-----------------|
-| 03:03:30         | ws1,ws2,ws4,ws5,ws7     | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | ws7             | -               | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14 | -               |
-| 03:04:00         | ws1,ws2,ws3,ws4,ws5,ws7 | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14 | -               |
-| 03:04:30         | ws3                     | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14 | -               |
-
-| 3rd row 03:05:00 | lowband x-cross         | lowband AW(any)             | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf)                 | highband x or e |
-|------------------|-------------------------|-----------------------------|-----------------|-----------------|------------------|----------------------------------|-----------------|
-| 03:04:00         | ws1,ws2,ws3,ws4,ws5,ws7 | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14 | -               |
-| 03:04:30         | ws3                     | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14 | -               |
-| 03:05:00         | ws1,ws2,ws4,ws5,ws7     | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14 | ws8             |
+| 3rd row 00:09:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e                   |
+|------------------|-----------------|-----------------|-----------------|-----------------|------------------|------------------|-----------------------------------|
+| 00:08:30         | ws3,ws5         | ws1,ws2,ws3,ws4 | ws1,ws3,ws4     | -               | -                | -                | ws10,ws14                         |
+| 00:09:00         | ws6,ws7         | ws1,ws2,ws3,ws4 | -               | -               | -                | -                | ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
+| 00:09:30         | ws6             | ws1,ws2,ws3,ws4 | -               | -               | -                | -                | ws10,ws13,ws14                    |
 
 | 3rd row 03:05:30 | lowband x-cross     | lowband AW(any)             | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf)                 | highband x or e |
 |------------------|---------------------|-----------------------------|-----------------|-----------------|------------------|----------------------------------|-----------------|
@@ -324,6 +248,12 @@
 | 03:05:00         | ws1,ws2,ws4,ws5,ws7 | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14 | ws8             |
 | 03:05:30         | ws3,ws5,ws6         | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14 | ws15            |
 | 03:06:00         | ws6                 | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | ws8              | ws9,ws10,ws11,ws12,ws13,ws14     | ws9,ws10,ws12   |
+
+| 3rd row 03:06:30 | lowband x-cross | lowband AW(any)             | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf)                 | highband x or e |
+|------------------|-----------------|-----------------------------|-----------------|-----------------|------------------|----------------------------------|-----------------|
+| 03:05:30         | ws3,ws5,ws6     | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14 | ws15            |
+| 03:06:00         | ws6             | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | ws8              | ws9,ws10,ws11,ws12,ws13,ws14     | ws9,ws10,ws12   |
+| 03:06:30         | -               | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | ws8,ws14         | ws9,ws10,ws11,ws12,ws13          | -               |
 
 | 3rd row 05:44:30 | lowband x-cross     | lowband AW(any)             | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
 |------------------|---------------------|-----------------------------|-----------------|-----------------|------------------|------------------|-----------------|
@@ -343,18 +273,6 @@
 | 05:45:00         | ws2,ws3,ws4,ws5,ws7 | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | ws8,ws10,ws11    | -                | ws12            |
 | 05:45:30         | ws6                 | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | ws8,ws10,ws11    | -                | -               |
 
-| 3rd row 05:46:00 | lowband x-cross     | lowband AW(any)             | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
-|------------------|---------------------|-----------------------------|-----------------|-----------------|------------------|------------------|-----------------|
-| 05:45:00         | ws2,ws3,ws4,ws5,ws7 | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | ws8,ws10,ws11    | -                | ws12            |
-| 05:45:30         | ws6                 | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | ws8,ws10,ws11    | -                | -               |
-| 05:46:00         | ws2,ws3,ws4,ws5,ws7 | ws1,ws3,ws4,ws5,ws6,ws7     | -               | -               | ws8,ws10,ws11    | -                | ws12            |
-
-| 3rd row 05:46:30 | lowband x-cross     | lowband AW(any)             | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e    |
-|------------------|---------------------|-----------------------------|-----------------|-----------------|------------------|------------------|--------------------|
-| 05:45:30         | ws6                 | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | ws8,ws10,ws11    | -                | -                  |
-| 05:46:00         | ws2,ws3,ws4,ws5,ws7 | ws1,ws3,ws4,ws5,ws6,ws7     | -               | -               | ws8,ws10,ws11    | -                | ws12               |
-| 05:46:30         | -                   | ws3,ws4,ws5,ws6,ws7         | -               | -               | ws8,ws10,ws11    | -                | ws8,ws11,ws12,ws13 |
-
 | 3rd row 05:47:00 | lowband x-cross         | lowband AW(any)         | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e                       |
 |------------------|-------------------------|-------------------------|-----------------|-----------------|------------------|------------------|---------------------------------------|
 | 05:46:00         | ws2,ws3,ws4,ws5,ws7     | ws1,ws3,ws4,ws5,ws6,ws7 | -               | -               | ws8,ws10,ws11    | -                | ws12                                  |
@@ -372,6 +290,12 @@
 | 05:47:00         | ws1,ws2,ws3,ws5,ws6,ws7 | ws2,ws3,ws4,ws5,ws6,ws7 | ws2             | -               | ws8,ws10,ws11    | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
 | 05:47:30         | ws4,ws6                 | ws3,ws4,ws5,ws6,ws7     | -               | -               | ws8,ws10,ws11    | -                | -                                     |
 | 05:48:00         | ws5                     | ws3,ws4,ws5,ws6,ws7     | -               | -               | ws8,ws10,ws11    | -                | -                                     |
+
+| 3rd row 05:48:30 | lowband x-cross | lowband AW(any)     | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|------------------|-----------------|---------------------|-----------------|-----------------|------------------|------------------|-----------------|
+| 05:47:30         | ws4,ws6         | ws3,ws4,ws5,ws6,ws7 | -               | -               | ws8,ws10,ws11    | -                | -               |
+| 05:48:00         | ws5             | ws3,ws4,ws5,ws6,ws7 | -               | -               | ws8,ws10,ws11    | -                | -               |
+| 05:48:30         | -               | ws3,ws4,ws5,ws6,ws7 | -               | -               | ws8,ws10,ws11    | -                | -               |
 
 | 3rd row 06:05:30 | lowband x-cross             | lowband AW(any)     | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e        |
 |------------------|-----------------------------|---------------------|-----------------|-----------------|------------------|------------------|------------------------|
@@ -391,29 +315,35 @@
 | 06:06:00         | ws2,ws3,ws4,ws6,ws7         | ws3,ws4,ws5,ws6,ws7 | -               | -               | ws8,ws10,ws11    | -                | ws8,ws9,ws11      |
 | 06:06:30         | ws3                         | ws3,ws4,ws5,ws6,ws7 | -               | -               | ws8,ws10,ws11    | -                | -                 |
 
-| 3rd row 06:26:30 | lowband x-cross         | lowband AW(any)         | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e              |
-|------------------|-------------------------|-------------------------|-----------------|-----------------|------------------|------------------|------------------------------|
-| 06:25:30         | -                       | ws1,ws2,ws4,ws6,ws7     | ws4             | ws3,ws5         | ws8,ws10,ws11    | -                | ws10,ws12,ws15               |
-| 06:26:00         | ws1,ws2,ws4,ws5,ws6,ws7 | ws1,ws2,ws4,ws6,ws7     | -               | ws3,ws5         | ws8,ws10,ws11    | -                | ws8,ws10,ws11,ws12,ws13,ws15 |
-| 06:26:30         | ws4                     | ws1,ws2,ws4,ws5,ws6,ws7 | ws5             | -               | ws8,ws10,ws11    | -                | ws15                         |
+| 3rd row 06:07:00 | lowband x-cross     | lowband AW(any)     | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
+|------------------|---------------------|---------------------|-----------------|-----------------|------------------|------------------|-----------------|
+| 06:06:00         | ws2,ws3,ws4,ws6,ws7 | ws3,ws4,ws5,ws6,ws7 | -               | -               | ws8,ws10,ws11    | -                | ws8,ws9,ws11    |
+| 06:06:30         | ws3                 | ws3,ws4,ws5,ws6,ws7 | -               | -               | ws8,ws10,ws11    | -                | -               |
+| 06:07:00         | ws2,ws3,ws4,ws5,ws6 | ws3,ws4,ws5,ws6,ws7 | -               | -               | ws8,ws10,ws11    | -                | -               |
 
-| 3rd row 06:27:00 | lowband x-cross         | lowband AW(any)         | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e              |
-|------------------|-------------------------|-------------------------|-----------------|-----------------|------------------|------------------|------------------------------|
-| 06:26:00         | ws1,ws2,ws4,ws5,ws6,ws7 | ws1,ws2,ws4,ws6,ws7     | -               | ws3,ws5         | ws8,ws10,ws11    | -                | ws8,ws10,ws11,ws12,ws13,ws15 |
-| 06:26:30         | ws4                     | ws1,ws2,ws4,ws5,ws6,ws7 | ws5             | -               | ws8,ws10,ws11    | -                | ws15                         |
-| 06:27:00         | ws1,ws2,ws4,ws5         | ws1,ws2,ws4,ws5,ws6,ws7 | -               | -               | ws8,ws10,ws11    | -                | ws9,ws10,ws11                |
+| 3rd row 06:19:00 | lowband x-cross | lowband AW(any)         | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e        |
+|------------------|-----------------|-------------------------|-----------------|-----------------|------------------|------------------|------------------------|
+| 06:18:00         | ws5,ws6,ws7     | ws1,ws2,ws4,ws5,ws6,ws7 | -               | -               | ws8,ws10,ws11    | -                | ws8,ws9,ws10,ws13,ws14 |
+| 06:18:30         | -               | ws1,ws4,ws5,ws6,ws7     | -               | -               | ws8,ws10,ws11    | -                | -                      |
+| 06:19:00         | ws1,ws2,ws3,ws4 | ws1,ws4,ws5,ws6,ws7     | -               | -               | ws8,ws10,ws11    | -                | ws8,ws11,ws12,ws15     |
 
-| 3rd row 06:40:30 | lowband x-cross         | lowband AW(any)         | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e                       |
-|------------------|-------------------------|-------------------------|-----------------|-----------------|------------------|------------------|---------------------------------------|
-| 06:39:30         | ws3                     | ws4,ws6                 | -               | ws2,ws5         | ws8,ws10,ws11    | -                | ws14                                  |
-| 06:40:00         | ws1,ws2,ws3,ws4,ws5,ws7 | ws3,ws4,ws6,ws7         | ws3,ws7         | ws2,ws5         | ws8,ws10,ws11    | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
-| 06:40:30         | -                       | ws2,ws3,ws4,ws5,ws6,ws7 | ws2,ws5         | -               | ws8,ws10,ws11    | -                | ws8,ws9                               |
+| 3rd row 06:19:30 | lowband x-cross | lowband AW(any)             | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e    |
+|------------------|-----------------|-----------------------------|-----------------|-----------------|------------------|------------------|--------------------|
+| 06:18:30         | -               | ws1,ws4,ws5,ws6,ws7         | -               | -               | ws8,ws10,ws11    | -                | -                  |
+| 06:19:00         | ws1,ws2,ws3,ws4 | ws1,ws4,ws5,ws6,ws7         | -               | -               | ws8,ws10,ws11    | -                | ws8,ws11,ws12,ws15 |
+| 06:19:30         | -               | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | ws2,ws3         | -               | ws8,ws10,ws11    | -                | ws11,ws12,ws15     |
 
-| 3rd row 07:21:00 | lowband x-cross     | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e              |
-|------------------|---------------------|-----------------|-----------------|-----------------|------------------|------------------|------------------------------|
-| 07:20:00         | ws1,ws2             | ws3,ws6         | -               | ws1,ws2         | -                | ws10,ws11        | ws8,ws10,ws11                |
-| 07:20:30         | ws1,ws2             | ws3,ws6         | -               | ws1,ws2         | -                | ws9,ws10,ws11    | -                            |
-| 07:21:00         | ws2,ws3,ws4,ws5,ws7 | ws1,ws2,ws3,ws6 | ws1,ws2         | -               | -                | ws9,ws10         | ws9,ws10,ws11,ws12,ws14,ws15 |
+| 3rd row 06:46:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e                       |
+|------------------|-----------------|-----------------|-----------------|-----------------|------------------|------------------|---------------------------------------|
+| 06:45:30         | ws1,ws3,ws5     | ws3,ws4         | -               | ws5,ws6         | ws8,ws10,ws11    | -                | ws8,ws9,ws12,ws13                     |
+| 06:46:00         | ws3,ws6,ws7     | ws3,ws4,ws5     | ws5             | ws6             | ws8,ws10,ws11    | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
+| 06:46:30         | -               | ws3,ws4,ws5,ws6 | ws6             | -               | ws8,ws10,ws11    | -                | -                                     |
+
+| 3rd row 07:01:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e                       |
+|------------------|-----------------|-----------------|-----------------|-----------------|------------------|------------------|---------------------------------------|
+| 07:00:30         | ws3,ws4,ws6,ws7 | ws3,ws4,ws5,ws6 | ws6             | ws7             | ws8,ws11         | ws10             | ws8,ws10,ws14,ws15                    |
+| 07:01:00         | ws3,ws4,ws6,ws7 | ws3,ws4,ws5,ws6 | -               | ws7             | ws8,ws9,ws11     | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
+| 07:01:30         | -               | ws3,ws5,ws6,ws7 | ws7             | -               | ws11             | -                | ws8,ws9,ws13,ws14,ws15                |
 
 | 3rd row 07:21:30 | lowband x-cross     | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e              |
 |------------------|---------------------|-----------------|-----------------|-----------------|------------------|------------------|------------------------------|
@@ -427,29 +357,11 @@
 | 07:21:30         | ws5,ws6,ws7         | ws1,ws2,ws3,ws6 | -               | -               | -                | ws9,ws10         | ws8,ws10,ws11,ws12,ws14,ws15 |
 | 07:22:00         | ws6,ws7             | ws1,ws2,ws3,ws6 | -               | -               | ws10             | ws13             | ws8,ws13                     |
 
-| 3rd row 07:40:30 | lowband x-cross     | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any)  | highband TO(exf) | highband x or e   |
-|------------------|---------------------|-----------------|-----------------|-----------------|-------------------|------------------|-------------------|
-| 07:39:30         | ws1,ws2,ws3,ws6     | ws1,ws2         | -               | ws3,ws4         | ws8,ws9,ws10,ws12 | ws11,ws13        | ws8,ws9,ws11,ws12 |
-| 07:40:00         | ws1,ws2,ws3,ws4,ws5 | ws1,ws2         | -               | ws3,ws4         | ws8,ws9,ws10,ws12 | ws11,ws13        | ws8,ws9,ws10,ws11 |
-| 07:40:30         | ws6                 | ws1,ws2,ws3,ws4 | ws3,ws4         | -               | ws8,ws9,ws10,ws12 | ws11,ws13        | ws9               |
-
-| 3rd row 07:41:00 | lowband x-cross     | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any)  | highband TO(exf) | highband x or e   |
-|------------------|---------------------|-----------------|-----------------|-----------------|-------------------|------------------|-------------------|
-| 07:40:00         | ws1,ws2,ws3,ws4,ws5 | ws1,ws2         | -               | ws3,ws4         | ws8,ws9,ws10,ws12 | ws11,ws13        | ws8,ws9,ws10,ws11 |
-| 07:40:30         | ws6                 | ws1,ws2,ws3,ws4 | ws3,ws4         | -               | ws8,ws9,ws10,ws12 | ws11,ws13        | ws9               |
-| 07:41:00         | ws5,ws6             | ws1,ws2,ws3,ws4 | -               | -               | ws8,ws9,ws10,ws12 | ws11,ws13        | ws10              |
-
 | 3rd row 07:45:30 | lowband x-cross | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf)   | highband x or e         |
 |------------------|-----------------|-----------------|-----------------|-----------------|------------------|--------------------|-------------------------|
 | 07:44:30         | ws3,ws5,ws6     | ws1,ws2,ws3,ws4 | ws4             | ws6             | ws12,ws14        | ws9,ws10,ws11,ws13 | ws9,ws10,ws11,ws12,ws14 |
 | 07:45:00         | ws1,ws2,ws4,ws7 | ws1,ws2,ws3     | -               | ws6             | -                | ws9,ws10,ws11,ws13 | ws8,ws9,ws11,ws13,ws15  |
 | 07:45:30         | ws1             | ws1,ws2,ws3,ws6 | ws6             | -               | ws9,ws10,ws11    | ws13               | ws8,ws13,ws15           |
-
-| 3rd row 07:46:30 | lowband x-cross     | lowband AW(any) | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e        |
-|------------------|---------------------|-----------------|-----------------|-----------------|------------------|------------------|------------------------|
-| 07:45:30         | ws1                 | ws1,ws2,ws3,ws6 | ws6             | -               | ws9,ws10,ws11    | ws13             | ws8,ws13,ws15          |
-| 07:46:00         | ws4,ws5,ws6,ws7     | ws1,ws2,ws6     | -               | -               | ws9,ws10,ws11    | ws13,ws15        | ws8,ws9,ws10           |
-| 07:46:30         | ws1,ws2,ws4,ws5,ws6 | ws1,ws2,ws4,ws6 | ws4             | -               | ws9,ws10,ws11    | ws13,ws15        | ws8,ws9,ws10,ws11,ws15 |
 
 | 3rd row 10:31:00 | lowband x-cross             | lowband AW(any)             | lowband AW flip | lowband TO(exf)         | highband AW(any) | highband TO(exf) | highband x or e                       |
 |------------------|-----------------------------|-----------------------------|-----------------|-------------------------|------------------|------------------|---------------------------------------|
@@ -463,6 +375,18 @@
 | 10:31:00         | ws5                         | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | ws5,ws6,ws7     | -               | ws11             | -                | ws8,ws15                              |
 | 10:31:30         | ws4,ws5                     | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | ws11             | -                | ws8,ws9,ws10,ws11,ws12,ws15           |
 
+| 3rd row 10:32:00 | lowband x-cross | lowband AW(any)             | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e             |
+|------------------|-----------------|-----------------------------|-----------------|-----------------|------------------|------------------|-----------------------------|
+| 10:31:00         | ws5             | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | ws5,ws6,ws7     | -               | ws11             | -                | ws8,ws15                    |
+| 10:31:30         | ws4,ws5         | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | ws11             | -                | ws8,ws9,ws10,ws11,ws12,ws15 |
+| 10:32:00         | -               | ws1,ws2,ws3,ws4,ws5,ws6,ws7 | -               | -               | ws11             | -                | ws8,ws9,ws10                |
+
+| 3rd row 10:44:30 | lowband x-cross | lowband AW(any)     | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e    |
+|------------------|-----------------|---------------------|-----------------|-----------------|------------------|------------------|--------------------|
+| 10:43:30         | ws2,ws5,ws6     | ws1,ws7             | ws1             | ws4,ws5,ws6     | -                | ws11             | ws9,ws10,ws11,ws15 |
+| 10:44:00         | ws4,ws7         | ws1,ws4,ws5,ws6,ws7 | ws4,ws5,ws6     | -               | -                | ws11             | -                  |
+| 10:44:30         | ws3,ws4         | ws1,ws4,ws5,ws6,ws7 | -               | -               | -                | ws11             | ws8,ws11,ws12,ws13 |
+
 | 3rd row 12:25:30 | lowband x-cross         | lowband AW(any)         | lowband AW flip | lowband TO(exf) | highband AW(any)  | highband TO(exf) | highband x or e         |
 |------------------|-------------------------|-------------------------|-----------------|-----------------|-------------------|------------------|-------------------------|
 | 12:24:30         | -                       | ws2,ws6                 | -               | ws1,ws3,ws4,ws5 | ws8,ws9,ws10,ws14 | ws15             | -                       |
@@ -475,11 +399,23 @@
 | 12:25:30         | ws7                     | ws1,ws2,ws3,ws4,ws5,ws6 | ws1,ws3,ws4,ws5 | -               | ws8,ws9,ws10,ws14 | ws15             | -                       |
 | 12:26:00         | ws2,ws3,ws5,ws6,ws7     | ws1,ws2,ws3,ws4,ws5,ws6 | -               | -               | ws8,ws9,ws10,ws14 | ws15             | ws8,ws9,ws11,ws12,ws15  |
 
-| 3rd row 15:49:00 | lowband x-cross         | lowband AW(any)         | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e        |
-|------------------|-------------------------|-------------------------|-----------------|-----------------|------------------|------------------|------------------------|
-| 15:48:00         | ws1,ws2,ws4,ws6         | ws1,ws2,ws3,ws5         | -               | ws4,ws6         | -                | -                | ws12                   |
-| 15:48:30         | ws1,ws2,ws4,ws5,ws6,ws7 | ws1,ws2,ws3,ws5         | -               | ws4,ws6         | -                | -                | ws8,ws9,ws10,ws12,ws13 |
-| 15:49:00         | -                       | ws1,ws2,ws3,ws4,ws5,ws6 | ws4,ws6         | -               | -                | -                | ws13                   |
+| 3rd row 12:26:30 | lowband x-cross     | lowband AW(any)         | lowband AW flip | lowband TO(exf) | highband AW(any)       | highband TO(exf) | highband x or e        |
+|------------------|---------------------|-------------------------|-----------------|-----------------|------------------------|------------------|------------------------|
+| 12:25:30         | ws7                 | ws1,ws2,ws3,ws4,ws5,ws6 | ws1,ws3,ws4,ws5 | -               | ws8,ws9,ws10,ws14      | ws15             | -                      |
+| 12:26:00         | ws2,ws3,ws5,ws6,ws7 | ws1,ws2,ws3,ws4,ws5,ws6 | -               | -               | ws8,ws9,ws10,ws14      | ws15             | ws8,ws9,ws11,ws12,ws15 |
+| 12:26:30         | -                   | ws1,ws2,ws3,ws4,ws5,ws6 | -               | -               | ws8,ws9,ws10,ws14,ws15 | -                | ws9,ws10,ws14          |
+
+| 3rd row 12:46:00 | lowband x-cross | lowband AW(any)         | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e        |
+|------------------|-----------------|-------------------------|-----------------|-----------------|------------------|------------------|------------------------|
+| 12:45:00         | ws1,ws6,ws7     | ws2,ws3,ws4,ws5,ws6     | -               | ws1             | ws8,ws9,ws10     | -                | ws8,ws12,ws13,ws15     |
+| 12:45:30         | ws3,ws5         | ws2,ws3,ws4,ws5,ws6     | -               | ws1             | ws8,ws9,ws10     | -                | ws8,ws9,ws10,ws12,ws14 |
+| 12:46:00         | ws2,ws4         | ws1,ws2,ws3,ws4,ws5,ws6 | ws1             | -               | ws8,ws9,ws10     | -                | ws8,ws9,ws11,ws12      |
+
+| 3rd row 12:46:30 | lowband x-cross | lowband AW(any)         | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e        |
+|------------------|-----------------|-------------------------|-----------------|-----------------|------------------|------------------|------------------------|
+| 12:45:30         | ws3,ws5         | ws2,ws3,ws4,ws5,ws6     | -               | ws1             | ws8,ws9,ws10     | -                | ws8,ws9,ws10,ws12,ws14 |
+| 12:46:00         | ws2,ws4         | ws1,ws2,ws3,ws4,ws5,ws6 | ws1             | -               | ws8,ws9,ws10     | -                | ws8,ws9,ws11,ws12      |
+| 12:46:30         | ws4             | ws1,ws2,ws3,ws4,ws5,ws6 | -               | -               | ws8,ws9,ws10     | -                | ws13                   |
 
 | 3rd row 15:51:00 | lowband x-cross | lowband AW(any)         | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e |
 |------------------|-----------------|-------------------------|-----------------|-----------------|------------------|------------------|-----------------|
@@ -499,11 +435,11 @@
 | 17:16:00         | ws4,ws5,ws6,ws7 | ws1,ws3,ws4,ws6     | ws4             | ws5             | -                | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
 | 17:16:30         | -               | ws1,ws3,ws4,ws5,ws6 | ws5             | -               | -                | -                | ws10,ws14                             |
 
-| 3rd row 19:35:30 | lowband x-cross | lowband AW(any)         | lowband AW flip     | lowband TO(exf)         | highband AW(any) | highband TO(exf) | highband x or e    |
-|------------------|-----------------|-------------------------|---------------------|-------------------------|------------------|------------------|--------------------|
-| 19:34:30         | ws1,ws2         | -                       | -                   | ws2,ws3,ws4,ws5,ws6,ws7 | ws10             | ws9              | ws9,ws10,ws13,ws15 |
-| 19:35:00         | ws3,ws4,ws5,ws6 | ws2                     | ws2                 | ws3,ws4,ws5,ws6,ws7     | ws8,ws10         | ws9              | ws8,ws10,ws11      |
-| 19:35:30         | ws6             | ws2,ws3,ws4,ws5,ws6,ws7 | ws3,ws4,ws5,ws6,ws7 | -                       | ws9,ws10         | ws8              | ws8,ws10,ws13,ws15 |
+| 3rd row 17:17:00 | lowband x-cross | lowband AW(any)     | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e                       |
+|------------------|-----------------|---------------------|-----------------|-----------------|------------------|------------------|---------------------------------------|
+| 17:16:00         | ws4,ws5,ws6,ws7 | ws1,ws3,ws4,ws6     | ws4             | ws5             | -                | -                | ws8,ws9,ws10,ws11,ws12,ws13,ws14,ws15 |
+| 17:16:30         | -               | ws1,ws3,ws4,ws5,ws6 | ws5             | -               | -                | -                | ws10,ws14                             |
+| 17:17:00         | ws4,ws5,ws7     | ws1,ws3,ws4,ws5,ws6 | -               | -               | -                | -                | ws11,ws12,ws13,ws14,ws15              |
 
 | 3rd row 20:27:00 | lowband x-cross         | lowband AW(any)         | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e             |
 |------------------|-------------------------|-------------------------|-----------------|-----------------|------------------|------------------|-----------------------------|
@@ -529,24 +465,6 @@
 | 20:34:30         | -                       | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws8              | ws10             | ws14                                  |
 | 20:35:00         | ws3,ws6                 | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws8              | ws10             | ws14                                  |
 
-| 3rd row 20:36:00 | lowband x-cross     | lowband AW(any)     | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e          |
-|------------------|---------------------|---------------------|-----------------|-----------------|------------------|------------------|--------------------------|
-| 20:35:00         | ws3,ws6             | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws8              | ws10             | ws14                     |
-| 20:35:30         | ws2                 | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws8              | ws10             | ws10,ws11,ws12,ws13,ws14 |
-| 20:36:00         | ws1,ws3,ws4,ws5,ws6 | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws8              | ws10             | ws8,ws13,ws15            |
-
-| 3rd row 20:36:30 | lowband x-cross     | lowband AW(any)     | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e          |
-|------------------|---------------------|---------------------|-----------------|-----------------|------------------|------------------|--------------------------|
-| 20:35:30         | ws2                 | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws8              | ws10             | ws10,ws11,ws12,ws13,ws14 |
-| 20:36:00         | ws1,ws3,ws4,ws5,ws6 | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws8              | ws10             | ws8,ws13,ws15            |
-| 20:36:30         | ws2                 | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws8              | ws10             | ws10,ws11,ws12,ws13,ws14 |
-
-| 3rd row 20:37:00 | lowband x-cross     | lowband AW(any)     | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e          |
-|------------------|---------------------|---------------------|-----------------|-----------------|------------------|------------------|--------------------------|
-| 20:36:00         | ws1,ws3,ws4,ws5,ws6 | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws8              | ws10             | ws8,ws13,ws15            |
-| 20:36:30         | ws2                 | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws8              | ws10             | ws10,ws11,ws12,ws13,ws14 |
-| 20:37:00         | ws2                 | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws8              | ws10             | ws11,ws13,ws14           |
-
 | 3rd row 20:37:30 | lowband x-cross             | lowband AW(any)     | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e          |
 |------------------|-----------------------------|---------------------|-----------------|-----------------|------------------|------------------|--------------------------|
 | 20:36:30         | ws2                         | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws8              | ws10             | ws10,ws11,ws12,ws13,ws14 |
@@ -570,6 +488,12 @@
 | 20:38:00         | ws1,ws3,ws4,ws5,ws6,ws7 | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws8              | ws10             | ws8,ws10,ws11,ws12,ws13,ws14,ws15 |
 | 20:38:30         | ws1,ws2                 | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws8              | ws10             | ws10,ws12,ws13,ws14               |
 | 20:39:00         | ws1,ws2,ws3,ws4,ws6     | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws8              | ws10             | ws10,ws11,ws12,ws13,ws14          |
+
+| 3rd row 20:39:30 | lowband x-cross     | lowband AW(any)     | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e          |
+|------------------|---------------------|---------------------|-----------------|-----------------|------------------|------------------|--------------------------|
+| 20:38:30         | ws1,ws2             | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws8              | ws10             | ws10,ws12,ws13,ws14      |
+| 20:39:00         | ws1,ws2,ws3,ws4,ws6 | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws8              | ws10             | ws10,ws11,ws12,ws13,ws14 |
+| 20:39:30         | -                   | ws1,ws3,ws5,ws6,ws7 | -               | -               | ws10             | -                | ws12,ws13                |
 
 | 3rd row 22:14:30 | lowband x-cross         | lowband AW(any)     | lowband AW flip | lowband TO(exf) | highband AW(any) | highband TO(exf) | highband x or e        |
 |------------------|-------------------------|---------------------|-----------------|-----------------|------------------|------------------|------------------------|

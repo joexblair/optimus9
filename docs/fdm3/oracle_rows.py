@@ -427,7 +427,11 @@ def orac_exhaust(R):
     #   inside the 3. A cross counts ONCE per TF per window - his 1115 ruling.
     six = window(R['x'], n6)[:, 1:lo_hi + 1].sum(1) >= int(FK.ORAC_6X_HITS)
     s1 = six.copy()
-    for d in range(1, nrow - n6 + 1):            # 6x may end on the row or up to (3 - 2) rows earlier
+    #   HIS *"those 3 rows encompass 6x"* holds only while the 6x window fits inside the outer one.
+    #   His 1118 *"allow 4 rows to build 6x"* made the 6x window WIDER than the outer 3, so there is
+    #   no room to slide it: the 6x must end on the row. STATED TO HIM, not chosen - the outer
+    #   window is still his 3 and he has not said it moves.
+    for d in range(1, max(0, nrow - n6) + 1):
         s1[d:] |= six[:-d]
     #   STATE 2: across the 3 rows, >=5 lowband AW(any) OR >=2 lowband AW flips; and 0 lowband
     #   TO(exf) ON THE FINAL ROW
@@ -911,7 +915,9 @@ def orac_file(day, a, z, R, reads, walk, V, path):
         w('#   the row                 the oracle row, its own open time. HH:MM:SS at his 1118')
         w('#                          *"for this report format only"* - the day is %s' % day)
         w('#   side                    that trade\'s target-side')
-        w('#   6x                      where the 6x landed: this row / the row before / no')
+        w('#   6x                      where the 6x landed. The %d row 6x window is wider than the'
+          % int(FK.ORAC_6X_ROWS))
+        w('#                          %d row outer window, so it can only end on the row' % nrow)
         w('#   lowAW/%d                 distinct ws1..ws%d reading AW(any) across the %d rows - state'
           % (nrow, lo_hi, nrow))
         w('#                           2 wants >=%d' % int(FK.ORAC_LOW_AW))
@@ -933,8 +939,11 @@ def orac_file(day, a, z, R, reads, walk, V, path):
         w('#                          SHORT so down is. MAE never above 0, MFE never below it')
         w('#   the 57                  yes where state 1, state 2 and the gate all pass - the rows')
         w('#                          a %g minute grace opens on' % float(FK.ORAC_GRACE_MIN))
-        w('#   x in %d rows             distinct ws1..ws%d carrying an x-cross across the %d rows'
-          % (nrow, hi_hi, nrow))
+        w('#   xlo                     distinct ws1..ws%d with an x-cross across the %d rows the'
+          % (lo_hi, int(FK.ORAC_6X_ROWS)))
+        w('#                          6x is built over - >=%d of them IS the 6x' % int(FK.ORAC_6X_HITS))
+        w('#   xhi                     distinct ws%d..ws%d with an x-cross across those same %d rows'
+          % (hi_lo, hi_hi, int(FK.ORAC_6X_ROWS)))
         w('#   fired at                the bar that grace completed on, or - when it never did')
         w('#   the leg closes          the bar v4_sweep_pivots closes the leg on')
         w('')
@@ -952,9 +961,11 @@ def orac_file(day, a, z, R, reads, walk, V, path):
         #   HIS 1118: *"for this report format only, show timestamps as hh:mm:ss"*
         HM = lambda ms_i: U(int(ms_i))[11:]
         HMB = lambda b: ln.U(int(b))[11:]
-        #   distinct ws1..ws%d carrying an x-cross across the %d rows - his *"how many distinct x
-        #   were printed inside of the 3 rows"*, the whole range since he named no band
-        XIN3 = window(R['x'], nrow)[:, 1:hi_hi + 1].sum(1)
+        #   HIS 1118: *"replace ' x in 3 rows' with `xlo` and `xhi`, now calculating on the 4
+        #   rows"* - the 6x window, not the outer one. xlo is ws1..ws%d and xhi is ws%d..ws%d.
+        _n6 = int(FK.ORAC_6X_ROWS)
+        XLO = window(R['x'], _n6)[:, 1:lo_hi + 1].sum(1)
+        XHI = window(R['x'], _n6)[:, hi_lo:hi_hi + 1].sum(1)
         #   HIS 1118 MAE/MFE here too: this file had none at all. The same read as the setup hunt -
         #   the row's own bar to the bar sweep-pivots closes its leg on, scoring the OUTGOING trade
         MM = {int(i): mm for i, mm in zip(k, setup_maemfe(PRT[k], reads['side'][k]))}
@@ -972,13 +983,13 @@ def orac_file(day, a, z, R, reads, walk, V, path):
                          '-' if _mae is None else '%+.3f' % _mae,
                          '-' if _mfe is None else '%+.3f' % _mfe,
                          FIRED.get(int(i), '-')[11:] if OPENS[i] and int(i) in FIRED else '-',
-                         six, XIN3[i], V['low_aw'][i], V['low_fl'][i], V['low_toexf'][i],
+                         six, XLO[i], XHI[i], V['low_aw'][i], V['low_fl'][i], V['low_toexf'][i],
                          V['all_toexf'][i], V['low_aw3'][i], V['high_toexf'][i],
                          'PASS' if V['s1'][i] else 'fail', 'PASS' if V['s2'][i] else 'fail',
                          'PASS' if V['gate'][i] else 'fail',
                          HMB(_zc) if _zc is not None else '-'])
         for t in fixed_table(['the row', 'the 57', 'side', 'MAE %', 'MFE %', 'fired at',
-                              '6x', 'x in %d rows' % nrow, 'lowAW/%d' % nrow, 'lowFLIP/%d' % nrow,
+                              '6x', 'xlo', 'xhi', 'lowAW/%d' % nrow, 'lowFLIP/%d' % nrow,
                               'lowTOexf', 'ws1-15TOexf', 'lowAW here', 'highTOexf',
                               'state 1', 'state 2', 'gate', 'the leg closes'],
                              rows):
