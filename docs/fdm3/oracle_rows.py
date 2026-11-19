@@ -927,7 +927,14 @@ def orac_file(day, a, z, R, reads, walk, V, path):
         w('#   state 1 / state 2       PASS or fail')
         w('#   gate                    >=%d of "lowAW here": PASS opens a %g minute grace'
           % (int(FK.ORAC_LOW_AW_3RD), float(FK.ORAC_GRACE_MIN)))
+        w('#   MAE %% / MFE %%          this row\'s bar to the bar sweep-pivots closes its leg on,')
+        w('#                          scoring the OUTGOING trade: a LOW target-side creates an')
+        w('#                          OUTGOING LONG so up is favourable, a HIGH one an OUTGOING')
+        w('#                          SHORT so down is. MAE never above 0, MFE never below it')
+        w('#   grace opens             YES where state 1, state 2 and the gate all pass - the rows')
+        w('#                          a %g minute grace opens on' % float(FK.ORAC_GRACE_MIN))
         w('#   fired at                the bar that grace completed on, or - when it never did')
+        w('#   the leg closes          the bar v4_sweep_pivots closes the leg on')
         w('#   ws1r walk               his general note\'s walk. STUB: the `ex-ws1r-mom-fence`')
         w('#                           trigger is not defined yet, so only the oob trigger starts')
         w('#                           it. NOT part of the mech - printed beside it')
@@ -935,20 +942,34 @@ def orac_file(day, a, z, R, reads, walk, V, path):
         FIRED = {}
         for i in np.flatnonzero(V['s3'][a:z + 1]) + a:
             FIRED.setdefault(int(V['gate_row'][i]), U(int(i)))
+        #   HIS 1118: *"add a column that flags these 57 rows"* - the rows that pass states 1 and 2
+        #   AND the gate, which is where one of his graces opens. It is the AND of the three
+        #   columns beside it, in one place so the 57 can be grepped.
+        OPENS = V['s1'] & V['s2'] & V['gate']
+        #   HIS 1118 MAE/MFE here too: this file had none at all. The same read as the setup hunt -
+        #   the row's own bar to the bar sweep-pivots closes its leg on, scoring the OUTGOING trade
+        MM = {int(i): mm for i, mm in zip(k, setup_maemfe(PRT[k], reads['side'][k]))}
         rows = []
         for i in k:
             six = ('this row' if V['six'][i] else
                    'the row before' if (i > 0 and V['six'][i - 1]) else 'no')
-            rows.append([U(int(i)), U(int(np.searchsorted(PRT, reads['topen'][i], 'left'))), sdof(i),
+            _zc, _mae, _mfe = MM[int(i)]
+            #   HIS 1118: the flag sits *"next to the timestamp"*, so it is column 2
+            rows.append([U(int(i)), 'YES' if OPENS[i] else '-', sdof(i),
+                         '-' if _mae is None else '%+.3f' % _mae,
+                         '-' if _mfe is None else '%+.3f' % _mfe,
+                         FIRED.get(int(i), '-') if OPENS[i] else '-',
+                         U(int(np.searchsorted(PRT, reads['topen'][i], 'left'))),
                          six, V['low_aw'][i], V['low_fl'][i], V['low_toexf'][i], V['all_toexf'][i],
                          V['low_aw3'][i], V['high_toexf'][i],
                          'PASS' if V['s1'][i] else 'fail', 'PASS' if V['s2'][i] else 'fail',
                          'PASS' if V['gate'][i] else 'fail',
-                         FIRED.get(int(i), '-') if (V['s1'][i] and V['s2'][i] and V['gate'][i]) else '-',
-                         'running' if walk[i] else 'not running'])
-        for t in fixed_table(['the row', 'trade opened', 'side', '6x', 'lowAW/%d' % nrow,
-                              'lowFLIP/%d' % nrow, 'lowTOexf', 'ws1-15TOexf', 'lowAW here',
-                              'highTOexf', 'state 1', 'state 2', 'gate', 'fired at', 'ws1r walk'],
+                         'running' if walk[i] else 'not running',
+                         ln.U(int(_zc)) if _zc is not None else '-'])
+        for t in fixed_table(['the row', 'grace opens', 'side', 'MAE %', 'MFE %', 'fired at',
+                              'trade opened', '6x', 'lowAW/%d' % nrow, 'lowFLIP/%d' % nrow,
+                              'lowTOexf', 'ws1-15TOexf', 'lowAW here', 'highTOexf',
+                              'state 1', 'state 2', 'gate', 'ws1r walk', 'the leg closes'],
                              rows):
             w(t)
         w('')
@@ -1102,28 +1123,28 @@ def main():
             #   report is read top to bottom with no second page bolted on, so MAE and MFE come
             #   FIRST and every header is short enough to keep the line on one screen. The legend
             #   above the table says what each short name holds.
-            wr('#   the row       the setup row, its own open time (UTC)')
-            wr('#   side          the pseudo trade\'s target-side there')
-            wr('#   MAE %% / MFE %% the setup bar to the bar sweep-pivots closes its leg on, scoring the')
-            wr('#                 OUTGOING trade: a LOW target-side creates an OUTGOING LONG so up is')
-            wr('#                 favourable, a HIGH one an OUTGOING SHORT so down is. MAE is never')
-            wr('#                 above 0 and MFE never below it')
-            wr('#   mage          max oob ws{TF}Mage - the single-step climb, - when none is oob')
-            wr('#   b             max oob ws{TF}b - the same climb on the b line')
-            wr('#   mnr           the M-no-rev column\'s TF at that row')
-            wr('#   lowX          distinct ws1..ws%d carrying an x-cross across the %d rows'
+            wr('#   the setup row          the setup row, its own open time (UTC)')
+            wr('#   side                   the pseudo trade\'s target-side there')
+            wr('#   MAE %% / MFE %%          the setup bar to the bar sweep-pivots closes its leg on,')
+            wr('#                          scoring the OUTGOING trade: a LOW target-side creates an')
+            wr('#                          OUTGOING LONG so up is favourable, a HIGH one an OUTGOING')
+            wr('#                          SHORT so down is. MAE never above 0, MFE never below it')
+            wr('#   max oob Mage           the oob climb on ws{TF}Mage, - when no line is oob')
+            wr('#   max oob b              the same climb on ws{TF}b')
+            wr('#   M-no-rev               the M-no-rev column\'s TF at that row')
+            wr('#   lowband x-cross        distinct ws1..ws%d with an x-cross across the %d rows'
                % (lo_hi, rows))
-            wr('#   lowFL         distinct ws1..ws%d flipping TO -> AW across the %d rows'
+            wr('#   lowband AW flip        distinct ws1..ws%d flipping TO -> AW across the %d rows'
                % (lo_hi, rows))
-            wr('#   hiX           distinct ws%d..ws%d carrying an x-cross across the %d rows'
+            wr('#   highband x-cross       distinct ws%d..ws%d with an x-cross across the %d rows'
                % (hi_lo, hi_hi, rows))
-            wr('#   g-lowFL       distinct ws1..ws%d flipping TO -> AW inside the %g minute grace'
+            wr('#   grace lowband AW flips distinct ws1..ws%d flipping TO -> AW in the %g minute grace'
                % (lo_hi, float(FK.ORAC_GRACE_MIN)))
-            wr('#   g-hiFL        distinct ws%d..ws%d flipping TO -> AW inside that grace'
+            wr('#   grace highband AW flips distinct ws%d..ws%d flipping TO -> AW in that grace'
                % (hi_lo, hi_hi))
-            wr('#   g-hiX         distinct ws%d..ws%d carrying an x-cross inside that grace'
+            wr('#   grace highband x-cross distinct ws%d..ws%d with an x-cross in that grace'
                % (hi_lo, hi_hi))
-            wr('#   leg closes    the bar v4_sweep_pivots closes the leg on')
+            wr('#   the leg closes         the bar v4_sweep_pivots closes the leg on')
             wr('')
             tab = []
             for i, (zc, mae, mfe) in zip(k, MM):
@@ -1137,9 +1158,14 @@ def main():
                             S['xl'][i], S['fl'][i], S['hx'][i],
                             S['glo'][i], S['ghi'][i], S['gx'][i],
                             ln.U(int(zc)) if zc is not None else '-'])
-            for t in fixed_table(['the row', 'side', 'MAE %', 'MFE %', 'mage', 'b', 'mnr',
-                                  'lowX', 'lowFL', 'hiX', 'g-lowFL', 'g-hiFL', 'g-hiX',
-                                  'leg closes'], tab):
+            #   HIS 1118: *"please use the prior txt format"* - the long names are back. The
+            #   short ones were codes I coined, which he cannot read. MAE and MFE stay at the
+            #   front, which was the other half of his ask.
+            for t in fixed_table(['the setup row', 'side', 'MAE %', 'MFE %', 'max oob Mage',
+                                  'max oob b', 'M-no-rev', 'lowband x-cross', 'lowband AW flip',
+                                  'highband x-cross', 'grace lowband AW flips',
+                                  'grace highband AW flips', 'grace highband x-crosses',
+                                  'the leg closes'], tab):
                 wr(t)
             #   HIS 1027 STANDING RULE: per-row MAE/MFE always carries its aggregate under it
             wr('')
@@ -1178,14 +1204,16 @@ def main():
                                 '%.1f' % S['glo'][sel].mean(), '%.1f' % S['ghi'][sel].mean(),
                                 '%.1f' % S['hx'][sel].mean(), '%.1f' % S['gx'][sel].mean(),
                                 int((S['ghi'][sel] >= 2).sum())])
-                wr('#   setups  how many setups carry this tag')
-                wr('#   scored  how many of them sweep-pivots could close a leg for')
-                wr('#   MFE>MAE how many of the scored have MFE above abs(MAE)')
-                wr('#   the four means are per setup, over the same column names as the row table')
+                wr('#   setups          how many setups carry this tag')
+                wr('#   scored          how many of them sweep-pivots could close a leg for')
+                wr('#   MFE > abs(MAE)  how many of the scored have MFE above abs(MAE)')
+                wr('#   the means are per setup, over the same columns as the row table above')
                 wr('')
                 for t in fixed_table(['max oob %s' % sfx, 'setups', 'scored', 'mean MAE %',
-                                      'mean MFE %', 'MFE>MAE', 'mean g-lowFL', 'mean g-hiFL',
-                                      'mean hiX', 'mean g-hiX', '>=2 g-hiFL'], grp):
+                                      'mean MFE %', 'MFE > abs(MAE)', 'mean grace lowband AW flips',
+                                      'mean grace highband AW flips', 'mean highband x-cross',
+                                      'mean grace highband x-crosses',
+                                      'setups reaching >=2 grace highband flips'], grp):
                     wr(t)
         for t in buf:
             print(t)
