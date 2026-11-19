@@ -864,11 +864,17 @@ def fixed_table(head, rows):
 
 
 def orac_file(day, a, z, R, reads, walk, V, path):
-    """HIS 1118: every row of `day` that opens one of his three states, one record per row, then
-    every orac-exhaust event's grace traced bar by bar. Fixed width, his 1118 ask."""
+    """HIS 1118: every row of `day` that prints a 6x, plus the rows a grace opens on. One record
+    per row, then every orac-exhaust event's grace traced bar by bar. Fixed width, his 1118 ask.
+
+    NO GATE ON THE POPULATION - his 1118 ruling after 04:06:30 went missing: *"this report's
+    purpose is to find the lowest common demoninator. if gates are applied, we don't have a
+    fighting chance"*. State 2 used to decide which rows printed and it hid 337 of the day's 399
+    6x rows. Every state is now a COLUMN, never a filter.
+    """
     lo_hi, hi_lo = int(FK.ORAC_LOW_HI), int(FK.ORAC_LOW_HI) + 1
     hi_hi, nrow = int(FK.ORAC_HIGH_HI), int(FK.ORAC_ROWS)
-    k = np.flatnonzero(V['s2'][a:z + 1]) + a
+    k = np.flatnonzero((V['six'] | (V['s1'] & V['s2'] & V['gate']))[a:z + 1]) + a
     tfs = lambda m, a_, b_: ','.join('ws%d' % t for t in range(a_, b_ + 1) if m[t]) or '-'
     sdof = lambda i: ('HIGH' if reads['side'][i] > 0 else 'LOW' if reads['side'][i] < 0 else '-')
     with open(path, 'w') as f:
@@ -910,7 +916,11 @@ def orac_file(day, a, z, R, reads, walk, V, path):
         w('# the knobs (banked): ' + ' '.join('%s=%s' % (kk, vv) for kk, vv in FK.live()
                                               if kk.startswith('ORAC_')))
         w('')
-        w('## 1. EVERY ROW OF %s THAT PASSES STATE 2' % day)
+        w('## 1. EVERY ROW OF %s THAT PRINTS A 6x, PLUS EVERY ROW A GRACE OPENS ON' % day)
+        w('#')
+        w('# NO GATE ON THIS POPULATION. HIS 1118: *"this report\'s purpose is to find the lowest')
+        w('# common demoninator. if gates are applied, we don\'t have a fighting chance"*. Every')
+        w('# state below is a COLUMN, never a filter.')
         w('#')
         w('#   the row                 the oracle row, its own open time. HH:MM:SS at his 1118')
         w('#                          *"for this report format only"* - the day is %s' % day)
@@ -954,10 +964,6 @@ def orac_file(day, a, z, R, reads, walk, V, path):
         #   AND the gate, which is where one of his graces opens. It is the AND of the three
         #   columns beside it, in one place so the 57 can be grepped.
         OPENS = V['s1'] & V['s2'] & V['gate']
-        #   HIS 1118: *"drop any rows that do not print a 6x event, unless they are one of the
-        #   57"*. "print" is the row's own 6x - V['six'] - so a row whose 6x landed on the row
-        #   before is dropped unless it is one of the 57.
-        k = np.asarray([i for i in k if V['six'][i] or OPENS[i]], np.int64)
         #   HIS 1118: *"for this report format only, show timestamps as hh:mm:ss"*
         HM = lambda ms_i: U(int(ms_i))[11:]
         HMB = lambda b: ln.U(int(b))[11:]
