@@ -62,7 +62,7 @@ MOM_FNC = _knob('MOM_FNC', 23.0)                # his `fdm3-23-77-fnc`, pending 
 ORACLE_PORT = _knob('ORACLE_PORT', 8790, int)
 FENCE_RESET_TO = _knob('FENCE_RESET_TO', 33.0)   # his `fdm3-fence-reset-TO`, banked on the page
 ORACLE_FENCE = _knob('ORACLE_FENCE', 23.0)       # the ex-fence fence, locked on the page since 1115
-ORACLE_SHIFT = _knob('ORACLE_SHIFT', 30, int)    # his 1117 pivot offset button, minutes - was 15
+ORACLE_SHIFT = _knob('ORACLE_SHIFT', 15, int)    # his 1119 pivot offset button, minutes - was 30 at 1117
 #   HIS 1119: *"I'm not using the m-no-rev column. drop it and replace it with a new max Mage TF
 #   column that repeats the value on every row of the leg"*. The two M-no-rev columns are gone;
 #   one column takes their place, holding the INCOMING leg's max oob Mage TF carried across the
@@ -231,7 +231,8 @@ RULED = {
     'FENCE_RESET_TO': (33.0, 'his `fdm3-fence-reset-TO`, the fence the flip, the 50 reset and the '
                              'void read - asserted against the page on every run'),
     'ORACLE_FENCE': (23.0, 'the ex-fence fence, locked on the page at his 1115 word'),
-    'ORACLE_SHIFT': (30, 'his 1117 pivot offset button, minutes - *"instead of +15, make it +30"*'),
+    'ORACLE_SHIFT': (15, 'his 1119 pivot offset button, minutes - *"rebuild 8792 with a pivot '
+                         '+15 minute button , and drop pivot +30 button"*, ruled for all three pages'),
     'MNR_TOPS': ((15,), 'the leg-Mage column\'s ceiling. HIS 1119 dropped the two M-no-rev '
                         'columns for one max-Mage-TF column; ws1..ws15 is his in-use range'),
     'MNR_LO': (1, 'the leg-Mage climb starts at the lowest oob line in the leg'),

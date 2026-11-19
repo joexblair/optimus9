@@ -113,6 +113,9 @@ O_SIDE = STRIDE - 1
 #   second M-no-rev column's three bytes. O_TA and O_CROSS sit before both inserts and are unmoved, and the side is
 #   still the last byte. The stride is derived from the page's own layout rather than a list of accepted values, so
 #   a page serving any shape this reader does not expect fails by name.
+#   HIS 1119 moved the row again: the two M-no-rev columns came out for one leg-Mage byte, so the
+#   row is 55 bytes where it was 63. And the pivot shift button is back at 15 minutes - it was
+#   reintroduced at 30 at his 1117 and is 15 again, on all three pages.
 _TAIL = 3 + len(META.get('mnrtops', [1]))   # SL% as an int16, then HIS 1119 one byte per leg-Mage column
 _WANT = (_RP + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)
          + (len(LINES) if 'updn' in META else 0) + _TAIL)

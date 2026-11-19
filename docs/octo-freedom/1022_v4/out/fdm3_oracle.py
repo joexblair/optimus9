@@ -342,9 +342,10 @@ XRES = ('winner',)
 PIVOTS = os.environ.get('FDM3_PIVOTS', 'ws2Mage')
 assert PIVOTS in ('ws2Mage', 'pooled'), PIVOTS
 A_TFS = [t for (_, band), on in zip(A_BANDS, A_LOCK) if on for t in band]
-#   HIS 1117: *"I need the 'pivot +15 min' button reintroduced on 8790. instead of +15, make it +30
-#   minutes"*. It was dropped in the 1115 rebuild; this is HIS 1112 button at his new value.
-PIV_SHIFT = 30                  # minutes - HIS 1117, was 15 at his 1112
+#   HIS 1119: *"rebuild 8792 with a pivot +15 minute button , and drop pivot +30 button"*, and he
+#   ruled it for all three pages, so the +30 button is gone everywhere. It was his 1112 value, went
+#   to 30 at his 1117 *"instead of +15, make it +30 minutes"*, and is back at 15.
+PIV_SHIFT = 15                  # minutes - HIS 1119, was 30 at his 1117 and 15 at his 1112
 OFFS = (0, PIV_SHIFT)           # the pivots as found, and every pivot PIV_SHIFT later
 FLIP_TOX = 'ws1'                # HIS 1113: the one line whose flip into TO(exf) is highlighted, *"in ws1 only"*
 TO_EXF = 3                      # the TO/AW code a cell prints as TO(exf): TO 1, +2 ex-fence on the target-side
@@ -717,7 +718,7 @@ def build():
     #   HIS 1113 *"flips the pivots directions"*: each pivot's side flips on its own bar, so every pseudo trade keeps
     #   its bars and its target-side flips
     #   HIS 1115 the two A buttons: towards/away runs once per flip and A state, with A (jig.at_extreme `line_extreme`)
-    #   on the lift-off reads of the ws1..ws6 r lines, the ws7..ws15 r lines, both or neither. The pivots +15 min and
+    #   on the lift-off reads of the ws1..ws6 r lines, the ws7..ws15 r lines, both or neither. The pivot shift and
     #   fence buttons are gone (HIS 1115), so no state moves a pivot and every state reads 23/77
     #   HIS 1117: A is locked, so the states are the pivot offset crossed with the flip - FOUR runs
     #   where there were eight. Every pivot PIV_SHIFT later moves each pseudo trade's open and close
@@ -1248,9 +1249,9 @@ async function init() {
   //   HIS 1115 *"create two buttons that A will be applied to - the first button shows A for ws1-ws6, and the second
   //   shows A for ws7-ws15"*. A: lift-off's window extreme off every bar of its span, not only the six samples. They
   //   combine with each other and with flip pivots
-  //   HIS 1117: *"I need the 'pivot +15 min' button reintroduced on 8790. instead of +15, make it
-  //   +30 minutes"*. Every ws2Mage pivot meta.shift minutes later, so every pseudo trade opens and
-  //   closes that much later on the same side
+  //   HIS 1119: *"rebuild 8792 with a pivot +15 minute button , and drop pivot +30 button"*, ruled
+  //   for all three pages. Every ws2Mage pivot meta.shift minutes later, so every pseudo trade
+  //   opens and closes that much later on the same side. 15 at his 1112, 30 at his 1117, 15 again
   const pb = document.createElement('button'); pb.className = 'tog';
   pb.textContent = 'pivots +' + meta.shift + ' min';
   pb.title = 'every ws2Mage pivot ' + meta.shift + ' minutes later; click again for the pivots as found';
