@@ -103,6 +103,10 @@ ORAC_HIGH_XE = _knob('ORAC_HIGH_XE', 1, int)         # his *"highband must print
 #   settled the counting - *"AW, TO, x, e prints are all per distinct TF"*. Read on the 3rd row
 #   alone, as his spec text says; his 00:08:30 reaches exactly 4 distinct lowband TFs there.
 ORAC_LOW_AW_3RD = _knob('ORAC_LOW_AW_3RD', 4, int)     # his *">=4 AWs print in lowband"*
+#   HIS 1118, after ws2Mage missed the 15 fence by 1.08 at 09:20 and stranded ws3..ws15 behind it:
+#   *"jumps of 2 should be allowed to make it more sane"*. The oob climb steps over one missing
+#   timeframe; a gap of two or more stops it.
+ORAC_OOB_JUMP = _knob('ORAC_OOB_JUMP', 2, int)         # timeframes the climb may step at once
 ORAC_GRACE_MIN = _knob('ORAC_GRACE_MIN', 5.0)          # his *"5 minutes (walk forward) grace"*
 ORAC_HIGH_FLIPS = _knob('ORAC_HIGH_FLIPS', 2, int)     # his *">=2 AW flips"* in highband
 ORAC_HIGH_TOEXF_MAX = _knob('ORAC_HIGH_TOEXF_MAX', 1, int)   # his *"a maximum of 1 TOexf"*
@@ -208,6 +212,8 @@ RULED = {
     'ORAC_LOW_FLIPS': (2, 'his 1118 state 2, the other side of the OR: *"(>=5 AW(any) OR '
                           '>=2 AW flips)"*. An AW flip is the TO -> AW flip, his *"new AW"*'),
     'ORAC_HIGH_AW': (3, 'his state 3: *">=3 AW(any) are required if any of these conditions qualify"*'),
+    'ORAC_OOB_JUMP': (2, 'his 1118 *"jumps of 2 should be allowed to make it more sane"* - the '
+                         'max-oob climb steps over one missing timeframe, not two'),
     'ORAC_LOW_AW_3RD': (4, 'his 1118 state 3 gate: *">=4 AWs print in lowband at the 3rd row"*, '
                            'distinct TFs, read on the 3rd row alone'),
     'ORAC_GRACE_MIN': (5.0, 'his 1118 *"highband has 5 minutes (walk forward) grace"*, minutes'),

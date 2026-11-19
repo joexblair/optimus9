@@ -489,9 +489,11 @@ def max_oob_line(reads, suffix='Mage'):
     so `suffix` picks which line of ws{TF} is read, 'Mage' or 'b'. -> (step, top) per row.
 
       step  HIS RULING: *"I've only measured in single steps: ws1 to 2, 2 to 3, 3 to 4. let's stick
-            with that logic to find the max"*. Start at the LOWEST ws1..ws15 whose Mage is oob and
-            climb one timeframe at a time while the next one is oob too; the max is the top of that
-            unbroken run. A gap stops the climb, so a line oob across a gap is not reached.
+            with that logic to find the max"*, then his 1118 follow-up after seeing ws2Mage miss the
+            fence by 1.08 at 09:20 and strand ws3..ws15 behind it: *"jumps of 2 should be allowed to
+            make it more sane"*. Start at the LOWEST ws1..ws15 whose line is oob and climb while the
+            next one OR the one after it is oob; the max is the top of that run. A gap of 2 or more
+            timeframes stops it.
       top   the highest oob line anywhere in ws1..ws15, gap or no gap - what this returned before
             his ruling, kept beside it so the difference is a number.
 
@@ -516,9 +518,11 @@ def max_oob_line(reads, suffix='Mage'):
     for tf in range(hi, 0, -1):
         lo = np.where(OOBM[:, tf], tf, lo).astype(np.int16)   # the LOWEST oob line
     run = lo.copy()
+    jump = int(FK.ORAC_OOB_JUMP)
     for tf in range(2, hi + 1):
-        #   tf extends the run when tf-1 is its current top and tf is oob too
-        run = np.where((run == tf - 1) & OOBM[:, tf], tf, run).astype(np.int16)
+        #   tf extends the run when it is oob and the run's top is within `jump` of it - his 1118
+        #   *"jumps of 2 should be allowed"*, so one missing timeframe is stepped over, two are not
+        run = np.where(OOBM[:, tf] & (run > 0) & (tf - run <= jump), tf, run).astype(np.int16)
     step = np.where(lo > 0, run, 0).astype(np.int16)
     assert (step[step > 0] >= lo[step > 0]).all() and (step <= top).all(), \
         'the single-step run is not inside the lines that are oob'
