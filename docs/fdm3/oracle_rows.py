@@ -481,9 +481,10 @@ def orac_exhaust(R):
                 gate_row=gate_row, grace=grace, fires=s3)
 
 
-def max_oob_mage(reads):
+def max_oob_line(reads, suffix='Mage'):
     """HIS 1118: *"the maximum oob Mage at any decision defines the max(ws1 to 15) that needs to
-    'weigh in' on the decision"*. -> (step, top) per row.
+    'weigh in' on the decision"*, and *"there might be a difference for `b` instead of `mage`"* -
+    so `suffix` picks which line of ws{TF} is read, 'Mage' or 'b'. -> (step, top) per row.
 
       step  HIS RULING: *"I've only measured in single steps: ws1 to 2, 2 to 3, 3 to 4. let's stick
             with that logic to find the max"*. Start at the LOWEST ws1..ws15 whose Mage is oob and
@@ -500,7 +501,7 @@ def max_oob_mage(reads):
     hi = int(FK.ORAC_HIGH_HI)
     OOBM = np.zeros((NROWS, hi + 1), bool)
     for tf in range(1, hi + 1):
-        m = closed(ln.line('ws%dMage' % tf), tf * 60)[PRT]
+        m = closed(ln.line('ws%d%s' % (tf, suffix)), tf * 60)[PRT]
         with np.errstate(invalid='ignore'):
             OOBM[:, tf] = np.where(side > 0, m >= 100 - oobf,
                                    np.where(side < 0, m <= oobf, False))
@@ -1023,7 +1024,8 @@ def main():
         print(control(R))
         TR = TA.pseudo_trades()[1]
         reads = orac_reads(TR)
-        step, top = max_oob_mage(reads)
+        TAG = {sfx: max_oob_line(reads, sfx) for sfx in ('Mage', 'b')}
+        step, top = TAG['Mage']
         MNR = mage50()[1][0][0] if 'mnrtops' in META else np.zeros(NROWS, np.int16)
         print('bars %d, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
         print('page port %d, %d rows %d s apart' % (PORT, NROWS, int(META['step']) // 1000))
@@ -1044,34 +1046,38 @@ def main():
             for i in k:
                 tab.append([U(int(i)),
                             'HIGH' if reads['side'][i] > 0 else 'LOW' if reads['side'][i] < 0 else '-',
-                            'ws%d' % step[i] if step[i] else '-',
-                            'ws%d' % top[i] if top[i] else '-',
+                            'ws%d' % TAG['Mage'][0][i] if TAG['Mage'][0][i] else '-',
+                            'ws%d' % TAG['b'][0][i] if TAG['b'][0][i] else '-',
+                            'ws%d' % TAG['Mage'][1][i] if TAG['Mage'][1][i] else '-',
+                            'ws%d' % TAG['b'][1][i] if TAG['b'][1][i] else '-',
                             'ws%d' % MNR[i] if MNR[i] else '-',
                             S['xl'][i], S['fl'][i], S['hx'][i],
                             S['glo'][i], S['ghi'][i], S['gx'][i]])
-            for t in fixed_table(['the setup row', 'side', 'max oob Mage', 'highest oob anywhere',
-                                  'M-no-rev',
+            for t in fixed_table(['the setup row', 'side', 'max oob Mage', 'max oob b',
+                                  'highest oob Mage anywhere', 'highest oob b anywhere', 'M-no-rev',
                                   'lowband x-cross', 'lowband AW flip',
                                   'highband x-cross', 'grace lowband AW flips',
                                   'grace highband AW flips', 'grace highband x-crosses'], tab):
                 wr(t)
-            wr('')
-            wr('## THE SAME SETUPS GROUPED BY THEIR MAX OOB MAGE')
-            wr('')
-            grp = []
-            for t_ in range(0, int(FK.ORAC_HIGH_HI) + 1):
-                sel = k[step[k] == t_]
-                if not len(sel):
-                    continue
-                grp.append(['ws%d' % t_ if t_ else 'none oob', len(sel),
-                            '%.1f' % S['glo'][sel].mean(), '%.1f' % S['ghi'][sel].mean(),
-                            '%.1f' % S['hx'][sel].mean(), '%.1f' % S['gx'][sel].mean(),
-                            int((S['ghi'][sel] >= 2).sum())])
-            for t in fixed_table(['max oob Mage', 'setups', 'mean grace lowband AW flips',
-                                  'mean grace highband AW flips', 'mean highband x-cross',
-                                  'mean grace highband x-crosses',
-                                  'setups reaching >=2 grace highband flips'], grp):
-                wr(t)
+            for sfx in ('Mage', 'b'):
+                wr('')
+                wr('## THE SAME SETUPS GROUPED BY THEIR MAX OOB %s' % sfx.upper())
+                wr('')
+                tag = TAG[sfx][0]
+                grp = []
+                for t_ in range(0, int(FK.ORAC_HIGH_HI) + 1):
+                    sel = k[tag[k] == t_]
+                    if not len(sel):
+                        continue
+                    grp.append(['ws%d' % t_ if t_ else 'none oob', len(sel),
+                                '%.1f' % S['glo'][sel].mean(), '%.1f' % S['ghi'][sel].mean(),
+                                '%.1f' % S['hx'][sel].mean(), '%.1f' % S['gx'][sel].mean(),
+                                int((S['ghi'][sel] >= 2).sum())])
+                for t in fixed_table(['max oob %s' % sfx, 'setups', 'mean grace lowband AW flips',
+                                      'mean grace highband AW flips', 'mean highband x-cross',
+                                      'mean grace highband x-crosses',
+                                      'setups reaching >=2 grace highband flips'], grp):
+                    wr(t)
         for t in buf:
             print(t)
         if out:
@@ -1081,12 +1087,19 @@ def main():
                 f.write('# 3 rows / with any AW flips in the post 6x/8x grace walk, seperated to high\n')
                 f.write('# and low bands"*, and *"thr number of x crosses in the high band might have\n')
                 f.write('# meaning"*.\n#\n')
-                f.write('# max oob Mage: HIS *"the maximum oob Mage at any decision defines the\n')
+                f.write('# max oob Mage / max oob b: HIS *"the maximum oob Mage at any decision defines the\n')
                 f.write('# max(ws1 to 15) that needs to weigh in on the decision"* - the highest\n')
                 f.write('# ws1..ws%d whose CLOSED-PREV Mage is oob %g/%g on the row\'s own target-side\n'
                         % (int(FK.ORAC_HIGH_HI), float(OOB), 100 - float(OOB)))
                 f.write('# at that row. PLAIN OOB, no lift-off reversal condition - that is what the\n')
-                f.write('# M-no-rev column beside it adds, so the two can be compared.\n#\n')
+                f.write('# M-no-rev column beside it adds, so the two can be compared.\n')
+                f.write('# BOTH LINES: his *"there might be a difference for `b` instead of `mage`"*, so the\n')
+                f.write('# same climb runs on ws{TF}Mage and on ws{TF}b and each gets its own tag and its\n')
+                f.write('# own grouping.\n')
+                f.write('# THE CLIMB: start at the LOWEST ws1..ws%d that is oob and step up one timeframe at\n'
+                        % int(FK.ORAC_HIGH_HI))
+                f.write('# a time while the next is oob too - his *"I\'ve only measured in single steps: ws1\n')
+                f.write('# to 2, 2 to 3, 3 to 4"*. A gap stops the climb. "highest oob anywhere" ignores gaps.\n#\n')
                 f.write('# the grace walk is the setup row and the rows after it up to %g minutes,\n'
                         % float(FK.ORAC_GRACE_MIN))
                 f.write('# the setup row included. Every count is DISTINCT TFs - his *"AW, TO, x, e\n')
