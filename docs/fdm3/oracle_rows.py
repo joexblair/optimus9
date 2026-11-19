@@ -483,22 +483,43 @@ def orac_exhaust(R):
 
 def max_oob_mage(reads):
     """HIS 1118: *"the maximum oob Mage at any decision defines the max(ws1 to 15) that needs to
-    'weigh in' on the decision"*. -> the highest ws1..ws15 whose Mage is oob on the row's own
-    target-side at that row's print bar, 0 where none is.
+    'weigh in' on the decision"*. -> (step, top) per row.
 
-    CLOSED-PREV, the banked read for every line but lift-off's, and the same read the M-no-rev
-    column's own oob test uses. PLAIN OOB: no lift-off reversal condition, which is what separates
-    this from M-no-rev. mnr1 prints beside it in the report so the two can be compared.
+      step  HIS RULING: *"I've only measured in single steps: ws1 to 2, 2 to 3, 3 to 4. let's stick
+            with that logic to find the max"*. Start at the LOWEST ws1..ws15 whose Mage is oob and
+            climb one timeframe at a time while the next one is oob too; the max is the top of that
+            unbroken run. A gap stops the climb, so a line oob across a gap is not reached.
+      top   the highest oob line anywhere in ws1..ws15, gap or no gap - what this returned before
+            his ruling, kept beside it so the difference is a number.
+
+    CLOSED-PREV, the banked read for every line but lift-off's, and the read the M-no-rev column's
+    own oob test uses. PLAIN OOB: no lift-off reversal condition, which is what M-no-rev adds.
     """
     oobf = float(K.FDM_FNC_OOB) if hasattr(K, 'FDM_FNC_OOB') else 15.0
     side = reads['side']
-    top = np.zeros(NROWS, np.int16)
-    for tf in range(1, int(FK.ORAC_HIGH_HI) + 1):
+    hi = int(FK.ORAC_HIGH_HI)
+    OOBM = np.zeros((NROWS, hi + 1), bool)
+    for tf in range(1, hi + 1):
         m = closed(ln.line('ws%dMage' % tf), tf * 60)[PRT]
         with np.errstate(invalid='ignore'):
-            oob = np.where(side > 0, m >= 100 - oobf, np.where(side < 0, m <= oobf, False))
-        top = np.where(oob, tf, top).astype(np.int16)
-    return top
+            OOBM[:, tf] = np.where(side > 0, m >= 100 - oobf,
+                                   np.where(side < 0, m <= oobf, False))
+    top = np.zeros(NROWS, np.int16)
+    for tf in range(1, hi + 1):
+        top = np.where(OOBM[:, tf], tf, top).astype(np.int16)
+    #   the unbroken run from the lowest oob line up
+    step = np.zeros(NROWS, np.int16)
+    lo = np.zeros(NROWS, np.int16)
+    for tf in range(hi, 0, -1):
+        lo = np.where(OOBM[:, tf], tf, lo).astype(np.int16)   # the LOWEST oob line
+    run = lo.copy()
+    for tf in range(2, hi + 1):
+        #   tf extends the run when tf-1 is its current top and tf is oob too
+        run = np.where((run == tf - 1) & OOBM[:, tf], tf, run).astype(np.int16)
+    step = np.where(lo > 0, run, 0).astype(np.int16)
+    assert (step[step > 0] >= lo[step > 0]).all() and (step <= top).all(), \
+        'the single-step run is not inside the lines that are oob'
+    return step, top
 
 
 def orac_setups(R, reads, rows):
@@ -1002,7 +1023,7 @@ def main():
         print(control(R))
         TR = TA.pseudo_trades()[1]
         reads = orac_reads(TR)
-        top = max_oob_mage(reads)
+        step, top = max_oob_mage(reads)
         MNR = mage50()[1][0][0] if 'mnrtops' in META else np.zeros(NROWS, np.int16)
         print('bars %d, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
         print('page port %d, %d rows %d s apart' % (PORT, NROWS, int(META['step']) // 1000))
@@ -1023,11 +1044,13 @@ def main():
             for i in k:
                 tab.append([U(int(i)),
                             'HIGH' if reads['side'][i] > 0 else 'LOW' if reads['side'][i] < 0 else '-',
+                            'ws%d' % step[i] if step[i] else '-',
                             'ws%d' % top[i] if top[i] else '-',
                             'ws%d' % MNR[i] if MNR[i] else '-',
                             S['xl'][i], S['fl'][i], S['hx'][i],
                             S['glo'][i], S['ghi'][i], S['gx'][i]])
-            for t in fixed_table(['the setup row', 'side', 'max oob Mage', 'M-no-rev',
+            for t in fixed_table(['the setup row', 'side', 'max oob Mage', 'highest oob anywhere',
+                                  'M-no-rev',
                                   'lowband x-cross', 'lowband AW flip',
                                   'highband x-cross', 'grace lowband AW flips',
                                   'grace highband AW flips', 'grace highband x-crosses'], tab):
@@ -1037,7 +1060,7 @@ def main():
             wr('')
             grp = []
             for t_ in range(0, int(FK.ORAC_HIGH_HI) + 1):
-                sel = k[top[k] == t_]
+                sel = k[step[k] == t_]
                 if not len(sel):
                     continue
                 grp.append(['ws%d' % t_ if t_ else 'none oob', len(sel),
