@@ -2487,3 +2487,4 @@ c0fb27c8bb87  you can overwrite 8792
 ccb7bad03405  and stop the other instances
 03066aec2bb9  mostly in the mid board ranges (0,-1,+1)
 7fe0627388da  commit and push all. bank the updates and make this the machine
+2c46b6410cd7  make this the machine

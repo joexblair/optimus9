@@ -97,7 +97,10 @@ ORACLE_E_REOPEN = os.environ.get('W_FDM3_ORACLE_E_REOPEN', 'winner')
 #   HIS 1118, asked which oracle its "2 rows" and "3 rows" count: *"1, 30sec"*. So this mech reads
 #   the 30 SECOND page, not the 60 second one every other fdm3 read uses. ORACLE_PORT stays at
 #   8790 - his 1117 bank - and orac-exhaust alone reads this one.
-ORAC_EXHAUST_PORT = _knob('ORAC_EXHAUST_PORT', 8791, int)
+#   HIS 1119, after *"make this the machine"* with 8790 and 8791 stopped: he picked orac-exhaust onto
+#   8792 - the same 30 s rows, with the four-read pivot trades under the TO/AW cells instead of
+#   ws2Mage's. Was 8791.
+ORAC_EXHAUST_PORT = _knob('ORAC_EXHAUST_PORT', 8792, int)
 ORAC_EXHAUST_ROW_S = _knob('ORAC_EXHAUST_ROW_S', 30, int)   # seconds per row, asserted against /meta
 #   HIS 1118: *"allow 4 rows to build 6x, and make it seven ws1-7 distinct x crosses"*
 ORAC_6X_ROWS = _knob('ORAC_6X_ROWS', 4, int)         # was his 2, now his 4
@@ -264,7 +267,8 @@ RULED = {
                                   'crossing back over the line that won. Not yet re-ruled'),
     'ORACLE_MAGE50_PCT': (20, 'the Mage-side-of-50 paint strength on the oracle\'s ws1..ws15 '
                               'cells, per cent - his 1118 *"the setting at 0726 is perfect"*'),
-    'ORAC_EXHAUST_PORT': (8791, 'orac-exhaust reads the 30 second oracle - his 1118 *"1, 30sec"*'),
+    'ORAC_EXHAUST_PORT': (8792, 'orac-exhaust reads the 30 second oracle - his 1118 *"1, 30sec"* - '
+                                'on 8792, the four-read pivot page, his 1119 pick. Was 8791'),
     'ORAC_EXHAUST_ROW_S': (30, 'seconds per row on the page orac-exhaust reads, his 1118 *"30sec"*'),
     'ORAC_6X_ROWS': (4, 'his 1118 *"allow 4 rows to build 6x"* - was the 2 of *"six '
                         'x-crosses printing in 2 rows in lowband"*'),

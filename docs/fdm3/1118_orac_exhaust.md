@@ -32,7 +32,7 @@ crosses"*, so `6x` is now **seven** of ws1..ws7 inside **four** rows.
   never cells
 - *"the zero TOexf condtion belongs to the final row, the other conditions are placed anywhere in
   the three rows"*
-- *"1, 30sec"* - the mech reads the 30 second oracle, port 8791
+- *"1, 30sec"* - the mech reads the 30 second oracle: port 8791 until his 1119 pick moved it to 8792, the same 30 s rows on the four-read pivot trades
 - *" LOW target-side creates a *OUTGOING* LONG,..."* - the setup row is the INCOMING trade, the one
   being closed; what is SCORED is the OUTGOING trade
 
@@ -107,7 +107,7 @@ All in `fdm3_knobs.py`; an off-ruled run raises at import unless `W_FDM3_EXPERIM
 
 | the knob | value | his words |
 |---|---|---|
-| `ORAC_EXHAUST_PORT` | 8791 | *"1, 30sec"* |
+| `ORAC_EXHAUST_PORT` | 8792 | *"1, 30sec"*; 8792 at his 1119 pick, was 8791 |
 | `ORAC_EXHAUST_ROW_S` | 30 | the same |
 | `ORAC_6X_ROWS` | 4 | *"allow 4 rows to build 6x"* |
 | `ORAC_6X_HITS` | 7 | *"make it seven ws1-7 distinct x crosses"* |
