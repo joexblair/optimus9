@@ -108,6 +108,15 @@ ORAC_LOW_AW_3RD = _knob('ORAC_LOW_AW_3RD', 4, int)     # his *">=4 AWs print in 
 #   *"jumps of 2 should be allowed to make it more sane"*. The oob climb steps over one missing
 #   timeframe; a gap of two or more stops it.
 ORAC_OOB_JUMP = _knob('ORAC_OOB_JUMP', 2, int)         # timeframes the climb may step at once
+#   HIS 1118: *"I need 0606 to be low pivot ... 1205 is another low pivot"*. ws2Mage, the line the
+#   pseudo trades pivot on, holds outside the 15 fence through both windows - its lowest readings
+#   are 19.22 at 06:02:00 and 16.82 at 12:02:05 - so it has no oob run to leave and no cross at
+#   either, at any hold length. ws1Mage crosses LOW at 06:03:10 and 12:02:10, 2m50s before each of
+#   his times. SCORING ONLY: the pseudo trades stay on ws2Mage, untouched.
+ORAC_MAEMFE_LINE = os.environ.get('W_FDM3_ORAC_MAEMFE_LINE', 'ws1Mage')
+#   HIS 1118: *"I take your recommendation"* - rank by MFE over abs(MAE), not by MAE alone, so a
+#   row with a tiny MAE AND a tiny MFE does not score as a winner. Ranked inside each side.
+ORAC_RANK_BY = os.environ.get('W_FDM3_ORAC_RANK_BY', 'mfe_over_mae')
 ORAC_GRACE_MIN = _knob('ORAC_GRACE_MIN', 5.0)          # his *"5 minutes (walk forward) grace"*
 ORAC_HIGH_FLIPS = _knob('ORAC_HIGH_FLIPS', 2, int)     # his *">=2 AW flips"* in highband
 ORAC_HIGH_TOEXF_MAX = _knob('ORAC_HIGH_TOEXF_MAX', 1, int)   # his *"a maximum of 1 TOexf"*
@@ -214,6 +223,11 @@ RULED = {
     'ORAC_LOW_FLIPS': (2, 'his 1118 state 2, the other side of the OR: *"(>=5 AW(any) OR '
                           '>=2 AW flips)"*. An AW flip is the TO -> AW flip, his *"new AW"*'),
     'ORAC_HIGH_AW': (3, 'his state 3: *">=3 AW(any) are required if any of these conditions qualify"*'),
+    'ORAC_MAEMFE_LINE': ('ws1Mage', 'the line whose sweep-pivot legs score MAE/MFE. His 1118 '
+                                   '06:06 and 12:05 targets land on it; ws2Mage has no cross '
+                                   'at either. Scoring only - the pseudo trades keep ws2Mage'),
+    'ORAC_RANK_BY': ('mfe_over_mae', 'his 1118 *"I take your recommendation"* - rank on MFE '
+                                     'over abs(MAE), per side, not on MAE alone'),
     'ORAC_OOB_JUMP': (2, 'his 1118 *"jumps of 2 should be allowed to make it more sane"* - the '
                          'max-oob climb steps over one missing timeframe, not two'),
     'ORAC_LOW_AW_3RD': (4, 'his 1118 state 3 gate: *">=4 AWs print in lowband at the 3rd row"*, '

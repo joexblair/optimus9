@@ -533,7 +533,22 @@ def max_oob_line(reads, suffix='Mage'):
     return step, top
 
 
-def setup_maemfe(bars, side):
+def leg_containing(bar, line):
+    """The v4_sweep_pivots leg of `line` that HOLDS `bar`. -> (open, close, side) or None.
+
+    HIS 1118 *"when the MAE MFE stats are tied to a reliable pivot"*. v4_sweep_pivots.swing picks
+    the leg that MARKS a cadence event, aligning to one nearby, and handed a setup bar it returned
+    legs that opened 24 minutes after it or closed before it. This takes the leg the bar is inside:
+    legs overlap, so it is the one with the LATEST open at or before the bar.
+    """
+    best = None
+    for o, z, sd in SP.legs(line):
+        if o <= bar < z and (best is None or o > best[0]):
+            best = (int(o), int(z), int(sd))
+    return best
+
+
+def setup_maemfe(bars, side, line=None):
     """HIS 1118: *"then we can use sweep-pivot's MAE/MFE to find what works and what doesn't"*.
     -> [(leg close bar or None, mae %, mfe %)] per bar in `bars`.
 
@@ -545,25 +560,25 @@ def setup_maemfe(bars, side):
     so a LOW target-side scores a LONG - up is favourable - and a HIGH target-side scores an
     OUTGOING SHORT, down favourable. THE FAVOURABLE DIRECTION IS THE OPPOSITE OF THE ROW'S
     TARGET-SIDE. It is not derived from price: it is his ruling, and the row's side is the input.
-    v4_sweep_pivots.swing takes the side of the CROSS that opened the leg and its own fav is
-    -side, so it is handed the target-side as-is and the two agree.
 
-    THE SPAN IS MECHANISM-DEFINED, no horizon and no percentage: the setup's own bar to the bar
-    v4_sweep_pivots closes its leg on, the same read l2_barrage uses for a cadence event.
+    THE SPAN IS THE LEG THAT HOLDS THE SETUP BAR, mechanism-defined, no horizon and no percentage:
+    the setup's own bar to that leg's close. The line is ORAC_MAEMFE_LINE, ws1Mage, because his
+    06:06 and 12:05 targets are crosses of it and ws2Mage has none at either.
     """
+    line = FK.ORAC_MAEMFE_LINE if line is None else line
     close = BT.prices()[0]
     out = []
     for b, sd in zip(bars, side):
         if not sd:
             out.append((None, None, None))
             continue
-        sw = SP.swing(int(b), int(sd), close)   # its fav is -side, and -target_side is his outgoing
-        if not sw or sw.get('close') is None:
+        leg = leg_containing(int(b), line)
+        if leg is None:
             out.append((None, None, None))
             continue
-        z = int(sw['close'])
-        a2, b2 = min(int(b), z), max(int(b), z)
-        seg = np.asarray(close[a2:b2 + 1], float)
+        o, z, _ls = leg
+        assert o <= int(b) < z, ('the leg does not hold the setup bar', b, o, z)
+        seg = np.asarray(close[int(b):z + 1], float)
         p0 = float(close[int(b)])
         if not np.isfinite(seg).any() or not np.isfinite(p0) or p0 == 0:
             out.append((z, None, None))
@@ -575,6 +590,24 @@ def setup_maemfe(bars, side):
         assert mfe >= 0 >= mae, ('the favourable side is the wrong way round', b, sd, mfe, mae)
         out.append((z, mae, mfe))
     return out
+
+
+def rank_per_side(mm, side):
+    """HIS 1118 *"I take your recommendation"*: rank on MFE over abs(MAE), inside each side.
+    -> (ratio, rank) per row, rank 1 the best of that side. A zero MAE sorts above every finite
+    ratio, by its MFE, because the division has no value there and the row gave nothing away.
+    """
+    ratio, rank = [None] * len(mm), [None] * len(mm)
+    for sd in (-1, +1):
+        idx = [i for i, (s_, (_z, m, f)) in enumerate(zip(side, mm)) if int(s_) == sd and m is not None]
+        key = {}
+        for i in idx:
+            _z, m, f = mm[i]
+            ratio[i] = None if m == 0 else f / abs(m)
+            key[i] = (0 if m == 0 else 1, -(f if m == 0 else f / abs(m)))
+        for r, i in enumerate(sorted(idx, key=lambda i: key[i]), 1):
+            rank[i] = r
+    return ratio, rank
 
 
 def orac_setups(R, reads, rows):
@@ -943,8 +976,14 @@ def orac_file(day, a, z, R, reads, walk, V, path):
         w('#   state 1 / state 2       PASS or fail')
         w('#   gate                    >=%d of "lowAW here": PASS opens a %g minute grace'
           % (int(FK.ORAC_LOW_AW_3RD), float(FK.ORAC_GRACE_MIN)))
-        w("#   MAE % / MFE %           this row's bar to the bar sweep-pivots closes its leg on,")
-        w('#                          scoring the OUTGOING trade: a LOW target-side creates an')
+        w('#   rank                    1 is the best of this row\'s own side, on MFE over abs(MAE).')
+        w('#                          A row with no MAE at all sorts above every finite ratio, by')
+        w('#                          its MFE, and prints "no MAE" in the ratio column')
+        w('#   MFE over abs(MAE)       the ranking value itself')
+        w("#   MAE pct / MFE pct       this row's bar to the close of the " + FK.ORAC_MAEMFE_LINE
+          + " LEG THAT HOLDS IT -")
+        w('#                          his 1118 reliable pivot. Scoring the OUTGOING trade: a LOW')
+        w('#                          target-side creates an')
         w('#                          OUTGOING LONG so up is favourable, a HIGH one an OUTGOING')
         w('#                          SHORT so down is. MAE never above 0, MFE never below it')
         w('#   the 57                  yes where state 1, state 2 and the gate all pass - the rows')
@@ -955,7 +994,7 @@ def orac_file(day, a, z, R, reads, walk, V, path):
         w('#   xhi                     distinct ws%d..ws%d with an x-cross across those same %d rows'
           % (hi_lo, hi_hi, int(FK.ORAC_6X_ROWS)))
         w('#   fired at                the bar that grace completed on, or - when it never did')
-        w('#   the leg closes          the bar v4_sweep_pivots closes the leg on')
+        w('#   the leg closes          the bar that %s leg closes on' % FK.ORAC_MAEMFE_LINE)
         w('')
         FIRED = {}
         for i in np.flatnonzero(V['s3'][a:z + 1]) + a:
@@ -974,27 +1013,33 @@ def orac_file(day, a, z, R, reads, walk, V, path):
         XHI = window(R['x'], _n6)[:, hi_lo:hi_hi + 1].sum(1)
         #   HIS 1118 MAE/MFE here too: this file had none at all. The same read as the setup hunt -
         #   the row's own bar to the bar sweep-pivots closes its leg on, scoring the OUTGOING trade
-        MM = {int(i): mm for i, mm in zip(k, setup_maemfe(PRT[k], reads['side'][k]))}
+        _mm = setup_maemfe(PRT[k], reads['side'][k])
+        _ratio, _rank = rank_per_side(_mm, reads['side'][k])
+        MM = {int(i): (mm, rt, rk) for i, mm, rt, rk in zip(k, _mm, _ratio, _rank)}
         rows = []
         for i in k:
             six = ('this row' if V['six'][i] else
                    'the row before' if (i > 0 and V['six'][i - 1]) else 'no')
-            _zc, _mae, _mfe = MM[int(i)]
+            (_zc, _mae, _mfe), _rt, _rk = MM[int(i)]
             #   HIS 1118: the flag sits *"next to the timestamp"*, so it is column 2.
             #   DROPPED at his word: `trade opened` duplicated the oracle's own pivot flips, and
             #   `ws1r walk`. `the leg closes` stays - it is a v4_sweep_pivots leg on whichever line
             #   marks the bar (ws10Mage, ws30Mage and others on this day), not the ws2Mage pivots
             #   the oracle flips on, so it is not a duplicate.
             rows.append([HM(i), 'yes' if OPENS[i] else '-', sdof(i),
+                         '-' if _rk is None else '%d' % _rk,
                          '-' if _mae is None else '%+.3f' % _mae,
                          '-' if _mfe is None else '%+.3f' % _mfe,
+                         'no MAE' if (_mae is not None and _rt is None) else
+                         ('-' if _rt is None else '%.2f' % _rt),
                          FIRED.get(int(i), '-')[11:] if OPENS[i] and int(i) in FIRED else '-',
                          six, XLO[i], XHI[i], V['low_aw'][i], V['low_fl'][i], V['low_toexf'][i],
                          V['all_toexf'][i], V['low_aw3'][i], V['high_toexf'][i],
                          'PASS' if V['s1'][i] else 'fail', 'PASS' if V['s2'][i] else 'fail',
                          'PASS' if V['gate'][i] else 'fail',
                          HMB(_zc) if _zc is not None else '-'])
-        for t in fixed_table(['the row', 'the 57', 'side', 'MAE %', 'MFE %', 'fired at',
+        for t in fixed_table(['the row', 'the 57', 'side', 'rank', 'MAE %', 'MFE %',
+                              'MFE over abs(MAE)', 'fired at',
                               '6x', 'xlo', 'xhi', 'lowAW/%d' % nrow, 'lowFLIP/%d' % nrow,
                               'lowTOexf', 'ws1-15TOexf', 'lowAW here', 'highTOexf',
                               'state 1', 'state 2', 'gate', 'the leg closes'],
