@@ -66,6 +66,8 @@ try:
     import v4_live_lines as LL
     import v4_closed_prev as CP
     import v4_knobs as K
+    import v4_sweep_pivots as SP      # HIS 1118: *"use sweep-pivot's MAE/MFE"*
+    import v4_backstop_trades as BT   # the price series towards_away's own pivots are built on
     sys.path.insert(0, '/home/joe/thecodes/docs/octo-freedom/1109_towards_away')
     import towards_away as TA          # HIS 1118 answer 2: *"use the pivot based psuedo-trades"*
 finally:
@@ -521,6 +523,41 @@ def max_oob_line(reads, suffix='Mage'):
     assert (step[step > 0] >= lo[step > 0]).all() and (step <= top).all(), \
         'the single-step run is not inside the lines that are oob'
     return step, top
+
+
+def setup_maemfe(bars, side):
+    """HIS 1118: *"then we can use sweep-pivot's MAE/MFE to find what works and what doesn't"*.
+    -> [(leg close bar or None, mae %, mfe %)] per bar in `bars`.
+
+    THE SPAN IS MECHANISM-DEFINED, no horizon and no percentage: the setup's own bar to the bar
+    v4_sweep_pivots closes its leg on, the same read l2_barrage uses for a cadence event.
+    THE FAVOURABLE DIRECTION IS THE ROW'S TARGET-SIDE, not derived: a HIGH target-side is a trade
+    hunting the high oob, so up is favourable. v4_sweep_pivots.swing takes the side of the CROSS
+    that opened the leg and its own fav is -side, so it is handed -target_side and the two agree.
+    """
+    close = BT.prices()[0]
+    out = []
+    for b, sd in zip(bars, side):
+        if not sd:
+            out.append((None, None, None))
+            continue
+        sw = SP.swing(int(b), -int(sd), close)
+        if not sw or sw.get('close') is None:
+            out.append((None, None, None))
+            continue
+        z = int(sw['close'])
+        a2, b2 = min(int(b), z), max(int(b), z)
+        seg = np.asarray(close[a2:b2 + 1], float)
+        p0 = float(close[int(b)])
+        if not np.isfinite(seg).any() or not np.isfinite(p0) or p0 == 0:
+            out.append((z, None, None))
+            continue
+        up = (float(np.nanmax(seg)) - p0) / p0 * 100.0
+        dn = (float(np.nanmin(seg)) - p0) / p0 * 100.0
+        mfe, mae = (up, dn) if int(sd) > 0 else (-dn, -up)
+        assert mfe >= 0 >= mae, ('the favourable side is the wrong way round', b, sd, mfe, mae)
+        out.append((z, mae, mfe))
+    return out
 
 
 def orac_setups(R, reads, rows):
@@ -1042,23 +1079,46 @@ def main():
             wr('## SETUPS ACROSS %d ROWS - >=%d of ws1..ws%d carry an x-cross AND >=1 lowband AW flip'
                % (rows, int(FK.ORAC_6X_HITS), int(FK.ORAC_LOW_HI)))
             wr('')
+            MM = setup_maemfe(PRT[k], reads['side'][k])
+            MAE = [m for _z, m, _f in MM if m is not None]
+            MFE = [f for _z, _m, f in MM if f is not None]
             tab = []
-            for i in k:
+            for i, (zc, mae, mfe) in zip(k, MM):
                 tab.append([U(int(i)),
                             'HIGH' if reads['side'][i] > 0 else 'LOW' if reads['side'][i] < 0 else '-',
                             'ws%d' % TAG['Mage'][0][i] if TAG['Mage'][0][i] else '-',
                             'ws%d' % TAG['b'][0][i] if TAG['b'][0][i] else '-',
-                            'ws%d' % TAG['Mage'][1][i] if TAG['Mage'][1][i] else '-',
-                            'ws%d' % TAG['b'][1][i] if TAG['b'][1][i] else '-',
                             'ws%d' % MNR[i] if MNR[i] else '-',
                             S['xl'][i], S['fl'][i], S['hx'][i],
-                            S['glo'][i], S['ghi'][i], S['gx'][i]])
-            for t in fixed_table(['the setup row', 'side', 'max oob Mage', 'max oob b',
-                                  'highest oob Mage anywhere', 'highest oob b anywhere', 'M-no-rev',
+                            S['glo'][i], S['ghi'][i], S['gx'][i],
+                            ln.U(int(zc)) if zc is not None else '-',
+                            '-' if mae is None else '%+.3f' % mae,
+                            '-' if mfe is None else '%+.3f' % mfe])
+            for t in fixed_table(['the setup row', 'side', 'max oob Mage', 'max oob b', 'M-no-rev',
                                   'lowband x-cross', 'lowband AW flip',
                                   'highband x-cross', 'grace lowband AW flips',
-                                  'grace highband AW flips', 'grace highband x-crosses'], tab):
+                                  'grace highband AW flips', 'grace highband x-crosses',
+                                  'the leg closes', 'MAE %', 'MFE %'], tab):
                 wr(t)
+            #   HIS 1027 STANDING RULE: per-row MAE/MFE always carries its aggregate under it
+            wr('')
+            wr('## THE MAE/MFE SUMMARY - the setup bar to the bar sweep-pivots closes its leg on')
+            wr('')
+            _med = lambda v: sorted(v)[len(v) // 2] if v else float('nan')
+            agg = [['setups scored', '%d of %d' % (len(MAE), len(k))]]
+            if MAE:
+                agg += [['sum MAE %', '%+.3f' % sum(MAE)], ['sum MFE %', '%+.3f' % sum(MFE)],
+                        ['mean MAE %', '%+.3f' % (sum(MAE) / len(MAE))],
+                        ['mean MFE %', '%+.3f' % (sum(MFE) / len(MFE))],
+                        ['median MAE %', '%+.3f' % _med(MAE)],
+                        ['median MFE %', '%+.3f' % _med(MFE)],
+                        ['worst MAE %', '%+.3f' % min(MAE)],
+                        ['best MFE %', '%+.3f' % max(MFE)],
+                        ['MFE > abs(MAE)', '%d of %d'
+                         % (sum(1 for m, f in zip(MAE, MFE) if f > abs(m)), len(MAE))]]
+            for t in fixed_table(['the read', 'value'], agg):
+                wr(t)
+            MAP = {int(i): (m, f) for i, (_z, m, f) in zip(k, MM)}
             for sfx in ('Mage', 'b'):
                 wr('')
                 wr('## THE SAME SETUPS GROUPED BY THEIR MAX OOB %s' % sfx.upper())
@@ -1069,14 +1129,19 @@ def main():
                     sel = k[tag[k] == t_]
                     if not len(sel):
                         continue
+                    mm = [MAP[int(x)] for x in sel if MAP[int(x)][0] is not None]
                     grp.append(['ws%d' % t_ if t_ else 'none oob', len(sel),
                                 '%.1f' % S['glo'][sel].mean(), '%.1f' % S['ghi'][sel].mean(),
                                 '%.1f' % S['hx'][sel].mean(), '%.1f' % S['gx'][sel].mean(),
-                                int((S['ghi'][sel] >= 2).sum())])
+                                int((S['ghi'][sel] >= 2).sum()), len(mm),
+                                '-' if not mm else '%+.3f' % (sum(m for m, _ in mm) / len(mm)),
+                                '-' if not mm else '%+.3f' % (sum(f for _, f in mm) / len(mm)),
+                                '-' if not mm else '%d' % sum(1 for m, f in mm if f > abs(m))])
                 for t in fixed_table(['max oob %s' % sfx, 'setups', 'mean grace lowband AW flips',
                                       'mean grace highband AW flips', 'mean highband x-cross',
                                       'mean grace highband x-crosses',
-                                      'setups reaching >=2 grace highband flips'], grp):
+                                      'setups reaching >=2 grace highband flips', 'scored',
+                                      'mean MAE %', 'mean MFE %', 'MFE > abs(MAE)'], grp):
                     wr(t)
         for t in buf:
             print(t)
@@ -1096,6 +1161,10 @@ def main():
                 f.write('# BOTH LINES: his *"there might be a difference for `b` instead of `mage`"*, so the\n')
                 f.write('# same climb runs on ws{TF}Mage and on ws{TF}b and each gets its own tag and its\n')
                 f.write('# own grouping.\n')
+                f.write('# MAE/MFE: his *"use sweep-pivot\'s MAE/MFE"*. The span is the setup bar to the bar\n')
+                f.write('# v4_sweep_pivots closes its leg on - mechanism-defined, no horizon and no percentage.\n')
+                f.write('# The favourable direction is the row\'s TARGET-SIDE: a HIGH target-side is a trade\n')
+                f.write('# hunting the high oob, so up is favourable. MAE is never above 0, MFE never below.\n')
                 f.write('# THE CLIMB: start at the LOWEST ws1..ws%d that is oob and step up one timeframe at\n'
                         % int(FK.ORAC_HIGH_HI))
                 f.write('# a time while the next is oob too - his *"I\'ve only measured in single steps: ws1\n')
