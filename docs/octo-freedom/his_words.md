@@ -2438,3 +2438,31 @@ db79a4885396  in the ws16-22 and ws23-30 columns, add the count of TO(exf) lines
 52ba4676ddd0  any except TO(exf)
 36f714db8bfd  GPU or CPU?
 bfbef6306254  build a gcws45b and gcws45r (45sec) lines and add them to the line cache
+e15bf728ba21  I need a sanity check on ws5's missing flip on 09-20 between 1010 and 1030. ws5 TOexf flips to AW at 1031, which I think is far too late. I want you start troubleshooting by looking at the closed-prev values, so that you can coarsely undserstand why I think this 1031 is incorrect
+a07208a27110  liftoff uses emerging values, so this table needs to show the emerging r values, and the liftoff decisions and samples
+e3121c9260d8  use the 23/77 fence as default going forward
+e09134cdc244  there's an issue in the sampling. look at these rows. the only sample that should be changing is the far right sample, and whena new sample is produce, all samples should move one to the left and the far left falls out. most rows are changing the samples in the middle of the dataset, for most rows
+7d5df0ab1769  was your data adequately warmed up ?
+3139c21c7512  liftoff is built to sample 2.8 times per TF. can you see that in the spec? is the code honouring it. most importantly, is the jig producing the lift-off mech?
+d10777cb46f2  ok. I'm not going to chase the 2.8 sample gap - we can make this work without a lot of re-developing the sampling needs to be supplemented by the actual line's behaviour. if you plot a emerging ws5r line between 1008 and 1023, what do you see? how could you use that data to improve the lift-off mech?
+dac5c71f418f  I want to try A first, but in way that I can control it. I'm deep in developing a strategy and my decisions have been made on the existing build, so I want to do this: fdm3-oracle (the current webUI) has a button to flip the fence from 20/80 to 23/77. 23/77 has proven to be the best option, so we can remove that button and lock 23/77 for the UI with that load freed up, I want to see A as a button on the webUI. I can then review surgically and come back to you with a verdict
+5f91e931060c  remove also the pivots+15 button. I'm not sure if the lower TFs and the higher TFs need the same mech shape. create two buttons that A will be applied to - the first button shows A for ws1-ws6, and the second shows A for ws7-ws15
+caf4b44364b7  1 and 2: agreed 3: you can make the change. tehy're not using it so wait until I've reviewed the change before notifyinhg
+5bafdd1f6204  it's looking good so far. while we're in test mode, add this dynamic stop loss mech and produce it in skinny column labeled 'SL%', to the right of 'ws1 time'
+156351cedc9c  STOPLOSS dynamic values -collect the 15s closed bar abs(price pct diff), between gcws15b extrema (oob to opposing oob), averaged over the last 6 hours --example 08-26 0125 low, 0132 high = ~1.0 0132 to 0207 = ~5.0 0207 to 0231 = ~3.5 0231 to 0245 = ~1 0245 to 0259 = ~1 etc etc if the pct pattern continued for the full 6 hours, the stop loss would be ~2%
+d8b3aae45a4a  drop the gcws15 and gcws30 columns. keep the table's existing columns at their current width, ie don't attempt to fill the lost column space
+bf6962e785e3  arbitrary start bar: 09-20 0941:45, gcws15b (g15b) highside oob crossing to ib -the lowside oob to ib can only be known when g15b crosses to highside oob, and vice-versa for highside oob to ib --this allows g15b to "bounce" on the opposing oob until it has completed its time on that side's oob -following along from the highside 0941 cross to ib, the mech must wait for g15b to cross to the highside oob before it can detect the lowside's "final" cross to ib --ie, "final" before reaching to the opposing oob -the timestamp of g15b returning to high oob is 1015:45, and the walk can now detect that the final lowside cross from oob to ib was 1013:45 -the highside's final cross to ib is 1035:30, and this is known when g15b crossed to lowside oob at 1040
+9211baa85933  the A mode is good - I'm still testing it
+ae1416742fe8  I've come across cases where a r line prints AW, heads towards 50 but doesn't go past 50, then turns back towards the side that created its AW flip. we have a mech that resets r to TO, after r has crossed into the counter side of 50 AND crosses back to targetside of 50. I want to simply swap the static 50 'line' with a (100 - {knob:33,`fdm3-fence-reset-TO`}) 33/67 fence. the mech will reset r to TO if it crosses into the fence then crosses out if the fence on the sameside as the infence incursion. if the line continues through the fence entirely (eg travels from 90 to 30, then back to 80) the same logic applies: the r will be tagged TO when r crosses over 67
+bb5743bd9f54  I want to simply swap the static 50 'line' with a (100 - {knob:33,`fdm3-fence-reset-TO`}) 33/67 fence
+646a4867f731  the mech will reset r to TO if it crosses into the fence then crosses out if the fence on the sameside as the infence incursion
+4168ae7ece46  if the line continues through the fence entirely (eg travels from 90 to 30, then back to 80) the same logic applies: the r will be tagged TO when r crosses over 67
+954a57bf43c0  ws3 r examples, taken from the persepective of r landing and reversing inside the fence: 09-19 1512, 1657, 2003, 09-20 0921, 1154
+a429f01373cd  this will need to be built on the port 8789 ui first. to speed up the build: my defaults for the current "A" are 'A ws1-ws6`:enabled, 'A ws7-ws15':disabled
+6f2cdf5eb763  this will need to be built on the port 8789 ui first
+2bf96cb6adac  Q1: move them to the fence
+3214c30d19e0  Q2: In the test it reads AW, because only a cross back over 67 gives TO.
+16424d116c54  Q3: I agree with your tags. I forgot that this mech uses emerging, so my view was tainted
+f0838e617209  Q4: the question's answers stay the same
+1331e0ca1960  1 and 2: agreed
+9dc42579cc00  in way that I can control it
