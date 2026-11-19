@@ -301,10 +301,13 @@ def mage50(chunk=20000):
         b = np.frombuffer(urllib.request.urlopen(u).read(), np.int8).reshape(-1, STRIDE)
         for j, tf in WS:
             m50[a:a + n, tf] = (b[:, int(META['updn']) + j].astype(int) >> 4) & 3
+        #   HIS 1119: the page dropped M-no-rev for ONE leg-Mage byte per column, so the old
+        #   3-bytes-per-column arithmetic read an SL% byte and returned timeframes like ws78.
         for k, (tfs, vals) in enumerate(MNR):
-            o = STRIDE - 1 - 3 * (len(MNR) - k)
-            tfs[a:a + n] = b[:, o].astype(int)
-            vals[a:a + n] = (b[:, o + 2].astype(int) << 8) | (b[:, o + 1].astype(int) & 255)
+            tfs[a:a + n] = b[:, STRIDE - 1 - (len(MNR) - k)].astype(int)
+            vals[a:a + n] = 0
+        assert int(MNR[0][0].max()) <= int(META.get('mnrtops', [15])[0]), \
+            'the leg-Mage byte is not where this reader thinks it is'
     return m50, MNR
 
 
@@ -1407,7 +1410,7 @@ def main():
                             '-' if mfe is None else '%+.3f' % mfe,
                             'ws%d' % TAG['Mage'][0][i] if TAG['Mage'][0][i] else '-',
                             'ws%d' % TAG['b'][0][i] if TAG['b'][0][i] else '-',
-                            'ws%d' % MNR[i] if MNR[i] else '-',
+                            'ws%d' % R['legmage'][i] if R['legmage'][i] else '-',
                             S['xl'][i], S['fl'][i], S['hx'][i],
                             S['glo'][i], S['ghi'][i], S['gx'][i],
                             ln.U(int(zc)) if zc is not None else '-'])
@@ -1415,7 +1418,7 @@ def main():
             #   short ones were codes I coined, which he cannot read. MAE and MFE stay at the
             #   front, which was the other half of his ask.
             for t in fixed_table(['the setup row', 'side', 'MAE %', 'MFE %', 'max oob Mage',
-                                  'max oob b', 'M-no-rev', 'lowband x-cross', 'lowband AW flip',
+                                  'max oob b', 'legMage', 'lowband x-cross', 'lowband AW flip',
                                   'highband x-cross', 'grace lowband AW flips',
                                   'grace highband AW flips', 'grace highband x-crosses',
                                   'the leg closes'], tab):
@@ -1468,6 +1471,47 @@ def main():
                                       'mean grace highband x-crosses',
                                       'setups reaching >=2 grace highband flips'], grp):
                     wr(t)
+        #   HIS 1119: *"drop this into a db table - I'll read it in excel"*. One row per setup,
+        #   the same rows the text report prints. The key carries the knob set, so a rerun at
+        #   different values lands beside its sibling instead of overwriting it.
+        if '--db' in sys.argv:
+            from optimus9.config import get_db_config
+            from optimus9.db.database_manager import DatabaseManager
+            _d = DatabaseManager(**get_db_config())
+            _d.connect()
+            _kn = ' '.join('%s=%s' % (kk, vv) for kk, vv in FK.live() if kk.startswith('ORAC_'))
+            assert len(_kn) <= 512, 'the knob set does not fit the key column'
+            _n = 0
+            for rows_ in (2, 3):
+                S = orac_setups(R, reads, rows_)
+                kk_ = np.flatnonzero(S['setup'][a:z + 1]) + a
+                MM = setup_maemfe(PRT[kk_], reads['side'][kk_])
+                RT, RK = rank_per_side(MM, reads['side'][kk_])
+                _d.execute('DELETE FROM fdm3_orac_setup WHERE day=%s AND win_rows=%s AND knobs=%s',
+                           (day, rows_, _kn))
+                for j, i in enumerate(kk_):
+                    zc, mae, mfe = MM[j]
+                    _d.execute(
+                        'INSERT INTO fdm3_orac_setup (day, win_rows, knobs, setup_row, side, '
+                        'mae_pct, mfe_pct, mfe_over_mae, rank_in_side, max_oob_mage, max_oob_b, '
+                        'leg_mage, low_xcross, low_aw_flip, high_xcross, grace_low_flip, '
+                        'grace_high_flip, grace_high_x, leg_closes) VALUES (%s, %s, %s, %s, %s, '
+                        '%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+                        (day, rows_, _kn, U(int(i)),
+                         'HIGH' if reads['side'][i] > 0 else 'LOW' if reads['side'][i] < 0 else 'none',
+                         None if mae is None else float(mae),
+                         None if mfe is None else float(mfe),
+                         None if RT[j] is None else float(RT[j]),
+                         None if RK[j] is None else int(RK[j]),
+                         int(TAG['Mage'][0][i]), int(TAG['b'][0][i]), int(R['legmage'][i]),
+                         int(S['xl'][i]), int(S['fl'][i]), int(S['hx'][i]),
+                         int(S['glo'][i]), int(S['ghi'][i]), int(S['gx'][i]),
+                         None if zc is None else ln.U(int(zc))))
+                    _n += 1
+            print()
+            print('| the table | rows written |')
+            print('|---|---|')
+            print('| fdm3_orac_setup, %s, both window widths | %d |' % (day, _n))
         for t in buf:
             print(t)
         if out:
