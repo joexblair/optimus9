@@ -243,6 +243,9 @@ def load(flip=0, alo=None, ahi=None, chunk=20000):
     #   read TO(exf). His condition1 reads *"the sum of the 2 columns"*, kept here per column so the
     #   sum is taken where it is used.
     out['sumtoexf'] = np.zeros((NROWS, len(SUMS)), np.int32)
+    #   HIS 1119: the leg's max oob Mage TF, one byte just before the side byte. It is the INCOMING
+    #   leg's max, stamped at this leg's open and the same on every row of the leg.
+    out['legmage'] = np.zeros(NROWS, np.int16)
     sd = np.zeros(NROWS, np.int8)
     for a in range(0, NROWS, chunk):
         n = min(chunk, NROWS - a)
@@ -275,6 +278,7 @@ def load(flip=0, alo=None, ahi=None, chunk=20000):
             out['toexf'][a:a + n, tf] = st == 3
         for k in range(len(SUMS)):
             out['sumtoexf'][a:a + n, k] = b[:, O_TOEXF + k].astype(np.int32)
+        out['legmage'][a:a + n] = b[:, O_SIDE - len(META.get('mnrtops', [1]))].astype(np.int16)
         sd[a:a + n] = b[:, O_SIDE]
     return out, sd
 
@@ -914,10 +918,13 @@ def orac_file(day, a, z, R, reads, walk, V, path):
     k = np.flatnonzero((V['six'] | (V['s1'] & V['s2'] & V['gate']))[a:z + 1]) + a
     tfs = lambda m, a_, b_: ','.join('ws%d' % t for t in range(a_, b_ + 1) if m[t]) or '-'
     sdof = lambda i: ('HIGH' if reads['side'][i] > 0 else 'LOW' if reads['side'][i] < 0 else '-')
-    with open(path, 'w') as f:
-        w = lambda t: f.write(t + '\n')
-        for t in fixed_table(['x'], [['y']])[:0]:
-            pass
+    #   HIS 1119: *"print this report at the bottom of the file"* (the per-row table) and *"also
+    #   move the section starting with '# orac-exhaust on 2026-09-24 - HIS 1118 SPEC' to the bottom
+    #   of the file"*. Both go below, with the legend kept immediately above the table it describes,
+    #   so the file opens on the counts. Every line is buffered and the two halves swap at the end.
+    _L = []
+    w = _L.append
+    if True:
         w('# orac-exhaust on %s - HIS 1118 SPEC' % day)
         w('#')
         w('# HIS SPEC, verbatim:')
@@ -977,9 +984,6 @@ def orac_file(day, a, z, R, reads, walk, V, path):
           % lo_hi)
         w('#                           GATE, which wants >=%d' % int(FK.ORAC_LOW_AW_3RD))
         w('#   highTOexf               ws%d..ws%d reading TO(exf) ON THIS ROW' % (hi_lo, hi_hi))
-        w('#   state 1 / state 2       PASS or fail')
-        w('#   gate                    >=%d of "lowAW here": PASS opens a %g minute grace'
-          % (int(FK.ORAC_LOW_AW_3RD), float(FK.ORAC_GRACE_MIN)))
         w('#   rank                    1 is the best of this row\'s own side, on MFE over abs(MAE).')
         w('#                          A row with no MAE at all sorts above every finite ratio, by')
         w('#                          its MFE, and prints "no MAE" in the ratio column')
@@ -992,6 +996,11 @@ def orac_file(day, a, z, R, reads, walk, V, path):
         w('#                          SHORT so down is. MAE never above 0, MFE never below it')
         w('#   the 57                  yes where state 1, state 2 and the gate all pass - the rows')
         w('#                          a %g minute grace opens on' % float(FK.ORAC_GRACE_MIN))
+        w('#   legMage                 the max oob Mage TF of the INCOMING leg, stamped at this')
+        w('#                          leg\'s open and the same on every row of it. The climb starts')
+        w('#                          at the lowest oob ws1..ws%d and steps while the next or the'
+          % int(FK.ORAC_MAGE_HI))
+        w('#                          one after is oob too. "-" = no line was oob in that leg')
         w('#   xlo                     distinct ws1..ws%d with an x-cross across the %d rows the'
           % (lo_hi, int(FK.ORAC_6X_ROWS)))
         w('#                          6x is built over - >=%d of them IS the 6x' % int(FK.ORAC_6X_HITS))
@@ -1037,16 +1046,17 @@ def orac_file(day, a, z, R, reads, walk, V, path):
                          'no MAE' if (_mae is not None and _rt is None) else
                          ('-' if _rt is None else '%.2f' % _rt),
                          FIRED.get(int(i), '-')[11:] if OPENS[i] and int(i) in FIRED else '-',
+                         'ws%d' % R['legmage'][i] if R['legmage'][i] else '-',
                          six, XLO[i], XHI[i], V['low_aw'][i], V['low_fl'][i], V['low_toexf'][i],
                          V['all_toexf'][i], V['low_aw3'][i], V['high_toexf'][i],
-                         'PASS' if V['s1'][i] else 'fail', 'PASS' if V['s2'][i] else 'fail',
-                         'PASS' if V['gate'][i] else 'fail',
                          HMB(_zc) if _zc is not None else '-'])
+        #   HIS 1119: *"these 3 columns can be dropped: state 1 | state 2 | gate"*. "the 57" is
+        #   their AND and it stays, so nothing is lost from the row.
         for t in fixed_table(['the row', 'the 57', 'side', 'rank', 'MAE %', 'MFE %',
-                              'MFE over abs(MAE)', 'fired at',
+                              'MFE over abs(MAE)', 'fired at', 'legMage',
                               '6x', 'xlo', 'xhi', 'lowAW/%d' % nrow, 'lowFLIP/%d' % nrow,
                               'lowTOexf', 'ws1-15TOexf', 'lowAW here', 'highTOexf',
-                              'state 1', 'state 2', 'gate', 'the leg closes'],
+                              'the leg closes'],
                              rows):
             w(t)
         w('')
@@ -1115,6 +1125,11 @@ def orac_file(day, a, z, R, reads, walk, V, path):
                                   'lowband AW flip', 'lowband TO(exf)', 'highband AW(any)',
                                   'highband TO(exf)', 'highband x or e'], rows):
                 w(t)
+    #   the swap: everything from "## 2. THE COUNTS" on goes first, then the header and the table
+    _cut = next(i for i, t in enumerate(_L) if t.startswith('## 2. THE COUNTS'))
+    assert _L[0].startswith('# orac-exhaust on'), 'the header is not the first line to move'
+    with open(path, 'w') as f:
+        f.write('\n'.join(_L[_cut:] + [''] + _L[:_cut]) + '\n')
     return len(k)
 
 
