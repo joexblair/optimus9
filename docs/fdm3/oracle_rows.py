@@ -533,11 +533,19 @@ def setup_maemfe(bars, side):
     """HIS 1118: *"then we can use sweep-pivot's MAE/MFE to find what works and what doesn't"*.
     -> [(leg close bar or None, mae %, mfe %)] per bar in `bars`.
 
+    THE SETUP IS THE INCOMING TRADE, THE ONE BEING CLOSED. What is scored is the OUTGOING trade,
+    the one being opened. HIS 1118, in his own words:
+
+        " LOW target-side creates a *OUTGOING* LONG,..."
+
+    so a LOW target-side scores a LONG - up is favourable - and a HIGH target-side scores an
+    OUTGOING SHORT, down favourable. THE FAVOURABLE DIRECTION IS THE OPPOSITE OF THE ROW'S
+    TARGET-SIDE. It is not derived from price: it is his ruling, and the row's side is the input.
+    v4_sweep_pivots.swing takes the side of the CROSS that opened the leg and its own fav is
+    -side, so it is handed the target-side as-is and the two agree.
+
     THE SPAN IS MECHANISM-DEFINED, no horizon and no percentage: the setup's own bar to the bar
     v4_sweep_pivots closes its leg on, the same read l2_barrage uses for a cadence event.
-    THE FAVOURABLE DIRECTION IS THE ROW'S TARGET-SIDE, not derived: a HIGH target-side is a trade
-    hunting the high oob, so up is favourable. v4_sweep_pivots.swing takes the side of the CROSS
-    that opened the leg and its own fav is -side, so it is handed -target_side and the two agree.
     """
     close = BT.prices()[0]
     out = []
@@ -545,7 +553,7 @@ def setup_maemfe(bars, side):
         if not sd:
             out.append((None, None, None))
             continue
-        sw = SP.swing(int(b), -int(sd), close)
+        sw = SP.swing(int(b), int(sd), close)   # its fav is -side, and -target_side is his outgoing
         if not sw or sw.get('close') is None:
             out.append((None, None, None))
             continue
@@ -558,7 +566,8 @@ def setup_maemfe(bars, side):
             continue
         up = (float(np.nanmax(seg)) - p0) / p0 * 100.0
         dn = (float(np.nanmin(seg)) - p0) / p0 * 100.0
-        mfe, mae = (up, dn) if int(sd) > 0 else (-dn, -up)
+        #   LOW target-side -> OUTGOING LONG -> up favourable; HIGH -> OUTGOING SHORT -> down
+        mfe, mae = (up, dn) if int(sd) < 0 else (-dn, -up)
         assert mfe >= 0 >= mae, ('the favourable side is the wrong way round', b, sd, mfe, mae)
         out.append((z, mae, mfe))
     return out
@@ -1095,8 +1104,10 @@ def main():
             #   above the table says what each short name holds.
             wr('#   the row       the setup row, its own open time (UTC)')
             wr('#   side          the pseudo trade\'s target-side there')
-            wr('#   MAE %% / MFE %% the setup bar to the bar sweep-pivots closes its leg on,')
-            wr('#                 favourable = the target-side. MAE never above 0, MFE never below')
+            wr('#   MAE %% / MFE %% the setup bar to the bar sweep-pivots closes its leg on, scoring the')
+            wr('#                 OUTGOING trade: a LOW target-side creates an OUTGOING LONG so up is')
+            wr('#                 favourable, a HIGH one an OUTGOING SHORT so down is. MAE is never')
+            wr('#                 above 0 and MFE never below it')
             wr('#   mage          max oob ws{TF}Mage - the single-step climb, - when none is oob')
             wr('#   b             max oob ws{TF}b - the same climb on the b line')
             wr('#   mnr           the M-no-rev column\'s TF at that row')
@@ -1196,8 +1207,11 @@ def main():
                 f.write('# own grouping.\n')
                 f.write('# MAE/MFE: his *"use sweep-pivot\'s MAE/MFE"*. The span is the setup bar to the bar\n')
                 f.write('# v4_sweep_pivots closes its leg on - mechanism-defined, no horizon and no percentage.\n')
-                f.write('# The favourable direction is the row\'s TARGET-SIDE: a HIGH target-side is a trade\n')
-                f.write('# hunting the high oob, so up is favourable. MAE is never above 0, MFE never below.\n')
+                f.write('# THE SETUP IS THE INCOMING TRADE, the one being closed. What is scored is the\n')
+                f.write('# OUTGOING trade, the one being opened. HIS 1118, verbatim:\n')
+                f.write('#     " LOW target-side creates a *OUTGOING* LONG,..."\n')
+                f.write('# so a LOW target-side scores a LONG (up favourable) and a HIGH target-side scores an\n')
+                f.write('# OUTGOING SHORT (down favourable). MAE is never above 0 and MFE never below it.\n')
                 f.write('# THE CLIMB: start at the LOWEST ws1..ws%d that is oob and step up one timeframe at\n'
                         % int(FK.ORAC_HIGH_HI))
                 f.write('# a time while the next is oob too - his *"I\'ve only measured in single steps: ws1\n')
