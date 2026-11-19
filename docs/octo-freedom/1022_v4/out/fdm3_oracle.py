@@ -252,8 +252,16 @@ SL_HOURS = 6.0                  # HIS 1115 *"averaged over the last 6 hours"*
 SL_NONE = -1                    # SL% x 100 where no leg ends in the window, or the tape has under 6 h behind the row
 #   HIS 1117: *"I can't decide between ws15 and ws25, so we'll need two m-no-rev columns - one for
 #   each. the columns can be skinny. label them mnr1 and mnr2"*. mnr1 is the LOWER ceiling.
-MNR_LABELS = ('mnr1', 'mnr2')
-MNR_TOPS = (15, 25)             # mnr1 ws1..ws15, mnr2 ws1..ws25
+#   HIS 1119: *"I'm not using the m-no-rev column. drop it and replace it with a new max Mage TF
+#   column that repeats the value on every row of the leg"*. mnr1 and mnr2 are gone, and one column
+#   takes their place.
+#   THE VALUE IS THE INCOMING LEG'S, STAMPED AT THIS LEG'S OPEN AND CARRIED UNCHANGED. That is what
+#   makes it causal AND constant across the leg: the max over THIS leg would need bars that have
+#   not happened yet on every row but the last. It is also the quantity he asked about: *"the max
+#   oob is derived during the period where an incoming trade ends and an outgoing trade begins. how
+#   do we make sure that the max oob seen at the pivot is consumed by the outgoing trade?"*
+MNR_LABELS = ('legMage',)
+MNR_TOPS = (15,)                # the climb runs ws1..ws15
 MNR_LO = 1                      # HIS 1117: *"we'll settle on ws1 to ws25"* - ws1 adds no leg end that
 #                                 ws2 does not already give, but he keeps it: *"m-no-rev is a 'keep
 #                                 walking' gate, not a 'bet the bank on it' event"*
@@ -273,7 +281,7 @@ assert 60 % ROW_S == 0 and ROW_S % 5 == 0, 'a row must be a whole number of 5 s 
 #   r-pred of its own 14 lines, so the producer stays honest - it is just not stored or drawn.
 RPRED_ON = False
 STRIDE = (len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)
-          + len(LINES) + 3 + 3 * len(MNR_TOPS))   # bytes per row:
+          + len(LINES) + 3 + len(MNR_TOPS))      # bytes per row:
 #   the TO/AW codes, the TO/AW counts, the cross codes (HIS 1110: 1 X, 2 E, 3 both, on the row's target-side; +4 the
 #   line reads AW on this row and TO on the row before, HIS 1110 TO -> AW flip; +8 ws1 only, TO(exf) on this row and
 #   anything else on the row before, HIS 1113), per sum the count of its lines
@@ -319,8 +327,20 @@ E_REOPEN = 'winner'             # his 1109 4B, unchanged - the ws{TF}e race
 #   process builds BOTH towards/away states when FDM3_XRE_BUTTON=1 and the page carries a button;
 #   with it off there is one state and no button, which is what 8790 runs. Each extra state is a
 #   full towards/away run, so the button roughly doubles the start-up.
-XRE_BUTTON = os.environ.get('FDM3_XRE_BUTTON', '0') == '1'
-XRES = ('winner', 'any') if XRE_BUTTON else ('winner',)
+#   HIS 1119 *"yes"*, the button comes out. It moved 9,313 of 4,082,385 TO/AW cells - 0.23%, and
+#   only ever TO(inf) into AW(inf) - for eight extra minutes of start-up. The ws{TF}x CROSS ROW
+#   stays at his B permanently (X_REOPEN above); this was only ever the towards/away x races.
+XRES = ('winner',)
+#   HIS 1118: *"create a test UI with these new pivots"*. With FDM3_PIVOTS=pooled the page's pseudo
+#   trades come from v4_sweep_pivots.pooled_pivots - ws1Mage and ws1b, each emerging and
+#   closed-prev, pooled, the longest dwell qualifying a same-side run, the pivot its final cross to
+#   ib - instead of towards_away.pseudo_trades's ws2Mage sweep-pivot legs. Every TO/AW cell follows,
+#   because towards/away runs on whatever trades it is handed.
+#   THE SIDE CONVENTION IS pseudo_trades's, UNCHANGED: a trade's target-side is the NEGATIVE of the
+#   pivot's side, so the two pages are read the same way and only the pivots differ.
+#   A TRADE OPENS AT A PIVOT'S CONFIRM BAR, not its cross: the cross is first knowable 90 s later.
+PIVOTS = os.environ.get('FDM3_PIVOTS', 'ws2Mage')
+assert PIVOTS in ('ws2Mage', 'pooled'), PIVOTS
 A_TFS = [t for (_, band), on in zip(A_BANDS, A_LOCK) if on for t in band]
 #   HIS 1117: *"I need the 'pivot +15 min' button reintroduced on 8790. instead of +15, make it +30
 #   minutes"*. It was dropped in the 1115 rebuild; this is HIS 1112 button at his new value.
@@ -367,6 +387,57 @@ def mnr_reset(cp, oob, cross, st, step, sd):
             out[i] = armed
             i += 1
     return out
+
+
+def leg_max_mage(side, prt):
+    """HIS 1119 LEG MAGE: *"a new max Mage TF column that repeats the value on every row of the
+    leg"*. -> [array of int8 per row], one entry so it slots where the M-no-rev columns were.
+
+    THE VALUE IS THE INCOMING LEG'S, stamped at the outgoing leg's open and carried unchanged to
+    its last row. That is what makes it both CONSTANT across the leg and CAUSAL: the max over THIS
+    leg needs bars that have not happened yet on every row but the last.
+    It is the quantity he asked about: *"the max oob is derived during the period where an incoming
+    trade ends and an outgoing trade begins. how do we make sure that the max oob seen at the pivot
+    is consumed by the outgoing trade?"*
+
+    THE CLIMB is his: start at the LOWEST ws1..ws{MNR_TOPS[0]} whose CLOSED-PREV Mage is oob on the
+    INCOMING leg's own target-side at some bar of that leg, and step up while the next timeframe -
+    or the one after it, his *"jumps of 2 should be allowed"* - is oob too. 0 where none is.
+    """
+    import fdm3_knobs_shim as _FK
+    oobf = float(K.OOB_LO)
+    hi = int(MNR_TOPS[0])
+    CPM = {t: np.asarray(CP.series(np.asarray(ln.line('ws%dMage' % t), float), t * 60), float)
+           for t in range(1, hi + 1)}
+    #   the legs: a run of bars that share one target-side. side is 0 outside every trade.
+    edges = [0] + [int(b) for b in np.flatnonzero(side[1:] != side[:-1]) + 1] + [len(side)]
+    val = np.zeros(len(side), np.int8)
+    carry = 0
+    for i in range(len(edges) - 1):
+        o, z = edges[i], edges[i + 1]
+        val[o:z] = carry                          # THIS leg shows the leg BEFORE it
+        sd = int(side[o])
+        if sd:
+            hits = []
+            for t in range(1, hi + 1):
+                v = CPM[t][o:z]
+                if not np.isfinite(v).any():
+                    continue
+                with np.errstate(invalid='ignore'):
+                    out = (np.nanmax(v) >= 100 - oobf) if sd > 0 else (np.nanmin(v) <= oobf)
+                if out:
+                    hits.append(t)
+            run = hits[0] if hits else 0
+            for t in hits[1:]:
+                if t - run <= int(_FK.OOB_JUMP):
+                    run = t
+                else:
+                    break
+            carry = run
+        else:
+            carry = 0
+    assert val.min() >= 0 and val.max() <= hi, ('the leg Mage TF is outside ws1..ws%d' % hi)
+    return [val[prt]]
 
 
 def m_no_rev(sps, prt):
@@ -597,7 +668,24 @@ def build():
         UD.append(code)
     assert len(UD) == len(LINES) and all(0 <= int(c.min()) and int(c.max()) <= 42 for c in UD)
     #   the 23/77 run with A ws1-ws6 on and the 33/67 reset: the first page state
-    LN, piv, trades, ST, det = TA.build(FNC, A_TFS, FENCE_RESET_TO)
+    if PIVOTS == 'pooled':
+        import v4_sweep_pivots as SP
+        import fdm3_knobs_shim as _FK
+        pv = SP.pooled_pivots(_FK.PIVOT_TF, _FK.PIVOT_DWELL_S)
+        piv = [(c, sd) for _cf, c, sd in pv]
+        trades = []
+        for i, (cf, c, sd) in enumerate(pv):
+            cl = pv[i + 1][0] if i + 1 < len(pv) else ln.N
+            if cf < ln.N:
+                trades.append((int(cf), int(min(cl, ln.N)), -int(sd)))
+        assert all(trades[k][2] != trades[k + 1][2] for k in range(len(trades) - 1)), \
+            'two of his pooled trades in a row share a side'
+        print('pooled pivots: %d on the tape, %d pseudo trades, first opens %s'
+              % (len(pv), len(trades), ln.U(trades[0][0])))
+        LN = TA.load()
+        ST, det = TA.run(LN, trades, FNC, A_TFS, FENCE_RESET_TO)
+    else:
+        LN, piv, trades, ST, det = TA.build(FNC, A_TFS, FENCE_RESET_TO)
     print('towards/away: %d ws2Mage pivots, %d pseudo trades, first opens %s'
           % (len(piv), len(trades), ln.U(trades[0][0])))
     #   HIS 1110 CROSS ROW: the e and x race wins per side over the whole tape, each put on the row of the ws1 bar it
@@ -657,7 +745,7 @@ def build():
                       % (off, fl, xre, len(tr), ln.U(tr[0][0]), time.time() - t1))
     assert all(np.array_equal(SIDES[(off, 1)], -SIDES[(off, 0)]) for off in OFFS), \
         'a flipped pseudo trade is not the as-found one on the same bars with the other target-side'
-    MNR = dict(zip(SIDES, m_no_rev([SIDES[key][prt] for key in SIDES], prt)))
+    MNR = {key: leg_max_mage(SIDES[key], prt) for key in SIDES}
     mats = {}
     for off, fl, xre, ST in STATES:
         side, mnr = SIDES[(off, fl)], MNR[(off, fl)]
@@ -709,10 +797,8 @@ def build():
         cols.extend(UD)                          # HIS 1116 the up/dn pair per line, the same in every state
         cols.append((sl & 0xFF).astype(np.uint8).view(np.int8))     # HIS 1115 SL%, the same in every state
         cols.append((sl >> 8).astype(np.int8))
-        for mn_k, mv_k in mnr:                   # HIS 1117 mnr1 then mnr2: its TF, 0 none, and its value
+        for mn_k in mnr:                         # HIS 1119: the incoming leg's max Mage TF, 0 none
             cols.append(mn_k)
-            cols.append((mv_k & 0xFF).astype(np.uint8).view(np.int8))
-            cols.append((mv_k >> 8).astype(np.int8))
         cols.append(side[prt])                   # HIS 1109: the time cell's 20% colour, red LOW, green HIGH
         mats[(off, fl, xre)] = np.ascontiguousarray(np.stack(cols, 1).astype(np.int8))
     return ts[first], mats
@@ -727,8 +813,8 @@ O_XC = O_TACNT + 2 * len(SUMS)                  # the cross code per line
 O_TOEXF = O_XC + len(LINES)                     # per sum, how many of its lines read TO(exf)
 O_UD = O_TOEXF + len(SUMS)                      # HIS 1116 the up/dn pair per line
 O_SL = O_UD + len(LINES)                        # HIS 1115 SL% x 100, an int16
-O_MNR = O_SL + 2                                # per M-no-rev column: its TF, then its value x 10
-assert O_MNR + 3 * len(MNR_TOPS) + 1 == STRIDE, (O_MNR, STRIDE)
+O_MNR = O_SL + 2                                # HIS 1119: one byte, the incoming leg's max Mage TF
+assert O_MNR + len(MNR_TOPS) + 1 == STRIDE, (O_MNR, STRIDE)
 
 OPEN, MATS = build()
 RP = MATS[(0, 0, 'winner')]                     # the pivots as found, A locked, 23/77, his 1109 4B x race
@@ -751,7 +837,7 @@ META = json.dumps({
     #   WHERE EACH BLOCK STARTS, so a reader is told rather than deriving it. A derived offset is
     #   how oracle_rows came to hold a stale O_TA and read every TO/AW cell out of the wrong byte.
     'ta': O_TA, 'xc': O_XC, 'toexf': O_TOEXF, 'sl': O_SL, 'omnr': O_MNR,
-    'xreopen': X_REOPEN, 'ereopen': E_REOPEN, 'xres': list(XRES),
+    'xreopen': X_REOPEN, 'ereopen': E_REOPEN, 'xres': list(XRES), 'pivots': PIVOTS,
     #   HIS 1116: where the up/dn block starts, so a reader is told rather than re-deriving the layout
     'updn': O_UD})
 
@@ -967,8 +1053,8 @@ function ensurePool(n) {
     const cells = [];
     let mcs = [], slc = null;
     for (let c = 0; c <= NC; c++) {
-      if (c === NL + 1) {              // HIS 1111 M-no-rev, between ws15 and the sums; 3 lines like every data cell
-        //   HIS 1117: one skinny cell per M-no-rev ceiling, mnr1 then mnr2
+      if (c === NL + 1) {              // HIS 1119 the leg's max Mage TF, between ws15 and the sums
+        //   one skinny cell, three lines like every data cell so the row stays aligned
         for (const _ of meta.mnrs) {
           const m = document.createElement('div'); m.n = document.createElement('span');
           m.ta = document.createElement('b'); m.xc = document.createElement('b'); m.append(m.n, m.ta, m.xc);
@@ -1013,11 +1099,13 @@ function draw() {
     //   HIS 1117: mnr1's three bytes then mnr2's, both before the side. ws{TF} on the top line and the
     //   line's closed-prev value under it
     for (let k = 0; k < p.mcs.length; k++) {
-      const b0 = o + NS - 1 - 3 * (p.mcs.length - k);
-      const mv = blk ? blk[b0] : 0, mx = blk ? ((blk[b0 + 2] << 8) | (blk[b0 + 1] & 255)) : 0;
+      //   HIS 1119: one byte per column now, not three. The value is the INCOMING leg's max Mage
+      //   TF, stamped at this leg's open and the same on every row of it
+      const b0 = o + NS - 1 - (p.mcs.length - k);
+      const mv = blk ? blk[b0] : 0;
       const m = p.mcs[k];
       m.n.textContent = !blk ? '·' : mv > 0 ? 'ws' + mv : NB;
-      m.ta.textContent = (blk && mv > 0) ? (mx / 10).toFixed(1) : NB;
+      m.ta.textContent = NB;
       m.xc.textContent = NB;
       m.className = (blk ? 'mn' : 'w') + (k === 0 ? ' sx' : '');
     }
@@ -1177,7 +1265,7 @@ async function init() {
   //   HIS 1118: *"the only way to answer is a button on 8791"* - whether his B reaches the
   //   towards/away ws{TF}x races (the 1112 row rule and the hunt samples) as well as the cross row.
   //   On = B. The cross row's own x bits are at B in every state; this button moves the TO/AW cells.
-  if ((meta.xres || ['winner']).length > 1) {
+  if ((meta.xres || ['winner']).length > 1) {   // HIS 1119: the server builds one state, so no button
     const xb = document.createElement('button'); xb.className = 'tog';
     xb.textContent = 'towards/away x race = B';
     xb.title = 'the towards/away ws{TF}x race re-opens on crossing back over ANY of its three race lines (his B); '
@@ -1246,19 +1334,17 @@ if __name__ == '__main__':
     #   HIS 1117: with r-pred off there is no r-pred byte in the row, so the 1110 count of its
     #   -1/+1 cells on an AW line cannot be taken from the page any more. The 1109 control above
     #   still checks the producer on its own minute grid.
-    #   HIS 1117 two columns: mnr1's bytes sit at STRIDE-7..-5 and mnr2's at STRIDE-4..-2
-    _MNR = [(RP[:, STRIDE - 1 - 3 * (len(MNR_TOPS) - k)].astype(int),
-             (RP[:, STRIDE - 1 - 3 * (len(MNR_TOPS) - k) + 2].astype(int) << 8)
-             | (RP[:, STRIDE - 1 - 3 * (len(MNR_TOPS) - k) + 1].astype(int) & 255))
-            for k in range(len(MNR_TOPS))]
+    #   HIS 1119: one byte per row, just before the side byte
+    _MNR = [RP[:, STRIDE - 1 - (len(MNR_TOPS) - k)].astype(int) for k in range(len(MNR_TOPS))]
     for k, (label, _) in enumerate(SUMS):
         _ex = RP[:, O_TOEXF + k].astype(int)
         print('%s: rows printing TO(exf) %d of %d, most lines reading TO(exf) on one row %d'
               % (label, int((_ex > 0).sum()), len(_ex), int(_ex.max())))
-    for _lab, _top, (_mn, _mv) in zip(MNR_LABELS, MNR_TOPS, _MNR):
-        print('%s (ws%d..ws%dMage): rows printing a TF %d of %d, highest TF printed %d, value %.1f .. %.1f'
-              % (_lab, MNR_LO, _top, int((_mn > 0).sum()), len(_mn), int(_mn.max()),
-                 _mv[_mn > 0].min() / 10, _mv[_mn > 0].max() / 10))
+    for _lab, _top, _mn in zip(MNR_LABELS, MNR_TOPS, _MNR):
+        _legs = int((np.diff(RP[:, STRIDE - 1].astype(int)) != 0).sum()) + 1
+        print('%s (ws1..ws%dMage, the INCOMING leg\'s max, carried): rows with a TF %d of %d, '
+              'highest %d, legs on the page %d'
+              % (_lab, _top, int((_mn > 0).sum()), len(_mn), int(_mn.max()), _legs))
     #   HIS 1118 the Mage's side of 50: bits 4-5 of each line's up/dn byte, counted over every cell
     _m50 = (RP[:, O_UD:O_UD + len(LINES)].astype(int) >> 4) & 3
     _thin = int(np.argmin((_m50 > 0).sum(0)))
@@ -1266,6 +1352,7 @@ if __name__ == '__main__':
           '%d, neither %d of %d; thinnest line %s, %d of %d cells painted'
           % (len(LINES), MAGE50_PCT, int((_m50 == 1).sum()), int((_m50 == 2).sum()), int((_m50 == 0).sum()),
              _m50.size, LINES[_thin], int((_m50[:, _thin] > 0).sum()), len(_m50)))
+    print('pivots: %s' % PIVOTS)
     print('fence: %d/%d, locked (HIS 1115). fence reset TO: %g/%g, banked (HIS 1117)'
           % (FNC, 100 - FNC, FENCE_RESET_TO, 100 - FENCE_RESET_TO))
     _lo, _hi = O_TA, O_TA + len(LINES)

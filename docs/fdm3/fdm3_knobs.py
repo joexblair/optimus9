@@ -63,9 +63,12 @@ ORACLE_PORT = _knob('ORACLE_PORT', 8790, int)
 FENCE_RESET_TO = _knob('FENCE_RESET_TO', 33.0)   # his `fdm3-fence-reset-TO`, banked on the page
 ORACLE_FENCE = _knob('ORACLE_FENCE', 23.0)       # the ex-fence fence, locked on the page since 1115
 ORACLE_SHIFT = _knob('ORACLE_SHIFT', 30, int)    # his 1117 pivot offset button, minutes - was 15
-MNR_TOPS = tuple(int(x) for x in os.environ.get('W_FDM3_MNR_TOPS', '15,25').split(','))
-#   his 1117 two M-no-rev columns: mnr1 ws1..ws25's lower ceiling, mnr2 the higher one
-MNR_LO = _knob('MNR_LO', 1, int)                 # his *"we'll settle on ws1 to ws25"*
+#   HIS 1119: *"I'm not using the m-no-rev column. drop it and replace it with a new max Mage TF
+#   column that repeats the value on every row of the leg"*. The two M-no-rev columns are gone;
+#   one column takes their place, holding the INCOMING leg's max oob Mage TF carried across the
+#   outgoing leg. This is now that column's ceiling, and MNR_LO is its floor.
+MNR_TOPS = tuple(int(x) for x in os.environ.get('W_FDM3_MNR_TOPS', '15').split(','))
+MNR_LO = _knob('MNR_LO', 1, int)                 # the climb starts at the lowest oob line
 #   HIS 1118 the Mage's side of 50 on the ws1..ws15 cells: he picked the paint strength by eye off a
 #   test that stepped 100% down to 0% in tens - *"the setting at 0726 is perfect"*, and 07:26 fell
 #   in the 20% step. The page publishes it in /meta so this value and the page cannot drift apart.
@@ -229,8 +232,9 @@ RULED = {
                              'void read - asserted against the page on every run'),
     'ORACLE_FENCE': (23.0, 'the ex-fence fence, locked on the page at his 1115 word'),
     'ORACLE_SHIFT': (30, 'his 1117 pivot offset button, minutes - *"instead of +15, make it +30"*'),
-    'MNR_TOPS': ((15, 25), 'his 1117 two M-no-rev ceilings, mnr1 then mnr2'),
-    'MNR_LO': (1, 'the M-no-rev floor, his *"we\'ll settle on ws1 to ws25"*'),
+    'MNR_TOPS': ((15,), 'the leg-Mage column\'s ceiling. HIS 1119 dropped the two M-no-rev '
+                        'columns for one max-Mage-TF column; ws1..ws15 is his in-use range'),
+    'MNR_LO': (1, 'the leg-Mage climb starts at the lowest oob line in the leg'),
     'ORACLE_X_REOPEN': ('any', 'his 1118 B - the ws{TF}x race re-opens on crossing back over ANY '
                                'of its three race lines: *"the only workable answer is B"*'),
     'ORACLE_E_REOPEN': ('winner', 'his 1109 4B, unchanged - the ws{TF}e race re-opens only on '

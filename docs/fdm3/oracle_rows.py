@@ -113,7 +113,7 @@ O_SIDE = STRIDE - 1
 #   second M-no-rev column's three bytes. O_TA and O_CROSS sit before both inserts and are unmoved, and the side is
 #   still the last byte. The stride is derived from the page's own layout rather than a list of accepted values, so
 #   a page serving any shape this reader does not expect fails by name.
-_TAIL = 3 + 3 * len(META.get('mnrtops', [1]))      # SL% as an int16, then each M-no-rev column's TF and value
+_TAIL = 3 + len(META.get('mnrtops', [1]))   # SL% as an int16, then HIS 1119 one byte per leg-Mage column
 _WANT = (_RP + len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)
          + (len(LINES) if 'updn' in META else 0) + _TAIL)
 assert STRIDE == _WANT, ('the page\'s row is not the shape this reader expects', STRIDE, _WANT)
