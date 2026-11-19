@@ -80,7 +80,8 @@ finally:
 #   banked knobs, so neither is a free choice at the command line.
 MODE = sys.argv[1] if len(sys.argv) > 1 else ''
 #   every orac- mode reads his 30 second page; the rest read the 60 second one he banked
-PORT = int(FK.ORAC_EXHAUST_PORT) if MODE in ('orac-exhaust', 'setups') else int(FK.ORACLE_PORT)
+PORT = (int(FK.ORAC_EXHAUST_PORT) if MODE in ('orac-exhaust', 'setups', 'contrast')
+        else int(FK.ORACLE_PORT))
 BASE = 'http://127.0.0.1:%d' % PORT
 META = json.load(urllib.request.urlopen(BASE + '/meta'))
 LINES, SUMS = META['lines'], META['sums']
@@ -1158,6 +1159,113 @@ def main():
         print('bars %d, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
         print('file: %s, %d samples of %s every %d s, %s .. %s'
               % (out, len(bars), name, gap, t0s, t1s))
+        return
+    if MODE == 'contrast':
+        #   HIS 1118: *"would the 'top' 20% be a good starting place to pare from?"* - the top and
+        #   the BOTTOM of each side, printed together, because a column the top shares means
+        #   nothing if the bottom shares it too
+        day = sys.argv[2]
+        assert int(META['step']) == int(FK.ORAC_EXHAUST_ROW_S) * 1000, \
+            ('this reads his 30 second oracle', META['step'])
+        a, z = K_OF(day + ' 00:00:00'), min(K_OF(day + ' 23:59:59'), NROWS - 1)
+        R, SD = load()
+        print(control(R))
+        TR = TA.pseudo_trades()[1]
+        reads = orac_reads(TR)
+        V = orac_exhaust(R)
+        lo_hi, hi_lo = int(FK.ORAC_LOW_HI), int(FK.ORAC_LOW_HI) + 1
+        hi_hi, nrow = int(FK.ORAC_HIGH_HI), int(FK.ORAC_ROWS)
+        n6 = int(FK.ORAC_6X_ROWS)
+        k = np.flatnonzero((V['six'] | (V['s1'] & V['s2'] & V['gate']))[a:z + 1]) + a
+        side = reads['side'][k]
+        mm = setup_maemfe(PRT[k], side)
+        ratio, rank = rank_per_side(mm, side)
+        TAG = {x: max_oob_line(reads, x)[0] for x in ('Mage', 'b')}
+        XLO = window(R['x'], n6)[:, 1:lo_hi + 1].sum(1)
+        XHI = window(R['x'], n6)[:, hi_lo:hi_hi + 1].sum(1)
+        S2 = orac_setups(R, reads, nrow)
+        #   EVERY COLUMN, and whether it can be read AT the setup bar. A column that cannot be is
+        #   printed but can never become a rule - it needs bars that have not happened yet.
+        COLS = [('xlo', XLO, 1), ('xhi', XHI, 1),
+                ('lowAW/%d' % nrow, V['low_aw'], 1), ('lowFLIP/%d' % nrow, V['low_fl'], 1),
+                ('lowTOexf here', V['low_toexf'], 1), ('ws1-15TOexf here', V['all_toexf'], 1),
+                ('lowAW here', V['low_aw3'], 1), ('highTOexf here', V['high_toexf'], 1),
+                ('max oob Mage', TAG['Mage'], 1), ('max oob b', TAG['b'], 1),
+                ('grace lowband AW flips', S2['glo'], 0),
+                ('grace highband AW flips', S2['ghi'], 0),
+                ('grace highband x-crosses', S2['gx'], 0)]
+        pct = float(FK.ORAC_CUT_PCT)
+        out = (sys.argv[3] if len(sys.argv) >= 4 else None)
+        if out and not os.path.isabs(out):
+            out = os.path.join(HERE, out)
+        buf = []
+        wr = buf.append
+        wr('# HIS 1118 TOP AND BOTTOM %g%% PER SIDE on %s' % (pct, day))
+        wr('#')
+        wr('# HIS WORDS: *"keeping only the top N MAE rows per side groupings"*, then *"would the')
+        wr('# \'top\' 20%% be a good starting place to pare from?"*. The BOTTOM %g%% prints beside it'
+           % pct)
+        wr('# because a column the top block shares means nothing if the bottom block shares it too.')
+        wr('#')
+        wr('# RANKED ON MFE OVER abs(MAE), his *"I take your recommendation"*, inside each side.')
+        wr('# A row with no MAE at all sorts above every finite ratio, by its MFE.')
+        wr('# The MAE/MFE span is the %s leg that HOLDS the row, under his last_cross leg mode.'
+           % FK.ORAC_MAEMFE_LINE)
+        wr('#')
+        wr('# "at the bar?" says whether the column can be read AT the setup row. A "no" column can')
+        wr('# describe a row but can never become a rule: it needs bars that have not happened yet.')
+        wr('#')
+        wr('# the page: port %d, %d rows %d s apart' % (PORT, NROWS, STEP // 1000))
+        wr('# the tape: %d bars, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
+        wr('# the knobs (banked): ' + ' '.join('%s=%s' % (kk, vv) for kk, vv in FK.live()
+                                               if kk.startswith('ORAC_')))
+        med = lambda v: sorted(v)[len(v) // 2] if len(v) else float('nan')
+        for sd, lab in ((+1, 'HIGH'), (-1, 'LOW')):
+            idx = [j for j in range(len(k)) if int(side[j]) == sd and rank[j] is not None]
+            idx.sort(key=lambda j: rank[j])
+            n = int(round(len(idx) * pct / 100.0))
+            top, bot = idx[:n], idx[-n:] if n else []
+            wr('')
+            wr('## %s - %d rows, top %g%% is %d and bottom %g%% is %d'
+               % (lab, len(idx), pct, n, pct, n))
+            wr('')
+            rows = []
+            for nm, arr, causal in COLS:
+                tv = [float(arr[k[j]]) for j in top]
+                bv = [float(arr[k[j]]) for j in bot]
+                rows.append([nm, 'yes' if causal else 'NO',
+                             '%.2f' % (sum(tv) / len(tv)), '%g' % med(tv),
+                             '%.2f' % (sum(bv) / len(bv)), '%g' % med(bv),
+                             '%+.2f' % (sum(tv) / len(tv) - sum(bv) / len(bv))])
+            for t in fixed_table(['the column', 'at the bar?', 'top mean', 'top median',
+                                  'bottom mean', 'bottom median', 'top mean - bottom mean'], rows):
+                wr(t)
+            wr('')
+            for blk, bl in ((top, 'TOP %g%%' % pct), (bot, 'BOTTOM %g%%' % pct)):
+                wr('')
+                wr('### %s %s' % (lab, bl))
+                wr('')
+                rr = []
+                for j in blk:
+                    i = int(k[j])
+                    _zc, _mae, _mfe = mm[j]
+                    rr.append([U(i)[11:], rank[j],
+                               '%+.3f' % _mae, '%+.3f' % _mfe,
+                               'no MAE' if ratio[j] is None else '%.2f' % ratio[j],
+                               'yes' if (V['s1'][i] and V['s2'][i] and V['gate'][i]) else '-']
+                              + [int(arr[i]) if nm not in ('max oob Mage', 'max oob b')
+                                 else ('ws%d' % int(arr[i]) if int(arr[i]) else '-')
+                                 for nm, arr, _c in COLS])
+                for t in fixed_table(['the row', 'rank', 'MAE %', 'MFE %', 'MFE over abs(MAE)',
+                                      'the 57'] + [nm for nm, _a, _c in COLS], rr):
+                    wr(t)
+        for t in buf:
+            print(t)
+        if out:
+            with open(out, 'w') as f:
+                f.write('\n'.join(buf) + '\n')
+            print('')
+            print('file: %s' % out)
         return
     if MODE == 'setups':
         #   HIS 1118: find his setups, tag each with the max oob Mage TF, and show whether that

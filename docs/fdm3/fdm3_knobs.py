@@ -125,6 +125,10 @@ ORAC_MAEMFE_LINE = os.environ.get('W_FDM3_ORAC_MAEMFE_LINE', 'ws2Mage')
 #   HIS 1118: *"I take your recommendation"* - rank by MFE over abs(MAE), not by MAE alone, so a
 #   row with a tiny MAE AND a tiny MFE does not score as a winner. Ranked inside each side.
 ORAC_RANK_BY = os.environ.get('W_FDM3_ORAC_RANK_BY', 'mfe_over_mae')
+#   HIS 1118: *"would the 'top' 20% be a good starting place to pare from?"* - yes, with the
+#   BOTTOM 20% printed beside it, because a column shared by the top means nothing if the bottom
+#   shares it too. Per cent of each side's rows taken from each end.
+ORAC_CUT_PCT = _knob('ORAC_CUT_PCT', 20.0)
 ORAC_GRACE_MIN = _knob('ORAC_GRACE_MIN', 5.0)          # his *"5 minutes (walk forward) grace"*
 ORAC_HIGH_FLIPS = _knob('ORAC_HIGH_FLIPS', 2, int)     # his *">=2 AW flips"* in highband
 ORAC_HIGH_TOEXF_MAX = _knob('ORAC_HIGH_TOEXF_MAX', 1, int)   # his *"a maximum of 1 TOexf"*
@@ -237,6 +241,7 @@ RULED = {
     'ORAC_MAEMFE_LINE': ('ws2Mage', 'the line whose sweep-pivot legs score MAE/MFE. Under his '
                                     '1118 leg mode it reads his 06:06 and 12:05 as LOW legs, and '
                                     'it is the line the pseudo trades already pivot on'),
+    'ORAC_CUT_PCT': (20.0, 'his 1118 top-and-bottom cut, per cent of each side\'s rows'),
     'ORAC_RANK_BY': ('mfe_over_mae', 'his 1118 *"I take your recommendation"* - rank on MFE '
                                      'over abs(MAE), per side, not on MAE alone'),
     'ORAC_OOB_JUMP': (2, 'his 1118 *"jumps of 2 should be allowed to make it more sane"* - the '
