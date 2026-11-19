@@ -294,6 +294,31 @@ def pooled_pivots(tf, dwell_s, xwob=None, reads=('Mage', 'b')):
     return out
 
 
+def pooled_trades(tf, dwell_s, xwob=None, reads=('Mage', 'b')):
+    """The pseudo trades HIS 1118 pooled pivots make. -> [(open bar, close bar, target-side)].
+
+    ONE HOME for a construction that was written inline in the fdm3-oracle page and recomputed, as
+    a DIFFERENT producer, in the fdm3 probe. Joe 1119 caught that: *"we shouldn't be using ws2Mage.
+    a new mode was build in sweep-pivots that relies on ws1 to ib, to the opposing oob to ib - this
+    is the mode that 8792 is using"*. The probe had been scoring ws2Mage trades against that page's
+    cells, and the two sides were opposite on 679 of 09-24's 2880 rows.
+
+    A trade OPENS at a pivot's CONFIRM bar - the cross itself is first knowable 90 s later - and
+    closes at the next pivot's confirm bar. Its TARGET-SIDE IS MINUS THE PIVOT'S SIDE: a pivot that
+    ends a run to the high side opens a trade heading low.
+    """
+    pv = pooled_pivots(tf, dwell_s, xwob=xwob, reads=reads)
+    out = []
+    for i, (cf, _c, sd) in enumerate(pv):
+        cl = pv[i + 1][0] if i + 1 < len(pv) else ln.N
+        if cf < ln.N:
+            out.append((int(cf), int(min(cl, ln.N)), -int(sd)))
+    assert all(out[k][2] != out[k + 1][2] for k in range(len(out) - 1)), \
+        'two pooled trades in a row share a target-side'
+    assert all(out[k][0] < out[k][1] for k in range(len(out))), 'a pooled trade closes before it opens'
+    return out
+
+
 def marks(tf, bar, side, align_s=None, xwob=None):
     """Does this Mage mark `bar` on `side`. -> the confirm bar of its nearest same-side cross, or None.
 

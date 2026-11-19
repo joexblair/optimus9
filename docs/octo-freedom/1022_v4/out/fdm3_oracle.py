@@ -723,23 +723,23 @@ def build():
     if PIVOTS == 'pooled':
         import v4_sweep_pivots as SP
         import fdm3_knobs_shim as _FK
+        #   HIS 1119, after the probe scored ws2Mage trades against this page's cells: the
+        #   construction has ONE HOME, v4_sweep_pivots.pooled_trades, which the probe calls too.
+        #   This produced the same list inline before the move - identical maths, same knobs.
         pv = SP.pooled_pivots(_FK.PIVOT_TF, _FK.PIVOT_DWELL_S)
         piv = [(c, sd) for _cf, c, sd in pv]
-        trades = []
-        for i, (cf, c, sd) in enumerate(pv):
-            cl = pv[i + 1][0] if i + 1 < len(pv) else ln.N
-            if cf < ln.N:
-                trades.append((int(cf), int(min(cl, ln.N)), -int(sd)))
-        assert all(trades[k][2] != trades[k + 1][2] for k in range(len(trades) - 1)), \
-            'two of his pooled trades in a row share a side'
+        trades = SP.pooled_trades(_FK.PIVOT_TF, _FK.PIVOT_DWELL_S)
         print('pooled pivots: %d on the tape, %d pseudo trades, first opens %s'
               % (len(pv), len(trades), ln.U(trades[0][0])))
         LN = TA.load()
         ST, det = TA.run(LN, trades, FNC, A_TFS, FENCE_RESET_TO)
     else:
         LN, piv, trades, ST, det = TA.build(FNC, A_TFS, FENCE_RESET_TO)
-    print('towards/away: %d ws2Mage pivots, %d pseudo trades, first opens %s'
-          % (len(piv), len(trades), ln.U(trades[0][0])))
+    #   HIS 1119 caught this line calling the pooled ws1 pivots `ws2Mage`: it printed the same
+    #   words on both paths, and that mislabel is how a ws2Mage read went unnoticed on this page.
+    print('towards/away: %d %s pivots, %d pseudo trades, first opens %s'
+          % (len(piv), 'pooled ws%d (Mage and b, emerging and closed-prev)' % int(_FK.PIVOT_TF)
+             if PIVOTS == 'pooled' else 'ws2Mage', len(trades), ln.U(trades[0][0])))
     #   HIS 1110 CROSS ROW: the e and x race wins per side over the whole tape, each put on the row of the ws1 bar it
     #   lands in. They do not read the pseudo trade, so both states share them; the row's target-side picks
     #   which side prints - crossovers LOW, crossunders HIGH
@@ -822,14 +822,20 @@ def build():
                 continue
             st = ST[t][prt].astype(np.int8)
             CODE[name] = np.where((st != TA.NONE) & exf_at(t), st + 2, st)
-            #   HIS 1119 `fdm3-infence-power`: the band of the line's own value, on a TO(inf) cell
-            #   only - his *"for every TO(inf) line"*. searchsorted on his edges with side='right'
+            #   HIS 1119 `fdm3-infence-power`: the band of the line's own value. His first ask was
+            #   *"for every TO(inf) line"*; he then added *"in the same manner as TO(inf), add the
+            #   (+2,+1,0,-1,-2) suffixs to AW(inf). same ranges"*, and ruled the same seven bands
+            #   there, so BOTH IN-FENCE CODES carry it. searchsorted on his edges with side='right'
             #   gives 0 under the first edge and len(edges) at or over the last, which is his -3
             #   and +3; +1 keeps 0 free for a cell with no value.
+            #   ONE CELL IS NEVER BOTH TO(inf) AND AW(inf), so the two share bits 3-5 and the code
+            #   in bits 0-2 says which tag the suffix belongs to. No bit was added.
             _v = np.round(np.asarray(LN['CPR'][t], float)[prt], IFP_DP)
             _bd = (np.searchsorted(IFP_EDGES, _v, side='right') + 1).astype(np.int8)
             _bd = np.where(np.isfinite(_v), _bd, 0).astype(np.int8)
-            _inf = CODE[name] == TA.TO                   # TO(inf): TO, and the ex-fence bit unset
+            #   TO(inf) is TA.TO and AW(inf) is TA.AW with the ex-fence bit unset - a +2 would
+            #   have made them TO(exf) / AW(exf), which carry no in-fence distance
+            _inf = (CODE[name] == TA.TO) | (CODE[name] == TA.AW)
             CODE[name] = (CODE[name] | np.where(_inf, _bd << 3, 0)).astype(np.int8)
             #   A TO(inf) cell CAN be bandless, and only in the tape's warm-up: a line has no
             #   closed-prev value until its first bar closes, which for ws15 is 2026-07-02
@@ -837,7 +843,7 @@ def build():
             #   and print a bare TO(inf). What must never happen is a cell WITH a value and no
             #   band - that would be a packing fault, so that is what this holds.
             assert not np.any(_inf & (_bd == 0) & np.isfinite(_v)), \
-                'a TO(inf) cell has a closed-prev value but no band'
+                'an in-fence cell has a closed-prev value but no band'
             IFP_BARE[0] += int(np.sum(_inf & (_bd == 0)))
             IFP_INF[0] += int(np.sum(_inf))
             cols.append(CODE[name])
@@ -1231,8 +1237,9 @@ function draw() {
         //   HIS 1119 `fdm3-infence-power`: the code is bits 0-2, the power band is bits 3-5 held as
         //   band+1, so 0 prints a bare TO(inf). The suffix goes on a TO(inf) cell only
         const tc = s & 7, pw = (s >> 3) & 7;
+        //   HIS 1119: the suffix goes on BOTH in-fence codes - TO(inf) is 1, AW(inf) is 2
         d.ta.textContent = (['', 'TO(inf)', 'AW(inf)', 'TO(exf)', 'AW(exf)'][tc] || NB)
-          + (tc === 1 && pw ? meta.ifp[pw - 1] : '');   // HIS 1109 (inf) / (exf)
+          + ((tc === 1 || tc === 2) && pw ? meta.ifp[pw - 1] : '');   // HIS 1109 (inf) / (exf)
         //   HIS 1110: crossovers on a LOW target-side, crossunders on HIGH; X and E on one ws1 bar join, 4 spaces apart
         const xc = blk[o + NL + 2 * (NC - NL) + c];
         d.xc.textContent = [xc & 1 ? (sd < 0 ? 'X↑' : '↓X') : '', xc & 2 ? (sd < 0 ? '↑E' : '↓E') : '']
@@ -1450,8 +1457,8 @@ if __name__ == '__main__':
     print('fdm3-small-trade (max %d highband lines in TO(exf)): pivots as found, rows in a trade %d, lrg %d; '
           'every state, rows in a trade %d, lrg %d'
           % (SMALL_MAX, int((RP[:, STRIDE - 1] != 0).sum()), int(_lrg.sum()), SMALL_ROWS[0], SMALL_ROWS[1]))
-    print('fdm3-infence-power: %d TO(inf) cells over every state, %d of them bare (%.2f%%) - a '
-          'line has no closed-prev value until its first bar closes'
+    print('fdm3-infence-power: %d in-fence cells over every state - TO(inf) and AW(inf) both - '
+          '%d of them bare (%.2f%%) - a line has no closed-prev value until its first bar closes'
           % (IFP_INF[0], IFP_BARE[0], 100.0 * IFP_BARE[0] / max(1, IFP_INF[0])))
     print('fence: %d/%d, locked (HIS 1115). fence reset TO: %g/%g, banked (HIS 1117)'
           % (FNC, 100 - FNC, FENCE_RESET_TO, 100 - FENCE_RESET_TO))

@@ -283,10 +283,12 @@ def load(flip=0, alo=None, ahi=None, chunk=20000):
             #   0 no value, 1..7 his -3 .. +3.
             st = b[:, O_TA + j].astype(int)
             out['tapow'][a:a + n, tf] = (st >> 3) & 7
-            #   a band may only sit on a TO(inf) cell - his *"for every TO(inf) line"*. If this
-            #   fires, the page put the band somewhere his words do not reach.
-            assert not np.any(((st & 7) != 1) & (((st >> 3) & 7) != 0)), \
-                'a power band sits on a cell that is not TO(inf)'
+            #   a band may only sit on an IN-FENCE cell - TO(inf) 1 or AW(inf) 2. His 1119
+            #   *"in the same manner as TO(inf), add the (+2,+1,0,-1,-2) suffixs to AW(inf)"*
+            #   widened it from TO(inf) alone. If this fires, the page put a band on a cell his
+            #   words do not reach.
+            assert not np.any(~np.isin(st & 7, (1, 2)) & (((st >> 3) & 7) != 0)), \
+                'a power band sits on a cell that is neither TO(inf) nor AW(inf)'
             st = st & 7
             out['aw'][a:a + n, tf] = np.isin(st, (2, 4))
             #   HIS *"printing exf"*: the ex-fence bit set - 3 TO(exf), 4 AW(exf). `ex` includes oob.
@@ -380,6 +382,31 @@ def _any_in_trade(flag, topen):
     lo = np.where(topen >= 0, topen, 0)
     assert (lo <= PRT).all(), 'a trade opens after the row that reads it'
     return (c[PRT + 1] - c[lo]) > 0
+
+
+def page_trades():
+    """The pseudo trades OF THE PAGE THIS PROBE IS READING. -> [(open, close, target-side)].
+
+    HIS 1119: *"we shouldn't be using ws2Mage. a new mode was build in sweep-pivots that relies on
+    ws1 to ib, to the opposing oob to ib - this is the mode that 8792 is using"*.
+
+    THE DEFECT THIS REPLACES: every mode here called towards_away.pseudo_trades(), the ws2Mage
+    producer, WHATEVER PORT IT READ. It was invisible while the banked port served ws2Mage pivots.
+    When his ORAC_EXHAUST_PORT moved to 8792 the probe went on scoring 1564 ws2Mage trades against
+    a page built on 3006 pooled ws1 ones: on 09-24 the two target-sides were OPPOSITE on 679 of
+    2880 rows, and the fdm3_orac_setup rows stamped port 8792 mixed the two.
+
+    The page publishes which producer it used, so there is nothing to infer. `pooled` is
+    v4_sweep_pivots.pooled_trades at the banked pivot knobs - the same one home the page calls.
+    """
+    src = str(META.get('pivots', 'ws2Mage'))
+    if src == 'pooled':
+        import fdm3_knobs as _K
+        return SP.pooled_trades(int(_K.ORAC_PIVOT_TF), int(_K.ORAC_PIVOT_DWELL_S))
+    if src == 'ws2Mage':
+        return TA.pseudo_trades()[1]
+    raise SystemExit('the page on port %d reports pivots %r, which this probe cannot build'
+                     % (PORT, src))
 
 
 def orac_reads(TR):
@@ -1279,7 +1306,7 @@ def main():
         a, z = K_OF(day + ' 00:00:00'), min(K_OF(day + ' 23:59:59'), NROWS - 1)
         R, SD = load()
         print(control(R))
-        TR = TA.pseudo_trades()[1]
+        TR = page_trades()
         reads = orac_reads(TR)
         V = orac_exhaust(R)
         lo_hi, hi_lo = int(FK.ORAC_LOW_HI), int(FK.ORAC_LOW_HI) + 1
@@ -1384,7 +1411,7 @@ def main():
         a, z = K_OF(day + ' 00:00:00'), min(K_OF(day + ' 23:59:59'), NROWS - 1)
         R, SD = load()
         print(control(R))
-        TR = TA.pseudo_trades()[1]
+        TR = page_trades()
         reads = orac_reads(TR)
         print('bars %d, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
         print('page port %d, %d rows %d s apart' % (PORT, NROWS, int(META['step']) // 1000))
@@ -1525,14 +1552,19 @@ def main():
             _MM = setup_maemfe(PRT[_all], reads['side'][_all])
             _RT, _RK = rank_per_side(_MM, reads['side'][_all])
             _S = {r_: orac_setups(R, reads, r_, every=True) for r_ in (2, 3)}
-            _d.execute('DELETE FROM fdm3_orac_setup WHERE day=%s AND knobs=%s', (day, _kn))
+            #   HIS 1119: *"use a new key and I'll filter on it"*. The port is a KEY column, not
+            #   a label: 8791 serves ws2Mage pivot trades and 8792 the four-read pooled ones, so one
+            #   timestamp has two honest and different rows and the second run must not overwrite
+            #   the first.
+            _d.execute('DELETE FROM fdm3_orac_setup WHERE day=%s AND port=%s AND knobs=%s',
+                       (day, PORT, _kn))
             _batch = []
             for j_, i_ in enumerate(_all):
                 zc, mae, mfe = _MM[j_]
                 for r_ in (2, 3):
                     S = _S[r_]
                     _batch.append((
-                        day, r_, _kn, len(_batch) + 1, U(int(i_)),
+                        day, PORT, r_, _kn, len(_batch) + 1, U(int(i_)),
                         'HIGH' if reads['side'][i_] > 0 else 'LOW' if reads['side'][i_] < 0 else 'none',
                         int(S['setup'][i_]),
                         None if mae is None else float(mae),
@@ -1547,15 +1579,15 @@ def main():
                         int(S['sxf'][i_, 0]), int(S['sxf'][i_, 1]),
                         None if zc is None else ln.U(int(zc))))
             _d.executemany(
-                'INSERT INTO fdm3_orac_setup (day, win_rows, knobs, seq, setup_row, side, '
+                'INSERT INTO fdm3_orac_setup (day, port, win_rows, knobs, seq, setup_row, side, '
                 'is_setup, mae_pct, mfe_pct, mfe_over_mae, rank_in_side, leg_mage, low_xcross, '
                 'low_aw_flip, high_xcross, grace_low_flip, grace_high_flip, grace_high_x, '
                 'low_aw, high_aw, low_toexf, high_toexf, toexf_16_22, toexf_23_30, leg_closes) '
-                'VALUES (' + ', '.join(['%s'] * 25) + ')', _batch)
+                'VALUES (' + ', '.join(['%s'] * 26) + ')', _batch)
             print()
             print('| the table | value |')
             print('|---|---|')
-            print('| fdm3_orac_setup, %s | %d rows |' % (day, len(_batch)))
+            print('| fdm3_orac_setup, %s, port %d | %d rows |' % (day, PORT, len(_batch)))
             print('| its timestamps | %d, each owning a 2-row and a 3-row window row |' % len(_all))
             print('| of them the hunt flags, 2 row window | %d |' % int(_S[2]['setup'][_all].sum()))
             print('| of them the hunt flags, 3 row window | %d |' % int(_S[3]['setup'][_all].sum()))
@@ -1607,7 +1639,7 @@ def main():
         z = min(z, NROWS - 1)
         R, SD = load()
         print(control(R))
-        TR = TA.pseudo_trades()[1]
+        TR = page_trades()
         reads = orac_reads(TR)
         walk = orac_walk(R, reads)
         V = orac_exhaust(R)

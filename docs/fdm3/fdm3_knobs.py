@@ -63,7 +63,9 @@ ORACLE_PORT = _knob('ORACLE_PORT', 8790, int)
 FENCE_RESET_TO = _knob('FENCE_RESET_TO', 33.0)   # his `fdm3-fence-reset-TO`, banked on the page
 ORACLE_FENCE = _knob('ORACLE_FENCE', 23.0)       # the ex-fence fence, locked on the page since 1115
 ORACLE_SHIFT = _knob('ORACLE_SHIFT', 15, int)    # his 1119 pivot offset button, minutes - was 30 at 1117
-#   HIS 1119 `fdm3-infence-power`: *"for every TO(inf) line, add a suffix based on these critreria"*.
+#   HIS 1119 `fdm3-infence-power`: *"for every TO(inf) line, add a suffix based on these critreria"*,
+#   then *"in the same manner as TO(inf), add the (+2,+1,0,-1,-2) suffixs to AW(inf). same ranges"* -
+#   so BOTH in-fence codes carry it, with the same seven bands.
 #   His five bands, plus the -3 and +3 he ruled for the 7.9% of TO(inf) cells his five did not
 #   reach. The edges are the band boundaries read LOW-inclusive at 2dp, so 62.00 opens the +1 band
 #   and 72.99 closes it. The value is the closed-prev r - the banked chart-matched read.
@@ -251,7 +253,9 @@ RULED = {
     'INFENCE_EDGES': ((23.0, 28.0, 38.0, 62.0, 73.0, 77.0),
                       'his 1119 `fdm3-infence-power` band edges, low-inclusive at 2dp: under 23 is '
                       '-3, 23-27.99 -2, 28-37.99 -1, 38-61.99 0, 62-72.99 +1, 73-76.99 +2, 77 and '
-                      'over +3. The -3 and +3 are his ruling on the cells the five did not reach'),
+                      'over +3. The -3 and +3 are his ruling on the cells the five did not reach. '
+                      'BOTH in-fence codes carry it - his *"in the same manner as TO(inf), add the '
+                      '(+2,+1,0,-1,-2) suffixs to AW(inf). same ranges"*, seven bands there too'),
     'INFENCE_DP': (2, 'his *"all values are 2dp: eg 62 to 73 is actually 62.00 to 72.99"*'),
     'SMALL_TRADE_MAX_TOEXF': (2, 'his 1119 `fdm3-small-trade-max-toexf` - the most distinct '
                                  'highband lines that may print TO(exf) since the trade opened '
