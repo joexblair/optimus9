@@ -127,8 +127,8 @@ HIS 1111 *"in the summary columns (16-22 and 22-30)"*: *"if any of the individua
 target-side at the print bar); the sum cell's third line, blank when none of its lines does. MINE: the TO:x AW:x
 line's style (10 px, weight 700, the cell's white text), not the cross row's yellow.
 
-HIS 1112 PIVOT BUTTON, REMOVED HIS 1115 *"remove also the pivots+15 button"*. It moved every ws2Mage pivot 15 min
-later (his 1112 *"move the pivots forward 15 minutes"*); no page state moves a pivot now.
+HIS 1112 PIVOT BUTTON, back at his 1117 and at 15 minutes again since his 1119. It moves every pivot that much later
+(his 1112 *"move the pivots forward 15 minutes"*), so every pseudo trade opens and closes later on the same side.
 
 HIS 1112 TOWARDS/AWAY UPDATE: *"I want to see the flip from TO to AW based on the x and e cross."* No page change: the
 TO/AW codes come from towards_away.run, which now carries the 50 reset, the excursion sample on e and x, the void
@@ -141,7 +141,7 @@ is unchanged: closed-prev OR the emerging extreme of the last 12 bars. Where a p
 now reads ex-23/77. The banked towards/away run outside the page is still 20/80.
 
 HIS 1113 FLIP BUTTON: *"add a button that flips the pivots directions, ie the green rows will become the red rows and
-vice versa"*. With the button on, every ws2Mage pivot's side is flipped on its own bar - a HIGH pivot reads LOW and a
+vice versa"*. With the button on, every pivot's side is flipped on its own bar - a HIGH pivot reads LOW and a
 LOW pivot HIGH - so every pseudo trade opens and closes on the same bars with its target-side flipped (asserted), and
 towards/away runs again on those trades. The time cell's red and green swap, and, as with the pivot button, everything
 that reads the pseudo trade follows: TO/AW and (inf)/(exf), the sums' TO:x AW:x and TO(exf), the cross row's side, the
@@ -339,6 +339,17 @@ XRES = ('winner',)
 #   THE SIDE CONVENTION IS pseudo_trades's, UNCHANGED: a trade's target-side is the NEGATIVE of the
 #   pivot's side, so the two pages are read the same way and only the pivots differ.
 #   A TRADE OPENS AT A PIVOT'S CONFIRM BAR, not its cross: the cross is first knowable 90 s later.
+#   WHICH PRODUCER MAKES THIS PAGE'S PSEUDO TRADES. Every TO/AW cell, every count and the row's side
+#   byte are scoped to a trade, so this one env var decides what the whole page means:
+#     'ws2Mage'  towards_away.pseudo_trades - the ws2Mage leg extremes, 1564 trades on the tape.
+#     'pooled'   v4_sweep_pivots.pooled_trades at the banked knobs - HIS 1118 four reads of
+#                ws{ORAC_PIVOT_TF} (Mage and b, each emerging and closed-prev), a run's FINAL cross
+#                to ib, the next pivot on the opposite side. At the banked tf 1 that is 3006 trades,
+#                and it is what Joe 1119 called *"a new mode... in sweep-pivots that relies on ws1
+#                to ib, to the opposing oob to ib"*.
+#   IT IS PUBLISHED IN /meta AS `pivots`, because a reader cannot infer it and must not guess: the
+#   fdm3 probe scored ws2Mage trades against a pooled page until his 1119 caught it, and on 09-24
+#   the two target-sides were opposite on 679 of 2880 rows.
 PIVOTS = os.environ.get('FDM3_PIVOTS', 'ws2Mage')
 assert PIVOTS in ('ws2Mage', 'pooled'), PIVOTS
 A_TFS = [t for (_, band), on in zip(A_BANDS, A_LOCK) if on for t in band]
@@ -926,6 +937,12 @@ META = json.dumps({
     'mnrs': list(MNR_LABELS), 'mnrtops': list(MNR_TOPS),
     'shift': PIV_SHIFT, 'alock': list(A_LOCK), 'reset': FENCE_RESET_TO, 'rpred': RPRED_ON,
     'ifp': list(IFP_LABELS), 'ifpedges': list(IFP_EDGES), 'ifpdp': IFP_DP,
+    #   HIS 1119: TWO KEYS FOR THE PRODUCER, on purpose.
+    #     `pivots`   the machine value, 'ws2Mage' or 'pooled'. The fdm3 probe switches on it, so it
+    #                must stay exactly what FDM3_PIVOTS accepts and must never be prettied up.
+    #     `pivlabel` what a PERSON reads - the button tooltips print it. Naming the timeframe here
+    #                is what stops a tooltip saying ws2Mage on a page whose pivots are ws1's.
+    'pivlabel': ('pooled ws%d' % int(_FKS.PIVOT_TF)) if PIVOTS == 'pooled' else 'ws2Mage',
     'mage50': MAGE50_PCT, 'smallmax': SMALL_MAX, 'smallbit': SMALL_LRG,
     #   WHERE EACH BLOCK STARTS, so a reader is told rather than deriving it. A derived offset is
     #   how oracle_rows came to hold a stale O_TA and read every TO/AW cell out of the wrong byte.
@@ -1336,7 +1353,7 @@ async function init() {
   //   versa"*, on the right of the calendars. No button changes the scroll position (his 1112 positioning rule):
   //   the rows on screen stay where they are and only their cells change
   const fp = document.createElement('button'); fp.className = 'tog'; fp.textContent = 'flip pivots';
-  fp.title = 'flip the side of every ws2Mage pivot, so a HIGH pivot reads LOW and a LOW pivot HIGH; click again for the sides as found';
+  fp.title = 'flip the side of every ' + meta.pivlabel + ' pivot, so a HIGH pivot reads LOW and a LOW pivot HIGH; click again for the sides as found';
   fp.setAttribute('aria-pressed', 'false');
   fp.onclick = () => {
     FLIP = FLIP ? meta.flips[0] : meta.flips[1];
@@ -1349,11 +1366,11 @@ async function init() {
   //   shows A for ws7-ws15"*. A: lift-off's window extreme off every bar of its span, not only the six samples. They
   //   combine with each other and with flip pivots
   //   HIS 1119: *"rebuild 8792 with a pivot +15 minute button , and drop pivot +30 button"*, ruled
-  //   for all three pages. Every ws2Mage pivot meta.shift minutes later, so every pseudo trade
+  //   for all three pages. Every pivot meta.shift minutes later, so every pseudo trade
   //   opens and closes that much later on the same side. 15 at his 1112, 30 at his 1117, 15 again
   const pb = document.createElement('button'); pb.className = 'tog';
   pb.textContent = 'pivots +' + meta.shift + ' min';
-  pb.title = 'every ws2Mage pivot ' + meta.shift + ' minutes later; click again for the pivots as found';
+  pb.title = 'every ' + meta.pivlabel + ' pivot ' + meta.shift + ' minutes later; click again for the pivots as found';
   pb.setAttribute('aria-pressed', 'false');
   pb.onclick = () => {
     OFF = OFF ? 0 : meta.shift;

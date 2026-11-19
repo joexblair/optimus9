@@ -232,6 +232,11 @@ def legs(tf, xwob=None, mode=None):
 def pooled_pivots(tf, dwell_s, xwob=None, reads=('Mage', 'b')):
     """HIS 1118 FOUR-READ PIVOTS. -> list of (confirm bar, cross bar, side), alternating.
 
+    AT THE BANKED KNOBS - ORAC_PIVOT_TF 1, ORAC_PIVOT_DWELL_S 0 - THIS IS ws1, and it yields 3006
+    pivots on the tape. Joe 1119 named it *"a new mode... in sweep-pivots that relies on ws1 to ib,
+    to the opposing oob to ib"*. `tf` is a parameter, so nothing here is ws1-only; the ws1 is the
+    bank's choice, not the mechanism's.
+
     HIS WORDS, in order: *"bake the 4 lines into the sweep-pivots machine: every test uses all
     lines to decide if dwell is qualified"*, then on how they combine *"1, the longest"*, and on
     how the crosses group *"2, it shouldn't matter - we're going from a 'final' cross to ib, to
