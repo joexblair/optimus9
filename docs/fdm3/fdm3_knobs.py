@@ -76,12 +76,17 @@ ORACLE_FENCE = _knob('ORACLE_FENCE', 23.0)       # the ex-fence fence, locked on
 #   BANKED HIS 1121: *"8793 is good - bank it and make the machine."* The nine edges are the default; the six of 1119 are an off-ruled run.
 INFENCE_EDGES = tuple(float(v) for v in os.environ.get('W_FDM3_INFENCE_EDGES', '8,23,28,38,62,73,77,92').split(','))
 INFENCE_DP = _knob('INFENCE_DP', 2, int)         # his *"all values are 2dp"*
-INFENCE_READ = os.environ.get('W_FDM3_INFENCE_READ', 'closed_prev_minute')
+INFENCE_READ = os.environ.get('W_FDM3_INFENCE_READ', 'closed_prev_30s')
 #   HIS 1121: *"instead of the 7 bands updating on closed-prev, I now want them to all update per closed-prev minute"*
 #   / *"ws12 will now print 12 updates over 12 minutes, instead of 1 update per 12 minutes"*, on 8793, a clone of
 #   8792. 'closed_prev_minute' = the line's emerging r at the last 5 s bar of the last CLOSED MINUTE, the closed-prev
 #   arithmetic at 60 s for every line, so ws1 reads what it read and ws12 steps 12 times in 12 minutes.
-#   BANKED HIS 1121: *"8793 is good - bank it and make the machine."* 'closed_prev_minute' is the default.
+#   BANKED HIS 1121: *"8793 is good - bank it and make the machine."* 'closed_prev_minute' was the default.
+#   HIS 1122, for the machine: *"instead of testing values on the 1 minute seam (current behaviour for all TFs), now
+#   the seam will be every 30sec.  it should fire at x:25 and x:55 so that oracel has the most current data"*.
+#   'closed_prev_30s' = the closed-prev arithmetic at 30 s for every line: the emerging r at the last 5 s bar of the
+#   last closed 30 s slot - the x:25 or x:55 bar. The default since 1122; 'closed_prev_minute' is off-ruled. The
+#   name is mine.
 #   HIS 1120: *"now all lines will be non-tagged (eg "-") if they are on the counter side of 50 (not the fence)"*,
 #   built on 8792. 1 = the oracle passes towards/away the level 50 and every line on the counter side of it prints
 #   "-"; 0 = the run as it was. His name for it is pending.
@@ -289,9 +294,10 @@ RULED = {
                       'page; v4\'s banked pair on the bank until he banks it'),
     'ORACLE_R_CFG': ('6,6,9', 'the ws{TF}r config the page reads - his 1121 "K len:6, RSI len:6, stoch range: 9", '
                               'from its own cache, BANKED 1122 with 8794. db (the stored wsf r row) is off-ruled'),
-    'INFENCE_READ': ('closed_prev_minute', 'the line value the band reads - his 1121 *"per closed-prev '
-                                           'minute"*, BANKED 1121 with 8793. closed_prev (the 1119 read) '
-                                           'and emerging (8788) are off-ruled'),
+    'INFENCE_READ': ('closed_prev_30s', 'the line value the band reads - his 1122 30 s seam, firing at x:25 and '
+                                        'x:55, BANKED 1122 with the machine. closed_prev_minute (his 1121 '
+                                        '*"per closed-prev minute"*, the 1121 bank), closed_prev (the 1119 read) '
+                                        'and emerging (8788) are off-ruled'),
     'MNR_TOPS': ((15,), 'the leg-Mage column\'s ceiling. HIS 1119 dropped the two M-no-rev '
                         'columns for one max-Mage-TF column; ws1..ws15 is his in-use range'),
     'MNR_LO': (1, 'the leg-Mage climb starts at the lowest oob line in the leg'),

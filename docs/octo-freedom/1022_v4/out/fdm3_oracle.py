@@ -270,10 +270,12 @@ MNR_RESET = True                # HIS 1117 closed-prev resume, on. False restore
 #   HIS 1117: *"now I want to see oracle printing rows that are 30sec apart"* / *"my need is
 #   per-30s AW/TO data and per-30s x/e cross data"*. The row is a 30 s slot, read where closed-prev
 #   shows that slot - ROW_S / 5 bars on, as the minute row was read 12 bars on.
-#   SECONDS PER ROW. 60 is the banked grid, one ws1 bar. FDM3_ROW_S=30 runs his 1117 30 s grid, so
+#   SECONDS PER ROW. FDM3_ROW_S=60 is the 1117 minute grid, one ws1 bar; 30 is his 1117 30 s grid, so
 #   one file serves both sides of the A/B and they differ by the row step alone - same columns, same
 #   M-no-rev ceilings, r-pred off on both.
-ROW_S = int(os.environ.get('FDM3_ROW_S', 60))
+#   HIS 1122 *"make this the machine"* and his answer *"Move them"*: 30 is the default, so a launch with no settings
+#   serves the machine. It was 60.
+ROW_S = int(os.environ.get('FDM3_ROW_S', 30))
 assert 60 % ROW_S == 0 and ROW_S % 5 == 0, 'a row must be a whole number of 5 s bars and divide a minute'
 #   HIS 1117: *"I'm not using r-pred at all so it can be disabled"*. The per-line r-pred byte and the
 #   two sums' r-pred byte are gone from the row; the two sum COLUMNS stay for their TO:x AW:x and
@@ -348,7 +350,8 @@ XRES = ('winner',)
 #                full window's length, one short and the other long.  I'll use a button to flip between the 2
 #                trades"*. No pivots: one trade from the tape's first bar to its end, and the flip button's set is
 #                the other one on the same bars. His answers: legMage and fdm3-small-trade *"Blank both"*.
-PIVOTS = os.environ.get('FDM3_PIVOTS', 'ws2Mage')
+#   HIS 1122 *"Move them"*: 'two' is the default - the machine. It was 'ws2Mage'; 8792 passed 'pooled'.
+PIVOTS = os.environ.get('FDM3_PIVOTS', 'two')
 assert PIVOTS in ('ws2Mage', 'pooled', 'two'), PIVOTS
 A_TFS = [t for (_, band), on in zip(A_BANDS, A_LOCK) if on for t in band]
 #   HIS 1119: *"rebuild 8792 with a pivot +15 minute button , and drop pivot +30 button"*, and he
@@ -388,8 +391,11 @@ assert len(IFP_LABELS) <= 15, 'the band+1 has four bits'
 #   code on a ws8..ws15 row whose suffix is under +4 where the row before printed +4, or over -4 where the row before
 #   printed -4, whatever the tag on either row - that row only, whichever pseudo trade the row before is in, the TO ->
 #   AW flip's own rule for the row before. Only a page with his +4 and -4 has them, so a seven-band page never sets it.
+#   HIS 1122: *"there is a red colouring applied to hband (high band lines) when 4 flips to 3.  expand the red colour
+#   mech's coverage to include ws2-ws15"*. The rule is unchanged; only its lines move from ws8..ws15 to ws2..ws15.
 IFP_RED4 = len(IFP_LABELS) == 9
-IFP_REDN = [0]                  # ws8..ws15 cells whose suffix prints red, counted across every state
+RED4_TFS = tuple(range(2, 16))  # HIS 1122 the lines the red suffix reads, ws2..ws15 (ws8..ws15 at his 1121)
+IFP_REDN = [0]                  # ws2..ws15 cells whose suffix prints red, counted across every state
 IFP_DP = 2                      # his 2dp - the value is rounded before it is placed
 IFP_BARE = [0]                  # TO(inf) cells with no value to band, counted across every state
 IFP_INF = [0]                   # TO(inf) cells in all, so the bare share is readable
@@ -414,23 +420,28 @@ SMALL_MAX = int(_FKS.SMALL_TRADE_MAX_TOEXF)     # his `fdm3-small-trade-max-toex
 #   update per closed-prev minute"* / *"ws12 will now print 12 updates over 12 minutes, instead of 1 update per 12
 #   minutes"*. 'closed_prev_minute' is the closed-prev arithmetic at 60 s on every line's emerging r: the value at the
 #   last 5 s bar of the last closed minute. ws1 reads what it read; ws2..ws15 step once a minute.
+#   HIS 1122: *"instead of testing values on the 1 minute seam (current behaviour for all TFs), now the seam will be
+#   every 30sec.  it should fire at x:25 and x:55 so that oracel has the most current data"*. 'closed_prev_30s' is the
+#   same arithmetic at 30 s: the value at the last 5 s bar of the last closed 30 s slot, the x:25 or x:55 bar. A row's
+#   print bar opens at x:00 or x:30, so every row reads the bar just before it.
 IFP_READ = _FKS.INFENCE_READ
-assert IFP_READ in ('closed_prev', 'emerging', 'closed_prev_minute'), IFP_READ
-IFP_KEY = {'closed_prev': 'CPR', 'emerging': 'EMR', 'closed_prev_minute': 'EMR'}[IFP_READ]   # towards_away.load()'s
+assert IFP_READ in ('closed_prev', 'emerging', 'closed_prev_minute', 'closed_prev_30s'), IFP_READ
+IFP_KEY = {'closed_prev': 'CPR', 'emerging': 'EMR', 'closed_prev_minute': 'EMR', 'closed_prev_30s': 'EMR'}[IFP_READ]
+IFP_SEAM_S = {'closed_prev_minute': 60, 'closed_prev_30s': 30}.get(IFP_READ)   # the seam in seconds, None = no seam   # towards_away.load()'s
 #   HIS 1121 on 8793: *"we'll add the suffix to TO/AW(exf) now.  this addition will serve to  highlight diffs between
 #   the closed-prev derived 'exf', and the more granular 1m seams"*, his answers 8793 only and "-(exf)" too. On, the
 #   same band of the same value goes on TO(exf) 3, AW(exf) 4 and -(exf) 6; off, the in-fence codes alone carry it.
 IFP_EXF = bool(_FKS.EXF_SUFFIX)
 IFP_EXFN = [0, 0]               # (exf) cells carrying the suffix, and of them bare, counted across every state
-IFP_MIN = {}                    # HIS 1121: each line's last-closed-minute r, built once per line and reused per state
+IFP_MIN = {}                    # HIS 1121: each line's r at its last closed seam, built once per line and reused per state
 
 
 def ifp_value(LN, t):
     """The r the in-fence power band reads on line ws{t}, at every 5 s bar. -> float array, len N."""
-    if IFP_READ != 'closed_prev_minute':
+    if IFP_SEAM_S is None:
         return np.asarray(LN[IFP_KEY][t], float)
     if t not in IFP_MIN:
-        IFP_MIN[t] = np.asarray(CP.series(LN[IFP_KEY][t], 60), float)
+        IFP_MIN[t] = np.asarray(CP.series(LN[IFP_KEY][t], IFP_SEAM_S), float)
     return IFP_MIN[t]
 #   HIS 1120: *"now all lines will be non-tagged (eg "-") if they are on the counter side of 50 (not the fence)"*.
 #   The level towards/away's run masks at - his 50, not FENCE_RESET_TO's line - or None for the run as banked.
@@ -1034,8 +1045,9 @@ def build():
             if name == FLIP_TOINF:
                 cd = CODE[name] & 7
                 xc[1:] |= 16 * ((cd[:-1] == TO_EXF) & (cd[1:] == TO_INF)).astype(np.int8)
-            #   HIS 1121 the red suffix on a ws8..ws15 line leaving +4 or -4: +32. pw is the band+1, 0 = no suffix
-            if IFP_RED4 and int(name[2:]) in SMALL_HI:
+            #   HIS 1121 the red suffix on a line leaving +4 or -4: +32, on ws2..ws15 since HIS 1122. pw is the band+1,
+            #   0 = no suffix
+            if IFP_RED4 and int(name[2:]) in RED4_TFS:
                 pw = (CODE[name].astype(int) >> 3) & 15
                 pw = np.where((CODE[name] & 7) > 0, pw, 0)
                 top = len(IFP_LABELS)
@@ -1481,7 +1493,7 @@ function draw() {
              ? meta.ifp[pw - 1] : '';   // HIS 1109 (inf) / (exf)
         //   HIS 1110: crossovers on a LOW target-side, crossunders on HIGH; X and E on one ws1 bar join, 4 spaces apart
         const xc = blk[o + NL + 2 * (NC - NL) + c];
-        //   HIS 1121 on 8793: +32 = a ws8..ws15 line leaving +4 or -4 - the suffix, sign and digit, in red; the tag keeps
+        //   HIS 1121 on 8793: +32 = a ws2..ws15 line (HIS 1122, ws8..ws15 at 1121) leaving +4 or -4 - the suffix, sign and digit, in red; the tag keeps
         //   its white or grey
         d.ta.textContent = (meta.tacodes[tc] || NB) + (xc & 32 && sf ? '' : sf);
         if (xc & 32 && sf) { const r = document.createElement('span'); r.className = 'r4'; r.textContent = sf; d.ta.appendChild(r); }
@@ -1690,7 +1702,7 @@ if __name__ == '__main__':
     print('HIS 1120 %s TO(inf) after TO(exf) (white TO(inf) text): %d, other columns marked %d'
           % (FLIP_TOINF, int((_xc[:, _j] & 16).astype(bool).sum()),
              int((_xc & 16).astype(bool).sum() - (_xc[:, _j] & 16).astype(bool).sum())))
-    print('HIS 1121 red suffix on ws8..ws15 leaving +4 or -4: %s' % (
+    print('HIS 1121 red suffix on ws%d..ws%d leaving +4 or -4: %s' % (RED4_TFS[0], RED4_TFS[-1],
         'ON, pivots as found %d cells (%s), every state %d' % (
             int((_xc & 32).astype(bool).sum()),
             ', '.join('%s %d' % (n, int((_xc[:, j] & 32).astype(bool).sum())) for j, n in enumerate(LINES)

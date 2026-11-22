@@ -304,6 +304,89 @@ ws12, pivots as found: the row 2026-07-03 16:39:00 prints `TO(exf)-4` on its las
 6.61; the row 2026-07-03 16:39:30 reads 9.59 at its print bar 2026-07-03 16:40:00 and prints
 `TO(exf)` with a red `-3`.
 
+**HIS 1122 - ws2 TO ws15:**
+
+> "there is a red colouring applied to hband (high band lines) when 4 flips to 3.  expand the red colour mech's coverage to include ws2-ws15"
+
+The rule above is unchanged; only its lines move, from ws8..ws15 to ws2..ws15 (`RED4_TFS` in the
+page, the lines the red suffix reads). The counts above are the 1121 page's, ws8..ws15 on the pooled
+pivots and the 1-minute read. The machine's own are in section 3d.
+
+### 3d. THE 30 s SEAM, AND THE RED ON ws2-ws15, ON THE MACHINE (his 1122)
+
+> "instead of testing values on the 1 minute seam (current behaviour for all TFs), now the seam will be every 30sec.  it should fire at x:25 and x:55 so that oracel has the most current data"
+
+**`INFENCE_READ` = `closed_prev_30s`, BANKED 1122** (the name is mine): the closed-prev arithmetic
+at 30 s on every line's emerging r - the value at the last 5 s bar of the last closed 30 s slot,
+the x:25 or x:55 bar. A row's print bar opens at x:00 or x:30, so every row reads the bar just
+before it. The suffix on TO(exf), AW(exf) and -(exf) reads the same value. Nothing else on the page
+moves: the TO/AW code, its ex-fence test and every other read are as they were.
+
+**AS BUILT AND VERIFIED on 8793**, 2026-11-22, against 8794 (the same page on the 1-minute read
+with the red on ws8..ws15), both trades, every row, each band re-derived from the tape (r 6,6,9):
+
+| check | short | long |
+|---|---|---|
+| meta keys that differ from 8794 | the band read alone | the band read alone |
+| rows read at a bar at second 25 | 136080 | 136080 |
+| rows read at a bar at second 55 | 136079 | 136079 |
+| rows x lines where the read is not the bar just before the print bar | 0 | 0 |
+| bytes outside the TO/AW and cross blocks that differ from 8794 | 0 | 0 |
+| TO/AW codes that differ from 8794 | 0 | 0 |
+| cross bits other than the red one that differ from 8794 | 0 | 0 |
+| banded-code cells | 4078124 | 4078124 |
+| bands off the 30 s tape read | 0 | 0 |
+| bare cells (warm-up) | 15 | 15 |
+| cells whose band differs from 8794 | 353295 | 353295 |
+
+| band moves between two rows | 8793, 30 s seam | 8794, 1-minute seam |
+|---|---|---|
+| on a row whose print bar opens at second 00 | 167610 | 394691 |
+| on a row whose print bar opens at second 30 | 353280 | 0 |
+
+The red suffix, re-derived from the page's own suffix text row by row on ws2..ws15:
+
+| check | short | long |
+|---|---|---|
+| red cells | 31224 | 31224 |
+| +4 -> +3 | 15009 | 15009 |
+| +4 -> +2 | 47 | 47 |
+| -4 -> -3 | 16120 | 16120 |
+| -4 -> -2 | 48 | 48 |
+| off the re-derive | 0 | 0 |
+| red on ws1 | 0 | 0 |
+
+| line | red cells, 8794 (ws8..ws15, 1-minute read) | red cells, 8793 (ws2..ws15, 30 s read) |
+|---|---|---|
+| ws1 | 0 | 0 |
+| ws2 | 0 | 4378 |
+| ws3 | 0 | 3458 |
+| ws4 | 0 | 3011 |
+| ws5 | 0 | 2586 |
+| ws6 | 0 | 2346 |
+| ws7 | 0 | 2158 |
+| ws8 | 1557 | 2043 |
+| ws9 | 1406 | 1897 |
+| ws10 | 1283 | 1724 |
+| ws11 | 1287 | 1725 |
+| ws12 | 1214 | 1641 |
+| ws13 | 1140 | 1494 |
+| ws14 | 1069 | 1425 |
+| ws15 | 988 | 1338 |
+
+ws3, the short trade, from 4 rows before its first red cell:
+
+| row | print bar | bar it reads | value it reads | 8793 cell | red | 8794 cell |
+|---|---|---|---|---|---|---|
+| 2026-07-02 14:54:30 | 2026-07-02 14:55:00 | 2026-07-02 14:54:55 | 6.71 | TO(exf)-4 |  | TO(exf)-4 |
+| 2026-07-02 14:55:00 | 2026-07-02 14:55:30 | 2026-07-02 14:55:25 | 6.71 | TO(exf)-4 |  | TO(exf)-4 |
+| 2026-07-02 14:55:30 | 2026-07-02 14:56:00 | 2026-07-02 14:55:55 | 7.18 | TO(exf)-4 |  | TO(exf)-4 |
+| 2026-07-02 14:56:00 | 2026-07-02 14:56:30 | 2026-07-02 14:56:25 | 7.34 | TO(exf)-4 |  | TO(exf)-4 |
+| 2026-07-02 14:56:30 | 2026-07-02 14:57:00 | 2026-07-02 14:56:55 | 8.84 | TO(exf)-3 | yes | TO(exf)-3 |
+| 2026-07-02 14:57:00 | 2026-07-02 14:57:30 | 2026-07-02 14:57:25 | 7.06 | TO(exf)-4 |  | TO(exf)-3 |
+| 2026-07-02 14:57:30 | 2026-07-02 14:58:00 | 2026-07-02 14:57:55 | 10.42 | TO(exf)-3 | yes | TO(exf)-3 |
+| 2026-07-02 14:58:00 | 2026-07-02 14:58:30 | 2026-07-02 14:58:25 | 10.61 | AW(exf)-3 |  | AW(exf)-3 |
+
 
 ## 4. WHAT CARRIES NO SUFFIX
 
@@ -318,8 +401,8 @@ ws12, pivots as found: the row 2026-07-03 16:39:00 prints `TO(exf)-4` on its las
 | the piece | where |
 |---|---|
 | the bands and the labels | `IFP_EDGES`, `IFP_LABELS`, `IFP_DP` in `fdm3_oracle.py`; since his 1121 the edges come from the knob `INFENCE_EDGES` and the labels from their count |
-| the banked knobs | `INFENCE_EDGES`, `INFENCE_DP`, `INFENCE_READ` in `fdm3_knobs.py`; the page reads `INFENCE_READ` through `fdm3_knobs_shim` since his 1120, and `EXF_SUFFIX` since his 1121 (0 on the bank, 1 on 8793) |
-| the band bits | bits 3-5 of each line's TO/AW byte, held as band+1 so 0 means no value; bits 3-6 on 8793's nine bands (his 1121 +4 and -4, section 3c) |
+| the banked knobs | `INFENCE_EDGES`, `INFENCE_DP`, `INFENCE_READ` in `fdm3_knobs.py`; the page reads `INFENCE_READ` through `fdm3_knobs_shim` since his 1120, and `EXF_SUFFIX` since his 1121 (1 on the bank since 1121). On the machine since 1122: the nine edges, `INFENCE_READ` = `closed_prev_30s` (section 3d), `EXF_SUFFIX` 1 |
+| the band bits | bits 3-5 of each line's TO/AW byte, held as band+1 so 0 means no value; bits 3-6 on the nine bands (his 1121 +4 and -4, section 3c), banked 1121 |
 | the text | the one place the page turns that byte into words |
 | the bank check | the probe refuses a page whose edges, 2dp or read differ from the bank. A page built before `ifpread` existed read closed-prev, so a missing key counts as that |
 

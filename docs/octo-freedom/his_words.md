@@ -2564,3 +2564,6 @@ e61193400f30  I'll use a button to flip between the 2 trades
 9896e8a6d63a  this is good - bank it, commit push, update the docs. make this the machine
 7f52ff9cc790  there is a red colouring applied to hband (high band lines) when 4 flips to 3. expand the red colour mech's coverage to include ws2-ws15
 9f9225620c23  expand the red colour mech's coverage to include ws2-ws15
+7ed4458cc94a  Build on 8793, stop 8792. there is one further change: instead of testing values on the 1 minute seam (current behaviour for all TFs), now the seam will be every 30sec. it should fire at x:25 and x:55 so that oracel has the most current data
+3d556395f285  instead of testing values on the 1 minute seam (current behaviour for all TFs), now the seam will be every 30sec. it should fire at x:25 and x:55 so that oracel has the most current data
+4f173d7535b0  Move them
