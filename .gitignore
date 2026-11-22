@@ -42,3 +42,4 @@ rc_alerts.state.json
 # quotes. Without them nothing in 1005_scoring/ reproduces. Joe 1005: "docs and knobs durable".
 !docs/octo-freedom/1005_scoring/*.out
 !docs/octo-freedom/1005_scoring/octosig/*.out
+.db_backup.cnf
