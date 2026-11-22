@@ -50,6 +50,13 @@ being wide, not by matching. Recorded here so nobody re-proposes it as the clean
 LOOKAHEAD IS ALLOWED HERE AND ONLY HERE. Joe: *"given that a sweep allows full lookahead"*. A leg
 is closed by a cross AFTER the event, so `scale` and `mfe` read the future on purpose. They are
 SCORING, and no mech step may call them - `v4_test_script`'s stage guard asserts that separately.
+
+THE FOUR-READ PIVOTS (HIS 1118) LIVE HERE WHOLE. HIS 1120: *"this isn't SRP.  the pivots can't belong in any fdm3
+classes"* / *"sweep-pivots calls for a list of pivots, and the +15 button is there to import a different set of
+pivots"*. Their rule (pooled_pivots), their pseudo trades (pooled_trades), their lookahead (pooled_final), the sets a
+page imports (pivot_set: every pivot +15 min, every side flipped), their knobs (POOL_*, SET_SHIFT_MIN) and the pine
+view of them (`python3 v4_sweep_pivots.py pine D0 D1 [out]`) are all in this file; v4_sweep_pivots.md section 10 is
+their spec. A page or an fdm3 mech imports a set and picks which - it owns none of this.
 """
 import os
 
@@ -80,6 +87,35 @@ WIDE = K.SP_TFS == 'wide'  # the TF set. 'wide' = his six PLUS ws1Mage and ws2Ma
 #                            the extra two were mine; HIS 1108 ruling *"bank the current config and
 #                            make it the machine"* makes all eight his
 
+# ── THE FOUR-READ PIVOTS' KNOBS LIVE HERE, beside their code. HIS 1120: *"this isn't SRP.  the pivots can't belong
+#    in any fdm3 classes"*. They were ORAC_PIVOT_TF, ORAC_PIVOT_DWELL_S and ORACLE_SHIFT in fdm3_knobs, at the same
+#    values, so nothing moved. v4_knobs is not touched, so they follow v4_lift_e's precedent: env W_SP_<NAME>, a ruled
+#    registry, and an off-ruled import refuses unless W_SP_EXPERIMENT=1.
+POOL_TF = int(os.environ.get('W_SP_POOL_TF', 1))                 # the TF the four reads run on, ws1
+POOL_DWELL_S = int(os.environ.get('W_SP_POOL_DWELL_S', 0))       # seconds the longest read must hold oob
+SET_SHIFT_MIN = int(os.environ.get('W_SP_SET_SHIFT_MIN', 15))    # minutes, the +15 set's offset
+POOL_EXPERIMENT = os.environ.get('W_SP_EXPERIMENT', '0') == '1'
+POOL_RULED = {
+    'POOL_TF': (1, 'his 1118: the four reads run on ws1'),
+    'POOL_DWELL_S': (0, 'his 1118 *"ok for the dwell"*, after his own lag test killed 180'),
+    'SET_SHIFT_MIN': (15, 'his 1119 *"rebuild 8792 with a pivot +15 minute button , and drop pivot +30 button"*'),
+}
+
+
+def pool_check():
+    """THE RULED CHECK for the four-read pivots' knobs. Refuses an off-ruled import unless W_SP_EXPERIMENT=1.
+    -> [(knob, live, ruled, ok)]."""
+    lv = dict(POOL_TF=POOL_TF, POOL_DWELL_S=POOL_DWELL_S, SET_SHIFT_MIN=SET_SHIFT_MIN)
+    rows = [(k, lv[k], POOL_RULED[k][0], lv[k] == POOL_RULED[k][0]) for k in POOL_RULED]
+    off = [r for r in rows if not r[3]]
+    if off and not POOL_EXPERIMENT:
+        raise SystemExit('REFUSED - four-read pivot knobs off the bank: %s. Set W_SP_EXPERIMENT=1 to run them.'
+                         % ', '.join('%s=%r (ruled %r)' % (k, v, rv) for k, v, rv, _ in off))
+    return rows
+
+
+POOL_KNOBS = pool_check()
+
 
 def _tfs(wide=None):
     """The TF set. `None` means the BANKED set, K.SP_TFS - so a caller cannot run an unbanked
@@ -98,7 +134,8 @@ def knobs():
             ('SP_XWOB', XWOB, 'bars IB must hold for a Mage cross - his wob 18'),
             ('SP_ALIGN_S', ALIGN_S, 'seconds, read ONLY by the window arm'),
             ('SP_TFS', K.SP_TFS, 'wide = his six plus ws1Mage and ws2Mage - RULED 1108, *"bank '
-                                 'the current config and make it the machine"*')]     # how a pivot is chosen from the index.
+                                 'the current config and make it the machine"*')] + \
+        [(k, v, POOL_RULED[k][1]) for k, v, _rv, _ok in POOL_KNOBS]     # how a pivot is chosen from the index.
 #   'lowest_pct' Joe 1024: *"start at the lowest TF and scan upwards. you should find a series of
 #              TFs printing the near-same distance from their own pivot to the event. the TF
 #              swing/pivot to pick should be the highest TF printing the lowest pct (between pivot
@@ -229,13 +266,37 @@ def legs(tf, xwob=None, mode=None):
     return out
 
 
-def pooled_pivots(tf, dwell_s, xwob=None, reads=('Mage', 'b')):
+def _pooled_events(tf, xwob, reads):
+    """The four reads' oob->ib crosses, pooled. -> [(cross bar, confirm bar, side, dwell s)], cross-bar order."""
+    import v4_closed_prev as CP
+    import ln as _ln
+    ev = []
+    for role in reads:
+        em = np.asarray(_ln.line('ws%d%s' % (int(tf), role)), float)
+        for lab, arr in (('em', em), ('cp', np.asarray(CP.series(em, int(tf) * 60), float))):
+            for c, cf, sd in oob_ib_cross(arr, K.OOB_HI, K.OOB_LO, xwob):
+                n, i = 0, int(c) - 1
+                while i >= 0 and np.isfinite(arr[i]) and (
+                        (arr[i] >= K.OOB_HI) if sd > 0 else (arr[i] <= K.OOB_LO)):
+                    n += 1
+                    i -= 1
+                ev.append((int(c), int(cf), int(sd), n * 5))
+    ev.sort()
+    return ev
+
+
+def pooled_pivots(tf=None, dwell_s=None, xwob=None, reads=('Mage', 'b')):
     """HIS 1118 FOUR-READ PIVOTS. -> list of (confirm bar, cross bar, side), alternating.
 
-    AT THE BANKED KNOBS - ORAC_PIVOT_TF 1, ORAC_PIVOT_DWELL_S 0 - THIS IS ws1, and it yields 3006
+    AT THE BANKED KNOBS - POOL_TF 1, POOL_DWELL_S 0, the defaults - THIS IS ws1, and it yields 3006
     pivots on the tape. Joe 1119 named it *"a new mode... in sweep-pivots that relies on ws1 to ib,
     to the opposing oob to ib"*. `tf` is a parameter, so nothing here is ws1-only; the ws1 is the
     bank's choice, not the mechanism's.
+
+    LOOKAHEAD - a pivot is FINAL only when the first qualifying opposite-side cross confirms (at dwell 0, the first
+    opposite cross): until then a later same-side cross can still become the run's last. pooled_final has that bar.
+    Measured 1120 over the tape at the banked knobs: 0 of 3,005 pivots are final at their own confirm bar; the gap is
+    5 s at least, 940 s median, 4,455 s at most.
 
     HIS WORDS, in order: *"bake the 4 lines into the sweep-pivots machine: every test uses all
     lines to decide if dwell is qualified"*, then on how they combine *"1, the longest"*, and on
@@ -255,24 +316,13 @@ def pooled_pivots(tf, dwell_s, xwob=None, reads=('Mage', 'b')):
     run measures as 0.1 on it while closed-prev measures the same move as 3.0. Taking the longest
     lets the steady read supply the dwell and the fast read supply the bar.
     """
-    import v4_closed_prev as CP
-    import ln as _ln
+    tf = POOL_TF if tf is None else int(tf)
+    dwell_s = POOL_DWELL_S if dwell_s is None else int(dwell_s)
     xwob = XWOB if xwob is None else xwob
     key = ('pooled', tf, xwob, int(dwell_s), reads)
     if key in _LEG:
         return _LEG[key]
-    ev = []
-    for role in reads:
-        em = np.asarray(_ln.line('ws%d%s' % (int(tf), role)), float)
-        for lab, arr in (('em', em), ('cp', np.asarray(CP.series(em, int(tf) * 60), float))):
-            for c, cf, sd in oob_ib_cross(arr, K.OOB_HI, K.OOB_LO, xwob):
-                n, i = 0, int(c) - 1
-                while i >= 0 and np.isfinite(arr[i]) and (
-                        (arr[i] >= K.OOB_HI) if sd > 0 else (arr[i] <= K.OOB_LO)):
-                    n += 1
-                    i -= 1
-                ev.append((int(c), int(cf), int(sd), n * 5))
-    ev.sort()
+    ev = _pooled_events(tf, xwob, reads)
     runs, cur = [], []
     for e in ev:
         if cur and e[2] == cur[0][2]:
@@ -299,7 +349,31 @@ def pooled_pivots(tf, dwell_s, xwob=None, reads=('Mage', 'b')):
     return out
 
 
-def pooled_trades(tf, dwell_s, xwob=None, reads=('Mage', 'b')):
+def pooled_final(tf=None, dwell_s=None, xwob=None, reads=('Mage', 'b')):
+    """THE POOLED PIVOTS' LOOKAHEAD, as bars. -> {pivot's confirm bar: the bar it is known FINAL}; the tape's last
+    pivot is missing - nothing after it makes it final.
+
+    A pivot is its run's final cross, so it is fixed only once a run on the OPPOSITE side qualifies: the confirm bar
+    of the first opposite-side cross after it whose dwell reaches `dwell_s` (at dwell 0, any opposite cross). Before
+    that bar a later same-side cross can still take its place. The page's pseudo trade opens at the confirm bar, so
+    the trade's start and side are lookahead until this bar - his 1109 *"noted - it's not a realtime tool"*.
+    """
+    tf = POOL_TF if tf is None else int(tf)
+    dwell_s = POOL_DWELL_S if dwell_s is None else int(dwell_s)
+    xwob = XWOB if xwob is None else xwob
+    ev = _pooled_events(tf, xwob, reads)
+    at = {(c, sd): i for i, (c, cf, sd, _d) in enumerate(ev)}
+    out = {}
+    for cf, c, sd in pooled_pivots(tf, dwell_s, xwob=xwob, reads=reads):
+        i = at[(c, sd)]
+        j = next((k for k in range(i + 1, len(ev)) if ev[k][2] != sd and ev[k][3] >= dwell_s), None)
+        if j is not None:
+            assert ev[j][1] > cf, 'a pooled pivot is final at or before its own confirm bar'
+            out[cf] = ev[j][1]
+    return out
+
+
+def pooled_trades(tf=None, dwell_s=None, xwob=None, reads=('Mage', 'b')):
     """The pseudo trades HIS 1118 pooled pivots make. -> [(open bar, close bar, target-side)].
 
     ONE HOME for a construction that was written inline in the fdm3-oracle page and recomputed, as
@@ -311,6 +385,8 @@ def pooled_trades(tf, dwell_s, xwob=None, reads=('Mage', 'b')):
     A trade OPENS at a pivot's CONFIRM bar - the cross itself is first knowable 90 s later - and
     closes at the next pivot's confirm bar. Its TARGET-SIDE IS MINUS THE PIVOT'S SIDE: a pivot that
     ends a run to the high side opens a trade heading low.
+    LOOKAHEAD: the confirm bar is not when the pivot is known - pooled_final is. Inside a trade a reader can be
+    causal; the trade itself is not.
     """
     pv = pooled_pivots(tf, dwell_s, xwob=xwob, reads=reads)
     out = []
@@ -321,6 +397,39 @@ def pooled_trades(tf, dwell_s, xwob=None, reads=('Mage', 'b')):
     assert all(out[k][2] != out[k + 1][2] for k in range(len(out) - 1)), \
         'two pooled trades in a row share a target-side'
     assert all(out[k][0] < out[k][1] for k in range(len(out))), 'a pooled trade closes before it opens'
+    return out
+
+
+def pivot_set(trades, shift_min=0, flip=False):
+    """ANOTHER SET OF PIVOTS for a page to import - HIS 1120 *"the +15 button is there to import a different set of
+    pivots"*, and the flip button *"same treatment"*. -> [(open bar, close bar, target-side)].
+
+      shift_min  every pivot that many minutes later (HIS 1112 / 1119, SET_SHIFT_MIN 15): each pseudo trade's open and
+                 close move by the same amount; a trade that would open past the tape is dropped and the last one
+                 still closes at the tape's end
+      flip       every pivot's side flipped on its own bar (HIS 1113 *"flips the pivots directions"*): the same bars,
+                 the other target-side
+    `trades` is any pivot-trade list - pooled_trades, or towards_away.pseudo_trades's ws2Mage one.
+    """
+    k = int(shift_min) * 12                          # 5 s bars
+    return [(o + k, min(c + k, ln.N), -s if flip else s) for o, c, s in trades if o + k < ln.N]
+
+
+def carried_set(trades, shift_min=0, flip=False):
+    """HIS 1121 *"B"*, the fdm3-oracle +15 button as he picked it. The option as I put it to him, on the 2026-09-14
+    22:18:25 down trade: it keeps its 22:18:25 open and its hunt, only the close moves (to 22:52:25), the rows before
+    22:36:30 stay as found, 22:37:00 to 22:51:30 continue the same trade, and each next trade's first 15 min show the
+    previous trade carried on. -> [(open, show, close, target-side)].
+
+      open   the trade's own open - its towards/away run and hunt start there
+      show   open + shift_min, the first bar it prints on
+      close  its close + shift_min, the tape's end at most
+    The print windows [show, close) are exactly pivot_set's trades, so the target-side on every row is unchanged;
+    only the run under them starts at the trade's own open. `flip` as pivot_set.
+    """
+    k = int(shift_min) * 12                          # 5 s bars
+    out = [(o, o + k, min(c + k, ln.N), -s if flip else s) for o, c, s in trades if o + k < ln.N]
+    assert [(sh, c, s) for o, sh, c, s in out] == pivot_set(trades, shift_min, flip), 'carried windows are not pivot_set\'s'
     return out
 
 
@@ -449,3 +558,64 @@ def swing(bar, side, close_px, wide=None, align_s=None, xwob=None):
     return dict(sc, pivot=j, mfe_pct=mfe, given_pct=given,
                 share=(given / mfe) if mfe > 0 else None,
                 lag_s=(bar - j) * 5)
+
+
+def pine(d0, d1, out=None):
+    """HIS 1118 PINE VIEW of the four-read pivots - *"create a pine module that I can load on a TF1 pane and see your
+    view of the pivots"*, *"useing only the red and green bgcolors mech"*. Moved here from fdm3's oracle_rows (its
+    `pine` mode) at his 1120 SRP ruling: a view of the pivots is the pivots' own. The jig's emit_bgcolor owns the
+    format and it is LOCKED - this only hands it two streams. -> (lows, highs, timestamps written)."""
+    from optimus9.analysis import jig as JIG
+    out = out or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out', 'sweep_pivots_pooled.pine')
+    pv = pooled_pivots()
+    a, z = ln.K(d0 + ' 00:00:00'), ln.K(d1 + ' 23:59:55')
+    TS = np.asarray(ln.ts, np.int64)
+    #   A TF1 PANE'S BAR IS A MINUTE, so each pivot paints the minute bar holding it: its 5 s
+    #   timestamp floored to the minute. The chart's `time` is that minute's open in ms.
+    lo = sorted({int(TS[c] // 60000 * 60000) for cf, c, sd in pv if a <= c <= z and sd < 0})
+    hi = sorted({int(TS[c] // 60000 * 60000) for cf, c, sd in pv if a <= c <= z and sd > 0})
+    #   HIS 1118 RULING on the sides: *" LOW target-side creates a *OUTGOING* LONG,..."*. So a
+    #   LOW pivot opens a LONG and paints GREEN; a HIGH pivot opens a SHORT and paints RED.
+    notes = [
+        'sweep-pivots four-read pivots, %s .. %s' % (d0, d1),
+        'HIS 1118 RULE: pool ws%dMage and ws%db, each EMERGING and CLOSED-PREV, into one' % (POOL_TF, POOL_TF),
+        'list of oob->ib crosses. Split into runs of consecutive same-side crosses. A run',
+        'qualifies when the LONGEST dwell inside it reaches %d s; the pivot is that run\'s' % POOL_DWELL_S,
+        'FINAL cross to ib. His words: "1, the longest" and "we\'re going from a final cross',
+        'to ib, to the next final cross to ib".',
+        '',
+        'GREEN = a LOW pivot, which opens an OUTGOING LONG - his " LOW target-side creates a',
+        '        *OUTGOING* LONG,...". RED = a HIGH pivot, an OUTGOING SHORT.',
+        '',
+        'EACH PIVOT PAINTS THE MINUTE BAR THAT HOLDS IT, so load this on a 1 minute pane.',
+        'The 5 s bar is floored to its minute; the cross is knowable %d s later (the hold),' % (int(XWOB) * 5),
+        'and the pivot is FINAL only when the first opposite-side cross confirms after it.',
+        '',
+        'the knobs: ' + ' '.join('%s=%s' % (k, v) for k, v, _rv, _ok in POOL_KNOBS if k.startswith('POOL')),
+        'sweep-pivots: SP_XWOB=%d bars, oob %g/%g' % (int(XWOB), float(K.OOB_LO), float(K.OOB_HI)),
+        'the tape: %d bars, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)),
+        'pivots on the whole tape at this dwell: %d' % len(pv)]
+    n = JIG._Score(None).emit_bgcolor(
+        [{'name': 'pivot_high_short', 'ts': hi, 'color': 'color.red'},
+         {'name': 'pivot_low_long', 'ts': lo, 'color': 'color.green'}],
+        out, 'sweep-pivots pivots %s..%s' % (d0, d1), notes=notes)
+    print('bars %d, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
+    print()
+    print('| the stream | colour | what it marks | pivots %s .. %s |' % (d0, d1))
+    print('|' + '---|' * 4)
+    print('| pivot_low_long | green | a LOW pivot, opening an OUTGOING LONG | %d |' % len(lo))
+    print('| pivot_high_short | red | a HIGH pivot, opening an OUTGOING SHORT | %d |' % len(hi))
+    print('| both | | | %d |' % (len(lo) + len(hi)))
+    print()
+    print('| the file | timestamps it carries |')
+    print('|---|---|')
+    print('| %s | %d |' % (out, n))
+    return lo, hi, n
+
+
+if __name__ == '__main__':
+    import sys
+    if len(sys.argv) >= 4 and sys.argv[1] == 'pine':
+        pine(sys.argv[2], sys.argv[3], sys.argv[4] if len(sys.argv) >= 5 else None)
+    else:
+        raise SystemExit('usage: python3 v4_sweep_pivots.py pine 2026-09-22 2026-09-28 [out.pine]')

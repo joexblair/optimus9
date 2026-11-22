@@ -40,9 +40,9 @@ trades go `lrg` on their first row: 12:03:35, 13:56:25 and 18:40:45.
 The count at a row reads that row and the rows before it in the same trade, and nothing later. It
 only ever grows, so `lrg` cannot go back to `sml` inside a trade - an assert holds that.
 
-**THE TRADE ITSELF IS NOT CAUSAL ON THE PAGE.** 8792's pseudo trades open at a pooled pivot, which
-is the LAST cross of a same-side run - fixed only when the opposite side's cross arrives. So on the
-page the detector is causal inside each trade, and the trade's start is not. In a walk, the trade
+**THE TRADE ITSELF IS NOT CAUSAL ON THE PAGE.** When 8792's pseudo trades are knowable is sweep-pivots'
+to state, not this mech's - [sweep-pivots' spec, section 10d](../octo-freedom/1022_v4/v4_sweep_pivots.md) (his 1120
+SRP ruling). So on the page the detector is causal inside each trade, and the trade's start is not. In a walk, the trade
 is the walk's own, opened with its side at its open bar, and the detector is causal end to end.
 
 ## 4. WHERE IT LIVES

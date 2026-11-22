@@ -42,11 +42,19 @@ ts = np.load(os.path.join(TAPE_DIR, _tape_key(EM, HOURS, WARMUP,
              {'src': _sy['s'], 'len': _sy['l']}) + '.npz'))['__ts__']
 N = len(ts)
 
+#   HIS 1121: *"contain the r config update to 8792 only.  you'll need a separate cache"*. None = ws{TF}r off the shared
+#   line cache at the DB row, as always. A directory = ws{TF}r read from that separate cache instead, set by the one
+#   process that asked for it (docs/fdm3/fdm3_r_cache.use). Every other role reads what it read.
+R_DIR = None
+
+
 def line(name):
     """ws7r -> the array. tf from the digits, role from the tail."""
     i = 2
     while name[i].isdigit(): i += 1
     tf, role = int(name[2:i]), name[i:]
+    if role == 'r' and R_DIR is not None:
+        return np.asarray(np.load(os.path.join(R_DIR, 'ws%dr.npy' % tf), mmap_mode='r'), float)[:N]
     a = np.asarray(np.load(os.path.join(LINE_DIR,
         _line_key(EM, HOURS, WARMUP, override(tf * 60, *SPEC[role])) + '.npy'), mmap_mode='r'), float)
     return a[:N]

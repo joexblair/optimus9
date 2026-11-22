@@ -148,12 +148,23 @@ assert int(META['fence']) == MOM_FNC, (META['fence'], MOM_FNC)
 #   W_FDM3_EXPERIMENT it prints the mismatch instead, so the two pages can be compared on purpose.
 _PAGE = [('its reset fence', META.get('reset'), float(FK.FENCE_RESET_TO)),
          ('its ex-fence fence', META.get('fence'), float(FK.ORACLE_FENCE)),
-         ('its pivot offset', META.get('shift'), int(FK.ORACLE_SHIFT)),
+         ('its pivot offset', META.get('shift'), int(SP.SET_SHIFT_MIN)),    # HIS 1120 SRP: sweep-pivots' +15 set
          ('its M-no-rev ceilings', META.get('mnrtops'), list(FK.MNR_TOPS)),
          ('its locked A state', META.get('alock'), [int(FK.A_WS1_WS6), int(FK.A_WS7_WS15)]),
          ('its Mage-side-of-50 paint', META.get('mage50'), int(FK.ORACLE_MAGE50_PCT)),
          ('its in-fence power edges', META.get('ifpedges'), list(FK.INFENCE_EDGES)),
          ('its in-fence power 2dp', META.get('ifpdp'), int(FK.INFENCE_DP)),
+         #   HIS 1120: a page built before the key existed read the closed-prev r, so a missing key is that
+         ('its in-fence power read', META.get('ifpread', 'closed_prev'), FK.INFENCE_READ),
+         #   HIS 1121: the suffix on the (exf) codes; a page built before the key existed had none, so a missing key is 0
+         ('its (exf) suffix', META.get('ifpexf', 0), int(FK.EXF_SUFFIX)),
+         #   HIS 1120: a page built before the key existed had no "-" rule, so a missing key is None
+         ('its "-" on the counter side of 50', META.get('untag'), 50.0 if int(FK.UNTAG50) else None),
+         #   HIS 1120: towards/away's lift-off pair; a page built before the key existed ran v4's
+         ('its towards/away lift-off', META.get('talift', 'v4'),
+          'v4' if FK.TA_LIFT == 'v4' else [float(FK.TA_LIFT.split(',')[0]), int(FK.TA_LIFT.split(',')[1])]),
+         #   HIS 1121: the ws{TF}r config; a page built before the key existed read the stored wsf r row
+         ('its r config', META.get('rcfg', 'db'), FK.ORACLE_R_CFG),
          ('its x race re-open', META.get('xreopen'), FK.ORACLE_X_REOPEN),
          ('its e race re-open', META.get('ereopen'), FK.ORACLE_E_REOPEN)]
 _OFF = [(w, g, want) for w, g, want in _PAGE
@@ -263,10 +274,13 @@ def load(flip=0, alo=None, ahi=None, chunk=20000):
         #   another's offset lands outside its range almost at once, which is what was missing when
         #   O_TA was stale.
         _ta = b[:, O_TA:O_TA + len(LINES)].astype(int) & 7   # HIS 1119: bits 3-5 are the band
-        assert _ta.min() >= 0 and _ta.max() <= 4, \
+        #   HIS 1120: a page with his "-" rule adds 5 "-(inf)" and 6 "-(exf)" - neither is a TO or AW state
+        assert _ta.min() >= 0 and _ta.max() <= (6 if META.get('untag') is not None else 4), \
             ('the TO/AW block is not at byte %d on this page' % O_TA, int(_ta.min()), int(_ta.max()))
         _xc = b[:, O_CROSS:O_CROSS + len(LINES)].astype(int)
-        assert _xc.min() >= 0 and _xc.max() <= 15, \
+        #   HIS 1120: +16 marks a ws5 TO(inf) after TO(exf) (white on the page); every read here masks its own bit
+        #   HIS 1121 on 8793: +32 is the red suffix on a ws8..ws15 line leaving +4 or -4, so the code runs to 63
+        assert _xc.min() >= 0 and _xc.max() <= 63, \
             ('the cross block is not at byte %d on this page' % O_CROSS, int(_xc.min()), int(_xc.max()))
         for k, _lab in enumerate(SUMS):
             _c = b[:, O_TOEXF + k].astype(int)
@@ -280,15 +294,18 @@ def load(flip=0, alo=None, ahi=None, chunk=20000):
             out['newaw'][a:a + n, tf] = (c & 4) > 0
             #   HIS 1119 `fdm3-infence-power` put the power band in bits 3-5 of this byte, so
             #   every read of the code masks with 7. `tapow` is the band as the page stores it:
-            #   0 no value, 1..7 his -3 .. +3.
+            #   0 no value, 1..7 his -3 .. +3. HIS 1121 +4 and -4 on 8793: bits 3-6, 1..9 his -4 .. +4,
+            #   so the mask is 15 - bit 6 is clear on a seven-band page, which reads what it read.
             st = b[:, O_TA + j].astype(int)
-            out['tapow'][a:a + n, tf] = (st >> 3) & 7
+            out['tapow'][a:a + n, tf] = (st >> 3) & 15
             #   a band may only sit on an IN-FENCE cell - TO(inf) 1 or AW(inf) 2. His 1119
             #   *"in the same manner as TO(inf), add the (+2,+1,0,-1,-2) suffixs to AW(inf)"*
             #   widened it from TO(inf) alone. If this fires, the page put a band on a cell his
             #   words do not reach.
-            assert not np.any(~np.isin(st & 7, (1, 2)) & (((st >> 3) & 7) != 0)), \
-                'a power band sits on a cell that is neither TO(inf) nor AW(inf)'
+            #   HIS 1121: a page carrying his (exf) suffix puts it on TO(exf) 3, AW(exf) 4 and -(exf) 6 too
+            _sfx = (1, 2, 5, 3, 4, 6) if int(META.get('ifpexf', 0)) else (1, 2, 5)
+            assert not np.any(~np.isin(st & 7, _sfx) & (((st >> 3) & 15) != 0)), \
+                'a power band sits on a cell the page\'s suffix does not reach'
             st = st & 7
             out['aw'][a:a + n, tf] = np.isin(st, (2, 4))
             #   HIS *"printing exf"*: the ex-fence bit set - 3 TO(exf), 4 AW(exf). `ex` includes oob.
@@ -397,12 +414,12 @@ def page_trades():
     2880 rows, and the fdm3_orac_setup rows stamped port 8792 mixed the two.
 
     The page publishes which producer it used, so there is nothing to infer. `pooled` is
-    v4_sweep_pivots.pooled_trades at the banked pivot knobs - the same one home the page calls.
+    v4_sweep_pivots.pooled_trades at sweep-pivots' own bank - the same one home the page calls. HIS 1120 SRP: its
+    knobs are sweep-pivots' too.
     """
     src = str(META.get('pivots', 'ws2Mage'))
     if src == 'pooled':
-        import fdm3_knobs as _K
-        return SP.pooled_trades(int(_K.ORAC_PIVOT_TF), int(_K.ORAC_PIVOT_DWELL_S))
+        return SP.pooled_trades()
     if src == 'ws2Mage':
         return TA.pseudo_trades()[1]
     raise SystemExit('the page on port %d reports pivots %r, which this probe cannot build'
@@ -1243,59 +1260,10 @@ def main():
               % (out, len(bars), name, gap, t0s, t1s))
         return
     if MODE == 'pine':
-        #   HIS 1118: *"create a pine module that I can load on a TF1 pane and see your view of the
-        #   pivots"*, *"useing only the red and green bgcolors mech"*. The jig's emit_bgcolor owns
-        #   the format and it is LOCKED - this only hands it two streams.
-        d0, d1 = sys.argv[2], sys.argv[3]
-        out = sys.argv[4] if len(sys.argv) >= 5 else 'out/fdm3_pivots.pine'
-        if not os.path.isabs(out):
-            out = os.path.join(HERE, out)
-        tf = int(FK.ORAC_PIVOT_TF)
-        dw = int(FK.ORAC_PIVOT_DWELL_S)
-        pv = SP.pooled_pivots(tf, dw)
-        a, z = ln.K(d0 + ' 00:00:00'), ln.K(d1 + ' 23:59:55')
-        TS = np.asarray(ln.ts, np.int64)
-        #   A TF1 PANE'S BAR IS A MINUTE, so each pivot paints the minute bar holding it: its 5 s
-        #   timestamp floored to the minute. The chart's `time` is that minute's open in ms.
-        lo = sorted({int(TS[c] // 60000 * 60000) for cf, c, sd in pv if a <= c <= z and sd < 0})
-        hi = sorted({int(TS[c] // 60000 * 60000) for cf, c, sd in pv if a <= c <= z and sd > 0})
-        #   HIS 1118 RULING on the sides: *" LOW target-side creates a *OUTGOING* LONG,..."*. So a
-        #   LOW pivot opens a LONG and paints GREEN; a HIGH pivot opens a SHORT and paints RED.
-        notes = [
-            'fdm3 four-read pivots, %s .. %s' % (d0, d1),
-            'HIS 1118 RULE: pool ws%dMage and ws%db, each EMERGING and CLOSED-PREV, into one' % (tf, tf),
-            'list of oob->ib crosses. Split into runs of consecutive same-side crosses. A run',
-            'qualifies when the LONGEST dwell inside it reaches %d s; the pivot is that run\'s' % dw,
-            'FINAL cross to ib. His words: "1, the longest" and "we\'re going from a final cross',
-            'to ib, to the next final cross to ib".',
-            '',
-            'GREEN = a LOW pivot, which opens an OUTGOING LONG - his " LOW target-side creates a',
-            '        *OUTGOING* LONG,...". RED = a HIGH pivot, an OUTGOING SHORT.',
-            '',
-            'EACH PIVOT PAINTS THE MINUTE BAR THAT HOLDS IT, so load this on a 1 minute pane.',
-            'The 5 s bar is floored to its minute; the cross is knowable %d s later (the hold).'
-            % (int(SP.XWOB) * 5),
-            '',
-            'the knobs: ' + ' '.join('%s=%s' % (k, v) for k, v in FK.live() if k.startswith('ORAC_PIVOT')),
-            'sweep-pivots: SP_XWOB=%d bars, oob %g/%g' % (int(SP.XWOB), float(K.OOB_LO), float(K.OOB_HI)),
-            'the tape: %d bars, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)),
-            'pivots on the whole tape at this dwell: %d' % len(pv)]
-        n = JIG._Score(None).emit_bgcolor(
-            [{'name': 'pivot_high_short', 'ts': hi, 'color': 'color.red'},
-             {'name': 'pivot_low_long', 'ts': lo, 'color': 'color.green'}],
-            out, 'fdm3 pivots %s..%s' % (d0, d1), notes=notes)
-        print('bars %d, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
-        print()
-        print('| the stream | colour | what it marks | pivots %s .. %s |' % (d0, d1))
-        print('|' + '---|' * 4)
-        print('| pivot_low_long | green | a LOW pivot, opening an OUTGOING LONG | %d |' % len(lo))
-        print('| pivot_high_short | red | a HIGH pivot, opening an OUTGOING SHORT | %d |' % len(hi))
-        print('| both | | | %d |' % (len(lo) + len(hi)))
-        print()
-        print('| the file | timestamps it carries |')
-        print('|---|---|')
-        print('| %s | %d |' % (out, n))
-        return
+        #   HIS 1120 SRP, *"the pivots can't belong in any fdm3 classes"*: the pine view of the four-read pivots
+        #   moved to sweep-pivots, with the pivots.
+        raise SystemExit('moved: python3 docs/octo-freedom/1022_v4/v4_sweep_pivots.py pine %s'
+                         % ' '.join(sys.argv[2:]))
     if MODE == 'contrast':
         #   HIS 1118: *"would the 'top' 20% be a good starting place to pare from?"* - the top and
         #   the BOTTOM of each side, printed together, because a column the top shares means

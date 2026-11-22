@@ -2488,3 +2488,79 @@ ccb7bad03405  and stop the other instances
 03066aec2bb9  mostly in the mid board ranges (0,-1,+1)
 7fe0627388da  commit and push all. bank the updates and make this the machine
 2c46b6410cd7  make this the machine
+7c9fa5dd116f  duplicate 8792 onto 8788, with one change: AW(inf) cells get the same 7 in-fence bands as TO(inf), and all 14 bands use emerging bars instead of closed-prev
+ecd85aeb0fc1  8788 is good. the next build will impact the AW and TO states, and be built on 8792
+61ec0f0e8f0a  now all lines will be non-tagged (eg "-") if they are on the counter side of 50 (not the fence)
+e08b1eaa43aa  -this inculdes the start of a trade - TO must be "earnt" at the start of the trade if the line is already on target side, otherwise it it non-tagged
+460ddea11d21  TO must be "earnt" at the start of the trade if the line is already on target side, otherwise it it non-tagged
+c75f7277fb34  non-tagged (eg "-")
+e3bfea05431a  (not the fence)
+191043fd2ac7  I only asked for an update on TO, but now the whole row has been replaced with a "-" I still need to see the ([inf,exf])[the 7 bands] data
+01bff28b513e  I only asked for an update on TO, but now the whole row has been replaced with a "-"
+380fcc9dc11a  I still need to see the ([inf,exf])[the 7 bands] data
+d3ac5c5d3bdd  at 09-30 lowside 0321, ws5 flips to AW. if we attempt to make that AW flip earlier by eyeballed 2 minutes, what is the wider impact for ws5 AW flips across 09-30 and 10-01?
+4c92672caa11  if we attempt to make that AW flip earlier by eyeballed 2 minutes
+8b30e666219c  this isn't SRP. the pivots can't belong in any fdm3 classes
+618d703eacd4  my basic view (I'm not a developer) is that sweep-pivots calls for a list of pivots, and the +15 button is there to import a different set of pivots.
+3397b224e889  the reason I called out SRP is the lookahead rabbit hole that you and fdm3 were circuling.
+713e9c1e706a  I'm sure there are knobs that impact this output
+805fceb713cb  confirm that ws{e} is creating supplementary samples to improve lift-off sampling?
+4603f0a52446  if you needed to trace the code, does this indicate a lack of docs?
+d3110e6bf7f0  ok for the dwell
+2d52f17c26f5  rebuild 8792 with a pivot +15 minute button , and drop pivot +30 button
+a2db5dcaec53  same treatment
+cd55bbf87d37  sweep-pivots calls for a list of pivots, and the +15 button is there to import a different set of pivots
+8b0bd651c6bc  the +15 button is there to import a different set of pivots
+1e335816726f  the pivots can't belong in any fdm3 classes
+abde66958bc1  I have new highlighting task for 8792
+1cc9f54079ec  currently, a flip to AW from TO(exf) is highlighted in white
+ba2ad99a75ab  keep this in place, and add a white highlight on TO(inf) if the previous row was TO(exf). eg, 09-30 0649 and 0649:30
+c8311db82e7e  add a white highlight on TO(inf) if the previous row was TO(exf)
+192cbd4f9c69  ws5 only
+22bea58171f5  I don't see 107 existing flips to AW in 09-30 and 10-01. show me the list of TO to AW flips you have for the first half of 09-30
+29243440378a  go on the probes finish
+6160ff051387  I need to see the "hold 1, tolerance 0.67" applied in 8791
+14052ae24ff2  hold 1, tolerance 0.67
+89e9a3b89ae2  the only concern I had with the change is the potential to add more rows. the report doesn't show any so I think we're in stable place
+e5c0501efbd6  is the output causal and repeatable in live trading?
+12b5a3739bbb  for the 107 AW flips and their improved timing, I need to see the timestamp diffs in a table. drop that in a txt file thanks
+a5b68d6b2572  shut 8791 down - the hold 1 tol 0.67 isn't useful
+2621b3908442  the next job will clone 8792, and spin it up on 8793 with this change:
+68770f6a0363  instead of the 7 bands updating on closed-prev, I now want them to all update per closed-prev minute
+36e7e9c12f15  eg, ws12 will now print 12 updates over 12 minutes, instead of 1 update per 12 minutes
+3ed941b9715b  instead of the 7 bands updating on closed-prev, I now want them to all update per closed-prev minute eg, ws12 will now print 12 updates over 12 minutes, instead of 1 update per 12 minutes
+a9e81f82b1ca  we'll add the suffix to TO/AW(exf) now. this addition will serve to highlight diffs between the closed-prev derived 'exf', and the more granular 1m seams. confirm you understand what I'm expecting from this change
+29b6f4409689  we'll add the suffix to TO/AW(exf) now.
+4b1f226306fd  this addition will serve to highlight diffs between the closed-prev derived 'exf', and the more granular 1m seams
+63bb5cce9b28  8793 only
+0c687d655342  Yes, -(exf) too
+a191b6bc0092  using an indent style simple worded spec, show me how a line advances to TOexf. use ws15 as an example. aside from the overall view, I'm most curious to learn what triggers the test - is it per 5s bar?
+f1c263b28ff4  update 8793
+c5711b709028  add +4 and -4 ranges. 100-92 for '+4' and 0-8 for '-4'
+810a7879f56b  adjust +3 and -3 to fit accordingly
+db19aece2de6  confirm that these will update on the new 1 minute seams
+1e4ce04e3b8f  thanks. confirm that we're using the 1min seams for the 9 band updates
+9238c8d4f8f6  thanks. for coloring: when a highband line (ws8-15) flips from +4 to +3, or from -4 to -3, print the 3 in red
+f79969fdbf76  Yes, suffix alone
+7063aa8107ed  +3 / -3, sign and digit
+c4c1c78a9a69  Yes, any drop off ±4
+2934c6344152  8793 is good - bank it and make the machine.
+4b3319640daf  then, clone 8793 to 8792 and change the config of r. the new config is K len:6, RSI len:6, stoch range: 9
+f5667c309e25  contain the r config update to 8792 only. you'll need a separate cache
+26071e287b14  why is 8793 down? I'm using it as the live machine
+da90b73ea716  noted. in future, don't rebuild something if there is no change to apply
+34aafd57de21  there's a problem in 8793
+02831eb433fe  the last row of a down target leg is 09-14 2236:30. when I click on 'pivots +15' to see the rows after 2236:30 from a downward perspective, the existing rows before 2236:30 chnage. this has never happened. could it be that you accidentally placed the 8792's cache onto 8793's +15 cache?
+da621306b344  8792 has the same problem, but it's not so obviouse (ie only a few rows change on the +15 button press )
+ae4f281df5a5  B
+6d5e1a978ec2  remind me which webui port will have the updated R config. show me a table that tells me what is served on each port
+2ddd653d6633  you can build all ports - I 'm going for a break
+274df0cb1ed3  kill 8788
+3bd9563d0761  clone 8792 to a new port. instead of using pivots to create legs, I now want two continuous trades that run for the full window's length, one short and the other long. I'll use a button to flip between the 2 trades
+591a0f484cc3  instead of using pivots to create legs, I now want two continuous trades that run for the full window's length, one short and the other long. I'll use a button to flip between the 2 trades
+2fdadf13ae32  Blank both
+e61193400f30  I'll use a button to flip between the 2 trades
+6b27116c8c68  Stop 8793
+9896e8a6d63a  this is good - bank it, commit push, update the docs. make this the machine
+7f52ff9cc790  there is a red colouring applied to hband (high band lines) when 4 flips to 3. expand the red colour mech's coverage to include ws2-ws15
+9f9225620c23  expand the red colour mech's coverage to include ws2-ws15

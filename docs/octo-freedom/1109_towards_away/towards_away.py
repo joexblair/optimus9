@@ -97,6 +97,14 @@ target-side line (line50): 67 on a HIGH target-side, 33 on a LOW one - his *"Q1:
 as the flip. His 1110 answers stay (*"Q4: the question's answers stay the same"*): emerging r, an AW that starts in or
 beyond the fence already counts, the extremum retired after the flip.
 
+THE 1120 "-" ON THE COUNTER SIDE OF 50, HIS *"now all lines will be non-tagged (eg "-") if they are on the counter side
+of 50 (not the fence)"* / *"TO must be "earnt" at the start of the trade if the line is already on target side,
+otherwise it it non-tagged"*. run's `untag`, None = the run as banked; the fdm3-oracle page passes 50.0 when the fdm3 knob
+UNTAG50 is 1 (8792, 2026-11-20). His answers: the emerging r, strictly on the counter side; it covers the trade's open;
+a line on the counter side does not count toward the scenario-2 lines-under test. A MASK over the final states plus that
+one exclusion - the flip, the 50 reset and void still read `rst`'s line, so on 8792 an AW that dips under 50 and comes
+back prints AW again until it is back past 67 (HIGH) / 33 (LOW).
+
 MINE, each one flagged here and in the report:
     - an extremum is superseded by going STRICTLY past it (knob SUPERSEDE 'strict'). Equal is not past: under
       9B the second sample can be the stored extremum itself, and 'inclusive' would end the AW on the bar it starts.
@@ -190,10 +198,16 @@ def pseudo_trades():
 
 def load():
     """Every array the mech reads, once. -> dict."""
-    E = RS.load((RS.K0, RS.R0, RS.S0))           # the emerging r lines, the same arrays the r-pred UI reads
-    EMR = {t: np.asarray(E[t], float) for t in TFS}
-    for t in TFS:                                # CONTROL: the stored ws r line, exactly
-        assert np.array_equal(EMR[t], np.asarray(ln.line('ws%dr' % t), float), equal_nan=True), t
+    if ln.R_DIR is None:
+        E = RS.load((RS.K0, RS.R0, RS.S0))       # the emerging r lines, the same arrays the r-pred UI reads
+        EMR = {t: np.asarray(E[t], float) for t in TFS}
+        for t in TFS:                            # CONTROL: the stored ws r line, exactly
+            assert np.array_equal(EMR[t], np.asarray(ln.line('ws%dr' % t), float), equal_nan=True), t
+    else:
+        #   HIS 1121: a page with its own r config reads ws{TF}r from its separate cache, through ln - the same
+        #   resolver lift-off's e path reads, so no r read in the process can see the other config. fdm3_r_cache
+        #   checked the cache against its own build on load
+        EMR = {t: np.asarray(ln.line('ws%dr' % t), float) for t in TFS}
     CPR = {t: np.asarray(CP.series(EMR[t], t * 60), float) for t in TFS}
     EMM = {t: np.asarray(ln.line('ws%dMage' % t), float) for t in TFS}
     CPM = {t: np.asarray(CP.series(EMM[t], t * 60), float) for t in TFS}
@@ -223,26 +237,39 @@ def vote(v, side, fnc=None):
     return (np.asarray(v, float) >= e) if int(side) > 0 else (np.asarray(v, float) <= e)
 
 
-def lift_extrema(LN, t, side, a=False):
+def lift_knobs(lift=None):
+    """The (tolerance, hold) towards/away's lift-off reads use. -> (r-points, bars). `lift` None is v4's banked pair
+    (LIFT_TOL 2.0, LIFT_WOB 8), read live from v4_knobs; HIS 1120 the fdm3-oracle page can pass its own - see run."""
+    if lift is None:
+        return float(K.LIFT_TOL), int(K.LIFT_WOB)
+    tol, wob = float(lift[0]), int(lift[1])
+    assert tol >= 0 and wob >= 1, lift
+    return tol, wob
+
+
+def lift_extrema(LN, t, side, a=False, lift=None):
     """Lift-off's NATURAL target-side reversals on the emerging r. -> (stamps, pivots, values), stamp-ascending.
-    `a` HIS 1115 "A" (jig.at_extreme `line_extreme`): the window extreme off every bar of the span. Default off."""
-    lp = JIG.lift_off_pivot(LN['EMR'][t], side, K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL, K.LIFT_WOB, line_extreme=a)
+    `a` HIS 1115 "A" (jig.at_extreme `line_extreme`): the window extreme off every bar of the span. Default off.
+    `lift` (tolerance, hold) as lift_knobs; the stamp is the lift bar + hold - 1, lift-off's own rule (K.lift_stamp)."""
+    tol, wob = lift_knobs(lift)
+    lp = JIG.lift_off_pivot(LN['EMR'][t], side, K.LIFT_PTS, K.gap_for(t), tol, wob, line_extreme=a)
     lb = sorted(lp)
-    st = np.asarray([K.lift_stamp(int(b)) for b in lb], int)
+    st = np.asarray([int(b) + wob - 1 for b in lb], int)
     pv = np.asarray([lp[b] for b in lb], int)
     return st, pv, LN['EMR'][t][pv] if len(pv) else np.zeros(0)
 
 
-def lift_extrema_e(LN, t, side, a=False):
+def lift_extrema_e(LN, t, side, a=False, lift=None):
     """Lift-off's e-CROSS reversals (his 1110 update) on the emerging r. -> (stamps, pivots, values).
 
     The pivot is his walk-back bar, so the value is *"the ws{TF}r value at that time"*. Empty when the
     lift-off e path is switched off (v4_lift_e LIFT_E_ON 0). `a` as lift_extrema: with HIS 1115 "A" on, the natural
-    reversals the e path reads are A's - his *"1 and 2: agreed"*.
+    reversals the e path reads are A's - his *"1 and 2: agreed"*. `lift` as lift_extrema.
     """
+    tol, wob = lift_knobs(lift)
     ep = LE.get(t, len(LN['EMR'][t]), side)
-    ev = [] if ep is None else JIG.lift_off_e(LN['EMR'][t], side, K.LIFT_PTS, K.gap_for(t), K.LIFT_TOL,
-                                             K.LIFT_WOB, ep, line_extreme=a)
+    ev = [] if ep is None else JIG.lift_off_e(LN['EMR'][t], side, K.LIFT_PTS, K.gap_for(t), tol, wob, ep,
+                                             line_extreme=a)
     st = np.asarray([x[0] for x in ev], int)
     pv = np.asarray([x[1] for x in ev], int)
     return st, pv, LN['EMR'][t][pv] if len(pv) else np.zeros(0)
@@ -392,7 +419,14 @@ def row_rule(LN, xreopen='winner'):
     return ask
 
 
-def run(LN, trades, fnc=None, a_tfs=(), rst=None, xreopen='winner'):
+#   HIS 1121 *"B"* on the fdm3-oracle +15 button: run_carried sends its trades through run() in groups that do not
+#   overlap - five on the pooled pivots - so the part of a run that reads no trade is built ONCE per process and
+#   reused: the ex-fence masks, the lift-off reversals, the row rule and the race prep. Keyed by every input those
+#   read. Nothing in it depends on the trades, and nothing reads it but run().
+_SETUP = {}
+
+
+def run(LN, trades, fnc=None, a_tfs=(), rst=None, xreopen='winner', untag=None, lift=None):
     """The mech over the whole tape. -> (STATE {tf: int8 array}, detail).
 
     `fnc` None reads the banked 20/80 fence everywhere ex-20/80 / in-fence is read: the reach, the scenario-1 vote, the
@@ -407,6 +441,20 @@ def run(LN, trades, fnc=None, a_tfs=(), rst=None, xreopen='winner'):
     `rst` HIS 1115 fdm3-fence-reset-TO (line50): None is the banked 50 line for the flip at 50, the 50 reset and void.
     The fdm3-oracle test page passes 33.0, and all three read the 33/67 fence's target-side line - 67 HIGH, 33 LOW.
 
+    `untag` HIS 1120: *"now all lines will be non-tagged (eg "-") if they are on the counter side of 50 (not the
+    fence)"* / *"TO must be "earnt" at the start of the trade if the line is already on target side, otherwise it it
+    non-tagged"*. None is the banked run, untouched; the fdm3-oracle page passes 50.0. His answers: the side of 50
+    decides at the open too, so a line is TO there only on the target side; the EMERGING r is tested, strictly; and a
+    line on the counter side does not count toward the scenario-2 lines-under test. It is a MASK over the states -
+    nothing else in the run reads it - so a line back on the target side prints whatever state it holds there.
+    It reads 50 itself, not `rst`'s line: his *"(not the fence)"*.
+
+    `lift` HIS 1120, *"I need to see the "hold 1, tolerance 0.67" applied in 8791"*, his answer: towards/away only.
+    (tolerance r-points, hold bars) for every lift-off read here - the natural reversals, the e-cross reversals and
+    the x/e path's pivots. None is v4's banked pair (2.0, 8), so the run is exactly as before. Nothing outside
+    towards/away reads it; a caller's other lift-off reads keep v4's pair (the page has none since 1119 - its M-no-rev
+    slot holds legMage, which reads no lift-off).
+
     detail['reach'][t][k]   the bar ws{t}r first reached ex-20/80 in trade k, or the trade's close if it never did
     detail['hunts'][t][k]   HIS 1112 the trade's hunts: [(start, end, reach)] - reach is None when the hunt ended
                             without one (a pass to the counter side of 50, or the close)
@@ -418,19 +466,31 @@ def run(LN, trades, fnc=None, a_tfs=(), rst=None, xreopen='winner'):
     AW1 = {t: np.zeros(N, bool) for t in TFS}
     det = {k: {t: {} for t in TFS} for k in ('reach', 'hunts', 's1', 'samples', 's2')}
     det['ties'] = 0
-    EXF = {(t, s): exf_mask(LN, t, s, fnc) for t in TFS for s in (-1, +1)}
+    SU = _SETUP.setdefault((id(LN), fnc, tuple(sorted(int(t) for t in a_tfs)), xreopen, lift), {'PREP': {}})
+    if 'EXF' not in SU:
+        SU['EXF'] = {(t, s): exf_mask(LN, t, s, fnc) for t in TFS for s in (-1, +1)}
+    EXF = SU['EXF']
     LV = {s: line50(s, rst) for s in (-1, +1)}                     # HIS 1115 the line the three 50 reads use
+
+    def cside(u, b, s):
+        """HIS 1120: ws{u}'s emerging r strictly on the counter side of `untag` at bar b, on target-side s."""
+        v = LN['EMR'][u][b]
+        return bool(v < untag) if s > 0 else bool(v > untag)
     A = {int(t) for t in a_tfs}
     assert A <= set(TFS), ('an A TF has no towards/away state', sorted(A - set(TFS)))
-    LIFT = {(t, s): lift_extrema(LN, t, s, t in A) for t in TFS for s in (-1, +1)}
-    LIFTE = {(t, s): lift_extrema_e(LN, t, s, t in A) for t in TFS for s in (-1, +1)}
+    if 'LIFT' not in SU:
+        SU['LIFT'] = {(t, s): lift_extrema(LN, t, s, t in A, lift) for t in TFS for s in (-1, +1)}
+        SU['LIFTE'] = {(t, s): lift_extrema_e(LN, t, s, t in A, lift) for t in TFS for s in (-1, +1)}
+    LIFT, LIFTE = SU['LIFT'], SU['LIFTE']
     #   HIS 1118: *"lines move all the time and there is no gaurantee that they will be available
     #   for the reset. the only workable answer is B"*. B is reopen='any' - the ws{TF}x race
     #   re-opens on crossing back over ANY of its three race lines. He ruled it on the oracle's
     #   x-cross row and asked for a BUTTON here rather than a ruling: *"the only way to answer is a
     #   button on 8791"*. So this stays 'winner' - his 1109 4B - unless a caller asks otherwise, and
     #   it never touches the ws{TF}e race.
-    ROW = row_rule(LN, xreopen)
+    if 'ROW' not in SU:
+        SU['ROW'] = row_rule(LN, xreopen)
+    ROW = SU['ROW']
     more = lambda v, x, s: (v > x) if s > 0 else (v < x)          # v more extreme than x on side s
     #   scenario 1, every line first - scenario 2 reads the lines under it
     for t in TFS:
@@ -486,14 +546,18 @@ def run(LN, trades, fnc=None, a_tfs=(), rst=None, xreopen='winner'):
             lines['X'] = np.asarray(ln.line('ws%dx' % t), float)
         AW2 = np.zeros(N, bool)
         for s in (-1, +1):
-            race = LE.race(t, s)
-            prep = {lab: JIG.race_prep(line, race, s) for lab, line in lines.items()}
-            runs = {lab: oob_runs(line, s) for lab, line in lines.items()} if TK.SAMPLE_AT == 'excursion' else None
+            if (t, s) not in SU['PREP']:
+                race = LE.race(t, s)
+                SU['PREP'][(t, s)] = (race, {lab: JIG.race_prep(line, race, s) for lab, line in lines.items()},
+                                      {lab: oob_runs(line, s) for lab, line in lines.items()}
+                                      if TK.SAMPLE_AT == 'excursion' else None)
+            race, prep, runs = SU['PREP'][(t, s)]
             lst, lpv, lval = LIFT[(t, s)]
 
             def under_test(b):
                 """The existing >1 of the 5 lines under reading AW, or HIS 1112 row rule. -> (passes, AW lines, row)."""
-                aw = [u for u in under if AW1[u][b]]
+                #   HIS 1120 answer: a line printing "-" is not printing away, so it does not count here
+                aw = [u for u in under if AW1[u][b] and not (untag is not None and cside(u, b, s))]
                 rw = ROW(b, s) if ROW is not None else (False, 0, 0)
                 return len(aw) > TK.UNDER_GT or rw[0], aw, rw[0]
 
@@ -573,13 +637,52 @@ def run(LN, trades, fnc=None, a_tfs=(), rst=None, xreopen='winner'):
             st[o:c] = TO
         st[(st == TO) & (AW1[t] | AW2)] = AW
         st[~np.isfinite(r)] = NONE
+        if untag is not None:                                       # HIS 1120: "-" on the counter side of 50
+            for o, c, s in trades:
+                st[o:c][(r[o:c] < untag) if s > 0 else (r[o:c] > untag)] = NONE
         #   HIS 1109 *"at the start of a trade, an r line is automatically tagged as towards"*, and 1110 *"make sure
         #   the update doesn't impact the "all lines start with TO at the beginning of a trade""*
         assert not any(st[o] == AW for o, c, s in trades), ('a line reads AW on a trade\'s open bar', t)
         STATE[t] = st
     return STATE, det
 
-def build(fnc=None, a_tfs=(), rst=None, xreopen='winner'):
+def run_carried(LN, runs, fnc=None, a_tfs=(), rst=None, xreopen='winner', untag=None, lift=None, keep=()):
+    """HIS 1121 *"B"* on the fdm3-oracle +15 button: a trade keeps its open and its hunt, only its close moves, and
+    its rows print from `show`. -> (STATE {tf: int8 array} as run gives it, the number of groups run, OWN).
+
+    OWN[k][t] is trade k's own state over its whole run, open to close, for each TF in `keep` - the bars before
+    `show` print the trade before it, so a reader that counts from a trade's open (fdm3-small-trade) needs them.
+
+    `runs` [(open, show, close, side)] - v4_sweep_pivots.carried_set. Each trade is run from its OWN open to its
+    close, and its state is taken on [show, close) only. The print windows tile the tape; the runs overlap - a trade
+    runs on under the next trade's first `show - open` bars - so they go through run() in groups whose trades do not
+    overlap, and every trade's state comes from its own group. `fnc` .. `lift` as run.
+    """
+    assert all(o <= sh < c for o, sh, c, s in runs), 'a carried trade prints outside its own run'
+    assert all(runs[k][2] <= runs[k + 1][1] for k in range(len(runs) - 1)), 'two carried trades print on one bar'
+    ends, grp = [], []
+    for o, sh, c, s in runs:                     # each trade into the first group whose last close is at or before its open
+        g = next((g for g, e in enumerate(ends) if e <= o), None)
+        if g is None:
+            ends.append(c)
+            grp.append(len(ends) - 1)
+        else:
+            ends[g] = c
+            grp.append(g)
+    STATE = {t: np.full(ln.N, NONE, np.int8) for t in TFS}
+    OWN = [None] * len(runs)
+    for g in range(len(ends)):
+        ks = [k for k in range(len(runs)) if grp[k] == g]
+        ST = run(LN, [(runs[k][0], runs[k][2], runs[k][3]) for k in ks], fnc, a_tfs, rst, xreopen, untag, lift)[0]
+        for k in ks:
+            o, sh, c = runs[k][0], runs[k][1], runs[k][2]
+            for t in TFS:
+                STATE[t][sh:c] = ST[t][sh:c]
+            OWN[k] = {t: ST[t][o:c].copy() for t in keep}
+    return STATE, len(ends), OWN
+
+
+def build(fnc=None, a_tfs=(), rst=None, xreopen='winner', untag=None, lift=None):
     """-> (LN, pivots, trades, STATE, detail), with the controls run. `fnc`, `a_tfs` and `rst` as run: the banked run
     when none is given; HIS 1115 the fdm3-oracle page builds its first state here."""
     LN = load()
@@ -590,7 +693,7 @@ def build(fnc=None, a_tfs=(), rst=None, xreopen='winner'):
             m = exf_mask(LN, t, s)
             for b in rng.integers(0, ln.N, 400):
                 assert bool(m[b]) == F2.ex2080_line(LN, t, int(b), s), ('ex-20/80 reader differs', t, s, b)
-    STATE, det = run(LN, trades, fnc, a_tfs, rst, xreopen)
+    STATE, det = run(LN, trades, fnc, a_tfs, rst, xreopen, untag, lift)
     return LN, piv, trades, STATE, det
 
 

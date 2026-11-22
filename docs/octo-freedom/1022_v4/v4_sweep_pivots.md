@@ -75,7 +75,8 @@ separately — every mech function's signature is checked for a price-derived pa
 ## 4. The knobs — all six, and every value is a measurement
 
 They live in `v4_knobs.py`, which refuses an off-ruled run unless `W_V4_EXPERIMENT=1`.
-`v4_sweep_pivots.knobs()` prints the set any run used.
+`v4_sweep_pivots.knobs()` prints the set any run used. The four-read pivots' three knobs live in
+`v4_sweep_pivots.py` itself - §10b.
 
 | the knob | value | what set it |
 |---|---|---|
@@ -234,7 +235,149 @@ it. 1 of 6,037 rows.
 | the 15 missing line caches | `RS.load` is read-only; rebuilding them was not authorised |
 | `out/net.md`'s column labels | read `k \| rsi \| stc` but hold `(rsi, stc, k_len)` — the transposition this session found in `v4_rcfg_sweep.spec`, still live in that file's header |
 
+## 10. The four-read pivots — HIS 1118, held here since his 1120 SRP ruling
+
+HIS 1120: *"this isn't SRP.  the pivots can't belong in any fdm3 classes"* / *"sweep-pivots calls for a list of
+pivots, and the +15 button is there to import a different set of pivots"* / *"the reason I called out SRP is the
+lookahead rabbit hole that you and fdm3 were circuling"*. Until 2026-11-20 the rule below was section 2 of fdm3's
+`1118_orac_exhaust.md`, its knobs sat in `fdm3_knobs.py`, its pine view was a mode of fdm3's `oracle_rows.py`, and two
+fdm3 specs stated its causality differently. Every value is unchanged by the move.
+
+### 10a. The rule
+
+HIS 1118: *"bake the 4 lines into the sweep-pivots machine: every test uses all lines to decide if dwell is
+qualified"*, then *"1, the longest"*, then *"2, it shouldn't matter - we're going from a 'final' cross to ib, to the
+next 'final' cross to ib"*.
+
+`v4_sweep_pivots.pooled_pivots()`:
+
+| the step | what it does |
+|---|---|
+| the four reads | ws{tf}Mage emerging, ws{tf}Mage closed-prev, ws{tf}b emerging, ws{tf}b closed-prev |
+| every read contributes | its own oob->ib crosses, each carrying the DWELL - how long that read held out of bounds immediately before the cross |
+| the group | a run of consecutive SAME-SIDE crosses. No time tolerance: the group is the run, which is what he ruled |
+| the gate | the run qualifies when the LONGEST dwell inside it reaches the dwell knob |
+| the pivot | that run's FINAL cross to ib |
+| after the gate | two surviving runs that then touch on the same side merge, again taking the last |
+| the guards | two asserts - the pivots alternate side, and they are in order |
+
+**WHY FOUR READS.** The emerging line flickers in and out of the fence, so a real 2.4 minute oob run measures as 0.1
+on it while closed-prev measures the same move as 3.0. Taking the longest lets the steady read supply the dwell and
+the fast read supply the bar.
+
+**THE DWELL IS 0**, and it was 180 for one turn. His own self-validation killed it: *"for each pivot that you print,
+wait for 2 more pivots to print, then look back at the extremes between each pair"*. His example - the real price
+high between 12:02 and 13:45 on 09-28 is 12:55:20; at dwell 0 a HIGH pivot prints 13:00:00, 4.7 min after it, and a
+180 s dwell deletes that pivot so 13:45:00 survives instead, 49.7 min late. Measured over 09-22..09-28:
+
+| dwell | pivots | mean lag to the real extreme | median lag | worst lag | within 5 min |
+|---|---|---|---|---|---|
+| 0, BANKED | 218 | 7.0 min | 2.8 min | 83.0 min | 153 of 217 |
+| 60 s | 178 | 8.4 min | 3.2 min | 83.0 min | 121 of 177 |
+| 120 s | 138 | 11.8 min | 3.8 min | 160.8 min | 87 of 137 |
+| 180 s | 122 | 13.0 min | 3.9 min | 160.8 min | 75 of 121 |
+| 300 s | 88 | 14.0 min | 4.1 min | 160.8 min | 53 of 87 |
+
+The POOLING and the final-cross collapse are what cut the noise, not the dwell: 3,006 pivots on the tape against the
+9,257 crosses raw emerging ws1Mage makes.
+
+**THE BANKED LEGS ARE UNTOUCHED.** `legs` keeps its own default - every cross opens a leg, it closes on the FIRST
+opposite cross, legs overlap - and `pooled_pivots` is a new reader beside it. HIS 1118: *"don't rebuild it - create a
+mode for this new mech so that the existing pivots remain untouched in any now or future fdm3-oracle updates"*.
+
+### 10b. The knobs
+
+They live in `v4_sweep_pivots.py`, beside the code, NOT in `v4_knobs.py` - that file is not touched, so they follow
+`v4_lift_e`'s precedent: env `W_SP_<NAME>`, a ruled registry, and an off-ruled import refuses unless
+`W_SP_EXPERIMENT=1`. `v4_sweep_pivots.knobs()` prints them with the six in §4.
+
+| the knob | value | his words | was |
+|---|---|---|---|
+| `POOL_TF` | 1 | the four reads run on ws1 | fdm3 `ORAC_PIVOT_TF` |
+| `POOL_DWELL_S` | 0 | *"ok for the dwell"* - his lag test, the table above | fdm3 `ORAC_PIVOT_DWELL_S` |
+| `SET_SHIFT_MIN` | 15 | *"rebuild 8792 with a pivot +15 minute button , and drop pivot +30 button"* | fdm3 `ORACLE_SHIFT` |
+
+### 10c. The sets a page imports
+
+HIS 1120: *"the +15 button is there to import a different set of pivots"*, and the flip button *"same treatment"*.
+`pivot_set(trades, shift_min, flip)` makes them from any pivot-trade list - `pooled_trades()` or towards/away's
+ws2Mage `pseudo_trades`. The page's two buttons only pick which set it imports.
+
+| the set | built by | pseudo trades on the tape |
+|---|---|---|
+| as found | `pooled_trades()` | 3,006 |
+| every pivot +15 min | `pivot_set(trades, 15)` | 3,005 |
+| every pivot's side flipped | `pivot_set(trades, 0, True)` | 3,006 |
+| +15 min and flipped | `pivot_set(trades, 15, True)` | 3,005 |
+
+A pseudo trade opens at a pivot's confirm bar and closes at the next pivot's; its target-side is MINUS the pivot's
+side. +15 moves every open and close by the same amount and drops a trade that would open past the tape; flipped
+keeps every bar and flips every target-side. All four sets are identical to the lists the fdm3-oracle page built
+inline before the move (checked 2026-11-20).
+
+**HIS 1121 *"B"* - THE +15 SET IS CARRIED ON THE PAGE.** He found the +15 button changing rows the as-found view
+already showed (the 2026-09-14 22:18:25 down trade, rows 22:33:00 to 22:36:30), because the +15 set moved the
+trade's OPEN as well as its close and towards/away restarted the hunt at the later open. His pick, B, as I put it to
+him: the trade keeps its open and its hunt, only the close moves, and each next trade's first 15 min show the
+previous trade carried on.
+
+`carried_set(trades, shift_min, flip)` -> [(open, show, close, target-side)]: `open` is the trade's own open (its
+towards/away run and hunt start there), `show` = open + 15 min (its first printed bar), `close` = its close + 15 min.
+The print windows [show, close) are exactly `pivot_set`'s trades - asserted - so the target-side on every row is
+unchanged. The page runs it through `towards_away.run_carried` (5 groups of trades that do not overlap on the pooled
+pivots), and asserts that every byte of every row a carried trade shares with its as-found self is the as-found one,
+except the flip marks on that trade's first printed row.
+
+| checked on 8794, 2026-11-21 | pivots +15 | +15 flipped |
+|---|---|---|
+| towards/away runs | 5 | 5 |
+| bars of towards/away asserted equal to as found, both states | 2,247,588 | |
+| page rows asserted equal to as found, both states | 374,580 | |
+| as-found states, bytes that differ from 8793 | 0 | 0 |
+| +15 bytes that differ from 8793's +15 (the old set) | 225,129 | 614,533 |
+| 2026-09-14 22:33:00 to 22:36:30, cells that differ from as found | 0 | |
+
+### 10d. The lookahead - stated here, once
+
+| the read | knowable at |
+|---|---|
+| a cross to ib | its confirm bar, 90 s after the cross (`SP_XWOB` 18 bars) |
+| a pivot, its run's FINAL cross to ib | the confirm bar of the first qualifying opposite-side cross after it - `pooled_final()`. Until then a later same-side cross can still take its place |
+| a pseudo trade's open and target-side | the bar its pivot is final |
+| a pseudo trade's close | the bar the next pivot is final |
+
+Measured 2026-11-20 over the tape, at the banked knobs:
+
+| the gap from a pivot's confirm bar to the bar it is final | seconds |
+|---|---|
+| shortest | 5 |
+| median | 940 |
+| longest | 4,455 |
+| pivots final at their own confirm bar | 0 of 3,005 |
+
+His 2026-09-30 03:21 ws5 AW sits in the trade that opens 2026-09-30 02:24:40: its open is final at 02:32:50, and its
+close at 03:55:25 is final at 04:07:25. So a reader inside a trade can be causal and the trade itself is not - his
+1109 *"noted - it's not a realtime tool"*. A causality question about a page row splits by owner: this table answers
+for the trade, and the page's own rules answer for the reads inside it.
+
+### 10e. The pine view
+
+HIS 1118: *"create a pine module that I can load on a TF1 pane and see your view of the pivots"*, *"useing only the
+red and green bgcolors mech"*. `python3 v4_sweep_pivots.py pine 2026-09-22 2026-09-28 [out.pine]`; the default file
+is `out/sweep_pivots_pooled.pine`. GREEN a LOW pivot (an outgoing LONG), RED a HIGH pivot (an outgoing SHORT), each on
+the minute bar that holds its cross. Moved from fdm3's `oracle_rows.py pine` mode, which now prints this command; the
+streams are identical (2026-09-30..10-01, 76 timestamps).
+
+### 10f. Who imports them
+
+| the importer | what it picks |
+|---|---|
+| fdm3-oracle, `FDM3_PIVOTS=pooled` (8792, 8788) | the pooled producer; its pivots +15 min and flip pivots buttons pick the set |
+| orac-exhaust, fdm3's `oracle_rows.py` | the producer the page it reads reports in `/meta` `pivots` |
+
+---
+
 ## Related
 
-`v4_sweep_pivots.py` · `v4_net_sp.py` · `v4_knobs.py` · `out/net_sp.md` · `out/mage_sweep_prior.md` ·
+`v4_sweep_pivots.py` · `v4_net_sp.py` · `v4_knobs.py` · `../../fdm3/1118_orac_exhaust.md` (imports §10) · `out/net_sp.md` · `out/mage_sweep_prior.md` ·
 `out/mage_align.md` · `out/band_sweep.md` · `out/sweep_pivots_18.md`

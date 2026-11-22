@@ -331,44 +331,65 @@ E_REOPEN = 'winner'             # his 1109 4B, unchanged - the ws{TF}e race
 #   only ever TO(inf) into AW(inf) - for eight extra minutes of start-up. The ws{TF}x CROSS ROW
 #   stays at his B permanently (X_REOPEN above); this was only ever the towards/away x races.
 XRES = ('winner',)
-#   HIS 1118: *"create a test UI with these new pivots"*. With FDM3_PIVOTS=pooled the page's pseudo
-#   trades come from v4_sweep_pivots.pooled_pivots - ws1Mage and ws1b, each emerging and
-#   closed-prev, pooled, the longest dwell qualifying a same-side run, the pivot its final cross to
-#   ib - instead of towards_away.pseudo_trades's ws2Mage sweep-pivot legs. Every TO/AW cell follows,
-#   because towards/away runs on whatever trades it is handed.
-#   THE SIDE CONVENTION IS pseudo_trades's, UNCHANGED: a trade's target-side is the NEGATIVE of the
-#   pivot's side, so the two pages are read the same way and only the pivots differ.
-#   A TRADE OPENS AT A PIVOT'S CONFIRM BAR, not its cross: the cross is first knowable 90 s later.
+#   HIS 1118: *"create a test UI with these new pivots"*. With FDM3_PIVOTS=pooled the page imports
+#   sweep-pivots' four-read pivot trades instead of towards_away.pseudo_trades's ws2Mage ones. Every
+#   TO/AW cell follows, because towards/away runs on whatever trades it is handed.
+#   HIS 1120 SRP, *"the pivots can't belong in any fdm3 classes"*: the pivots' rule, knobs, sets and
+#   LOOKAHEAD are sweep-pivots' - v4_sweep_pivots.py and v4_sweep_pivots.md section 10. This page
+#   only picks which producer and which set it imports.
 #   WHICH PRODUCER MAKES THIS PAGE'S PSEUDO TRADES. Every TO/AW cell, every count and the row's side
 #   byte are scoped to a trade, so this one env var decides what the whole page means:
 #     'ws2Mage'  towards_away.pseudo_trades - the ws2Mage leg extremes, 1564 trades on the tape.
-#     'pooled'   v4_sweep_pivots.pooled_trades at the banked knobs - HIS 1118 four reads of
-#                ws{ORAC_PIVOT_TF} (Mage and b, each emerging and closed-prev), a run's FINAL cross
-#                to ib, the next pivot on the opposite side. At the banked tf 1 that is 3006 trades,
-#                and it is what Joe 1119 called *"a new mode... in sweep-pivots that relies on ws1
-#                to ib, to the opposing oob to ib"*.
+#     'pooled'   v4_sweep_pivots.pooled_trades at sweep-pivots' bank - 3006 trades.
 #   IT IS PUBLISHED IN /meta AS `pivots`, because a reader cannot infer it and must not guess: the
 #   fdm3 probe scored ws2Mage trades against a pooled page until his 1119 caught it, and on 09-24
 #   the two target-sides were opposite on 679 of 2880 rows.
+#     'two'      HIS 1122 *"instead of using pivots to create legs, I now want two continuous trades that run for the
+#                full window's length, one short and the other long.  I'll use a button to flip between the 2
+#                trades"*. No pivots: one trade from the tape's first bar to its end, and the flip button's set is
+#                the other one on the same bars. His answers: legMage and fdm3-small-trade *"Blank both"*.
 PIVOTS = os.environ.get('FDM3_PIVOTS', 'ws2Mage')
-assert PIVOTS in ('ws2Mage', 'pooled'), PIVOTS
+assert PIVOTS in ('ws2Mage', 'pooled', 'two'), PIVOTS
 A_TFS = [t for (_, band), on in zip(A_BANDS, A_LOCK) if on for t in band]
 #   HIS 1119: *"rebuild 8792 with a pivot +15 minute button , and drop pivot +30 button"*, and he
 #   ruled it for all three pages, so the +30 button is gone everywhere. It was his 1112 value, went
 #   to 30 at his 1117 *"instead of +15, make it +30 minutes"*, and is back at 15.
-PIV_SHIFT = 15                  # minutes - HIS 1119, was 30 at his 1117 and 15 at his 1112
+import v4_sweep_pivots as SP    # noqa: E402 - HIS 1120 SRP: the pivot sets and their knobs are sweep-pivots'
+PIV_SHIFT = SP.SET_SHIFT_MIN    # minutes, sweep-pivots' +15 set - HIS 1119, was 30 at his 1117 and 15 at his 1112
 OFFS = (0, PIV_SHIFT)           # the pivots as found, and every pivot PIV_SHIFT later
+if PIVOTS == 'two':
+    OFFS = (0,)                 # HIS 1122 two trades: no pivots, so no +15 set to import and no +15 button
 FLIP_TOX = 'ws1'                # HIS 1113: the one line whose flip into TO(exf) is highlighted, *"in ws1 only"*
+#   HIS 1120: *"currently, a flip to AW from TO(exf) is highlighted in white"* / *"keep this in place, and add a white
+#   highlight on TO(inf) if the previous row was TO(exf). eg, 09-30 0649 and 0649:30"*, his answer *"ws5 only"*, on
+#   8792 and 8788. +16 in the cross code on the ws5 row that prints TO(inf) where the row before printed TO(exf),
+#   whichever pseudo trade that row is in - the TO -> AW flip's own rule for the row before.
+FLIP_TOINF = 'ws5'              # the one line whose TO(inf) after TO(exf) prints white
+TO_INF = 1                      # the TO/AW code a cell prints as TO(inf), whatever its in-fence band
 TO_EXF = 3                      # the TO/AW code a cell prints as TO(exf): TO 1, +2 ex-fence on the target-side
 #   HIS 1119 `fdm3-infence-power`: *"for every TO(inf) line, add a suffix based on these critreria"*,
 #   with his five bands, and his ruling on the 7.9% of cells his bands did not reach - a -3 band
 #   under the low edge and a +3 band at or over the high one. The cause of those cells: the ex-fence
 #   test reads the TARGET side only, so a HIGH target-side line is in-fence at any value under 77.
 #   HIS *"all values are 2dp: eg 62 to 73 is actually 62.00 to 72.99"*, so the value is ROUNDED to
-#   2dp and then placed. THE VALUE IS THE CLOSED-PREV r, the banked chart-matched read: emerging is
-#   lift-off's read alone.
-IFP_EDGES = (23.0, 28.0, 38.0, 62.0, 73.0, 77.0)
-IFP_LABELS = ('-3', '-2', '-1', '0', '+1', '+2', '+3')
+#   2dp and then placed. THE VALUE IS THE r THE KNOB INFENCE_READ NAMES (IFP_READ below): the
+#   closed-prev r on the bank, the banked chart-matched read; the emerging r on his 1120 8788.
+#   HIS 1121 on 8793: *"add  +4 and -4 ranges.  100-92  for '+4' and 0-8 for '-4'"* / *"adjust +3 and -3 to fit
+#   accordingly"*. The edges are the banked knob INFENCE_EDGES: 23 28 38 62 73 77 on the bank, 8 and 92 added on 8793. The
+#   labels follow the count - 2n edges give -n .. +n - and the band+1 sits in bits 3-6, so +4 is 9 and every band read
+#   masks with 15. Bit 7 stays clear: 6 | 9 << 3 is 78.
+import fdm3_knobs_shim as _FKS  # noqa: E402 - the banked fdm3 knobs, from the page's own directory
+IFP_EDGES = tuple(_FKS.INFENCE_EDGES)
+assert len(IFP_EDGES) % 2 == 0 and list(IFP_EDGES) == sorted(set(IFP_EDGES)), IFP_EDGES
+IFP_LABELS = tuple('%+d' % k if k else '0' for k in range(-len(IFP_EDGES) // 2, len(IFP_EDGES) // 2 + 1))
+assert len(IFP_LABELS) <= 15, 'the band+1 has four bits'
+#   HIS 1121 on 8793: *"for coloring: when a highband line (ws8-15) flips from +4 to +3, or from -4 to -3, print the 3
+#   in red"*, his answers "Yes, suffix alone", "+3 / -3, sign and digit" and "Yes, any drop off ±4". +32 in the cross
+#   code on a ws8..ws15 row whose suffix is under +4 where the row before printed +4, or over -4 where the row before
+#   printed -4, whatever the tag on either row - that row only, whichever pseudo trade the row before is in, the TO ->
+#   AW flip's own rule for the row before. Only a page with his +4 and -4 has them, so a seven-band page never sets it.
+IFP_RED4 = len(IFP_LABELS) == 9
+IFP_REDN = [0]                  # ws8..ws15 cells whose suffix prints red, counted across every state
 IFP_DP = 2                      # his 2dp - the value is rounded before it is placed
 IFP_BARE = [0]                  # TO(inf) cells with no value to band, counted across every state
 IFP_INF = [0]                   # TO(inf) cells in all, so the bare share is readable
@@ -381,8 +402,58 @@ IFP_INF = [0]                   # TO(inf) cells in all, so the bare share is rea
 SMALL_HI = tuple(range(8, 16))  # his highband, ws8..ws15
 SMALL_LRG = 64                  # the bit in the legMage byte: set = `lrg`, clear inside a trade = `sml`
 SMALL_ROWS = [0, 0]             # rows inside a trade, and of them `lrg`, over every state
-import fdm3_knobs_shim as _FKS  # noqa: E402 - the banked fdm3 knobs, from the page's own directory
+LRG_AF = {}                     # HIS 1121 B: each as-found state's `lrg`, which a carried state must match on shared rows
+CARRY_SHARED = [0]              # HIS 1121 B: bars where a carried +15 state was asserted equal to its as-found state
+CARRY_ROWS = [0]                # HIS 1121 B: rows where a carried +15 page state was asserted equal to the as-found page
 SMALL_MAX = int(_FKS.SMALL_TRADE_MAX_TOEXF)     # his `fdm3-small-trade-max-toexf`, 2 lines
+#   HIS 1120: *"duplicate 8792 onto 8788, with one change: AW(inf) cells get the same 7 in-fence
+#   bands as TO(inf), and all 14 bands use emerging bars instead of closed-prev"*. THE r THE BAND
+#   READS is the banked knob INFENCE_READ: 'closed_prev' on the bank, 'emerging' on 8788 as an
+#   off-ruled run. Only the band moves - the TO/AW code and its ex-fence test read what they read.
+#   HIS 1121, on 8793 as a clone of 8792: *"instead of the 7 bands updating on closed-prev, I now want them to all
+#   update per closed-prev minute"* / *"ws12 will now print 12 updates over 12 minutes, instead of 1 update per 12
+#   minutes"*. 'closed_prev_minute' is the closed-prev arithmetic at 60 s on every line's emerging r: the value at the
+#   last 5 s bar of the last closed minute. ws1 reads what it read; ws2..ws15 step once a minute.
+IFP_READ = _FKS.INFENCE_READ
+assert IFP_READ in ('closed_prev', 'emerging', 'closed_prev_minute'), IFP_READ
+IFP_KEY = {'closed_prev': 'CPR', 'emerging': 'EMR', 'closed_prev_minute': 'EMR'}[IFP_READ]   # towards_away.load()'s
+#   HIS 1121 on 8793: *"we'll add the suffix to TO/AW(exf) now.  this addition will serve to  highlight diffs between
+#   the closed-prev derived 'exf', and the more granular 1m seams"*, his answers 8793 only and "-(exf)" too. On, the
+#   same band of the same value goes on TO(exf) 3, AW(exf) 4 and -(exf) 6; off, the in-fence codes alone carry it.
+IFP_EXF = bool(_FKS.EXF_SUFFIX)
+IFP_EXFN = [0, 0]               # (exf) cells carrying the suffix, and of them bare, counted across every state
+IFP_MIN = {}                    # HIS 1121: each line's last-closed-minute r, built once per line and reused per state
+
+
+def ifp_value(LN, t):
+    """The r the in-fence power band reads on line ws{t}, at every 5 s bar. -> float array, len N."""
+    if IFP_READ != 'closed_prev_minute':
+        return np.asarray(LN[IFP_KEY][t], float)
+    if t not in IFP_MIN:
+        IFP_MIN[t] = np.asarray(CP.series(LN[IFP_KEY][t], 60), float)
+    return IFP_MIN[t]
+#   HIS 1120: *"now all lines will be non-tagged (eg "-") if they are on the counter side of 50 (not the fence)"*.
+#   The level towards/away's run masks at - his 50, not FENCE_RESET_TO's line - or None for the run as banked.
+#   Every TO/AW read on the page follows the mask: the cells, the TO:x AW:x and TO(exf) sums, the flip marks and
+#   fdm3-small-trade.
+UNTAG = 50.0 if int(_FKS.UNTAG50) else None
+#   HIS 1120 *"I need to see the "hold 1, tolerance 0.67" applied in 8791"*, his answer towards/away only: the lift-off
+#   (tolerance, hold) every towards/away run here uses. None is v4's banked pair. Nothing else on the page reads
+#   lift-off: m_no_rev is not called since his 1119 legMage took its slot.
+TALIFT = _FKS.TA_LIFT
+#   HIS 1121: *"clone 8793 to 8792 and change the config of r.  the new config is K len:6, RSI len:6, stoch range: 9"* /
+#   *"contain the r config update to 8792 only.  you'll need a separate cache"*. 'db' reads ws{TF}r off the shared line
+#   cache as always. Any other config switches THIS PROCESS's ln to its separate cache before anything reads r, so
+#   towards/away, lift-off's e path, the bands, the (exf) test, the "-" rule and the up/dn pair all read the one config.
+import fdm3_r_cache as RC  # noqa: E402 - docs/fdm3, on the path since the shim import
+R_CFG = _FKS.ORACLE_R_CFG
+R_USE = RC.use(R_CFG)           # None on 'db'; else (directory, manifest, built now)
+#   HIS 1120, after seeing the whole cell go to "-": *"I only asked for an update on TO, but now the whole row has been
+#   replaced with a "-"  I still need to see the ([inf,exf])[the 7 bands]  data"*, and his answer that TO and AW both
+#   give way. So a masked cell keeps its fence tag and its band: "-(inf)-1", "-(exf)". Two new codes in bits 0-2 -
+#   5 and 6 were free - so every reader that asks for TO(inf) 1, AW(inf) 2, TO(exf) 3 or AW(exf) 4 still gets the
+#   states towards/away gave, and a "-" cell is none of them.
+UN_INF, UN_EXF = 5, 6
 #   the band is stored as band+1 in bits 3-5 of the TO/AW byte, so 0 means NO VALUE and prints a
 #   bare TO(inf). The code itself stays in bits 0-2, which is why every reader masks with 7.
 FLIPS = (0, 1)                  # HIS 1113 button: *"flips the pivots directions"* - 0 as found, 1 every pivot's side flipped
@@ -500,6 +571,25 @@ def small_trade(code, side, prt, cap):
     lrg = live & (n > int(cap))
     #   THE HOLD: inside one trade `lrg` never goes back to `sml`
     assert not np.any(lrg[:-1] & ~lrg[1:] & (tid[:-1] == tid[1:])), 'a trade went lrg -> sml'
+    return lrg
+
+
+def small_trade_carried(own, runs, prt, cap, exm):
+    """HIS 1121 B `fdm3-small-trade` on the +15 set. -> bool per row, True = `lrg`.
+
+    small_trade's count - distinct ws8..ws15 lines that have read TO(exf) since the trade opened - over a CARRIED
+    trade's own run (towards_away.run_carried's OWN): from its own open, so the rows before its first printed row,
+    which the page gives to the trade before it, count too. TO(exf) is the TO state with the line ex-fence on the
+    trade's target-side, as the page's cells build it; `exm` holds those ex-fence masks per (TF, side).
+    """
+    lrg = np.zeros(len(prt), bool)
+    for k, (o, sh, c, s) in enumerate(runs):
+        a, b, z = (int(np.searchsorted(prt, x, 'left')) for x in (o, sh, c))
+        if z <= b:
+            continue
+        rows = prt[a:z]
+        hit = np.stack([(own[k][t][rows - o] == TA.TO) & exm[(t, s)][rows] for t in SMALL_HI], 1)
+        lrg[b:z] = np.logical_or.accumulate(hit, 0).sum(1)[b - a:] > int(cap)
     return lrg
 
 
@@ -663,7 +753,10 @@ def build():
     and towards/away per A state too. Every towards/away read is at the locked 23/77 fence (HIS 1115)."""
     ts = np.asarray(ln.ts, np.int64)
     assert (np.diff(ts) == 5000).all(), 'the 5 s grid has a gap - a row would not be one ws1 bar'
-    E = RS.load((RS.K0, RS.R0, RS.S0))           # fdm2's emerging r lines, ws1..ws30
+    if ln.R_DIR is None:
+        E = RS.load((RS.K0, RS.R0, RS.S0))       # fdm2's emerging r lines, ws1..ws30
+    else:                                        # HIS 1121: this page's own r config, from its separate cache
+        E = {t: np.asarray(ln.line('ws%dr' % t), float) for t in RC.TFS}
 
     def rpred(name):
         if name.startswith('gc'):                # ln.line multiplies the digits by 60, so the sub-minute lines
@@ -732,25 +825,31 @@ def build():
     assert len(UD) == len(LINES) and all(0 <= int(c.min()) and int(c.max()) <= 42 for c in UD)
     #   the 23/77 run with A ws1-ws6 on and the 33/67 reset: the first page state
     if PIVOTS == 'pooled':
-        import v4_sweep_pivots as SP
-        import fdm3_knobs_shim as _FK
         #   HIS 1119, after the probe scored ws2Mage trades against this page's cells: the
         #   construction has ONE HOME, v4_sweep_pivots.pooled_trades, which the probe calls too.
-        #   This produced the same list inline before the move - identical maths, same knobs.
-        pv = SP.pooled_pivots(_FK.PIVOT_TF, _FK.PIVOT_DWELL_S)
+        #   HIS 1120 SRP: so do its knobs - the page imports the set at sweep-pivots' own bank.
+        pv = SP.pooled_pivots()
         piv = [(c, sd) for _cf, c, sd in pv]
-        trades = SP.pooled_trades(_FK.PIVOT_TF, _FK.PIVOT_DWELL_S)
+        trades = SP.pooled_trades()
         print('pooled pivots: %d on the tape, %d pseudo trades, first opens %s'
               % (len(pv), len(trades), ln.U(trades[0][0])))
         LN = TA.load()
-        ST, det = TA.run(LN, trades, FNC, A_TFS, FENCE_RESET_TO)
+        ST, det = TA.run(LN, trades, FNC, A_TFS, FENCE_RESET_TO, untag=UNTAG, lift=TALIFT)
+    elif PIVOTS == 'two':
+        #   HIS 1122 two continuous trades. As found is the SHORT one, target-side LOW - a SHORT hunts the low oob -
+        #   from the tape's first bar to its end; the flip set is the LONG one, target-side HIGH, on the same bars
+        piv, trades = [], [(0, int(ln.N), -1)]
+        print('HIS 1122 two trades: short %s to %s, target-side LOW; long on the same bars, target-side HIGH'
+              % (ln.U(0), ln.U(ln.N - 1)))
+        LN = TA.load()
+        ST, det = TA.run(LN, trades, FNC, A_TFS, FENCE_RESET_TO, untag=UNTAG, lift=TALIFT)
     else:
-        LN, piv, trades, ST, det = TA.build(FNC, A_TFS, FENCE_RESET_TO)
+        LN, piv, trades, ST, det = TA.build(FNC, A_TFS, FENCE_RESET_TO, untag=UNTAG, lift=TALIFT)
     #   HIS 1119 caught this line calling the pooled ws1 pivots `ws2Mage`: it printed the same
     #   words on both paths, and that mislabel is how a ws2Mage read went unnoticed on this page.
     print('towards/away: %d %s pivots, %d pseudo trades, first opens %s'
-          % (len(piv), 'pooled ws%d (Mage and b, emerging and closed-prev)' % int(_FK.PIVOT_TF)
-             if PIVOTS == 'pooled' else 'ws2Mage', len(trades), ln.U(trades[0][0])))
+          % (len(piv), 'pooled ws%d (Mage and b, emerging and closed-prev)' % int(SP.POOL_TF)
+             if PIVOTS == 'pooled' else 'no' if PIVOTS == 'two' else 'ws2Mage', len(trades), ln.U(trades[0][0])))
     #   HIS 1110 CROSS ROW: the e and x race wins per side over the whole tape, each put on the row of the ws1 bar it
     #   lands in. They do not read the pseudo trade, so both states share them; the row's target-side picks
     #   which side prints - crossovers LOW, crossunders HIGH
@@ -777,8 +876,9 @@ def build():
                 row = row[(wins >= first[0]) & (row < len(prt))]
                 c[row] |= bit
             XC[name][sd] = c
-    #   HIS 1113 *"flips the pivots directions"*: each pivot's side flips on its own bar, so every pseudo trade keeps
-    #   its bars and its target-side flips
+    #   HIS 1113 *"flips the pivots directions"* and the +15 min button are SETS OF PIVOTS the page imports from
+    #   sweep-pivots (v4_sweep_pivots.pivot_set) - HIS 1120 *"the +15 button is there to import a different set of
+    #   pivots"*, the flip *"same treatment"*. The page only picks which set; each state is one set
     #   HIS 1115 the two A buttons: towards/away runs once per flip and A state, with A (jig.at_extreme `line_extreme`)
     #   on the lift-off reads of the ws1..ws6 r lines, the ws7..ws15 r lines, both or neither. The pivot shift and
     #   fence buttons are gone (HIS 1115), so no state moves a pivot and every state reads 23/77
@@ -789,27 +889,66 @@ def build():
     #   HIS 1118 BUTTON: the ws{TF}x race's re-open is a third state dimension when XRE_BUTTON is
     #   on. It changes the towards/away run only - the cross row's own x bits are built above at
     #   X_REOPEN and are the same in every state.
-    STATES, SIDES, TRS = [], {}, {}
+    #   HIS 1121 *"B"*, after the +15 button changed rows the as-found view already showed (2026-09-14 22:33:00 to
+    #   22:36:30): on the +15 set a trade KEEPS ITS OWN OPEN AND ITS HUNT and only its close moves. Its rows still
+    #   print in pivot_set's window - so the target-side on every row is unchanged - but towards/away runs it from its
+    #   own open (v4_sweep_pivots.carried_set, towards_away.run_carried), and the reads that count from a trade's open
+    #   (fdm3-small-trade, legMage) count from that open too.
+    STATES, SIDES, TRS, CARRY, OWN = [], {}, {}, {}, {}
     for off in OFFS:
-        k = off * 12                             # 5 s bars
         for fl in FLIPS:
-            tr = [(o + k, min(c + k, ln.N), -s if fl else s) for o, c, s in trades if o + k < ln.N]
+            tr = SP.pivot_set(trades, off, bool(fl))
             side = np.zeros(ln.N, np.int8)
             for o, c, s in tr:
                 side[o:c] = s
             SIDES[(off, fl)] = side
             TRS[(off, fl)] = tr
+            if off:
+                CARRY[(off, fl)] = SP.carried_set(trades, off, bool(fl))
             for xre in XRES:
                 t1 = time.time()
-                STATES.append((off, fl, xre,
-                               ST if not off and not fl and xre == 'winner'
-                               else TA.run(LN, tr, FNC, A_TFS, FENCE_RESET_TO, xre)[0]))
+                if not off and not fl and xre == 'winner':
+                    st_, ng = ST, 1
+                elif not off:
+                    st_, ng = TA.run(LN, tr, FNC, A_TFS, FENCE_RESET_TO, xre, UNTAG, TALIFT)[0], 1
+                else:
+                    st_, ng, OWN[(off, fl, xre)] = TA.run_carried(LN, CARRY[(off, fl)], FNC, A_TFS, FENCE_RESET_TO,
+                                                                  xre, UNTAG, TALIFT, keep=SMALL_HI)
+                STATES.append((off, fl, xre, st_))
                 print('state pivots +%d min, flip %d, x race re-opens on %s: %d pseudo trades, '
-                      'first opens %s, %.1f s'
-                      % (off, fl, xre, len(tr), ln.U(tr[0][0]), time.time() - t1))
+                      'first opens %s, %d towards/away run%s, %.1f s'
+                      % (off, fl, xre, len(tr), ln.U(tr[0][0]), ng, '' if ng == 1 else 's', time.time() - t1))
     assert all(np.array_equal(SIDES[(off, 1)], -SIDES[(off, 0)]) for off in OFFS), \
         'a flipped pseudo trade is not the as-found one on the same bars with the other target-side'
-    MNR = {key: leg_max_mage(SIDES[key], prt) for key in SIDES}
+    #   HIS 1121 B AS AN INVARIANT: from a carried trade's first printed bar to its OWN close, every towards/away state
+    #   equals the as-found trade's - those are the rows both views share. A run that read past its bar breaks this.
+    AFS = {(fl, xre): st_ for off, fl, xre, st_ in STATES if not off}
+    for off, fl, xre, st_ in STATES:
+        if not off:
+            continue
+        shared = np.zeros(ln.N, bool)
+        for (o, sh, c, s), (o0, c0, s0) in zip(CARRY[(off, fl)], SP.pivot_set(trades, 0, bool(fl))):
+            assert o == o0 and s == s0, 'a carried trade is not its as-found self'
+            shared[sh:c0] = True
+        for t in st_:
+            assert np.array_equal(st_[t][shared], AFS[(fl, xre)][t][shared]), \
+                ('HIS 1121 B: a carried trade differs from its as-found self on a shared bar', off, fl, xre, t)
+        CARRY_SHARED[0] += int(shared.sum())
+    #   HIS 1119 legMage is the INCOMING leg's, stamped at the trade's open. A carried trade keeps its open, so its
+    #   value is the as-found trade's, printed over its carried window
+    EXM = {(t, s): TA.exf_mask(LN, t, s, FNC) for t in SMALL_HI for s in (-1, +1)}   # HIS 1121 B small-trade
+    MNR = {}
+    for fl in FLIPS:
+        if PIVOTS == 'two':                      # HIS 1122 *"Blank both"*: no legMage on the two trades
+            _vb = np.zeros(ln.N, np.int8)
+        else:
+            _vb = leg_max_mage(SIDES[(0, fl)], np.arange(ln.N))[0]
+        MNR[(0, fl)] = [_vb[prt]]
+        for off in OFFS[1:]:
+            _v = np.zeros(ln.N, np.int8)
+            for o, sh, c, s in CARRY[(off, fl)]:
+                _v[sh:c] = _vb[o]
+            MNR[(off, fl)] = [_v[prt]]
     mats = {}
     for off, fl, xre, ST in STATES:
         side, mnr = SIDES[(off, fl)], MNR[(off, fl)]
@@ -833,6 +972,13 @@ def build():
                 continue
             st = ST[t][prt].astype(np.int8)
             CODE[name] = np.where((st != TA.NONE) & exf_at(t), st + 2, st)
+            if UNTAG is not None:
+                #   HIS 1120: the masked cells - in a trade, with an r value, no state - print "-" with their fence tag
+                _r = np.asarray(LN['EMR'][t], float)[prt]
+                _un = (st == TA.NONE) & (sp != 0) & np.isfinite(_r)
+                assert np.all(np.where(sp[_un] > 0, _r[_un] < UNTAG, _r[_un] > UNTAG)), \
+                    'a "-" cell is not on the counter side of %g' % UNTAG
+                CODE[name] = np.where(_un, np.where(exf_at(t), UN_EXF, UN_INF), CODE[name])
             #   HIS 1119 `fdm3-infence-power`: the band of the line's own value. His first ask was
             #   *"for every TO(inf) line"*; he then added *"in the same manner as TO(inf), add the
             #   (+2,+1,0,-1,-2) suffixs to AW(inf). same ranges"*, and ruled the same seven bands
@@ -840,21 +986,28 @@ def build():
             #   gives 0 under the first edge and len(edges) at or over the last, which is his -3
             #   and +3; +1 keeps 0 free for a cell with no value.
             #   ONE CELL IS NEVER BOTH TO(inf) AND AW(inf), so the two share bits 3-5 and the code
-            #   in bits 0-2 says which tag the suffix belongs to. No bit was added.
-            _v = np.round(np.asarray(LN['CPR'][t], float)[prt], IFP_DP)
+            #   in bits 0-2 says which tag the suffix belongs to. No bit was added. HIS 1121 +4 and -4
+            #   take bit 6 too, on a page with nine bands.
+            _v = np.round(ifp_value(LN, t)[prt], IFP_DP)
             _bd = (np.searchsorted(IFP_EDGES, _v, side='right') + 1).astype(np.int8)
             _bd = np.where(np.isfinite(_v), _bd, 0).astype(np.int8)
             #   TO(inf) is TA.TO and AW(inf) is TA.AW with the ex-fence bit unset - a +2 would
             #   have made them TO(exf) / AW(exf), which carry no in-fence distance
-            _inf = (CODE[name] == TA.TO) | (CODE[name] == TA.AW)
-            CODE[name] = (CODE[name] | np.where(_inf, _bd << 3, 0)).astype(np.int8)
+            _inf = (CODE[name] == TA.TO) | (CODE[name] == TA.AW) | (CODE[name] == UN_INF)   # HIS 1120 "-(inf)" too
+            #   HIS 1121: TO(exf), AW(exf) and "-(exf)" too, when the page carries his (exf) suffix
+            _exf = ((CODE[name] == TA.TO + 2) | (CODE[name] == TA.AW + 2) | (CODE[name] == UN_EXF)) & IFP_EXF
+            CODE[name] = (CODE[name] | np.where(_inf | _exf, _bd << 3, 0)).astype(np.int8)
+            assert not np.any(_exf & (_bd == 0) & np.isfinite(_v)), \
+                'an (exf) cell has a %s value but no band' % IFP_READ
+            IFP_EXFN[0] += int(np.sum(_exf))
+            IFP_EXFN[1] += int(np.sum(_exf & (_bd == 0)))
             #   A TO(inf) cell CAN be bandless, and only in the tape's warm-up: a line has no
             #   closed-prev value until its first bar closes, which for ws15 is 2026-07-02
             #   16:29:55, after the first pseudo trade opens at 14:33:45. Those cells keep band 0
             #   and print a bare TO(inf). What must never happen is a cell WITH a value and no
             #   band - that would be a packing fault, so that is what this holds.
             assert not np.any(_inf & (_bd == 0) & np.isfinite(_v)), \
-                'an in-fence cell has a closed-prev value but no band'
+                'an in-fence cell has a %s value but no band' % IFP_READ
             IFP_BARE[0] += int(np.sum(_inf & (_bd == 0)))
             IFP_INF[0] += int(np.sum(_inf))
             cols.append(CODE[name])
@@ -875,8 +1028,20 @@ def build():
             #   TO(exf)"*, his answer *"any except TO(exf)"*: +8 on the ws1 row that reads TO(exf) where the row before
             #   read anything else - blank, TO(inf), AW(inf) or AW(exf) - whichever pseudo trade that row is in
             if name == FLIP_TOX:
-                cd = CODE[name] & 7          # HIS 1119: bits 3-5 are the in-fence power band
+                cd = CODE[name] & 7          # HIS 1119: bits 3-5 are the in-fence power band, 3-6 since HIS 1121 +4
                 xc[1:] |= 8 * ((cd[:-1] != TO_EXF) & (cd[1:] == TO_EXF)).astype(np.int8)
+            #   HIS 1120 *"add a white highlight on TO(inf) if the previous row was TO(exf)"*, ws5 only: +16
+            if name == FLIP_TOINF:
+                cd = CODE[name] & 7
+                xc[1:] |= 16 * ((cd[:-1] == TO_EXF) & (cd[1:] == TO_INF)).astype(np.int8)
+            #   HIS 1121 the red suffix on a ws8..ws15 line leaving +4 or -4: +32. pw is the band+1, 0 = no suffix
+            if IFP_RED4 and int(name[2:]) in SMALL_HI:
+                pw = (CODE[name].astype(int) >> 3) & 15
+                pw = np.where((CODE[name] & 7) > 0, pw, 0)
+                top = len(IFP_LABELS)
+                red = (pw[:-1] > 0) & (pw[1:] > 0) & (((pw[:-1] == top) & (pw[1:] < top)) | ((pw[:-1] == 1) & (pw[1:] > 1)))
+                xc[1:] |= 32 * red.astype(np.int8)
+                IFP_REDN[0] += int(red.sum())
             cols.append(xc)
         #   HIS 1111 *"if any of the individual lines are printing TO(exf), print "TO(exf)" under the TO:x AW:x row"*:
         #   per sum column, how many of its lines read TO(exf) - the code a ws1..ws15 cell prints as TO(exf)
@@ -886,15 +1051,40 @@ def build():
         cols.append((sl & 0xFF).astype(np.uint8).view(np.int8))     # HIS 1115 SL%, the same in every state
         cols.append((sl >> 8).astype(np.int8))
         #   HIS 1119 `fdm3-small-trade` rides in bit 6 of the legMage byte - `lrg` set, `sml` clear
-        lrg = small_trade(CODE, side, prt, SMALL_MAX)
-        #   THE CHECK, a second construction: each trade off this state's own trade list, its rows
-        #   cut by the print bar, the lines seen accumulated row by row inside it
-        _chk = np.zeros(len(prt), bool)
-        for _o, _c, _s in TRS[(off, fl)]:
-            _a, _z = np.searchsorted(prt, _o, 'left'), np.searchsorted(prt, _c, 'left')
-            if _z > _a:
-                _h = np.stack([(CODE['ws%d' % t][_a:_z] & 7) == TO_EXF for t in SMALL_HI], 1)
-                _chk[_a:_z] = np.logical_or.accumulate(_h, 0).sum(1) > SMALL_MAX
+        if PIVOTS == 'two':                      # HIS 1122 *"Blank both"*: the page prints no sml / lrg either
+            lrg = np.zeros(len(prt), bool)
+            _chk = lrg
+        elif not off:
+            lrg = small_trade(CODE, side, prt, SMALL_MAX)
+            #   THE CHECK, a second construction: each trade off this state's own trade list, its rows
+            #   cut by the print bar, the lines seen accumulated row by row inside it
+            _chk = np.zeros(len(prt), bool)
+            for _o, _c, _s in TRS[(off, fl)]:
+                _a, _z = np.searchsorted(prt, _o, 'left'), np.searchsorted(prt, _c, 'left')
+                if _z > _a:
+                    _h = np.stack([(CODE['ws%d' % t][_a:_z] & 7) == TO_EXF for t in SMALL_HI], 1)
+                    _chk[_a:_z] = np.logical_or.accumulate(_h, 0).sum(1) > SMALL_MAX
+            LRG_AF[(fl, xre)] = lrg
+        else:
+            #   HIS 1121 B: a carried trade counts from its OWN open, over its own run - the rows before it prints
+            #   included, which the trade before it carries on the page
+            lrg = small_trade_carried(OWN[(off, fl, xre)], CARRY[(off, fl)], prt, SMALL_MAX, EXM)
+            #   THE CHECK, a second construction: a set of lines per trade, row by row, from its open
+            _chk = np.zeros(len(prt), bool)
+            for _k, (_o, _sh, _c, _s) in enumerate(CARRY[(off, fl)]):
+                _ex = {t: EXM[(t, _s)] for t in SMALL_HI}
+                seen = set()
+                for _r in range(np.searchsorted(prt, _o, 'left'), np.searchsorted(prt, _c, 'left')):
+                    _b = int(prt[_r])
+                    seen |= {t for t in SMALL_HI if OWN[(off, fl, xre)][_k][t][_b - _o] == TA.TO and _ex[t][_b]}
+                    if _b >= _sh:
+                        _chk[_r] = len(seen) > SMALL_MAX
+            #   and on the rows both views share it is the as-found trade's own `sml` / `lrg`
+            _sh_rows = np.zeros(len(prt), bool)
+            for (_o, _sh, _c, _s), (_o0, _c0, _s0) in zip(CARRY[(off, fl)], SP.pivot_set(trades, 0, bool(fl))):
+                _sh_rows[np.searchsorted(prt, _sh, 'left'):np.searchsorted(prt, _c0, 'left')] = True
+            assert np.array_equal(lrg[_sh_rows], LRG_AF[(fl, xre)][_sh_rows]), \
+                ('HIS 1121 B: fdm3-small-trade differs from the as-found trade on a shared row', off, fl, xre)
         assert np.array_equal(_chk, lrg), ('fdm3-small-trade disagrees with its own check',
                                            off, fl, int((_chk != lrg).sum()))
         SMALL_ROWS[0] += int((side[prt] != 0).sum())
@@ -904,6 +1094,27 @@ def build():
             cols.append((mn_k | np.where(lrg, SMALL_LRG, 0)).astype(np.int8))
         cols.append(side[prt])                   # HIS 1109: the time cell's 20% colour, red LOW, green HIGH
         mats[(off, fl, xre)] = np.ascontiguousarray(np.stack(cols, 1).astype(np.int8))
+    #   HIS 1121 B, THE PAGE'S OWN INVARIANT: on every row a carried +15 trade shares with its as-found self - its first
+    #   printed row to its own close - every byte is the as-found one. The one exception is that trade's FIRST printed
+    #   row, where the cross code's flip marks (+4 +8 +16 +32) compare with the row above, and on +15 the row above
+    #   prints the trade before it.
+    _xo = len(base) + len(LINES) + 2 * len(SUMS)
+    for (off, fl, xre), m in mats.items():
+        if not off:
+            continue
+        rows, firsts = np.zeros(len(prt), bool), np.zeros(len(prt), bool)
+        for (o, sh, c, s), (o0, c0, s0) in zip(CARRY[(off, fl)], SP.pivot_set(trades, 0, bool(fl))):
+            a, z = int(np.searchsorted(prt, sh, 'left')), int(np.searchsorted(prt, c0, 'left'))
+            if z > a:
+                rows[a:z] = True
+                firsts[a] = True
+        X = m[rows].astype(np.int16) ^ mats[(0, fl, xre)][rows].astype(np.int16)
+        X[np.ix_(firsts[rows], np.arange(_xo, _xo + len(LINES)))] &= ~60
+        assert not X.any(), ('HIS 1121 B: a shared row differs from the as-found page', off, fl, xre,
+                             int(X.any(1).sum()))
+        CARRY_ROWS[0] += int(rows.sum())
+    #   the towards/away runs are done: their cached setup is not needed to serve, and three pages share 23 GB
+    TA._SETUP.clear()
     return ts[first], mats
 
 
@@ -935,14 +1146,19 @@ META = json.dumps({
     'lines': LINES, 'mnr': MNR_LABELS[0], 'sums': [s for s, _ in SUMS], 'stride': STRIDE, 'rows': int(len(OPEN)), 't0': int(OPEN[0]), 'step': ROW_S * 1000,
     'days': DAYS, 'fence': FNC, 'abands': [b for b, _ in A_BANDS], 'flips': list(FLIPS),
     'mnrs': list(MNR_LABELS), 'mnrtops': list(MNR_TOPS),
-    'shift': PIV_SHIFT, 'alock': list(A_LOCK), 'reset': FENCE_RESET_TO, 'rpred': RPRED_ON,
-    'ifp': list(IFP_LABELS), 'ifpedges': list(IFP_EDGES), 'ifpdp': IFP_DP,
+    'shift': PIV_SHIFT, 'carry': 1, 'alock': list(A_LOCK), 'reset': FENCE_RESET_TO, 'rpred': RPRED_ON,
+    'ifp': list(IFP_LABELS), 'ifpedges': list(IFP_EDGES), 'ifpdp': IFP_DP, 'ifpread': IFP_READ, 'ifpexf': int(IFP_EXF), 'untag': UNTAG, 'rcfg': R_CFG,
+    'talift': list(TALIFT) if TALIFT else 'v4',   # HIS 1120 towards/away's lift-off (tolerance, hold), or v4's pair
+    'tacodes': ['', 'TO(inf)', 'AW(inf)', 'TO(exf)', 'AW(exf)', '-(inf)', '-(exf)'],
     #   HIS 1119: TWO KEYS FOR THE PRODUCER, on purpose.
     #     `pivots`   the machine value, 'ws2Mage' or 'pooled'. The fdm3 probe switches on it, so it
     #                must stay exactly what FDM3_PIVOTS accepts and must never be prettied up.
     #     `pivlabel` what a PERSON reads - the button tooltips print it. Naming the timeframe here
     #                is what stops a tooltip saying ws2Mage on a page whose pivots are ws1's.
-    'pivlabel': ('pooled ws%d' % int(_FKS.PIVOT_TF)) if PIVOTS == 'pooled' else 'ws2Mage',
+    'pivlabel': ('pooled ws%d' % int(SP.POOL_TF)) if PIVOTS == 'pooled' else 'two trades' if PIVOTS == 'two'
+                else 'ws2Mage',
+    'offs': list(OFFS),                         # HIS 1122: the two-trade page has no +15 set, so no +15 button
+    'legblank': int(PIVOTS == 'two'),           # HIS 1122 *"Blank both"*: no legMage and no sml / lrg
     'mage50': MAGE50_PCT, 'smallmax': SMALL_MAX, 'smallbit': SMALL_LRG,
     #   WHERE EACH BLOCK STARTS, so a reader is told rather than deriving it. A derived offset is
     #   how oracle_rows came to hold a stale O_TA and read every TO/AW cell out of the wrong byte.
@@ -1081,6 +1297,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.4 system-ui,-appl
 .row .mn b{font-size:9px;font-weight:600}
 .row div b.g{color:var(--mut)}
 .row div b.f{color:var(--flip)}
+.row div b span.r4{color:var(--red)}
 .row.sel{background:var(--hl);outline:2px solid var(--sel);outline-offset:-2px}
 .row .t.lo{background:var(--redA)}
 .row .t.hi{background:var(--grnA)}
@@ -1217,7 +1434,7 @@ function draw() {
       m.n.textContent = !blk ? '·' : mv > 0 ? 'ws' + mv : NB;
       //   HIS 1119 `fdm3-small-trade`: *"print it underneath the existing 'legmage' data"*, `sml` until
       //   more than meta.smallmax highband lines have printed TO(exf) in the trade, then `lrg`
-      m.ta.textContent = blk && k === 0 && sd !== 0 ? (mb & meta.smallbit ? 'lrg' : 'sml') : NB;
+      m.ta.textContent = blk && k === 0 && sd !== 0 && !meta.legblank ? (mb & meta.smallbit ? 'lrg' : 'sml') : NB;
       m.xc.textContent = NB;
       m.className = (blk ? 'mn' : 'w') + (k === 0 ? ' sx' : '');
     }
@@ -1253,17 +1470,27 @@ function draw() {
         d.className = '';
         //   HIS 1119 `fdm3-infence-power`: the code is bits 0-2, the power band is bits 3-5 held as
         //   band+1, so 0 prints a bare TO(inf). The suffix goes on a TO(inf) cell only
-        const tc = s & 7, pw = (s >> 3) & 7;
+        //   HIS 1121 +4 and -4: nine bands on 8793, so the band+1 is bits 3-6
+        const tc = s & 7, pw = (s >> 3) & 15;
         //   HIS 1119: the suffix goes on BOTH in-fence codes - TO(inf) is 1, AW(inf) is 2
-        d.ta.textContent = (['', 'TO(inf)', 'AW(inf)', 'TO(exf)', 'AW(exf)'][tc] || NB)
-          + ((tc === 1 || tc === 2) && pw ? meta.ifp[pw - 1] : '');   // HIS 1109 (inf) / (exf)
+        //   HIS 1120 *"non-tagged (eg "-")"*: a line with no tag inside a trade prints "-" when the page carries his
+        //   counter-side-of-50 rule; outside a trade, or without the rule, it stays blank as before
+        //   HIS 1120: "-(inf)" 5 and "-(exf)" 6 on the counter side of 50; "-(inf)" carries the band like TO(inf)
+        //   HIS 1121 on 8793: TO(exf) 3, AW(exf) 4 and "-(exf)" 6 carry it too when meta.ifpexf is 1
+        const sf = (tc === 1 || tc === 2 || tc === 5 || (meta.ifpexf && (tc === 3 || tc === 4 || tc === 6))) && pw
+             ? meta.ifp[pw - 1] : '';   // HIS 1109 (inf) / (exf)
         //   HIS 1110: crossovers on a LOW target-side, crossunders on HIGH; X and E on one ws1 bar join, 4 spaces apart
         const xc = blk[o + NL + 2 * (NC - NL) + c];
+        //   HIS 1121 on 8793: +32 = a ws8..ws15 line leaving +4 or -4 - the suffix, sign and digit, in red; the tag keeps
+        //   its white or grey
+        d.ta.textContent = (meta.tacodes[tc] || NB) + (xc & 32 && sf ? '' : sf);
+        if (xc & 32 && sf) { const r = document.createElement('span'); r.className = 'r4'; r.textContent = sf; d.ta.appendChild(r); }
         d.xc.textContent = [xc & 1 ? (sd < 0 ? 'X↑' : '↓X') : '', xc & 2 ? (sd < 0 ? '↑E' : '↓E') : '']
           .filter(Boolean).join('    ') || NB;
-        d.ta.className = xc & 12 ? 'f' : 'g';  // HIS 1110: TO on the row before, AW on this one - white, this row only;
+        d.ta.className = xc & 28 ? 'f' : 'g';  // HIS 1110: TO on the row before, AW on this one - white, this row only;
                                                // HIS 1111: every other TO/AW grey, on a -1/+1 cell too;
-                                               // HIS 1113: ws1 only, TO(exf) after anything else - white, the same way
+                                               // HIS 1113: ws1 only, TO(exf) after anything else - white, the same way;
+                                               // HIS 1120: ws5 only, TO(inf) after TO(exf) - white, the same way
       } else {                          // a sum: its TO:x AW:x and TO(exf) lines, both towards/away
         //   HIS 1117: with r-pred off the sum has no number of its own, so its top line is blank and
         //   the other two keep their places - the cell's three lines stay aligned with a line cell's
@@ -1352,12 +1579,21 @@ async function init() {
   //   HIS 1113 *"add a button that flips the pivots directions, ie the green rows will become the red rows and vice
   //   versa"*, on the right of the calendars. No button changes the scroll position (his 1112 positioning rule):
   //   the rows on screen stay where they are and only their cells change
-  const fp = document.createElement('button'); fp.className = 'tog'; fp.textContent = 'flip pivots';
-  fp.title = 'flip the side of every ' + meta.pivlabel + ' pivot, so a HIGH pivot reads LOW and a LOW pivot HIGH; click again for the sides as found';
+  //   HIS 1122 *"I'll use a button to flip between the 2 trades"*: on the two-trade page the same button, labelled
+  //   with the trade on screen - short as found, long flipped
+  const two = meta.pivots === 'two';
+  const fp = document.createElement('button'); fp.className = 'tog'; fp.textContent = two ? 'short' : 'flip pivots';
+  fp.title = two ? 'the short trade, target-side LOW, on every row; click for the long trade, target-side HIGH'
+                 : 'flip the side of every ' + meta.pivlabel + ' pivot, so a HIGH pivot reads LOW and a LOW pivot HIGH; click again for the sides as found';
   fp.setAttribute('aria-pressed', 'false');
   fp.onclick = () => {
     FLIP = FLIP ? meta.flips[0] : meta.flips[1];
     fp.classList.toggle('on', FLIP > 0); fp.setAttribute('aria-pressed', String(FLIP > 0));
+    if (two) {
+      fp.textContent = FLIP > 0 ? 'long' : 'short';
+      fp.title = FLIP > 0 ? 'the long trade, target-side HIGH, on every row; click for the short trade, target-side LOW'
+                          : 'the short trade, target-side LOW, on every row; click for the long trade, target-side HIGH';
+    }
     for (const p of pool) p.ok = false;
     schedule();
   };
@@ -1368,17 +1604,19 @@ async function init() {
   //   HIS 1119: *"rebuild 8792 with a pivot +15 minute button , and drop pivot +30 button"*, ruled
   //   for all three pages. Every pivot meta.shift minutes later, so every pseudo trade
   //   opens and closes that much later on the same side. 15 at his 1112, 30 at his 1117, 15 again
-  const pb = document.createElement('button'); pb.className = 'tog';
-  pb.textContent = 'pivots +' + meta.shift + ' min';
-  pb.title = 'every ' + meta.pivlabel + ' pivot ' + meta.shift + ' minutes later; click again for the pivots as found';
-  pb.setAttribute('aria-pressed', 'false');
-  pb.onclick = () => {
-    OFF = OFF ? 0 : meta.shift;
-    pb.classList.toggle('on', OFF > 0); pb.setAttribute('aria-pressed', String(OFF > 0));
-    for (const p of pool) p.ok = false;
-    schedule();
-  };
-  document.getElementById('btnrow').appendChild(pb);
+  if ((meta.offs || [0, meta.shift]).length > 1) {   // HIS 1122: the two-trade page builds no +15 set
+    const pb = document.createElement('button'); pb.className = 'tog';
+    pb.textContent = 'pivots +' + meta.shift + ' min';
+    pb.title = 'every ' + meta.pivlabel + ' pivot ' + meta.shift + ' minutes later; click again for the pivots as found';
+    pb.setAttribute('aria-pressed', 'false');
+    pb.onclick = () => {
+      OFF = OFF ? 0 : meta.shift;
+      pb.classList.toggle('on', OFF > 0); pb.setAttribute('aria-pressed', String(OFF > 0));
+      for (const p of pool) p.ok = false;
+      schedule();
+    };
+    document.getElementById('btnrow').appendChild(pb);
+  }
   //   HIS 1118: *"the only way to answer is a button on 8791"* - whether his B reaches the
   //   towards/away ws{TF}x races (the 1112 row rule and the hunt samples) as well as the cross row.
   //   On = B. The cross row's own x bits are at B in every state; this button moves the TO/AW cells.
@@ -1448,6 +1686,15 @@ if __name__ == '__main__':
     _j = LINES.index(FLIP_TOX)
     print('%s flips into TO(exf) (white TO(exf) text): %d, other columns marked %d'
           % (FLIP_TOX, int((_xc[:, _j] & 8).astype(bool).sum()), int((_xc & 8).astype(bool).sum() - (_xc[:, _j] & 8).astype(bool).sum())))
+    _j = LINES.index(FLIP_TOINF)
+    print('HIS 1120 %s TO(inf) after TO(exf) (white TO(inf) text): %d, other columns marked %d'
+          % (FLIP_TOINF, int((_xc[:, _j] & 16).astype(bool).sum()),
+             int((_xc & 16).astype(bool).sum() - (_xc[:, _j] & 16).astype(bool).sum())))
+    print('HIS 1121 red suffix on ws8..ws15 leaving +4 or -4: %s' % (
+        'ON, pivots as found %d cells (%s), every state %d' % (
+            int((_xc & 32).astype(bool).sum()),
+            ', '.join('%s %d' % (n, int((_xc[:, j] & 32).astype(bool).sum())) for j, n in enumerate(LINES)
+                      if (_xc[:, j] & 32).any()), IFP_REDN[0]) if IFP_RED4 else 'off, no +4 or -4 on this page'))
     #   HIS 1117: with r-pred off there is no r-pred byte in the row, so the 1110 count of its
     #   -1/+1 cells on an AW line cannot be taken from the page any more. The 1109 control above
     #   still checks the producer on its own minute grid.
@@ -1474,9 +1721,25 @@ if __name__ == '__main__':
     print('fdm3-small-trade (max %d highband lines in TO(exf)): pivots as found, rows in a trade %d, lrg %d; '
           'every state, rows in a trade %d, lrg %d'
           % (SMALL_MAX, int((RP[:, STRIDE - 1] != 0).sum()), int(_lrg.sum()), SMALL_ROWS[0], SMALL_ROWS[1]))
-    print('fdm3-infence-power: %d in-fence cells over every state - TO(inf) and AW(inf) both - '
-          '%d of them bare (%.2f%%) - a line has no closed-prev value until its first bar closes'
-          % (IFP_INF[0], IFP_BARE[0], 100.0 * IFP_BARE[0] / max(1, IFP_INF[0])))
+    print('fdm3-infence-power: %d in-fence cells over every state - TO(inf), AW(inf) and HIS 1120 -(inf) - '
+          '%d of them bare (%.2f%%), the band on the %s r - a line has no value until its warm-up ends'
+          % (IFP_INF[0], IFP_BARE[0], 100.0 * IFP_BARE[0] / max(1, IFP_INF[0]), IFP_READ))
+    print('HIS 1121 suffix on TO(exf), AW(exf) and -(exf): %s' % ('ON, %d cells over every state, %d of them bare'
+                                                                   % tuple(IFP_EXFN) if IFP_EXF else 'off'))
+    print('HIS 1120 "-" on the counter side of 50: %s' % ('ON, emerging r, strictly past %g' % UNTAG if UNTAG else 'off'))
+    if len(OFFS) > 1:                            # HIS 1122: the two-trade page builds no +15 set
+      print('HIS 1121 B pivots +%d: each trade runs from its own open to its close + %d min and prints from open + %d min; '
+          'shared with the as-found states, %d bars of towards/away and %d page rows asserted equal, byte for byte '
+          '(a trade\'s first printed row may differ only in its flip marks)'
+          % (PIV_SHIFT, PIV_SHIFT, PIV_SHIFT, CARRY_SHARED[0], CARRY_ROWS[0]))
+    print('HIS 1121 r config: %s' % (
+        'the stored wsf r row %s, off the shared line cache' % (ln.SPEC['r'][0],) if R_USE is None else
+        '%s (k_len|rsi|stc|src), ws1r..ws30r %s the separate cache %s; its ws30r control at the DB row matched '
+        'exactly. The shared line cache, the DB row and v4\'s R_* knobs are not touched'
+        % (R_USE[1]['kline'], 'BUILT into' if R_USE[2] else 'read from', R_USE[0])))
+    print('HIS 1120 towards/away lift-off: %s' % ('tolerance %g r-points, hold %d bars - towards/away, the page\'s only lift-off reader'
+                                                 % TALIFT if TALIFT else 'v4\'s banked pair, tolerance %g, hold %d'
+                                                 % TA.lift_knobs()))
     print('fence: %d/%d, locked (HIS 1115). fence reset TO: %g/%g, banked (HIS 1117)'
           % (FNC, 100 - FNC, FENCE_RESET_TO, 100 - FENCE_RESET_TO))
     _lo, _hi = O_TA, O_TA + len(LINES)

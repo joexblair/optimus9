@@ -68,7 +68,7 @@ READ ONLY: the 8792 page (30 s rows, pooled four-read pivots, flip 0, pivots as 
 | 2026-09-23 23:47:25 | HIGH | 90% | highband | 2026-09-24 00:33:30 ws8 (TO(inf)+1) | - | - | - | - | - | - | - | - | - |  |
 | 2026-09-23 23:47:25 | HIGH | 90% | lowband | 2026-09-24 00:33:30 ws1 (TO(exf)) | 2026-09-24 00:33:30 ws1 | 1.9 | 2026-09-24 00:24:30 | 9.0 | 5 (ws1, ws2, ws4, ws5, ws6) | 8 of 8 | 12 of 15, high 15 | 1 (ws1) | - | no line reads TO(exf) on the walk-back row |
 | 2026-09-24 00:35:25 | LOW | 100% | highband | 2026-09-24 00:46:00 ws10 (TO(inf)-1), ws14 (TO(inf)-1) | - | - | - | - | - | - | - | - | - |  |
-| 2026-09-24 00:35:25 | LOW | 100% | lowband | 2026-09-24 00:56:30 ws4 (TO(exf)), ws7 (TO(exf)) | 2026-09-24 00:56:30 ws4, ws7 | 0.9 | not found | - | - | - | - | - | - | not found: 3) red at its high 15 on all 43 rows walked |
+| 2026-09-24 00:35:25 | LOW | 100% | lowband | 2026-09-24 00:56:30 ws4 (TO(exf)), ws7 (TO(exf)) | 2026-09-24 00:56:30 ws4, ws7 | 0.9 | not found | - | - | - | - | - | - | not found: 3) red never under its trade high on the 43 rows walked - 1 rising to 15 by 2026-09-24 00:41:30, then 15; it first falls, to 11, on the flip row |
 | 2026-09-24 00:57:25 | HIGH | 79% | highband | - | - | - | - | - | - | - | - | - | - |  |
 | 2026-09-24 00:57:25 | HIGH | 79% | lowband | 2026-09-24 01:38:00 ws5 (TO(exf)) | 2026-09-24 01:38:00 ws5 | 1.4 | 2026-09-24 01:37:30 | 0.5 | 6 (ws1, ws2, ws3, ws4, ws5, ws6) | 7 of 8 | 11 of 15, high 15 | 2 (ws1, ws2) | ws5 2026-09-24 01:38:00 |  |
 | 2026-09-24 01:39:25 | LOW | 95% | highband | 2026-09-24 02:10:00 ws8 (TO(inf)-1) | 2026-09-24 01:52:30 ws15 | 20.9 | 2026-09-24 01:45:30 | 7.0 | 6 (ws2, ws3, ws4, ws5, ws6, ws7) | 6 of 8 | 9 of 15, high 15 | 1 (ws1) | ws11 2026-09-24 01:48:00, ws15 2026-09-24 01:52:30 |  |
@@ -193,3 +193,167 @@ His picks: 8792 first, then the walk; *"print it underneath the existing 'legmag
 - against the saved old 8792, all 4 states: 0 bytes differ outside the legMage byte, 0 in legMage bits 0-5
 - 09-24, pivots as found: 35 trades, 20 sml on their last row, 0 disagree with the whole-trade count
 - stopped: 8789, 8790, 8791. 8788 is the systemd unit, still up (needs his password)
+
+## Back to the last AW flip - the 20 small trades by fdm3-small-trade (`sml` on the last row of 8792)
+
+Same readings as above (1) x/e cluster his minimum 4; 2), 3), 4) and the walk-back mine), anchored on each band's last TO(exf) into AW.
+
+| trade opens | target-side | highband mid-board | band | last AW flip, lines (read the row before) | last TO(exf) into AW, lines | min before the trade closes | walk-back row | lead, min | 1) x/e cluster | 2) highband mid-board | 3) incumbent colour | 4) AW flips near cluster | TO(exf) lines on the walk-back row -> AW at | commentary |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-09-23 23:47:25 | HIGH | 90% | highband | 2026-09-24 00:33:30 ws8 (TO(inf)+1) | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-23 23:47:25 | HIGH | 90% | lowband | 2026-09-24 00:33:30 ws1 (TO(exf)) | 2026-09-24 00:33:30 ws1 | 1.9 | 2026-09-24 00:24:30 | 9.0 | 5 (ws1, ws2, ws4, ws5, ws6) | 8 of 8 | 12 of 15, high 15 | 1 (ws1) | - | no line reads TO(exf) on the walk-back row |
+| 2026-09-24 00:35:25 | LOW | 100% | highband | 2026-09-24 00:46:00 ws10 (TO(inf)-1), ws14 (TO(inf)-1) | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-24 00:35:25 | LOW | 100% | lowband | 2026-09-24 00:56:30 ws4 (TO(exf)), ws7 (TO(exf)) | 2026-09-24 00:56:30 ws4, ws7 | 0.9 | not found | - | - | - | - | - | - | not found: 3) red never under its trade high on the 43 rows walked - 1 rising to 15 by 2026-09-24 00:41:30, then 15; it first falls, to 11, on the flip row |
+| 2026-09-24 00:57:25 | HIGH | 79% | highband | - | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-24 00:57:25 | HIGH | 79% | lowband | 2026-09-24 01:38:00 ws5 (TO(exf)) | 2026-09-24 01:38:00 ws5 | 1.4 | 2026-09-24 01:37:30 | 0.5 | 6 (ws1, ws2, ws3, ws4, ws5, ws6) | 7 of 8 | 11 of 15, high 15 | 2 (ws1, ws2) | ws5 2026-09-24 01:38:00 |  |
+| 2026-09-24 01:39:25 | LOW | 95% | highband | 2026-09-24 02:10:00 ws8 (TO(inf)-1) | 2026-09-24 01:52:30 ws15 | 20.9 | 2026-09-24 01:45:30 | 7.0 | 6 (ws2, ws3, ws4, ws5, ws6, ws7) | 6 of 8 | 9 of 15, high 15 | 1 (ws1) | ws11 2026-09-24 01:48:00, ws15 2026-09-24 01:52:30 | 1 of 2 highband TO(exf) into AW flips in the 20 small trades |
+| 2026-09-24 01:39:25 | LOW | 95% | lowband | 2026-09-24 02:12:30 ws6 (TO(exf)) | 2026-09-24 02:12:30 ws6 | 0.9 | 2026-09-24 01:45:30 | 27.0 | 6 (ws2, ws3, ws4, ws5, ws6, ws7) | 6 of 8 | 9 of 15, high 15 | 1 (ws1) | ws11 2026-09-24 01:48:00, ws15 2026-09-24 01:52:30 | 3) red 15 of 15 on every row from 2026-09-24 01:46:00 to the last row 2026-09-24 02:12:30 |
+| 2026-09-24 05:17:25 | LOW | 74% | highband | 2026-09-24 06:01:00 ws8 (TO(inf)0) | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-24 05:17:25 | LOW | 74% | lowband | 2026-09-24 06:07:00 ws4 (TO(inf)-1) | 2026-09-24 06:04:00 ws5, ws6, ws7 | 4.2 | 2026-09-24 06:03:30 | 0.5 | 7 (ws1, ws2, ws3, ws4, ws5, ws6, ws7) | 7 of 8 | 1 of 15, high 7 | 2 (ws2, ws3) | ws4 2026-09-24 06:07:00, ws5 2026-09-24 06:04:00, ws6 2026-09-24 06:04:00, ws7 2026-09-24 06:04:00 | 3) red never above 7 of 15 in the trade |
+| 2026-09-24 06:08:15 | HIGH | 96% | highband | 2026-09-24 07:01:00 ws9 (TO(inf)0) | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-24 06:08:15 | HIGH | 96% | lowband | 2026-09-24 07:01:30 ws7 (TO(exf)) | 2026-09-24 07:01:30 ws7 | 0.9 | 2026-09-24 07:01:00 | 0.5 | 7 (ws1, ws2, ws3, ws4, ws5, ws6, ws7) | 6 of 8 | 14 of 15, high 15 | 3 (ws6, ws8, ws9) | ws7 2026-09-24 07:01:30 |  |
+| 2026-09-24 07:02:25 | LOW | 100% | highband | - | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-24 07:02:25 | LOW | 100% | lowband | 2026-09-24 07:06:30 ws1 (TO(exf)) | 2026-09-24 07:06:30 ws1 | 1.9 | not found | - | - | - | - | - | - | not found: 4) 0 of 9 rows walked |
+| 2026-09-24 11:18:35 | LOW | 20% | highband | - | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-24 11:18:35 | LOW | 20% | lowband | 2026-09-24 12:03:00 ws6 (TO(exf)) | 2026-09-24 12:03:00 ws6 | 0.6 | not found | - | - | - | - | - | - | not found: 2) 0 of 89 rows walked - highband TO(inf) between 0 and +3 in the trade |
+| 2026-09-24 12:27:25 | LOW | 67% | highband | - | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-24 12:27:25 | LOW | 67% | lowband | 2026-09-24 12:34:30 ws1 (TO(exf)) | 2026-09-24 12:34:30 ws1 | 2.8 | not found | - | - | - | - | - | - | not found: 4) 0 of 15 rows walked |
+| 2026-09-24 13:42:25 | LOW | 34% | highband | - | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-24 13:42:25 | LOW | 34% | lowband | 2026-09-24 13:54:30 ws2 (TO(exf)), ws3 (TO(exf)) | 2026-09-24 13:54:30 ws2, ws3 | 1.9 | not found | - | - | - | - | - | - | not found: 2) 0 of 25 rows walked - highband TO(inf) between +1 and +3 in the trade |
+| 2026-09-24 14:37:25 | LOW | 60% | highband | - | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-24 14:37:25 | LOW | 60% | lowband | 2026-09-24 15:04:30 ws4 (TO(exf)) | 2026-09-24 15:04:30 ws4 | 0.7 | 2026-09-24 15:03:00 | 1.5 | 5 (ws1, ws3, ws5, ws6, ws7) | 7 of 8 | 4 of 15, high 5 | 2 (ws4, ws5) | - | 3) red never above 5 of 15 in the trade |
+| 2026-09-24 15:05:10 | HIGH | 86% | highband | - | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-24 15:05:10 | HIGH | 86% | lowband | 2026-09-24 15:51:00 ws5 (TO(exf)) | 2026-09-24 15:51:00 ws5 | 1.0 | 2026-09-24 15:30:30 | 20.5 | 7 (ws1, ws2, ws3, ws4, ws5, ws6, ws7) | 7 of 8 | 13 of 15, high 15 | 1 (ws3) | ws2 2026-09-24 15:32:30, ws4 2026-09-24 15:32:30 |  |
+| 2026-09-24 16:16:25 | HIGH | 75% | highband | 2026-09-24 16:32:30 ws10 (TO(inf)+1) | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-24 16:16:25 | HIGH | 75% | lowband | 2026-09-24 16:43:00 ws1 (TO(exf)) | 2026-09-24 16:43:00 ws1 | 1.4 | not found | - | - | - | - | - | - | not found: 3) green at its high 15 on all 54 rows walked |
+| 2026-09-24 18:08:45 | HIGH | 28% | highband | 2026-09-24 18:38:30 ws8 (TO(inf)0) | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-24 18:08:45 | HIGH | 28% | lowband | 2026-09-24 18:40:00 ws5 (TO(exf)) | 2026-09-24 18:40:00 ws5 | 0.8 | not found | - | - | - | - | - | - | not found: 2) 0 of 63 rows walked - highband TO(inf) between -3 and +1 in the trade |
+| 2026-09-24 18:50:25 | HIGH | 68% | highband | - | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-24 18:50:25 | HIGH | 68% | lowband | 2026-09-24 18:55:00 ws6 (TO(exf)) | 2026-09-24 18:55:00 ws6 | 4.8 | 2026-09-24 18:54:30 | 0.5 | 7 (ws1, ws2, ws3, ws4, ws5, ws6, ws7) | 6 of 8 | 8 of 15, high 9 | 2 (ws1, ws7) | ws6 2026-09-24 18:55:00 |  |
+| 2026-09-24 18:59:50 | LOW | 76% | highband | 2026-09-24 19:05:30 ws12 (TO(inf)-2) | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-24 18:59:50 | LOW | 76% | lowband | 2026-09-24 19:06:00 ws1 (TO(exf)) | 2026-09-24 19:06:00 ws1 | 1.0 | not found | - | - | - | - | - | - | not found: 4) 1 of 13 rows walked |
+| 2026-09-24 19:07:00 | HIGH | 93% | highband | 2026-09-24 19:35:30 ws9 (TO(exf)) | 2026-09-24 19:35:30 ws9 | 1.9 | 2026-09-24 19:27:30 | 8.0 | 5 (ws1, ws2, ws3, ws4, ws6) | 8 of 8 | 13 of 15, high 15 | 1 (ws4) | ws2 2026-09-24 19:28:00, ws3 2026-09-24 19:35:30, ws4 2026-09-24 19:35:30, ws6 2026-09-24 19:35:30 | 1 of 2 highband TO(exf) into AW flips in the 20 small trades |
+| 2026-09-24 19:07:00 | HIGH | 93% | lowband | 2026-09-24 19:35:30 ws3 (TO(exf)), ws4 (TO(exf)), ws5 (TO(exf)), ws6 (TO(exf)), ws7 (TO(exf)) | 2026-09-24 19:35:30 ws3, ws4, ws5, ws6, ws7 | 1.9 | 2026-09-24 19:27:30 | 8.0 | 5 (ws1, ws2, ws3, ws4, ws6) | 8 of 8 | 13 of 15, high 15 | 1 (ws4) | ws2 2026-09-24 19:28:00, ws3 2026-09-24 19:35:30, ws4 2026-09-24 19:35:30, ws6 2026-09-24 19:35:30 | 5 lines convert on one row |
+| 2026-09-24 19:37:25 | LOW | 84% | highband | 2026-09-24 20:25:30 ws9 (TO(inf)-1) | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-24 19:37:25 | LOW | 84% | lowband | 2026-09-24 20:22:30 ws7 (TO(exf)) | 2026-09-24 20:22:30 ws7 | 4.9 | 2026-09-24 20:22:00 | 0.5 | 7 (ws1, ws2, ws3, ws4, ws5, ws6, ws7) | 7 of 8 | 14 of 15, high 15 | 1 (ws10) | ws7 2026-09-24 20:22:30 |  |
+| 2026-09-24 20:27:25 | HIGH | 90% | highband | - | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-24 20:27:25 | HIGH | 90% | lowband | 2026-09-24 21:02:30 ws5 (TO(exf)) | 2026-09-24 21:02:30 ws5 | 1.2 | 2026-09-24 20:54:30 | 8.0 | 7 (ws1, ws2, ws3, ws4, ws5, ws6, ws7) | 7 of 8 | 1 of 15, high 6 | 2 (ws4, ws5) | - | 3) green never above 6 of 15 in the trade |
+| 2026-09-24 21:17:25 | HIGH | 72% | highband | 2026-09-24 21:31:00 ws9 (TO(inf)+1) | - | - | - | - | - | - | - | - | - |  |
+| 2026-09-24 21:17:25 | HIGH | 72% | lowband | 2026-09-24 21:36:00 ws7 (TO(inf)+1) | 2026-09-24 21:22:30 ws1 | 14.9 | not found | - | - | - | - | - | - | not found: 4) 0 of 11 rows walked |
+
+| band | trades with a TO(exf) into AW flip | 2.0 min or less before the trade closes | 5.0 min or less |
+|---|---|---|---|
+| highband | 2 of 20 | 1 | 1 |
+| lowband | 20 of 20 | 15 | 19 |
+
+| walk-back | rows |
+|---|---|
+| all 4 present on a row before the flip | 13 |
+| not found | 9 |
+| no TO(exf) into AW flip in that band | 18 |
+
+| TO(exf) lines on a walk-back row | count |
+|---|---|
+| distinct walk-back rows | 11 |
+| lines reading TO(exf) there | 16 |
+| of them reaching AW before the trade closes | 16 |
+
+## His 1119 layout: counts on the left, the closest match when all 4 never line up, no minute columns
+
+The closest-match row (MINE): walking back from the row before the flip, the nearest row with the most of the 4 present. "NOT PRESENT, on no row walked" marks a mech with no actionable row in the whole walk.
+
+| trade opens | band | 1) x/e cluster | 2) highband mid-board | 3) incumbent colour | 4) AW flips near cluster | of the 4 present | closest-match row | last TO(exf) into AW, lines | target-side | TO(exf) lines on the closest-match row -> AW at | last AW flip, lines (read the row before) | highband mid-board share, the trade | commentary |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-09-23 23:47:25 | highband | - | - | - | - | - | - | - | HIGH | - | 2026-09-24 00:33:30 ws8 (TO(inf)+1) | 90% |  |
+| 2026-09-23 23:47:25 | lowband | 5 (ws1, ws2, ws4, ws5, ws6) | 8 of 8 | 12 of 15, high 15 | 1 (ws1) | 4 of 4 | 2026-09-24 00:24:30 | 2026-09-24 00:33:30 ws1 | HIGH | - | 2026-09-24 00:33:30 ws1 (TO(exf)) | 90% | no line reads TO(exf) on the closest-match row |
+| 2026-09-24 00:35:25 | highband | - | - | - | - | - | - | - | LOW | - | 2026-09-24 00:46:00 ws10 (TO(inf)-1), ws14 (TO(inf)-1) | 100% |  |
+| 2026-09-24 00:35:25 | lowband | 4 (ws3, ws4, ws5, ws7) | 7 of 8 | 15 of 15, high 15 - NOT PRESENT, on no row walked | 2 (ws3, ws5) | 3 of 4, missing 3) | 2026-09-24 00:56:00 | 2026-09-24 00:56:30 ws4, ws7 | LOW | ws4 2026-09-24 00:56:30, ws7 2026-09-24 00:56:30, ws10 no AW to the close | 2026-09-24 00:56:30 ws4 (TO(exf)), ws7 (TO(exf)) | 100% | 3) red rises to 15 by 2026-09-24 00:41:30 and first falls, to 11, on the flip row |
+| 2026-09-24 00:57:25 | highband | - | - | - | - | - | - | - | HIGH | - | - | 79% |  |
+| 2026-09-24 00:57:25 | lowband | 6 (ws1, ws2, ws3, ws4, ws5, ws6) | 7 of 8 | 11 of 15, high 15 | 2 (ws1, ws2) | 4 of 4 | 2026-09-24 01:37:30 | 2026-09-24 01:38:00 ws5 | HIGH | ws5 2026-09-24 01:38:00 | 2026-09-24 01:38:00 ws5 (TO(exf)) | 79% |  |
+| 2026-09-24 01:39:25 | highband | 6 (ws2, ws3, ws4, ws5, ws6, ws7) | 6 of 8 | 9 of 15, high 15 | 1 (ws1) | 4 of 4 | 2026-09-24 01:45:30 | 2026-09-24 01:52:30 ws15 | LOW | ws11 2026-09-24 01:48:00, ws15 2026-09-24 01:52:30 | 2026-09-24 02:10:00 ws8 (TO(inf)-1) | 95% | 1 of 2 highband TO(exf) into AW flips in the 20 small trades |
+| 2026-09-24 01:39:25 | lowband | 6 (ws2, ws3, ws4, ws5, ws6, ws7) | 6 of 8 | 9 of 15, high 15 | 1 (ws1) | 4 of 4 | 2026-09-24 01:45:30 | 2026-09-24 02:12:30 ws6 | LOW | ws11 2026-09-24 01:48:00, ws15 2026-09-24 01:52:30 | 2026-09-24 02:12:30 ws6 (TO(exf)) | 95% | 3) red 15 of 15 on every row from 2026-09-24 01:46:00 to the last row 2026-09-24 02:12:30 |
+| 2026-09-24 05:17:25 | highband | - | - | - | - | - | - | - | LOW | - | 2026-09-24 06:01:00 ws8 (TO(inf)0) | 74% |  |
+| 2026-09-24 05:17:25 | lowband | 7 (ws1, ws2, ws3, ws4, ws5, ws6, ws7) | 7 of 8 | 1 of 15, high 7 | 2 (ws2, ws3) | 4 of 4 | 2026-09-24 06:03:30 | 2026-09-24 06:04:00 ws5, ws6, ws7 | LOW | ws4 2026-09-24 06:07:00, ws5 2026-09-24 06:04:00, ws6 2026-09-24 06:04:00, ws7 2026-09-24 06:04:00 | 2026-09-24 06:07:00 ws4 (TO(inf)-1) | 74% | 3) red never above 7 of 15 in the trade |
+| 2026-09-24 06:08:15 | highband | - | - | - | - | - | - | - | HIGH | - | 2026-09-24 07:01:00 ws9 (TO(inf)0) | 96% |  |
+| 2026-09-24 06:08:15 | lowband | 7 (ws1, ws2, ws3, ws4, ws5, ws6, ws7) | 6 of 8 | 14 of 15, high 15 | 3 (ws6, ws8, ws9) | 4 of 4 | 2026-09-24 07:01:00 | 2026-09-24 07:01:30 ws7 | HIGH | ws7 2026-09-24 07:01:30 | 2026-09-24 07:01:30 ws7 (TO(exf)) | 96% |  |
+| 2026-09-24 07:02:25 | highband | - | - | - | - | - | - | - | LOW | - | - | 100% |  |
+| 2026-09-24 07:02:25 | lowband | 6 (ws1, ws2, ws3, ws4, ws5, ws6) | 8 of 8 | 1 of 15, high 4 | 0 (-) - NOT PRESENT, on no row walked | 3 of 4, missing 4) | 2026-09-24 07:06:00 | 2026-09-24 07:06:30 ws1 | LOW | ws1 2026-09-24 07:06:30 | 2026-09-24 07:06:30 ws1 (TO(exf)) | 100% |  |
+| 2026-09-24 11:18:35 | highband | - | - | - | - | - | - | - | LOW | - | - | 20% |  |
+| 2026-09-24 11:18:35 | lowband | 7 (ws1, ws2, ws3, ws4, ws5, ws6, ws7) | 3 of 8 - NOT PRESENT, on no row walked | 13 of 15, high 15 | 1 (ws7) | 3 of 4, missing 2) | 2026-09-24 12:02:30 | 2026-09-24 12:03:00 ws6 | LOW | ws6 2026-09-24 12:03:00 | 2026-09-24 12:03:00 ws6 (TO(exf)) | 20% | 2) highband TO(inf) between 0 and +3 in the trade |
+| 2026-09-24 12:27:25 | highband | - | - | - | - | - | - | - | LOW | - | - | 67% |  |
+| 2026-09-24 12:27:25 | lowband | 7 (ws1, ws2, ws3, ws4, ws5, ws6, ws7) | 5 of 8 | 10 of 15, high 10 - not present here | 0 (-) - NOT PRESENT, on no row walked | 2 of 4, missing 3), 4) | 2026-09-24 12:31:00 | 2026-09-24 12:34:30 ws1 | LOW | ws1 2026-09-24 12:34:30, ws2 no AW to the close | 2026-09-24 12:34:30 ws1 (TO(exf)) | 67% |  |
+| 2026-09-24 13:42:25 | highband | - | - | - | - | - | - | - | LOW | - | - | 34% |  |
+| 2026-09-24 13:42:25 | lowband | 7 (ws1, ws2, ws3, ws4, ws5, ws6, ws7) | 3 of 8 - NOT PRESENT, on no row walked | 1 of 15, high 2 | 1 (ws4) | 3 of 4, missing 2) | 2026-09-24 13:54:00 | 2026-09-24 13:54:30 ws2, ws3 | LOW | ws2 2026-09-24 13:54:30, ws3 2026-09-24 13:54:30, ws5 no AW to the close | 2026-09-24 13:54:30 ws2 (TO(exf)), ws3 (TO(exf)) | 34% | 2) highband TO(inf) between +1 and +3 in the trade |
+| 2026-09-24 14:37:25 | highband | - | - | - | - | - | - | - | LOW | - | - | 60% |  |
+| 2026-09-24 14:37:25 | lowband | 5 (ws1, ws3, ws5, ws6, ws7) | 7 of 8 | 4 of 15, high 5 | 2 (ws4, ws5) | 4 of 4 | 2026-09-24 15:03:00 | 2026-09-24 15:04:30 ws4 | LOW | - | 2026-09-24 15:04:30 ws4 (TO(exf)) | 60% | 3) red never above 5 of 15 in the trade |
+| 2026-09-24 15:05:10 | highband | - | - | - | - | - | - | - | HIGH | - | - | 86% |  |
+| 2026-09-24 15:05:10 | lowband | 7 (ws1, ws2, ws3, ws4, ws5, ws6, ws7) | 7 of 8 | 13 of 15, high 15 | 1 (ws3) | 4 of 4 | 2026-09-24 15:30:30 | 2026-09-24 15:51:00 ws5 | HIGH | ws2 2026-09-24 15:32:30, ws4 2026-09-24 15:32:30 | 2026-09-24 15:51:00 ws5 (TO(exf)) | 86% |  |
+| 2026-09-24 16:16:25 | highband | - | - | - | - | - | - | - | HIGH | - | 2026-09-24 16:32:30 ws10 (TO(inf)+1) | 75% |  |
+| 2026-09-24 16:16:25 | lowband | 4 (ws1, ws2, ws4, ws7) | 5 of 8 | 15 of 15, high 15 - NOT PRESENT, on no row walked | 1 (ws10) | 3 of 4, missing 3) | 2026-09-24 16:34:30 | 2026-09-24 16:43:00 ws1 | HIGH | ws8 no AW to the close | 2026-09-24 16:43:00 ws1 (TO(exf)) | 75% | 3) green 15 of 15 from the trade's first row |
+| 2026-09-24 18:08:45 | highband | - | - | - | - | - | - | - | HIGH | - | 2026-09-24 18:38:30 ws8 (TO(inf)0) | 28% |  |
+| 2026-09-24 18:08:45 | lowband | 7 (ws1, ws2, ws3, ws4, ws5, ws6, ws7) | 3 of 8 - NOT PRESENT, on no row walked | 8 of 15, high 15 | 1 (ws8) | 3 of 4, missing 2) | 2026-09-24 18:39:30 | 2026-09-24 18:40:00 ws5 | HIGH | ws5 2026-09-24 18:40:00, ws7 no AW to the close | 2026-09-24 18:40:00 ws5 (TO(exf)) | 28% | 2) highband TO(inf) between -3 and +1 in the trade |
+| 2026-09-24 18:50:25 | highband | - | - | - | - | - | - | - | HIGH | - | - | 68% |  |
+| 2026-09-24 18:50:25 | lowband | 7 (ws1, ws2, ws3, ws4, ws5, ws6, ws7) | 6 of 8 | 8 of 15, high 9 | 2 (ws1, ws7) | 4 of 4 | 2026-09-24 18:54:30 | 2026-09-24 18:55:00 ws6 | HIGH | ws6 2026-09-24 18:55:00 | 2026-09-24 18:55:00 ws6 (TO(exf)) | 68% |  |
+| 2026-09-24 18:59:50 | highband | - | - | - | - | - | - | - | LOW | - | 2026-09-24 19:05:30 ws12 (TO(inf)-2) | 76% |  |
+| 2026-09-24 18:59:50 | lowband | 3 (ws1, ws2, ws5) - not present here | 6 of 8 | 11 of 15, high 12 | 1 (ws12) | 3 of 4, missing 1) | 2026-09-24 19:05:30 | 2026-09-24 19:06:00 ws1 | LOW | ws1 2026-09-24 19:06:00 | 2026-09-24 19:06:00 ws1 (TO(exf)) | 76% |  |
+| 2026-09-24 19:07:00 | highband | 5 (ws1, ws2, ws3, ws4, ws6) | 8 of 8 | 13 of 15, high 15 | 1 (ws4) | 4 of 4 | 2026-09-24 19:27:30 | 2026-09-24 19:35:30 ws9 | HIGH | ws2 2026-09-24 19:28:00, ws3 2026-09-24 19:35:30, ws4 2026-09-24 19:35:30, ws6 2026-09-24 19:35:30 | 2026-09-24 19:35:30 ws9 (TO(exf)) | 93% | 1 of 2 highband TO(exf) into AW flips in the 20 small trades |
+| 2026-09-24 19:07:00 | lowband | 5 (ws1, ws2, ws3, ws4, ws6) | 8 of 8 | 13 of 15, high 15 | 1 (ws4) | 4 of 4 | 2026-09-24 19:27:30 | 2026-09-24 19:35:30 ws3, ws4, ws5, ws6, ws7 | HIGH | ws2 2026-09-24 19:28:00, ws3 2026-09-24 19:35:30, ws4 2026-09-24 19:35:30, ws6 2026-09-24 19:35:30 | 2026-09-24 19:35:30 ws3 (TO(exf)), ws4 (TO(exf)), ws5 (TO(exf)), ws6 (TO(exf)), ws7 (TO(exf)) | 93% | 5 lines convert on one row |
+| 2026-09-24 19:37:25 | highband | - | - | - | - | - | - | - | LOW | - | 2026-09-24 20:25:30 ws9 (TO(inf)-1) | 84% |  |
+| 2026-09-24 19:37:25 | lowband | 7 (ws1, ws2, ws3, ws4, ws5, ws6, ws7) | 7 of 8 | 14 of 15, high 15 | 1 (ws10) | 4 of 4 | 2026-09-24 20:22:00 | 2026-09-24 20:22:30 ws7 | LOW | ws7 2026-09-24 20:22:30 | 2026-09-24 20:22:30 ws7 (TO(exf)) | 84% |  |
+| 2026-09-24 20:27:25 | highband | - | - | - | - | - | - | - | HIGH | - | - | 90% |  |
+| 2026-09-24 20:27:25 | lowband | 7 (ws1, ws2, ws3, ws4, ws5, ws6, ws7) | 7 of 8 | 1 of 15, high 6 | 2 (ws4, ws5) | 4 of 4 | 2026-09-24 20:54:30 | 2026-09-24 21:02:30 ws5 | HIGH | - | 2026-09-24 21:02:30 ws5 (TO(exf)) | 90% | 3) green never above 6 of 15 in the trade |
+| 2026-09-24 21:17:25 | highband | - | - | - | - | - | - | - | HIGH | - | 2026-09-24 21:31:00 ws9 (TO(inf)+1) | 72% |  |
+| 2026-09-24 21:17:25 | lowband | 6 (ws1, ws2, ws3, ws4, ws5, ws7) | 6 of 8 | 2 of 15, high 3 | 0 (-) - NOT PRESENT, on no row walked | 3 of 4, missing 4) | 2026-09-24 21:22:00 | 2026-09-24 21:22:30 ws1 | HIGH | ws1 2026-09-24 21:22:30 | 2026-09-24 21:36:00 ws7 (TO(inf)+1) | 72% |  |
+
+| of the 4 present on the closest-match row | band rows | TO(exf) lines on those rows | of them reaching AW before the close |
+|---|---|---|---|
+| 4 of 4 | 13 (11 distinct rows) | 16 | 16 |
+| 3 of 4 | 8 | 13 | 9 |
+| 2 of 4 | 1 | 2 | 1 |
+
+### The same table, narrow enough for the terminal to draw as a table
+
+"none" = that column's mech was present on no row walked; "no" = present on some row walked, not on the closest-match row. The flip's lines, the last AW flip of any kind, the mid-board share and the commentary are in the wide table above.
+
+| trade opens | band | 1) x/e | 2) mid-board | 3) colour | 4) AW flips | of 4 | closest-match row | last TO(exf) into AW | TO(exf) lines there -> AW |
+|---|---|---|---|---|---|---|---|---|---|
+| 2026-09-23 23:47:25 | high | - | - | - | - | - | - | - | - |
+| 2026-09-23 23:47:25 | low | 5 | 8 of 8 | 12, high 15 | 1 | 4 of 4 | 2026-09-24 00:24:30 | 2026-09-24 00:33:30 | - |
+| 2026-09-24 00:35:25 | high | - | - | - | - | - | - | - | - |
+| 2026-09-24 00:35:25 | low | 4 | 7 of 8 | 15, high 15 none | 2 | 3 of 4 | 2026-09-24 00:56:00 | 2026-09-24 00:56:30 | yes: ws4, ws7; no: ws10 |
+| 2026-09-24 00:57:25 | high | - | - | - | - | - | - | - | - |
+| 2026-09-24 00:57:25 | low | 6 | 7 of 8 | 11, high 15 | 2 | 4 of 4 | 2026-09-24 01:37:30 | 2026-09-24 01:38:00 | yes: ws5 |
+| 2026-09-24 01:39:25 | high | 6 | 6 of 8 | 9, high 15 | 1 | 4 of 4 | 2026-09-24 01:45:30 | 2026-09-24 01:52:30 | yes: ws11, ws15 |
+| 2026-09-24 01:39:25 | low | 6 | 6 of 8 | 9, high 15 | 1 | 4 of 4 | 2026-09-24 01:45:30 | 2026-09-24 02:12:30 | yes: ws11, ws15 |
+| 2026-09-24 05:17:25 | high | - | - | - | - | - | - | - | - |
+| 2026-09-24 05:17:25 | low | 7 | 7 of 8 | 1, high 7 | 2 | 4 of 4 | 2026-09-24 06:03:30 | 2026-09-24 06:04:00 | yes: ws4, ws5, ws6, ws7 |
+| 2026-09-24 06:08:15 | high | - | - | - | - | - | - | - | - |
+| 2026-09-24 06:08:15 | low | 7 | 6 of 8 | 14, high 15 | 3 | 4 of 4 | 2026-09-24 07:01:00 | 2026-09-24 07:01:30 | yes: ws7 |
+| 2026-09-24 07:02:25 | high | - | - | - | - | - | - | - | - |
+| 2026-09-24 07:02:25 | low | 6 | 8 of 8 | 1, high 4 | 0 none | 3 of 4 | 2026-09-24 07:06:00 | 2026-09-24 07:06:30 | yes: ws1 |
+| 2026-09-24 11:18:35 | high | - | - | - | - | - | - | - | - |
+| 2026-09-24 11:18:35 | low | 7 | 3 of 8 none | 13, high 15 | 1 | 3 of 4 | 2026-09-24 12:02:30 | 2026-09-24 12:03:00 | yes: ws6 |
+| 2026-09-24 12:27:25 | high | - | - | - | - | - | - | - | - |
+| 2026-09-24 12:27:25 | low | 7 | 5 of 8 | 10, high 10 no | 0 none | 2 of 4 | 2026-09-24 12:31:00 | 2026-09-24 12:34:30 | yes: ws1; no: ws2 |
+| 2026-09-24 13:42:25 | high | - | - | - | - | - | - | - | - |
+| 2026-09-24 13:42:25 | low | 7 | 3 of 8 none | 1, high 2 | 1 | 3 of 4 | 2026-09-24 13:54:00 | 2026-09-24 13:54:30 | yes: ws2, ws3; no: ws5 |
+| 2026-09-24 14:37:25 | high | - | - | - | - | - | - | - | - |
+| 2026-09-24 14:37:25 | low | 5 | 7 of 8 | 4, high 5 | 2 | 4 of 4 | 2026-09-24 15:03:00 | 2026-09-24 15:04:30 | - |
+| 2026-09-24 15:05:10 | high | - | - | - | - | - | - | - | - |
+| 2026-09-24 15:05:10 | low | 7 | 7 of 8 | 13, high 15 | 1 | 4 of 4 | 2026-09-24 15:30:30 | 2026-09-24 15:51:00 | yes: ws2, ws4 |
+| 2026-09-24 16:16:25 | high | - | - | - | - | - | - | - | - |
+| 2026-09-24 16:16:25 | low | 4 | 5 of 8 | 15, high 15 none | 1 | 3 of 4 | 2026-09-24 16:34:30 | 2026-09-24 16:43:00 | no: ws8 |
+| 2026-09-24 18:08:45 | high | - | - | - | - | - | - | - | - |
+| 2026-09-24 18:08:45 | low | 7 | 3 of 8 none | 8, high 15 | 1 | 3 of 4 | 2026-09-24 18:39:30 | 2026-09-24 18:40:00 | yes: ws5; no: ws7 |
+| 2026-09-24 18:50:25 | high | - | - | - | - | - | - | - | - |
+| 2026-09-24 18:50:25 | low | 7 | 6 of 8 | 8, high 9 | 2 | 4 of 4 | 2026-09-24 18:54:30 | 2026-09-24 18:55:00 | yes: ws6 |
+| 2026-09-24 18:59:50 | high | - | - | - | - | - | - | - | - |
+| 2026-09-24 18:59:50 | low | 3 no | 6 of 8 | 11, high 12 | 1 | 3 of 4 | 2026-09-24 19:05:30 | 2026-09-24 19:06:00 | yes: ws1 |
+| 2026-09-24 19:07:00 | high | 5 | 8 of 8 | 13, high 15 | 1 | 4 of 4 | 2026-09-24 19:27:30 | 2026-09-24 19:35:30 | yes: ws2, ws3, ws4, ws6 |
+| 2026-09-24 19:07:00 | low | 5 | 8 of 8 | 13, high 15 | 1 | 4 of 4 | 2026-09-24 19:27:30 | 2026-09-24 19:35:30 | yes: ws2, ws3, ws4, ws6 |
+| 2026-09-24 19:37:25 | high | - | - | - | - | - | - | - | - |
+| 2026-09-24 19:37:25 | low | 7 | 7 of 8 | 14, high 15 | 1 | 4 of 4 | 2026-09-24 20:22:00 | 2026-09-24 20:22:30 | yes: ws7 |
+| 2026-09-24 20:27:25 | high | - | - | - | - | - | - | - | - |
+| 2026-09-24 20:27:25 | low | 7 | 7 of 8 | 1, high 6 | 2 | 4 of 4 | 2026-09-24 20:54:30 | 2026-09-24 21:02:30 | - |
+| 2026-09-24 21:17:25 | high | - | - | - | - | - | - | - | - |
+| 2026-09-24 21:17:25 | low | 6 | 6 of 8 | 2, high 3 | 0 none | 3 of 4 | 2026-09-24 21:22:00 | 2026-09-24 21:22:30 | yes: ws1 |

@@ -1,4 +1,4 @@
-# orac-exhaust, and the four-read pivots it is scored on
+# orac-exhaust, scored on sweep-pivots' four-read pivots
 
 GOAL: find the lowest common denominator of a profitable setup. HIS 1118: *"this report's purpose
 is to find the lowest common demoninator. if gates are applied, we don't have a fighting chance"*.
@@ -38,49 +38,12 @@ crosses"*, so `6x` is now **seven** of ws1..ws7 inside **four** rows.
 
 ---
 
-## 2. THE FOUR-READ PIVOTS
+## 2. THE FOUR-READ PIVOTS - sweep-pivots' own, not this mech's
 
-HIS 1118: *"bake the 4 lines into the sweep-pivots machine: every test uses all lines to decide if
-dwell is qualified"*, then *"1, the longest"*, then *"2, it shouldn't matter - we're going from a
-'final' cross to ib, to the next 'final' cross to ib"*.
-
-`v4_sweep_pivots.pooled_pivots(tf, dwell_s)`:
-
-| the step | what it does |
-|---|---|
-| the four reads | ws{tf}Mage emerging, ws{tf}Mage closed-prev, ws{tf}b emerging, ws{tf}b closed-prev |
-| every read contributes | its own oob->ib crosses, each carrying the DWELL - how long that read held out of bounds immediately before the cross |
-| the group | a run of consecutive SAME-SIDE crosses. No time tolerance: the group is the run, which is what he ruled |
-| the gate | the run qualifies when the LONGEST dwell inside it reaches `dwell_s` |
-| the pivot | that run's FINAL cross to ib |
-| after the gate | two surviving runs that then touch on the same side merge, again taking the last |
-| the guards | two asserts - the pivots alternate side, and they are in order |
-
-**WHY FOUR READS.** The emerging line flickers in and out of the fence, so a real 2.4 minute oob
-run measures as 0.1 on it while closed-prev measures the same move as 3.0. Taking the longest lets
-the steady read supply the dwell and the fast read supply the bar.
-
-**THE DWELL IS 0**, and it was 180 for one turn. His own self-validation killed it: *"for each
-pivot that you print, wait for 2 more pivots to print, then look back at the extremes between each
-pair"*. His example - the real price high between 12:02 and 13:45 on 09-28 is 12:55:20; at dwell 0
-a HIGH pivot prints 13:00:00, 4.7 min after it, and a 180 s dwell deletes that pivot so 13:45:00
-survives instead, 49.7 min late. Measured over 09-22..09-28:
-
-| dwell | pivots | mean lag to the real extreme | median lag | worst lag | within 5 min |
-|---|---|---|---|---|---|
-| 0, BANKED | 218 | 7.0 min | 2.8 min | 83.0 min | 153 of 217 |
-| 60 s | 178 | 8.4 min | 3.2 min | 83.0 min | 121 of 177 |
-| 120 s | 138 | 11.8 min | 3.8 min | 160.8 min | 87 of 137 |
-| 180 s | 122 | 13.0 min | 3.9 min | 160.8 min | 75 of 121 |
-| 300 s | 88 | 14.0 min | 4.1 min | 160.8 min | 53 of 87 |
-
-The POOLING and the final-cross collapse are what cut the noise, not the dwell: 3,006 pivots on the
-tape against the 9,257 crosses raw emerging ws1Mage makes.
-
-**THE BANKED PIVOTS ARE UNTOUCHED.** `v4_sweep_pivots.legs` keeps its own default - every cross
-opens a leg, it closes on the FIRST opposite cross, legs overlap - and `pooled_pivots` is a new
-reader beside it. HIS 1118: *"don't rebuild it - create a mode for this new mech so that the
-existing pivots remain untouched in any now or future fdm3-oracle updates"*.
+HIS 1120: *"this isn't SRP.  the pivots can't belong in any fdm3 classes"*. The four-read pivots' rule, their knobs,
+the sets a page imports (as found, +15 min, flipped), their LOOKAHEAD and their pine view are written once, in
+[sweep-pivots' spec, section 10](../octo-freedom/1022_v4/v4_sweep_pivots.md). This section held the rule until 2026-11-20. orac-exhaust only imports the set
+the page it reads reports in `/meta`.
 
 ---
 
@@ -122,8 +85,6 @@ All in `fdm3_knobs.py`; an off-ruled run raises at import unless `W_FDM3_EXPERIM
 | `ORAC_HIGH_TOEXF_MAX` | 1 | *"a maximum of 1 TOexf"* |
 | `ORAC_OOB_JUMP` | 2 | *"jumps of 2 should be allowed to make it more sane"* |
 | `ORAC_MAGE_HI` | 15 | *"this new spec intentionaly contains the in-use TFs to ws1-ws15"* |
-| `ORAC_PIVOT_TF` | 1 | the four reads run on ws1 |
-| `ORAC_PIVOT_DWELL_S` | 0 | *"ok for the dwell"* - his lag test |
 | `ORAC_LEG_MODE` | last_cross | *"from a 'final' cross to ib, to the next 'final' cross to ib"* |
 | `ORAC_MAEMFE_LINE` | ws2Mage | the scoring line |
 | `ORAC_RANK_BY` | mfe_over_mae | *"I take your recommendation"* |
@@ -139,7 +100,7 @@ All in `fdm3_knobs.py`; an off-ruled run raises at import unless `W_FDM3_EXPERIM
 |---|---|
 | states 1 and 2, the state 3 gate | the setup row itself |
 | the state 3 grace | the bar inside the grace where highband completes. **The event fires THERE**, not at the 3rd row, because a forward walk cannot be answered before it happens. `gate_row` records which 3rd row opened it, and an assert holds that no event precedes its own 3rd row |
-| a pivot | its CONFIRM bar, 90 s after the cross (the hold) |
+| a pivot, and so the pseudo trade's open, close and target-side | sweep-pivots' answer, [its spec](../octo-freedom/1022_v4/v4_sweep_pivots.md) §10d: FINAL only when the first opposite-side cross confirms - 940 s after its confirm bar at the median, never at it. Until 2026-11-20 this row said the confirm bar |
 | MAE / MFE | the leg's close. SCORING ONLY - no mech step may read them |
 
 The report marks every column with "at the bar?" so a column that cannot become a rule is visible
@@ -155,7 +116,7 @@ relies on ws1 to ib, to the opposing oob to ib - this is the mode that 8792 is u
 
 | the object | its producer | what it scopes | its knob |
 |---|---|---|---|
-| the pseudo trade | `v4_sweep_pivots.pooled_trades` at the banked knobs - four reads of ws1Mage and ws1b, a run's FINAL cross to ib, the next pivot opposite. 3006 trades | the row's target-side, and every TO/AW, x-cross and TO(exf) read, because each is "anywhere in this trade" | `ORAC_PIVOT_TF` 1, `ORAC_PIVOT_DWELL_S` 0 |
+| the pseudo trade | `v4_sweep_pivots.pooled_trades` at sweep-pivots' bank - four reads of ws1Mage and ws1b, a run's FINAL cross to ib, the next pivot opposite. 3006 trades | the row's target-side, and every TO/AW, x-cross and TO(exf) read, because each is "anywhere in this trade" | sweep-pivots' `POOL_TF` 1, `POOL_DWELL_S` 0 - [its spec](../octo-freedom/1022_v4/v4_sweep_pivots.md) §10b |
 | the MAE/MFE span | the `ws2Mage` leg that HOLDS the setup bar, under the `last_cross` leg mode | where the scoring starts and ends | `ORAC_MAEMFE_LINE` ws2Mage |
 
 **THE PROBE NO LONGER GUESSES THE FIRST ONE.** It reads `pivots` from the page's own `/meta` and
@@ -199,13 +160,13 @@ derivable from anything he has said, so it stays named here rather than changed.
 
 | what | where |
 |---|---|
-| the mech and every report mode | `oracle_rows.py` - modes `orac-exhaust`, `setups`, `contrast`, `pine`, `line`, `mage50` |
+| the mech and every report mode | `oracle_rows.py` - modes `orac-exhaust`, `setups`, `contrast`, `line`, `mage50`. `pine` moved to sweep-pivots at his 1120 SRP ruling and now prints the new command |
 | the four-read pivots | `v4_sweep_pivots.pooled_pivots` |
 | the trades those pivots make | `v4_sweep_pivots.pooled_trades` - ONE HOME, called by the page AND the probe |
 | which producer a page used | the page's own `/meta`: `pivots` is the machine value, `pivlabel` what a person reads |
-| the knobs | `fdm3_knobs.py` |
+| the knobs | `fdm3_knobs.py`; the pivots' own are sweep-pivots' ([its spec](../octo-freedom/1022_v4/v4_sweep_pivots.md) §10b) |
 | the Excel table | `fdm3_orac_setup` in `pk_optimizer`, `port` in the primary key so 8791's and 8792's rows sit side by side |
 | the 09-24 report | `out/orac_exhaust_0924.txt` |
 | the setup hunt | `out/orac_setups_0924.txt` |
 | the top/bottom 20% contrast | `out/orac_contrast_0924.txt` |
-| the pivots for TradingView | `out/fdm3_pivots_0922_0928.pine`, a 1 minute pane, green = LOW pivot = OUTGOING LONG |
+| the pivots for TradingView | `out/fdm3_pivots_0922_0928.pine`, made 1118 by the old fdm3 `pine` mode, a 1 minute pane, green = LOW pivot = OUTGOING LONG. New ones: `python3 v4_sweep_pivots.py pine D0 D1` ([its spec](../octo-freedom/1022_v4/v4_sweep_pivots.md) §10e) |

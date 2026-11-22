@@ -90,11 +90,226 @@ This is not a free choice — under the `either` ex-fence mode a cell is in-fenc
 closed-prev value and the 60 s emerging extreme are in-fence, so both reads were available, and the
 banked ruling picks between them.
 
+### 3a. THE EMERGING READ, ON 8788 (his 1120)
+
+> "duplicate 8792 onto 8788, with one change: AW(inf) cells get the same 7 in-fence bands as
+> TO(inf), and all 14 bands use emerging bars instead of closed-prev"
+
+**THE READ IS THE KNOB `INFENCE_READ`** in `fdm3_knobs.py`: `closed_prev` on the bank, `emerging`
+on 8788, which runs it as an off-ruled page (`W_FDM3_EXPERIMENT=1 W_FDM3_INFENCE_READ=emerging`,
+plus 8792's `FDM3_ROW_S=30 FDM3_PIVOTS=pooled`). The knob existed before 1120 but the page never read
+it; it reads it now, and `/meta` publishes it as `ifpread`. The AW(inf) half of his ask was already
+on 8792. **ONLY THE SUFFIX MOVES**: the TO/AW code and its ex-fence test are untouched.
+
+MINE: the emerging value is the line's emerging r at the row's print bar - the same 5 s bar the
+cell's code is read at - and not the 60 s emerging extreme the ex-fence test also reads.
+
+8788 against 8792, every row, 2026-11-20:
+
+| state | bytes outside the TO/AW block that differ | TO/AW codes that differ | in-fence cells | suffixes that differ | TO(inf) | AW(inf) | bare on 8788 | bare on 8792 |
+|---|---|---|---|---|---|---|---|---|
+| pivots as found | 0 | 0 | 3048753 | 1369424 | 1175379 | 194045 | 0 | 134 |
+| +15 min | 0 | 0 | 2942394 | 1315602 | 1035195 | 280407 | 0 | 125 |
+| flipped | 0 | 0 | 3595386 | 1487785 | 1233547 | 254238 | 0 | 155 |
+| +15 min, flipped | 0 | 0 | 3701297 | 1541410 | 1387976 | 153434 | 0 | 140 |
+
+2026-09-24, pivots as found, each suffix's range of the value it was placed on, read off the tape:
+
+| the cell prints | 8788 cells, emerging r | its range | 8792 cells, closed-prev r | its range |
+|---|---|---|---|---|
+| `TO(inf)-3` | 1338 | 0.00 .. 22.99 | 1932 | 0.00 .. 22.93 |
+| `TO(inf)-2` | 1508 | 23.00 .. 27.98 | 1268 | 23.06 .. 27.98 |
+| `TO(inf)-1` | 4595 | 28.00 .. 37.99 | 4452 | 28.07 .. 37.96 |
+| `TO(inf)0` | 13593 | 38.00 .. 61.99 | 13498 | 38.01 .. 61.98 |
+| `TO(inf)+1` | 5097 | 62.00 .. 72.99 | 4553 | 62.00 .. 72.97 |
+| `TO(inf)+2` | 1353 | 73.00 .. 76.99 | 1280 | 73.11 .. 76.90 |
+| `TO(inf)+3` | 1462 | 77.00 .. 100.00 | 1963 | 77.05 .. 100.00 |
+| `AW(inf)-3` | 113 | 0.54 .. 22.91 | 92 | 1.14 .. 22.93 |
+| `AW(inf)-2` | 248 | 23.11 .. 27.99 | 246 | 23.26 .. 27.94 |
+| `AW(inf)-1` | 557 | 28.02 .. 37.97 | 573 | 28.02 .. 37.98 |
+| `AW(inf)0` | 1331 | 38.01 .. 61.98 | 1453 | 38.02 .. 61.98 |
+| `AW(inf)+1` | 750 | 62.01 .. 72.98 | 589 | 62.04 .. 72.97 |
+| `AW(inf)+2` | 206 | 73.00 .. 76.87 | 259 | 73.11 .. 76.90 |
+| `AW(inf)+3` | 116 | 77.20 .. 98.54 | 109 | 77.43 .. 98.54 |
+
+The 8792 column equals the as-built table in section 2, cell for cell.
+
+### 3b. THE PER-MINUTE READ, AND THE (exf) SUFFIX, ON 8793 (his 1121)
+
+> "shut 8791 down - the hold 1 tol 0.67 isn't useful
+> the next job will clone 8792, and spin it up on 8793 with this change:
+> instead of the 7 bands updating on closed-prev, I now want them to all update per closed-prev minute
+> eg, ws12 will now print 12 updates over 12 minutes, instead of 1 update per 12 minutes"
+
+Then, while 8793 was starting:
+
+> "we'll add the suffix to TO/AW(exf) now.  this addition will serve to  highlight diffs between the
+> closed-prev derived 'exf', and the more granular 1m seams.  confirm you understand what I'm expecting
+> from this change"
+
+His answers: 8793 only, and "-(exf)" carries it too.
+
+**THE VALUE IS `INFENCE_READ` = `closed_prev_minute`**: the line's emerging r at the last 5 s bar of
+the last CLOSED MINUTE - the closed-prev arithmetic at 60 s on every line, midnight grid. ws1 reads
+what it read on 8792; ws2..ws15 step once a minute instead of once per own bar.
+
+**THE (exf) SUFFIX IS `EXF_SUFFIX` = 1**: the same band of the same value goes on `TO(exf)`,
+`AW(exf)` and `-(exf)`. Read with the 23/77 fence, a cell whose 1 m value agrees with its `(exf)` tag
+prints the far band on its target side - `+3` (77.00 and over) on a HIGH target side, `-3` (under
+23.00) on a LOW one. Any other suffix on an `(exf)` cell is a cell where the tag and the 1 m value
+disagree.
+
+**THE (exf) TAG IS NOT CLOSED-PREV ALONE**, and he should read the diffs knowing it: a cell is
+`(exf)` when the line's closed-prev value at its OWN timeframe is past 23/77, OR its emerging value
+was past 23/77 on any 5 s bar of the last 60 s (v4 knobs `FDM_EXF_READ` 'either',
+`FDM_EXF_EM_BARS` 12). Neither the tag nor any TO/AW code moves on 8793.
+
+**THE OTHER DIRECTION PRINTS ONLY BY ROUNDING.** An `(inf)` cell's last-closed-minute bar sits inside
+that same 60 s window, so its value cannot be past 23/77 on the target side. 35 `(inf)` cells (as
+found) still print the far band, and all 35 are values within 0.005 of the edge that round to it at
+2dp - 76.9983 prints `+3` while the `(exf)` test reads it as under 77.
+
+The process: `FDM3_ROW_S=30 FDM3_PIVOTS=pooled W_FDM3_EXPERIMENT=1 W_FDM3_UNTAG50=1
+W_FDM3_INFENCE_READ=closed_prev_minute W_FDM3_EXF_SUFFIX=1`, an off-ruled page. The probe's page
+check pins both keys, so orac-exhaust refuses 8793 on the bank.
+
+8793 with the per-minute read alone, against 8792, every row, 2026-11-21:
+
+| state | bytes outside the TO/AW block that differ | TO/AW codes that differ | in-fence cells | bands that differ from 8792 | bands off the per-minute tape read | bare on 8793 | bare on 8792 |
+|---|---|---|---|---|---|---|---|
+| pivots as found | 0 | 0 | 3048753 | 1093141 | 0 | 10 | 134 |
+| flipped | 0 | 0 | 3595386 | 1168609 | 0 | 13 | 155 |
+| +15 min | 0 | 0 | 2942394 | 1033530 | 0 | 11 | 125 |
+| +15 min, flipped | 0 | 0 | 3701297 | 1228072 | 0 | 12 | 140 |
+
+Pivots as found, per line:
+
+| the line | in-fence cells | bands that differ from 8792 |
+|---|---|---|
+| ws1 | 196977 | 0 |
+| ws2 | 189588 | 43368 |
+| ws3 | 187317 | 57595 |
+| ws4 | 191579 | 66475 |
+| ws5 | 196315 | 71820 |
+| ws6 | 199749 | 75605 |
+| ws7 | 203072 | 79580 |
+| ws8 | 204477 | 82381 |
+| ws9 | 206380 | 85664 |
+| ws10 | 209418 | 86243 |
+| ws11 | 210315 | 87165 |
+| ws12 | 210978 | 87398 |
+| ws13 | 213856 | 89232 |
+| ws14 | 213246 | 90715 |
+| ws15 | 215486 | 89900 |
+
+8793 with both, against 8792, every row, 2026-11-21 - the per-minute table above holds unchanged
+(every in-fence band matches the per-minute tape read in both 8793 builds), and the (exf) cells read:
+
+| state | (exf) cells | bands off the per-minute tape read | far band on the target side - agrees with (exf) | any other suffix - disagrees | bare |
+|---|---|---|---|---|---|
+| pivots as found | 1028615 | 0 | 862247 | 166364 | 4 |
+| flipped | 481982 | 0 | 306648 | 175333 | 1 |
+| +15 min | 1134734 | 0 | 923577 | 211154 | 3 |
+| +15 min, flipped | 375831 | 0 | 245296 | 130533 | 2 |
+
+The start-up line agrees: 3021162 (exf) cells over every state, 10 bare (warm-up). Bytes outside
+the TO/AW block, and every TO/AW code, equal 8792's in all 4 states. CONTROL MATCH 257295.
+
+The first disagreeing ws12 cell on 2026-09-30, pivots as found: the row 2026-09-30 00:23:30 prints
+`TO(exf)-2`. Its print bar is 00:24:00, where ws12's emerging r is 12.64 - past 23 on the LOW side,
+so the 60 s half of the test made it `(exf)`; ws12's own closed-prev (26.31) and its last closed
+minute (00:23:55, 26.31) are both in-fence.
+
+### 3c. THE +4 AND -4 BANDS, ON 8793 (his 1121)
+
+> "update 8793
+> add  +4 and -4 ranges.  100-92  for '+4' and 0-8 for '-4'
+> adjust +3 and -3 to fit accordingly"
+
+Then, while 8793 was starting:
+
+> "confirm that these will update on the new 1 minute seams"
+
+**THE EDGES ARE `INFENCE_EDGES` = 8, 23, 28, 38, 62, 73, 77, 92 on 8793**, read low-inclusive at 2dp
+by his own section 2 rule. The bank keeps the six edges of section 2. The value is the one section 3b
+names - `INFENCE_READ` = `closed_prev_minute` - so the -4 and +4 step on the same 1 minute seams as
+every other band. Only the placement of the value moved.
+
+| the value, 2dp | the suffix on 8793 | on 8792 and the bank |
+|---|---|---|
+| 0.00 to 7.99 | -4 | -3 |
+| 8.00 to 22.99 | -3 | -3 |
+| 23.00 to 27.99 | -2 | -2 |
+| 28.00 to 37.99 | -1 | -1 |
+| 38.00 to 61.99 | 0 | 0 |
+| 62.00 to 72.99 | +1 | +1 |
+| 73.00 to 76.99 | +2 | +2 |
+| 77.00 to 91.99 | +3 | +3 |
+| 92.00 and over | +4 | +3 |
+
+**THE BAND BITS ARE 3-6 ON A NINE-BAND PAGE.** The band is held as band+1, so +4 is 9 and needs bit
+6. Bit 7 stays clear (the largest byte is -(exf)+4, 78). Every band read masks with 15; on a
+seven-band page bit 6 is never set, so 8792 and 8788 read what they read. The labels follow the
+edge count: 2n edges print -n .. +n.
+
+**AS BUILT AND VERIFIED on 8793**, every state, each band re-derived from the tape: the 60 s
+closed-prev of the line's emerging r at the row's print bar, placed on the nine edges. A band move
+counts where the row before and this row both carry a suffix and the two differ; a row whose print
+bar opens a minute is a row opening at :30.
+
+| state | banded cells | off the tape read | bare | -4 | -3 | +3 | +4 | band moves, print bar opens a minute | band moves, any other row |
+|---|---|---|---|---|---|---|---|---|---|
+| pivots as found | 4077368 | 0 | 14 | 126316 | 475268 | 458438 | 108918 | 371529 | 0 |
+| flipped | 4077368 | 0 | 14 | 126316 | 475268 | 458438 | 108918 | 371529 | 0 |
+| +15 min | 4077128 | 0 | 14 | 126316 | 475246 | 458438 | 108918 | 371505 | 0 |
+| +15 min flipped | 4077128 | 0 | 14 | 126316 | 475246 | 458438 | 108918 | 371505 | 0 |
+
+Bytes outside the TO/AW block, and every TO/AW code, equal 8792's in all 4 states.
+
+**THE RED SUFFIX (his 1121):**
+
+> "for coloring: when a highband line (ws8-15) flips from +4 to +3, or from -4 to -3, print the 3 in red"
+
+His answers: "Yes, suffix alone" - the tag on either row does not matter; "+3 / -3, sign and digit"
+- the whole suffix is red and the tag keeps its white or grey; "Yes, any drop off ±4" - red on
+whatever suffix a row lands on after a +4 or -4.
+
+- on ws8 to ws15, a row is red when:
+  - the row before printed +4 and this row prints a suffix under +4
+  - OR the row before printed -4 and this row prints a suffix over -4
+- that row only; the row before is the row directly above, whichever pseudo trade it is in - the
+  TO -> AW flip's own rule
+- +32 in the line's cross code; only a page with his +4 and -4 sets it, so a seven-band page never
+  does
+
+| state | red cells | +4 -> +3 | -4 -> -3 | a drop past ±3 | off the re-derive | red off ws8-ws15 |
+|---|---|---|---|---|---|---|
+| pivots as found | 6975 | 3267 | 3708 | 0 | 0 | 0 |
+| flipped | 6975 | 3267 | 3708 | 0 | 0 | 0 |
+| +15 min | 6975 | 3267 | 3708 | 0 | 0 | 0 |
+| +15 min flipped | 6975 | 3267 | 3708 | 0 | 0 | 0 |
+
+| line, pivots as found | red cells |
+|---|---|
+| ws8 | 1116 |
+| ws9 | 935 |
+| ws10 | 946 |
+| ws11 | 940 |
+| ws12 | 856 |
+| ws13 | 791 |
+| ws14 | 718 |
+| ws15 | 673 |
+
+ws12, pivots as found: the row 2026-07-03 16:39:00 prints `TO(exf)-4` on its last closed minute
+6.61; the row 2026-07-03 16:39:30 reads 9.59 at its print bar 2026-07-03 16:40:00 and prints
+`TO(exf)` with a red `-3`.
+
+
 ## 4. WHAT CARRIES NO SUFFIX
 
 | the cell | why |
 |---|---|
-| `TO(exf)`, `AW(exf)` | ex-fence by definition, so there is no in-fence distance to report |
+| `TO(exf)`, `AW(exf)`, `-(exf)` | ex-fence by definition, so there is no in-fence distance to report - EXCEPT on 8793, where his 1121 `EXF_SUFFIX` puts the band on them, section 3b |
 | a blank cell | no state |
 | the ws16-22 and ws23-30 sums | they print a COUNT of lines, not one line's text, so there is no one value to band |
 
@@ -102,11 +317,11 @@ banked ruling picks between them.
 
 | the piece | where |
 |---|---|
-| the bands and the labels | `IFP_EDGES`, `IFP_LABELS`, `IFP_DP` in `fdm3_oracle.py` |
-| the banked knobs | `INFENCE_EDGES`, `INFENCE_DP`, `INFENCE_READ` in `fdm3_knobs.py` |
-| the band bits | bits 3-5 of each line's TO/AW byte, held as band+1 so 0 means no value |
+| the bands and the labels | `IFP_EDGES`, `IFP_LABELS`, `IFP_DP` in `fdm3_oracle.py`; since his 1121 the edges come from the knob `INFENCE_EDGES` and the labels from their count |
+| the banked knobs | `INFENCE_EDGES`, `INFENCE_DP`, `INFENCE_READ` in `fdm3_knobs.py`; the page reads `INFENCE_READ` through `fdm3_knobs_shim` since his 1120, and `EXF_SUFFIX` since his 1121 (0 on the bank, 1 on 8793) |
+| the band bits | bits 3-5 of each line's TO/AW byte, held as band+1 so 0 means no value; bits 3-6 on 8793's nine bands (his 1121 +4 and -4, section 3c) |
 | the text | the one place the page turns that byte into words |
-| the bank check | the probe refuses a page whose edges or 2dp differ from the bank |
+| the bank check | the probe refuses a page whose edges, 2dp or read differ from the bank. A page built before `ifpread` existed read closed-prev, so a missing key counts as that |
 
 **NO BYTE WAS ADDED, AND NONE WAS ADDED FOR AW(inf) EITHER.** The TO/AW code uses bits 0-2 and the
 band takes bits 3-5 of the same byte, so the row is still 55 bytes and every page keeps its layout.

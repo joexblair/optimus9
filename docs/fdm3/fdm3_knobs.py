@@ -62,16 +62,53 @@ MOM_FNC = _knob('MOM_FNC', 23.0)                # his `fdm3-23-77-fnc`, pending 
 ORACLE_PORT = _knob('ORACLE_PORT', 8790, int)
 FENCE_RESET_TO = _knob('FENCE_RESET_TO', 33.0)   # his `fdm3-fence-reset-TO`, banked on the page
 ORACLE_FENCE = _knob('ORACLE_FENCE', 23.0)       # the ex-fence fence, locked on the page since 1115
-ORACLE_SHIFT = _knob('ORACLE_SHIFT', 15, int)    # his 1119 pivot offset button, minutes - was 30 at 1117
+#   HIS 1120 SRP: the pivot offset (ORACLE_SHIFT 15) is sweep-pivots' SET_SHIFT_MIN now - v4_sweep_pivots.py
 #   HIS 1119 `fdm3-infence-power`: *"for every TO(inf) line, add a suffix based on these critreria"*,
 #   then *"in the same manner as TO(inf), add the (+2,+1,0,-1,-2) suffixs to AW(inf). same ranges"* -
 #   so BOTH in-fence codes carry it, with the same seven bands.
 #   His five bands, plus the -3 and +3 he ruled for the 7.9% of TO(inf) cells his five did not
 #   reach. The edges are the band boundaries read LOW-inclusive at 2dp, so 62.00 opens the +1 band
 #   and 72.99 closes it. The value is the closed-prev r - the banked chart-matched read.
-INFENCE_EDGES = (23.0, 28.0, 38.0, 62.0, 73.0, 77.0)
+#   HIS 1121 on 8793: *"add  +4 and -4 ranges.  100-92  for '+4' and 0-8 for '-4'"* / *"adjust +3 and -3 to fit
+#   accordingly"*. The edges are a knob now, as comma-separated r values; 8793 runs '8,23,28,38,62,73,77,92', so -4 is
+#   0-7.99, -3 8-22.99, +3 77-91.99 and +4 92 and over, on the same low-inclusive 2dp read. The labels follow the
+#   count: 2n edges are -n .. +n.
+#   BANKED HIS 1121: *"8793 is good - bank it and make the machine."* The nine edges are the default; the six of 1119 are an off-ruled run.
+INFENCE_EDGES = tuple(float(v) for v in os.environ.get('W_FDM3_INFENCE_EDGES', '8,23,28,38,62,73,77,92').split(','))
 INFENCE_DP = _knob('INFENCE_DP', 2, int)         # his *"all values are 2dp"*
-INFENCE_READ = os.environ.get('W_FDM3_INFENCE_READ', 'closed_prev')
+INFENCE_READ = os.environ.get('W_FDM3_INFENCE_READ', 'closed_prev_minute')
+#   HIS 1121: *"instead of the 7 bands updating on closed-prev, I now want them to all update per closed-prev minute"*
+#   / *"ws12 will now print 12 updates over 12 minutes, instead of 1 update per 12 minutes"*, on 8793, a clone of
+#   8792. 'closed_prev_minute' = the line's emerging r at the last 5 s bar of the last CLOSED MINUTE, the closed-prev
+#   arithmetic at 60 s for every line, so ws1 reads what it read and ws12 steps 12 times in 12 minutes.
+#   BANKED HIS 1121: *"8793 is good - bank it and make the machine."* 'closed_prev_minute' is the default.
+#   HIS 1120: *"now all lines will be non-tagged (eg "-") if they are on the counter side of 50 (not the fence)"*,
+#   built on 8792. 1 = the oracle passes towards/away the level 50 and every line on the counter side of it prints
+#   "-"; 0 = the run as it was. His name for it is pending.
+#   BANKED HIS 1121: *"8793 is good - bank it and make the machine."* 1 is the default.
+UNTAG50 = _knob('UNTAG50', 1, int)
+#   HIS 1121: *"we'll add the suffix to TO/AW(exf) now.  this addition will serve to  highlight diffs between the
+#   closed-prev derived 'exf', and the more granular 1m seams"*, his answers 8793 only and "-(exf)" too. 1 = the
+#   seven-band suffix also goes on TO(exf), AW(exf) and -(exf), read from the same value INFENCE_READ names; 0 = the
+#   suffix stays on the in-fence codes.
+#   BANKED HIS 1121: *"8793 is good - bank it and make the machine."* 1 is the default.
+EXF_SUFFIX = _knob('EXF_SUFFIX', 1, int)
+#   HIS 1120: *"I need to see the "hold 1, tolerance 0.67" applied in 8791"*, his answer: towards/away only. The
+#   lift-off tolerance and hold the oracle hands towards/away, as 'tolerance,hold' (r-points, bars), or 'v4' = v4's
+#   own banked pair (2.0, 8), which towards/away reads live. Nothing else on the page reads lift-off (M-no-rev's slot
+#   holds legMage since 1119).
+#   OFF ON THE BANK ('v4') - 8791 runs '0.67,1' as an off-ruled page. The name is mine; his words are "hold 1,
+#   tolerance 0.67".
+TA_LIFT = os.environ.get('W_FDM3_TA_LIFT', 'v4')
+#   HIS 1121: *"clone 8793 to 8792 and change the config of r.  the new config is K len:6, RSI len:6, stoch range: 9"*
+#   / *"contain the r config update to 8792 only.  you'll need a separate cache"*. The ws{TF}r config every r read on
+#   the page uses, ws1r..ws30r, as 'k_len,rsi,stc' in his order (K len, RSI len, stoch range), src close. 'db' = the
+#   stored wsf r row (7|5|8|close) off the shared line cache. Any other config is built into its OWN cache directory
+#   (fdm3_r_cache.py) and read from there by that page's process alone - the shared line cache, the DB row and v4's
+#   R_* knobs are not touched. The name is mine.
+#   BANKED 1122 at '6,6,9' - his *"this is good - bank it, commit push, update the docs.  make this the machine"* on
+#   8794, which runs it. 'db' (the stored row, 8793's 1121 bank) is off-ruled now.
+ORACLE_R_CFG = os.environ.get('W_FDM3_ORACLE_R_CFG', '6,6,9')
 #   HIS 1119 `fdm3-small-trade`: *"highband lines printing TO(exf) during the trade:  2 is the max for
 #   a small trade."*, then *"the resting state is `small-trade` until the mech(s) prove
 #   `large-trade`"*. Distinct ws8..ws15 lines, counted from the trade's first row to the row being
@@ -149,20 +186,9 @@ ORAC_RANK_BY = os.environ.get('W_FDM3_ORAC_RANK_BY', 'mfe_over_mae')
 #   BOTTOM 20% printed beside it, because a column shared by the top means nothing if the bottom
 #   shares it too. Per cent of each side's rows taken from each end.
 ORAC_CUT_PCT = _knob('ORAC_CUT_PCT', 20.0)
-#   HIS 1118 FOUR-READ PIVOTS: *"bake the 4 lines into the sweep-pivots machine: every test uses all
-#   lines to decide if dwell is qualified"* / *"1, the longest"* / *"2, it shouldn't matter - we're
-#   going from a 'final' cross to ib, to the next 'final' cross to ib"*. The four reads are ws{TF}
-#   Mage and b, each emerging and closed-prev.
-#   THE DWELL IS 0. His 1118 self-validation - *"for each pivot that you print, wait for 2 more
-#   pivots to print, then look back at the extremes between each pair"* - killed the 180 I had
-#   banked off his *"at least 3 minutes"*. His own example: the real price high between 12:02 and
-#   13:45 on 09-28 is 12:55:20; at dwell 0 a HIGH pivot prints 13:00:00, 4.7 min after it, and the
-#   dwell deletes that pivot so 13:45:00 survives instead, 49.7 min late. Over 09-22..09-28 the
-#   mean lag to the real extreme runs 7.0 min at dwell 0 and 13.0 at 180 s, and every other measure
-#   moves the same way. The POOLING and the final-cross collapse do the noise work: 218 pivots over
-#   7 days against the 9,257 crosses raw emerging ws1Mage makes on the tape.
-ORAC_PIVOT_TF = _knob('ORAC_PIVOT_TF', 1, int)           # ws1 Mage and b
-ORAC_PIVOT_DWELL_S = _knob('ORAC_PIVOT_DWELL_S', 0, int)  # seconds the longest read must hold oob
+#   HIS 1120: *"this isn't SRP.  the pivots can't belong in any fdm3 classes"*. The four-read pivots' knobs -
+#   ORAC_PIVOT_TF 1 and ORAC_PIVOT_DWELL_S 0, with his 1118 words and the dwell lag test - moved to sweep-pivots
+#   at the same values: v4_sweep_pivots POOL_TF / POOL_DWELL_S, spec v4_sweep_pivots.md section 10.
 ORAC_GRACE_MIN = _knob('ORAC_GRACE_MIN', 5.0)          # his *"5 minutes (walk forward) grace"*
 ORAC_HIGH_FLIPS = _knob('ORAC_HIGH_FLIPS', 2, int)     # his *">=2 AW flips"* in highband
 ORAC_HIGH_TOEXF_MAX = _knob('ORAC_HIGH_TOEXF_MAX', 1, int)   # his *"a maximum of 1 TOexf"*
@@ -248,20 +274,24 @@ RULED = {
     'FENCE_RESET_TO': (33.0, 'his `fdm3-fence-reset-TO`, the fence the flip, the 50 reset and the '
                              'void read - asserted against the page on every run'),
     'ORACLE_FENCE': (23.0, 'the ex-fence fence, locked on the page at his 1115 word'),
-    'ORACLE_SHIFT': (15, 'his 1119 pivot offset button, minutes - *"rebuild 8792 with a pivot '
-                         '+15 minute button , and drop pivot +30 button"*, ruled for all three pages'),
-    'INFENCE_EDGES': ((23.0, 28.0, 38.0, 62.0, 73.0, 77.0),
-                      'his 1119 `fdm3-infence-power` band edges, low-inclusive at 2dp: under 23 is '
-                      '-3, 23-27.99 -2, 28-37.99 -1, 38-61.99 0, 62-72.99 +1, 73-76.99 +2, 77 and '
-                      'over +3. The -3 and +3 are his ruling on the cells the five did not reach. '
-                      'BOTH in-fence codes carry it - his *"in the same manner as TO(inf), add the '
-                      '(+2,+1,0,-1,-2) suffixs to AW(inf). same ranges"*, seven bands there too'),
+    'INFENCE_EDGES': ((8.0, 23.0, 28.0, 38.0, 62.0, 73.0, 77.0, 92.0),
+                      'his 1119 `fdm3-infence-power` band edges with his 1121 +4 and -4, BANKED 1121 *"8793 is '
+                      'good - bank it and make the machine."*, low-inclusive at 2dp: under 8 is -4, 8-22.99 -3, '
+                      '23-27.99 -2, 28-37.99 -1, 38-61.99 0, 62-72.99 +1, 73-76.99 +2, 77-91.99 +3, 92 and over '
+                      '+4. BOTH in-fence codes carry it, and the (exf) codes with EXF_SUFFIX'),
     'INFENCE_DP': (2, 'his *"all values are 2dp: eg 62 to 73 is actually 62.00 to 72.99"*'),
     'SMALL_TRADE_MAX_TOEXF': (2, 'his 1119 `fdm3-small-trade-max-toexf` - the most distinct '
                                  'highband lines that may print TO(exf) since the trade opened '
                                  'for it to stay sml'),
-    'INFENCE_READ': ('closed_prev', 'the line value the band reads - the banked chart-matched '
-                                    'read, since emerging is lift-off\'s read alone'),
+    'EXF_SUFFIX': (1, 'his 1121 suffix on TO(exf), AW(exf) and -(exf), BANKED 1121 with 8793'),
+    'UNTAG50': (1, 'his 1120 "-" on the counter side of 50, BANKED 1121 with 8793'),
+    'TA_LIFT': ('v4', 'his 1120 "hold 1, tolerance 0.67" for towards/away only, built on 8791 as an off-ruled '
+                      'page; v4\'s banked pair on the bank until he banks it'),
+    'ORACLE_R_CFG': ('6,6,9', 'the ws{TF}r config the page reads - his 1121 "K len:6, RSI len:6, stoch range: 9", '
+                              'from its own cache, BANKED 1122 with 8794. db (the stored wsf r row) is off-ruled'),
+    'INFENCE_READ': ('closed_prev_minute', 'the line value the band reads - his 1121 *"per closed-prev '
+                                           'minute"*, BANKED 1121 with 8793. closed_prev (the 1119 read) '
+                                           'and emerging (8788) are off-ruled'),
     'MNR_TOPS': ((15,), 'the leg-Mage column\'s ceiling. HIS 1119 dropped the two M-no-rev '
                         'columns for one max-Mage-TF column; ws1..ws15 is his in-use range'),
     'MNR_LO': (1, 'the leg-Mage climb starts at the lowest oob line in the leg'),
@@ -290,12 +320,6 @@ RULED = {
     'ORAC_MAEMFE_LINE': ('ws2Mage', 'the line whose sweep-pivot legs score MAE/MFE. Under his '
                                     '1118 leg mode it reads his 06:06 and 12:05 as LOW legs, and '
                                     'it is the line the pseudo trades already pivot on'),
-    'ORAC_PIVOT_TF': (1, 'his 1118 four-read pivots run on ws1 - Mage and b, each emerging '
-                         'and closed-prev'),
-    'ORAC_PIVOT_DWELL_S': (0, 'seconds the LONGEST of the four reads must hold oob for a run '
-                              'to qualify. 0 at his 1118 *"ok for the dwell"* - his own lag test '
-                              'showed 180 s doubles the lag to the real extreme and deletes the '
-                              'pivot nearest it'),
     'ORAC_CUT_PCT': (20.0, 'his 1118 top-and-bottom cut, per cent of each side\'s rows'),
     'ORAC_RANK_BY': ('mfe_over_mae', 'his 1118 *"I take your recommendation"* - rank on MFE '
                                      'over abs(MAE), per side, not on MAE alone'),
