@@ -2726,3 +2726,44 @@ a67ad3cdb7c2  I retract. the times are correct
 faf8d7d96f01  run the changes for fdm3-htf-oracle and I'll test the vwap outputs
 68a81c3d9f46  01:16:35 is incorrect
 3e3a02a9e0d8  the 3 pivot lookback should have picked the high extrema at 0300
+5f663dbc6dba  add these styles to the ws5 vw pctr column
+85646957ff74  resting colour: current (grey)
+d909dcffd10e  hi/lo u > 0: green
+82fa496b5d90  hi/lo l < 0: red
+d024596e77f9  hi/lo v crossing under or over 0: colour the "lo/hi v:value" white
+6adc6af2d564  resting colour: current (grey) / hi/lo u > 0: green / hi/lo l < 0: red / hi/lo v crossing under or over 0: colour the "lo/hi v:value" white
+409772d3eb80  now I see the issue. the indicators I had were set to src:low
+edc60f56dba2  change the band multiplier to 1.7, on src:close, and advise on the 1240/1241 pct for `hi u`
+cc92e0c76869  change the band multiplier to 1.7, on src:close
+9835330c9cae  remember that my values are always estimates. at 1240, vwap is 0.18246. at 1241: 0.18248
+31afb071c18a  my vwap is on 1m. the TV vwap tool auto places the anchor. for 0303, it is attached to the low.
+36e0b7f3338b  reasearch: find out how tradingview's "anchored vwap" chooses its anchor. find multiple sources to validate your findings, including reddit
+59405b126e0d  my 09-06 1240 is crossed by the `hi u`, just under the close. the reported pct is -0.38
+3bdf714cb6bd  confirm that you're including the wicks when calculating the ws5 vw pct
+59e817579067  always high for LONG, always low for SHORT
+463c53df5da5  you ran ahead without checking first
+97cca645cc92  the wicks must be included in the pct calculations
+15ca92f097bf  in oracle's ws5 vw pct column, swap the `lo l` table rows with `hi l`, and vice versa
+2b5bd17aad4b  swap the `lo l` table rows with `hi l`, and vice versa / ie for an htf-oracle long trade, the fixed table rows will be / hi u:{val} / hi v:{val} / lo l:{val} / inverse for short
+8effb7184445  are you asking if you should use the 1minute's `high` value for a long trade, because that is the most extreme value and makes the most sense for an upper vwap line to cross?
+c31f7aeda508  Follow the swap (Recommended)
+e9e7f23531d8  Follow the swap
+46846f3c6ff5  Switch now
+2326bb69cae8  Ask me before the switch (Recommended)
+745b2fbed8cf  good, 8796 is the correct mech . I have another change to bake on 8796: for each ws1 time row, add a 4th "line" in the ws{TF} columns. this new line will present the r line's value, rounded to 1dp
+7681f2888318  for each ws1 time row, add a 4th "line" in the ws{TF} columns. this new line will present the r line's value, rounded to 1dp
+9ae44c738666  The b9's read (Recommended)
+b512bfe0fc33  The b9's read
+6df42496bffe  Taller rows (Recommended)
+12e67df8ca37  I think I've errored when I requested the swap of `lo l` and `hi l`. spin up a clone of 8795 and swap `lo l` and `hi l` back to their original trades (short and long respectively). I'm expecting that a short trade will then detect a `lo l` cross of 09-06 0713, approx halfway between the close and the low
+09a55152a792  swap `lo l` and `hi l` back to their original trades (short and long respectively)
+74728344c0bd  swap the `lo l` table rows with `hi l`
+9fc6aa506d16  I have a cosmetic change: print the line values above the TO/AW(*)b9 line, and colour the line values grey
+554e3fdb3bfe  print the line values above the TO/AW(*)b9 line, and colour the line values grey
+9cbdb36961d4  colour the line values grey
+a2ccac6b5c27  then 8796 can be banked, spec updates, commit push all. make this the machine
+9e13e363a67e  8796 can be banked, spec updates, commit push all. make this the machine
+9403453b548b  good, 8796 is the correct mech
+8123d9e14e9b  8796 is the correct mech
+8cee1427124b  I think I've errored when I requested the swap of `lo l` and `hi l`
+ca2a18665df6  thanks buddy

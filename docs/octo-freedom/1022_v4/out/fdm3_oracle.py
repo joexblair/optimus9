@@ -342,10 +342,23 @@ RPRED_ON = False
 #   HIS 1124/1125 fdm3-htf-oracle's two VWAP columns on the far right, ws5 then ws10 - docs/fdm3/fdm3_vwap.py has his
 #   words, his answers and the rule. Per TF six int16 (% x 100, low byte first): lo udist, lo vdist, lo ldist, hi udist,
 #   hi vdist, hi ldist. They read no trade, so every state carries the same bytes. None on fdm3-oracle.
-VW_TFS = (5, 10) if HTF else ()
-VW_BYTES = 12 * len(VW_TFS)
+VW_TFS = (5,) if HTF else ()     # HIS 1125 *"drop the ws10Mage column"* - ws5 only
+#   HIS 1125 the VWAP block, per TF: 'ws5 vw pct' 6 int16 (the short cell lo u, lo v, hi l from the 1m low, then the
+#   long cell hi u, hi v, lo l from the 1m high), 'ws5 vw diff' 6 int16 on the printed values and 6 on their DEMA 2,
+#   then a 2-byte reversal mask - 38 bytes. The page shows the short cell on the short trade, the long cell on the long
+VW_LAY = {'pct': 0, 'raw': 12, 'dema': 24, 'flags': 36}
+#   HIS 1125 the l rows. 0, THE DEFAULT SINCE HIS 1125 BANK (*"8796 can be banked ... make this the machine"*): his clone
+#   *"swap `lo l` and `hi l` back to their original trades (short and long respectively)"*, after *"I think I've errored
+#   when I requested the swap"*. 1 is the swap he retracted (*"swap the `lo l` table rows with `hi l`"*), kept only so
+#   8795 can be relaunched as it served. FDM3_VW_SWAP is MY name
+VW_SWAP = os.environ.get('FDM3_VW_SWAP', '0') == '1'
+#   HIS 1125 *"for each ws1 time row, add a 4th "line" in the ws{TF} columns. this new line will present the r line's
+#   value, rounded to 1dp"*, his answer *"The b9's read"*: the r the b9 band is placed from (ifp_value at the print bar),
+#   x 10 as an int16 per line, -32768 none. fdm3-htf-oracle only; his answer *"Taller rows"*: 66 px
+RL_BYTES = 2 * len(LINES) if HTF else 0
+VW_BYTES = 38 * len(VW_TFS)
 VW_NOTE = []                    # the start-up's VWAP lines, one per TF - a list so the child can hand it back
-STRIDE = (len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS) + VW_BYTES
+STRIDE = (len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS) + VW_BYTES + RL_BYTES
           + len(LINES) + 3 + len(MNR_TOPS))      # bytes per row:
 #   the TO/AW codes, the TO/AW counts, the cross codes (HIS 1110: 1 X, 2 E, 3 both, on the row's target-side; +4 the
 #   line reads AW on this row and TO on the row before, HIS 1110 TO -> AW flip; +8 ws1 only, TO(exf) on this row and
@@ -1051,23 +1064,36 @@ def build():
             for o, sh, c, s in CARRY[(off, fl)]:
                 _v[sh:c] = _vb[o]
             MNR[(off, fl)] = [_v[prt]]
-    #   HIS 1124/1125 the VWAP columns, the same in every state
+    #   HIS 1124/1125 the VWAP columns, the same in every state. HIS 1125: anchored on the BANKED sweep-pivots
     VWC = []
     if VW_TFS:
         import fdm3_vwap as VW
         assert tuple(VW.TFS) == VW_TFS, (VW.TFS, VW_TFS)
-        _c, _h, _l = (np.asarray(a, float) for a in BT.prices())
-        _vr = VW.rows(prt, ts, _c, _h, _l, VW.volume(), lambda t: np.asarray(ln.line('ws%dMage' % t), float))
+        _c, _h, _l = (np.asarray(a_, float) for a_ in BT.prices())   # HIS 1125 the wicks: the long cell reads highs
         del VW_NOTE[:]
         for t in VW_TFS:
-            _an = VW.anchors(t, ts, _h, _l, np.asarray(ln.line('ws%dMage' % t), float))
-            VW_NOTE.append('ws%d: %d low and %d high anchors, rows with both VWAPs %d of %d, first %s'
-                           % (t, sum(a[1] < 0 for a in _an), sum(a[1] > 0 for a in _an),
-                              int((_vr[t] != VW.BLANK).all(1).sum()), len(prt),
-                              ln.U(prt[int(np.argmax((_vr[t] != VW.BLANK).all(1)))])))
-            for q in range(6):
-                v = _vr[t][:, q].astype(np.int16)
-                VWC += [(v & 0xFF).astype(np.uint8).view(np.int8), (v >> 8).astype(np.int8)]
+            _pv = SP.pivots(t)
+            _vr = VW.rows(prt, ts, _c, _h, _l, VW.volume(), _pv, swap=VW_SWAP)
+            _both = (_vr['pct'] != VW.BLANK).all(1)
+            VW_NOTE.append('ws%d: %d sweep pivots (%d LOW, %d HIGH), multiplier %.2f, rows with both VWAPs printing %d of %d, '
+                           'first %s' % (t, len(_pv), sum(p['side'] < 0 for p in _pv), sum(p['side'] > 0 for p in _pv),
+                                         VW.MULT, int(_both.sum()), len(prt), ln.U(prt[int(np.argmax(_both))])))
+            for blk_ in ('pct', 'raw', 'dema'):
+                for q in range(6):
+                    v = _vr[blk_][:, q].astype(np.int16)
+                    VWC += [(v & 0xFF).astype(np.uint8).view(np.int8), (v >> 8).astype(np.int8)]
+            _f = _vr['flags'].astype(np.uint16)
+            VWC += [(_f & 0xFF).astype(np.uint8).view(np.int8), (_f >> 8).astype(np.uint8).view(np.int8)]
+        assert len(VWC) == VW_BYTES, (len(VWC), VW_BYTES)
+    RLC = []                                     # HIS 1125 the r line, the same in every state
+    if RL_BYTES:
+        for name in LINES:
+            _rv = np.asarray(ifp_value(LN, int(name[2:])), float)[prt]
+            _ri = np.where(np.isfinite(_rv), np.round(_rv * 10.0), -32768)
+            assert (np.abs(_ri[np.isfinite(_rv)]) < 32767).all(), 'an r value x 10 does not fit an int16'
+            _ri = _ri.astype(np.int16)
+            RLC += [(_ri & 0xFF).astype(np.uint8).view(np.int8), (_ri >> 8).astype(np.int8)]
+        assert len(RLC) == RL_BYTES, (len(RLC), RL_BYTES)
     mats = {}
     for off, fl, xre, ST in STATES:
         side, mnr = SIDES[(off, fl)], MNR[(off, fl)]
@@ -1182,6 +1208,7 @@ def build():
         for _, tfs in SUMS:
             cols.append(np.sum([((ST[t][prt] == TA.TO) & exf_at(t)).astype(int) for t in tfs], 0))
         cols.extend(VWC)                         # HIS 1124/1125 the VWAP columns, the same in every state
+        cols.extend(RLC)                         # HIS 1125 the r line per ws{TF} column, the same in every state
         cols.extend(UD)                          # HIS 1116 the up/dn pair per line, the same in every state
         cols.append((sl & 0xFF).astype(np.uint8).view(np.int8))     # HIS 1115 SL%, the same in every state
         cols.append((sl >> 8).astype(np.int8))
@@ -1260,8 +1287,9 @@ O_TA = 0                                        # the TO/AW code per line
 O_TACNT = O_TA + len(LINES)                     # per sum, its TO count then its AW count
 O_XC = O_TACNT + 2 * len(SUMS)                  # the cross code per line
 O_TOEXF = O_XC + len(LINES)                     # per sum, how many of its lines read TO(exf)
-O_VW = O_TOEXF + len(SUMS)                      # HIS 1124/1125 the VWAP block, 12 bytes per TF, none on fdm3-oracle
-O_UD = O_VW + VW_BYTES                          # HIS 1116 the up/dn pair per line
+O_VW = O_TOEXF + len(SUMS)                      # HIS 1124/1125 the VWAP block, 38 bytes per TF (VW_LAY), none on fdm3-oracle
+O_RL = O_VW + VW_BYTES                          # HIS 1125 the r line, 2 bytes per line, none on fdm3-oracle
+O_UD = O_RL + RL_BYTES                          # HIS 1116 the up/dn pair per line
 O_SL = O_UD + len(LINES)                        # HIS 1115 SL% x 100, an int16
 O_MNR = O_SL + 2                                # HIS 1119: one byte, the incoming leg's max Mage TF
 assert O_MNR + len(MNR_TOPS) + 1 == STRIDE, (O_MNR, STRIDE)
@@ -1531,7 +1559,9 @@ META = json.dumps({
     'xreopen': X_REOPEN, 'ereopen': E_REOPEN, 'xres': list(XRES), 'pivots': PIVOTS,
     #   HIS 1116: where the up/dn block starts, so a reader is told rather than re-deriving the layout
     'updn': O_UD,
-    'vw': O_VW, 'vwtfs': list(VW_TFS)})        # HIS 1124/1125 where the VWAP block starts, and its TFs
+    'vw': O_VW, 'vwtfs': list(VW_TFS), 'vwlay': VW_LAY,     # HIS 1124/1125 where the VWAP block starts, its TFs, its layout
+    'vwcell': 'wick' if VW_SWAP else 'wick_own',
+    'rl': O_RL if RL_BYTES else None})          # HIS 1125 where the r line starts; None = no r line   # HIS 1125 the 1m-wick cells, l rows swapped or not; none = older
 
 
 class H(BaseHTTPRequestHandler):
@@ -1648,12 +1678,25 @@ body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.4 system-ui,-appl
 .row.z{background:var(--zebra)}
 .row div{text-align:center;height:49px;display:flex;flex-direction:column;justify-content:center;line-height:16px}
 .row .t{display:block;line-height:49px}
-/*   HIS 1124 *"Taller rows"*: fdm3-htf-oracle's VWAP cells print 6 lines, so its rows grow to 98 px and every 3-line
-     cell sits centred in them   */
-.tall .row{height:98px}
-.tall .row div{height:97px}
-.tall .row .t{line-height:97px}
-.row div b.v{font-weight:600;font-size:10px;white-space:pre;color:var(--fg)}
+/*   HIS 1125 fdm3-htf-oracle's VWAP cells: *"only the lo udist, lo vdist, lo ldist values need to be presented"* on the
+     short trade (hi on the long), *"this will allow the cell to use the same font size as the up|dn row"* - three
+     lines in the 50 px row. The diff cell is *"a fixed size table having one row and three fixed-sized columns"*, plus
+     his DEMA 2 row under it; a reversal prints green when it turned up and red when it turned down   */
+.row div span.vp{font-weight:400;white-space:pre}
+/*   HIS 1125 the r line, a 4th line in every ws{TF} cell, his answer *"Taller rows"*: 66 px rows, four 16 px lines   */
+.rl4 .row{height:66px}
+.rl4 .row div{height:65px}
+.rl4 .row .t{line-height:65px}
+.row div span.rv{font-weight:400;color:var(--mut)}   /* HIS 1125 *"colour the line values grey"* */
+/*   HIS 1125 *"resting colour: current (grey) / hi/lo u > 0: green / hi/lo l < 0: red / hi/lo v crossing under or over 0:
+     colour the "lo/hi v:value" white"* - the whole line takes the colour; white is the page's flip white   */
+.row div span.vp.vg{color:var(--grn)}
+.row div span.vp.vr{color:var(--red)}
+.row div span.vp.vw{color:var(--flip)}
+.row div.vd{display:grid;grid-template-columns:repeat(3,46px);grid-auto-rows:16px;justify-content:center;align-content:center}
+.row div.vd span{text-align:right;font-weight:400;white-space:pre}
+.row div.vd span.vu{color:var(--grn)}
+.row div.vd span.vn{color:var(--red)}
 .row div b{font-weight:700;font-size:10px}
 /*   HIS 1117: *"the dn/up rows are printing bold when rpred coloring is applied. ensure that the top row
      (of the cell) is non-bold"*. The red/green r-pred classes put font-weight 600 on the whole cell and the
@@ -1693,10 +1736,12 @@ body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.4 system-ui,-appl
 <tr><td id="what">fdm3-oracle - SL%, r-pred ws1 to ws15, M-no-rev, plus the ws16-22 and ws23-30 sums, emerging, on closed-prev ws1 bars, with towards/away</td></tr></table>
 </div></div>
 </div><script>
-let RH = 50;            // row height, px - three lines: the number, TO / AW, then the crosses (HIS 1110); 98 on
-                        // fdm3-htf-oracle with its 6-line VWAP cells, HIS 1124 *"Taller rows"*
-const VWW = 104;        // px, a VWAP column - its widest line, "lo udist: -10.00" at 10px; MINE
-const VWL = ['lo udist', 'lo vdist', 'lo ldist', 'hi udist', 'hi vdist', 'hi ldist'];   // HIS 1124 "Low VWAP on top"
+let RH = 50;            // row height, px - three lines: the number, TO / AW, then the crosses (HIS 1110)
+const VWW = 104;        // px, 'ws5 vw pct' - its widest line, "lo u: -10.00" at 13px is 86 px; MINE
+const VDW = 150;        // px, 'ws5 vw diff' - three fixed 46 px columns, each "-10.00" at 13px; MINE
+//   HIS 1125 *"drop 'dist' from the labels"*, then *"swap the `lo l` table rows with `hi l`, and vice versa"*
+const VWQ = [['lo u', 'lo v', 'hi l'], ['hi u', 'hi v', 'lo l']];   // the short cell, the long cell
+const VWQ0 = [['lo u', 'lo v', 'lo l'], ['hi u', 'hi v', 'hi l']];  // HIS 1125 clone 'wick_own', or a page before the swap
 const BLOCK = 720;      // rows per fetch: 12 h of ws1 bars
 const AHEAD = 3;        // blocks prefetched in the scroll direction
 const KEEP = 60;        // blocks held before the least recently used is dropped
@@ -1773,13 +1818,17 @@ function ensurePool(n) {
       }
       if (c) { d.n = document.createElement('span'); d.ta = document.createElement('b'); d.append(d.n, d.ta); if (c > NL) d.ta.className = 's'; else d.n.className = 'ud'; }
       if (c) { d.xc = document.createElement('b'); d.xc.className = 'x'; d.append(d.xc); }   // HIS 1110 cross row, every cell
+      //   HIS 1125 the r line, then *"print the line values above the TO/AW(*)b9 line, and colour the line values grey"*
+      if (c && c <= NL && meta.rl != null) { d.rv = document.createElement('span'); d.rv.className = 'rv'; d.insertBefore(d.rv, d.ta); }
       cells.push(d);
     }
-    const vws = [];                     // HIS 1124/1125 the VWAP cells, far right: six lines each
+    const vws = [];                     // HIS 1125 per TF: the pct cell (3 lines) and the diff cell (2 x 3 table)
     for (const _ of (meta.vwtfs || [])) {
       const v = document.createElement('div'); v.ls = [];
-      for (let q = 0; q < 6; q++) { const b = document.createElement('b'); b.className = 'v'; v.appendChild(b); v.ls.push(b); }
-      el.appendChild(v); vws.push(v);
+      for (let q = 0; q < 3; q++) { const b = document.createElement('span'); b.className = 'vp'; v.appendChild(b); v.ls.push(b); }
+      const d = document.createElement('div'); d.className = 'vd'; d.ls = [];
+      for (let q = 0; q < 6; q++) { const b = document.createElement('span'); d.appendChild(b); d.ls.push(b); }
+      el.appendChild(v); el.appendChild(d); vws.push([v, d]);
     }
     body.appendChild(el); pool.push({el, cells, mcs, slc, vws, i: -1, ok: false});
   }
@@ -1832,6 +1881,8 @@ function draw() {
     for (let c = 0; c < NC; c++) {
       const d = p.cells[c + 1], sx = c === NL ? ' sx' : '';
       d.style.background = '';   // the pool reuses cells, so clear the last row's paint
+      if (d.rv) d.rv.textContent = !blk ? NB : (rb => rb === -32768 ? NB : (rb / 10).toFixed(1))(   // HIS 1125 r, 1 dp
+          (blk[o + meta.rl + 2 * c + 1] << 8) | (blk[o + meta.rl + 2 * c] & 255));
       if (!blk) { d.n.textContent = '·'; d.ta.textContent = NB; d.xc.textContent = NB; d.className = 'w' + sx; continue; }
       if (c < NL) {                     // a wsf line
         //   HIS 1116: the top row prints the UP/DN pair. HIS 1117: its look-back is 180 s and 120 s,
@@ -1892,17 +1943,50 @@ function draw() {
         d.xc.className = 's';
       }
     }
-    //   HIS 1124/1125 the VWAP cells: % x 100 as int16, low byte first; -32768 is no pair of anchors yet
+    //   HIS 1125 the VWAP cells: % x 100 as int16, low byte first; -32768 is none. The short trade shows the lo values,
+    //   the long trade (the button on) the hi ones - HIS *"the inverse is true for the long trade"*
+    const vq0 = FLIP > 0 ? 3 : 0, vlab = (meta.vwcell === 'wick' ? VWQ : VWQ0)[FLIP > 0 ? 1 : 0], L = meta.vwlay || {};
+    const i16 = b => (blk[b + 1] << 8) | (blk[b] & 255);
+    const pc = x => (x >= 0 ? '+' : '-') + (Math.abs(x) / 100).toFixed(2);
+    //   HIS 1125 the v cross reads the LAST row too, which can sit in the block before this one
+    const pblk = i > 0 ? (i % BLOCK ? blk : getBlock(Math.floor((i - 1) / BLOCK))) : null;
+    const po = ((i - 1) % BLOCK) * NS;
+    let vok = true;
     for (let k = 0; k < p.vws.length; k++) {
-      const v = p.vws[k];
+      const [v, d] = p.vws[k], b0 = o + meta.vw + 38 * k;
       v.className = (k === 0 ? 'sx' : '') + (blk ? '' : ' w');
-      for (let q = 0; q < 6; q++) {
-        if (!blk) { v.ls[q].textContent = q === 0 ? '·' : NB; continue; }
-        const b = o + meta.vw + 12 * k + 2 * q, x = (blk[b + 1] << 8) | (blk[b] & 255);
-        v.ls[q].textContent = x === -32768 ? NB : VWL[q] + ': ' + (x >= 0 ? '+' : '-') + (Math.abs(x) / 100).toFixed(2);
+      d.className = 'vd' + (blk ? '' : ' w');
+      for (let q = 0; q < 3; q++) {
+        if (!blk) { v.ls[q].textContent = q === 0 ? '·' : NB; v.ls[q].className = 'vp'; continue; }
+        const x = i16(b0 + L.pct + 2 * (vq0 + q));
+        v.ls[q].textContent = x === -32768 ? NB : vlab[q] + ': ' + pc(x);
+        let c = '';
+        if (x !== -32768) {
+          if (q === 0 && x > 0) c = ' vg';                 // u over 0: green
+          else if (q === 2 && x < 0) c = ' vr';            // l under 0: red
+          else if (q === 1) {                              // v crossing 0 since the last row: white. MINE: 0.00 is not under
+            if (!pblk) vok = i === 0;
+            else {
+              const pb = po + meta.vw + 38 * k + L.pct + 2 * (vq0 + q);
+              const y = (pblk[pb + 1] << 8) | (pblk[pb] & 255);
+              if (y !== -32768 && (y < 0) !== (x < 0)) c = ' vw';
+            }
+          }
+        }
+        v.ls[q].className = 'vp' + c;
+      }
+      const fl = blk ? ((blk[b0 + L.flags] & 255) | ((blk[b0 + L.flags + 1] & 255) << 8)) : 0;
+      for (let r = 0; r < 2; r++) {                 // row 1 the printed values, row 2 their DEMA 2
+        for (let q = 0; q < 3; q++) {
+          const c = d.ls[3 * r + q];
+          if (!blk) { c.textContent = NB; c.className = ''; continue; }
+          const x = i16(b0 + (r ? L.dema : L.raw) + 2 * (vq0 + q));
+          c.textContent = x === -32768 ? NB : pc(x);
+          c.className = x !== -32768 && (fl >> (6 * r + vq0 + q)) & 1 ? (x > 0 ? 'vu' : 'vn') : '';
+        }
       }
     }
-    p.i = i; p.ok = !!blk;
+    p.i = i; p.ok = !!blk && vok;   // HIS 1125: a row whose last row is not fetched yet is drawn again when it is
   }
   const t = meta.t0 + first * meta.step;
   document.getElementById('top').textContent = 'top row: ' + fmt(t);
@@ -1965,12 +2049,12 @@ async function init() {
     ? 'fdm3-htf-oracle - ws20 to ws30, ws45, ws60, ws90, ws120, ws240 on 1-minute rows, with towards/away and b9'
     : document.getElementById('what').textContent; }
   const NV = (meta.vwtfs || []).length;   // HIS 1124/1125 the VWAP columns, far right
-  if (NV) { RH = 98; document.body.classList.add('tall'); }
-  const heads = meta.htf ? ['ws1 time (UTC)'].concat(meta.lines, (meta.vwtfs || []).map(t => 'ws' + t + ' vw pct'))
+  const heads = meta.htf ? ['ws1 time (UTC)'].concat(meta.lines, [].concat(...(meta.vwtfs || []).map(t => ['ws' + t + ' vw pct', 'ws' + t + ' vw diff'])))
                          : ['ws1 time (UTC)', 'SL%'].concat(meta.lines, meta.mnrs, meta.sums);
   for (const h of heads) { const d = document.createElement('div'); d.textContent = h; hd.appendChild(d); }
   if (NV) hd.children[1 + NL].className = 'sx';
   if (!meta.htf) { hd.children[NL + 2].className = 'sx'; hd.children[NL + 3].className = 'sx'; }
+  if (meta.rl != null) { RH = 66; document.body.classList.add('rl4'); }   // HIS 1125 the r line, *"Taller rows"*
   body.style.height = (meta.rows * RH) + 'px';
   //   HIS 1111: no sideways bar. The lines stay CW; the time column takes what is left, then M-no-rev and the
   //   sums give way together
@@ -1978,9 +2062,9 @@ async function init() {
   //   the box narrows by the two dropped columns, less the SL% column
   //   HIS 1117: the one wide M-no-rev column becomes two skinny ones
   const inner = box.firstElementChild;
-  const tw = meta.htf ? TW + NL * CW + NV * VWW : TW + SLW + NC * CW + meta.mnrs.length * MNRW;
+  const tw = meta.htf ? TW + NL * CW + NV * (VWW + VDW) : TW + SLW + NC * CW + meta.mnrs.length * MNRW;
   inner.style.setProperty('--gt', meta.htf ? 'minmax(' + TMIN + 'px,1fr) repeat(' + NL + ',' + CW + 'px)'
-                          + (NV ? ' repeat(' + NV + ',' + VWW + 'px)' : '')
+                          + (NV ? ' repeat(' + NV + ',' + VWW + 'px ' + VDW + 'px)' : '')
     : 'minmax(' + TMIN + 'px,1fr) ' + SLW + 'px repeat(' + NL + ',' + CW + 'px) repeat(' +
       meta.mnrs.length + ',' + MNRW + 'px) repeat(' + (NC - NL) + ',minmax(' + SMIN + 'px,' + CW + 'px))');
   //   after the body's height, so the vertical scrollbar is in the box's width
