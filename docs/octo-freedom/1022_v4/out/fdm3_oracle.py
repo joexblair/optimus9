@@ -41,6 +41,12 @@ THE SIDE RADIO IS NOT BUILT. He asked for it only *"if the side is required"*; p
 THE CACHE, two halves:
     the server    computes the whole matrix once at start, ~2 s, and holds it in memory - no disk cache,
                   so a line rebuild can never be served stale. 136,079 rows x 17 lines, int8.
+                  HIS 1124 SUPERSEDES THE "no disk cache": *"the rows are a small file - it should be kept on
+                  disk as well as in memory to avoid downtime on small cosmetic changes or restarts"*. The rows
+                  are on disk too, per page settings, and a start-up reads them only when every source module,
+                  data file and database read its full start-up used is unchanged - see rows_from_cache_or_build.
+                  The start-up itself runs in a forked child since his 1124 "Free start-up only", so a serving
+                  page holds the rows and little else.
     the browser   fetches BLOCK rows at a time, prefetches AHEAD blocks in the scroll direction (and
                   one behind), and drops the least recently used blocks past KEEP. Only the rows on
                   screen are in the page. A calendar day prefetches its blocks when the pointer is over it.
@@ -197,19 +203,56 @@ Scratch: scratchpad/gpucpu/.
 
 usage: fdm3_oracle.py [port]   then open http://127.0.0.1:<port>
 """
+import hashlib
 import io
 import json
 import os
+import shutil
 import sys
 import time
 
 import numpy as np
 
+T_START_NS = time.time_ns()                     # HIS 1124 row cache: an input edited after this is not trusted
+_SELF = os.path.realpath(__file__)
 V4 = '/home/joe/thecodes/docs/octo-freedom/1022_v4'
 sys.path.insert(0, '/home/joe/thecodes')
 sys.path.insert(0, V4)
 os.environ.setdefault('LG_TAPE_END', '2026-10-05')
 os.chdir(V4)                                    # the tape is cwd-sensitive - every run prints its bar count
+#   HIS 1124 *"the rows are a small file - it should be kept on disk as well as in memory to avoid downtime on small
+#   cosmetic changes or restarts"*. The row cache (rows_from_cache_or_build, below) is read only when every input of the
+#   start-up is what it was when the rows were built, so a changed line, knob or rule can never be served stale. So
+#   this process RECORDS ITS INPUTS AS IT READS THEM, from here on: every file numpy loads, and every database read with
+#   a hash of what came back. MINE, structural: what counts as an input and how each is compared.
+_LOADED = set()
+_np_load = np.load
+
+
+def _np_load_rec(f, *a, **k):
+    if isinstance(f, (str, os.PathLike)):
+        _LOADED.add(os.path.realpath(os.fspath(f)))
+    return _np_load(f, *a, **k)
+
+
+np.load = _np_load_rec
+_DBREADS = {}
+_e = sys.stderr; sys.stderr = io.StringIO()
+try:
+    from optimus9.db import database_manager as _DBMOD
+finally:
+    sys.stderr = _e
+_db_exec = _DBMOD.DatabaseManager.execute
+
+
+def _db_exec_rec(self, sql, params=(), *, fetch=False):
+    out = _db_exec(self, sql, params, fetch=fetch)
+    if fetch:
+        _DBREADS[(sql, repr(tuple(params)))] = hashlib.sha1(repr(out).encode()).hexdigest()
+    return out
+
+
+_DBMOD.DatabaseManager.execute = _db_exec_rec
 _e = sys.stderr; sys.stderr = io.StringIO()
 try:
     import v4_rcfg_sweep as RS
@@ -229,7 +272,9 @@ finally:
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8788
-if __name__ == '__main__':
+ROWS_CHECK = os.environ.get('FDM3_ROWS_CHECK', '0') == '1'      # HIS 1124 row cache: say whether it would be read, then stop
+ROWS_REBUILD = os.environ.get('FDM3_ROWS_REBUILD', '0') == '1'  # HIS 1124 row cache: ignore it, start up in full
+if __name__ == '__main__' and not ROWS_CHECK:
     #   A TAKEN PORT FAILS IN A SECOND, NOT AFTER THE ~50 s BUILD. As the o9-fdm3-oracle service (Restart=always) a
     #   late failure would rebuild every few seconds while another process holds the port.
     import socket
@@ -241,9 +286,21 @@ if __name__ == '__main__':
         raise SystemExit('port %d is in use (%s) - not building' % (PORT, _e))
     finally:
         _sk.close()
+#   HIS 1124: *"I need a parallel webservice built, named fdm3-htf-oracle.  fdm3-htf-oracle will clone fdm3-oracle, and
+#   replace all columns except `ws1 time` with these new columns:"* / *"ws20,21,22,23,24,25,26,27,28,29,30,45,60,90,120,240"* /
+#   *"these replacement columns will print the same data as fdm3-oracle's ws1-15 fields"* / *"the rows will be per 1
+#   minute seam (not 30s)"*. ONE FILE SERVES BOTH, the way every earlier clone of this page was a setting on it: FDM3_PAGE
+#   'htf' is fdm3-htf-oracle (out/fdm3_htf_oracle.py sets it), anything else this page as it was. MINE, structural:
+#   one file rather than a copy, and the setting's name.
+PAGE_MODE = os.environ.get('FDM3_PAGE', 'oracle')
+assert PAGE_MODE in ('oracle', 'htf'), PAGE_MODE
+HTF = PAGE_MODE == 'htf'
+HTF_COLS = (20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 45, 60, 90, 120, 240)   # HIS 1124, his order
 LINES = ['ws%d' % t for t in range(1, 16)]      # HIS 1109 wsf + ws13..ws15 HIS 1111; HIS 1115 *"drop the gcws15 and gcws30
 #                                                 columns"*
 SUMS = [('ws16-22', range(16, 23)), ('ws23-30', range(23, 31))]   # HIS 1111 two right columns (1109: ws13-20, ws21-30)
+if HTF:                                         # HIS 1124: his 16 columns are every column but the time; no sums
+    LINES, SUMS = ['ws%d' % t for t in HTF_COLS], []
 CONTROL_FLAGGED = 257295        # 1109 measurement: the 14 wsf columns' cells at -1 or +1, whole tape
 CONTROL_LINES = ['gcws15', 'gcws30'] + ['ws%d' % t for t in range(1, 13)]   # the 1109 control's 14 lines - gcws15 and
 #                                 gcws30 are still read for it, though the page no longer shows them (HIS 1115)
@@ -275,14 +332,20 @@ MNR_RESET = True                # HIS 1117 closed-prev resume, on. False restore
 #   M-no-rev ceilings, r-pred off on both.
 #   HIS 1122 *"make this the machine"* and his answer *"Move them"*: 30 is the default, so a launch with no settings
 #   serves the machine. It was 60.
-ROW_S = int(os.environ.get('FDM3_ROW_S', 30))
+ROW_S = int(os.environ.get('FDM3_ROW_S', 60 if HTF else 30))   # HIS 1124 fdm3-htf-oracle: *"per 1 minute seam (not 30s)"*
 assert 60 % ROW_S == 0 and ROW_S % 5 == 0, 'a row must be a whole number of 5 s bars and divide a minute'
 #   HIS 1117: *"I'm not using r-pred at all so it can be disabled"*. The per-line r-pred byte and the
 #   two sums' r-pred byte are gone from the row; the two sum COLUMNS stay for their TO:x AW:x and
 #   TO(exf) lines, which are towards/away reads, not r-pred. The 1109 control still computes the
 #   r-pred of its own 14 lines, so the producer stays honest - it is just not stored or drawn.
 RPRED_ON = False
-STRIDE = (len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS)
+#   HIS 1124/1125 fdm3-htf-oracle's two VWAP columns on the far right, ws5 then ws10 - docs/fdm3/fdm3_vwap.py has his
+#   words, his answers and the rule. Per TF six int16 (% x 100, low byte first): lo udist, lo vdist, lo ldist, hi udist,
+#   hi vdist, hi ldist. They read no trade, so every state carries the same bytes. None on fdm3-oracle.
+VW_TFS = (5, 10) if HTF else ()
+VW_BYTES = 12 * len(VW_TFS)
+VW_NOTE = []                    # the start-up's VWAP lines, one per TF - a list so the child can hand it back
+STRIDE = (len(LINES) + 2 * len(SUMS) + len(LINES) + len(SUMS) + VW_BYTES
           + len(LINES) + 3 + len(MNR_TOPS))      # bytes per row:
 #   the TO/AW codes, the TO/AW counts, the cross codes (HIS 1110: 1 X, 2 E, 3 both, on the row's target-side; +4 the
 #   line reads AW on this row and TO on the row before, HIS 1110 TO -> AW flip; +8 ws1 only, TO(exf) on this row and
@@ -368,6 +431,9 @@ FLIP_TOX = 'ws1'                # HIS 1113: the one line whose flip into TO(exf)
 #   8792 and 8788. +16 in the cross code on the ws5 row that prints TO(inf) where the row before printed TO(exf),
 #   whichever pseudo trade that row is in - the TO -> AW flip's own rule for the row before.
 FLIP_TOINF = 'ws5'              # the one line whose TO(inf) after TO(exf) prints white
+#   HIS 1124 fdm3-htf-oracle has no ws1 or ws5 column; his answer *"On every column"* puts both highlights on all 16
+FLIP_TOX_LINES = tuple(LINES) if HTF else (FLIP_TOX,)
+FLIP_TOINF_LINES = tuple(LINES) if HTF else (FLIP_TOINF,)
 TO_INF = 1                      # the TO/AW code a cell prints as TO(inf), whatever its in-fence band
 TO_EXF = 3                      # the TO/AW code a cell prints as TO(exf): TO 1, +2 ex-fence on the target-side
 #   HIS 1119 `fdm3-infence-power`: *"for every TO(inf) line, add a suffix based on these critreria"*,
@@ -394,8 +460,20 @@ assert len(IFP_LABELS) <= 15, 'the band+1 has four bits'
 #   HIS 1122: *"there is a red colouring applied to hband (high band lines) when 4 flips to 3.  expand the red colour
 #   mech's coverage to include ws2-ws15"*. The rule is unchanged; only its lines move from ws8..ws15 to ws2..ws15.
 IFP_RED4 = len(IFP_LABELS) == 9
-RED4_TFS = tuple(range(2, 16))  # HIS 1122 the lines the red suffix reads, ws2..ws15 (ws8..ws15 at his 1121)
+RED4_TFS = tuple(_FKS.RED4_TFS)  # HIS 1122 the lines the red suffix reads, the fdm3 knob RED4_LINES: ws2..ws15 on the
+#                                  bank, ws8..ws15 at his 1121 and on 8794 at his answer *"As it was"*
+#   HIS 1124 fdm3-htf-oracle, the b9 colours - *"I'm now refering to the 9 bands as `b9`"* / *"a (+/-) 4 to 3 change will
+#   still be coloured in red"* / *"for any of (+/-) 3 to 2, 2 to 1, 1 to 0,  where the change has moved to a band that is
+#   counter trade (existing behaviour), the number will be coloured orange"*. His answers: counter trade is *"Against the
+#   trade's side"* - on the short trade (target-side LOW) a move UP, on the long trade (target-side HIGH) a move DOWN;
+#   *"Red against trade only"*; and *"Orange on any such move"*, more than one band too. So on a row whose suffix moved
+#   against the row's target-side from the row before: red when the row before printed -4 (short) / +4 (long), orange
+#   when it printed -3, -2 or -1 (short) / +3, +2 or +1 (long). +64 in the cross code, red's +32 beside it. On all 16
+#   columns. This page (fdm3-oracle) keeps its red as it is.
+if HTF:
+    RED4_TFS = tuple(HTF_COLS)
 IFP_REDN = [0]                  # ws2..ws15 cells whose suffix prints red, counted across every state
+IFP_ORGN = [0]                  # HIS 1124 fdm3-htf-oracle: cells whose suffix prints orange, counted across every state
 IFP_DP = 2                      # his 2dp - the value is rounded before it is placed
 IFP_BARE = [0]                  # TO(inf) cells with no value to band, counted across every state
 IFP_INF = [0]                   # TO(inf) cells in all, so the bare share is readable
@@ -459,6 +537,18 @@ TALIFT = _FKS.TA_LIFT
 import fdm3_r_cache as RC  # noqa: E402 - docs/fdm3, on the path since the shim import
 R_CFG = _FKS.ORACLE_R_CFG
 R_USE = RC.use(R_CFG)           # None on 'db'; else (directory, manifest, built now)
+#   HIS 1124 fdm3-htf-oracle, his answer "A separate cache": every line his 16 columns read that no cache held - the 5
+#   minutes under each column over ws30 and ws240 itself in all four lines, r and e for ws45..ws120 - comes from that
+#   page's own cache. towards/away runs scenario 1 on ws15..ws30 and those TFs, and scenario 2 (the state) on the 16
+#   columns alone: his *"The 5 minutes under it"* reads ws15..ws19 under ws20..ws24 and ws40..ws44 under ws45.
+HTF_USE, TA_TFS = None, None
+if HTF:
+    assert R_USE is not None and PIVOTS == 'two', 'fdm3-htf-oracle is built on the two trades and its own r config'
+    import fdm3_htf_lines as HL  # noqa: E402 - docs/fdm3
+    HTF_USE = HL.use(R_CFG)
+    TA_TFS = sorted(set(range(15, 31)) | set(HL.NEW) | set(HL.OLD_HI))
+    assert TA.s2_tfs(TA_TFS) == list(HTF_COLS), ('the TFs with a state are not his 16 columns', TA.s2_tfs(TA_TFS))
+RUN_A_TFS = [t for t in A_TFS if TA_TFS is None or t in TA_TFS]   # HIS 1117 A ws1-ws6: no such line on fdm3-htf-oracle
 #   HIS 1120, after seeing the whole cell go to "-": *"I only asked for an update on TO, but now the whole row has been
 #   replaced with a "-"  I still need to see the ([inf,exf])[the 7 bands]  data"*, and his answer that TO and AW both
 #   give way. So a masked cell keeps its fence tag and its band: "-(inf)-1", "-(exf)". Two new codes in bits 0-2 -
@@ -767,7 +857,7 @@ def build():
     if ln.R_DIR is None:
         E = RS.load((RS.K0, RS.R0, RS.S0))       # fdm2's emerging r lines, ws1..ws30
     else:                                        # HIS 1121: this page's own r config, from its separate cache
-        E = {t: np.asarray(ln.line('ws%dr' % t), float) for t in RC.TFS}
+        E = {t: np.asarray(ln.line('ws%dr' % t), float) for t in sorted(set(RC.TFS) | set(TA_TFS or ()))}
 
     def rpred(name):
         if name.startswith('gc'):                # ln.line multiplies the digits by 60, so the sub-minute lines
@@ -796,7 +886,7 @@ def build():
     _m1 = np.flatnonzero((ts % 60000) == 0)
     _m1 = _m1[_m1 + 12 < ln.N] + 12
     FLAGGED = int(sum((rpred(name)[_m1] != 0).sum() for name in CONTROL_LINES))
-    sl = sl_pct(prt)
+    sl = np.full(len(prt), SL_NONE, np.int16) if HTF else sl_pct(prt)   # HIS 1124: no SL% column on fdm3-htf-oracle
     if RPRED_ON:
         for _, tfs in SUMS:                      # the same read, summed: -7..+7 and -8..+8, fits int8
             base.append(np.sum([rpred('ws%d' % t)[prt].astype(int) for t in tfs], 0))
@@ -852,8 +942,8 @@ def build():
         piv, trades = [], [(0, int(ln.N), -1)]
         print('HIS 1122 two trades: short %s to %s, target-side LOW; long on the same bars, target-side HIGH'
               % (ln.U(0), ln.U(ln.N - 1)))
-        LN = TA.load()
-        ST, det = TA.run(LN, trades, FNC, A_TFS, FENCE_RESET_TO, untag=UNTAG, lift=TALIFT)
+        LN = TA.load(TA_TFS)                     # HIS 1124: None is the banked ws1..ws30
+        ST, det = TA.run(LN, trades, FNC, RUN_A_TFS, FENCE_RESET_TO, untag=UNTAG, lift=TALIFT)
     else:
         LN, piv, trades, ST, det = TA.build(FNC, A_TFS, FENCE_RESET_TO, untag=UNTAG, lift=TALIFT)
     #   HIS 1119 caught this line calling the pooled ws1 pivots `ws2Mage`: it printed the same
@@ -878,7 +968,7 @@ def build():
             #   linked - they never were, but the reader's old parameter name said `e` and read as
             #   though they might be.
             for bit, line, ro in ((1, np.asarray(ln.line('ws%dx' % t), float), X_REOPEN),
-                                  (2, WSE.lines()[t], E_REOPEN)):
+                                  (2, WSE.line(t), E_REOPEN)):
                 wins = np.asarray([b for b, _ in JIG.race_wins(line, race, sd, reopen=ro)], np.int64)
                 #   HIS 1117: the row a win lands in is ROW_S seconds wide, not a fixed 12 bars. At
                 #   ROW_S 30 a //12 here binned every cross at half its row index, so the whole page
@@ -921,7 +1011,7 @@ def build():
                 if not off and not fl and xre == 'winner':
                     st_, ng = ST, 1
                 elif not off:
-                    st_, ng = TA.run(LN, tr, FNC, A_TFS, FENCE_RESET_TO, xre, UNTAG, TALIFT)[0], 1
+                    st_, ng = TA.run(LN, tr, FNC, RUN_A_TFS, FENCE_RESET_TO, xre, UNTAG, TALIFT)[0], 1
                 else:
                     st_, ng, OWN[(off, fl, xre)] = TA.run_carried(LN, CARRY[(off, fl)], FNC, A_TFS, FENCE_RESET_TO,
                                                                   xre, UNTAG, TALIFT, keep=SMALL_HI)
@@ -947,7 +1037,8 @@ def build():
         CARRY_SHARED[0] += int(shared.sum())
     #   HIS 1119 legMage is the INCOMING leg's, stamped at the trade's open. A carried trade keeps its open, so its
     #   value is the as-found trade's, printed over its carried window
-    EXM = {(t, s): TA.exf_mask(LN, t, s, FNC) for t in SMALL_HI for s in (-1, +1)}   # HIS 1121 B small-trade
+    EXM = {(t, s): TA.exf_mask(LN, t, s, FNC) for t in SMALL_HI for s in (-1, +1)} if len(OFFS) > 1 else {}   # HIS 1121 B
+    #                                            small-trade, read on the +15 set only
     MNR = {}
     for fl in FLIPS:
         if PIVOTS == 'two':                      # HIS 1122 *"Blank both"*: no legMage on the two trades
@@ -960,6 +1051,23 @@ def build():
             for o, sh, c, s in CARRY[(off, fl)]:
                 _v[sh:c] = _vb[o]
             MNR[(off, fl)] = [_v[prt]]
+    #   HIS 1124/1125 the VWAP columns, the same in every state
+    VWC = []
+    if VW_TFS:
+        import fdm3_vwap as VW
+        assert tuple(VW.TFS) == VW_TFS, (VW.TFS, VW_TFS)
+        _c, _h, _l = (np.asarray(a, float) for a in BT.prices())
+        _vr = VW.rows(prt, ts, _c, _h, _l, VW.volume(), lambda t: np.asarray(ln.line('ws%dMage' % t), float))
+        del VW_NOTE[:]
+        for t in VW_TFS:
+            _an = VW.anchors(t, ts, _h, _l, np.asarray(ln.line('ws%dMage' % t), float))
+            VW_NOTE.append('ws%d: %d low and %d high anchors, rows with both VWAPs %d of %d, first %s'
+                           % (t, sum(a[1] < 0 for a in _an), sum(a[1] > 0 for a in _an),
+                              int((_vr[t] != VW.BLANK).all(1).sum()), len(prt),
+                              ln.U(prt[int(np.argmax((_vr[t] != VW.BLANK).all(1)))])))
+            for q in range(6):
+                v = _vr[t][:, q].astype(np.int16)
+                VWC += [(v & 0xFF).astype(np.uint8).view(np.int8), (v >> 8).astype(np.int8)]
     mats = {}
     for off, fl, xre, ST in STATES:
         side, mnr = SIDES[(off, fl)], MNR[(off, fl)]
@@ -1038,27 +1146,42 @@ def build():
             #   HIS 1113 *"in ws1 only, in the same format as any flip to AW(*), highlight the field when ws1 flips to
             #   TO(exf)"*, his answer *"any except TO(exf)"*: +8 on the ws1 row that reads TO(exf) where the row before
             #   read anything else - blank, TO(inf), AW(inf) or AW(exf) - whichever pseudo trade that row is in
-            if name == FLIP_TOX:
+            if name in FLIP_TOX_LINES:
                 cd = CODE[name] & 7          # HIS 1119: bits 3-5 are the in-fence power band, 3-6 since HIS 1121 +4
                 xc[1:] |= 8 * ((cd[:-1] != TO_EXF) & (cd[1:] == TO_EXF)).astype(np.int8)
             #   HIS 1120 *"add a white highlight on TO(inf) if the previous row was TO(exf)"*, ws5 only: +16
-            if name == FLIP_TOINF:
+            if name in FLIP_TOINF_LINES:
                 cd = CODE[name] & 7
                 xc[1:] |= 16 * ((cd[:-1] == TO_EXF) & (cd[1:] == TO_INF)).astype(np.int8)
             #   HIS 1121 the red suffix on a line leaving +4 or -4: +32, on ws2..ws15 since HIS 1122. pw is the band+1,
             #   0 = no suffix
-            if IFP_RED4 and int(name[2:]) in RED4_TFS:
+            if IFP_RED4 and int(name[2:]) in RED4_TFS and not HTF:
                 pw = (CODE[name].astype(int) >> 3) & 15
                 pw = np.where((CODE[name] & 7) > 0, pw, 0)
                 top = len(IFP_LABELS)
                 red = (pw[:-1] > 0) & (pw[1:] > 0) & (((pw[:-1] == top) & (pw[1:] < top)) | ((pw[:-1] == 1) & (pw[1:] > 1)))
                 xc[1:] |= 32 * red.astype(np.int8)
                 IFP_REDN[0] += int(red.sum())
+            #   HIS 1124 fdm3-htf-oracle: the b9 colours against the row's target-side. bv is the b9 value, -4..+4
+            if IFP_RED4 and HTF:
+                pw = (CODE[name].astype(int) >> 3) & 15
+                pw = np.where((CODE[name] & 7) > 0, pw, 0)
+                bv = pw - (len(IFP_LABELS) + 1) // 2
+                both = (pw[:-1] > 0) & (pw[1:] > 0)
+                up, dn = both & (bv[1:] > bv[:-1]), both & (bv[1:] < bv[:-1])
+                lo, hi = sp[1:] < 0, sp[1:] > 0
+                red = (lo & up & (bv[:-1] == -4)) | (hi & dn & (bv[:-1] == 4))
+                org = (lo & up & np.isin(bv[:-1], (-3, -2, -1))) | (hi & dn & np.isin(bv[:-1], (1, 2, 3)))
+                assert not (red & org).any()
+                xc[1:] |= (32 * red + 64 * org).astype(np.int8)
+                IFP_REDN[0] += int(red.sum())
+                IFP_ORGN[0] += int(org.sum())
             cols.append(xc)
         #   HIS 1111 *"if any of the individual lines are printing TO(exf), print "TO(exf)" under the TO:x AW:x row"*:
         #   per sum column, how many of its lines read TO(exf) - the code a ws1..ws15 cell prints as TO(exf)
         for _, tfs in SUMS:
             cols.append(np.sum([((ST[t][prt] == TA.TO) & exf_at(t)).astype(int) for t in tfs], 0))
+        cols.extend(VWC)                         # HIS 1124/1125 the VWAP columns, the same in every state
         cols.extend(UD)                          # HIS 1116 the up/dn pair per line, the same in every state
         cols.append((sl & 0xFF).astype(np.uint8).view(np.int8))     # HIS 1115 SL%, the same in every state
         cols.append((sl >> 8).astype(np.int8))
@@ -1137,12 +1260,238 @@ O_TA = 0                                        # the TO/AW code per line
 O_TACNT = O_TA + len(LINES)                     # per sum, its TO count then its AW count
 O_XC = O_TACNT + 2 * len(SUMS)                  # the cross code per line
 O_TOEXF = O_XC + len(LINES)                     # per sum, how many of its lines read TO(exf)
-O_UD = O_TOEXF + len(SUMS)                      # HIS 1116 the up/dn pair per line
+O_VW = O_TOEXF + len(SUMS)                      # HIS 1124/1125 the VWAP block, 12 bytes per TF, none on fdm3-oracle
+O_UD = O_VW + VW_BYTES                          # HIS 1116 the up/dn pair per line
 O_SL = O_UD + len(LINES)                        # HIS 1115 SL% x 100, an int16
 O_MNR = O_SL + 2                                # HIS 1119: one byte, the incoming leg's max Mage TF
 assert O_MNR + len(MNR_TOPS) + 1 == STRIDE, (O_MNR, STRIDE)
 
-OPEN, MATS = build()
+#   HIS 1124 *"the reason for the memory control"*, his answer "Free start-up only": the page held 7.7 GB (6.4 GB in RAM,
+#   1.3 GB in swap, 2026-11-24 19:37:19) to serve 29.9 MB of rows. build() runs in a FORKED CHILD, which hands back only
+#   the row matrices and the start-up counts and exits, so every array the start-up made goes back to the operating
+#   system with it. The child is a copy of this process, so it reads exactly what build() read here - every byte of
+#   every row is the same. MINE, structural: the fork, and a pipe rather than a file.
+_COUNTS = ('VW_NOTE', 'IFP_REDN', 'IFP_ORGN', 'IFP_BARE', 'IFP_INF', 'IFP_EXFN', 'SMALL_ROWS', 'CARRY_SHARED', 'CARRY_ROWS')
+
+
+def build_in_child():
+    """build() in a forked child. -> build()'s (row open ms, matrices), with FLAGGED and the _COUNTS lists set here."""
+    import pickle
+    import traceback
+    global FLAGGED
+    sys.stdout.flush(); sys.stderr.flush()
+    rd, wr = os.pipe()
+    pid = os.fork()
+    if pid == 0:                                 # the child: build, send, exit without running anything else
+        os.close(rd)
+        code = 1
+        try:
+            res = build()
+            #   HIS 1124 row cache: the child's inputs too - the modules, files and database reads build() reached
+            out = (res, FLAGGED, {k: list(globals()[k]) for k in _COUNTS},
+                   (_code_files(), sorted(_LOADED), sorted(_DBREADS.items())))
+            with os.fdopen(wr, 'wb') as f:
+                pickle.dump(out, f, protocol=pickle.HIGHEST_PROTOCOL)
+            code = 0
+        except BaseException:
+            traceback.print_exc()
+        finally:
+            sys.stdout.flush(); sys.stderr.flush()
+            os._exit(code)
+    os.close(wr)
+    with os.fdopen(rd, 'rb') as f:
+        data = f.read()                          # read it all before waiting, so a full pipe cannot stall the child
+    _, st = os.waitpid(pid, 0)
+    if st != 0 or not data:
+        raise SystemExit('the start-up child failed (wait status %d) - not serving' % st)
+    res, FLAGGED, cnt, inputs = pickle.loads(data)
+    for k in _COUNTS:
+        globals()[k][:] = cnt[k]
+    return res, inputs
+
+
+#   HIS 1124 THE ROW CACHE: *"the rows are a small file - it should be kept on disk as well as in memory to avoid
+#   downtime on small cosmetic changes or restarts"* / *"update the code and rebuild the optimised 8793 first, then
+#   8795"*. One directory per page SETTINGS - every W_, FDM3_ and LG_ setting, the Python and numpy versions - under
+#   ROWS_ROOT, holding the rows of every state, the start-up counts and a manifest of every input the start-up read.
+#   A start-up READS it only when all of these are as they were: the source of every module of this repo the start-up
+#   ran (compared as code: comments, docstrings and the page's HTML do not count, so a cosmetic edit keeps it), every
+#   file numpy loaded (size and modified time), and every database read (re-run, its answer hashed). Anything else -
+#   or FDM3_ROWS_REBUILD=1 - is a full start-up, which writes a new cache. FDM3_ROWS_CHECK=1 says which it would be
+#   and stops. MINE, structural: the layout, the comparisons and the two settings' names. A cache is never written
+#   when an input changed while the start-up ran.
+ROWS_ROOT = '/home/joe/thecodes/optimus9/orchestration/.rpl_cache/fdm3_rows'   # beside the line caches, git-ignored
+ROWS_VERSION = 1
+REPO = '/home/joe/thecodes/'
+ROWS_NOTE = ''
+
+
+def _settings():
+    """-> the page's settings, which name its cache directory."""
+    env = {k: v for k, v in os.environ.items()
+           if k.startswith(('W_', 'FDM3_', 'LG_')) and k not in ('FDM3_ROWS_CHECK', 'FDM3_ROWS_REBUILD')}
+    return {'env': env, 'python': sys.version.split()[0], 'numpy': np.__version__}
+
+
+def _rows_dir():
+    return os.path.join(ROWS_ROOT, hashlib.sha1(json.dumps(_settings(), sort_keys=True).encode()).hexdigest()[:16])
+
+
+def _code_hash(path):
+    """A source file's code, without comments, docstrings or (in this file) the page's HTML. -> sha1 hex."""
+    import ast
+    with open(path) as f:
+        tree = ast.parse(f.read())
+    if os.path.realpath(path) == _SELF:
+        tree.body = [n for n in tree.body if not (isinstance(n, ast.Assign) and len(n.targets) == 1
+                                                  and getattr(n.targets[0], 'id', None) == 'PAGE')]
+    for n in ast.walk(tree):
+        if isinstance(n, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n.body \
+                and isinstance(n.body[0], ast.Expr) and isinstance(n.body[0].value, ast.Constant) \
+                and isinstance(n.body[0].value.value, str):
+            n.body = n.body[1:] or [ast.Pass()]
+    return hashlib.sha1(ast.dump(tree).encode()).hexdigest()
+
+
+def _code_files():
+    """-> every source file of this repo loaded in this process, real paths, sorted."""
+    out = {_SELF}
+    for m in list(sys.modules.values()):
+        f = getattr(m, '__file__', None)
+        if f and f.endswith('.py') and os.path.realpath(f).startswith(REPO):
+            out.add(os.path.realpath(f))
+    return sorted(out)
+
+
+def _md5(path):
+    with open(path, 'rb') as f:
+        return hashlib.md5(f.read()).hexdigest()
+
+
+def rows_check():
+    """Can this start-up read its cache. -> (manifest, None) or (None, the first reason it cannot)."""
+    import ast
+    d = _rows_dir()
+    mp = os.path.join(d, 'manifest.json')
+    if not os.path.exists(mp):
+        return None, 'no row cache for these settings yet (%s)' % d
+    with open(mp) as f:
+        man = json.load(f)
+    if man.get('version') != ROWS_VERSION:
+        return None, 'the cache was written by row-cache version %s' % man.get('version')
+    new = [f for f in _code_files() if f not in man['code']]
+    if new:
+        return None, '%d source file(s) loaded now that the cached start-up did not load, first %s' % (len(new), new[0])
+    for f, h in man['code'].items():
+        if not os.path.exists(f) or _code_hash(f) != h:
+            return None, 'source changed: %s' % f
+    for f, (size, mt) in man['data'].items():
+        st = os.stat(f) if os.path.exists(f) else None
+        if st is None or (st.st_size, st.st_mtime_ns) != (size, mt):
+            return None, 'data file changed: %s' % f
+    if man['db']:
+        db = _DBMOD.DatabaseManager(**_db_config())
+        db.connect()
+        try:
+            for sql, prm, h in man['db']:
+                try:
+                    got = _db_exec(db, sql, ast.literal_eval(prm), fetch=True)
+                except Exception as e:                   # a read that cannot be re-run cannot be trusted
+                    return None, 'a database read could not be re-run (%s): %s' % (e, sql[:80])
+                if hashlib.sha1(repr(got).encode()).hexdigest() != h:
+                    return None, 'a database read came back different: %s' % ' '.join(sql.split())[:100]
+        finally:
+            db.disconnect()
+    for k, m5 in man['files'].items():
+        if not os.path.exists(os.path.join(d, k)) or _md5(os.path.join(d, k)) != m5:
+            return None, 'the cached rows file %s is damaged or missing' % k
+    return man, None
+
+
+def _db_config():
+    _e = sys.stderr; sys.stderr = io.StringIO()
+    try:
+        from optimus9.config import get_db_config
+    finally:
+        sys.stderr = _e
+    return get_db_config()
+
+
+def rows_write(res, inputs, code0, built_s):
+    """Write the cache for this page's settings. -> None, or why it was not written."""
+    open_, mats = res
+    files_c, loaded_c, db_c = inputs
+    code = {}
+    for f in sorted(set(files_c) | set(code0)):
+        h = _code_hash(f)
+        if (f in code0 and code0[f] != h) or (f not in code0 and os.stat(f).st_mtime_ns > T_START_NS):
+            return 'source changed while the start-up ran: %s' % f
+        code[f] = h
+    data = {}
+    for f in sorted(set(loaded_c) | _LOADED):
+        if f.startswith(ROWS_ROOT):
+            continue
+        st = os.stat(f)
+        if st.st_mtime_ns > T_START_NS:
+            return 'data file changed while the start-up ran: %s' % f
+        data[f] = [st.st_size, st.st_mtime_ns]
+    d = _rows_dir()
+    tmp = '%s.part.%d' % (d, os.getpid())
+    os.makedirs(tmp)
+    files, states = {}, []
+    np.save(os.path.join(tmp, 'open.npy'), np.asarray(open_))
+    files['open.npy'] = _md5(os.path.join(tmp, 'open.npy'))
+    for (off, fl, xre), m in mats.items():
+        k = 'rows_%d_%d_%s.npy' % (off, fl, xre)
+        np.save(os.path.join(tmp, k), m)
+        files[k] = _md5(os.path.join(tmp, k))
+        states.append([off, fl, xre, k])
+    man = {'version': ROWS_VERSION, 'settings': _settings(), 'built_at': time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()), 'built_s': round(built_s, 1),
+           'states': states, 'files': files, 'flagged': FLAGGED, 'counts': {k: list(globals()[k]) for k in _COUNTS},
+           'code': code, 'data': data, 'db': [[sql, prm, h] for (sql, prm), h in sorted(dict(db_c).items())]}
+    with open(os.path.join(tmp, 'manifest.json'), 'w') as f:
+        json.dump(man, f, indent=1)
+    if os.path.isdir(d):                         # the settings' old cache is stale by now: swap it out
+        old = '%s.old.%d' % (d, os.getpid())
+        os.rename(d, old)
+        os.rename(tmp, d)
+        shutil.rmtree(old)
+    else:
+        os.rename(tmp, d)
+    return None
+
+
+def rows_from_cache_or_build():
+    """-> (row open ms, matrices), from the disk cache when every input is unchanged, else from a full start-up."""
+    global FLAGGED, ROWS_NOTE
+    man, why = (None, 'FDM3_ROWS_REBUILD=1') if ROWS_REBUILD else rows_check()
+    if ROWS_CHECK:
+        print('row cache %s: %s' % (_rows_dir(), 'WOULD BE READ, built %s' % man['built_at'] if man else 'would NOT be read - ' + why))
+        sys.stdout.flush()
+        raise SystemExit(0)
+    if man is not None:
+        d = _rows_dir()
+        open_ = _np_load(os.path.join(d, 'open.npy'))
+        mats = {(int(off), int(fl), xre): _np_load(os.path.join(d, k)) for off, fl, xre, k in man['states']}
+        FLAGGED = man['flagged']
+        for k in _COUNTS:
+            globals()[k][:] = man['counts'][k]
+        ROWS_NOTE = ('row cache READ from %s in %.1f s - its full start-up was %.1f s, %s; %d source files, %d data files '
+                     'and %d database reads checked unchanged' % (d, time.time() - T0, man['built_s'], man['built_at'],
+                                                                len(man['code']), len(man['data']), len(man['db'])))
+        return open_, mats
+    print('row cache: %s - a full start-up' % why)
+    sys.stdout.flush()
+    code0 = {f: _code_hash(f) for f in _code_files()}
+    res, inputs = build_in_child()
+    built_s = time.time() - T0
+    nw = rows_write(res, inputs, code0, built_s)
+    ROWS_NOTE = ('row cache NOT written: %s' % nw) if nw else ('row cache WRITTEN to %s after a %.1f s full start-up'
+                                                              % (_rows_dir(), built_s))
+    return res
+
+
+OPEN, MATS = rows_from_cache_or_build()
 RP = MATS[(0, 0, 'winner')]                     # the pivots as found, A locked, 23/77, his 1109 4B x race
 assert all(m.shape == RP.shape for m in MATS.values()) and RP.shape[1] == STRIDE
 assert all(np.array_equal(m[:, O_UD:O_UD + len(LINES)], RP[:, O_UD:O_UD + len(LINES)]) for m in MATS.values()), \
@@ -1160,6 +1509,10 @@ META = json.dumps({
     'mnrs': list(MNR_LABELS), 'mnrtops': list(MNR_TOPS),
     'shift': PIV_SHIFT, 'carry': 1, 'alock': list(A_LOCK), 'reset': FENCE_RESET_TO, 'rpred': RPRED_ON,
     'ifp': list(IFP_LABELS), 'ifpedges': list(IFP_EDGES), 'ifpdp': IFP_DP, 'ifpread': IFP_READ, 'ifpexf': int(IFP_EXF), 'untag': UNTAG, 'rcfg': R_CFG,
+    'red4': list(RED4_TFS),                     # HIS 1122 the lines the red suffix reads
+    #   HIS 1124 fdm3-htf-oracle: which page this is. htf 1 = no SL%, no legMage, no sums, no A buttons; the cross code's
+    #   +64 is the orange b9 colour and +8 / +16 mark every column
+    'page': PAGE_MODE, 'htf': int(HTF), 'title': 'fdm3-htf-oracle' if HTF else 'fdm3-oracle',
     'talift': list(TALIFT) if TALIFT else 'v4',   # HIS 1120 towards/away's lift-off (tolerance, hold), or v4's pair
     'tacodes': ['', 'TO(inf)', 'AW(inf)', 'TO(exf)', 'AW(exf)', '-(inf)', '-(exf)'],
     #   HIS 1119: TWO KEYS FOR THE PRODUCER, on purpose.
@@ -1177,7 +1530,8 @@ META = json.dumps({
     'ta': O_TA, 'xc': O_XC, 'toexf': O_TOEXF, 'sl': O_SL, 'omnr': O_MNR,
     'xreopen': X_REOPEN, 'ereopen': E_REOPEN, 'xres': list(XRES), 'pivots': PIVOTS,
     #   HIS 1116: where the up/dn block starts, so a reader is told rather than re-deriving the layout
-    'updn': O_UD})
+    'updn': O_UD,
+    'vw': O_VW, 'vwtfs': list(VW_TFS)})        # HIS 1124/1125 where the VWAP block starts, and its TFs
 
 
 class H(BaseHTTPRequestHandler):
@@ -1294,6 +1648,12 @@ body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.4 system-ui,-appl
 .row.z{background:var(--zebra)}
 .row div{text-align:center;height:49px;display:flex;flex-direction:column;justify-content:center;line-height:16px}
 .row .t{display:block;line-height:49px}
+/*   HIS 1124 *"Taller rows"*: fdm3-htf-oracle's VWAP cells print 6 lines, so its rows grow to 98 px and every 3-line
+     cell sits centred in them   */
+.tall .row{height:98px}
+.tall .row div{height:97px}
+.tall .row .t{line-height:97px}
+.row div b.v{font-weight:600;font-size:10px;white-space:pre;color:var(--fg)}
 .row div b{font-weight:700;font-size:10px}
 /*   HIS 1117: *"the dn/up rows are printing bold when rpred coloring is applied. ensure that the top row
      (of the cell) is non-bold"*. The red/green r-pred classes put font-weight 600 on the whole cell and the
@@ -1310,6 +1670,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.4 system-ui,-appl
 .row div b.g{color:var(--mut)}
 .row div b.f{color:var(--flip)}
 .row div b span.r4{color:var(--red)}
+.row div b span.o4{color:var(--org)}   /* HIS 1124 fdm3-htf-oracle: the orange b9 colour, the page's own orange */
 .row.sel{background:var(--hl);outline:2px solid var(--sel);outline-offset:-2px}
 .row .t.lo{background:var(--redA)}
 .row .t.hi{background:var(--grnA)}
@@ -1332,7 +1693,10 @@ body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.4 system-ui,-appl
 <tr><td id="what">fdm3-oracle - SL%, r-pred ws1 to ws15, M-no-rev, plus the ws16-22 and ws23-30 sums, emerging, on closed-prev ws1 bars, with towards/away</td></tr></table>
 </div></div>
 </div><script>
-const RH = 50;          // row height, px - three lines: the number, TO / AW, then the crosses (HIS 1110)
+let RH = 50;            // row height, px - three lines: the number, TO / AW, then the crosses (HIS 1110); 98 on
+                        // fdm3-htf-oracle with its 6-line VWAP cells, HIS 1124 *"Taller rows"*
+const VWW = 104;        // px, a VWAP column - its widest line, "lo udist: -10.00" at 10px; MINE
+const VWL = ['lo udist', 'lo vdist', 'lo ldist', 'hi udist', 'hi vdist', 'hi ldist'];   // HIS 1124 "Low VWAP on top"
 const BLOCK = 720;      // rows per fetch: 12 h of ws1 bars
 const AHEAD = 3;        // blocks prefetched in the scroll direction
 const KEEP = 60;        // blocks held before the least recently used is dropped
@@ -1348,6 +1712,7 @@ const cache = new Map(), pending = new Set();
 const box = document.getElementById('box'), body = document.getElementById('body');
 const pool = [];
 let lastTop = 0, dir = 1, raf = 0, dayOn = '';
+let fitDeep = () => {};   // HIS 1124 on 8795, set in init - a no-op on every other page
 const NB = '\u00a0';   // HIS 1110: the place holder line - a blank line keeps a cell's 3 lines aligned
 let sel = -1;           // HIS 1110: the clicked row, highlighted; a click on another row moves it, on the same row clears it
 let FLIP = 0;           // HIS 1113: 0 the pivots' sides as found, 1 every side flipped with the button on
@@ -1392,7 +1757,7 @@ function ensurePool(n) {
     const cells = [];
     let mcs = [], slc = null;
     for (let c = 0; c <= NC; c++) {
-      if (c === NL + 1) {              // HIS 1119 the leg's max Mage TF, between ws15 and the sums
+      if (c === NL + 1 && !meta.htf) {   // HIS 1119 the leg's max Mage TF, between ws15 and the sums; none on htf
         //   one skinny cell, three lines like every data cell so the row stays aligned
         for (const _ of meta.mnrs) {
           const m = document.createElement('div'); m.n = document.createElement('span');
@@ -1401,7 +1766,7 @@ function ensurePool(n) {
         }
       }
       const d = document.createElement('div'); d.className = c ? '' : 't'; el.appendChild(d);
-      if (!c) {                         // HIS 1115 SL%, right of the time; 3 lines like every data cell
+      if (!c && !meta.htf) {            // HIS 1115 SL%, right of the time; 3 lines like every data cell; none on htf
         slc = document.createElement('div'); slc.n = document.createElement('span');
         slc.ta = document.createElement('b'); slc.xc = document.createElement('b'); slc.append(slc.n, slc.ta, slc.xc);
         el.appendChild(slc);
@@ -1410,7 +1775,13 @@ function ensurePool(n) {
       if (c) { d.xc = document.createElement('b'); d.xc.className = 'x'; d.append(d.xc); }   // HIS 1110 cross row, every cell
       cells.push(d);
     }
-    body.appendChild(el); pool.push({el, cells, mcs, slc, i: -1, ok: false});
+    const vws = [];                     // HIS 1124/1125 the VWAP cells, far right: six lines each
+    for (const _ of (meta.vwtfs || [])) {
+      const v = document.createElement('div'); v.ls = [];
+      for (let q = 0; q < 6; q++) { const b = document.createElement('b'); b.className = 'v'; v.appendChild(b); v.ls.push(b); }
+      el.appendChild(v); vws.push(v);
+    }
+    body.appendChild(el); pool.push({el, cells, mcs, slc, vws, i: -1, ok: false});
   }
 }
 function draw() {
@@ -1453,9 +1824,11 @@ function draw() {
     //   HIS 1115 SL%: the mean abs price % of the gcws15b legs (final oob -> ib to final oob -> ib) ending in the last
     //   6 h, x 100 in two bytes; blank where there is none
     const sl = blk ? ((blk[o + NS - 5] << 8) | (blk[o + NS - 6] & 255)) : 0;
-    p.slc.n.textContent = !blk ? '·' : sl < 0 ? NB : (sl / 100).toFixed(2);
-    p.slc.ta.textContent = NB; p.slc.xc.textContent = NB;
-    p.slc.className = blk ? 'sl' : 'w';
+    if (p.slc) {                        // HIS 1124: fdm3-htf-oracle has no SL% column
+      p.slc.n.textContent = !blk ? '·' : sl < 0 ? NB : (sl / 100).toFixed(2);
+      p.slc.ta.textContent = NB; p.slc.xc.textContent = NB;
+      p.slc.className = blk ? 'sl' : 'w';
+    }
     for (let c = 0; c < NC; c++) {
       const d = p.cells[c + 1], sx = c === NL ? ' sx' : '';
       d.style.background = '';   // the pool reuses cells, so clear the last row's paint
@@ -1495,8 +1868,10 @@ function draw() {
         const xc = blk[o + NL + 2 * (NC - NL) + c];
         //   HIS 1121 on 8793: +32 = a ws2..ws15 line (HIS 1122, ws8..ws15 at 1121) leaving +4 or -4 - the suffix, sign and digit, in red; the tag keeps
         //   its white or grey
-        d.ta.textContent = (meta.tacodes[tc] || NB) + (xc & 32 && sf ? '' : sf);
-        if (xc & 32 && sf) { const r = document.createElement('span'); r.className = 'r4'; r.textContent = sf; d.ta.appendChild(r); }
+        //   HIS 1124 fdm3-htf-oracle: +64 = the orange b9 colour, a move against the target-side off 3, 2 or 1
+        const bc = sf ? (xc & 32 ? 'r4' : xc & 64 ? 'o4' : '') : '';
+        d.ta.textContent = (meta.tacodes[tc] || NB) + (bc ? '' : sf);
+        if (bc) { const r = document.createElement('span'); r.className = bc; r.textContent = sf; d.ta.appendChild(r); }
         d.xc.textContent = [xc & 1 ? (sd < 0 ? 'X↑' : '↓X') : '', xc & 2 ? (sd < 0 ? '↑E' : '↓E') : '']
           .filter(Boolean).join('    ') || NB;
         d.ta.className = xc & 28 ? 'f' : 'g';  // HIS 1110: TO on the row before, AW on this one - white, this row only;
@@ -1517,11 +1892,22 @@ function draw() {
         d.xc.className = 's';
       }
     }
+    //   HIS 1124/1125 the VWAP cells: % x 100 as int16, low byte first; -32768 is no pair of anchors yet
+    for (let k = 0; k < p.vws.length; k++) {
+      const v = p.vws[k];
+      v.className = (k === 0 ? 'sx' : '') + (blk ? '' : ' w');
+      for (let q = 0; q < 6; q++) {
+        if (!blk) { v.ls[q].textContent = q === 0 ? '·' : NB; continue; }
+        const b = o + meta.vw + 12 * k + 2 * q, x = (blk[b + 1] << 8) | (blk[b] & 255);
+        v.ls[q].textContent = x === -32768 ? NB : VWL[q] + ': ' + (x >= 0 ? '+' : '-') + (Math.abs(x) / 100).toFixed(2);
+      }
+    }
     p.i = i; p.ok = !!blk;
   }
   const t = meta.t0 + first * meta.step;
   document.getElementById('top').textContent = 'top row: ' + fmt(t);
   markDay(fmt(t).slice(0, 10));
+  fitDeep();
 }
 function schedule() { if (!raf) raf = requestAnimationFrame(draw); }
 
@@ -1574,17 +1960,29 @@ async function init() {
   NL = meta.lines.length; NC = NL + meta.sums.length; NS = meta.stride; UD0 = meta.updn;
   [ALO, AHI] = meta.alock;   // HIS 1117: A is locked, the page only reports it
   const hd = document.getElementById('hd');
-  for (const h of ['ws1 time (UTC)', 'SL%'].concat(meta.lines, meta.mnrs, meta.sums)) { const d = document.createElement('div'); d.textContent = h; hd.appendChild(d); }
-  hd.children[NL + 2].className = 'sx'; hd.children[NL + 3].className = 'sx';
+  //   HIS 1124 fdm3-htf-oracle: *"replace all columns except `ws1 time`"* - the time, then his 16 columns
+  if (meta.title) { document.title = meta.title; document.getElementById('what').textContent = meta.htf
+    ? 'fdm3-htf-oracle - ws20 to ws30, ws45, ws60, ws90, ws120, ws240 on 1-minute rows, with towards/away and b9'
+    : document.getElementById('what').textContent; }
+  const NV = (meta.vwtfs || []).length;   // HIS 1124/1125 the VWAP columns, far right
+  if (NV) { RH = 98; document.body.classList.add('tall'); }
+  const heads = meta.htf ? ['ws1 time (UTC)'].concat(meta.lines, (meta.vwtfs || []).map(t => 'ws' + t + ' vw pct'))
+                         : ['ws1 time (UTC)', 'SL%'].concat(meta.lines, meta.mnrs, meta.sums);
+  for (const h of heads) { const d = document.createElement('div'); d.textContent = h; hd.appendChild(d); }
+  if (NV) hd.children[1 + NL].className = 'sx';
+  if (!meta.htf) { hd.children[NL + 2].className = 'sx'; hd.children[NL + 3].className = 'sx'; }
   body.style.height = (meta.rows * RH) + 'px';
   //   HIS 1111: no sideways bar. The lines stay CW; the time column takes what is left, then M-no-rev and the
   //   sums give way together
   //   HIS 1115 *"keep the table's existing columns at their current width, ie don't attempt to fill the lost column space"*:
   //   the box narrows by the two dropped columns, less the SL% column
   //   HIS 1117: the one wide M-no-rev column becomes two skinny ones
-  const inner = box.firstElementChild, tw = TW + SLW + NC * CW + meta.mnrs.length * MNRW;
-  inner.style.setProperty('--gt', 'minmax(' + TMIN + 'px,1fr) ' + SLW + 'px repeat(' + NL + ',' + CW + 'px) repeat(' +
-                          meta.mnrs.length + ',' + MNRW + 'px) repeat(' + (NC - NL) + ',minmax(' + SMIN + 'px,' + CW + 'px))');
+  const inner = box.firstElementChild;
+  const tw = meta.htf ? TW + NL * CW + NV * VWW : TW + SLW + NC * CW + meta.mnrs.length * MNRW;
+  inner.style.setProperty('--gt', meta.htf ? 'minmax(' + TMIN + 'px,1fr) repeat(' + NL + ',' + CW + 'px)'
+                          + (NV ? ' repeat(' + NV + ',' + VWW + 'px)' : '')
+    : 'minmax(' + TMIN + 'px,1fr) ' + SLW + 'px repeat(' + NL + ',' + CW + 'px) repeat(' +
+      meta.mnrs.length + ',' + MNRW + 'px) repeat(' + (NC - NL) + ',minmax(' + SMIN + 'px,' + CW + 'px))');
   //   after the body's height, so the vertical scrollbar is in the box's width
   document.querySelector('.wrap').style.maxWidth = (tw + box.offsetWidth - box.clientWidth + 32) + 'px';
   buildCal();
@@ -1647,7 +2045,7 @@ async function init() {
     document.getElementById('btnrow').appendChild(xb);
   }
   //   HIS 1117 banked A: the two buttons show the locked positions and cannot be clicked
-  for (const [i, band] of meta.abands.entries()) {
+  for (const [i, band] of (meta.htf ? [] : meta.abands).entries()) {   // HIS 1124: no ws1-ws15 on htf, so no A
     const ab = document.createElement('button'); ab.className = 'tog'; ab.textContent = 'A ' + band;
     const on = meta.alock[i];
     ab.title = 'lift-off A on the ' + band + ' r lines: BANKED ' + (on ? 'on' : 'off') + ', not a button';
@@ -1657,9 +2055,22 @@ async function init() {
   }
   //   HIS 1118 *"as wide as the buttons space"*: the table is sized from the button row, which can
   //   itself wrap at a narrow window, so it is re-measured on every resize
+  //   HIS 1124 on 8795, his answer *"a dox no deeper than the calendars"*: its button row is one button wide, so the box
+  //   widens from that width until its bottom is no lower than the calendars' bottom, or until it reaches the room right
+  //   of the calendars. Between resizes it only ever widens, so the top row and cache text changing cannot shake it.
+  //   8793 and 8794 keep his 1118 width alone. MINE: the 10 px step
+  if (meta.htf) fitDeep = () => {
+    const info = document.getElementById('info'), cal = document.getElementById('cal');
+    const room = cal.parentElement.clientWidth - cal.offsetWidth - 18;   // 18 px, the strip's own gap
+    let x = info.offsetWidth;
+    while (info.getBoundingClientRect().bottom > cal.getBoundingClientRect().bottom + 0.5 && x + 10 <= room) {
+      x += 10; info.style.width = x + 'px';
+    }
+  };
   const fitInfo = () => {
     const w = document.getElementById('btnrow').offsetWidth;
     if (w > 0) document.getElementById('info').style.width = w + 'px';
+    fitDeep();
   };
   fitInfo();
   window.addEventListener('resize', fitInfo);
@@ -1682,6 +2093,7 @@ init().catch(e => { document.getElementById('err').textContent = 'load failed: '
 if __name__ == '__main__':
     print('bars %d, %s .. %s' % (ln.N, ln.U(0), ln.U(ln.N - 1)))
     print('rows %d, %s .. %s, built in %.1f s' % (len(OPEN), U(OPEN[0]), U(OPEN[-1]), time.time() - T0))
+    print(ROWS_NOTE)                             # HIS 1124 the row cache: read, written, or why not
     print('CONTROL flagged cells %d, 1109 measurement %d: %s'
           % (FLAGGED, CONTROL_FLAGGED, 'MATCH' if FLAGGED == CONTROL_FLAGGED else 'DIFFERS'))
     for k, (label, _) in enumerate(SUMS):
@@ -1695,14 +2107,22 @@ if __name__ == '__main__':
           % tuple(list(int(((_xc & 3) == k).sum()) for k in (1, 2, 3)) + [X_REOPEN, E_REOPEN]))
     print('TO -> AW flip cells (white AW text): %d, %d of them on a -1/+1 cell'
           % (int((_xc & 4).astype(bool).sum()), int((_xc & 4).astype(bool).sum())))
-    _j = LINES.index(FLIP_TOX)
-    print('%s flips into TO(exf) (white TO(exf) text): %d, other columns marked %d'
-          % (FLIP_TOX, int((_xc[:, _j] & 8).astype(bool).sum()), int((_xc & 8).astype(bool).sum() - (_xc[:, _j] & 8).astype(bool).sum())))
-    _j = LINES.index(FLIP_TOINF)
-    print('HIS 1120 %s TO(inf) after TO(exf) (white TO(inf) text): %d, other columns marked %d'
-          % (FLIP_TOINF, int((_xc[:, _j] & 16).astype(bool).sum()),
-             int((_xc & 16).astype(bool).sum() - (_xc[:, _j] & 16).astype(bool).sum())))
-    print('HIS 1121 red suffix on ws%d..ws%d leaving +4 or -4: %s' % (RED4_TFS[0], RED4_TFS[-1],
+    for _bit, _lines, _what in ((8, FLIP_TOX_LINES, 'flips into TO(exf) (white TO(exf) text)'),
+                                (16, FLIP_TOINF_LINES, 'HIS 1120 TO(inf) after TO(exf) (white TO(inf) text)')):
+        _js = [LINES.index(n) for n in _lines]
+        _on = int((_xc[:, _js] & _bit).astype(bool).sum())
+        print('%s %s: %d, other columns marked %d' % ('every column' if len(_lines) > 1 else _lines[0], _what, _on,
+                                                       int((_xc & _bit).astype(bool).sum()) - _on))
+    if HTF:                                      # HIS 1124 the b9 colours against the target-side
+        print('HIS 1124 b9 colours on %s, against the target-side: short trade red %d, orange %d; every state red %d, '
+              'orange %d' % (', '.join(LINES), int((_xc & 32).astype(bool).sum()), int((_xc & 64).astype(bool).sum()),
+                             IFP_REDN[0], IFP_ORGN[0]))
+        print('HIS 1124 fdm3-htf-oracle lines: %s %s; towards/away scenario 1 on %d TFs, a state on %s'
+              % ('BUILT into' if HTF_USE[2] else 'read from', HTF_USE[0], len(TA_TFS), ', '.join(LINES)))
+        for _n in VW_NOTE:
+            print('HIS 1124/1125 VWAP %s' % _n)
+    if not HTF:                                  # fdm3-oracle's own red rule
+      print('HIS 1121 red suffix on ws%d..ws%d leaving +4 or -4: %s' % (RED4_TFS[0], RED4_TFS[-1],
         'ON, pivots as found %d cells (%s), every state %d' % (
             int((_xc & 32).astype(bool).sum()),
             ', '.join('%s %d' % (n, int((_xc[:, j] & 32).astype(bool).sum())) for j, n in enumerate(LINES)

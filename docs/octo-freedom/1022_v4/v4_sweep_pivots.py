@@ -57,6 +57,16 @@ pivots"*. Their rule (pooled_pivots), their pseudo trades (pooled_trades), their
 page imports (pivot_set: every pivot +15 min, every side flipped), their knobs (POOL_*, SET_SHIFT_MIN) and the pine
 view of them (`python3 v4_sweep_pivots.py pine D0 D1 [out]`) are all in this file; v4_sweep_pivots.md section 10 is
 their spec. A page or an fdm3 mech imports a set and picks which - it owns none of this.
+
+THE 1125 REPAIR, AND THE RULES MOVED TO THE JIG. HIS 1125: *"I've found a flaw in sweep-pivots"* / *"there aree cases when
+ws{TF}Mage prints oob after the actual pxs pivot, resulting in a pivot that is not the extremum"*, *"this isn't a new
+mode, it's a repair of the existing ib to ib mech"* (*"four read pivots"*), *"make the repaired mode the default for
+sweep pivots.  ensure everything is in the jig so that we are consistent in our behaviour"*, and on what moves
+*"Everything"*. The rule is `optimus9.analysis.jig.sweep_pivots` (found when the closed ws{TF}Mage enters the opposite
+oob, the last four-read cross to ib, walkback-to-lookforward, the 3-pivot scan); this file only FEEDS it the tape and
+keeps the views: every pivot, leg, pseudo trade, set and swing scale below is built on the repaired pivots, at their
+EXTREMUM bars (his 1125 *"The extremum bar"*). The 1024 overlapping legs and the 1118 last-cross legs are kept only as
+explicit `legs(mode=...)` for comparisons - SUNSET, no default reads them.
 """
 import os
 
@@ -64,6 +74,7 @@ import numpy as np
 
 import ln
 import v4_knobs as K
+from optimus9.analysis import jig as JIG
 from optimus9.analysis.jig import oob_ib_cross
 
 # ── his TF list, and the two lines that are MINE ────────────────────────────────────────────────
@@ -115,6 +126,8 @@ def pool_check():
 
 
 POOL_KNOBS = pool_check()
+assert POOL_RULED['POOL_DWELL_S'][0] == JIG.SP_DWELL_S, 'the ruled dwell and the jig\'s have drifted apart'
+WALK_STEP, WALK_CONF = JIG.SP_WALK_STEP, JIG.SP_WALK_CONF     # HIS 1124, the jig's - TF-bars per jump, the confirmation
 
 
 def _tfs(wide=None):
@@ -169,8 +182,8 @@ def index(wide=None, xwob=None):
     if key not in _IDX:
         b, sd, ti = [], [], []
         for n, t in enumerate(tfs):
-            for _, f, s in crosses(t, xwob):
-                b.append(int(f)); sd.append(int(s)); ti.append(n)
+            for p in pivots(_tf_of(t), xwob=xwob):          # HIS 1125 "Everything": the repaired pivots' extrema
+                b.append(int(p['ext'])); sd.append(int(p['side'])); ti.append(n)
         o = np.argsort(np.asarray(b, int), kind='stable')
         _IDX[key] = (np.asarray(b, int)[o], np.asarray(sd, int)[o], np.asarray(ti, int)[o], tfs)
     return _IDX[key]
@@ -205,14 +218,51 @@ def mage(tf):
     return np.asarray(_LL.sub_line(tf), float)
 
 
-def legs(tf, xwob=None, mode=None):
-    """The legs one Mage brackets with its OWN crosses. -> list of (open, close, side).
+def _tf_of(tf):
+    """'ws5Mage' / 5 -> 5. The repaired pivots run the four reads of ws{TF}, so a name must be ws{n}Mage."""
+    if isinstance(tf, (int, np.integer)):
+        return int(tf)
+    s = str(tf)
+    assert s.startswith('ws') and s.endswith('Mage') and s[2:-4].isdigit(), \
+        'the repaired sweep pivots need ws{TF}Mage and ws{TF}b; %r has no four reads' % s
+    return int(s[2:-4])
 
-    `mode` picks HOW the crosses are paired, and the DEFAULT IS THE BANKED RULE so no existing
-    caller moves:
-      None / 'banked'  every cross opens a leg and it closes on the FIRST opposite cross. The legs
-                       overlap. This is what every v4 and fdm3 read has always used.
-      'last_cross'     HIS 1118 fdm3 MODE, in his words: *"I thought sweep-pivots went from 'last
+
+def pivots(tf=None, dwell_s=None, xwob=None, reads=('Mage', 'b')):
+    """HIS 1125 THE REPAIRED FOUR-READ PIVOTS of ws{tf}, on the tape. -> jig.sweep_pivots' list (see its docstring).
+
+    This is the tape FEED only: the four reads (ws{tf}Mage and ws{tf}b, each emerging and closed-prev), the closed
+    ws{tf}Mage, the 5 s lows and highs. Every rule is the jig's. Cached per (tf, dwell, xwob, reads)."""
+    tf = POOL_TF if tf is None else _tf_of(tf)
+    dwell_s = POOL_DWELL_S if dwell_s is None else int(dwell_s)
+    xwob = XWOB if xwob is None else xwob
+    key = ('repaired', tf, int(dwell_s), xwob, tuple(reads))
+    if key not in _LEG:
+        import v4_closed_prev as CP
+        import v4_backstop_trades as BT
+        rd = []
+        for role in reads:
+            em = np.asarray(ln.line('ws%d%s' % (tf, role)), float)
+            rd += [em, np.asarray(CP.series(em, tf * 60), float)]
+        cx = JIG.pooled_crosses(rd, K.OOB_HI, K.OOB_LO, xwob)
+        st, en = JIG.tf_bars(ln.ts, tf)
+        _close, hi, lo = BT.prices()
+        mg = np.asarray(ln.line('ws%dMage' % tf), float)[en]
+        _LEG[key] = JIG.sweep_pivots(cx, mg, st, en, lo, hi, K.OOB_HI, K.OOB_LO, dwell_s=dwell_s,
+                                     step=WALK_STEP, confirm=WALK_CONF)
+    return _LEG[key]
+
+
+def legs(tf, xwob=None, mode=None):
+    """The legs one Mage brackets. -> list of (open, close, side).
+
+    `mode` picks HOW, and the DEFAULT IS HIS 1125 REPAIR - *"make the repaired mode the default for sweep pivots"*,
+    *"Everything"*:
+      None / 'repaired' consecutive repaired pivots of ws{TF} (`pivots`): a leg opens on one pivot's EXTREMUM bar and
+                       closes on the next one's. They tile and never overlap; `side` is the opening pivot's side.
+      'banked'         SUNSET 2026-11-25 - the 1024 legs: every cross opens a leg and it closes on the FIRST opposite
+                       cross; they overlap. Kept only so a comparison can print the old beside the new.
+      'last_cross'     SUNSET 2026-11-25 as a default; still read by fdm3's ORAC_LEG_MODE knob. HIS 1118 fdm3 MODE, in his words: *"I thought sweep-pivots went from 'last
                        cross to ib' to opposing side 'last-cross to ib'"*. Each RUN of same-side
                        crosses collapses to its last, so the legs tile end to end and never
                        overlap. HIS 1118: *"don't rebuild it - create a mode for this new mech so
@@ -234,11 +284,17 @@ def legs(tf, xwob=None, mode=None):
     to the next opposite boundary, so the legs OVERLAP and that is correct.
     """
     xwob = XWOB if xwob is None else xwob
-    mode = 'banked' if mode is None else mode
-    assert mode in ('banked', 'last_cross'), mode
+    mode = 'repaired' if mode is None else mode
+    assert mode in ('repaired', 'banked', 'last_cross'), mode
     key = (tf, xwob, mode)
     if key in _LEG:
         return _LEG[key]
+    if mode == 'repaired':
+        pv = pivots(_tf_of(tf), xwob=xwob)
+        _out = [(int(pv[i]['ext']), int(pv[i + 1]['ext']), int(pv[i]['side'])) for i in range(len(pv) - 1)]
+        assert all(_out[i][1] == _out[i + 1][0] for i in range(len(_out) - 1)), 'the repaired legs must tile'
+        _LEG[key] = _out
+        return _out
     if mode == 'last_cross':
         #   HIS 1118 MODE: keep only the LAST cross of each same-side run, then consecutive pairs
         #   are the legs. They tile - one leg's close is the next one's open - and never overlap.
@@ -266,134 +322,45 @@ def legs(tf, xwob=None, mode=None):
     return out
 
 
-def _pooled_events(tf, xwob, reads):
-    """The four reads' oob->ib crosses, pooled. -> [(cross bar, confirm bar, side, dwell s)], cross-bar order."""
-    import v4_closed_prev as CP
-    import ln as _ln
-    ev = []
-    for role in reads:
-        em = np.asarray(_ln.line('ws%d%s' % (int(tf), role)), float)
-        for lab, arr in (('em', em), ('cp', np.asarray(CP.series(em, int(tf) * 60), float))):
-            for c, cf, sd in oob_ib_cross(arr, K.OOB_HI, K.OOB_LO, xwob):
-                n, i = 0, int(c) - 1
-                while i >= 0 and np.isfinite(arr[i]) and (
-                        (arr[i] >= K.OOB_HI) if sd > 0 else (arr[i] <= K.OOB_LO)):
-                    n += 1
-                    i -= 1
-                ev.append((int(c), int(cf), int(sd), n * 5))
-    ev.sort()
-    return ev
-
-
 def pooled_pivots(tf=None, dwell_s=None, xwob=None, reads=('Mage', 'b')):
-    """HIS 1118 FOUR-READ PIVOTS. -> list of (confirm bar, cross bar, side), alternating.
+    """HIS 1118 FOUR-READ PIVOTS, REPAIRED HIS 1125. -> list of (extremum bar, cross bar, side), alternating.
 
-    AT THE BANKED KNOBS - POOL_TF 1, POOL_DWELL_S 0, the defaults - THIS IS ws1, and it yields 3006
-    pivots on the tape. Joe 1119 named it *"a new mode... in sweep-pivots that relies on ws1 to ib,
-    to the opposing oob to ib"*. `tf` is a parameter, so nothing here is ws1-only; the ws1 is the
-    bank's choice, not the mechanism's.
-
-    LOOKAHEAD - a pivot is FINAL only when the first qualifying opposite-side cross confirms (at dwell 0, the first
-    opposite cross): until then a later same-side cross can still become the run's last. pooled_final has that bar.
-    Measured 1120 over the tape at the banked knobs: 0 of 3,005 pivots are final at their own confirm bar; the gap is
-    5 s at least, 940 s median, 4,455 s at most.
-
-    HIS WORDS, in order: *"bake the 4 lines into the sweep-pivots machine: every test uses all
-    lines to decide if dwell is qualified"*, then on how they combine *"1, the longest"*, and on
-    how the crosses group *"2, it shouldn't matter - we're going from a 'final' cross to ib, to
-    the next 'final' cross to ib"*.
-
-    THE FOUR READS of ws{tf}: Mage emerging, Mage closed-prev, b emerging, b closed-prev. Every
-    one of them contributes its own oob->ib crosses, each carrying the DWELL - how long that read
-    held out of bounds immediately before the cross.
-    THE RULE: pool all four, split into runs of consecutive SAME-SIDE crosses, and a run qualifies
-    when the LONGEST dwell inside it reaches `dwell_s`. The pivot is that run's FINAL cross to ib.
-    Runs that fail are dropped, and two surviving runs that then touch on the same side merge,
-    again taking the last.
-    NO TIME TOLERANCE is needed: the group is a same-side run, which is what he ruled.
-
-    WHY FOUR READS. The emerging line flickers in and out of the fence, so a real 2.4 minute oob
-    run measures as 0.1 on it while closed-prev measures the same move as 3.0. Taking the longest
-    lets the steady read supply the dwell and the fast read supply the bar.
-    """
-    tf = POOL_TF if tf is None else int(tf)
-    dwell_s = POOL_DWELL_S if dwell_s is None else int(dwell_s)
-    xwob = XWOB if xwob is None else xwob
-    key = ('pooled', tf, xwob, int(dwell_s), reads)
-    if key in _LEG:
-        return _LEG[key]
-    ev = _pooled_events(tf, xwob, reads)
-    runs, cur = [], []
-    for e in ev:
-        if cur and e[2] == cur[0][2]:
-            cur.append(e)
-        else:
-            if cur:
-                runs.append(cur)
-            cur = [e]
-    if cur:
-        runs.append(cur)
-    out = []
-    for r in runs:
-        if max(x[3] for x in r) < int(dwell_s):
-            continue
-        last = r[-1]
-        if out and out[-1][2] == last[2]:
-            out[-1] = (last[1], last[0], last[2])       # same side again: take the later one
-        else:
-            out.append((last[1], last[0], last[2]))
-    assert all(out[i][2] != out[i + 1][2] for i in range(len(out) - 1)), \
-        'two of his pooled pivots in a row share a side'
-    assert all(out[i][0] <= out[i + 1][0] for i in range(len(out) - 1)), 'the pivots are not in order'
-    _LEG[key] = out
-    return out
+    The rule is the jig's (jig.sweep_pivots, fed by `pivots`). Until 2026-11-25 the pivot was the four reads' FINAL
+    cross to ib - HIS 1118 *"we're going from a 'final' cross to ib, to the next 'final' cross to ib"* - and its first
+    element was that cross's confirm bar. HIS 1125 found the flaw (the final cross is not always at the extremum) and
+    ruled the repair; the first element is now the pivot's EXTREMUM bar, after every modification. The four reads, the
+    dwell (POOL_DWELL_S 0) and the 90 s confirm (SP_XWOB 18) are unchanged. At the bank, POOL_TF 1, this is ws1."""
+    return [(int(p['ext']), int(p['cross']), int(p['side'])) for p in pivots(tf, dwell_s, xwob, reads)]
 
 
 def pooled_final(tf=None, dwell_s=None, xwob=None, reads=('Mage', 'b')):
-    """THE POOLED PIVOTS' LOOKAHEAD, as bars. -> {pivot's confirm bar: the bar it is known FINAL}; the tape's last
-    pivot is missing - nothing after it makes it final.
+    """THE REPAIRED PIVOTS' LOOKAHEAD, as bars. -> {pivot's extremum bar: the bar it is first FOUND}.
 
-    A pivot is its run's final cross, so it is fixed only once a run on the OPPOSITE side qualifies: the confirm bar
-    of the first opposite-side cross after it whose dwell reaches `dwell_s` (at dwell 0, any opposite cross). Before
-    that bar a later same-side cross can still take its place. The page's pseudo trade opens at the confirm bar, so
-    the trade's start and side are lookahead until this bar - his 1109 *"noted - it's not a realtime tool"*.
-    """
-    tf = POOL_TF if tf is None else int(tf)
-    dwell_s = POOL_DWELL_S if dwell_s is None else int(dwell_s)
-    xwob = XWOB if xwob is None else xwob
-    ev = _pooled_events(tf, xwob, reads)
-    at = {(c, sd): i for i, (c, cf, sd, _d) in enumerate(ev)}
-    out = {}
-    for cf, c, sd in pooled_pivots(tf, dwell_s, xwob=xwob, reads=reads):
-        i = at[(c, sd)]
-        j = next((k for k in range(i + 1, len(ev)) if ev[k][2] != sd and ev[k][3] >= dwell_s), None)
-        if j is not None:
-            assert ev[j][1] > cf, 'a pooled pivot is final at or before its own confirm bar'
-            out[cf] = ev[j][1]
-    return out
+    HIS 1125 *"the entry to an opposing oob validates the final ib"* and his answer *"ws{TF}Mage enters opposite oob"*:
+    a pivot is found at the 5 s bar after the closed ws{TF}Mage first closes in the opposite oob. Its extremum can move
+    after that (the 3-pivot re-check); each pivot's `hist` in `pivots` has every bar it moved on."""
+    return {int(p['ext']): int(p['found']) for p in pivots(tf, dwell_s, xwob, reads)}
 
 
 def pooled_trades(tf=None, dwell_s=None, xwob=None, reads=('Mage', 'b')):
-    """The pseudo trades HIS 1118 pooled pivots make. -> [(open bar, close bar, target-side)].
+    """The pseudo trades the repaired four-read pivots make. -> [(open bar, close bar, target-side)].
 
     ONE HOME for a construction that was written inline in the fdm3-oracle page and recomputed, as
     a DIFFERENT producer, in the fdm3 probe. Joe 1119 caught that: *"we shouldn't be using ws2Mage.
     a new mode was build in sweep-pivots that relies on ws1 to ib, to the opposing oob to ib - this
-    is the mode that 8792 is using"*. The probe had been scoring ws2Mage trades against that page's
-    cells, and the two sides were opposite on 679 of 09-24's 2880 rows.
+    is the mode that 8792 is using"*.
 
-    A trade OPENS at a pivot's CONFIRM bar - the cross itself is first knowable 90 s later - and
-    closes at the next pivot's confirm bar. Its TARGET-SIDE IS MINUS THE PIVOT'S SIDE: a pivot that
-    ends a run to the high side opens a trade heading low.
-    LOOKAHEAD: the confirm bar is not when the pivot is known - pooled_final is. Inside a trade a reader can be
-    causal; the trade itself is not.
+    HIS 1125 *"The extremum bar"*: a trade OPENS on a pivot's extremum bar and closes on the next pivot's. Its
+    TARGET-SIDE IS MINUS THE PIVOT'S SIDE: a HIGH pivot opens a trade heading low.
+    LOOKAHEAD: the extremum is not when the pivot is known - pooled_final is. Inside a trade a reader can be causal;
+    the trade itself is not - his 1109 *"noted - it's not a realtime tool"*.
     """
     pv = pooled_pivots(tf, dwell_s, xwob=xwob, reads=reads)
     out = []
-    for i, (cf, _c, sd) in enumerate(pv):
+    for i, (e, _c, sd) in enumerate(pv):
         cl = pv[i + 1][0] if i + 1 < len(pv) else ln.N
-        if cf < ln.N:
-            out.append((int(cf), int(min(cl, ln.N)), -int(sd)))
+        if e < ln.N:
+            out.append((int(e), int(min(cl, ln.N)), -int(sd)))
     assert all(out[k][2] != out[k + 1][2] for k in range(len(out) - 1)), \
         'two pooled trades in a row share a target-side'
     assert all(out[k][0] < out[k][1] for k in range(len(out))), 'a pooled trade closes before it opens'
@@ -434,14 +401,14 @@ def carried_set(trades, shift_min=0, flip=False):
 
 
 def marks(tf, bar, side, align_s=None, xwob=None):
-    """Does this Mage mark `bar` on `side`. -> the confirm bar of its nearest same-side cross, or None.
+    """Does this Mage mark `bar` on `side`. -> the extremum bar of its nearest same-side repaired pivot, or None.
 
     *"see how many per-Mage-pivots are closest to the event"*. Nearest in EITHER direction: a
     cross before the event is the move's own start and a cross after it is the same boundary seen
     late, so excluding one side would answer a different question.
     """
     align_s = ALIGN_S if align_s is None else align_s
-    c = np.array([f for _, f, s in crosses(tf, xwob) if s == side])
+    c = np.array([q['ext'] for q in pivots(_tf_of(tf), xwob=xwob) if q['side'] == side])   # HIS 1125 the repaired pivots
     if not len(c):
         return None
     i = int(np.argmin(np.abs(c - bar)))
@@ -489,14 +456,14 @@ def scale(bar, side, wide=None, align_s=None, xwob=None):
 def per_tf(bar, side, close_px, wide=None, xwob=None):
     """Each in-use Mage's own pivot for this event, and the pct from it. -> list, lowest TF first.
 
-    Per TF: its same-side cross nearest the event opens a leg; that leg's extremum on `side` is
-    the TF's pivot; `pct` is the favourable-signed move from the pivot to the event. A TF appears
+    Per TF: its same-side repaired pivot nearest the event opens a leg (HIS 1125 - the field is still called 'cross'
+    and now holds that pivot's extremum bar); that leg's extremum close on `side` is the TF's pivot; `pct` is the favourable-signed move from the pivot to the event. A TF appears
     only if its cross opens a closed leg, and - under CONTAIN - only if the EVENT falls inside it.
     """
     tfs = _tfs(wide)
     out = []
     for n, t in enumerate(tfs):
-        c = np.array([f for _, f, s in crosses(t, xwob) if s == side])
+        c = np.array([q['ext'] for q in pivots(_tf_of(t), xwob=xwob) if q['side'] == side])   # HIS 1125 repaired
         if not len(c):
             continue
         cross = int(c[int(np.argmin(np.abs(c - bar)))])
@@ -572,24 +539,24 @@ def pine(d0, d1, out=None):
     TS = np.asarray(ln.ts, np.int64)
     #   A TF1 PANE'S BAR IS A MINUTE, so each pivot paints the minute bar holding it: its 5 s
     #   timestamp floored to the minute. The chart's `time` is that minute's open in ms.
-    lo = sorted({int(TS[c] // 60000 * 60000) for cf, c, sd in pv if a <= c <= z and sd < 0})
-    hi = sorted({int(TS[c] // 60000 * 60000) for cf, c, sd in pv if a <= c <= z and sd > 0})
+    lo = sorted({int(TS[e] // 60000 * 60000) for e, c, sd in pv if a <= e <= z and sd < 0})     # HIS 1125 the extremum
+    hi = sorted({int(TS[e] // 60000 * 60000) for e, c, sd in pv if a <= e <= z and sd > 0})
     #   HIS 1118 RULING on the sides: *" LOW target-side creates a *OUTGOING* LONG,..."*. So a
     #   LOW pivot opens a LONG and paints GREEN; a HIGH pivot opens a SHORT and paints RED.
     notes = [
         'sweep-pivots four-read pivots, %s .. %s' % (d0, d1),
-        'HIS 1118 RULE: pool ws%dMage and ws%db, each EMERGING and CLOSED-PREV, into one' % (POOL_TF, POOL_TF),
-        'list of oob->ib crosses. Split into runs of consecutive same-side crosses. A run',
-        'qualifies when the LONGEST dwell inside it reaches %d s; the pivot is that run\'s' % POOL_DWELL_S,
-        'FINAL cross to ib. His words: "1, the longest" and "we\'re going from a final cross',
-        'to ib, to the next final cross to ib".',
+        'HIS 1118 FOUR READS, REPAIRED HIS 1125: pool ws%dMage and ws%db, each EMERGING and' % (POOL_TF, POOL_TF),
+        'CLOSED-PREV, into one list of oob->ib crosses. A pivot is FOUND when the closed',
+        'ws%dMage closes in the opposite oob; the last cross to ib of the other side is the' % POOL_TF,
+        'candidate, walkback-to-lookforward holds its extremum, and the 3-pivot scan moves it',
+        'to the most extreme price since the previous opposite pivot. Painted on the EXTREMUM.',
         '',
         'GREEN = a LOW pivot, which opens an OUTGOING LONG - his " LOW target-side creates a',
         '        *OUTGOING* LONG,...". RED = a HIGH pivot, an OUTGOING SHORT.',
         '',
         'EACH PIVOT PAINTS THE MINUTE BAR THAT HOLDS IT, so load this on a 1 minute pane.',
-        'The 5 s bar is floored to its minute; the cross is knowable %d s later (the hold),' % (int(XWOB) * 5),
-        'and the pivot is FINAL only when the first opposite-side cross confirms after it.',
+        'The 5 s bar is floored to its minute. A cross is knowable %d s after it (the hold);' % (int(XWOB) * 5),
+        'a pivot is knowable only from the bar it is found.',
         '',
         'the knobs: ' + ' '.join('%s=%s' % (k, v) for k, v, _rv, _ok in POOL_KNOBS if k.startswith('POOL')),
         'sweep-pivots: SP_XWOB=%d bars, oob %g/%g' % (int(XWOB), float(K.OOB_LO), float(K.OOB_HI)),

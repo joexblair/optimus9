@@ -17,6 +17,8 @@ OOB_JUMP = int(_FK.ORAC_OOB_JUMP)
 SMALL_TRADE_MAX_TOEXF = int(_FK.SMALL_TRADE_MAX_TOEXF)    # HIS 1119 `fdm3-small-trade-max-toexf`
 INFENCE_READ = str(_FK.INFENCE_READ)                     # HIS 1120: the r the in-fence power band reads
 INFENCE_EDGES = tuple(float(v) for v in _FK.INFENCE_EDGES)   # HIS 1119 band edges; HIS 1121 +4/-4 adds 8 and 92 on 8793
+RED4_TFS = tuple(range(int(str(_FK.RED4_LINES).split('-')[0]), int(str(_FK.RED4_LINES).split('-')[1]) + 1))   # HIS 1122
+assert RED4_TFS and 1 <= RED4_TFS[0] <= RED4_TFS[-1] <= 15, _FK.RED4_LINES
 EXF_SUFFIX = int(_FK.EXF_SUFFIX)                         # HIS 1121: the seven-band suffix on the (exf) codes too, 1 on
 ORACLE_R_CFG = str(_FK.ORACLE_R_CFG)                     # HIS 1121: the ws{TF}r config, 'db' or 'k_len,rsi,stc'
 UNTAG50 = int(_FK.UNTAG50)                               # HIS 1120: "-" on the counter side of 50, 1 on

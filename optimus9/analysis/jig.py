@@ -603,7 +603,7 @@ def fdm2_blaster(rows, bar, head_tfs=(1, 2), lo=2, hi=None):
 
 
 def mage_cascade_bar(line, bar, side, mode='extrema', gap=MC_GAP, grid=None,
-                     sample_bars=None):
+                     sample_bars=None, confirm=None, to=None):
     """[PRODUCER - Joe 1017] THE ONE BAR the mage cascade reads. -> (bar, why) or None.
 
       line   the extrema source on the 5 s grid. ws1Mage today - Joe 1017: *"in our current state,
@@ -625,6 +625,13 @@ def mage_cascade_bar(line, bar, side, mode='extrema', gap=MC_GAP, grid=None,
              None keeps the banked behaviour: every 5 s bar is a candidate and the lattice is
              pinned to `bar` itself. The CALLER owns the array, because the seam rule lives in
              v4_closed_prev.seam_bars and must not be re-derived here.
+      confirm  OPTIONAL, mode 'extrema' without sample_bars. HIS 1124 VWAP walk *"the walkback will jump back in
+             3 TF-bars at a time, with a final 4 TF-bar confirmation"*: when a `gap` step stops improving, one more
+             sample `confirm` bars back from the candidate is tested; if it is more extreme the walk goes on from
+             there, otherwise it ends. None (the default) is the banked walk exactly.
+      to     OPTIONAL, mode 'extrema' without sample_bars. HIS 1125 *"walkback-to-lookforward"*: the forward extreme
+             runs from the walk's candidate to `to` instead of to `bar`. The CALLER owns that `to` is knowable;
+             None (the default) is `bar`, the banked behaviour.
 
     The walk is UNBOUNDED - it runs back to the start of the tape if it must. No cap, Joe's
     standing rule. Returns None when no same-side turn exists before the tape starts.
@@ -678,20 +685,27 @@ def mage_cascade_bar(line, bar, side, mode='extrema', gap=MC_GAP, grid=None,
                   (start - cand) // gap, gap, seg_b.size))
     elif mode == 'extrema':
         prev = float(line[bar])
-        cand, i = None, 1
-        while bar - i * gap >= 0:
-            j = bar - i * gap
+        cand, pos = None, bar
+        while pos - gap >= 0:
+            j = pos - gap
             v = float(line[j])
             d = (v - prev) * side
             if d > 0.0:
                 cand = j
             elif cand is not None:
-                break
+                if confirm is None:
+                    break
+                jc = cand - int(confirm)                # HIS 1124 the final confirmation
+                if jc < 0 or (float(line[jc]) - float(line[cand])) * side <= 0.0:
+                    break
+                cand, j, v = jc, jc, float(line[jc])   # it found more: the walk goes on from there
             prev = v
-            i += 1
+            pos = j
         if cand is None:
             return None
-        seg = line[cand:bar + 1]
+        end = bar if to is None else int(to)
+        assert end >= bar, 'the look-forward end is before the walk start'
+        seg = line[cand:end + 1]
         if not np.isfinite(seg).any():
             return None
         o = int(np.nanargmax(seg) if side > 0 else np.nanargmin(seg))
@@ -699,6 +713,8 @@ def mage_cascade_bar(line, bar, side, mode='extrema', gap=MC_GAP, grid=None,
         why = ('the %s-side extrema %.2f, %d bars back | the coarse sample bar was %d bars back, '
                '%d x %d-bar steps' % ('high' if side > 0 else 'low', float(line[k]), bar - k,
                                       bar - cand, (bar - cand) // gap, gap))
+        assert 0 <= k <= end, 'the mage-cascade bar ran past its look-forward end'
+        return int(k), why
     else:
         raise ValueError('mode is extrema, grid or event')
     assert 0 <= k <= bar, 'the mage-cascade bar ran past the event bar'
@@ -997,6 +1013,177 @@ def oob_ib_cross(line, hi, lo, xwob):
         if oh[z]:   out.append((int(k), int(c), 1))
         elif ol[z]: out.append((int(k), int(c), -1))
     return out
+
+
+# ── SWEEP-PIVOTS: THE FOUR-READ PIVOTS (HIS 1118) AND THEIR REPAIR (HIS 1125) ────────────────────────────────
+# HIS 1125: *"sweep-pivots' role is to detect extrema and label them as pivots"* / *"this isn't a new mode, it's a
+# repair of the existing ib to ib mech"* / *"make the repaired mode the default for sweep pivots.  ensure everything is
+# in the jig so that we are consistent in our behaviour"*. The RULES live here; v4_sweep_pivots only feeds them the
+# tape (the four reads, the closed ws{TF}Mage, the prices) and keeps the sets a page imports.
+#
+# THE FLAW HE FOUND, 1125: *"there aree cases when ws{TF}Mage prints oob after the actual pxs pivot, resulting in a
+# pivot that is not the extremum"* - 2026-09-07 the last low oob->ib before ws5Mage crosses into the high oob at 12:45
+# is 12:00-12:10 and its extremum 11:59, *"but this isn't the actual extremum"* / *"if you look back from 1200, you'll
+# find that the actual low-side extremum was created in the previous oob to ib at 0805 (extremum 0741 )"*.
+SP_DWELL_S = 0       # seconds the longest of a side's crosses must have held oob. HIS 1118 *"ok for the dwell"*
+SP_WALK_STEP = 3     # TF-bars per walk-back jump. HIS 1124 *"the walkback will jump back in 3 TF-bars at a time"*
+SP_WALK_CONF = 4     # TF-bars, the final confirmation. HIS 1124 *"with a final 4 TF-bar confirmation"*
+
+
+def tf_bars(ts, tf_min):
+    """Closed TF bars on the midnight grid. -> (first 5 s bar, last 5 s bar) of each TF bar."""
+    ts = np.asarray(ts, np.int64)
+    s = int(tf_min) * 60000
+    b0 = (ts // s) * s
+    st = np.concatenate([[0], np.flatnonzero(np.diff(b0)) + 1])
+    en = np.concatenate([st[1:], [len(ts)]]) - 1
+    return st, en
+
+
+def pooled_crosses(reads, hi, lo, xwob):
+    """[PRODUCER - HIS 1118] THE FOUR READS' oob->ib crosses, pooled. -> [(cross, confirm, side, dwell s)], sorted.
+
+    HIS 1118: *"bake the 4 lines into the sweep-pivots machine: every test uses all lines to decide if dwell is
+    qualified"*. `reads` are the 5 s arrays - ws{TF}Mage emerging, ws{TF}Mage closed-prev, ws{TF}b emerging, ws{TF}b
+    closed-prev. Each cross is oob_ib_cross's (confirmed after `xwob` ib bars) and carries its DWELL: how long that
+    read held oob immediately before the cross."""
+    ev = []
+    for arr in reads:
+        arr = np.asarray(arr, float)
+        for c, cf, sd in oob_ib_cross(arr, hi, lo, xwob):
+            n, i = 0, int(c) - 1
+            while i >= 0 and np.isfinite(arr[i]) and ((arr[i] >= hi) if sd > 0 else (arr[i] <= lo)):
+                n += 1
+                i -= 1
+            ev.append((int(c), int(cf), int(sd), n * 5))
+    ev.sort()
+    return ev
+
+
+def sweep_pivots(crosses, mage_tf, tf_st, tf_en, low, high, hi, lo, dwell_s=SP_DWELL_S, step=SP_WALK_STEP,
+                 confirm=SP_WALK_CONF):
+    """[PRODUCER - HIS 1118, REPAIRED HIS 1125] SWEEP-PIVOTS. -> [pivot dict], in order, sides alternating.
+
+      crosses   pooled_crosses of the four reads
+      mage_tf   the CLOSED ws{TF}Mage, one value per TF bar
+      tf_st/en  each TF bar's first and last 5 s bar (tf_bars)
+      low/high  the 5 s price lows and highs - HIS *"using OHLC"*
+
+    THE RULE, his 1125 walk-through, step by step:
+      found     *"the entry to an opposing oob validates the final ib"*: the closed ws{TF}Mage closes in an oob coming
+                from ib (his 1125 answer *"ws{TF}Mage enters opposite oob"*). That forms the OTHER side's pivot,
+                knowable from the 5 s bar after that TF bar ends.
+      candidate *"the mech looks back from 1245 to find the last oob to ib"*: the last of that side's four-read
+                crosses since the previous entry into the same oob, confirmed by the entry's close. None - no pivot.
+      held      *"the mech runs walkback-to-lookforward"*: the jig's walk back to look forward (mage_cascade_bar, his
+                1017 walk) on the TF-bar lows (highs) from the candidate's TF bar, `step` TF-bars a jump and a final
+                `confirm`-bar confirmation, looking forward to the entry bar. No walk-back turn: the extreme from the
+                candidate's TF bar to the entry.
+      the scan  *"then scans for every extrema in the last 3 pivots (2 pivots on a side, 1 pivot on the other side)"*:
+                the most extreme 5 s price between the previous opposite pivot and the entry. More extreme than
+                held - the pivot moves there.
+      modified  *"test for unexpected extremum between the last 3 pivots, when ever a pivot is created or modified"*:
+                MY READING - the previous pivot must be the most extreme of its side between its two neighbours, and
+                the newest the most extreme of its side from the previous pivot to the entry; both are re-checked
+                until neither moves. An entry that forms a pivot on the SAME side as the newest one (no opposite
+                pivot between) modifies that pivot instead of adding one, so the sides always alternate - MINE too.
+
+    Each pivot: side (-1 LOW, +1 HIGH), ext (the 5 s extremum bar, after every modification), found (the 5 s bar it
+    is first knowable), cross / confirm (the four-read cross it was found from), held, scan (the two bars the rule
+    compared), outside (the walk-back reached past the previous opposite pivot), entry (the TF bar) - all as at the
+    found bar; hist [(bar knowable, ext)] - where the extremum stood from each bar on; reform [(bar, cross, held, scan,
+    ext after)] - each later same-side entry that re-formed it.
+
+    CAUSAL, asserted: every extremum a bar can see is at or before the TF bar close that made it, every candidate
+    cross is confirmed by then. A pivot's later modifications are new hist entries on their own bars."""
+    low = np.asarray(low, float)
+    high = np.asarray(high, float)
+    tf_st = np.asarray(tf_st, np.int64)
+    tf_en = np.asarray(tf_en, np.int64)
+    M = np.asarray(mage_tf, float)
+    PL, PH = np.minimum.reduceat(low, tf_st), np.maximum.reduceat(high, tf_st)
+    with np.errstate(invalid='ignore'):
+        zone = np.where(~np.isfinite(M), 9, np.where(M <= lo, -1, np.where(M >= hi, 1, 0)))
+    ent = np.flatnonzero((np.abs(zone[1:]) == 1) & (zone[:-1] == 0)) + 1
+    CB, CF, DW = {}, {}, {}
+    for s in (-1, 1):
+        xs = [x for x in crosses if x[2] == s]
+        CB[s] = np.asarray([x[0] for x in xs], np.int64)
+        CF[s] = np.asarray([x[1] for x in xs], np.int64)
+        DW[s] = np.asarray([x[3] for x in xs], np.int64)
+
+    def ext(a, b, sd):                  # the most extreme 5 s bar in [a, b]; the first on a tie
+        seg = low[a:b + 1] if sd < 0 else high[a:b + 1]
+        return int(a + (np.nanargmin(seg) if sd < 0 else np.nanargmax(seg)))
+
+    def more(x, y, sd):
+        return bool(low[x] < low[y]) if sd < 0 else bool(high[x] > high[y])
+
+    piv, prev_end = [], {-1: -1, 1: -1}
+    for j in ent:
+        into = int(zone[j])
+        sd = -into
+        e_end = int(tf_en[j])
+        found = e_end + 1
+        since, prev_end[into] = prev_end[into], e_end
+        m = (CB[sd] > since) & (CF[sd] <= e_end)
+        if not m.any() or int(DW[sd][m].max()) < int(dwell_s):
+            continue
+        q = int(np.flatnonzero(m)[-1])
+        c, cf = int(CB[sd][q]), int(CF[sd][q])
+        x = int(np.searchsorted(tf_st, c, side='right')) - 1
+        w = mage_cascade_bar(PL if sd < 0 else PH, x, sd, mode='extrema', gap=int(step), confirm=confirm, to=int(j))
+        held = ext(int(tf_st[w[0]]), int(tf_en[w[0]]), sd) if w is not None else ext(int(tf_st[x]), e_end, sd)
+        opp = next((p for p in reversed(piv) if p['side'] == -sd), None)
+        scan = ext(opp['ext'], e_end, sd) if opp is not None else held
+        #   a walk-back that reaches past the previous opposite pivot holds a bar outside the last 3 pivots: the scan,
+        #   which starts at that pivot, decides - so the sides stay in time order. MINE, counted as 'outside'
+        outside = opp is not None and held < opp['ext']
+        new = scan if (outside or more(scan, held, sd)) else held
+        before = {id(p): p['ext'] for p in piv[-3:]}
+        if piv and piv[-1]['side'] == sd:                        # MINE: a same-side entry modifies the newest pivot
+            p = piv[-1]
+            if more(new, p['ext'], sd):
+                p['ext'] = new
+            p['reform'].append((found, c, held, scan, int(p['ext'])))   # the fields above stay the found-bar ones
+        else:
+            piv.append({'side': sd, 'ext': new, 'found': found, 'cross': c, 'confirm': cf, 'held': held,
+                        'scan': scan, 'outside': bool(outside), 'entry': int(j), 'hist': [], 'reform': []})
+        for _ in range(16):                                      # the last 3 pivots settle
+            if len(piv) < 3:
+                break
+            A, B, C = piv[-3], piv[-2], piv[-1]
+            moved = False
+            bb = ext(A['ext'], C['ext'], B['side'])
+            if more(bb, B['ext'], B['side']):
+                B['ext'], moved = bb, True
+            cc = ext(B['ext'], e_end, C['side'])
+            if more(cc, C['ext'], C['side']):
+                C['ext'], moved = cc, True
+            if not moved:
+                break
+        else:
+            raise AssertionError('the last 3 pivots did not settle at %d' % found)
+        for p in piv[-3:]:
+            if not p['hist'] or before.get(id(p)) != p['ext']:
+                if p['hist'] and p['hist'][-1][0] == found:
+                    p['hist'][-1] = (found, p['ext'])
+                else:
+                    p['hist'].append((found, p['ext']))
+        assert all(b0 > e for p in piv[-3:] for b0, e in p['hist']), 'a pivot extremum is after the bar that saw it'
+        assert cf <= e_end, 'a candidate cross is not confirmed by the entry'
+    assert all(piv[i]['side'] != piv[i + 1]['side'] for i in range(len(piv) - 1)), 'two sweep pivots share a side'
+    assert all(piv[i]['ext'] <= piv[i + 1]['ext'] for i in range(len(piv) - 1)), 'the sweep pivots are not in order'
+    return piv
+
+
+def pivot_ext_at(p, bar):
+    """Where pivot `p`'s extremum stood at 5 s bar `bar`. -> the 5 s bar, or None before it was found."""
+    e = None
+    for b0, x in p['hist']:
+        if b0 <= bar:
+            e = x
+    return e
 
 
 # ── ws1mage-rev (Joe 0911 named it) ────────────────────────────────────────────────────────────

@@ -7,6 +7,8 @@ visible"*, and before that: *"sweep-pivots feels like an honest improvement"*.
 
 ---
 
+**GOAL** (his 1125): *"sweep-pivots' role is to detect extrema and label them as pivots"*.
+
 ## 1. Why it exists
 
 Joe 1024: *"getting swings correctly dialed is the most load-bearing mech in a sweep - if we can't
@@ -374,6 +376,49 @@ streams are identical (2026-09-30..10-01, 76 timestamps).
 |---|---|
 | fdm3-oracle, `FDM3_PIVOTS=pooled` (8792, 8788) | the pooled producer; its pivots +15 min and flip pivots buttons pick the set |
 | orac-exhaust, fdm3's `oracle_rows.py` | the producer the page it reads reports in `/meta` `pivots` |
+
+### 10g. The 1125 repair - the default, and the rules are the jig's
+
+**BANKED 2026-11-25, THE MACHINE** - his *"bank this sweep-pivots update and make it the machine"*, after his read of the
+2026-09-05 to 2026-09-07 ws5 table: *"I retract.  the times are correct"*.
+
+HIS 1125: *"I've found a flaw in sweep-pivots"* / *"there aree cases when ws{TF}Mage prints oob after the actual pxs
+pivot, resulting in a pivot that is not the extremum"* / *"sweep-pivots' role is to detect extrema and label them as
+pivots"* / *"this isn't a new mode, it's a repair of the existing ib to ib mech"* (*"four read pivots"*) / *"make the
+repaired mode the default for sweep pivots.  ensure everything is in the jig so that we are consistent in our
+behaviour"*, and what moves: *"Everything"*.
+
+The rule is `optimus9.analysis.jig.sweep_pivots`; `v4_sweep_pivots.pivots(tf)` only feeds it the tape.
+
+| the step | what it does | whose |
+|---|---|---|
+| the four reads | ws{TF}Mage and ws{TF}b, each emerging and closed-prev, pooled oob->ib crosses, 90 s confirm (`SP_XWOB` 18), dwell 0 | his 1118, unchanged |
+| found | the closed ws{TF}Mage closes in an oob coming from ib; that forms the OTHER side's pivot, knowable from the next 5 s bar | his 1125 *"the entry to an opposing oob validates the final ib"*, his answer *"ws{TF}Mage enters opposite oob"* |
+| the candidate | the last four-read cross to ib of that side since the previous entry into the same oob, confirmed by the entry's close | his 1125 *"the mech looks back from 1245 to find the last oob to ib"* |
+| held | walkback-to-lookforward - the jig's walk back to look forward (`mage_cascade_bar`, his 1017 walk) on TF-bar lows / highs, 3 TF-bars a jump (`SP_WALK_STEP`), a final 4-bar confirmation (`SP_WALK_CONF`), looking forward to the entry bar | his 1124 / 1125 |
+| the 3-pivot scan | the most extreme 5 s price from the previous opposite pivot to the entry; more extreme than held - the pivot moves there | his 1125 *"scans for every extrema in the last 3 pivots"* |
+| modified | the previous pivot must be the most extreme of its side between its two neighbours, the newest from the previous pivot to the entry; both re-checked until neither moves. A same-side entry re-forms the newest pivot instead of adding one, so sides alternate. A walk-back that reaches past the previous opposite pivot hands the choice to the scan | MINE, flagged until he rules |
+| the pivot's bar | its EXTREMUM - every pseudo trade, leg, set and swing-scale rung opens there | his 1125 *"The extremum bar"* |
+
+The banked `mage_cascade_bar` is unchanged: `confirm` and `to` default to None, and 48,000 banked calls compared with
+the pre-repair jig differ on 0. `legs(mode='banked')` (the 1024 overlapping legs) and `legs(mode='last_cross')` (his
+1118 leg mode, still asked for by fdm3's `ORAC_LEG_MODE`) stay as explicit modes; no default reads them.
+
+Every count in sections 10a to 10f was measured BEFORE this repair. On the tape after it:
+
+| | before the repair | repaired |
+|---|---|---|
+| ws1 pivots (the bank, `POOL_TF` 1) | 3,006 | 2,567 |
+| ws2 pivots | 1,599 | 1,270 |
+| ws5 pivots | 660 | 529 |
+| towards/away's ws2Mage pseudo trades | 1,564 | 1,269 |
+
+| ws5, repaired | pivots |
+|---|---|
+| the extremum set by walkback-to-lookforward | 293 |
+| the extremum moved by the 3-pivot scan | 236 |
+| of those, the walk-back reached past the previous opposite pivot | 0 |
+| moved again after it was found | 7 |
 
 ---
 

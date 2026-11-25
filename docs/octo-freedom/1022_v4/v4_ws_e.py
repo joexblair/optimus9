@@ -72,6 +72,30 @@ def lines():
     return _LINES
 
 
+def has(tf):
+    """Is there a ws{tf}e line in this process. -> bool. HIS 1124: the cached row's ws1..ws30, or a line the
+    fdm3-htf-oracle page's own cache holds (ln.X_DIR)."""
+    import ln
+    tf = int(tf)
+    return TF_LO <= tf <= TF_HI or (ln.X_DIR is not None and os.path.exists(os.path.join(ln.X_DIR, 'ws%de.npy' % tf)))
+
+
+_XLINES = {}
+
+
+def line(tf):
+    """ws{tf}e. -> array. The cached row's line for ws1..ws30 (lines()), else HIS 1124 the fdm3-htf-oracle page's own
+    cache through ln - which refuses a TF that cache does not hold."""
+    import ln
+    tf = int(tf)
+    if TF_LO <= tf <= TF_HI:
+        return lines()[tf]
+    if tf not in _XLINES:
+        assert has(tf), 'ws%de does not exist in this process' % tf
+        _XLINES[tf] = np.asarray(ln.line('ws%de' % tf), float)
+    return _XLINES[tf]
+
+
 def build_in_memory(tfs):
     """ws{tf}e for `tfs` built IN MEMORY, never cached, with a ws30Mage control row. -> {tf: array}.
 

@@ -196,8 +196,29 @@ def pseudo_trades():
     return piv, trades
 
 
-def load():
-    """Every array the mech reads, once. -> dict."""
+def s2_tfs(tfs):
+    """The TFs of `tfs` whose scenario-2 test can run: all 5 lines under them are in `tfs`. -> list.
+
+    HIS 1124 on fdm3-htf-oracle, his answer *"The 5 minutes under it"*: the lines under ws{t} are ws{t-5}..ws{t-1}, as
+    they always were, so ws45 reads ws40..ws44. A TF whose lines under are not all built (ws15..ws19 there, which
+    are only read as lines under ws20..ws24) carries scenario 1 alone and gets no state. On the banked ws1..ws30
+    every TF qualifies, so the banked run is unchanged."""
+    have = set(int(t) for t in tfs)
+    return [t for t in tfs if all(u in have for u in range(max(TK.TF_LO, t - TK.UNDER), t))]
+
+
+def load(tfs=None):
+    """Every array the mech reads, once. -> dict. `tfs` None is the banked ws1..ws30 (TFS); HIS 1124 fdm3-htf-oracle
+    passes its own list, every TF of which must have its lines in the process (ln and v4_ws_e)."""
+    if tfs is not None:
+        tfs = sorted(int(t) for t in tfs)
+        EMR = {t: np.asarray(ln.line('ws%dr' % t), float) for t in tfs}
+        CPR = {t: np.asarray(CP.series(EMR[t], t * 60), float) for t in tfs}
+        EMM = {t: np.asarray(ln.line('ws%dMage' % t), float) for t in tfs}
+        CPM = {t: np.asarray(CP.series(EMM[t], t * 60), float) for t in tfs}
+        #   the row rule reads ws{ROWX_TF_LO}e..ws{ROWX_TF_HI}e whatever TFs carry a state
+        E = {t: WSE.line(t) for t in sorted(set(tfs) | set(range(TK.ROWX_TF_LO, TK.ROWX_TF_HI + 1)))}
+        return dict(EMR=EMR, CPR=CPR, EMM=EMM, CPM=CPM, E=E, TFS=tfs)
     if ln.R_DIR is None:
         E = RS.load((RS.K0, RS.R0, RS.S0))       # the emerging r lines, the same arrays the r-pred UI reads
         EMR = {t: np.asarray(E[t], float) for t in TFS}
@@ -463,6 +484,7 @@ def run(LN, trades, fnc=None, a_tfs=(), rst=None, xreopen='winner', untag=None, 
     detail['s2'][t][k]      scenario 2's triggers: [(bar, extremum, the AW lines under, AW to, 'pair'|'xe', row rule)]
     """
     N = ln.N
+    TFS = LN.get('TFS', globals()['TFS'])                         # HIS 1124: a load(tfs) LN carries its own TFs
     AW1 = {t: np.zeros(N, bool) for t in TFS}
     det = {k: {t: {} for t in TFS} for k in ('reach', 'hunts', 's1', 'samples', 's2')}
     det['ties'] = 0
@@ -538,7 +560,7 @@ def run(LN, trades, fnc=None, a_tfs=(), rst=None, xreopen='winner', untag=None, 
     TS = np.asarray(ln.ts, np.int64)
     first = np.flatnonzero((TS % 60000) == 0)                      # the ws1 bars - the web UI's rows
     STATE = {}
-    for t in TFS:
+    for t in s2_tfs(TFS):                                          # HIS 1124: every TF on the banked ws1..ws30
         r, r50 = LN['EMR'][t], LN[R50][t]
         under = [u for u in range(max(TK.TF_LO, t - TK.UNDER), t)]
         lines = {'E': LN['E'][t]}
@@ -669,14 +691,14 @@ def run_carried(LN, runs, fnc=None, a_tfs=(), rst=None, xreopen='winner', untag=
         else:
             ends[g] = c
             grp.append(g)
-    STATE = {t: np.full(ln.N, NONE, np.int8) for t in TFS}
+    STATE = {t: np.full(ln.N, NONE, np.int8) for t in s2_tfs(LN.get('TFS', TFS))}   # HIS 1124 as run
     OWN = [None] * len(runs)
     for g in range(len(ends)):
         ks = [k for k in range(len(runs)) if grp[k] == g]
         ST = run(LN, [(runs[k][0], runs[k][2], runs[k][3]) for k in ks], fnc, a_tfs, rst, xreopen, untag, lift)[0]
         for k in ks:
             o, sh, c = runs[k][0], runs[k][1], runs[k][2]
-            for t in TFS:
+            for t in STATE:
                 STATE[t][sh:c] = ST[t][sh:c]
             OWN[k] = {t: ST[t][o:c].copy() for t in keep}
     return STATE, len(ends), OWN

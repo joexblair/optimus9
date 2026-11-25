@@ -344,6 +344,10 @@ with the red on ws8..ws15), both trades, every row, each band re-derived from th
 | on a row whose print bar opens at second 00 | 167610 | 394691 |
 | on a row whose print bar opens at second 30 | 353280 | 0 |
 
+The lines are the fdm3 knob `RED4_LINES`, 2-15 on the bank. 8794 runs beside 8793 since 2026-11-22
+19:12:45 with `RED4_LINES` 8-15 and `INFENCE_READ` `closed_prev_minute`, his answer *"As it was"*; against
+8793 its band moves and red cells per line equal the 8794 columns below, every one.
+
 The red suffix, re-derived from the page's own suffix text row by row on ws2..ws15:
 
 | check | short | long |
@@ -387,6 +391,58 @@ ws3, the short trade, from 4 rows before its first red cell:
 | 2026-07-02 14:57:30 | 2026-07-02 14:58:00 | 2026-07-02 14:57:55 | 10.42 | TO(exf)-3 | yes | TO(exf)-3 |
 | 2026-07-02 14:58:00 | 2026-07-02 14:58:30 | 2026-07-02 14:58:25 | 10.61 | AW(exf)-3 |  | AW(exf)-3 |
 
+
+### 3e. THE b9 COLOURS ON fdm3-htf-oracle (his 1124)
+
+His words: *"I'm now refering to the 9 bands as `b9`"* / *"the red b9 coloring that applies to +/-4 flips to +/-3 will be
+extended"* / *"a (+/-) 4 to 3 change will still be coloured in red"* / *"for any of (+/-) 3 to 2, 2 to 1, 1 to 0,  where
+the change has moved to a band that is counter trade (existing behaviour), the number will be coloured orange"*. His
+answers: counter trade is *"Against the trade's side"*, *"Red against trade only"*, *"Orange on any such move"*.
+
+| the row's trade | the move from the row before | colour |
+|---|---|---|
+| short (target-side LOW) | up, off -4 | red |
+| short | up, off -3, -2 or -1 | orange |
+| long (target-side HIGH) | down, off +4 | red |
+| long | down, off +3, +2 or +1 | orange |
+
+- Both rows must carry a b9 suffix; the tag on either row does not matter (the 1121 red's own rule).
+- fdm3-htf-oracle only, on all 16 of its columns. fdm3-oracle (8793) keeps its 1121/1122 red: off +/-4 on both trades,
+  ws2-ws15.
+- In the cross code: +32 red, +64 orange.
+
+Checks on 8795, serving 2026-11-24 20:24:41, every cell re-derived from the tape and the cells' own suffixes:
+
+| check | short | long |
+|---|---|---|
+| b9 cells | 2,162,468 | 2,162,468 |
+| b9 off the tape re-derive (30 s closed-prev of the 6,6,9 r, at the x:55 bar) | 0 | 0 |
+| bare (no value yet, warm-up) | 15 | 15 |
+| red cells | 5,370 | 5,171 |
+| red off the re-derive | 0 | 0 |
+| orange cells | 30,524 | 33,228 |
+| orange off the re-derive | 0 | 0 |
+
+| move | short | long |
+|---|---|---|
+| red -4 -> -3 | 5,366 | - |
+| red -4 -> -2 | 4 | - |
+| orange -3 -> -2 | 8,448 | - |
+| orange -3 -> -1 | 1,311 | - |
+| orange -3 -> 0 | 71 | - |
+| orange -2 -> -1 | 8,937 | - |
+| orange -2 -> 0 | 575 | - |
+| orange -1 -> 0 | 11,182 | - |
+| red +4 -> +3 | - | 5,167 |
+| red +4 -> +2 | - | 4 |
+| orange +3 -> +2 | - | 9,109 |
+| orange +3 -> +1 | - | 1,733 |
+| orange +3 -> 0 | - | 46 |
+| orange +2 -> +1 | - | 9,534 |
+| orange +2 -> 0 | - | 407 |
+| orange +1 -> 0 | - | 12,399 |
+
+- No coloured move crossed 0 in one row: none lands on the other sign.
 
 ## 4. WHAT CARRIES NO SUFFIX
 

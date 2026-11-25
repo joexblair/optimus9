@@ -46,10 +46,17 @@ N = len(ts)
 #   line cache at the DB row, as always. A directory = ws{TF}r read from that separate cache instead, set by the one
 #   process that asked for it (docs/fdm3/fdm3_r_cache.use). Every other role reads what it read.
 R_DIR = None
+#   HIS 1124 fdm3-htf-oracle, his answer "A separate cache": the lines that page needs and no cache holds - ws40..ws44,
+#   ws55..ws59, ws85..ws89, ws115..ws119, ws235..ws240, and r / e for ws45, ws60, ws90, ws120 - are read from that
+#   page's own directory (docs/fdm3/fdm3_htf_lines.use). None = not this process. A name it holds is read from it
+#   first; every other name resolves as before, so a line no cache holds still refuses.
+X_DIR = None
 
 
 def line(name):
     """ws7r -> the array. tf from the digits, role from the tail."""
+    if X_DIR is not None and os.path.exists(os.path.join(X_DIR, name + '.npy')):
+        return np.asarray(np.load(os.path.join(X_DIR, name + '.npy'), mmap_mode='r'), float)[:N]
     i = 2
     while name[i].isdigit(): i += 1
     tf, role = int(name[2:i]), name[i:]

@@ -89,7 +89,7 @@ def epath(tf, n):
         return None
     import v4_ws_e as WSE
     tf = int(tf)
-    if not (WSE.TF_LO <= tf <= WSE.TF_HI):
+    if not WSE.has(tf):                          # HIS 1124: ws1..ws30, or a line fdm3-htf-oracle's own cache holds
         SKIPS['no e line'] += 1
         return None
     import ln
@@ -112,12 +112,12 @@ def _build(tf):
     """ws{tf}'s e line and race lines, built once per TF. -> dict."""
     import v4_ws_e as WSE
     tf = int(tf)
-    assert WSE.TF_LO <= tf <= WSE.TF_HI, 'ws%de does not exist' % tf
+    assert WSE.has(tf), 'ws%de does not exist' % tf
     import ln
     if tf not in _EP:
         import v4_knobs as K
         import v4_closed_prev as CP
-        e = WSE.lines()[tf]
+        e = WSE.line(tf)
         r = np.asarray(ln.line('ws%dr' % tf), float)
         m = np.asarray(ln.line('ws%dMage' % tf), float)
         cp = LIFT_E_RACE_READ == 'closed_prev'

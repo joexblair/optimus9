@@ -2567,3 +2567,162 @@ e61193400f30  I'll use a button to flip between the 2 trades
 7ed4458cc94a  Build on 8793, stop 8792. there is one further change: instead of testing values on the 1 minute seam (current behaviour for all TFs), now the seam will be every 30sec. it should fire at x:25 and x:55 so that oracel has the most current data
 3d556395f285  instead of testing values on the 1 minute seam (current behaviour for all TFs), now the seam will be every 30sec. it should fire at x:25 and x:55 so that oracel has the most current data
 4f173d7535b0  Move them
+138daac8efa9  can't I have 8794 and 8793 together?
+85c49303e426  As it was
+79de53b6b277  you've noted that the webservice's memory is getting large now. can you modify the service to chunk the data into weekly caches, from sunday to sunday? the previous week will automatically handover to the next week when the seam is reached
+d1d544223dd4  can you modify the service to chunk the data into weekly caches, from sunday to sunday?
+0cdf48d7f5ea  the previous week will automatically handover to the next week when the seam is reached
+a532ceb92589  this will have to be dynamic to avoid potential issues if I'm scanning near the seam. maybe you could load 2 caches in an overlap to make it feel seamless
+b49296a92a32  the other job I have, and the reason for the memory control:
+0141a04d60df  I need a parallel webservice built, named fdm3-htf-oracle. fdm3-htf-oracle will clone fdm3-oracle, and replace all columns except `ws1 time` with these new columns:
+43b6fcd25d5e  ws20,21,22,23,24,25,26,27,28,29,30,45,60,90,120,240
+ab0fa831c936  -these replacement columns will print the same data as fdm3-oracle's ws1-15 fields
+2f177d331688  these replacement columns will print the same data as fdm3-oracle's ws1-15 fields
+4632a6e15127  -the rows will be per 1 minute seam (not 30s)
+91ac53f28a0b  the rows will be per 1 minute seam (not 30s)
+a347152de686  -I'm now refering to the 9 bands as `b9`
+9857b598c04e  I'm now refering to the 9 bands as `b9`
+4d7876160b4b  -the red b9 coloring that applies to +/-4 flips to +/-3 will be extended:
+5f4a5f966ac4  the red b9 coloring that applies to +/-4 flips to +/-3 will be extended
+184430d14c23  --a (+/-) 4 to 3 change will still be coloured in red
+4947de0f86e4  a (+/-) 4 to 3 change will still be coloured in red
+230d6f261d70  --for any of (+/-) 3 to 2, 2 to 1, 1 to 0, where the change has moved to a band that is counter trade (existing behaviour), the number will be coloured orange
+9a28322f8d26  for any of (+/-) 3 to 2, 2 to 1, 1 to 0, where the change has moved to a band that is counter trade (existing behaviour), the number will be coloured orange
+e72a1a6de676  this might be wrong: "maybe you could load 2 caches in an overlap". logic says it would need to be 3 caches loaded. if the 3 weeks is still a heavy burden, then the caches could be dropped to 4 days
+7749cec854e7  logic says it would need to be 3 caches loaded
+db364a9af7fd  if the 3 weeks is still a heavy burden, then the caches could be dropped to 4 days
+e1090e2094aa  Free start-up only (Recommended)
+fc888f6cffb7  Free start-up only
+e0e0d69c275c  Against the trade's side
+ecd160c1ac33  The 5 minutes under it
+a6f46c4b1eaf  A separate cache (Recommended)
+ddc21db39ab4  A separate cache
+9efb068af578  Red against trade only
+66c717cd094e  Orange on any such move
+b1fd1e322501  On every column
+e029fbec90b9  Both, one at a time
+7607fd0db249  the reason for the memory control
+2c07a62a73de  per 1 minute seam (not 30s)
+f35c1314d901  replace all columns except `ws1 time`
+6cde613fbd29  I need a parallel webservice built, named fdm3-htf-oracle
+73ba86529b62  a dox no deeper than the calendars
+1d447340b02e  this highlights an necessary optimisation. the rows are a small file - it should be kept on disk as well as in memory to avoid downtime on small cosmetic changes or restarts
+c080b8131119  the rows are a small file - it should be kept on disk as well as in memory to avoid downtime on small cosmetic changes or restarts
+6deb0b74eb86  update the code and rebuild the optimised 8793 first, then 8795, then I'll update your code and you can run the 8794 optimistion on the session restart
+dc4c0dd377b5  stop 8794. I'm now using 8793 and 8795 only
+9c5d62e62190  I'm now using 8793 and 8795 only
+96cabc1a14fc  stop 8794
+3d3ce4e20573  research VWAP. we'll be adding its data to the fdm3-htf-oracle table, in 2 new columns on the far right
+f54e961df577  the anchors will be retrospectively set based on the ws10Mage and ws5Mage ib to opposing ib sweep-pivots. there will always be exactly 2 VWAPs for both ws10 and ws5, and they will also be exactly 1 pivot apart (the full swing). there will always be a pair of vwap anchors: the lowside and the following highside anchored-vwap, for both ws10 and ws5
+04fddd1e44e0  -as a new pivot is discovered, the VWAP will anchor on the extremum just before the pivot
+76ebe2bb4b22  as a new pivot is discovered, the VWAP will anchor on the extremum just before the pivot
+d93e416ffaad  --at the causally built pivot, walkback-to-lookforward to find the price extremum, using OHLC. the research will tell you exactly where to place the VWAP anchor
+708ccecf1169  at the causally built pivot, walkback-to-lookforward to find the price extremum, using OHLC. the research will tell you exactly where to place the VWAP anchor
+d65cf9baade2  ---the walkback will jump back in 3 TF-bars at a time, with a final 4 TF-bar confirmation
+71632f00034d  the walkback will jump back in 3 TF-bars at a time, with a final 4 TF-bar confirmation
+f8d71bbabc1c  ---the extremum could print before or after the pivot, so act accordingly to discover the correct extremum near to the pivot
+c798a9f65c49  the extremum could print before or after the pivot, so act accordingly to discover the correct extremum near to the pivot
+2b550bb6d008  to test your vwap anchor positioning (eyeballed):
+abbb5bb0daa2  eaxmple anchor pair for ws10: 09-05 0410 low and 09-06 1240 high
+dcd72225e375  example for ws5: 09-05 1140 low, 1255 high
+217b778e60ac  -the bands are using the standard deviation "bands calculation mode"
+770d19e7e528  the bands are using the standard deviation "bands calculation mode"
+8a1d88549d2b  -the bands multiplier is 2, the source is closed
+30c03bf5027a  the bands multiplier is 2, the source is closed
+4c685b5db498  the new htf-oracle columns will carry 3 rows per cell (all fake data):
+0443f5c8570d  -each value represents the distance between each line, and price (not pxs)
+8bea6128a3c4  each value represents the distance between each line, and price (not pxs)
+6622aef2ed1d  --ie, the upper band line, the VWAP line, the lower band line
+7cf15c909412  the udist/vdist/ldist value is the literal difference between prince and the upper/vwap/lower line, in our agreed TV-based pct diff calculation
+0b71b9a4328c  for both all three lines:
+df0dcf01400d  --a negative percentage shows that price is not higher than the line
+59a4315a79b0  --a positive percentage shows that price is higher than the line
+10b884759491  a negative percentage shows that price is not higher than the line
+d4a9a1dbd804  a positive percentage shows that price is higher than the line
+54e9b7ac8deb  ws10
+e5af17914e88  Both, 6 rows per cell
+8cddd564a5ca  (price − line) / line
+f3926bc8cef3  good catch - my eyes didn't see the small-dwell at 0630. add a min-dwell, or a min oob excursion depth, to exclude the 0630
+be7df0b936f9  add a min-dwell, or a min oob excursion depth, to exclude the 0630
+2c7e3a1877ff  there's a mode that builds pivots from "cross to ib" to opposing "cross to ib"
+2ff421c72d35  Taller rows
+6b697a6d47e6  Pivot bar is enough
+7887758905be  Close of the x:55 bar (Recommended)
+137a2a740b79  Close of the x:55 bar
+931e3fb98c04  Closed Mage bars (Recommended)
+d8fc70f76d3d  Closed Mage bars
+1b390cd54a0c  0.5
+89b2d3ba9e7c  Latest low + latest high (Recommended)
+7d792e2996bc  Latest low + latest high
+b1d47ce0f61d  Low VWAP on top
+183383674827  I don't know what "Which bar size does the VWAP add up price x volume on" means
+f7ee4ed3eb3f  Use it, I'll send a reading
+b4f737cfb562  I'm using VWAP to validate the oracle's decisions, so 1m makes the most sense
+fbb9be1cece6  the TV vwap indicator isn't printing the indicator's values, so I can only give you an estimate based on when the lines intersects a 1m candle, and
+800951d610ab  anchor: 09-05 04:13
+a332b217c69a  Restart 8795, stop 8796 (Recommended)
+07db711052ac  Restart 8795, stop 8796
+54e4ad2c600e  you asked me earlier if I want the anchor to move if a more extreme pivot appears in the walk forward (causal)
+d4d9a7f29709  I want that to happen please - the re-anchoring on a new extremum is a good thing. this is capped by ws5Mage crossing into the target side oob (ie the beginning of the next pivot's creation)
+65811b1188b3  use 1.82 as the band multiplier
+b3fe89928c7d  there's an anomaly at 09-07 lowside 0220. the lo u v l dist values have converged, which would inidcate a new anchor was set at 0220. confirm I'm correct, and if so then show me how you created the ws5Mage pivots.
+d694a7ce271b  for context, a pivot can only be found when the opposing side has crossed from oob to ib. this data is strictly causal, so there should never be a case where the anchor is visible to the walk (or to oracle's rows), becuase the previous same-side vwap is still alive.
+548c8c542a0a  0220 is on the low side, and the next high side oob to ib is 09-07 1330. if you look back from 1330, searching for a low side oob to ib, you should see ws5Mage cross from low side oob to ib at 0805, not 0220
+9f0c7187e1cd  even at the corrected 0805 low side, the walk does not detect the pivot until 1245, when ws5Mage reaches the "opposing" side of 0805 - this is why the lowside vwap anchor (09-06 2225) needs to stay in place until 1245, as a "virtual" overlap
+e4987f2f10b6  when oracle is presenting the short trade, only the lo udist, lo vdist, lo ldist values need to be presented in 'ws5 vw pct'. the inverse is true for the long trade (only the hi dists are printed)
+a4059d56d93f  this will allow the cell to use the same font size as the up|dn row
+40c04e8c8371  drop 'dist' from the labels. now they will be 'lo u', 'lo v' ,'lo l'
+f4f703f6611f  drop the ws10Mage column, and replace it with a 'ws5 vw diff' column
+76c3e4b87414  this column will show if the last row and the current row have reversed, by how much, for lo u, lo v, and lo l . use a green and red coloured font to highlight any reversals
+4e9cc0d15cb3  to make this easy to use, create a fixed size table having one row and three fixed-sized columns. the three values and their colouring will then be an easy downward scan for my eyes
+ac0a4e3e9ebd  we've built this better pivot detector in the last week. I asked for it to be a mode in sweep-pivots
+c06ddd5e6d33  I see you're not reading the jig. there shouldn't be a standalone for sweep pivots
+5b0de4b339da  I've found a flaw in sweep-pivots
+a4d4dd3bf092  there aree cases when ws{TF}Mage prints oob after the actual pxs pivot, resulting in a pivot that is not the extremum
+08a98fc047a9  eg at 09-07 1200, ws5Mage creates the last lowside oob to ib event, before crossing to the opposing (high) oob at 09-07 1245
+151e0cc74ebd  the extremum detected by walkback-to-lookforward is at 1159, but this isn't the actual extremum
+6a50102f2a8d  but this isn't the actual extremum
+900ff0a39557  if you look back from 1200, you'll find that the actual low-side extremum was created in the previous oob to ib at 0805 (extremum 0741 )
+7a83a450db06  sweep-pivots' role is to detect extrema and label them as pivots, therefore the way to test for (and manage) an errant ws{TF}Mage oob is to test for unexpected extremum between the last 3 pivots, when ever a pivot is created or modified
+78230d7d5085  sweep-pivots' role is to detect extrema and label them as pivots
+d2dfa0b3d9b0  test for unexpected extremum between the last 3 pivots, when ever a pivot is created or modified
+0204bafaaf4e  "modified": the 09-06 1100 "ws5Mage oob to ib created" pivot moved to 1241 during the walk (I think you have this already, but we haven't formalised it until now)
+dc7c176cd3fd  0610 high ib to oob. extremum detected for 0415. low pivot can now be formed because the entry to an opposing oob validates the final ib at 0415.
+422cb0386e0d  the entry to an opposing oob validates the final ib
+c46c469d7dd7  low vwap A is anchored on the 0415 extremum. it is silent: no values are printed by low vwap A until high vwap A is formed
+258975794a93  and so-on. when each sameside vwap begins printing, its ancestor sameside vwap is dropped
+911c2dc0cfc6  the mech looks back from 1245 to find the last oob to ib, finds 1205
+89e980b3aed5  the mech looks back from 1245 to find the last oob to ib
+267c13b60099  the mech runs walkback-to-lookforward, finds low extremum at 1155
+1e0db448441e  the mech runs walkback-to-lookforward
+090e4915b2df  the mech holds this timestamp, then scans for every extrema in the last 3 pivots (2 pivots on a side, 1 pivot on the other side)
+5d2c3f802e88  then scans for every extrema in the last 3 pivots (2 pivots on a side, 1 pivot on the other side)
+b96c808be0da  scans for every extrema in the last 3 pivots
+f34c7a6255fa  the mech finds that 0740 is more extreme than the held 1155, so the pivot is set at 0740
+0402930a91d8  the mech directs the vwap mech to anchor the latest (silent) vwap at 0740
+b0d45a2a1aa9  the reason for looking back 3 pivots: to have enough forward-looking vision to pick the extrema without ambiguity
+cae4341d0d96  Drop it
+f3183698d8e1  do nothing - the actual extrema will be detected by the new mech that we're adding to sweep-pivots
+65973cf61f21  The change flips from rising to falling, or back.
+f35a561503d0  I think this might be served better with line smoothing. to test the idea of smoothing, build a 2nd row (of the 3 column fixed width table) built on a DEMA len 2 smoothing line
+8a97f4e10748  this isn't a new mode, it's a repair of the existing ib to ib mech
+aa2aa75966ba  make the repaired mode the default for sweep pivots. ensure everything is in the jig so that we are consistent in our behaviour, then sunset any files that announce themselves as pivot detection
+11a0c946c1ad  make the repaired mode the default for sweep pivots. ensure everything is in the jig so that we are consistent in our behaviour
+ea7faae3ac0e  four read pivots. when you have finished the update, and before the build of htf-oracle, provide a full table of the pivots for 09-05 to 09-07 full days
+4bf0bb3cbd4d  four read pivots
+4a66d1480779  Everything
+6b49e9da37dd  Retire it
+e9b2edad404f  Header and warning (Recommended)
+3a7f08e77235  Header and warning
+1277000aae3e  ws{TF}Mage enters opposite oob
+f3076dea399c  The extremum bar
+677e5c649da2  walkback-to-lookforward
+bdbc0fc11564  using OHLC
+77fe68b3a5c8  the walkback will jump back in 3 TF-bars at a time
+36d35f65f87e  with a final 4 TF-bar confirmation
+a67ad3cdb7c2  I retract. the times are correct
+3858ddf471e1  bank this sweep-pivots update and make it the machine
+5ab563517543  bank this sweep-pivots update and make it the machine. commit push all files
+faf8d7d96f01  run the changes for fdm3-htf-oracle and I'll test the vwap outputs
+68a81c3d9f46  01:16:35 is incorrect
+3e3a02a9e0d8  the 3 pivot lookback should have picked the high extrema at 0300

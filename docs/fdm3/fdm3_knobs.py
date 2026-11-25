@@ -98,6 +98,11 @@ UNTAG50 = _knob('UNTAG50', 1, int)
 #   suffix stays on the in-fence codes.
 #   BANKED HIS 1121: *"8793 is good - bank it and make the machine."* 1 is the default.
 EXF_SUFFIX = _knob('EXF_SUFFIX', 1, int)
+#   HIS 1122: *"expand the red colour mech's coverage to include ws2-ws15"* - the lines the red suffix on a line leaving
+#   +4 or -4 reads, 'lo-hi' as wsN numbers. BANKED 1122 at '2-15' with the machine. His answer *"As it was"* for 8794
+#   beside it: '8-15', his 1121 *"when a highband line (ws8-15) flips from +4 to +3"*, as an off-ruled page. The name
+#   is mine.
+RED4_LINES = os.environ.get('W_FDM3_RED4_LINES', '2-15')
 #   HIS 1120: *"I need to see the "hold 1, tolerance 0.67" applied in 8791"*, his answer: towards/away only. The
 #   lift-off tolerance and hold the oracle hands towards/away, as 'tolerance,hold' (r-points, bars), or 'v4' = v4's
 #   own banked pair (2.0, 8), which towards/away reads live. Nothing else on the page reads lift-off (M-no-rev's slot
@@ -289,6 +294,8 @@ RULED = {
                                  'highband lines that may print TO(exf) since the trade opened '
                                  'for it to stay sml'),
     'EXF_SUFFIX': (1, 'his 1121 suffix on TO(exf), AW(exf) and -(exf), BANKED 1121 with 8793'),
+    'RED4_LINES': ('2-15', 'the lines the red suffix reads - his 1122 ws2-ws15, BANKED 1122 with the machine. 8-15 '
+                           '(his 1121 highband) is off-ruled'),
     'UNTAG50': (1, 'his 1120 "-" on the counter side of 50, BANKED 1121 with 8793'),
     'TA_LIFT': ('v4', 'his 1120 "hold 1, tolerance 0.67" for towards/away only, built on 8791 as an off-ruled '
                       'page; v4\'s banked pair on the bank until he banks it'),
